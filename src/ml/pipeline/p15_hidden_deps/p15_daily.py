@@ -77,7 +77,7 @@ sys.path.append(str(PROJECT_ROOT))
 from config.donotshare.donotshare import DATA_CACHE_DIR as _cache_root
 from src.data.downloader.finra_trf_downloader import FinraTRFDownloader
 from src.data.downloader.cboe_downloader import CboeDownloader
-from src.data.downloader.edgar_downloader import EdgarDownloader
+from src.data.downloader.edgar_downloader import EdgarDownloader, EftsUnavailableError
 from src.data.downloader.fear_greed_downloader import FearGreedDownloader
 from src.data.downloader.fred_downloader import FredDownloader
 from src.data.downloader.gdelt_downloader import GdeltDownloader
@@ -793,29 +793,69 @@ def _job_edgar_8k_index(yesterday: _Date) -> Optional[Dict[str, Any]]:
     fetching. Weekends are skipped (EDGAR has no weekend filings); already-cached
     days are O(1) skips inside download_8k_filings.
 
+    The whole retention window (last ``_GAP_CAP_DAYS`` days) is re-scanned every
+    run rather than only the days after the watermark. Because cached days are
+    O(1) skips, re-scanning is cheap and gives two robustness properties:
+
+      - Per-day fault tolerance: a transient EFTS failure (e.g. an HTTP 500 that
+        exhausts retries) raises ``EftsUnavailableError`` for that one date. We
+        catch it, log a warning, and continue instead of aborting the whole loop
+        — so one bad day never blocks the rest of the window or the daily bundle.
+      - Self-healing: because every run re-scans the window, a day skipped due to
+        such a failure is retried on the next run and fills in automatically. (A
+        watermark-only resume would leave that day a permanent hole, since the
+        watermark advances past it once later days succeed.)
+
     Args:
         yesterday: UTC date to fill up to (inclusive).
 
     Returns:
-        Dict with days_downloaded and filings (total rows across the window).
+        Dict with days_downloaded, days_failed, filings (total rows across the
+        window) and failed_dates (ISO strings of any days that could not be
+        fetched this run).
     """
     edgar = EdgarDownloader()
     watermark = _edgar_8k_watermark(edgar._8k_index_dir)
-    start, end = _gap_window(watermark, _EDGAR_8K_START, yesterday)
+    # Re-scan the full retention window each run (not just watermark+1) so a day
+    # previously skipped on a transient EFTS failure self-heals; cached days are
+    # O(1) skips inside download_8k_filings, so the re-scan is cheap.
+    end = yesterday
+    start = max(_EDGAR_8K_START, _CUTOFF_DATE, end - timedelta(days=_GAP_CAP_DAYS - 1))
     _logger.info("edgar_8k_index: %s → %s (watermark=%s)", start, end, watermark)
 
     days_downloaded = 0
+    days_failed = 0
     total_filings = 0
+    failed_dates: List[str] = []
     current = start
     while current <= end:
         if current.weekday() < 5:   # Mon–Fri only (no EDGAR weekend filings)
-            df = edgar.download_8k_filings(as_of_date=current)
-            if df is not None and not df.empty:
-                total_filings += len(df)
-            days_downloaded += 1
+            try:
+                df = edgar.download_8k_filings(as_of_date=current)
+                if df is not None and not df.empty:
+                    total_filings += len(df)
+                days_downloaded += 1
+            except EftsUnavailableError:
+                days_failed += 1
+                failed_dates.append(current.isoformat())
+                _logger.warning(
+                    "edgar_8k_index: EFTS unavailable for %s — skipping; "
+                    "will retry on the next run", current,
+                )
         current += timedelta(days=1)
 
-    return {"days_downloaded": days_downloaded, "filings": total_filings}
+    if days_failed:
+        _logger.warning(
+            "edgar_8k_index: %d day(s) failed this run and will self-heal next "
+            "run: %s", days_failed, ", ".join(failed_dates),
+        )
+
+    return {
+        "days_downloaded": days_downloaded,
+        "days_failed": days_failed,
+        "filings": total_filings,
+        "failed_dates": failed_dates,
+    }
 
 
 def _job_edgar_facts() -> Optional[Dict[str, Any]]:
