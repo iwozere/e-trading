@@ -31,6 +31,10 @@ Jobs executed (in order, failures are isolated):
     8. edgar_submissions  — SEC EDGAR submissions refresh for Tier-1 watchlist CIKs
                             (~160 sector-bellwether stocks; lightweight ~KB files;
                             used for 8-K event tracking)
+    8b. edgar_8k_index    — Universe-wide daily 8-K/8-K/A filing index via one EFTS
+                            query per day; self-healing gap-fill (60-day cap).
+                            → DATA_CACHE_DIR/edgar/8k/index/YYYY-MM-DD.csv.gz
+                            Read by the P17 CatalystAgent (item codes per filing).
     9. edgar_facts        — SEC EDGAR XBRL company facts full refresh
                             (quarterly: first weekday on or after the 15th of
                             March/May/August/November)
@@ -93,6 +97,7 @@ _GAP_CAP_DAYS = 60                       # max calendar days backfilled per run
 _YFINANCE_START  = _Date(2010, 1, 1)
 _GDELT_V2_START  = _Date(2015, 2, 18)   # GDELT 2.0 launch date
 _FINRA_TRF_START = _Date(2014, 4, 1)    # approximate Reg SHO API availability
+_EDGAR_8K_START  = _Date(2020, 1, 1)    # only recent 8-Ks matter for catalyst tracking
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +246,29 @@ def _trf_watermark(trf_dir: Path) -> Optional[_Date]:
         return None
     dates = []
     for f in trf_dir.glob("????-??-??.csv.gz"):
+        try:
+            dates.append(_Date.fromisoformat(f.name.removesuffix(".csv.gz")))
+        except ValueError:
+            pass
+    return max(dates) if dates else None
+
+
+def _edgar_8k_watermark(index_dir: Path) -> Optional[_Date]:
+    """
+    Return the most recent date cached in the 8-K index dir.
+
+    Scans for YYYY-MM-DD.csv.gz filenames and returns the maximum date found.
+
+    Args:
+        index_dir: Directory containing per-day YYYY-MM-DD.csv.gz 8-K index files.
+
+    Returns:
+        Most recent date present, or None if the directory is absent or empty.
+    """
+    if not index_dir.exists():
+        return None
+    dates = []
+    for f in index_dir.glob("????-??-??.csv.gz"):
         try:
             dates.append(_Date.fromisoformat(f.name.removesuffix(".csv.gz")))
         except ValueError:
@@ -754,6 +782,42 @@ def _job_edgar_submissions() -> Optional[Dict[str, Any]]:
     return summary  # type: ignore[return-value]
 
 
+def _job_edgar_8k_index(yesterday: _Date) -> Optional[Dict[str, Any]]:
+    """
+    Cache the universe-wide daily 8-K filing index, gap-filled self-healingly.
+
+    One EFTS query per filing date returns every 8-K / 8-K/A filed that day; the
+    per-day index (cik, company, items, accession, primary_document) is cached at
+    DATA_CACHE_DIR/edgar/8k/index/{date}.csv.gz. The P17 CatalystAgent reads this
+    cache instead of making per-candidate EDGAR calls, and it seeds later 8-K body
+    fetching. Weekends are skipped (EDGAR has no weekend filings); already-cached
+    days are O(1) skips inside download_8k_filings.
+
+    Args:
+        yesterday: UTC date to fill up to (inclusive).
+
+    Returns:
+        Dict with days_downloaded and filings (total rows across the window).
+    """
+    edgar = EdgarDownloader()
+    watermark = _edgar_8k_watermark(edgar._8k_index_dir)
+    start, end = _gap_window(watermark, _EDGAR_8K_START, yesterday)
+    _logger.info("edgar_8k_index: %s → %s (watermark=%s)", start, end, watermark)
+
+    days_downloaded = 0
+    total_filings = 0
+    current = start
+    while current <= end:
+        if current.weekday() < 5:   # Mon–Fri only (no EDGAR weekend filings)
+            df = edgar.download_8k_filings(as_of_date=current)
+            if df is not None and not df.empty:
+                total_filings += len(df)
+            days_downloaded += 1
+        current += timedelta(days=1)
+
+    return {"days_downloaded": days_downloaded, "filings": total_filings}
+
+
 def _job_edgar_facts() -> Optional[Dict[str, Any]]:
     summary = EdgarDownloader().download_all_company_facts(force=True)
     return summary  # type: ignore[return-value]
@@ -904,6 +968,7 @@ def main() -> None:
     results["fred_daily"]        = _run_job("fred_daily",        lambda: _job_fred_daily(fred_dl))
     results["fred_combined"]     = _run_job("fred_combined",     lambda: _job_fred_combined(fred_dl))
     results["edgar_submissions"] = _run_job("edgar_submissions", _job_edgar_submissions)
+    results["edgar_8k_index"]    = _run_job("edgar_8k_index",    lambda: _job_edgar_8k_index(yesterday))
     results["p18_13f_index"]     = _run_job("p18_13f_index",     lambda: _job_p18_13f_index_seed(yesterday))
     if _is_edgar_facts_day(yesterday_dt + timedelta(days=1)):
         results["edgar_facts"]   = _run_job("edgar_facts",       _job_edgar_facts)

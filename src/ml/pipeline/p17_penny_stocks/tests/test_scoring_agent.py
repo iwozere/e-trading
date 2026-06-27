@@ -148,10 +148,11 @@ def test_technical_score_all_signals():
 # ── Fundamentals score ─────────────────────────────────────────────────────────
 
 def test_fundamentals_score_unknown_revenue():
+    """Unknown revenue growth scores neutral (50), not a penalty (see _fundamentals_score)."""
     agent = _make_agent()
     c = _make_candidate(revenue_growth_yoy=None)
     agent._score(c)
-    assert c.fundamentals_score == 0.0
+    assert c.fundamentals_score == 50.0
 
 
 def test_fundamentals_score_positive_cashflow_bonus():

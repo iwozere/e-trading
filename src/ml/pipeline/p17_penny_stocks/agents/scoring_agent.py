@@ -96,7 +96,8 @@ class ScoringAgent:
         c.volume_score = self._volume_score(c)
         c.technical_score = self._technical_score(c)
         c.fundamentals_score = self._fundamentals_score(c)
-        c.catalyst_score = 0.0       # Phase 1 placeholder — no catalyst agent yet
+        # c.catalyst_score is set upstream by the CatalystAgent (defaults to 0.0
+        # when that stage is skipped or finds no catalyst); do not overwrite it.
         c.short_squeeze_score = self._ss_agent.compute_score(c)
         c.accumulation_score = self._accumulation_score(c)
 
@@ -233,6 +234,8 @@ class ScoringAgent:
             signals.append(f"high_si_{c.short_interest_pct_float:.0%}")
         if c.accumulation_days >= 5:
             signals.append(f"accumulation_{c.accumulation_days}d")
+        if c.catalyst_score > 0 and c.catalyst_signals:
+            signals.extend(c.catalyst_signals)
         if c.dilution_penalty > 0:
             signals.extend(c.dilution_signals)
         if "halt_risk_high_si" in (c.signals or []):

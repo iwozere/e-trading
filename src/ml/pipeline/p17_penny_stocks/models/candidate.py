@@ -67,6 +67,9 @@ class Candidate:
     dilution_penalty: float = 0.0
     dilution_signals: List[str] = field(default_factory=list)
 
+    # ── Catalyst ───────────────────────────────────────────────────────────
+    catalyst_signals: List[str] = field(default_factory=list)
+
     # ── Sub-scores (each normalized 0–100) ────────────────────────────────
     momentum_score: float = 0.0
     volume_score: float = 0.0
@@ -125,6 +128,7 @@ class Candidate:
             "cash_runway_months": self.cash_runway_months,
             "dilution_penalty": self.dilution_penalty,
             "dilution_signals": "|".join(self.dilution_signals),
+            "catalyst_signals": "|".join(self.catalyst_signals),
             "momentum_score": round(self.momentum_score, 1),
             "volume_score": round(self.volume_score, 1),
             "technical_score": round(self.technical_score, 1),

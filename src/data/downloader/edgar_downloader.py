@@ -124,6 +124,8 @@ class EdgarDownloader(BaseDataDownloader):
         self._13f_holdings_dir = self._13f_dir / "holdings"
         self._form4_dir = self._13f_dir / "form4"
         self._13dg_dir = self._13f_dir / "13dg"
+        self._8k_dir = self._edgar_dir / "8k"
+        self._8k_index_dir = self._8k_dir / "index"
         self._session = requests.Session()
         self._session.headers.update({"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"})
         self._last_request_time: float = 0.0
@@ -485,11 +487,11 @@ class EdgarDownloader(BaseDataDownloader):
         for hit in hits:
             src = hit.get("_source", {})
             records.append({
-                "cik": str(src.get("entity_id", "")).lstrip("0") or None,
-                "institution_name": src.get("entity_name", ""),
-                "accession_number": src.get("accession_no", ""),
+                "cik": _efts_first_cik(src) or None,
+                "institution_name": _efts_company(src),
+                "accession_number": str(src.get("adsh", "")),
                 "filed_date": src.get("file_date", ""),
-                "period_of_report": src.get("period_of_report", ""),
+                "period_of_report": src.get("period_ending", ""),
             })
 
         df = pd.DataFrame(records).dropna(subset=["cik"])
@@ -674,11 +676,11 @@ class EdgarDownloader(BaseDataDownloader):
 
         records = [
             {
-                "cik": str(h.get("_source", {}).get("entity_id", "")).lstrip("0"),
-                "institution_name": h.get("_source", {}).get("entity_name", ""),
-                "accession_number": h.get("_source", {}).get("accession_no", ""),
+                "cik": _efts_first_cik(h.get("_source", {})),
+                "institution_name": _efts_company(h.get("_source", {})),
+                "accession_number": str(h.get("_source", {}).get("adsh", "")),
                 "filed_date": h.get("_source", {}).get("file_date", ""),
-                "period_of_report": h.get("_source", {}).get("period_of_report", ""),
+                "period_of_report": h.get("_source", {}).get("period_ending", ""),
             }
             for h in hits
         ]
@@ -723,16 +725,22 @@ class EdgarDownloader(BaseDataDownloader):
         records = []
         for hit in hits:
             src = hit.get("_source", {})
-            acc = src.get("accession_no", "").replace("-", "")
-            cik_str = str(src.get("entity_id", "")).lstrip("0")
-            if not acc or not cik_str:
+            acc = str(src.get("adsh", ""))
+            if not acc:
                 continue
+            acc_norm = acc.replace("-", "")
+            # A Form 4 EFTS hit lists BOTH the reporting owner and the issuer in
+            # `ciks`; the filing lives under either entity's CIK directory, and the
+            # issuer ticker is read from the parsed XML. The primary-document name
+            # varies per filing (e.g. edgardoc.xml, primary_doc.xml, wf-form4_*.xml),
+            # so use the exact filename the EFTS `_id` carries as the first candidate.
+            cik_str = _efts_first_cik(src)
+            cik_int = int(cik_str) if cik_str else int(acc_norm[:10])
+            primary_doc = _primary_doc_from_efts_id(str(hit.get("_id", "")))
+            candidate_names = [primary_doc] if primary_doc else []
+            candidate_names += ["primary-doc.xml", "primary_doc.xml", "form4.xml", "doc4.xml"]
 
-            xml_content = self._fetch_filing_xml(
-                int(cik_str) if cik_str else 0,
-                acc,
-                candidate_names=["primary-doc.xml", "form4.xml", "doc4.xml"],
-            )
+            xml_content = self._fetch_filing_xml(cik_int, acc_norm, candidate_names=candidate_names)
             if xml_content is None:
                 continue
 
@@ -781,11 +789,11 @@ class EdgarDownloader(BaseDataDownloader):
 
         records = [
             {
-                "cik": str(h.get("_source", {}).get("entity_id", "")).lstrip("0"),
-                "entity_name": h.get("_source", {}).get("entity_name", ""),
-                "accession_number": h.get("_source", {}).get("accession_no", ""),
+                "cik": _efts_first_cik(h.get("_source", {})),
+                "entity_name": _efts_company(h.get("_source", {})),
+                "accession_number": str(h.get("_source", {}).get("adsh", "")),
                 "filed_date": date_str,
-                "form_type": h.get("_source", {}).get("form_type", ""),
+                "form_type": h.get("_source", {}).get("form") or h.get("_source", {}).get("file_type", ""),
             }
             for h in hits
         ]
@@ -795,6 +803,72 @@ class EdgarDownloader(BaseDataDownloader):
         dest.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(dest, index=False, compression="gzip")
         _logger.info("Cached %d 13D/G filings for %s → %s", len(df), date_str, dest)
+        return df
+
+    def download_8k_filings(
+        self,
+        as_of_date: Optional[date] = None,
+        force: bool = False,
+    ) -> pd.DataFrame:
+        """
+        Download the index of all 8-K filings submitted on a given date.
+
+        Queries EDGAR EFTS for form 8-K on the date and caches a lightweight
+        per-day index — one row per filing — as
+        ``DATA_CACHE_DIR/edgar/8k/index/{date}.csv.gz``. This is the universe-wide
+        daily catalyst feed the P17 CatalystAgent reads from (8-K item codes per
+        filing) and the seed for later 8-K body fetching.
+
+        Args:
+            as_of_date: Filing date to fetch. Defaults to yesterday (markets/EDGAR
+                are quiet when the daily bundle runs).
+            force: Re-download even if cached.
+
+        Returns:
+            DataFrame with columns: cik, company, accession_number, items,
+            description, filed_date, primary_document. Empty if none were filed.
+        """
+        target_date = as_of_date or (datetime.now().date() - timedelta(days=1))
+        date_str = str(target_date)
+        dest = self._8k_index_dir / f"{date_str}.csv.gz"
+
+        if dest.exists() and not force:
+            _logger.info("8-K index for %s already cached at %s", date_str, dest)
+            return pd.read_csv(dest, compression="gzip", dtype=str)
+
+        # NB: EFTS treats the `forms` param as an exact match; passing "8-K,8-K/A"
+        # paradoxically returns only the /A amendments, so query the plain form
+        # (which is the bulk of catalyst-bearing filings). Amendments can be added
+        # later via a second query if needed.
+        _logger.info("Downloading 8-K index for %s ...", date_str)
+        hits = self._efts_search(forms="8-K", start_dt=date_str, end_dt=date_str)
+
+        records = []
+        for hit in hits:
+            src = hit.get("_source", {})
+            # EFTS _source is list-oriented: ciks / display_names are arrays, the
+            # accession number is `adsh`. (Field names verified against the live
+            # endpoint — NOT entity_id/accession_no, which do not exist here.)
+            cik_str = _efts_first_cik(src)
+            acc = str(src.get("adsh", ""))
+            if not cik_str or not acc:
+                continue
+            records.append({
+                "cik": cik_str,
+                "company": _efts_company(src),
+                "accession_number": acc,
+                "items": _normalize_8k_items(src.get("items")),
+                "description": str(src.get("file_description", "") or src.get("file_type", "")),
+                "filed_date": str(src.get("file_date", "") or date_str),
+                "primary_document": _primary_doc_from_efts_id(str(hit.get("_id", ""))),
+            })
+
+        _8K_COLS = ["cik", "company", "accession_number", "items",
+                    "description", "filed_date", "primary_document"]
+        df = pd.DataFrame(records, columns=_8K_COLS) if records else pd.DataFrame(columns=_8K_COLS)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(dest, index=False, compression="gzip")
+        _logger.info("Cached %d 8-K filings for %s → %s", len(df), date_str, dest)
         return df
 
     # ------------------------------------------------------------------
@@ -1307,6 +1381,42 @@ def _parse_filing_date(date_str: str) -> datetime:
         return datetime.strptime(date_str, "%Y-%m-%d")
     except ValueError:
         return datetime(1970, 1, 1)
+
+
+def _normalize_8k_items(items: Any) -> str:
+    """Normalise an EFTS 8-K ``items`` field (list or string) to a comma-joined string."""
+    if items is None:
+        return ""
+    if isinstance(items, (list, tuple)):
+        return ",".join(str(i).strip() for i in items if str(i).strip())
+    return str(items).strip()
+
+
+def _primary_doc_from_efts_id(efts_id: str) -> str:
+    """Extract the primary document filename from an EFTS hit ``_id`` (``"{accession}:{doc}"``)."""
+    return efts_id.split(":", 1)[1] if ":" in efts_id else ""
+
+
+def _company_from_display_name(display_name: str) -> str:
+    """Strip the ``" (CIK 0001234567)"`` suffix from an EFTS display_names entry."""
+    return display_name.split("(CIK", 1)[0].strip()
+
+
+def _efts_first_cik(src: Dict[str, Any]) -> str:
+    """
+    Return the first CIK (leading zeros stripped) from an EFTS ``_source``, or "".
+
+    EFTS ``_source`` is list-oriented: the CIK(s) live in ``ciks`` (an array), NOT
+    in ``entity_id`` — which does not exist on this endpoint.
+    """
+    ciks = src.get("ciks") or []
+    return str(ciks[0]).lstrip("0") if ciks else ""
+
+
+def _efts_company(src: Dict[str, Any]) -> str:
+    """Return the display name (CIK suffix stripped) from an EFTS ``_source``, or ""."""
+    names = src.get("display_names") or []
+    return _company_from_display_name(str(names[0])) if names else ""
 
 
 # ---------------------------------------------------------------------------

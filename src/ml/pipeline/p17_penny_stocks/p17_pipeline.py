@@ -36,6 +36,7 @@ from src.ml.pipeline.p17_penny_stocks.agents.market_agent import MarketAgent
 from src.ml.pipeline.p17_penny_stocks.agents.technical_agent import TechnicalAgent
 from src.ml.pipeline.p17_penny_stocks.agents.short_squeeze_agent import ShortSqueezeAgent
 from src.ml.pipeline.p17_penny_stocks.agents.dilution_agent import DilutionAgent
+from src.ml.pipeline.p17_penny_stocks.agents.catalyst_agent import CatalystAgent
 from src.ml.pipeline.p17_penny_stocks.agents.scoring_agent import ScoringAgent
 from src.ml.pipeline.p17_penny_stocks.agents.reporting_agent import ReportingAgent
 
@@ -99,6 +100,9 @@ class P17Pipeline:
         )
         self._dilution_agent = DilutionAgent(
             cfg.scoring_config, self._results_dir, self.target_date,
+        )
+        self._catalyst_agent = CatalystAgent(
+            cfg.catalyst_config, self._results_dir, self.target_date,
         )
         self._scoring_agent = ScoringAgent(cfg.scoring_config, self._ss_agent)
         self._reporting_agent = ReportingAgent(
@@ -196,6 +200,14 @@ class P17Pipeline:
             return {"dilution_flagged": flagged}
 
         job_results["dilution"] = self._run_job("Stage5 Dilution", stage5)
+
+        # ── Stage 5.5: Catalyst ────────────────────────────────────────────
+        def stage_catalyst() -> Dict:
+            self._catalyst_agent.run(candidates, force_refresh)
+            flagged = sum(1 for c in candidates if c.catalyst_score > 0)
+            return {"catalyst_flagged": flagged}
+
+        job_results["catalyst"] = self._run_job("Stage5.5 Catalyst", stage_catalyst)
 
         # ── Stage 6: Scoring ───────────────────────────────────────────────
         def stage6() -> Dict:

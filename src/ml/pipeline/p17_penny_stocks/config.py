@@ -89,13 +89,12 @@ class P17ScoringConfig:
     """Composite score weights and tier assignment thresholds."""
 
     # Weights — must sum to 1.0
-    # catalyst is a Phase 1 placeholder (always 0); its 0.10 redistributed proportionally
-    weight_momentum: float = 0.28
-    weight_volume: float = 0.22
-    weight_technical: float = 0.17
-    weight_fundamentals: float = 0.17
-    weight_catalyst: float = 0.00
-    weight_short_squeeze: float = 0.11
+    weight_momentum: float = 0.25
+    weight_volume: float = 0.20
+    weight_technical: float = 0.15
+    weight_fundamentals: float = 0.15
+    weight_catalyst: float = 0.10       # live since the CatalystAgent (8-K detection) landed
+    weight_short_squeeze: float = 0.10
     weight_accumulation: float = 0.05
 
     # Dilution hard penalties — deducted from weighted sum after scoring
@@ -119,6 +118,25 @@ class P17ScoringConfig:
 
 
 @dataclass
+class P17CatalystConfig:
+    """Bullish catalyst detection thresholds (SEC 8-K material events)."""
+
+    # Catalysts decay fast — only filings within this window are considered, and
+    # more recent ones are weighted more heavily inside the agent.
+    lookback_days: int = 30
+
+    # Pre-recency base points (0–100) by catalyst strength.
+    # Tier 1: FDA/clearance, M&A, material definitive agreement (contract/partnership),
+    #         guidance raise, defense/nuclear/rare-earth award.
+    # Tier 2: generic press release / Reg-FD disclosure, earnings event, thematic mention.
+    points_tier1: float = 90.0
+    points_tier2: float = 55.0
+
+    # Added (capped at 100) when two or more distinct catalyst categories fire.
+    multi_catalyst_bonus: float = 10.0
+
+
+@dataclass
 class P17AlertConfig:
     """Alert and notification settings."""
 
@@ -137,6 +155,7 @@ class P17PipelineConfig:
     technical_config: P17TechnicalConfig
     short_squeeze_config: P17ShortSqueezeConfig
     scoring_config: P17ScoringConfig
+    catalyst_config: P17CatalystConfig
     alert_config: P17AlertConfig
 
     save_intermediate_results: bool = True
@@ -157,5 +176,6 @@ class P17PipelineConfig:
             technical_config=P17TechnicalConfig(),
             short_squeeze_config=P17ShortSqueezeConfig(),
             scoring_config=P17ScoringConfig(),
+            catalyst_config=P17CatalystConfig(),
             alert_config=P17AlertConfig(),
         )
