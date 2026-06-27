@@ -1119,11 +1119,12 @@ knobs — distinct from the long-term roadmap in §22.
 For several consecutive sessions the screener produced **A=0, B=0** — every
 candidate stuck at tier C or below — even though the catalyst stage is healthy
 (e.g. run of 2026-06-26: 66/160 candidates flagged via the 8-K index cache).
-This is now a **scoring-calibration** issue, not a data gap.
+A 24-day analysis (§24.4) **resolved this**: Tier B is healthy (fires ~42% of
+days); the real, structural issue is that **Tier A is unreachable** under the
+current scoring. It is *not* a data gap (catalyst signal now flows).
 
 Reference case — **ILLR (2026-06-26)**, the top-ranked name, `final_score=54.0`,
-exactly **1 point below `tier_b_min_score=55`**, and flagged
-`explosive_candidate=True`:
+exactly 1 point below `tier_b_min_score=55`, flagged `explosive_candidate=True`:
 
 | sub-score      | value | × weight | points |
 | -------------- | ----- | -------- | ------ |
@@ -1135,45 +1136,121 @@ exactly **1 point below `tier_b_min_score=55`**, and flagged
 | short_squeeze  | 10    | 0.10     | 1.00   |
 | accumulation   | 71    | 0.05     | 3.55   |
 
-A textbook explosive setup (rvol 55×, fresh 8-K catalyst, strong technical /
-accumulation, zero dilution) is held under the tier-B wall because
-**`momentum_score=0` sits on the single largest weight (0.25)**, while the two
-explosive drivers (volume + catalyst) are capped at 30% combined weight.
+> ⚠️ **ILLR is a misleading poster child — read this before using it as
+> evidence.** Its `momentum_score=0` is **correct, not a defect**. P17 return
+> fields are *fractions* (`TechnicalAgent._return` → `(end-start)/start`, where
+> `1.0 = +100%`). ILLR's stored `price_5d_return=19.33` means **+1,933% in 5
+> days**, and `price_20d_return=3.0` is **+300% clamped at `momentum_20d_max`**.
+> `_momentum_score` deliberately returns `0` at that cap to penalise a *late
+> euphoric spike* (a name already up ~19× in a week is a chase, not an
+> early-stage entry — see §23). So ILLR landing at tier C is the anti-chase
+> logic **working as designed**, not the tier wall clipping a good setup.
 
 ## 24.2 Tuning levers (priority order)
 
-1. **Explosive → tier floor** *(cleanest first fix)*: give any candidate with
-   `explosive_candidate=True` a **minimum tier of B**. Such names already pass
-   every mandatory structural gate in §10, so ranking them tier C (as ILLR was)
-   is inconsistent. This fixes the inconsistency without weakening any threshold.
-   Touches `ScoringAgent._assign_tier` (`scoring_agent.py`).
+1. **Rebalance composite weights** (`P17ScoringConfig`, §9): now that catalyst is
+   a *real* signal (was a hardcoded `0`), `weight_catalyst=0.10` may be too low
+   for an explosive-penny thesis. **Note:** the §24.4 sweep found that reweighting
+   alone only lifts the score ceiling from ~67.5 to ~70 and trades away Tier C
+   breadth — it does **not** make Tier A (`>=75`) reachable. Treat reweighting as
+   secondary to the §24.5 decision, and do not tune to make ILLR-type
+   already-exploded names tier up.
 
-2. **Rebalance composite weights** (`P17ScoringConfig`, §9): now that catalyst is
-   a *real* signal, `weight_catalyst=0.10` is likely too low for an explosive-penny
-   thesis, and `weight_momentum=0.25` dominating may misfire on pre-breakout names
-   (high volume + catalyst, momentum not yet realised). Sweep
-   `weight_catalyst` / `weight_volume` up and `weight_momentum` down against the
-   backfilled window (§24.3).
+2. **Smooth the momentum cap discontinuity** (minor): `_momentum_score` cliffs
+   from ~100 (at +299%) to 0 (at the +300% cap). A monotone taper down from the
+   cap would be less brittle than the hard cliff. Low priority — it only affects
+   already-blown-off names that *should* score low anyway, so it does not explain
+   A=0/B=0.
 
-3. **Lower `tier_b_min_score` (last resort)**: least principled lever — prefer
-   fixing weights + the explosive floor first. Only revisit if the distribution
-   still shows a meaningful B-tier population is being clipped after (1) and (2).
+3. **Lower `tier_b_min_score` (last resort)**: least principled lever. Only
+   revisit if the §24.3 sweep shows a real population of *early-stage* setups
+   sitting just under 55.
+
+> **Rejected idea — explosive → tier-B floor.** An earlier draft proposed
+> flooring `explosive_candidate=True` names to tier B. ILLR shows why that is
+> wrong: it satisfies every mandatory explosive gate (§10) yet is already up ~19×
+> — flooring it would promote exactly the blow-off chases the screener is meant
+> to avoid. If anything, the **explosive criteria (§10) need a "not already at
+> the euphoric momentum cap" guard**, not a tier floor.
 
 ## 24.3 Validation methodology (avoid single-day overfit)
 
-* **Do not calibrate against one day.** Tuning to 2026-06-26 alone overfits.
-* Use the **60-day 8-K index backfill** (now cached by the P15 daily bundle,
-  `_job_edgar_8k_index`) to run the pipeline across a multi-day window and inspect
-  the resulting A/B/C/W distribution and, where possible, forward returns via the
-  backtester (§15) before committing config changes.
-* Re-check after any change that the **catalyst flag rate is sane** — the
-  2026-06-26 run flagged ~41% (66/160), which is high; verify tier-2 keyword
-  matches (`" ai "`, `partnership`, earnings items) are not over-flagging and
-  inflating `catalyst_score`.
+* **Do not calibrate against one day.** Tuning to a single date overfits.
+* There is **no backtester engine** yet (§15 is design-only), so a forward-return
+  P&L backtest is not runnable. The analysis below instead uses the **stored daily
+  candidate CSVs** (`results/p17_penny_stocks/{date}/{date}_candidates.csv`) plus
+  an **offline re-score** that credits the now-live 8-K catalyst (the
+  `_job_edgar_8k_index` backfill covers the window). This recomputes
+  `final_score`/tier from the persisted sub-scores without re-running the full
+  pipeline, which makes weight/threshold sweeps fast.
+* Re-check that the **catalyst flag rate is sane** — the 2026-06-26 run flagged
+  ~41% (66/160), which is high; verify tier-2 keyword matches (`" ai "`,
+  `partnership`, earnings items) are not over-flagging and inflating
+  `catalyst_score`.
 
-## 24.4 Open verification item
+## 24.4 Analysis results (24-day window, 2026-05-15 → 06-26)
 
-* `momentum_score=0` on a name with 55× relative volume and a fresh catalyst
-  (ILLR) is plausible (price flat/down on the volume spike = possible dump) but
-  worth confirming it is **not a data gap** silently zeroing momentum for
-  high-volume names. See §8.1 Price Momentum.
+Ran 2026-06-28 over 24 days of stored output (3,609 candidate-rows), with an
+offline catalyst-live re-score on the 16 fully-covered days (05-28 → 06-26).
+
+**Finding 1 — Tier B is healthy.** B fired on **10 / 24 days** (~42%). The
+A=0/B=0 that triggered this investigation was just a recent dry stretch, not a
+systemic failure. No calibration action needed for B.
+
+**Finding 2 — Tier A is structurally unreachable (the real issue).**
+
+* Tier A fired **0 / 24 days**, ever.
+* Global max `final_score` = **66.8** (stored) / **67.5** (catalyst-live
+  re-score) vs `tier_a_min_score=75` — a **~7.5-point gap even in the best case**.
+* Going catalyst-live barely moved tiers (`0/7/104 → 0/6/103`); the 0.10 catalyst
+  weight cannot bridge that gap.
+* *Why:* no name in 24 days scored high on momentum (.25) **and** volume (.20)
+  **and** technical (.15) **and** catalyst (.10) at once. There is a structural
+  trade-off — names with `momentum_score>=80` averaged `volume_score` **17**;
+  names with `volume_score>=80` averaged `momentum_score` **55** (19% were `0` =
+  already-exploded, ILLR-style). The best name ever (CPOP, 06-11: momentum 100,
+  volume 100, fundamentals 100) still only reached 66.8 because `technical=20`,
+  `short_squeeze=10`, `catalyst=0`.
+
+**Sweep — totals across the 16 covered days** (offline re-score):
+
+| variant | A | B | C | best max |
+| ------- | - | - | - | -------- |
+| baseline (`tier_a_min=75`, current weights) | 0 | 6 | 103 | 67.5 |
+| `tier_a_min=70` (current weights) | 0 | 6 | 103 | 67.5 |
+| `tier_a_min=68` (current weights) | 0 | 6 | 103 | 67.5 |
+| catalyst-heavy weights¹ (`tier_a_min=75`) | 0 | 6 | 56 | 70.1 |
+| catalyst-heavy weights¹ + `tier_a_min=70` | 1 | 5 | 56 | 70.1 |
+| catalyst-heavy weights¹ + `tier_a_min=68` | 1 | 5 | 56 | 70.1 |
+
+¹ catalyst-heavy = momentum .25→.15, catalyst .10→.20, fundamentals .15→.10,
+accumulation .05→.10 (volume/technical/short-squeeze unchanged).
+
+**Read-out:**
+
+* **Lowering `tier_a_min` alone does nothing** until it drops *below the ~67.5
+  ceiling* — 70 and 68 still yield 0 A. (My earlier "~68" suggestion was wrong;
+  it sits just above the ceiling.)
+* **Catalyst-heavy weights raise the ceiling only to ~70** and yield a *trickle*
+  of A (1 in 16 days at `tier_a_min<=70`) — but collapse Tier C (103→56) by
+  down-weighting momentum, i.e. they make the whole screen far more selective,
+  not obviously better.
+* **No modest reweight/threshold change cleanly "fixes" Tier A.** The ceiling is
+  ~67–70 regardless.
+
+## 24.5 Decision required (product call, not a bug)
+
+Per §11, **Tier A = "Elite."** So 0 A's may be *correct by design*. Choose one:
+
+1. **Tier A as a regular daily top-pick** → lower `tier_a_min_score` to **~65–67**
+   (just below the empirical ceiling). Most direct; expect a handful of A's per
+   month. Re-run the sweep harness to confirm the exact count before committing.
+2. **Tier A as genuinely rare/elite** → keep `75`, accept A fires a few times a
+   *year*, and treat **Tier B as the actionable daily list** (it already works).
+3. **Loosen sub-score normalisation** (deeper change) — the real reason the
+   ceiling is ~67 is that even great names leave `technical` / `short_squeeze` /
+   `catalyst` sub-scores low. Revisit the §9 normalisation caps if Tier A should
+   be reachable *without* lowering its threshold. Larger scope; do last.
+
+Do **not** rebalance weights chasing Tier A before deciding what Tier A is *for*
+— the sweep shows it trades away Tier C breadth for ~1 extra A.
