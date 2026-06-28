@@ -65,9 +65,22 @@ def main() -> int:
         return 0
     if args.cmd == "run-once":
         config.shadow_mode = args.mode == "shadow"
-        return _not_implemented("Phase 1/2", f"run-once ({args.mode})")
+        if args.mode == "live":
+            return _not_implemented("Phase 2", "run-once (live alerting)")
+        from src.ml.pipeline.p19_penny_intraday.shadow_loop import ShadowLoop
+        target = args.date or _today()
+        summary = ShadowLoop(config, target).run_once()
+        print(f"P19 shadow poll {target}: logged={summary.get('logged')} "
+              f"of polled={summary.get('polled')}")
+        print(f"__SCHEDULER_RESULT__:{json.dumps(summary)}")
+        return 0
     if args.cmd == "eod-backfill":
-        return _not_implemented("Phase 1", "eod backfill")
+        from src.ml.pipeline.p19_penny_intraday.shadow_loop import ShadowLoop
+        target = args.date or _today()
+        summary = ShadowLoop(config, target).eod_backfill()
+        print(f"P19 eod-backfill {target}: {summary.get('rows_updated')} rows")
+        print(f"__SCHEDULER_RESULT__:{json.dumps(summary)}")
+        return 0
     return 1
 
 

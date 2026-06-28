@@ -15,10 +15,18 @@
       + IBKR-scanner gappers + manual pins; hard filters; dedup/precedence; priority
       rank; cap to N; `watchlist.json` with baseline context. Wired to
       `run_p19 build-watchlist`. Tested on real P17 output (gappers need the Pi Gateway).
-- [ ] `run-once` shadow loop: stream IBKR 5m bars (delayed) for the watchlist
-- [ ] RVOL-so-far: intraday volume-profile baseline (bootstrap from `daily_avg × cdf`)
-- [ ] Shadow store (SQLite/Parquet) + `eod-backfill` of O/H/L/C
-- [ ] Wire a market-hours intraday cron (UTC, DST-aware)
+- [x] **`run-once` shadow loop** (`shadow_loop.py`): one delayed IBKR `reqMktData`
+      snapshot per watchlist name (one line each, ≤100) → %-move / RVOL-so-far →
+      append to SQLite. Feed/store/EOD-fetcher injectable; tested with a fake feed.
+- [x] **Metrics** (`metrics.py`): %-from-open/prev-close, RVOL-so-far with a *linear*
+      session-fraction placeholder (real U-shaped profile comes from shadow data).
+- [x] **Shadow store** (`shadow_store.py`): SQLite at `results/p19_penny_intraday/
+      shadow.sqlite` + `eod-backfill` of O/H/L/C (via DataManager, DATA_CACHE_DIR).
+- [ ] **Verify on the Pi during market hours**: `run-once --mode shadow` logs rows;
+      check RVOL/volume units (`ibkr_volume_lot_size`, default 100) against live numbers.
+- [ ] Enrich **gappers' baseline** (avg_volume / prior_close) via DataManager — they
+      currently log `rvol=0` until baseline is fetched (P17 names already have it).
+- [ ] Wire a market-hours intraday cron (UTC, DST-aware) for `run-once` + `eod-backfill`.
 
 > **Verify on the Pi:** run `python src/ml/pipeline/p19_penny_intraday/run_p19.py
 > build-watchlist` with the Gateway up to confirm the IBKR gappers scanner adds

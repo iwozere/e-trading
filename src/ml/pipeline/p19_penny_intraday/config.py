@@ -44,6 +44,7 @@ class P19FeedConfig:
     ibkr_client_id: int = 19               # intraday loop (unique per process)
     ibkr_scanner_client_id: int = 20       # pre-market gappers scan (distinct id)
     ibkr_market_data_type: int = 3         # 3 = delayed (free)
+    ibkr_volume_lot_size: int = 100        # reqMktData day-volume → shares (verify on Pi)
     use_streaming: bool = True             # keepUpToDate bars, not per-cycle historical
     poll_interval_minutes: int = 5         # 5/15/30 supported
     watchlist_cap: int = 100               # IBKR ~100 market-data lines (§13.2)

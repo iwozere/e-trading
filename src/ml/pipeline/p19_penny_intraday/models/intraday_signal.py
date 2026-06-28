@@ -17,14 +17,20 @@ class IntradaySignal:
     # ── Identity / time ────────────────────────────────────────────────────
     ticker: str
     ts: datetime                              # detection time (UTC)
+    source: str = ""                          # watchlist source: p17 | gapper | manual
     price: float = 0.0
 
-    # ── Live price action (Finnhub /quote, real-time) ──────────────────────
+    # ── Live price action (IBKR delayed reqMktData) ────────────────────────
+    day_open: float = 0.0
+    day_high: float = 0.0
+    day_low: float = 0.0
+    prev_close: float = 0.0
     pct_from_open: float = 0.0
     pct_from_prev_close: float = 0.0
-    day_high: float = 0.0
 
     # ── Volume / RVOL (delayed, confirming context) ────────────────────────
+    day_volume: float = 0.0                   # cumulative day volume (raw, IBKR units)
+    avg_volume_30d: float = 0.0               # baseline (shares) for RVOL
     rvol_so_far: float = 0.0
     dollar_volume_so_far: float = 0.0
     volume_is_delayed: bool = True
@@ -54,10 +60,16 @@ class IntradaySignal:
         return {
             "ticker": self.ticker,
             "ts": self.ts.isoformat() if self.ts else "",
+            "source": self.source,
             "price": round(self.price, 4),
+            "day_open": round(self.day_open, 4),
+            "day_high": round(self.day_high, 4),
+            "day_low": round(self.day_low, 4),
+            "prev_close": round(self.prev_close, 4),
             "pct_from_open": round(self.pct_from_open, 4),
             "pct_from_prev_close": round(self.pct_from_prev_close, 4),
-            "day_high": round(self.day_high, 4),
+            "day_volume": round(self.day_volume, 2),
+            "avg_volume_30d": round(self.avg_volume_30d, 2),
             "rvol_so_far": round(self.rvol_so_far, 2),
             "dollar_volume_so_far": round(self.dollar_volume_so_far, 2),
             "volume_is_delayed": self.volume_is_delayed,
