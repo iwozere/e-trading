@@ -29,7 +29,15 @@
 - [x] **Scheduler SQL** (`bin/scheduler/insert_p19_schedules.sql`): build-watchlist
       (13:00 UTC), shadow poll (`*/15 13-21 UTC`), eod-backfill (21:30 UTC), weekdays,
       DST-safe. **Apply on prod:** `psql -d <db> < bin/scheduler/insert_p19_schedules.sql`.
+- [x] **Shadow-data QA report** (`shadow_report.py`) — per-day coverage, RVOL/%-move
+      distributions, EOD-fill rate, volume lot-size sanity flag. Use it to monitor
+      collection health and later to calibrate thresholds.
+- [x] **Connect-retry** in the intraday feed for unattended multi-week robustness.
 - [ ] Verify on the Pi during market hours: shadow poll logs rows; check volume units.
+
+> **Paused here ~2026-06-28 for data collection. Resume point = spec §19** (health-
+> check → calibrate thresholds → build Phase 2 trigger/alerts → Phase 3 enrichment →
+> real U-shaped volume profile).
 
 > **Verify on the Pi:** run `python src/ml/pipeline/p19_penny_intraday/run_p19.py
 > build-watchlist` with the Gateway up to confirm the IBKR gappers scanner adds

@@ -389,3 +389,43 @@ Phase 0 must also create, under `src/ml/pipeline/p19_penny_intraday/`:
 `README.md`, `docs/Requirements.md`, `docs/Design.md`, `docs/Tasks.md`, and
 `tests/`. Cross-module dependencies (P17 agents, DataManager, sentiments, EDGAR,
 notification) documented in `Requirements.md`.
+
+## 19. Status & resume point (2026-06-28)
+
+**Phase 0 + Phase 1 are built and committed** — the monitor runs in **shadow mode
+(logging only, no alerts)** and is ready to accumulate the calibration dataset.
+
+**Done:**
+- IBKR paper Gateway working (host networking, `127.0.0.1:4002`, `ib_async`; §13.2).
+- Watchlist builder: P17 (Tier B/C + explosive) + IBKR gappers scanner + manual,
+  hard-filtered, ranked, capped to 100, with **baseline enrichment** (avg vol /
+  prior close for gappers via DataManager). → `{date}/watchlist.json`.
+- Shadow loop (`run-once --mode shadow`): one delayed `reqMktData` snapshot per name
+  (adaptive settle, connect-retry) → %-move / RVOL-so-far → `shadow.sqlite`.
+- `eod-backfill` of O/H/L/C; **scheduler SQL** (`bin/scheduler/insert_p19_schedules.sql`).
+- `shadow_report.py` QA tool; 31 tests pass.
+
+**Before walking away (operational):**
+1. Verify one **market-hours** `run-once --mode shadow` logs rows; eyeball
+   `shadow_report` — fix `ibkr_volume_lot_size` if the vol-ratio flag fires.
+2. `psql -d <db> < bin/scheduler/insert_p19_schedules.sql` to start daily collection.
+3. Use a **dedicated paper IBKR username** (avoid web/mobile login during RTH) to
+   prevent the "Re-login required" churn dropping polls.
+
+**Resume here in ~3–4 weeks (when data has accumulated) — in order:**
+1. **Health-check** the collection: `python -m src.ml.pipeline.p19_penny_intraday.shadow_report --all`.
+2. **Calibrate thresholds** from the shadow data — examine the RVOL-so-far and
+   |%-from-open| distributions (and how they relate to EOD `day_max`) to set
+   `intraday_rvol_trigger` / `intraday_move_trigger` / severity weights. This is the
+   shadow-first payoff; do **not** guess these earlier.
+3. **Build Phase 2** (`run-once --mode live`): trigger engine (volume + price (+ fresh
+   8-K)) → **severity score** (§8) → **dedup/escalation state** (`alerted.json`) →
+   **Alert Manager** (Telegram via NotificationService, daily cap). The runner stub
+   for `--mode live` is already wired.
+4. **Phase 3 enrichment**: reuse P17 `CatalystAgent` (intraday EFTS 8-K),
+   `ShortSqueezeAgent`, `DilutionAgent` (fade flag); attach sentiment context (§10).
+5. Replace the **linear** RVOL session-fraction (`metrics.py`) with a real U-shaped
+   **volume profile** computed from the accumulated shadow data.
+
+**Real U-shaped profile, lot-size, and gapper coverage are the known approximations
+to revisit first** (see Tasks.md).

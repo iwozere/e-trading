@@ -37,7 +37,14 @@ class IBKRIntradayFeed:
         self.cfg = feed_config
         self._ib = None
 
-    def connect(self) -> bool:
+    def connect(self, attempts: int = 2, backoff_seconds: float = 3.0) -> bool:
+        """
+        Connect to the Gateway, retrying a few times.
+
+        For unattended multi-week running, a single retry smooths over the daily
+        Gateway re-auth/restart and the "Re-login required" churn — a transient
+        failure on one attempt usually succeeds on the next.
+        """
         try:
             try:
                 from ib_async import IB
@@ -47,17 +54,29 @@ class IBKRIntradayFeed:
             _logger.warning("ib_async/ib_insync unavailable — intraday feed disabled")
             return False
 
-        ib = IB()
-        try:
-            ib.connect(self.cfg.ibkr_host, self.cfg.ibkr_port,
-                       clientId=self.cfg.ibkr_client_id, timeout=15, readonly=True)
-        except Exception as e:
-            _logger.warning("IBKR feed connect %s:%s failed (%s: %s)",
-                            self.cfg.ibkr_host, self.cfg.ibkr_port, type(e).__name__, e)
-            return False
-        ib.reqMarketDataType(self.cfg.ibkr_market_data_type)   # 3 = delayed
-        self._ib = ib
-        return True
+        for attempt in range(1, attempts + 1):
+            ib = IB()
+            try:
+                ib.connect(self.cfg.ibkr_host, self.cfg.ibkr_port,
+                           clientId=self.cfg.ibkr_client_id, timeout=15, readonly=True)
+                ib.reqMarketDataType(self.cfg.ibkr_market_data_type)   # 3 = delayed
+                self._ib = ib
+                return True
+            except Exception as e:
+                _logger.warning("IBKR feed connect %s:%s attempt %d/%d failed (%s: %s)",
+                                self.cfg.ibkr_host, self.cfg.ibkr_port, attempt, attempts,
+                                type(e).__name__, e)
+                try:
+                    ib.disconnect()
+                except Exception:
+                    pass
+                if attempt < attempts:
+                    try:
+                        ib.sleep(backoff_seconds)
+                    except Exception:
+                        import time
+                        time.sleep(backoff_seconds)
+        return False
 
     def snapshot(self, tickers: List[str], settle_seconds: float = 12.0) -> Dict[str, Dict[str, Any]]:
         """
