@@ -59,10 +59,13 @@ class IBKRIntradayFeed:
         self._ib = ib
         return True
 
-    def snapshot(self, tickers: List[str], settle_seconds: float = 5.0) -> Dict[str, Dict[str, Any]]:
+    def snapshot(self, tickers: List[str], settle_seconds: float = 12.0) -> Dict[str, Dict[str, Any]]:
         """
-        Subscribe to ``tickers``, let ticks settle, and return raw quote dicts:
-        ``{ticker: {last, open, high, low, prev_close, volume}}``.
+        Subscribe to ``tickers``, wait (adaptively) for ticks, and return raw quote
+        dicts: ``{ticker: {last, open, high, low, prev_close, volume}}``.
+
+        Waits up to ``settle_seconds``, returning early once ~80% of names have a
+        price — many delayed subscriptions need several seconds to populate.
         """
         if self._ib is None:
             return {}
@@ -78,7 +81,17 @@ class IBKRIntradayFeed:
                 subs[sym] = from_ib.reqMktData(Stock(sym, "SMART", "USD"), "", False, False)
             except Exception:
                 _logger.debug("reqMktData failed for %s", sym)
-        from_ib.sleep(settle_seconds)   # let delayed ticks arrive
+
+        # Adaptive settle: poll until most tickers have a price or the budget runs out.
+        waited = 0.0
+        target = max(1, int(0.8 * len(subs)))
+        while waited < settle_seconds:
+            from_ib.sleep(0.5)
+            waited += 0.5
+            ready = sum(1 for t in subs.values()
+                        if _num(getattr(t, "last", None)) or _num(getattr(t, "close", None)))
+            if ready >= target:
+                break
 
         out: Dict[str, Dict[str, Any]] = {}
         for sym, t in subs.items():
