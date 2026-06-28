@@ -305,10 +305,18 @@ p19's primary feed. The Gateway is already deployed (Docker, same Pi, paper port
 | Market-data type | must set `reqMarketDataType(3)` for delayed | already done in `IBKRDataDownloader`. |
 
 **Operational notes:** Gateway must be up (Docker on Pi); **daily re-auth/restart** →
-p19 must handle reconnects; use a **unique `clientId`** (p19 = 19) distinct from other
-bots; connection from `donotshare/.env` (`IBKR_HOST=raspberrypi`,
-`IBKR_PAPER_PORT=4002`). **15-min delay = discovery, not entry** — for one-session
-pump-and-fades you'll often see the move mid/late; treat alerts as awareness.
+p19 must handle reconnects; use a **unique `clientId`** (p19 = 19, scanner = 20)
+distinct from other bots. Connect via **`127.0.0.1:4002`** (the gateway API), verified
+2026-06-28. **15-min delay = discovery, not entry** — for one-session pump-and-fades
+you'll often see the move mid/late; treat alerts as awareness.
+
+**Gateway deployment gotcha (resolved 2026-06-28):** the gnzsnz `ib-gateway` container
+binds the API to localhost *inside* the container; publishing `4002:4002` over the
+Docker bridge makes connections arrive as a non-localhost (untrusted) source, so the
+TCP socket connects but the **API handshake silently times out** — for *any* client
+(both `ib_insync` and `ib_async` fail identically). Fix: run the paper container with
+**`network_mode: host`** (drop the `ports:` block) so the Pi reaches the API as true
+localhost. Use the project venv (`ib_async` lives there, not system Python).
 
 **Probe:** `tools/latency_probe.py` has an `--ibkr` mode that connects to the paper
 Gateway, sets delayed data, pulls a few penny names' 5m bars, and reports **bar

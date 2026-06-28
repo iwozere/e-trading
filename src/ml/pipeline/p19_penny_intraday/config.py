@@ -39,8 +39,8 @@ class P19FeedConfig:
     price_crosscheck_provider: str = "finnhub"   # optional real-time price (no vol)
     fallback_provider: str = "yfinance"
     # IBKR Gateway connection (same-Pi paper Gateway; values from donotshare/.env)
-    ibkr_host: str = "raspberrypi"
-    ibkr_port: int = 4002                  # paper Gateway (live = 4001)
+    ibkr_host: str = "127.0.0.1"           # same-Pi Gateway (host networking)
+    ibkr_port: int = 4002                  # paper Gateway API (verified working)
     ibkr_client_id: int = 19               # intraday loop (unique per process)
     ibkr_scanner_client_id: int = 20       # pre-market gappers scan (distinct id)
     ibkr_market_data_type: int = 3         # 3 = delayed (free)
