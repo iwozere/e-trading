@@ -156,10 +156,18 @@ class WatchlistBuilder:
 
         ib = IB()
         try:
+            # readonly=True skips the order/account startup exchange, which is the
+            # usual culprit when the socket connects but the API handshake times out.
             ib.connect(feed.ibkr_host, feed.ibkr_port,
-                       clientId=feed.ibkr_client_id + 1, timeout=10)
+                       clientId=feed.ibkr_scanner_client_id, timeout=15, readonly=True)
         except Exception as e:
-            _logger.warning("IBKR Gateway unreachable (%s) — gappers source skipped", e)
+            _logger.warning(
+                "IBKR connect %s:%s clientId=%s failed (%s: %s) — gappers source skipped. "
+                "If the socket connects but the handshake times out, suspect a clientId "
+                "conflict (try another id / restart the paper Gateway) or an "
+                "ib_insync/Python version mismatch.",
+                feed.ibkr_host, feed.ibkr_port, feed.ibkr_scanner_client_id,
+                type(e).__name__, e)
             return []
 
         try:

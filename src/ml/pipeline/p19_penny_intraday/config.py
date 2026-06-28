@@ -41,7 +41,8 @@ class P19FeedConfig:
     # IBKR Gateway connection (same-Pi paper Gateway; values from donotshare/.env)
     ibkr_host: str = "raspberrypi"
     ibkr_port: int = 4002                  # paper Gateway (live = 4001)
-    ibkr_client_id: int = 19               # unique per process (p19)
+    ibkr_client_id: int = 19               # intraday loop (unique per process)
+    ibkr_scanner_client_id: int = 20       # pre-market gappers scan (distinct id)
     ibkr_market_data_type: int = 3         # 3 = delayed (free)
     use_streaming: bool = True             # keepUpToDate bars, not per-cycle historical
     poll_interval_minutes: int = 5         # 5/15/30 supported
