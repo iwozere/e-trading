@@ -27,10 +27,14 @@
       optional LLM alert summarizer
 
 ## Known Issues / Constraints
-- No free real-time intraday **volume** (spec §13.1) — volume is ~15-min delayed.
-- Polygon free ~5 req/min — volume only for the price-triggered subset, not all N.
-- Latency probe was run off-hours (Sunday) — **re-run during market hours** for true
-  staleness numbers before sizing the poll interval.
+- **Primary feed = IBKR Gateway (delayed, free)** — gives 5m bars *with volume* (spec
+  §13.2). Binding limits: ~100 market-data lines (→ watchlist N ≤ 100), historical
+  pacing ~60/10min (→ stream, don't poll). Gateway must be up; daily restart →
+  handle reconnects; unique clientId (p19=19).
+- Free REST tiers lack real-time volume (§13.1) — kept only as fallback / price
+  cross-check.
+- **Run `latency_probe --ibkr` on the Pi during market hours** to confirm real delay
+  and volume presence before Phase 1.
 
 ## Open Questions (spec §17)
 - [ ] Best batch/snapshot endpoints + measured market-hours latency per provider

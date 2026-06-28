@@ -2,6 +2,7 @@
 
 ## Python Dependencies
 - `pandas`, `requests`
+- `ib_insync` (IBKR Gateway client — primary feed)
 - `python-dotenv` (loads `config/donotshare/.env` keys)
 - `optuna` (threshold calibration, Phase 4 — reuses P17 harness)
 - `anthropic` (optional LLM alert summarizer, Phase 4)
@@ -16,8 +17,11 @@
 - `src.notification.logger` — logging
 
 ## External Services / Keys (`config/donotshare/.env`)
-- `FINNHUB_API_KEY` (free) — real-time `/quote` (price). Intraday candles are premium.
-- `POLYGON_API_KEY` (free) — intraday `/aggs` (volume), ~15-min delayed, ~5 req/min.
+- **IBKR Gateway (primary)** — `IBKR_HOST=raspberrypi`, `IBKR_PAPER_PORT=4002`; paper
+  Docker Gateway on the same Pi. Delayed (free) market data via `reqMarketDataType(3)`;
+  5m bars carry volume. Limits: ~100 market-data lines, historical pacing ~60/10min.
+- `FINNHUB_API_KEY` (free, fallback) — real-time `/quote` (price). Candles are premium.
+- `POLYGON_API_KEY` (free, fallback) — intraday `/aggs` (volume), ~15-min delayed, ~5 req/min.
 - EDGAR (no key, fair-use headers).
 - Optional: Reddit/StockTwits/NewsAPI keys for sentiment adapters.
 

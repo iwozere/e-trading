@@ -145,12 +145,70 @@ def probe_polygon(key: str) -> None:
           f"{'(premium-gated on free)' if r.status_code in (401,403) else 'ok'}")
 
 
+def probe_ibkr() -> None:
+    """
+    Probe the IBKR paper Gateway (run on the Pi, during market hours).
+
+    Confirms p19's chosen primary feed: delayed 5m bars that **carry volume**.
+    Reports connection, last-bar staleness, and whether volume is present.
+    """
+    print("\n=== IBKR GATEWAY (paper, delayed) ===")
+    host = os.getenv("IBKR_HOST", "127.0.0.1")
+    port = int(os.getenv("IBKR_PAPER_PORT", "4002"))
+    client_id = 19  # unique to p19; avoid clashing with running bots
+    try:
+        from ib_insync import IB, Stock
+    except Exception:
+        print("  ib_insync not installed — skipped")
+        return
+
+    ib = IB()
+    try:
+        ib.connect(host, port, clientId=client_id, timeout=10)
+    except Exception as e:
+        print(f"  connect {host}:{port} FAILED: {e}")
+        print("  (run this on the Pi where the Gateway Docker is reachable)")
+        return
+
+    print(f"  connected {host}:{port} (clientId={client_id})")
+    ib.reqMarketDataType(3)  # 3 = delayed (free)
+    for sym in TICKERS[:5]:
+        try:
+            bars = ib.reqHistoricalData(
+                Stock(sym, "SMART", "USD"), endDateTime="", durationStr="1 D",
+                barSizeSetting="5 mins", whatToShow="TRADES", useRTH=False, formatDate=2)
+        except Exception as e:
+            print(f"  {sym}: reqHistoricalData ERROR {e}")
+            continue
+        if not bars:
+            print(f"  {sym}: no bars (no subscription / no data)")
+            continue
+        last = bars[-1]
+        ts = last.date if isinstance(last.date, datetime) else None
+        age = _age(ts.timestamp()) if ts else "n/a"
+        has_vol = getattr(last, "volume", 0) and last.volume > 0
+        print(f"  {sym}: {len(bars)} bars, last close={last.close} vol={last.volume} "
+              f"({age}) volume_present={'YES' if has_vol else 'no'}")
+    ib.disconnect()
+    print("  → if volume_present=YES, IBKR delivers real RVOL (15-min delayed) — primary feed confirmed")
+
+
 def main() -> int:
+    import argparse
+    ap = argparse.ArgumentParser(description="P19 feed probe")
+    ap.add_argument("--ibkr", action="store_true", help="Probe the IBKR paper Gateway (run on the Pi)")
+    ap.add_argument("--rest", action="store_true", help="Probe Finnhub + Polygon REST tiers")
+    args = ap.parse_args()
+
     _load_env()
     print(f"P19 feed probe @ {datetime.now(timezone.utc):%Y-%m-%d %H:%M UTC %A}")
     print("(latency/staleness only meaningful during market hours Mon-Fri 13:30-20:00 UTC)")
-    probe_finnhub(os.getenv("FINNHUB_API_KEY", ""))
-    probe_polygon(os.getenv("POLYGON_API_KEY", ""))
+    # default (no flags) = REST probe, as before
+    if args.ibkr:
+        probe_ibkr()
+    if args.rest or not args.ibkr:
+        probe_finnhub(os.getenv("FINNHUB_API_KEY", ""))
+        probe_polygon(os.getenv("POLYGON_API_KEY", ""))
     return 0
 
 

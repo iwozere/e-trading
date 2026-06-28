@@ -27,13 +27,25 @@ class P19FilterConfig:
 
 @dataclass
 class P19FeedConfig:
-    """Intraday data feed (spec §4.2, §13.1)."""
-    price_provider: str = "finnhub"        # real-time /quote (o/h/l/c/prev-close)
-    volume_provider: str = "polygon"       # ~15-min delayed intraday aggregates
+    """
+    Intraday data feed (spec §4.2, §13.1–13.2).
+
+    Primary = **IBKR Gateway (delayed, free)** — unlike Finnhub/Polygon free, IBKR
+    delayed bars include **volume**, giving real 1m/5m OHLCV (~15-min delayed) and
+    therefore real RVOL-so-far. Connects to the paper Gateway on the same Pi.
+    Finnhub (real-time price, no volume) is an optional faster cross-check.
+    """
+    primary_provider: str = "ibkr"         # delayed 1m/5m OHLCV+volume via Gateway
+    price_crosscheck_provider: str = "finnhub"   # optional real-time price (no vol)
     fallback_provider: str = "yfinance"
-    poll_interval_minutes: int = 5         # price poll; 5/15/30 supported
-    volume_poll_interval_minutes: int = 15  # delayed volume on a slower cadence
-    watchlist_cap: int = 200               # size with provider rate limits (§13.1)
+    # IBKR Gateway connection (same-Pi paper Gateway; values from donotshare/.env)
+    ibkr_host: str = "raspberrypi"
+    ibkr_port: int = 4002                  # paper Gateway (live = 4001)
+    ibkr_client_id: int = 19               # unique per process (p19)
+    ibkr_market_data_type: int = 3         # 3 = delayed (free)
+    use_streaming: bool = True             # keepUpToDate bars, not per-cycle historical
+    poll_interval_minutes: int = 5         # 5/15/30 supported
+    watchlist_cap: int = 100               # IBKR ~100 market-data lines (§13.2)
     premarket_enabled: bool = True
 
 

@@ -21,7 +21,7 @@ daily P17 batch screener structurally cannot do.
 
 | # | Decision | Choice | Rationale |
 |---|---|---|---|
-| 1 | Intraday data feed | **Finnhub/Polygon free tier** (near-real-time), yfinance fallback | yfinance is ~15 min delayed — too slow for single-session fades. Real-time-capable downloaders already exist in repo. |
+| 1 | Intraday data feed | **IBKR Gateway (delayed, free)** primary; Finnhub real-time price cross-check; yfinance fallback | *Updated 2026-06-28 after the feed probe (§13.1):* no free REST tier gives real-time intraday **volume**. IBKR delayed bars **include volume** (1m/5m OHLCV, ~15-min delayed — acceptable), giving real RVOL-so-far. Gateway already deployed (paper, same Pi). See §13.2. |
 | 2 | Watchlist universe | **P17 daily output + pre-market gappers/most-active < $5** | Catches overnight movers P17 didn't rank, while staying capped/affordable. |
 | 3 | Build sequencing | **Shadow-mode logger first**, then calibrate, then alert | No historical intraday penny data exists; thresholds must be tuned on accumulated data, not guessed. |
 | 4 | Social/news sentiment | **Context/enrichment only** (not a trigger) | Sentiment is noisy, laggy, gameable. Trigger on volume + price + fresh 8-K; attach sentiment for color; test its lead later. |
@@ -99,12 +99,16 @@ the daily watchlist; P19 watches it live**, importing P17 agents as libraries.
   interest, any known catalyst, and the intraday **volume-profile baseline** (§4.2).
 
 ### 4.2 Intraday Feed
-- `DataManager.get_ohlcv(symbol, "1m"|"5m", …)` with **ProviderSelector** routing to
-  Finnhub/Polygon (real-time-ish) and yfinance as fallback. Prefer **batch/snapshot**
-  endpoints over per-symbol loops to stay within rate limits.
+- **Primary: IBKR Gateway** (`IBKRLiveDataFeed` / `IBKRDataDownloader`), delayed mode
+  (`reqMarketDataType(3)`), **streaming** 5m bars via `reqHistoricalData(keepUpToDate=
+  True)` for the watchlist — one subscription per name within the ~100 market-data
+  line budget (§13.2). Delayed bars **carry volume**, so RVOL-so-far is real (just
+  ~15-min late). Connects to the same-Pi paper Gateway (`raspberrypi:4002`).
+- **Optional cross-check**: Finnhub `/quote` (real-time price, no volume) for a faster
+  read on price thrust; **fallback**: yfinance/Polygon via `DataManager`.
 - **RVOL-so-far-today** = cumulative volume to now ÷ *typical cumulative volume by
   this minute-of-day*. The intraday **volume profile** (U-shaped) is built from
-  recent cached intraday history; until enough exists, approximate as
+  recent IBKR/cached intraday history; until enough exists, approximate as
   `daily_avg_volume × intraday_cdf(minute_of_day)`. Shadow mode (§12) accumulates the
   real profile.
 - Also compute **% move from today's open** and **% from prior close**.
@@ -284,6 +288,32 @@ RVOL-so-far" assumption:
 - **Watchlist sizing:** Finnhub 60/min → a full quote sweep of N≈60 fits a 1-min
   poll, or N≈300 fits a 5-min poll. Polygon 5/min makes per-name volume polling
   impractical at scale — fetch volume for only the *price-triggered* subset.
+
+### 13.2 IBKR Gateway feed (chosen primary — 2026-06-28)
+
+IBKR's **free delayed** market data (`reqMarketDataType(3)`, ~15-min late) returns
+**1m/5m OHLCV with volume** — the one thing the free REST tiers lacked — making it
+p19's primary feed. The Gateway is already deployed (Docker, same Pi, paper port
+**4002**); reuse `IBKRLiveDataFeed` / `IBKRDataDownloader` and `ib_insync`.
+
+**The binding constraint shifts from REST rate limits to IBKR data limits:**
+
+| IBKR limit | Default (scales w/ equity & commissions) | p19 handling |
+|---|---|---|
+| Market-data **lines** (concurrent streams) | **~100** | **Cap watchlist N ≤ 100** and **stream** (`keepUpToDate`) rather than poll. |
+| **Historical** request pacing | **~60 / 10 min**; no identical req < 15 s; ≤6 identical / 2 s | Don't drive the loop with `reqHistoricalData`; use streaming subs. Tail beyond 100 names (if any) rotates through historical within this budget. |
+| Market-data type | must set `reqMarketDataType(3)` for delayed | already done in `IBKRDataDownloader`. |
+
+**Operational notes:** Gateway must be up (Docker on Pi); **daily re-auth/restart** →
+p19 must handle reconnects; use a **unique `clientId`** (p19 = 19) distinct from other
+bots; connection from `donotshare/.env` (`IBKR_HOST=raspberrypi`,
+`IBKR_PAPER_PORT=4002`). **15-min delay = discovery, not entry** — for one-session
+pump-and-fades you'll often see the move mid/late; treat alerts as awareness.
+
+**Probe:** `tools/latency_probe.py` has an `--ibkr` mode that connects to the paper
+Gateway, sets delayed data, pulls a few penny names' 5m bars, and reports **bar
+staleness + volume presence**. Run it **on the Pi during market hours** to confirm the
+real delay and that volume comes through before building Phase 1.
 
 ## 14. Alerting
 

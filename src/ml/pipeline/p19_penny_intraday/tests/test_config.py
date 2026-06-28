@@ -22,12 +22,13 @@ def test_default_filters_penny_regime():
     assert f.min_daily_volume == 500_000
 
 
-def test_feed_reflects_probe_findings():
+def test_feed_uses_ibkr_primary():
     feed = P19Config.create_default().feed_config
-    # Finnhub real-time price; Polygon delayed volume on a slower cadence
-    assert feed.price_provider == "finnhub"
-    assert feed.volume_provider == "polygon"
-    assert feed.volume_poll_interval_minutes >= feed.poll_interval_minutes
+    # IBKR Gateway (delayed, free) is primary — provides volume bars (§13.2)
+    assert feed.primary_provider == "ibkr"
+    assert feed.ibkr_port == 4002              # paper Gateway
+    assert feed.ibkr_market_data_type == 3     # delayed
+    assert feed.watchlist_cap <= 100           # IBKR market-data line limit
 
 
 def test_independent_config_instances():
