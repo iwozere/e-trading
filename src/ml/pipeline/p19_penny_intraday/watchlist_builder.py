@@ -148,11 +148,14 @@ class WatchlistBuilder:
         succeeds from the P17 source alone.
         """
         feed = self.cfg.feed_config
-        try:
-            from ib_insync import IB, ScannerSubscription, TagValue
-        except Exception:
-            _logger.warning("ib_insync unavailable — gappers source skipped")
-            return []
+        try:                                  # prefer maintained ib_async (Py3.13-safe)
+            from ib_async import IB, ScannerSubscription, TagValue
+        except ImportError:
+            try:
+                from ib_insync import IB, ScannerSubscription, TagValue
+            except Exception:
+                _logger.warning("ib_async/ib_insync unavailable — gappers source skipped")
+                return []
 
         ib = IB()
         try:
