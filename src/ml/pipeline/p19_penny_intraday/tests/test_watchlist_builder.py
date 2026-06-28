@@ -106,6 +106,28 @@ def test_write_emits_watchlist_json(tmp_path):
     assert payload["entries"][0]["tier"] == "B"
 
 
+def test_baseline_enrichment_fills_non_p17(tmp_path):
+    # manual pin (no baseline) gets enriched; P17 name keeps its CSV baseline
+    rows = [_row("AAA", tier="B", avg_vol=2_000_000)]
+    p17 = _p17_dir(tmp_path, "2026-06-26", rows)
+    cfg = P19Config.create_default()
+    cfg.use_gappers = False
+    cfg.manual_pins = ["MAN"]
+    fetched = {}
+
+    def fake_fetcher(ticker):
+        fetched[ticker] = True
+        return {"avg_volume_30d": 750_000, "prior_close": 1.23}
+
+    b = WatchlistBuilder(cfg, "2026-06-26", p17_results_dir=p17,
+                         output_dir=str(tmp_path / "p19"), baseline_fetcher=fake_fetcher)
+    by_ticker = {e.ticker: e for e in b.build()}
+    assert by_ticker["MAN"].avg_volume_30d == 750_000      # enriched
+    assert by_ticker["MAN"].prior_close == 1.23
+    assert by_ticker["AAA"].avg_volume_30d == 2_000_000    # P17 baseline untouched
+    assert "AAA" not in fetched                            # P17 not re-fetched
+
+
 def test_no_p17_csv_yields_empty(tmp_path):
     cfg = P19Config.create_default()
     cfg.use_gappers = False

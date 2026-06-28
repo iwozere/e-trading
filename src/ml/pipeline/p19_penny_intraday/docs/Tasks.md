@@ -24,9 +24,12 @@
       shadow.sqlite` + `eod-backfill` of O/H/L/C (via DataManager, DATA_CACHE_DIR).
 - [ ] **Verify on the Pi during market hours**: `run-once --mode shadow` logs rows;
       check RVOL/volume units (`ibkr_volume_lot_size`, default 100) against live numbers.
-- [ ] Enrich **gappers' baseline** (avg_volume / prior_close) via DataManager — they
-      currently log `rvol=0` until baseline is fetched (P17 names already have it).
-- [ ] Wire a market-hours intraday cron (UTC, DST-aware) for `run-once` + `eod-backfill`.
+- [x] Enrich **gappers'/manual baseline** (avg_volume / prior_close) via DataManager
+      in the watchlist builder (capped set only) so RVOL populates for them too.
+- [x] **Scheduler SQL** (`bin/scheduler/insert_p19_schedules.sql`): build-watchlist
+      (13:00 UTC), shadow poll (`*/15 13-21 UTC`), eod-backfill (21:30 UTC), weekdays,
+      DST-safe. **Apply on prod:** `psql -d <db> < bin/scheduler/insert_p19_schedules.sql`.
+- [ ] Verify on the Pi during market hours: shadow poll logs rows; check volume units.
 
 > **Verify on the Pi:** run `python src/ml/pipeline/p19_penny_intraday/run_p19.py
 > build-watchlist` with the Gateway up to confirm the IBKR gappers scanner adds

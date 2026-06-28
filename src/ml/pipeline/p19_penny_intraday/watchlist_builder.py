@@ -54,11 +54,14 @@ class WatchlistBuilder:
         target_date: str,
         p17_results_dir: str = DEFAULT_P17_RESULTS_DIR,
         output_dir: str = DEFAULT_OUTPUT_DIR,
+        baseline_fetcher=None,
     ) -> None:
         self.cfg = config
         self.target_date = target_date
         self.p17_results_dir = p17_results_dir
         self.output_dir = output_dir
+        # Resolves a ticker -> {avg_volume_30d, prior_close}; default uses DataManager.
+        self._baseline_fetcher = baseline_fetcher
 
     # ── Public API ─────────────────────────────────────────────────────────
 
@@ -88,7 +91,51 @@ class WatchlistBuilder:
             e.priority = self._priority(e)
         kept.sort(key=lambda e: e.priority, reverse=True)
         cap = max(1, self.cfg.feed_config.watchlist_cap)
-        return kept[:cap]
+        kept = kept[:cap]
+        self._enrich_baseline(kept)   # only the capped set, to limit fetches
+        return kept
+
+    # ── Baseline enrichment (gappers/manual lack P17 context) ──────────────
+
+    def _enrich_baseline(self, entries: List[WatchlistEntry]) -> None:
+        """
+        Fill `avg_volume_30d` / `prior_close` for non-P17 names so the shadow loop
+        can compute RVOL-so-far. P17 entries already carry these from the CSV;
+        gappers/manual get them from 30 days of daily bars (DataManager-cached).
+        Best-effort: a failed fetch leaves the fields at 0 (RVOL stays 0 for it).
+        """
+        need = [e for e in entries
+                if e.source != "p17" and (e.avg_volume_30d <= 0 or e.prior_close <= 0)]
+        if not need:
+            return
+        fetcher = self._baseline_fetcher or self._default_baseline_fetcher
+        enriched = 0
+        for e in need:
+            b = fetcher(e.ticker)
+            if not b:
+                continue
+            if e.avg_volume_30d <= 0:
+                e.avg_volume_30d = float(b.get("avg_volume_30d", 0.0) or 0.0)
+            if e.prior_close <= 0:
+                e.prior_close = float(b.get("prior_close", 0.0) or 0.0)
+            enriched += 1
+        _logger.info("Baseline enrichment: %d/%d non-P17 names filled", enriched, len(need))
+
+    @staticmethod
+    def _default_baseline_fetcher(ticker: str):
+        """30-day avg volume + last close via DataManager (cached in DATA_CACHE_DIR)."""
+        try:
+            from datetime import datetime, timedelta
+            from src.data.data_manager import DataManager
+            end = datetime.now()
+            df = DataManager().get_ohlcv(ticker, "1d", end - timedelta(days=45), end)
+            if df is None or df.empty or "volume" not in df.columns:
+                return None
+            return {"avg_volume_30d": float(df["volume"].tail(30).mean()),
+                    "prior_close": float(df["close"].iloc[-1])}
+        except Exception:
+            _logger.debug("Baseline fetch failed for %s", ticker)
+            return None
 
     # ── Sources ────────────────────────────────────────────────────────────
 
