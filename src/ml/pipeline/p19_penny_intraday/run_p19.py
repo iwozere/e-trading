@@ -13,7 +13,9 @@ Usage:
 """
 
 import argparse
+import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -23,6 +25,11 @@ from src.notification.logger import setup_logger
 from src.ml.pipeline.p19_penny_intraday.config import P19Config
 
 _logger = setup_logger(__name__)
+
+
+def _today() -> str:
+    """Trading date for the watchlist (UTC today; pre-market build)."""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
 def _not_implemented(phase: str, what: str) -> int:
@@ -36,6 +43,7 @@ def main() -> int:
     # available on every subparser — share it via a parent parser.
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--user-id", default=None, help="Scheduler-injected alert recipient")
+    common.add_argument("--date", default=None, help="Trading date YYYY-MM-DD (default: today UTC)")
 
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("build-watchlist", parents=[common], help="Build the daily watchlist (pre-market)")
@@ -49,7 +57,12 @@ def main() -> int:
         config.user_id = args.user_id
 
     if args.cmd == "build-watchlist":
-        return _not_implemented("Phase 1", "watchlist builder")
+        from src.ml.pipeline.p19_penny_intraday.watchlist_builder import WatchlistBuilder
+        target = args.date or _today()
+        summary = WatchlistBuilder(config, target).run()
+        print(f"P19 watchlist {target}: {summary['count']} names {summary['sources']}")
+        print(f"__SCHEDULER_RESULT__:{json.dumps(summary)}")
+        return 0
     if args.cmd == "run-once":
         config.shadow_mode = args.mode == "shadow"
         return _not_implemented("Phase 1/2", f"run-once ({args.mode})")

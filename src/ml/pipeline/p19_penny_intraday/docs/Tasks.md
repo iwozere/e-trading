@@ -10,13 +10,19 @@
 - [x] CLI scaffold (`run_p19.py`) with run modes
 - [x] Submodule docs (README, Requirements, Design, Tasks)
 
-### 🔄 NEXT — Phase 1 (watchlist + shadow logger, NO alerts)
-- [ ] Watchlist Builder: consume P17 daily output + pre-market gappers < $5; hard
-      filters; cap to N; write `watchlist.json` with baseline context
-- [ ] `run-once` shadow loop: poll Finnhub `/quote` for price action
+### 🔄 IN PROGRESS — Phase 1 (watchlist + shadow logger, NO alerts)
+- [x] **Watchlist Builder** (`watchlist_builder.py`): P17 source (Tier B/C + explosive)
+      + IBKR-scanner gappers + manual pins; hard filters; dedup/precedence; priority
+      rank; cap to N; `watchlist.json` with baseline context. Wired to
+      `run_p19 build-watchlist`. Tested on real P17 output (gappers need the Pi Gateway).
+- [ ] `run-once` shadow loop: stream IBKR 5m bars (delayed) for the watchlist
 - [ ] RVOL-so-far: intraday volume-profile baseline (bootstrap from `daily_avg × cdf`)
 - [ ] Shadow store (SQLite/Parquet) + `eod-backfill` of O/H/L/C
 - [ ] Wire a market-hours intraday cron (UTC, DST-aware)
+
+> **Verify on the Pi:** run `python src/ml/pipeline/p19_penny_intraday/run_p19.py
+> build-watchlist` with the Gateway up to confirm the IBKR gappers scanner adds
+> pre-market movers beyond the P17 names.
 
 ### 🚀 PLANNED
 - [ ] Phase 2: Trigger Engine (price thrust + delayed-volume confirm) + dedup state +
