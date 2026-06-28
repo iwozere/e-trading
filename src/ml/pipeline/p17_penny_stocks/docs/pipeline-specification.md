@@ -826,6 +826,66 @@ entry/exit/metrics engine specified below (`next_open` entry, trailing/time/targ
 exits, Sharpe, drawdown, tier accuracy) remains the target for a realistic
 backtest.
 
+## 15.1 Implemented — stop/trailing strategy simulator + Optuna optimizer
+
+`strategy_sim.py` is a path-dependent backtest of a stop-loss + trailing-stop
+strategy over the Tier A/B/C detections, plus an Optuna optimizer.
+
+* **Strategy:** enter at detection close (or `--entry next_open`); initial stop at
+  `-stop`; a trailing stop arms once price reaches `+activate` above entry, then
+  follows the running high by `trail` (the initial stop is dropped once armed).
+  `stop`/`trail` are fixed `pct` or `atr`-multiples (`--stop-mode`/`--trail-mode`).
+* **Sizing:** per-tier dollars (default A=$1000, B=$500, C=$100), optionally
+  optimised (`--optimize-sizing`).
+* **CLI:** `run` (one parameter set) and `optimize` (Optuna; objectives
+  `total_pnl` | `roi` | `sharpe`). Price paths are cached on disk so optimisation
+  is fast.
+
+### Findings (run 2026-06-28, 66 detections over 2026-05-15 → 06-26)
+
+These guided the stop-loss design and are the **starting point for the next round
+of work** (see §15.2):
+
+* **Best-case "unprofitable" rate:** even selling at the peak, **51%** of all
+  names (and **50%** of Tier B) never reached **+20%**. Half the alerts never arm
+  a +20% trailing stop.
+* **A fixed −10% stop is too tight.** Tier B median ATR is **13.2%/day**
+  (p75 18%); a −10% stop is inside one day's noise and stopped out **55–67%** of
+  positions. Widening to −20% roughly halved that.
+* **Optuna optimum (consistent across `total_pnl` and `sharpe`):**
+  stop **≈1.8× ATR**, trail **≈0.34× ATR**, activation **≈+45%** (much higher than
+  the proposed +20%, which noise trips too easily). ATR-scaled stops beat any
+  single fixed %.
+* **Tier B does not pay under any stop policy here (≈−10% ROI, ~67% stopped);
+  Tier C is the engine (≈+6–10% ROI).** P&L-maximising sizing drove Tier B to $0
+  and loaded Tier C. Counter-intuitive but logical: A/B are scored for *explosive
+  peak* upside, which high ATR whipsaws out before a stop strategy can capture it.
+
+### Caveats (do not deploy on these numbers)
+
+* **In-sample / overfit:** params are fitted to one 66-trade, 6-week history;
+  best in-sample Sharpe ≈ 0.2 is a *weak* edge. No out-of-sample validation yet.
+* **Tiny sample**, especially Tier B (9 trades).
+* **Stops assumed to fill at the stop price** — penny stocks gap, so realised
+  losses run worse than modelled.
+* **P&L-max sizing is degenerate** (concentrates in the best tier); read it as
+  "which tier is worth trading", not a literal allocation.
+
+## 15.2 Resume point — next round (planned ~2026-09)
+
+Work paused here intentionally; resume from this list:
+
+1. **Walk-forward / out-of-sample validation** — split the history, optimise on
+   the earlier window, test on the later; only trust params that survive.
+2. **Accumulate more history + paper-trade** the ATR-stop / +45%-activation config
+   before risking capital (current sample is too small to conclude an edge).
+3. **Model gap risk** — fill stops at next-bar open when it gaps through the stop,
+   not at the stop price, for honest downside.
+4. **Revisit the tradeable set** — the data favours Tier C; decide whether to
+   trade C-heavy, fix Tier A's unreachability (§24.5) so A actually fires, or keep
+   B for non-stop (peak-capture) plays.
+5. **Only then** wire live execution onto the Stage-8 alert path.
+
 ## Entry Rules
 
 Entry price must be defined before computing any metric:
