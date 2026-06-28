@@ -39,6 +39,7 @@ from src.ml.pipeline.p17_penny_stocks.agents.dilution_agent import DilutionAgent
 from src.ml.pipeline.p17_penny_stocks.agents.catalyst_agent import CatalystAgent
 from src.ml.pipeline.p17_penny_stocks.agents.scoring_agent import ScoringAgent
 from src.ml.pipeline.p17_penny_stocks.agents.reporting_agent import ReportingAgent
+from src.ml.pipeline.p17_penny_stocks.agents.notification_agent import NotificationAgent
 
 _logger = setup_logger(__name__)
 
@@ -107,6 +108,9 @@ class P17Pipeline:
         self._scoring_agent = ScoringAgent(cfg.scoring_config, self._ss_agent)
         self._reporting_agent = ReportingAgent(
             cfg.scoring_config, self._results_dir, self.target_date,
+        )
+        self._notification_agent = NotificationAgent(
+            cfg.alert_config, self.target_date, cfg.user_id,
         )
 
     # ── Run ────────────────────────────────────────────────────────────────
@@ -230,6 +234,12 @@ class P17Pipeline:
             return report_meta
 
         job_results["reporting"] = self._run_job("Stage7 Reporting", stage7)
+
+        # ── Stage 8: Notification (Tier A/B email) ─────────────────────────
+        def stage8() -> Dict:
+            return self._notification_agent.run(candidates)
+
+        job_results["notify"] = self._run_job("Stage8 Notify", stage8)
 
         elapsed = round(time.monotonic() - t_start, 1)
         _logger.info("=" * 70)

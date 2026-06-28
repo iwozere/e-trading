@@ -777,6 +777,20 @@ Alert only:
 MIN_ALERT_SCORE: 75
 ```
 
+## 13.1 Implemented — Tier A/B email (Stage 8)
+
+`NotificationAgent` (`agents/notification_agent.py`) runs as **Stage 8** after
+reporting. It emails the run's actionable picks — **Tier B** (the requested
+scope) plus any **Tier A** (an elite pick is never dropped from an alert that
+carries the lower tier), highest score first, as a human-readable HTML table
+(ticker, company, tier, score, price, RVol, catalyst score, catalyst signals)
+with a plain-text fallback. Delivery mirrors P05: the message is queued via
+`NotificationService` and the recipient's address is resolved from their
+`user_id` through `UsersService` (no SMTP creds in the pipeline). Gated on
+`P17AlertConfig.email_enabled` (now `True` by default) **and** a `user_id`
+(`run_p17.py --user-id …`); with no user, or no Tier A/B names, it no-ops. Any
+failure is logged and never aborts the pipeline.
+
 ---
 
 # 14. Historical Storage
@@ -797,6 +811,20 @@ Needed for:
 ---
 
 # 15. Backtesting Engine
+
+## 15.0 Implemented — best-case (peak-exit) backtest
+
+`backtest.py` (`python -m src.ml.pipeline.p17_penny_stocks.backtest`) is a first,
+deliberately simple cut: it buys a fixed amount (`--invest`, default $1000) in
+every ticker on its **first** detection date and "sells" at the **maximum daily
+high** between detection and now, reporting profit/ROI overall and **per tier**.
+Because it exits at the absolute peak it is an *upper bound*, not an achievable
+strategy — its value is the **relative** ranking across tiers (does B beat C beat
+W?) and confirming surfaced names actually moved. Detections are deduped to the
+earliest appearance; daily OHLCV comes from `YahooDataDownloader`. The full
+entry/exit/metrics engine specified below (`next_open` entry, trailing/time/target
+exits, Sharpe, drawdown, tier accuracy) remains the target for a realistic
+backtest.
 
 ## Entry Rules
 

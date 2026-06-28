@@ -143,7 +143,7 @@ class P17AlertConfig:
     enabled: bool = True
     min_alert_score: float = 75.0
     telegram_enabled: bool = True
-    email_enabled: bool = False
+    email_enabled: bool = True   # Tier A/B picks emailed at end of each daily run (requires user_id)
 
 
 @dataclass
