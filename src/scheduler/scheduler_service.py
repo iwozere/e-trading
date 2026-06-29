@@ -43,6 +43,54 @@ UTC = timezone.utc
 # Global service instance reference for pickle-safe job execution
 _service_instance: Optional['SchedulerService'] = None
 
+# Standard crontab numbers weekdays as 0/7=Sunday, 1=Monday ... 6=Saturday.
+_CRONTAB_WEEKDAY_NAMES = {
+    0: "sun", 1: "mon", 2: "tue", 3: "wed", 4: "thu", 5: "fri", 6: "sat", 7: "sun",
+}
+
+
+def crontab_weekday_to_apscheduler(field: str) -> str:
+    """
+    Translate a standard-crontab day-of-week field to APScheduler weekday names.
+
+    Standard crontab numbers weekdays as 0/7=Sunday, 1=Monday ... 6=Saturday.
+    APScheduler's ``CronTrigger`` instead treats numeric weekdays as
+    0=Monday ... 6=Sunday, so passing a raw numeric field (e.g. ``'1-5'``)
+    shifts every day by one and would schedule Tue-Sat instead of the intended
+    Mon-Fri. Converting the numbers to names (``'mon'``-``'fri'``) makes the
+    trigger honour crontab semantics, matching ``croniter`` which is used to
+    compute ``next_run_at``.
+
+    Args:
+        field: The day-of-week field of a cron expression (e.g. ``'1-5'``,
+            ``'0'``, ``'1,3,5'``, ``'*'``, or already-named ``'mon-fri'``).
+
+    Returns:
+        The field with numeric weekday tokens replaced by APScheduler names.
+        Operators (``*``, ``,``, ``-``, ``/``) and existing names are preserved.
+    """
+    if field == "*":
+        return field
+
+    def num_to_name(token: str) -> str:
+        token = token.strip()
+        return _CRONTAB_WEEKDAY_NAMES.get(int(token), token) if token.isdigit() else token
+
+    def convert_simple(token: str) -> str:
+        if "-" in token:  # range a-b
+            start, end = token.split("-", 1)
+            return f"{num_to_name(start)}-{num_to_name(end)}"
+        return num_to_name(token)
+
+    def convert_token(token: str) -> str:
+        if "/" in token:  # step a/b or */b -- only the base names a weekday
+            base, step = token.split("/", 1)
+            converted_base = base if base == "*" else convert_simple(base)
+            return f"{converted_base}/{step}"
+        return convert_simple(token)
+
+    return ",".join(convert_token(part) for part in field.split(","))
+
 
 async def execute_job_wrapper(schedule_id: int) -> None:
     """
@@ -481,7 +529,7 @@ class SchedulerService:
                     hour=cron_fields[1],
                     day=cron_fields[2],
                     month=cron_fields[3],
-                    day_of_week=cron_fields[4],
+                    day_of_week=crontab_weekday_to_apscheduler(cron_fields[4]),
                     timezone=UTC
                 )
             elif len(cron_fields) == 6:
@@ -492,7 +540,7 @@ class SchedulerService:
                     hour=cron_fields[2],
                     day=cron_fields[3],
                     month=cron_fields[4],
-                    day_of_week=cron_fields[5],
+                    day_of_week=crontab_weekday_to_apscheduler(cron_fields[5]),
                     timezone=UTC
                 )
             else:
