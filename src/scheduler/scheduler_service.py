@@ -518,7 +518,11 @@ class SchedulerService:
             # Write next_run_at back to DB so the UI reflects the computed fire time.
             # This is especially important for rows inserted via raw SQL, which bypass
             # create_schedule() and therefore never have next_run_at populated.
-            if job.next_run_time is not None:
+            # NOTE: read next_run_time defensively via getattr — not every APScheduler
+            # Job exposes the attribute, and a missing attribute must never abort job
+            # registration (the DB write is purely cosmetic for the UI).
+            next_run_time = getattr(job, "next_run_time", None)
+            if next_run_time is not None:
                 try:
                     await asyncio.to_thread(
                         lambda: self.jobs_service.update_schedule_next_run(schedule.id)
@@ -527,7 +531,7 @@ class SchedulerService:
                     _logger.warning("Could not update next_run_at for schedule %d", schedule.id)
 
             _logger.debug("Registered schedule %s (ID: %d) with job ID: %s, next_run_at: %s",
-                         schedule.name, schedule.id, job_id, job.next_run_time)
+                         schedule.name, schedule.id, job_id, next_run_time)
 
         except Exception as e:
             _logger.error("Failed to register schedule %s (ID: %d): %s",
