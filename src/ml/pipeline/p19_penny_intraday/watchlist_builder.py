@@ -62,6 +62,8 @@ class WatchlistBuilder:
         self.output_dir = output_dir
         # Resolves a ticker -> {avg_volume_30d, prior_close}; default uses DataManager.
         self._baseline_fetcher = baseline_fetcher
+        # Lazily-built, reused across tickers so we don't re-init downloaders per name.
+        self._data_manager = None
 
     # ── Public API ─────────────────────────────────────────────────────────
 
@@ -121,14 +123,24 @@ class WatchlistBuilder:
             enriched += 1
         _logger.info("Baseline enrichment: %d/%d non-P17 names filled", enriched, len(need))
 
-    @staticmethod
-    def _default_baseline_fetcher(ticker: str):
+    def _get_data_manager(self):
+        """Return a single shared DataManager, building it on first use.
+
+        Constructing a DataManager initializes every downloader (Alpaca, Tiingo,
+        FMP, ...), so it must be reused across tickers rather than rebuilt per name.
+        """
+        if self._data_manager is None:
+            from src.data.data_manager import DataManager
+            self._data_manager = DataManager()
+        return self._data_manager
+
+    def _default_baseline_fetcher(self, ticker: str):
         """30-day avg volume + last close via DataManager (cached in DATA_CACHE_DIR)."""
         try:
             from datetime import datetime, timedelta
-            from src.data.data_manager import DataManager
             end = datetime.now()
-            df = DataManager().get_ohlcv(ticker, "1d", end - timedelta(days=45), end)
+            df = self._get_data_manager().get_ohlcv(
+                ticker, "1d", end - timedelta(days=45), end)
             if df is None or df.empty or "volume" not in df.columns:
                 return None
             return {"avg_volume_30d": float(df["volume"].tail(30).mean()),
