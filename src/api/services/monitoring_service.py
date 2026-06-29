@@ -92,12 +92,20 @@ class SystemMonitoringService:
             # Get per-core usage
             cpu_per_core = psutil.cpu_percent(interval=0.1, percpu=True)
 
+            # Load average (1/5/15 min). psutil.getloadavg() is cross-platform
+            # (emulated on Windows); guard in case it is unavailable.
+            try:
+                load_avg = [round(v, 2) for v in psutil.getloadavg()]
+            except (AttributeError, OSError):
+                load_avg = None
+
             return {
                 'usage_percent': round(cpu_percent, 2),
                 'core_count': cpu_count,
                 'per_core_usage': [round(usage, 2) for usage in cpu_per_core],
                 'frequency_mhz': round(cpu_freq.current, 2) if cpu_freq else None,
-                'max_frequency_mhz': round(cpu_freq.max, 2) if cpu_freq else None
+                'max_frequency_mhz': round(cpu_freq.max, 2) if cpu_freq else None,
+                'load_average': load_avg
             }
 
         except Exception:
@@ -107,7 +115,31 @@ class SystemMonitoringService:
                 'core_count': 0,
                 'per_core_usage': [],
                 'frequency_mhz': None,
-                'max_frequency_mhz': None
+                'max_frequency_mhz': None,
+                'load_average': None
+            }
+
+    def get_host_metrics(self) -> Dict[str, Any]:
+        """
+        Get host-level metrics independent of the API process.
+
+        Returns:
+            Dict: Host boot time and true machine uptime.
+        """
+        try:
+            boot_ts = psutil.boot_time()
+            boot_dt = datetime.fromtimestamp(boot_ts, tz=timezone.utc)
+            uptime_seconds = (datetime.now(timezone.utc) - boot_dt).total_seconds()
+            return {
+                'boot_time': boot_dt.isoformat(),
+                'uptime_seconds': round(uptime_seconds, 1)
+            }
+
+        except Exception:
+            _logger.exception("Failed to get host metrics:")
+            return {
+                'boot_time': None,
+                'uptime_seconds': None
             }
 
     def get_memory_metrics(self) -> Dict[str, Any]:
@@ -347,6 +379,7 @@ class SystemMonitoringService:
             'disk': self.get_disk_metrics(),
             'temperature': self.get_temperature_metrics(),
             'network': self.get_network_metrics(),
+            'host': self.get_host_metrics(),
             'processes': self.get_process_metrics()
         }
 

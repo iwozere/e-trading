@@ -12,6 +12,7 @@ import {
   Drawer,
   Grid,
   IconButton,
+  LinearProgress,
   Paper,
   Snackbar,
   Tab,
@@ -35,9 +36,12 @@ import {
   ExpandMore,
   HelpOutline as UnknownIcon,
   Memory as MemoryIcon,
+  NetworkCheck as NetworkIcon,
   PlayArrow as PlayArrowIcon,
   Refresh as RefreshIcon,
   Speed as SpeedIcon,
+  Storage as StorageIcon,
+  Thermostat as ThermostatIcon,
   Timeline as TimelineIcon,
   Timer as TimerIcon,
   Warning as WarningIcon,
@@ -114,6 +118,18 @@ function fmtDuration(seconds: number | null): string {
   return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
 }
 
+function fmtRate(bytesPerSec: number): string {
+  if (!isFinite(bytesPerSec) || bytesPerSec < 0) return '—';
+  const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+  let v = bytesPerSec;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -158,9 +174,10 @@ interface MetricBoxProps {
   value: string | number;
   icon: React.ReactNode;
   subtitle?: string;
+  valueColor?: string;
 }
 
-const MetricBox: React.FC<MetricBoxProps> = ({ title, value, icon, subtitle }) => (
+const MetricBox: React.FC<MetricBoxProps> = ({ title, value, icon, subtitle, valueColor }) => (
   <Paper elevation={0} variant="outlined" sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
     <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, color: 'text.secondary' }}>
       {icon}
@@ -168,7 +185,7 @@ const MetricBox: React.FC<MetricBoxProps> = ({ title, value, icon, subtitle }) =
         {title}
       </Typography>
     </Box>
-    <Typography variant="h4" component="div" sx={{ mb: 1 }}>
+    <Typography variant="h4" component="div" sx={{ mb: 1, color: valueColor }}>
       {value}
     </Typography>
     {subtitle && (
@@ -181,9 +198,41 @@ const MetricBox: React.FC<MetricBoxProps> = ({ title, value, icon, subtitle }) =
 
 // ── SystemTab (original content) ──────────────────────────────────────────────
 
+interface IoRates {
+  netRecv: number;
+  netSent: number;
+  diskRead: number;
+  diskWrite: number;
+}
+
 const SystemTab: React.FC = () => {
   const { data: statusData, error: statusError } = useSystemStatus();
   const { data: metricsData, error: metricsError } = useSystemMetrics();
+
+  // Network/disk counters are monotonic totals; derive per-second rates from the
+  // delta between consecutive polls (the metrics query refetches every 15s).
+  const prevSampleRef = useRef<{ ts: number; net: any; disk: any } | null>(null);
+  const [ioRates, setIoRates] = useState<IoRates | null>(null);
+
+  useEffect(() => {
+    if (!metricsData?.timestamp) return;
+    const ts = new Date(metricsData.timestamp).getTime();
+    const net = metricsData.network;
+    const disk = metricsData.disk?.io_stats;
+    const prev = prevSampleRef.current;
+    if (prev && net && disk && ts > prev.ts) {
+      const dt = (ts - prev.ts) / 1000;
+      const rate = (cur?: number, old?: number) =>
+        cur != null && old != null && cur >= old ? (cur - old) / dt : 0;
+      setIoRates({
+        netRecv: rate(net.bytes_recv, prev.net?.bytes_recv),
+        netSent: rate(net.bytes_sent, prev.net?.bytes_sent),
+        diskRead: rate(disk.read_bytes, prev.disk?.read_bytes),
+        diskWrite: rate(disk.write_bytes, prev.disk?.write_bytes),
+      });
+    }
+    prevSampleRef.current = { ts, net, disk };
+  }, [metricsData?.timestamp]);
 
   const formatUptime = (seconds?: number) => {
     if (!seconds) return 'N/A';
@@ -194,6 +243,35 @@ const SystemTab: React.FC = () => {
 
   const cpuUsage = metricsData?.cpu?.usage_percent || statusData?.system_metrics?.cpu_percent || 0;
   const memUsage = metricsData?.memory?.usage_percent || statusData?.system_metrics?.memory_percent || 0;
+  const tempC = metricsData?.temperature?.average_celsius ?? statusData?.system_metrics?.temperature_c ?? 0;
+  // Matches backend thresholds (warning ≥70°C, critical ≥80°C).
+  const tempColor = tempC >= 80 ? 'error.main' : tempC >= 70 ? 'warning.main' : undefined;
+
+  const usageColor = (pct?: number | null) =>
+    pct == null ? undefined : pct >= 95 ? 'error.main' : pct >= 85 ? 'warning.main' : undefined;
+
+  const diskUsage: number | null =
+    metricsData?.disk?.partitions
+      ? Math.max(0, ...Object.values<any>(metricsData.disk.partitions).map((d) => d.usage_percent ?? 0))
+      : statusData?.system_metrics?.disk_usage_percent ?? null;
+  const diskColor = usageColor(diskUsage);
+
+  const swapUsage: number | null = metricsData?.memory?.swap_usage_percent ?? null;
+  const swapColor = usageColor(swapUsage);
+
+  const cpuFreqMhz: number | null = metricsData?.cpu?.frequency_mhz ?? null;
+  const coreCount: number | null = metricsData?.cpu?.core_count ?? null;
+
+  const loadAvg: number[] | null = metricsData?.cpu?.load_average ?? null;
+  // Load relative to core count: >1.0/core is saturated, >0.7/core is busy.
+  const loadColor =
+    loadAvg && coreCount
+      ? loadAvg[0] >= coreCount ? 'error.main' : loadAvg[0] >= coreCount * 0.7 ? 'warning.main' : undefined
+      : undefined;
+
+  const hostUptime: number | undefined = metricsData?.host?.uptime_seconds ?? undefined;
+
+  const perCore: number[] = metricsData?.cpu?.per_core_usage ?? [];
 
   return (
     <Box>
@@ -204,7 +282,7 @@ const SystemTab: React.FC = () => {
       )}
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <MetricBox
             title="Service Version"
             value={statusData?.version || 'N/A'}
@@ -212,7 +290,7 @@ const SystemTab: React.FC = () => {
             subtitle={statusData?.service_name || 'Alkotrader'}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <MetricBox
             title="Uptime"
             value={formatUptime(statusData?.uptime_seconds)}
@@ -220,7 +298,7 @@ const SystemTab: React.FC = () => {
             subtitle="Time since last restart"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <MetricBox
             title="CPU Usage"
             value={`${cpuUsage.toFixed(1)}%`}
@@ -228,13 +306,126 @@ const SystemTab: React.FC = () => {
             subtitle="Current system load"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <MetricBox
             title="Memory Usage"
             value={`${memUsage.toFixed(1)}%`}
             icon={<MemoryIcon />}
             subtitle="Current RAM usage"
           />
+        </Grid>
+        <Grid item xs={12} sm={6} md={2.4}>
+          <MetricBox
+            title="Temperature"
+            value={tempC ? `${tempC.toFixed(1)}°C` : 'N/A'}
+            icon={<ThermostatIcon />}
+            subtitle="CPU / SoC temperature"
+            valueColor={tempColor}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={2.4}>
+          <MetricBox
+            title="Disk Usage"
+            value={diskUsage != null ? `${diskUsage.toFixed(1)}%` : 'N/A'}
+            icon={<StorageIcon />}
+            subtitle="Busiest partition"
+            valueColor={diskColor}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={2.4}>
+          <MetricBox
+            title="Swap Usage"
+            value={swapUsage != null ? `${swapUsage.toFixed(1)}%` : 'N/A'}
+            icon={<MemoryIcon />}
+            subtitle="Swap in use"
+            valueColor={swapColor}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={2.4}>
+          <MetricBox
+            title="CPU Frequency"
+            value={cpuFreqMhz ? `${(cpuFreqMhz / 1000).toFixed(2)} GHz` : 'N/A'}
+            icon={<SpeedIcon />}
+            subtitle="Current clock speed"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={2.4}>
+          <MetricBox
+            title="Load Average"
+            value={loadAvg ? loadAvg.map((v: number) => v.toFixed(2)).join(' / ') : 'N/A'}
+            icon={<TimelineIcon />}
+            subtitle={`1 / 5 / 15 min${coreCount ? ` · ${coreCount} cores` : ''}`}
+            valueColor={loadColor}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={2.4}>
+          <MetricBox
+            title="Host Uptime"
+            value={formatUptime(hostUptime)}
+            icon={<TimerIcon />}
+            subtitle="Since machine boot"
+          />
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {perCore.length > 0 && (
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Per-Core CPU</Typography>
+                <Divider sx={{ mb: 2 }} />
+                {perCore.map((usage, i) => (
+                  <Box key={i} sx={{ mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Typography variant="caption" color="text.secondary">Core {i}</Typography>
+                      <Typography variant="caption">{usage.toFixed(0)}%</Typography>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={Math.min(100, usage)}
+                      color={usage >= 90 ? 'error' : usage >= 70 ? 'warning' : 'primary'}
+                      sx={{ height: 6, borderRadius: 3 }}
+                    />
+                  </Box>
+                ))}
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+        <Grid item xs={12} md={6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>I/O Throughput</Typography>
+              <Divider sx={{ mb: 2 }} />
+              {ioRates ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <NetworkIcon color="action" />
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">Network</Typography>
+                      <Typography variant="body1">
+                        ↓ {fmtRate(ioRates.netRecv)} &nbsp;·&nbsp; ↑ {fmtRate(ioRates.netSent)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <StorageIcon color="action" />
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">Disk</Typography>
+                      <Typography variant="body1">
+                        read {fmtRate(ioRates.diskRead)} &nbsp;·&nbsp; write {fmtRate(ioRates.diskWrite)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  Measuring… (rates appear after the next refresh)
+                </Typography>
+              )}
+            </CardContent>
+          </Card>
         </Grid>
       </Grid>
 
