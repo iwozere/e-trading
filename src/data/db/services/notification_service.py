@@ -204,6 +204,7 @@ class NotificationService(BaseDBService):
                 "recipient_id": msg.recipient_id,
                 "template_name": msg.template_name,
                 "content": msg.content,
+                "metadata": msg.message_metadata,
                 "status": msg.status,
                 "created_at": msg.created_at.isoformat() if msg.created_at else None,
                 "scheduled_for": msg.scheduled_for.isoformat() if msg.scheduled_for else None,

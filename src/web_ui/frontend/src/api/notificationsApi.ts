@@ -8,6 +8,7 @@ export interface MessageItem {
   recipient_id: string | null;
   template_name: string | null;
   content: Record<string, any>;
+  metadata: Record<string, any> | null;
   status: string;
   created_at: string | null;
   scheduled_for: string | null;

@@ -5,8 +5,9 @@ Monitoring API Routes
 Endpoints for service health and pipeline execution status.
 """
 
+import socket
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -36,6 +37,28 @@ _DISPLAY_NAMES = {
     "trading-api.service": "API",
 }
 
+# The IB Gateway runs as Docker containers (ibgw-paper / ibgw-live) started by a
+# oneshot systemd unit that exits after `docker compose up -d`. As a result
+# `systemctl is-active ibgateway-docker.service` reports "inactive" even while
+# the gateway is up. We therefore detect the gateways by probing their API
+# ports directly, which reflects whether they are actually reachable.
+_IB_GATEWAY_HOST = "127.0.0.1"
+# (display name, API port). Paper auto-starts on boot; Live is manual-only and
+# is expected to be inactive unless deliberately started.
+_IB_GATEWAYS: List[Tuple[str, int]] = [
+    ("IB Gateway (Paper)", 4002),
+    ("IB Gateway (Live)", 4001),
+]
+
+
+def _port_open(host: str, port: int, timeout: float = 1.0) -> bool:
+    """Return True if a TCP connection to host:port succeeds within timeout."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
 
 @router.get("/services")
 async def get_services_status(current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
@@ -48,7 +71,22 @@ async def get_services_status(current_user: User = Depends(get_current_user)) ->
     try:
         monitor = ServiceMonitor(admin_user_id=current_user.id)
         services: List[Dict[str, Any]] = []
+
+        # IB Gateway runs in Docker; probe its API ports instead of the
+        # (oneshot, always-inactive) systemd unit so the live state is accurate.
+        for display_name, port in _IB_GATEWAYS:
+            up = _port_open(_IB_GATEWAY_HOST, port)
+            services.append({
+                "name": f"ib-gateway-{port}",
+                "display_name": display_name,
+                "status": "active" if up else "inactive",
+                "has_errors": False,
+            })
+
         for svc in SERVICES_TO_MONITOR:
+            # The Docker gateway unit is reported above via port probing.
+            if svc == "ibgateway-docker.service":
+                continue
             is_active, raw_status = monitor.check_service_status(svc)
             if raw_status == "error":
                 status = "unknown"

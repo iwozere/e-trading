@@ -34,6 +34,9 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogActions,
+  Divider,
+  Stack,
   IconButton,
   Tooltip,
 } from '@mui/material';
@@ -41,9 +44,51 @@ import {
   Refresh as RefreshIcon,
   Search as SearchIcon,
   Visibility as VisibilityIcon,
+  AttachFile as AttachFileIcon,
 } from '@mui/icons-material';
 import { useMessages } from '../../hooks/notifications/useMessages';
 import { MessageItem } from '../../api/notificationsApi';
+
+// ---- Email-style extraction helpers -------------------------------------
+// Messages are persisted as a generic content dict; map them onto the email
+// fields the notification service uses when actually sending (see EmailChannel
+// and the processor's MessageContent mapping).
+
+const emailSubject = (m: MessageItem): string =>
+  m.content?.title || m.content?.subject || '(no subject)';
+
+const emailTo = (m: MessageItem): string =>
+  m.metadata?.email_receiver || m.recipient_id || '(unknown)';
+
+const asList = (v: any): string[] => {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.map(String);
+  return String(v)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+};
+
+const emailHtml = (m: MessageItem): string | null => m.content?.html || null;
+
+const emailText = (m: MessageItem): string =>
+  m.content?.message || m.content?.text || m.content?.body || '';
+
+const baseName = (p: string): string => String(p).split(/[\\/]/).pop() || String(p);
+
+// Attachments may be stored as {filename: data}, {files: [paths]}, or a list.
+const attachmentNames = (m: MessageItem): string[] => {
+  const a = m.content?.attachments;
+  if (!a) return [];
+  if (Array.isArray(a)) {
+    return a.map((x) => (typeof x === 'string' ? baseName(x) : x?.name || 'attachment'));
+  }
+  if (typeof a === 'object') {
+    if (Array.isArray(a.files)) return a.files.map((f: any) => baseName(String(f)));
+    return Object.keys(a);
+  }
+  return [];
+};
 
 // Default the "from" date to 30 days ago (YYYY-MM-DD for the date input).
 const isoDateDaysAgo = (days: number): string => {
@@ -84,6 +129,12 @@ const Messages: React.FC = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(50);
   const [selected, setSelected] = useState<MessageItem | null>(null);
+  const [showRaw, setShowRaw] = useState(false);
+
+  const openMessage = (m: MessageItem) => {
+    setShowRaw(false);
+    setSelected(m);
+  };
 
   const { data, isLoading, isError, error, refetch, isFetching } = useMessages({
     recipient_id: applied.recipient_id || undefined,
@@ -306,7 +357,7 @@ const Messages: React.FC = () => {
                         </TableCell>
                         <TableCell align="center">
                           <Tooltip title="View full message">
-                            <IconButton size="small" onClick={() => setSelected(msg)}>
+                            <IconButton size="small" onClick={() => openMessage(msg)}>
                               <VisibilityIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
@@ -330,50 +381,55 @@ const Messages: React.FC = () => {
         </Card>
       )}
 
-      {/* Detail dialog */}
+      {/* Detail dialog — rendered as a normal email */}
       <Dialog open={Boolean(selected)} onClose={() => setSelected(null)} maxWidth="md" fullWidth>
-        <DialogTitle>Message #{selected?.id}</DialogTitle>
+        <DialogTitle sx={{ pb: 1 }}>
+          {selected ? emailSubject(selected) : ''}
+        </DialogTitle>
         <DialogContent dividers>
           {selected && (
             <Box>
-              <Grid container spacing={1} sx={{ mb: 2 }}>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">Recipient</Typography>
-                  <Typography variant="body2">{selected.recipient_id || '-'}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">Type</Typography>
-                  <Typography variant="body2">{selected.message_type}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">Status</Typography>
-                  <Typography variant="body2">{selected.status}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">Priority</Typography>
-                  <Typography variant="body2">{selected.priority}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">Channels</Typography>
-                  <Typography variant="body2">{(selected.channels || []).join(', ') || '-'}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">Template</Typography>
-                  <Typography variant="body2">{selected.template_name || '-'}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">Created</Typography>
-                  <Typography variant="body2">
-                    {selected.created_at ? new Date(selected.created_at).toLocaleString() : 'N/A'}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">Processed</Typography>
-                  <Typography variant="body2">
-                    {selected.processed_at ? new Date(selected.processed_at).toLocaleString() : '-'}
-                  </Typography>
-                </Grid>
-              </Grid>
+              {/* Email header */}
+              <Box sx={{ mb: 1.5 }}>
+                <EmailHeaderRow label="To" value={emailTo(selected)} />
+                {asList(selected.metadata?.cc).length > 0 && (
+                  <EmailHeaderRow label="Cc" value={asList(selected.metadata?.cc).join(', ')} />
+                )}
+                {asList(selected.metadata?.bcc).length > 0 && (
+                  <EmailHeaderRow label="Bcc" value={asList(selected.metadata?.bcc).join(', ')} />
+                )}
+                <EmailHeaderRow label="Subject" value={emailSubject(selected)} />
+                <EmailHeaderRow
+                  label="Date"
+                  value={selected.created_at ? new Date(selected.created_at).toLocaleString() : 'N/A'}
+                />
+                <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+                  <Box sx={{ width: 70, flexShrink: 0 }}>
+                    <Typography variant="caption" color="text.secondary">Via</Typography>
+                  </Box>
+                  <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                    {(selected.channels || []).map((c) => (
+                      <Chip key={c} label={c} size="small" variant="outlined" />
+                    ))}
+                    <Chip label={selected.status} size="small" color={statusColor(selected.status)} />
+                  </Stack>
+                </Box>
+              </Box>
+
+              {/* Attachments */}
+              {attachmentNames(selected).length > 0 && (
+                <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 1.5 }}>
+                  {attachmentNames(selected).map((name) => (
+                    <Chip
+                      key={name}
+                      icon={<AttachFileIcon />}
+                      label={name}
+                      size="small"
+                      variant="outlined"
+                    />
+                  ))}
+                </Stack>
+              )}
 
               {selected.last_error && (
                 <Alert severity="error" sx={{ mb: 2 }}>
@@ -381,21 +437,61 @@ const Messages: React.FC = () => {
                 </Alert>
               )}
 
-              <Typography variant="caption" color="text.secondary">Content</Typography>
-              <Paper
-                variant="outlined"
-                sx={{ p: 2, mt: 0.5, overflowX: 'auto', backgroundColor: 'rgba(0,0,0,0.2)' }}
-              >
-                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                  {JSON.stringify(selected.content, null, 2)}
-                </pre>
-              </Paper>
+              <Divider sx={{ mb: 2 }} />
+
+              {/* Body — HTML rendered in a sandboxed iframe (no scripts), or
+                  plain text. Toggle to inspect the raw stored payload. */}
+              {showRaw ? (
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 2, overflowX: 'auto', backgroundColor: 'rgba(0,0,0,0.2)' }}
+                >
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {JSON.stringify({ content: selected.content, metadata: selected.metadata }, null, 2)}
+                  </pre>
+                </Paper>
+              ) : emailHtml(selected) ? (
+                <Box
+                  component="iframe"
+                  title="message-body"
+                  sandbox=""
+                  srcDoc={emailHtml(selected) as string}
+                  sx={{
+                    width: '100%',
+                    minHeight: 320,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    backgroundColor: '#fff',
+                  }}
+                />
+              ) : (
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {emailText(selected) || <em>(empty body)</em>}
+                </Typography>
+              )}
             </Box>
           )}
         </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowRaw((v) => !v)}>
+            {showRaw ? 'Show email' : 'Show raw'}
+          </Button>
+          <Button onClick={() => setSelected(null)}>Close</Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );
 };
+
+// Small label/value row used in the email header block.
+const EmailHeaderRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <Box sx={{ display: 'flex', alignItems: 'baseline', mt: 0.25 }}>
+    <Box sx={{ width: 70, flexShrink: 0 }}>
+      <Typography variant="caption" color="text.secondary">{label}</Typography>
+    </Box>
+    <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>{value}</Typography>
+  </Box>
+);
 
 export default Messages;
