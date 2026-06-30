@@ -41,6 +41,11 @@ import { useTelegramPermissions } from '../Telegram/TelegramRouteGuard';
 
 const drawerWidth = 240;
 
+// Injected at build time (see vite.config.ts). Fallbacks keep dev/tests happy.
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
+const BUILD_DATE =
+  typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__.slice(0, 10) : '';
+
 interface LayoutProps {
   children: React.ReactNode;
 }
@@ -97,7 +102,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const drawer = (
-    <div>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Toolbar>
         <Typography variant="h6" noWrap component="div">
           Trading System
@@ -212,7 +217,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </List>
         </>
       )}
-    </div>
+
+      {/* Version label (static, baked in at build time) */}
+      <Box sx={{ mt: 'auto', p: 2 }}>
+        <Divider sx={{ mb: 1 }} />
+        <Typography variant="caption" color="text.secondary" noWrap display="block">
+          v{APP_VERSION}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" noWrap display="block">
+          build {BUILD_DATE}
+        </Typography>
+      </Box>
+    </Box>
   );
 
   return (

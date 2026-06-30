@@ -760,14 +760,32 @@ async def catch_all(full_path: str):
     local_path = (dist_path / full_path).resolve()
     if not str(local_path).startswith(str(dist_path)):
         return JSONResponse(status_code=404, content={"detail": "Not found"})
-    if local_path.is_file():
+    if local_path.is_file() and local_path.name != "index.html":
+        # Vite emits content-hashed asset filenames, so they are immutable and
+        # safe to cache aggressively. Everything else (e.g. favicon) is served
+        # with default caching.
+        if local_path.parent.name == "assets":
+            return FileResponse(
+                local_path,
+                headers={"Cache-Control": "public, max-age=31536000, immutable"},
+            )
         return FileResponse(local_path)
-        
-    # Standard SPA behavior: serve index.html for all other paths
+
+    # Standard SPA behavior: serve index.html for all other paths.
+    # index.html must NOT be cached: it references the current hashed bundle, so
+    # a stale copy would keep loading an old build (and hide new pages/links)
+    # until a hard refresh.
     index_file = dist_path / "index.html"
     if index_file.exists():
-        return FileResponse(index_file)
-        
+        return FileResponse(
+            index_file,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
+
     return JSONResponse(status_code=404, content={"detail": "Frontend not found"})
 
 # Mount static files for the React frontend (fallback for root / and static assets)
