@@ -894,6 +894,64 @@ async def list_notifications(
         raise HTTPException(status_code=500, detail="Failed to list notifications")
 
 
+@router.get("/messages/search")
+async def search_messages(
+    recipient_id: Optional[str] = None,
+    search: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    status: Optional[str] = None,
+    channel: Optional[str] = None,
+    days: int = 30,
+    limit: int = 100,
+    offset: int = 0,
+    current_user: User = Depends(require_trader_or_admin)
+):
+    """
+    Search sent notification messages for the admin UI.
+
+    Supports filtering by recipient (substring), free-text content search,
+    delivery channel, status and a created-at date range. Defaults to the
+    last 30 days when no date range is supplied.
+
+    Args:
+        recipient_id: Filter by recipient (case-insensitive substring).
+        search: Free-text substring matched against content, type and template.
+        start_date: Include messages created at or after this time.
+        end_date: Include messages created at or before this time.
+        status: Filter by message status.
+        channel: Filter by delivery channel.
+        days: Look-back window when start_date is omitted.
+        limit: Maximum number of results (capped at 1000).
+        offset: Number of results to skip.
+        current_user: Current authenticated user (trader or admin required).
+
+    Returns:
+        Paginated result with total count and matching messages.
+    """
+    try:
+        from src.data.db.services.notification_service import NotificationService
+
+        service = NotificationService()
+        result = service.search_messages(
+            recipient_id=recipient_id,
+            search=search,
+            start_date=start_date,
+            end_date=end_date,
+            status=status,
+            channel=channel,
+            days=days,
+            limit=limit,
+            offset=offset,
+        )
+
+        return result
+
+    except Exception:
+        _logger.exception("Error searching messages:")
+        raise HTTPException(status_code=500, detail="Failed to search messages")
+
+
 @router.get("/{message_id}", response_model=NotificationResponse)
 async def get_notification_status(
     message_id: int,

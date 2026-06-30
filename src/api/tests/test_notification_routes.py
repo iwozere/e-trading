@@ -149,6 +149,53 @@ def test_send_trade_convenience_endpoint(authenticated_client_trader):
         assert data["message_id"] == 789
 
 
+def test_search_messages_endpoint(authenticated_client_trader):
+    """Test the message search endpoint returns the service result."""
+    client = authenticated_client_trader
+    service_result = {
+        "total": 1,
+        "limit": 100,
+        "offset": 0,
+        "items": [
+            {
+                "id": 1,
+                "message_type": "alert",
+                "priority": "NORMAL",
+                "channels": ["telegram"],
+                "recipient_id": "user_42",
+                "template_name": None,
+                "content": {"message": "hello world"},
+                "status": "DELIVERED",
+                "created_at": "2026-06-30T10:00:00+00:00",
+                "scheduled_for": "2026-06-30T10:00:00+00:00",
+                "processed_at": "2026-06-30T10:00:01+00:00",
+                "retry_count": 0,
+                "last_error": None,
+            }
+        ],
+    }
+
+    with patch(
+        "src.data.db.services.notification_service.NotificationService.search_messages",
+        return_value=service_result,
+    ) as mock_search:
+        response = client.get(
+            "/api/notifications/messages/search",
+            params={"recipient_id": "user_42", "search": "hello", "days": 30},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert data["items"][0]["recipient_id"] == "user_42"
+        assert data["items"][0]["content"]["message"] == "hello world"
+
+        # Filters should be forwarded to the service layer.
+        _, kwargs = mock_search.call_args
+        assert kwargs["recipient_id"] == "user_42"
+        assert kwargs["search"] == "hello"
+
+
 def test_notification_service_unavailable_handling(client: TestClient):
     """Test handling when notification service is unavailable."""
     with patch('src.api.notification_routes._call_notification_service') as mock_service:

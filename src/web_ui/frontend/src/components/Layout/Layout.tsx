@@ -23,6 +23,7 @@ import {
   Monitor,
   Analytics,
   Settings,
+  Email,
   AccountCircle,
   Logout,
   Telegram,
@@ -77,6 +78,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { text: 'Strategies', icon: <TrendingUp />, path: '/strategies' },
     { text: 'Monitoring', icon: <Monitor />, path: '/monitoring' },
     { text: 'Analytics', icon: <Analytics />, path: '/analytics' },
+    { text: 'Messages', icon: <Email />, path: '/messages' },
     { text: 'Administration', icon: <Settings />, path: '/administration' },
   ];
 

@@ -13,6 +13,7 @@ import StrategyForm from './pages/Strategies/StrategyForm';
 import Monitoring from './pages/Monitoring/Monitoring';
 import Analytics from './pages/Analytics/Analytics';
 import Administration from './pages/Administration/Administration';
+import Messages from './pages/Messages/Messages';
 import Login from './pages/Auth/Login';
 
 // Telegram Bot Management Components
@@ -219,7 +220,15 @@ const App: React.FC = () => {
                         </ProtectedRoute>
                       }
                     />
-                    
+                    <Route
+                      path="/messages"
+                      element={
+                        <ProtectedRoute>
+                          <Messages />
+                        </ProtectedRoute>
+                      }
+                    />
+
                     {/* Telegram Bot Management Routes */}
                     <Route
                       path="/telegram"

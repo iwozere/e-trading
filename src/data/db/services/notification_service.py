@@ -7,9 +7,11 @@ Provides high-level business logic for notification management.
 """
 
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import sys
+
+from sqlalchemy import cast, Text, or_, desc, func
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -117,6 +119,102 @@ class NotificationService(BaseDBService):
             limit=limit,
             offset=offset
         )
+
+    @with_uow
+    @handle_db_error
+    def search_messages(
+        self,
+        recipient_id: Optional[str] = None,
+        search: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        status: Optional[str] = None,
+        channel: Optional[str] = None,
+        days: int = 30,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """
+        Search sent messages with flexible filtering for the admin UI.
+
+        Args:
+            recipient_id: Filter by recipient (case-insensitive substring match).
+            search: Case-insensitive substring matched against the message content,
+                message type and template name.
+            start_date: Only include messages created at or after this time.
+                Defaults to ``days`` ago when not provided.
+            end_date: Only include messages created at or before this time.
+            status: Filter by message status (e.g. DELIVERED, FAILED).
+            channel: Filter by delivery channel (e.g. telegram, email).
+            days: Look-back window in days used when ``start_date`` is omitted.
+            limit: Maximum number of messages to return (capped at 1000).
+            offset: Number of messages to skip for pagination.
+
+        Returns:
+            Dictionary with ``total`` (matching row count), ``items`` (list of
+            message dicts), ``limit`` and ``offset``.
+        """
+        # Default to the last `days` days when no explicit start is given.
+        if start_date is None:
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
+
+        limit = max(1, min(limit, 1000))
+        offset = max(0, offset)
+
+        session = self.repos.s
+        query = session.query(Message).filter(Message.created_at >= start_date)
+
+        if end_date is not None:
+            query = query.filter(Message.created_at <= end_date)
+
+        if recipient_id:
+            query = query.filter(Message.recipient_id.ilike(f"%{recipient_id}%"))
+
+        if status:
+            query = query.filter(Message.status == status.upper())
+
+        if channel:
+            query = query.filter(Message.channels.contains([channel]))
+
+        if search:
+            pattern = f"%{search}%"
+            query = query.filter(
+                or_(
+                    cast(Message.content, Text).ilike(pattern),
+                    Message.message_type.ilike(pattern),
+                    Message.template_name.ilike(pattern),
+                )
+            )
+
+        total = query.with_entities(func.count(Message.id)).scalar() or 0
+
+        messages = (
+            query.order_by(desc(Message.created_at))
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+        items = [
+            {
+                "id": msg.id,
+                "message_type": msg.message_type,
+                "priority": msg.priority,
+                "channels": msg.channels,
+                "recipient_id": msg.recipient_id,
+                "template_name": msg.template_name,
+                "content": msg.content,
+                "status": msg.status,
+                "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                "scheduled_for": msg.scheduled_for.isoformat() if msg.scheduled_for else None,
+                "processed_at": msg.processed_at.isoformat() if msg.processed_at else None,
+                "retry_count": msg.retry_count,
+                "last_error": msg.last_error,
+            }
+            for msg in messages
+        ]
+
+        return {"total": total, "items": items, "limit": limit, "offset": offset}
 
     @with_uow
     @handle_db_error
