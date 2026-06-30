@@ -567,7 +567,7 @@ async def cleanup_old_notifications(
         with db_service.uow() as uow:
             # Clean up old delivered messages
             deleted_count = uow.notifications.messages.cleanup_old_messages(days_to_keep)
-            uow.commit()
+            uow.s.commit()
 
         _logger.info(
             "Notification cleanup completed by user %s: %s messages deleted, days_to_keep=%s",
@@ -791,7 +791,7 @@ async def create_notification(
 
         with db_service.uow() as uow:
             db_message = uow.notifications.messages.create_message(message_data)
-            uow.commit()
+            uow.s.commit()
 
         _logger.info(
             "Notification created by user %s: message_id=%s, type=%s, channels=%s",
