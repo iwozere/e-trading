@@ -13,9 +13,12 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import pandas as pd
+
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.ml.pipeline.p20_kestrel.config import DATA_CACHE_PATH
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 
 _kestrel = _KestrelService()
@@ -178,6 +181,74 @@ def screen_b3_activist(as_of_date: date) -> List[Dict[str, Any]]:
     return candidates
 
 
+def _get_latest_index_changes_file(as_of_date: date) -> Optional[Path]:
+    """Find the most recent index changes cache file on or before as_of_date."""
+    p = DATA_CACHE_PATH / "index_changes" / f"{as_of_date.isoformat()}.csv.gz"
+    if p.exists():
+        return p
+
+    changes_dir = DATA_CACHE_PATH / "index_changes"
+    if not changes_dir.exists():
+        return None
+    files = []
+    for f in changes_dir.glob("????-??-??.csv.gz"):
+        try:
+            f_date = date.fromisoformat(f.name.removesuffix(".csv.gz"))
+            if f_date <= as_of_date:
+                files.append((f_date, f))
+        except ValueError:
+            pass
+    if not files:
+        return None
+
+    files.sort(key=lambda x: x[0], reverse=True)
+    return files[0][1]
+
+
+def screen_b3_index(as_of_date: date) -> List[Dict[str, Any]]:
+    """
+    Screen B3: S&P/Nasdaq index changes (additions) near their effective date.
+
+    Checks if an index addition's effective date is within [as_of_date - 5 days, as_of_date + 15 days].
+    """
+    file_path = _get_latest_index_changes_file(as_of_date)
+    if not file_path:
+        _logger.debug("No index changes cache file found on or before %s", as_of_date)
+        return []
+
+    try:
+        df = pd.read_csv(file_path, compression="gzip")
+        df = df[df["Added_Ticker"].notna() & (df["Added_Ticker"] != "")]
+
+        candidates: List[Dict[str, Any]] = []
+        for _, row in df.iterrows():
+            ticker = str(row["Added_Ticker"]).strip().upper()
+            event_date_str = str(row["date"]).strip()
+            try:
+                event_date = date.fromisoformat(event_date_str)
+            except ValueError:
+                continue
+
+            days_out = (event_date - as_of_date).days
+            if -5 <= days_out <= 15:
+                universe_row = get_universe_row(ticker)
+                if not universe_row:
+                    continue
+
+                candidates.append({
+                    "ticker": ticker,
+                    "sleeve": _SLEEVE,
+                    "sub_sleeve": "B3",
+                    "trigger": f"index_addition_{row['index_name']}",
+                    "event_date": event_date,
+                    "days_out": days_out,
+                })
+        return candidates
+    except Exception:
+        _logger.exception("Failed to parse index changes file %s", file_path)
+        return []
+
+
 def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
     """
     Run Sleeve B screens and upsert candidates to watchlist.
@@ -193,8 +264,9 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
 
     b1 = screen_b1(target_date)
     b2 = screen_b2(target_date)
-    b3 = screen_b3_activist(target_date)
-    all_candidates = b1 + b2 + b3
+    b3_activist = screen_b3_activist(target_date)
+    b3_index = screen_b3_index(target_date)
+    all_candidates = b1 + b2 + b3_activist + b3_index
 
     for c in all_candidates:
         upsert_watchlist({
@@ -204,12 +276,13 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
         })
 
     _logger.info(
-        "Sleeve B: B1=%d FDA run-ups, B2=%d spin-offs, B3=%d activists",
-        len(b1), len(b2), len(b3),
+        "Sleeve B: B1=%d FDA run-ups, B2=%d spin-offs, B3_act=%d activists, B3_idx=%d index-changes",
+        len(b1), len(b2), len(b3_activist), len(b3_index),
     )
     return {
         "b1_fda_runups": len(b1),
         "b2_spinoffs": len(b2),
-        "b3_activists": len(b3),
+        "b3_activists": len(b3_activist),
+        "b3_index_events": len(b3_index),
         "total_candidates": len(all_candidates),
     }

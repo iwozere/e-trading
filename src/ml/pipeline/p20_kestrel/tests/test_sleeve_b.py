@@ -12,6 +12,7 @@ from src.ml.pipeline.p20_kestrel.screening.sleeve_b import (
     screen_b1,
     screen_b2,
     screen_b3_activist,
+    screen_b3_index,
 )
 
 
@@ -244,3 +245,43 @@ def test_b3_excludes_none_signal():
         result = screen_b3_activist(date.today())
 
     assert result == []
+
+
+def test_b3_index_returns_additions():
+    """B3 index screen returns valid index addition candidates in the entry window."""
+    import pandas as pd
+
+    fake_df = pd.DataFrame([
+        {
+            "date": (date.today() + timedelta(days=10)).isoformat(),
+            "index_name": "SP500",
+            "Added_Ticker": "KKR",
+            "Added_Security": "KKR & Co. Inc.",
+            "Removed_Ticker": "CMA",
+            "Removed_Security": "Comerica",
+            "Reason": "Market capitalization change"
+        },
+        {
+            "date": (date.today() - timedelta(days=20)).isoformat(),  # outside window
+            "index_name": "NASDAQ100",
+            "Added_Ticker": "LRCX",
+            "Added_Security": "Lam Research",
+            "Removed_Ticker": "",
+            "Removed_Security": "",
+            "Reason": "Quarterly reconstitution"
+        }
+    ])
+
+    with (
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b._get_latest_index_changes_file",
+              return_value=Path("dummy_path.csv.gz")),
+        patch("pandas.read_csv", return_value=fake_df),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
+              return_value=_universe(ticker="KKR")),
+    ):
+        result = screen_b3_index(date.today())
+
+    assert len(result) == 1
+    assert result[0]["sub_sleeve"] == "B3"
+    assert result[0]["ticker"] == "KKR"
+    assert result[0]["trigger"] == "index_addition_SP500"

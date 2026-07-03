@@ -109,6 +109,8 @@ def test_sleeve_b_run_counts_candidates_correctly():
               return_value={"ticker": "SPINCO", "mcap": _B2_MCAP_MIN * 2}),
         patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_active_tickers",
               return_value=[]),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b._get_latest_index_changes_file",
+              return_value=None),
         patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.upsert_watchlist"),
     ):
         result = run_b()

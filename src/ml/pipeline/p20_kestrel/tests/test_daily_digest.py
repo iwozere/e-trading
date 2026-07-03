@@ -53,7 +53,7 @@ def test_build_digest_sections(monkeypatch):
 def test_build_digest_with_open_position(monkeypatch):
     """Digest shows position info when positions exist."""
     import src.ml.pipeline.p20_kestrel.reporting.daily_digest as dd
-    monkeypatch.setattr(dd, "get_latest_signal", lambda *_: {"value": 55.0})
+    monkeypatch.setattr(dd, "get_latest_signal", lambda *_: 55.0)
     monkeypatch.setattr(dd, "get_open_positions", lambda: [{
         "ticker": "AAPL",
         "sleeve": "A",

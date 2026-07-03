@@ -24,6 +24,7 @@ from src.data.db.services.kestrel_service import KestrelService as _KestrelServi
 
 _kestrel = _KestrelService()
 finish_job_run = _kestrel.finish_job_run
+get_latest_signal = _kestrel.get_latest_signal
 get_universe_row = _kestrel.get_universe_row
 get_watchlist = _kestrel.get_watchlist
 start_job_run = _kestrel.start_job_run
@@ -108,7 +109,8 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
                 ctx = _build_dossier_context(universe_row)
 
                 mcap_b = (universe_row.get("mcap") or 0) / 1e9
-                drawdown_val = candidate.get("drawdown_from_2y_high") or -0.5
+                drawdown_db = get_latest_signal(ticker, "drawdown_from_2y_high")
+                drawdown_val = drawdown_db if drawdown_db is not None else -0.5
 
                 user_prompt = DOSSIER.format(
                     ticker=ticker,

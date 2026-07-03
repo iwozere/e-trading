@@ -1050,6 +1050,21 @@ def _job_finra_trf(yesterday: _Date) -> Optional[Dict[str, Any]]:
     return {"rows": total_rows, "days_downloaded": days_downloaded}
 
 
+def _job_index_changes(yesterday: _Date) -> Optional[Dict[str, Any]]:
+    """
+    Download Wikipedia index changes (S&P 500 and Nasdaq-100 constituent additions/removals)
+    and cache them as YYYY-MM-DD.csv.gz.
+    """
+    try:
+        from src.data.downloader.wikipedia_downloader import WikipediaDownloader
+        dl = WikipediaDownloader()
+        df = dl.download_index_changes(yesterday)
+        return {"records": len(df)}
+    except Exception as exc:
+        _logger.error("index_changes: scrape failed: %s", exc)
+        return {"records": 0, "error": str(exc)}
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -1078,6 +1093,7 @@ def main() -> None:
     results["edgar_form4"]       = _run_job("edgar_form4",       lambda: _job_edgar_form4(yesterday))
     results["edgar_13dg"]        = _run_job("edgar_13dg",        lambda: _job_edgar_13dg(yesterday))
     results["p18_13f_index"]     = _run_job("p18_13f_index",     lambda: _job_p18_13f_index_seed(yesterday))
+    results["index_changes"]     = _run_job("index_changes",     lambda: _job_index_changes(yesterday))
     if _is_edgar_facts_day(yesterday_dt + timedelta(days=1)):
         results["edgar_facts"]   = _run_job("edgar_facts",       _job_edgar_facts)
 

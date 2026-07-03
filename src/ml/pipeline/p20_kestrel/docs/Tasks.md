@@ -54,7 +54,6 @@
 
 - [ ] Revisions feed integration — enables full §4.2 scoring (set `REVISIONS_FEED_AVAILABLE=True`)
 - [ ] Sleeve A: EV/EBITDA relative valuation scoring when data available
-- [ ] Sleeve B: Index inclusion event screening (S&P/Nasdaq adds/removes)
 - [ ] Performance attribution — realized P&L by sleeve in weekly report
 - [ ] Backtester integration — validate sleeve screens against historical data
 
@@ -76,6 +75,11 @@ See [Code-Review-2026-07-03.md](Code-Review-2026-07-03.md) for full details.
 - [x] **H1b** — risk_checker intraday prices — fixed: yfinance delayed quote with EOD-close fallback
 - [x] **M3** — data_health staleness — fixed: checks full STALENESS_DAYS window, not just yesterday
 - [ ] **M2** — eod_ingest per-ticker fallback speed — monitor first production run
+- [x] **C8** — Daily digest type conversion crash — fixed: reads float directly
+- [x] **C9** — 8-K classifier key mismatch skips — fixed: uses accession_number and constructs URL
+- [x] **C10** — Risk factor diff HTML index fetch — fixed: gets primaryDocument text
+- [x] **H5** — Watchlist candidate drawdown fallback — fixed: calls get_latest_signal()
+- [x] **L1** — LLM client cost fallback test failure — fixed
 
 ## Known Issues
 
@@ -88,6 +92,7 @@ See [Code-Review-2026-07-03.md](Code-Review-2026-07-03.md) for full details.
 
 - [x] Integration test: full morning chain with mock DB — `test_integration_morning_chain.py`
 - [x] Integration test: /pos add → confirm_add → risk_checker roundtrip — `test_integration_pos_roundtrip.py`
+- [x] Sleeve B: Index inclusion event screening (S&P/Nasdaq adds/removes) — Scraped via Wikipedia inside `p15_daily.py`, cached as CSV, and screened in `sleeve_b.py`
 - [ ] Performance test: universe_loader with 3000+ tickers (requires live data or large fixture)
 
 ## Documentation Updates

@@ -48,7 +48,7 @@ _PRICING: Dict[str, Dict[str, float]] = {
 
 
 def _compute_cost(model: str, tokens_in: int, tokens_out: int) -> float:
-    pricing = _PRICING.get(model, {"in": 5e-6, "out": 15e-6})
+    pricing = _PRICING.get(model, _PRICING[SONNET_MODEL])
     return round(pricing["in"] * tokens_in + pricing["out"] * tokens_out, 6)
 
 

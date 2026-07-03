@@ -96,6 +96,7 @@ def _fetch_recent_10k_texts(ticker: str) -> List[Dict[str, Any]]:
         forms_list = recent_filings.get("form", [])
         dates_list = recent_filings.get("filingDate", [])
         accessions_list = recent_filings.get("accessionNumber", [])
+        docs_list = recent_filings.get("primaryDocument", [])
 
         collected = 0
         for i, form_type in enumerate(forms_list):
@@ -105,13 +106,17 @@ def _fetch_recent_10k_texts(ticker: str) -> List[Dict[str, Any]]:
                 break
             filed_date = dates_list[i] if i < len(dates_list) else ""
             accession = str(accessions_list[i]).replace("-", "") if i < len(accessions_list) else ""
+            primary_doc = docs_list[i] if i < len(docs_list) else ""
+
+            if not primary_doc:
+                continue
 
             try:
-                idx_url = (
+                url = (
                     f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession}/"
-                    f"{accession}-index.htm"
+                    f"{primary_doc}"
                 )
-                resp = requests.get(idx_url, timeout=10, headers={"User-Agent": "KestrelBot akossyrev@gmail.com"})
+                resp = requests.get(url, timeout=10, headers={"User-Agent": "KestrelBot akossyrev@gmail.com"})
                 filings.append({
                     "form_type": form_type,
                     "filed_date": filed_date,

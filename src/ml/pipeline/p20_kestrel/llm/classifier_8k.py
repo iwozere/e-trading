@@ -62,7 +62,8 @@ def _fetch_filing_body(filing: Dict[str, Any]) -> Optional[str]:
         Filing text or None if unavailable.
     """
     # Try P15 local cache first
-    accession = str(filing.get("accession", "")).replace("-", "")
+    accession_raw = filing.get("accession_number", "")
+    accession = str(accession_raw).replace("-", "")
     ticker = str(filing.get("ticker", "")).upper()
 
     cache_path = DATA_CACHE_PATH / "edgar" / "8k" / f"{ticker}_{accession}.txt"
@@ -75,10 +76,11 @@ def _fetch_filing_body(filing: Dict[str, Any]) -> Optional[str]:
     # Try EDGAR directly (minimal body fetch)
     try:
         import requests
-        filename = str(filing.get("filename", ""))
-        if not filename:
+        cik = filing.get("cik")
+        primary_doc = filing.get("primary_document")
+        if not cik or not accession or not primary_doc:
             return None
-        url = f"https://www.sec.gov/Archives/edgar/{filename}"
+        url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession}/{primary_doc}"
         resp = requests.get(url, timeout=15, headers={"User-Agent": "KestrelBot akossyrev@gmail.com"})
         if resp.ok:
             return resp.text[:50_000]
@@ -113,7 +115,8 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
 
         for filing in queue:
             ticker = str(filing.get("ticker", "")).upper()
-            accession = str(filing.get("accession", ""))
+            accession_raw = filing.get("accession_number", "")
+            accession = str(accession_raw)
             filed_date = str(filing.get("filed_date", ""))
             form_type = str(filing.get("form_type", "8-K"))
 
