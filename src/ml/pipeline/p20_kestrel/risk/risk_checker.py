@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
@@ -28,34 +28,6 @@ _logger = setup_logger(__name__)
 
 _JOB_NAME = "risk_check"
 _INTRADAY_LOSS_ALERT_PCT = -0.12  # -12% intraday fires push
-
-
-def _load_positions_from_yaml() -> List[Dict[str, Any]]:
-    """
-    Load positions from the YAML fallback file if it exists.
-
-    Returns:
-        List of position dicts (same schema as k20_positions rows).
-    """
-    import os
-    try:
-        import yaml
-    except ImportError:
-        return []
-
-    yaml_path = Path(os.environ.get("POSITIONS_YAML", "positions.yml"))
-    if not yaml_path.exists():
-        return []
-    try:
-        with open(yaml_path, encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        if isinstance(data, list):
-            return data
-        _logger.warning("positions.yml has unexpected structure; skipping")
-        return []
-    except Exception:
-        _logger.exception("Failed to load positions.yml")
-        return []
 
 
 def _check_position(
@@ -146,20 +118,14 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
 
     try:
         positions = get_open_positions()
-
-        # Also incorporate YAML fallback positions
-        yaml_positions = _load_positions_from_yaml()
-        all_positions = positions + yaml_positions
-        _logger.info("Checking %d positions (%d DB + %d YAML)", len(all_positions), len(positions), len(yaml_positions))
+        _logger.info("Checking %d open positions", len(positions))
 
         alerts_fired = 0
         positions_checked = 0
 
-        for pos in all_positions:
+        for pos in positions:
             ticker = str(pos.get("ticker", "")).upper()
-            # Get latest close price from signals
-            signal = get_latest_signal(ticker, "close")
-            close_price: Optional[float] = float(signal["value"]) if signal else None
+            close_price = get_latest_signal(ticker, "close")
 
             alert = _check_position(pos, close_price)
             if alert:

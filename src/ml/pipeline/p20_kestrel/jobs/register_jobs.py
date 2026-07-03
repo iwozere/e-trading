@@ -58,6 +58,8 @@ _JOB_SPECS: List[Dict[str, Any]] = [
     {"name": "p20_llm_dossiers",         "cron": "30 22 * * 1-5",     "script": "run_llm_dossiers.py",        "enabled": True},
     # Risk
     {"name": "p20_risk_check",           "cron": "*/30 9-17 * * 1-5", "script": "run_risk_check.py",          "enabled": True},
+    # LLM (weekly — 10-K/Q filings change quarterly)
+    {"name": "p20_llm_risk_diff",        "cron": "0 18 * * 0",        "script": "run_llm_risk_diff.py",       "enabled": True},
     # Maintenance
     {"name": "p20_weekly_maintenance",   "cron": "0 5 * * 1",         "script": "run_weekly_maintenance.py",  "enabled": True},
     {"name": "p20_trends_watchlist",     "cron": "0 3 * * 1-5",       "script": "run_trends_watchlist.py",    "enabled": True},
@@ -72,7 +74,7 @@ def run() -> Dict[str, Any]:
     Returns:
         Summary dict with inserted count.
     """
-    _logger.info("Registering %d P20 job schedules", len(_JOB_SPECS))  # expect 18
+    _logger.info("Registering %d P20 job schedules", len(_JOB_SPECS))  # expect 19
     count = 0
 
     with session_scope() as s:

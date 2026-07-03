@@ -318,8 +318,9 @@ VALUES (
 
 -- 12. Sleeve B — Event Catalyst Screen — 21:15 UTC
 -- B1: FDA run-ups ($300M–$10B mcap, PDUFA/AdCom/readout 10–90 days out).
+-- B2: Spin-offs in the 20–60 day post-spin entry window (>$150M mcap).
 -- B3: Activist 13D screen from k20_signals activist signals.
--- Result fields: success, b1_candidates, b3_candidates, watchlist_entries
+-- Result fields: success, b1_fda_runups, b2_spinoffs, b3_activists, total_candidates
 -- Timeout: 5 min (DB query only).
 INSERT INTO job_schedules (user_id, name, job_type, target, task_params, cron, enabled, created_at, updated_at)
 VALUES (
@@ -334,11 +335,18 @@ VALUES (
         "notification_rules": {
             "conditions": [
                 {
-                    "check_field": "b1_candidates",
+                    "check_field": "b1_fda_runups",
                     "operator": ">",
                     "threshold": 0,
                     "channels": ["telegram"],
                     "comment": "Telegram alert when FDA run-up candidates found (Sleeve B1)"
+                },
+                {
+                    "check_field": "b2_spinoffs",
+                    "operator": ">",
+                    "threshold": 0,
+                    "channels": ["telegram"],
+                    "comment": "Telegram alert when post-spin entry candidates found (Sleeve B2)"
                 }
             ]
         }
@@ -551,6 +559,46 @@ VALUES (
         "timeout_seconds": 300
     }'::jsonb,
     '0 17 * * 0',
+    true,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+) ON CONFLICT (user_id, name) DO NOTHING;
+
+-- ==============================================================================
+-- LLM RISK DIFF  (Sunday 18:00 UTC — after weekly report)
+-- Runs weekly; 10-K/Q filings change quarterly so daily cadence is wasteful.
+-- ==============================================================================
+
+-- 19. LLM Risk Diff — Sunday 18:00 UTC
+-- Fetches the two most recent 10-K or 10-Q filings for each watchlist ticker
+-- via EDGAR submissions, extracts Item 1A risk sections, and runs an LLM diff
+-- to surface newly added or materially escalated risk factors.
+-- Results are cached in k20_llm_runs; already-classified filings are skipped.
+-- Result fields: success, tickers_processed, diffs_ok, red_flags_found, errors
+-- Timeout: 60 min (EDGAR HTTP + LLM API; budget-capped at 100% monthly).
+INSERT INTO job_schedules (user_id, name, job_type, target, task_params, cron, enabled, created_at, updated_at)
+VALUES (
+    2,
+    'P20 LLM Risk Diff',
+    'data_processing',
+    'src.ml.pipeline.p20_kestrel.jobs.run_llm_risk_diff',
+    '{
+        "script_path": "src/ml/pipeline/p20_kestrel/jobs/run_llm_risk_diff.py",
+        "script_args": [],
+        "timeout_seconds": 3600,
+        "notification_rules": {
+            "conditions": [
+                {
+                    "check_field": "red_flags_found",
+                    "operator": ">",
+                    "threshold": 0,
+                    "channels": ["telegram"],
+                    "comment": "Telegram alert when new risk red flags are detected in watchlist filings"
+                }
+            ]
+        }
+    }'::jsonb,
+    '0 18 * * 0',
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP

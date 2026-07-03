@@ -81,6 +81,9 @@ def _parse_mcap(raw: Any) -> Optional[float]:
         return None
 
 
+_FUNDAMENTALS_BATCH = 50
+
+
 async def _fetch_fundamentals_for_ticker(ticker: str) -> Optional[Any]:
     """Fetch fundamentals for one ticker; return None on failure."""
     try:
@@ -88,6 +91,20 @@ async def _fetch_fundamentals_for_ticker(ticker: str) -> Optional[Any]:
     except Exception:
         _logger.debug("No fundamentals for %s", ticker)
         return None
+
+
+async def _fetch_all_fundamentals(tickers: List[str]) -> List[Optional[Any]]:
+    """Fetch fundamentals for all tickers in concurrent batches to avoid rate limits."""
+    results: List[Optional[Any]] = []
+    for i in range(0, len(tickers), _FUNDAMENTALS_BATCH):
+        batch = tickers[i: i + _FUNDAMENTALS_BATCH]
+        batch_results = await asyncio.gather(
+            *(_fetch_fundamentals_for_ticker(t) for t in batch),
+            return_exceptions=True,
+        )
+        for r in batch_results:
+            results.append(None if isinstance(r, BaseException) else r)
+    return results
 
 
 def run() -> Dict[str, Any]:
@@ -102,12 +119,17 @@ def run() -> Dict[str, Any]:
     csv_tickers: set[str] = set(df["ticker"].tolist())
     _logger.info("CSV contains %d tickers", len(csv_tickers))
 
+    tickers_list = df["ticker"].tolist()
+    _logger.info(
+        "Fetching fundamentals for %d tickers (batch size %d)",
+        len(tickers_list), _FUNDAMENTALS_BATCH,
+    )
+    all_funds = asyncio.run(_fetch_all_fundamentals(tickers_list))
+
     rows: List[Dict[str, Any]] = []
-    for _, row in df.iterrows():
+    for (_, row), fund in zip(df.iterrows(), all_funds):
         ticker = str(row["ticker"])
         mcap = _parse_mcap(row.get("mcap_raw", ""))
-
-        fund = asyncio.run(_fetch_fundamentals_for_ticker(ticker))
 
         universe_row: Dict[str, Any] = {
             "ticker": ticker,

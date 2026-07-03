@@ -332,3 +332,57 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
         _logger.exception("GDELT processor failed")
         finish_job_run(_JOB_NAME, target_date, status="failed", error=str(exc))
         raise
+
+
+def run_backfill(
+    start_date: date,
+    end_date: Optional[date] = None,
+) -> Dict[str, Any]:
+    """
+    Process GKG files for a date range (backfill mode).
+
+    Calls run() for each weekday in [start_date, end_date] inclusive,
+    logging per-date results. Continues on per-date errors.
+
+    Args:
+        start_date: First date to process (inclusive).
+        end_date: Last date to process (inclusive). Defaults to yesterday.
+
+    Returns:
+        Aggregate summary with per_date breakdown.
+    """
+    end = end_date or (date.today() - timedelta(days=1))
+    _logger.info("GDELT backfill %s → %s", start_date, end)
+
+    per_date: List[Dict[str, Any]] = []
+    dates_processed = 0
+    dates_skipped = 0
+    current = start_date
+
+    while current <= end:
+        if current.weekday() >= 5:  # skip weekends
+            current += timedelta(days=1)
+            continue
+        try:
+            result = run(current)
+            per_date.append({"date": str(current), **result})
+            dates_processed += 1
+        except Exception:
+            _logger.exception("Backfill failed for %s; continuing", current)
+            per_date.append({"date": str(current), "error": True})
+            dates_skipped += 1
+        current += timedelta(days=1)
+
+    total_files = sum(r.get("files_processed", 0) for r in per_date)
+    total_rows = sum(r.get("rows_upserted", 0) for r in per_date)
+    _logger.info(
+        "GDELT backfill done: %d processed, %d skipped, %d files, %d rows",
+        dates_processed, dates_skipped, total_files, total_rows,
+    )
+    return {
+        "dates_processed": dates_processed,
+        "dates_skipped": dates_skipped,
+        "total_files": total_files,
+        "total_rows_upserted": total_rows,
+        "per_date": per_date,
+    }

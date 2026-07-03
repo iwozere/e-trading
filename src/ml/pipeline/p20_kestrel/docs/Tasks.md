@@ -31,15 +31,22 @@
 - [x] `reporting/daily_digest.py` — 07:30 digest builder + sender
 - [x] `reporting/data_health.py` — 07:00 freshness guard
 - [x] `reporting/weekly_report.py` — Sunday performance report
-- [x] `jobs/register_jobs.py` — One-time job schedule registration (18 jobs)
-- [x] 18 `run_*.py` scheduler entry scripts (was 20; consolidated to 18)
-- [x] Test suite (9 test files, ~60 tests)
+- [x] `jobs/register_jobs.py` — One-time job schedule registration (19 jobs)
+- [x] 20 `run_*.py` scheduler entry scripts (19 scheduled + 1 manual backfill)
+- [x] Test suite (12 test files, ~90 tests)
 - [x] Module documentation (README, Requirements, Design, Tasks)
+- [x] Sleeve B2 (spin-offs) — `screen_b2()` in sleeve_b.py; `get_past_spinoffs()` repo; B2 in run()
+- [x] `llm/risk_diff.py` — wired: `run_llm_risk_diff.py` entry point + registered in jobs (Sunday 18:00 UTC)
+- [x] `universe_loader.py` async batch — `_fetch_all_fundamentals()` with `asyncio.gather()` in 50-ticker batches
+- [x] `gdelt_processor.py` multi-day backfill — `run_backfill(start, end)` + `run_gdelt_backfill.py`
+- [x] `risk_checker.py` YAML fallback — removed; always reads k20_positions
+- [x] Deploy runbook — added to README.md
+- [x] Telegram bot hook example for /pos — added to README.md
+- [x] Integration tests (2 test files: morning chain + /pos roundtrip)
 
 ### 🔄 IN PROGRESS
 
-- [ ] Sleeve B2 (spin-offs) — entry window 20-60 days post-spin not yet implemented
-- [ ] `llm/risk_diff.py` — module implemented but not wired in: no run script, not registered in register_jobs.py, not called from any other module; needs a `run_llm_risk_diff.py` entry point and registration
+*(none)*
 
 ### 🚀 PLANNED ENHANCEMENTS
 
@@ -51,9 +58,7 @@
 
 ## Technical Debt
 
-- [ ] `universe_loader.py`: async batch fundamentals (currently sequential asyncio.run per ticker)
-- [ ] `gdelt_processor.py`: multi-day backfill needs its own orchestration script
-- [ ] `risk_checker.py`: YAML fallback is a temporary measure; should always use k20_positions
+*(none outstanding)*
 
 ## Known Issues
 
@@ -63,11 +68,11 @@
 
 ## Testing Requirements
 
-- [ ] Integration test: full morning chain with mock DB
-- [ ] Integration test: /pos add → confirm_add → risk_checker roundtrip
-- [ ] Performance test: universe_loader with 3000+ tickers
+- [x] Integration test: full morning chain with mock DB — `test_integration_morning_chain.py`
+- [x] Integration test: /pos add → confirm_add → risk_checker roundtrip — `test_integration_pos_roundtrip.py`
+- [ ] Performance test: universe_loader with 3000+ tickers (requires live data or large fixture)
 
 ## Documentation Updates
 
-- [ ] Add Telegram bot hook example for /pos handler
-- [ ] Add deploy runbook (migration → register_jobs → enable jobs)
+- [x] Add Telegram bot hook example for /pos handler — in README.md
+- [x] Add deploy runbook (migration → register_jobs → enable jobs) — in README.md
