@@ -91,7 +91,7 @@ def run() -> Dict[str, Any]:
                 state_json={},
             )
             stmt = stmt.on_conflict_do_nothing(
-                constraint="unique_user_schedule_name"
+                index_elements=["user_id", "name"]
             )
             s.execute(stmt)
             _logger.debug("Registered: %s (%s)", spec["name"], spec["cron"])
