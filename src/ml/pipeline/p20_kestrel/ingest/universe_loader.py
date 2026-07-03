@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -96,10 +97,11 @@ def _parse_mcap(raw: Any) -> Optional[float]:
         return None
 
 
-_FUNDAMENTALS_BATCH = 50
+_FUNDAMENTALS_WORKERS = 8      # concurrent Yahoo fetch threads
+_PROGRESS_LOG_EVERY = 500      # progress log interval (tickers)
 
 
-async def _fetch_fundamentals_for_ticker(ticker: str) -> Optional[Any]:
+def _fetch_fundamentals_for_ticker(ticker: str) -> Optional[Any]:
     """Fetch fundamentals for one ticker using Yahoo only; return None on failure.
 
     Yahoo is used exclusively here: FMP/Polygon/TwelveData all hit free-tier
@@ -108,23 +110,30 @@ async def _fetch_fundamentals_for_ticker(ticker: str) -> Optional[Any]:
     individual ticker lookups where data quality matters more than speed.
     """
     try:
-        return await get_fundamentals_unified(ticker, provider="yf")
+        # get_fundamentals_unified is declared async but performs synchronous
+        # I/O internally — run it in this worker thread's own event loop.
+        return asyncio.run(get_fundamentals_unified(ticker, provider="yf"))
     except Exception:
         _logger.debug("No fundamentals for %s", ticker)
         return None
 
 
-async def _fetch_all_fundamentals(tickers: List[str]) -> List[Optional[Any]]:
-    """Fetch fundamentals for all tickers in concurrent batches to avoid rate limits."""
+def _fetch_all_fundamentals(tickers: List[str]) -> List[Optional[Any]]:
+    """
+    Fetch fundamentals for all tickers with real thread-level concurrency.
+
+    asyncio.gather over get_fundamentals_unified provides NO concurrency —
+    the coroutine body is synchronous and blocks the event loop, so batches
+    ran strictly sequentially (hours for a full universe). A thread pool
+    gives true parallel HTTP fetches; cached tickers return in milliseconds.
+    """
     results: List[Optional[Any]] = []
-    for i in range(0, len(tickers), _FUNDAMENTALS_BATCH):
-        batch = tickers[i: i + _FUNDAMENTALS_BATCH]
-        batch_results = await asyncio.gather(
-            *(_fetch_fundamentals_for_ticker(t) for t in batch),
-            return_exceptions=True,
-        )
-        for r in batch_results:
-            results.append(None if isinstance(r, BaseException) else r)
+    total = len(tickers)
+    with ThreadPoolExecutor(max_workers=_FUNDAMENTALS_WORKERS) as pool:
+        for i, fund in enumerate(pool.map(_fetch_fundamentals_for_ticker, tickers), 1):
+            results.append(fund)
+            if i % _PROGRESS_LOG_EVERY == 0 or i == total:
+                _logger.info("Fundamentals progress: %d/%d tickers", i, total)
     return results
 
 
@@ -158,10 +167,10 @@ def run() -> Dict[str, Any]:
 
     tickers_list = df["ticker"].tolist()
     _logger.info(
-        "Fetching fundamentals for %d tickers (batch size %d)",
-        len(tickers_list), _FUNDAMENTALS_BATCH,
+        "Fetching fundamentals for %d tickers (%d worker threads)",
+        len(tickers_list), _FUNDAMENTALS_WORKERS,
     )
-    all_funds = asyncio.run(_fetch_all_fundamentals(tickers_list))
+    all_funds = _fetch_all_fundamentals(tickers_list)
 
     rows: List[Dict[str, Any]] = []
     for (_, row), fund in zip(df.iterrows(), all_funds):

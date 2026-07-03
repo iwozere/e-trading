@@ -196,6 +196,12 @@ def _job_nasdaq_screener() -> Optional[Dict[str, Any]]:
             part = part.rename(columns={"Security Name": "Name"})
             # Drop file-footer rows (Symbol == "Symbol" header duplicates or NaN)
             part = part[part["Symbol"].notna() & (part["Symbol"] != "Symbol")]
+            # Both files carry ETF and Test Issue Y/N flags — the P20 universe
+            # wants operating companies only.
+            if "ETF" in part.columns:
+                part = part[part["ETF"] != "Y"]
+            if "Test Issue" in part.columns:
+                part = part[part["Test Issue"] != "Y"]
             parts.append(cast(pd.DataFrame, part[["Symbol", "Name", "Exchange"]]))
 
         merged: pd.DataFrame = cast(pd.DataFrame, pd.concat(parts, ignore_index=True))
