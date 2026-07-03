@@ -23,8 +23,6 @@ from typing import Any, Dict, List
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-
 from src.data.db.core.database import session_scope
 from src.data.db.models.model_jobs import Schedule
 from src.notification.logger import setup_logger
@@ -80,21 +78,30 @@ def run() -> Dict[str, Any]:
     with session_scope() as s:
         for spec in _JOB_SPECS:
             script_path = f"{_SCRIPT_BASE}/{spec['script']}"
-            stmt = pg_insert(Schedule).values(
+            existing = s.query(Schedule).filter_by(
                 user_id=_SYSTEM_USER_ID,
-                name=spec["name"],
-                job_type="script",
-                target=script_path,
-                task_params={"script_path": script_path},
-                cron=spec["cron"],
-                enabled=spec["enabled"],
-                state_json={},
-            )
-            stmt = stmt.on_conflict_do_nothing(
-                index_elements=["user_id", "name"]
-            )
-            s.execute(stmt)
-            _logger.debug("Registered: %s (%s)", spec["name"], spec["cron"])
+                name=spec["name"]
+            ).first()
+            
+            if existing:
+                existing.target = script_path
+                existing.task_params = {"script_path": script_path}
+                existing.cron = spec["cron"]
+                existing.enabled = spec["enabled"]
+                _logger.debug("Updated existing schedule: %s (%s)", spec["name"], spec["cron"])
+            else:
+                new_schedule = Schedule(
+                    user_id=_SYSTEM_USER_ID,
+                    name=spec["name"],
+                    job_type="script",
+                    target=script_path,
+                    task_params={"script_path": script_path},
+                    cron=spec["cron"],
+                    enabled=spec["enabled"],
+                    state_json={},
+                )
+                s.add(new_schedule)
+                _logger.debug("Registered new schedule: %s (%s)", spec["name"], spec["cron"])
             count += 1
 
     _logger.info("Job registration complete: %d rows", count)
