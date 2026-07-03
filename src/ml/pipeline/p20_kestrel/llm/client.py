@@ -26,11 +26,12 @@ from src.ml.pipeline.p20_kestrel.config import (
     LLM_MONTHLY_BUDGET_USD,
     SONNET_MODEL,
 )
-from src.ml.pipeline.p20_kestrel.db.repos import (
-    get_llm_monthly_spend,
-    get_llm_run_cached,
-    insert_llm_run,
-)
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+
+_kestrel = _KestrelService()
+get_llm_monthly_spend = _kestrel.get_llm_monthly_spend
+get_llm_run_cached = _kestrel.get_llm_run_cached
+insert_llm_run = _kestrel.insert_llm_run
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

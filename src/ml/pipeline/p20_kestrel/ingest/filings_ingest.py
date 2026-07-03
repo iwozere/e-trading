@@ -20,12 +20,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.data.downloader.edgar_downloader import EdgarDownloader
-from src.ml.pipeline.p20_kestrel.db.repos import (
-    finish_job_run,
-    get_watchlist_tickers,
-    start_job_run,
-    upsert_signals,
-)
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+
+_kestrel = _KestrelService()
+finish_job_run = _kestrel.finish_job_run
+get_open_positions = _kestrel.get_open_positions
+get_watchlist_tickers = _kestrel.get_watchlist_tickers
+start_job_run = _kestrel.start_job_run
+upsert_signals = _kestrel.upsert_signals
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -40,7 +42,6 @@ _FORM4_BUY_CODES = {"P", "A"}  # P = open market purchase, A = grant
 
 def _get_target_tickers() -> Set[str]:
     """Return the union of watchlist + positions tickers — the filing discovery scope."""
-    from src.ml.pipeline.p20_kestrel.db.repos import get_open_positions
     watchlist = set(get_watchlist_tickers())
     positions = {p["ticker"] for p in get_open_positions()}
     return watchlist | positions

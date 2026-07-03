@@ -17,11 +17,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.ml.pipeline.p20_kestrel.config import SONNET_MODEL
-from src.ml.pipeline.p20_kestrel.db.repos import (
-    finish_job_run,
-    get_watchlist_tickers,
-    start_job_run,
-)
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+
+_kestrel = _KestrelService()
+finish_job_run = _kestrel.finish_job_run
+get_watchlist_tickers = _kestrel.get_watchlist_tickers
+start_job_run = _kestrel.start_job_run
 from src.ml.pipeline.p20_kestrel.llm.client import KestrelLLMClient
 from src.ml.pipeline.p20_kestrel.llm.prompts import RISK_DIFF, SYSTEM_ANALYST
 from src.notification.logger import setup_logger

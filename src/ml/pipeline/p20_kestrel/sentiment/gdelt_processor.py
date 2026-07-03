@@ -21,14 +21,16 @@ sys.path.append(str(PROJECT_ROOT))
 import pandas as pd
 from difflib import SequenceMatcher
 
-from src.ml.pipeline.p20_kestrel.db.repos import (
-    finish_job_run,
-    get_all_aliases,
-    get_blocklist,
-    get_sentiment_history,
-    start_job_run,
-    upsert_sentiment,
-)
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+
+_kestrel = _KestrelService()
+finish_job_run = _kestrel.finish_job_run
+get_all_aliases = _kestrel.get_all_aliases
+get_blocklist = _kestrel.get_blocklist
+get_sentiment_history = _kestrel.get_sentiment_history
+get_watchlist_tickers = _kestrel.get_watchlist_tickers
+start_job_run = _kestrel.start_job_run
+upsert_sentiment = _kestrel.upsert_sentiment
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

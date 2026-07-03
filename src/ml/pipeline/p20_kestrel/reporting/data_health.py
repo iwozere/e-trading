@@ -24,13 +24,14 @@ from src.ml.pipeline.p20_kestrel.config import (
     LLM_MONTHLY_BUDGET_USD,
     STALENESS_DAYS,
 )
-from src.ml.pipeline.p20_kestrel.db.repos import (
-    finish_job_run,
-    get_job_run,
-    get_llm_monthly_spend,
-    get_or_create_budget,
-    start_job_run,
-)
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+
+_kestrel = _KestrelService()
+finish_job_run = _kestrel.finish_job_run
+get_job_run = _kestrel.get_job_run
+get_llm_monthly_spend = _kestrel.get_llm_monthly_spend
+get_or_create_budget = _kestrel.get_or_create_budget
+start_job_run = _kestrel.start_job_run
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

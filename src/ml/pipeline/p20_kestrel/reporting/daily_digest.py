@@ -17,14 +17,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.ml.pipeline.p20_kestrel.config import REVISIONS_FEED_AVAILABLE
-from src.ml.pipeline.p20_kestrel.db.repos import (
-    finish_job_run,
-    get_catalysts_in_window,
-    get_latest_signal,
-    get_open_positions,
-    get_watchlist,
-    start_job_run,
-)
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+
+_kestrel = _KestrelService()
+finish_job_run = _kestrel.finish_job_run
+get_catalysts_in_window = _kestrel.get_catalysts_in_window
+get_latest_signal = _kestrel.get_latest_signal
+get_open_positions = _kestrel.get_open_positions
+get_watchlist = _kestrel.get_watchlist
+start_job_run = _kestrel.start_job_run
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

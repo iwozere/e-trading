@@ -11,7 +11,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.ml.pipeline.p20_kestrel.db.models import (
+from src.data.db.models.model_kestrel import (
     K20AlertsLog,
     K20AliasBlocklist,
     K20Catalyst,

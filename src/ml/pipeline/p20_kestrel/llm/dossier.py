@@ -20,13 +20,14 @@ from src.ml.pipeline.p20_kestrel.config import (
     SLEEVE_A_DOSSIER_THRESHOLD,
     SONNET_MODEL,
 )
-from src.ml.pipeline.p20_kestrel.db.repos import (
-    finish_job_run,
-    get_universe_row,
-    get_watchlist,
-    start_job_run,
-    upsert_watchlist,
-)
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+
+_kestrel = _KestrelService()
+finish_job_run = _kestrel.finish_job_run
+get_universe_row = _kestrel.get_universe_row
+get_watchlist = _kestrel.get_watchlist
+start_job_run = _kestrel.start_job_run
+upsert_watchlist = _kestrel.upsert_watchlist
 from src.ml.pipeline.p20_kestrel.llm.client import KestrelLLMClient
 from src.ml.pipeline.p20_kestrel.llm.prompts import DOSSIER, SYSTEM_ANALYST
 from src.notification.logger import setup_logger

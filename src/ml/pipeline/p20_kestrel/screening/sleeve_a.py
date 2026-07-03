@@ -21,13 +21,14 @@ from src.ml.pipeline.p20_kestrel.config import (
     SLEEVE_A_MIN_ADV_USD,
     SLEEVE_A_PUSH_THRESHOLD,
 )
-from src.ml.pipeline.p20_kestrel.db.repos import (
-    get_active_tickers,
-    get_signals,
-    get_universe_row,
-    upsert_signals,
-    upsert_watchlist,
-)
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+
+_kestrel = _KestrelService()
+get_active_tickers = _kestrel.get_active_tickers
+get_signals = _kestrel.get_signals
+get_universe_row = _kestrel.get_universe_row
+upsert_signals = _kestrel.upsert_signals
+upsert_watchlist = _kestrel.upsert_watchlist
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

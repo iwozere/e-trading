@@ -25,12 +25,13 @@ from typing import Any, Dict, Optional, Tuple
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.ml.pipeline.p20_kestrel.db.repos import (
-    get_open_positions,
-    insert_position,
-    update_position,
-    upsert_watchlist,
-)
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+
+_kestrel = _KestrelService()
+get_open_positions = _kestrel.get_open_positions
+insert_position = _kestrel.insert_position
+update_position = _kestrel.update_position
+upsert_watchlist = _kestrel.upsert_watchlist
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

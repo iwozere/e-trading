@@ -19,11 +19,12 @@ import pandas as pd
 
 from src.common.fundamentals import get_fundamentals_unified
 from src.ml.pipeline.p20_kestrel.config import NASDAQ_TICKERS_CSV
-from src.ml.pipeline.p20_kestrel.db.repos import (
-    get_active_tickers,
-    mark_tickers_delisted,
-    upsert_universe_rows,
-)
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+
+_kestrel = _KestrelService()
+get_active_tickers = _kestrel.get_active_tickers
+mark_tickers_delisted = _kestrel.mark_tickers_delisted
+upsert_universe_rows = _kestrel.upsert_universe_rows
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

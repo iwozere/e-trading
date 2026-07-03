@@ -195,7 +195,7 @@ Contains only `k20_*` tables; does not touch any existing table.
 
 ### Phase 1 — Schema + EOD Ingest + Momentum + Digest
 
-#### `db/models.py`
+#### `src.data.db.models.model_kestrel`
 
 Define all `k20_*` tables as SQLAlchemy mapped classes. Notable additions vs. spec §3.1 already incorporated in v1.2:
 
@@ -214,7 +214,7 @@ Define all `k20_*` tables as SQLAlchemy mapped classes. Notable additions vs. sp
 | `k20_job_runs` | Composite PK `(job, run_date)`; used by DAG (§11.1) |
 | `k20_alerts_log` | `ts` with index; no PK (append-only log) |
 
-`db/repos.py` — thin wrappers around `session_scope()` for each table; no SQLAlchemy `Session` leaked outside.
+`src.data.db.repos.repo_kestrel.KestrelRepo` — Session-based repo via `KestrelService(BaseDBService)` with `@with_uow`; all k20_* tables.
 
 #### `ingest/universe_loader.py`
 

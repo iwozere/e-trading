@@ -26,8 +26,6 @@ def test_data_health_returns_required_keys():
     with (
         patch("src.ml.pipeline.p20_kestrel.reporting.data_health.start_job_run"),
         patch("src.ml.pipeline.p20_kestrel.reporting.data_health.finish_job_run"),
-        patch("src.ml.pipeline.p20_kestrel.reporting.data_health.get_latest_sentiment",
-              return_value={"date": date.today()}),
         patch("src.ml.pipeline.p20_kestrel.reporting.data_health.get_llm_monthly_spend",
               return_value=10.0),
     ):
@@ -46,7 +44,7 @@ def test_data_health_returns_required_keys():
 def test_sentiment_aggregator_handles_empty_watchlist():
     """Aggregator returns a valid dict when watchlist is empty."""
     with (
-        patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.get_watchlist_tickers",
+        patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.get_active_tickers",
               return_value=[]),
         patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.start_job_run"),
         patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.finish_job_run"),

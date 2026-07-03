@@ -15,10 +15,11 @@ from typing import Any, Dict, List, Optional, Tuple
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.ml.pipeline.p20_kestrel.db.repos import (
-    get_active_tickers,
-    upsert_aliases,
-)
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+
+_kestrel = _KestrelService()
+get_active_tickers = _kestrel.get_active_tickers
+upsert_aliases = _kestrel.upsert_aliases
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

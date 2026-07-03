@@ -54,6 +54,7 @@ from src.data.db.repos.repo_jobs import JobsRepository
 from src.data.db.repos.repo_notification import NotificationRepository
 from src.data.db.repos.repo_system_health import SystemHealthRepository
 from src.data.db.repos.repo_short_squeeze import ShortSqueezeRepo
+from src.data.db.repos.repo_kestrel import KestrelRepo
 
 
 # ------------------------------- UoW bundle ----------------------------------
@@ -96,6 +97,9 @@ class ReposBundle:
 
     # Short Squeeze Pipeline
     short_squeeze: ShortSqueezeRepo
+
+    # P20 Kestrel Pipeline
+    kestrel: KestrelRepo
 
 
 # ----------------------------- Database service ------------------------------
@@ -166,6 +170,9 @@ class DatabaseService:
 
                 # Short Squeeze Pipeline
                 short_squeeze=ShortSqueezeRepo(s),
+
+                # P20 Kestrel Pipeline
+                kestrel=KestrelRepo(s),
             )
             yield repos
             s.commit()

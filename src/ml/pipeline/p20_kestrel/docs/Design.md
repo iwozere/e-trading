@@ -42,7 +42,7 @@ k20_*          ─→  weekly_report      ─→  Notification push
 
 ### Component Design
 
-**Repository Layer (`db/repos.py`)**
+**Repository Layer (`src.data.db.repos.repo_kestrel.KestrelRepo`)**
 - Single module, thin wrappers, no raw SQL outside of it
 - `session_scope()` handles commit/rollback
 - PostgreSQL upsert via `pg_insert(...).on_conflict_do_update()`

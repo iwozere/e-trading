@@ -136,9 +136,6 @@ async def on_callback_query(bot, query):
 ```
 p20_kestrel/
 ├── config.py              # All tuning constants
-├── db/
-│   ├── models.py          # SQLAlchemy ORM for k20_* tables
-│   └── repos.py           # Repository layer (no Session leakage)
 ├── ingest/
 │   ├── universe_loader.py # Weekly Nasdaq screener + fundamentals
 │   ├── eod_ingest.py      # Daily OHLCV + technicals
@@ -176,7 +173,7 @@ p20_kestrel/
 
 ## Integration
 
-- `src.data.db` — PostgreSQL via SQLAlchemy session_scope()
+- `src.data.db` — PostgreSQL via `KestrelService` (BaseDBService / UoW pattern)
 - `src.notification.service.client` — Push alerts
 - `src.data.market_data.data_manager` — OHLCV feeds
 - `src.data.fundamentals` — get_fundamentals_unified()
