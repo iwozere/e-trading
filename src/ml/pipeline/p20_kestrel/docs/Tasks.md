@@ -33,13 +33,13 @@
 - [x] `reporting/weekly_report.py` — Sunday performance report
 - [x] `jobs/register_jobs.py` — One-time job schedule registration (18 jobs)
 - [x] 18 `run_*.py` scheduler entry scripts (was 20; consolidated to 18)
-- [x] Test suite (7 test files, ~60 tests)
+- [x] Test suite (9 test files, ~60 tests)
 - [x] Module documentation (README, Requirements, Design, Tasks)
 
 ### 🔄 IN PROGRESS
 
 - [ ] Sleeve B2 (spin-offs) — entry window 20-60 days post-spin not yet implemented
-- [ ] `llm/risk_diff.py` — currently attached to 10-K/Q; needs integration with watchlist scoring
+- [ ] `llm/risk_diff.py` — module implemented but not wired in: no run script, not registered in register_jobs.py, not called from any other module; needs a `run_llm_risk_diff.py` entry point and registration
 
 ### 🚀 PLANNED ENHANCEMENTS
 
