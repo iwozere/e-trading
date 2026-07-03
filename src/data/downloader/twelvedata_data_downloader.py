@@ -263,7 +263,7 @@ class TwelveDataDataDownloader(BaseDataDownloader):
             )
 
         except Exception as e:
-            _logger.exception("Failed to get fundamentals for %s: %s", symbol, str(e))
+            _logger.warning("Provider unavailable for %s: %s", symbol, e)
             return Fundamentals(
                 ticker=symbol.upper(),
                 company_name="Unknown",

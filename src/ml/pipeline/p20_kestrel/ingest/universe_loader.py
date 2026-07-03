@@ -100,9 +100,15 @@ _FUNDAMENTALS_BATCH = 50
 
 
 async def _fetch_fundamentals_for_ticker(ticker: str) -> Optional[Any]:
-    """Fetch fundamentals for one ticker; return None on failure."""
+    """Fetch fundamentals for one ticker using Yahoo only; return None on failure.
+
+    Yahoo is used exclusively here: FMP/Polygon/TwelveData all hit free-tier
+    rate limits or 403s on the profile endpoint, adding noise and latency
+    without contributing data. The multi-provider merge is reserved for
+    individual ticker lookups where data quality matters more than speed.
+    """
     try:
-        return await get_fundamentals_unified(ticker)
+        return await get_fundamentals_unified(ticker, provider="yf")
     except Exception:
         _logger.debug("No fundamentals for %s", ticker)
         return None

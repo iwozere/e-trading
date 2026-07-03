@@ -287,7 +287,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
             )
 
         except Exception as e:
-            _logger.exception("Failed to get fundamentals for %s: %s", symbol, str(e))
+            _logger.warning("Provider unavailable for %s: %s", symbol, e)
             raise
 
     def get_provider_name(self) -> str:

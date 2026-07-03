@@ -319,7 +319,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
             )
 
         except Exception as e:
-            _logger.exception("Failed to get fundamentals for %s: %s", symbol, str(e))
+            _logger.warning("Provider unavailable for %s: %s", symbol, e)
             return self._create_empty_fundamentals(symbol)
 
     def _create_empty_fundamentals(self, symbol: str) -> Fundamentals:
