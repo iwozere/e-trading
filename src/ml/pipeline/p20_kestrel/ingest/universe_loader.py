@@ -97,7 +97,7 @@ def _parse_mcap(raw: Any) -> Optional[float]:
         return None
 
 
-_FUNDAMENTALS_WORKERS = 1      # concurrent Yahoo fetch threads
+_FUNDAMENTALS_WORKERS = 8      # concurrent Yahoo fetch threads
 _PROGRESS_LOG_EVERY = 500      # progress log interval (tickers)
 
 
@@ -109,11 +109,7 @@ def _fetch_fundamentals_for_ticker(ticker: str) -> Optional[Any]:
     without contributing data. The multi-provider merge is reserved for
     individual ticker lookups where data quality matters more than speed.
     """
-    import random
-    import time
     try:
-        # Stagger the thread requests slightly
-        time.sleep(random.uniform(0.1, 0.5))
         # get_fundamentals_unified is declared async but performs synchronous
         # I/O internally — run it in this worker thread's own event loop.
         return asyncio.run(get_fundamentals_unified(ticker, provider="yf"))
