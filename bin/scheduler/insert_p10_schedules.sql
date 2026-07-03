@@ -1,6 +1,10 @@
 -- SQL script to insert scheduled jobs for P10 (EMPS3) pipeline
 -- Runs 2 hours BEFORE EMPS2
 -- User ID: 2 (akossyrev@gmail.com)
+--
+-- Idempotent: safe to re-run (ON CONFLICT (user_id, name) DO NOTHING).
+-- Usage:
+--   psql -d your_database < bin/scheduler/insert_p10_schedules.sql
 
 -- ==============================================================================
 -- 1. EMPS3 Morning Scan
@@ -42,7 +46,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 -- ==============================================================================
 -- 2. EMPS3 Evening Scan
@@ -84,4 +88,4 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;

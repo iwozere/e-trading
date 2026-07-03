@@ -1,0 +1,186 @@
+"""
+P20 Kestrel — Risk checker.
+
+Checks open positions against stop/target prices and LLM invalidation signals.
+Fires push alerts for stops/targets touched and writes position updates.
+"""
+
+from __future__ import annotations
+
+import sys
+from datetime import date
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+PROJECT_ROOT = Path(__file__).resolve().parents[5]
+sys.path.append(str(PROJECT_ROOT))
+
+from src.ml.pipeline.p20_kestrel.db.repos import (
+    finish_job_run,
+    get_latest_signal,
+    get_open_positions,
+    log_alert,
+    start_job_run,
+)
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
+
+_JOB_NAME = "risk_check"
+_INTRADAY_LOSS_ALERT_PCT = -0.12  # -12% intraday fires push
+
+
+def _load_positions_from_yaml() -> List[Dict[str, Any]]:
+    """
+    Load positions from the YAML fallback file if it exists.
+
+    Returns:
+        List of position dicts (same schema as k20_positions rows).
+    """
+    import os
+    try:
+        import yaml
+    except ImportError:
+        return []
+
+    yaml_path = Path(os.environ.get("POSITIONS_YAML", "positions.yml"))
+    if not yaml_path.exists():
+        return []
+    try:
+        with open(yaml_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        if isinstance(data, list):
+            return data
+        _logger.warning("positions.yml has unexpected structure; skipping")
+        return []
+    except Exception:
+        _logger.exception("Failed to load positions.yml")
+        return []
+
+
+def _check_position(
+    position: Dict[str, Any],
+    close_price: Optional[float],
+) -> Optional[Dict[str, Any]]:
+    """
+    Check one position against stop/target prices.
+
+    Args:
+        position: Position dict from k20_positions.
+        close_price: Latest close price (may be None if unavailable).
+
+    Returns:
+        Alert dict if an alert should be fired, else None.
+    """
+    if close_price is None:
+        return None
+
+    ticker = str(position.get("ticker", ""))
+    stop_px = position.get("stop_px")
+    t1_px = position.get("t1_px")
+    t2_px = position.get("t2_px")
+    entry_px = position.get("entry_px")
+    realized_thirds = position.get("realized_thirds", 0)
+
+    alert: Optional[Dict[str, Any]] = None
+
+    # Stop check
+    if stop_px is not None and close_price <= float(stop_px):
+        alert = {
+            "trigger": "stop_hit",
+            "ticker": ticker,
+            "close": close_price,
+            "stop_px": stop_px,
+            "action": "CLOSE position — stop hit",
+        }
+        _logger.warning("STOP HIT: %s @ %.2f (stop: %.2f)", ticker, close_price, stop_px)
+
+    # T1 target check
+    elif t1_px is not None and realized_thirds == 0 and close_price >= float(t1_px):
+        alert = {
+            "trigger": "t1_target",
+            "ticker": ticker,
+            "close": close_price,
+            "t1_px": t1_px,
+            "action": "Scale out 1/3 @ T1",
+        }
+
+    # T2 target check
+    elif t2_px is not None and realized_thirds == 1 and close_price >= float(t2_px):
+        alert = {
+            "trigger": "t2_target",
+            "ticker": ticker,
+            "close": close_price,
+            "t2_px": t2_px,
+            "action": "Scale out 1/3 @ T2",
+        }
+
+    # Intraday loss guard (vs entry)
+    elif entry_px is not None and close_price < float(entry_px) * (1 + _INTRADAY_LOSS_ALERT_PCT):
+        pct_loss = (close_price - float(entry_px)) / float(entry_px)
+        alert = {
+            "trigger": "intraday_loss",
+            "ticker": ticker,
+            "close": close_price,
+            "entry_px": entry_px,
+            "pct_loss": round(pct_loss, 4),
+            "action": f"Position down {pct_loss:.1%} — review immediately",
+        }
+
+    return alert
+
+
+def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
+    """
+    Check all open positions for risk events and fire alerts.
+
+    Args:
+        as_of_date: Date to run risk check for (defaults to today).
+
+    Returns:
+        Summary dict.
+    """
+    target_date = as_of_date or date.today()
+    _logger.info("Risk checker for %s", target_date)
+    start_job_run(_JOB_NAME, target_date)
+
+    try:
+        positions = get_open_positions()
+
+        # Also incorporate YAML fallback positions
+        yaml_positions = _load_positions_from_yaml()
+        all_positions = positions + yaml_positions
+        _logger.info("Checking %d positions (%d DB + %d YAML)", len(all_positions), len(positions), len(yaml_positions))
+
+        alerts_fired = 0
+        positions_checked = 0
+
+        for pos in all_positions:
+            ticker = str(pos.get("ticker", "")).upper()
+            # Get latest close price from signals
+            signal = get_latest_signal(ticker, "close")
+            close_price: Optional[float] = float(signal["value"]) if signal else None
+
+            alert = _check_position(pos, close_price)
+            if alert:
+                log_alert(
+                    ticker=ticker,
+                    trigger=alert["trigger"],
+                    payload=alert,
+                    channel="push",
+                )
+                alerts_fired += 1
+                _logger.info("Alert fired: %s — %s", ticker, alert["trigger"])
+
+            positions_checked += 1
+
+        finish_job_run(_JOB_NAME, target_date, status="ok", rows_out=alerts_fired)
+        return {
+            "positions_checked": positions_checked,
+            "alerts_fired": alerts_fired,
+        }
+
+    except Exception as exc:
+        _logger.exception("Risk check failed")
+        finish_job_run(_JOB_NAME, target_date, status="failed", error=str(exc))
+        raise

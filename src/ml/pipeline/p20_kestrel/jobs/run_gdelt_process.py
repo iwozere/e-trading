@@ -1,0 +1,24 @@
+"""P20 Kestrel — scheduler entry point: GDELT GKG daily processing."""
+
+import json
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[5]
+sys.path.append(str(PROJECT_ROOT))
+
+from src.ml.pipeline.p20_kestrel.sentiment.gdelt_processor import run
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
+
+
+def main() -> None:
+    """Process today's GDELT GKG and print scheduler result."""
+    result = run()
+    _logger.info("GDELT process complete: %s", result)
+    print(f"__SCHEDULER_RESULT__:{json.dumps(result, default=str)}")
+
+
+if __name__ == "__main__":
+    main()

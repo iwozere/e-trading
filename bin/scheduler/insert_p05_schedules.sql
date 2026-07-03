@@ -19,6 +19,7 @@
 --   duplicating (and uglifying) every notification. See Stage4Output.format_* and
 --   P05Pipeline._send_notifications.
 --
+-- Idempotent: safe to re-run (ON CONFLICT (user_id, name) DO NOTHING).
 -- Usage:
 --   psql -d your_database < bin/scheduler/insert_p05_schedules.sql
 
@@ -52,7 +53,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 -- ==============================================================================
 -- Migration for an already-deployed schedule

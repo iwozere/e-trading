@@ -9,6 +9,7 @@
 --   success, total_candidates, tier_a_count, tier_b_count,
 --   tier_c_count, explosive_count, results_dir, timestamp
 --
+-- Idempotent: safe to re-run (ON CONFLICT (user_id, name) DO NOTHING).
 -- Usage:
 --   psql -d your_database < bin/scheduler/insert_p17_schedules.sql
 
@@ -54,7 +55,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 -- ==============================================================================
 -- Verification Query

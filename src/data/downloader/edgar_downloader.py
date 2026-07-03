@@ -24,6 +24,7 @@ Classes:
 - EdgarDownloader: Main downloader class for SEC EDGAR data
 """
 
+import gzip
 import json
 import re
 import time
@@ -88,6 +89,12 @@ _SHARES_FACT_CANDIDATES = [
 # EFTS pagination page size (max 100)
 _EFTS_PAGE_SIZE = 100
 
+# EDGAR quarterly full-index (covers all form types including SC 13D/G which EFTS does not index)
+_EDGAR_FULL_INDEX_URL = "https://www.sec.gov/Archives/edgar/full-index/{year}/QTR{quarter}/form.gz"
+_13DG_FORM_TYPES = frozenset({"SC 13D", "SC 13G", "SC 13D/A", "SC 13G/A"})
+# Number of header lines to skip in the quarterly form.idx file
+_FORM_IDX_HEADER_LINES = 9
+
 
 class EdgarDownloader(BaseDataDownloader):
     """
@@ -126,6 +133,7 @@ class EdgarDownloader(BaseDataDownloader):
         self._13dg_dir = self._13f_dir / "13dg"
         self._8k_dir = self._edgar_dir / "8k"
         self._8k_index_dir = self._8k_dir / "index"
+        self._full_index_dir = self._edgar_dir / "full-index"
         self._session = requests.Session()
         self._session.headers.update({"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"})
         self._last_request_time: float = 0.0
@@ -672,7 +680,7 @@ class EdgarDownloader(BaseDataDownloader):
 
         hits = self._efts_search(forms="13F-HR", start_dt=date_str, end_dt=date_str)
         if not hits:
-            return pd.DataFrame(columns=["cik", "institution_name", "accession_number", "filed_date"])
+            return pd.DataFrame(columns=["cik", "institution_name", "accession_number", "filed_date"])  # type: ignore[arg-type]
 
         records = [
             {
@@ -751,7 +759,7 @@ class EdgarDownloader(BaseDataDownloader):
             "ticker", "issuer_cik", "insider_name", "transaction_code",
             "shares", "price_per_share", "total_value_usd", "filed_date",
         ]
-        df = pd.DataFrame(records, columns=_FORM4_COLS) if records else pd.DataFrame(columns=_FORM4_COLS)
+        df = pd.DataFrame(records, columns=_FORM4_COLS) if records else pd.DataFrame(columns=_FORM4_COLS)  # type: ignore[arg-type]
 
         dest.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(dest, index=False, compression="gzip")
@@ -764,17 +772,22 @@ class EdgarDownloader(BaseDataDownloader):
         force: bool = False,
     ) -> pd.DataFrame:
         """
-        Download Schedule 13D and 13G amendments filed on a given date.
+        Download Schedule 13D and 13G filings submitted on a given date.
 
         Results are cached as DATA_CACHE_DIR/edgar/13f/13dg/{date}.csv.gz.
 
+        EDGAR's full-text search (EFTS) does not index SC 13D/G filings, so this
+        method uses the official quarterly form.idx file cached under
+        DATA_CACHE_DIR/edgar/full-index/. The quarterly index is refreshed daily
+        for the current quarter and cached permanently for past quarters.
+
         Args:
             as_of_date: Filing date to fetch. Defaults to yesterday.
-            force: Re-download even if cached.
+            force: Re-download even if cached (also forces quarterly index refresh).
 
         Returns:
             DataFrame with columns: cik, entity_name, accession_number, filed_date,
-            form_type (13D or 13G).
+            form_type (SC 13D, SC 13G, SC 13D/A, or SC 13G/A).
         """
         target_date = as_of_date or (datetime.now().date() - timedelta(days=1))
         date_str = str(target_date)
@@ -784,22 +797,33 @@ class EdgarDownloader(BaseDataDownloader):
             _logger.info("13D/G filings for %s already cached at %s", date_str, dest)
             return pd.read_csv(dest, compression="gzip")
 
-        _logger.info("Downloading 13D/G filings for %s ...", date_str)
-        hits = self._efts_search(forms="SC 13D,SC 13G,SC 13D/A,SC 13G/A", start_dt=date_str, end_dt=date_str)
+        # EDGAR EFTS does not index SC 13D/G filings — use the quarterly form.idx instead.
+        _logger.info("Fetching 13D/G filings for %s from EDGAR quarterly form index ...", date_str)
+        quarter = (target_date.month - 1) // 3 + 1
+        idx_lines = self._fetch_quarterly_form_idx(target_date.year, quarter, force=force)
 
-        records = [
-            {
-                "cik": _efts_first_cik(h.get("_source", {})),
-                "entity_name": _efts_company(h.get("_source", {})),
-                "accession_number": str(h.get("_source", {}).get("adsh", "")),
-                "filed_date": date_str,
-                "form_type": h.get("_source", {}).get("form") or h.get("_source", {}).get("file_type", ""),
-            }
-            for h in hits
-        ]
+        records = []
+        for line in idx_lines:
+            if not (line.startswith("SC 13D") or line.startswith("SC 13G")):
+                continue
+            parts = re.split(r"\s{2,}", line.strip())
+            if len(parts) < 5:
+                continue
+            form_type, entity_name, cik_str, filed_date, filename = parts[:5]
+            if form_type not in _13DG_FORM_TYPES or filed_date != date_str:
+                continue
+            # Accession number lives in the filename stem: edgar/data/{cik}/XXXXXXXXXX-YY-NNNNNN.txt
+            acc_no = Path(filename).stem
+            records.append({
+                "cik": cik_str.strip(),
+                "entity_name": entity_name.strip(),
+                "accession_number": acc_no,
+                "filed_date": filed_date,
+                "form_type": form_type,
+            })
 
         _13DG_COLS = ["cik", "entity_name", "accession_number", "filed_date", "form_type"]
-        df = pd.DataFrame(records, columns=_13DG_COLS) if records else pd.DataFrame(columns=_13DG_COLS)
+        df = pd.DataFrame(records, columns=_13DG_COLS) if records else pd.DataFrame(columns=_13DG_COLS)  # type: ignore[arg-type]
         dest.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(dest, index=False, compression="gzip")
         _logger.info("Cached %d 13D/G filings for %s → %s", len(df), date_str, dest)
@@ -865,7 +889,7 @@ class EdgarDownloader(BaseDataDownloader):
 
         _8K_COLS = ["cik", "company", "accession_number", "items",
                     "description", "filed_date", "primary_document"]
-        df = pd.DataFrame(records, columns=_8K_COLS) if records else pd.DataFrame(columns=_8K_COLS)
+        df = pd.DataFrame(records, columns=_8K_COLS) if records else pd.DataFrame(columns=_8K_COLS)  # type: ignore[arg-type]
         dest.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(dest, index=False, compression="gzip")
         _logger.info("Cached %d 8-K filings for %s → %s", len(df), date_str, dest)
@@ -933,6 +957,50 @@ class EdgarDownloader(BaseDataDownloader):
             _logger.warning("No company facts available for CIK %s", cik)
             return None
         return _pick_best_shares_fact(cf_json, settlement_date)
+
+    def _fetch_quarterly_form_idx(self, year: int, quarter: int, force: bool = False) -> List[str]:
+        """
+        Download and cache the EDGAR quarterly form.idx for a given year/quarter.
+
+        For the current quarter the cache is refreshed if older than 24 hours because
+        EDGAR appends new filings daily. Past quarters are cached permanently.
+
+        Args:
+            year: Calendar year.
+            quarter: Quarter number 1–4.
+            force: Re-download even if a valid cache exists.
+
+        Returns:
+            Data lines from form.idx (9-line header stripped).
+        """
+        dest = self._full_index_dir / f"{year}_Q{quarter}_form.idx.gz"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+
+        today = datetime.now().date()
+        current_quarter = (today.month - 1) // 3 + 1
+        is_current = year == today.year and quarter == current_quarter
+        cache_stale = (
+            is_current
+            and dest.exists()
+            and (time.time() - dest.stat().st_mtime) > 86400
+        )
+
+        if not dest.exists() or force or cache_stale:
+            url = _EDGAR_FULL_INDEX_URL.format(year=year, quarter=quarter)
+            _logger.info("Downloading EDGAR form index for %dQ%d ...", year, quarter)
+            elapsed = time.monotonic() - self._last_request_time
+            if elapsed < _MIN_REQUEST_INTERVAL:
+                time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+            resp = self._session.get(url, timeout=120)
+            self._last_request_time = time.monotonic()
+            resp.raise_for_status()
+            dest.write_bytes(resp.content)
+            _logger.info("Cached EDGAR form index → %s (%d bytes)", dest, len(resp.content))
+
+        with gzip.open(dest, "rt", encoding="latin-1") as fh:
+            lines = fh.readlines()
+
+        return [ln.rstrip("\n") for ln in lines[_FORM_IDX_HEADER_LINES:]]
 
     def _efts_search(self, forms: str, start_dt: str, end_dt: str) -> List[Dict]:
         """

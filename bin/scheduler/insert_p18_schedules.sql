@@ -8,6 +8,7 @@
 --   success, high_score_count, new_13f_filings_today, form4_sells_count,
 --   top_ticker, top_score, results_dir, timestamp
 --
+-- Idempotent: safe to re-run (ON CONFLICT (user_id, name) DO NOTHING).
 -- Usage:
 --   psql -d your_database < bin/scheduler/insert_p18_schedules.sql
 
@@ -54,7 +55,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 -- ==============================================================================
 -- 2. Filing-season timeout variant (OPTIONAL)

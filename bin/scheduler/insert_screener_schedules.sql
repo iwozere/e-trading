@@ -9,10 +9,10 @@
 -- Email receives the full results table (sp500_selected_stocks.csv / six_selected_stocks.csv)
 -- Telegram receives a summary with result count and top tickers.
 --
+-- Idempotent: safe to re-run (ON CONFLICT (user_id, name) DO NOTHING).
+-- Note: ON CONFLICT syntax requires PostgreSQL; not compatible with SQLite.
 -- Usage:
 --   psql -d your_database < bin/scheduler/insert_screener_schedules.sql
---   OR
---   sqlite3 your_database.db < bin/scheduler/insert_screener_schedules.sql
 
 -- ==============================================================================
 -- 1. S&P 500 Weekly Screener
@@ -49,7 +49,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 -- ==============================================================================
 -- 2. SIX (Swiss Exchange) Weekly Screener
@@ -87,7 +87,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 -- ==============================================================================
 -- Verification Query

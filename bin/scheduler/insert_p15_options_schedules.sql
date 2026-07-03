@@ -5,6 +5,7 @@
 -- By the time p15_daily.py runs, options chains for all NASDAQ-listed P15
 -- tickers are already cached and will be skipped in the options_putcall job.
 --
+-- Idempotent: safe to re-run (ON CONFLICT (user_id, name) DO NOTHING).
 -- Usage:
 --   psql -d your_database < bin/scheduler/insert_p15_options_schedules.sql
 
@@ -52,7 +53,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 -- ==============================================================================
 -- Verification Query

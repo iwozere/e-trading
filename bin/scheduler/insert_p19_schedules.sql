@@ -10,6 +10,7 @@
 -- script args, which P19 uses for (future Phase 2) alert delivery. Phase 1 = shadow
 -- logging only, no notifications.
 --
+-- Idempotent: safe to re-run (ON CONFLICT (user_id, name) DO NOTHING).
 -- Usage:
 --   psql -d your_database < bin/scheduler/insert_p19_schedules.sql
 
@@ -34,7 +35,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 -- ==============================================================================
 -- 2. Shadow Loop — every 15 min during (and around) market hours
@@ -57,7 +58,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 -- ==============================================================================
 -- 3. EOD Backfill — once, after the close
@@ -80,7 +81,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 -- ==============================================================================
 -- Verification

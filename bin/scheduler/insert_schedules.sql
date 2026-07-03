@@ -1,10 +1,10 @@
 -- SQL script to insert 4 scheduled jobs for VIX, EMPS2, and Fundamentals
 -- User ID: 2 (akossyrev@gmail.com, Telegram: 859865894)
 --
+-- Idempotent: safe to re-run (ON CONFLICT (user_id, name) DO NOTHING).
+-- Note: ON CONFLICT syntax requires PostgreSQL; not compatible with SQLite.
 -- Usage:
 --   psql -d your_database < bin/scheduler/insert_schedules.sql
---   OR
---   sqlite3 your_database.db < bin/scheduler/insert_schedules.sql
 
 -- ==============================================================================
 -- 1. VIX Daily Monitor
@@ -46,7 +46,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 -- ==============================================================================
 -- 2. EMPS2 Morning Scan
@@ -89,7 +89,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 -- ==============================================================================
 -- 3. EMPS2 Evening Scan
@@ -132,7 +132,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 -- ==============================================================================
 -- 4. Fundamentals Cache Refresh (Weekend)
@@ -167,7 +167,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 -- ==============================================================================
 -- Verification Query

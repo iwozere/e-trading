@@ -35,6 +35,7 @@
 --   across 14-22 UTC so both regimes are covered; a few off-hour runs on the
 --   edges will just report "no new bar" and exit cleanly.
 --
+-- Idempotent: safe to re-run (ON CONFLICT (user_id, name) DO NOTHING).
 -- After applying, either wait for the `scheduler_updates` LISTEN/NOTIFY reload
 -- or restart the scheduler service for the new rows to be picked up.
 -- =============================================================================
@@ -64,7 +65,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 
 -- -----------------------------------------------------------------------------
@@ -91,7 +92,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 
 -- -----------------------------------------------------------------------------
@@ -119,7 +120,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 
 -- -----------------------------------------------------------------------------
@@ -146,7 +147,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 
 -- -----------------------------------------------------------------------------
@@ -175,4 +176,4 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;

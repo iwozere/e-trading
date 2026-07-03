@@ -98,6 +98,8 @@ _YFINANCE_START  = _Date(2010, 1, 1)
 _GDELT_V2_START  = _Date(2015, 2, 18)   # GDELT 2.0 launch date
 _FINRA_TRF_START = _Date(2014, 4, 1)    # approximate Reg SHO API availability
 _EDGAR_8K_START  = _Date(2020, 1, 1)    # only recent 8-Ks matter for catalyst tracking
+_EDGAR_FORM4_START = _Date(2024, 1, 1)  # Form 4 cache start for P20 Kestrel
+_EDGAR_13DG_START  = _Date(2024, 1, 1)  # 13D/G cache start for P20 Kestrel
 
 
 # ---------------------------------------------------------------------------
@@ -863,6 +865,70 @@ def _job_edgar_facts() -> Optional[Dict[str, Any]]:
     return summary  # type: ignore[return-value]
 
 
+def _job_edgar_form4(yesterday: _Date) -> Optional[Dict[str, Any]]:
+    """
+    Download Form 4 insider filings for the gap window ending at yesterday.
+
+    Caches one file per weekday to DATA_CACHE_DIR/edgar/13f/form4/YYYY-MM-DD.csv.gz.
+    P20 Kestrel reads these files instead of triggering its own downloads.
+
+    Args:
+        yesterday: Most recent date to fill up to (inclusive).
+
+    Returns:
+        Dict with rows (total rows) and days_downloaded.
+    """
+    edgar = EdgarDownloader()
+    watermark = _trf_watermark(edgar._form4_dir)
+    start, end = _gap_window(watermark, _EDGAR_FORM4_START, yesterday)
+    _logger.info("edgar_form4: %s → %s (watermark=%s)", start, end, watermark)
+
+    total_rows = 0
+    days_downloaded = 0
+    current = start
+    while current <= end:
+        if current.weekday() < 5:
+            df = edgar.download_form4_filings(as_of_date=current)
+            if df is not None and not df.empty:
+                total_rows += len(df)
+                days_downloaded += 1
+        current += timedelta(days=1)
+
+    return {"rows": total_rows, "days_downloaded": days_downloaded}
+
+
+def _job_edgar_13dg(yesterday: _Date) -> Optional[Dict[str, Any]]:
+    """
+    Download SC 13D/G activist filings for the gap window ending at yesterday.
+
+    Caches one file per weekday to DATA_CACHE_DIR/edgar/13f/13dg/YYYY-MM-DD.csv.gz.
+    P20 Kestrel reads these files for activist signal detection.
+
+    Args:
+        yesterday: Most recent date to fill up to (inclusive).
+
+    Returns:
+        Dict with rows (total rows) and days_downloaded.
+    """
+    edgar = EdgarDownloader()
+    watermark = _trf_watermark(edgar._13dg_dir)
+    start, end = _gap_window(watermark, _EDGAR_13DG_START, yesterday)
+    _logger.info("edgar_13dg: %s → %s (watermark=%s)", start, end, watermark)
+
+    total_rows = 0
+    days_downloaded = 0
+    current = start
+    while current <= end:
+        if current.weekday() < 5:
+            df = edgar.download_13dg_filings(as_of_date=current)
+            if df is not None and not df.empty:
+                total_rows += len(df)
+                days_downloaded += 1
+        current += timedelta(days=1)
+
+    return {"rows": total_rows, "days_downloaded": days_downloaded}
+
+
 def _job_p18_13f_index_seed(today: _Date) -> Optional[Dict[str, Any]]:
     """
     Seed the P18 quarterly 13F-HR index cache from EDGAR bulk files when missing.
@@ -1009,6 +1075,8 @@ def main() -> None:
     results["fred_combined"]     = _run_job("fred_combined",     lambda: _job_fred_combined(fred_dl))
     results["edgar_submissions"] = _run_job("edgar_submissions", _job_edgar_submissions)
     results["edgar_8k_index"]    = _run_job("edgar_8k_index",    lambda: _job_edgar_8k_index(yesterday))
+    results["edgar_form4"]       = _run_job("edgar_form4",       lambda: _job_edgar_form4(yesterday))
+    results["edgar_13dg"]        = _run_job("edgar_13dg",        lambda: _job_edgar_13dg(yesterday))
     results["p18_13f_index"]     = _run_job("p18_13f_index",     lambda: _job_p18_13f_index_seed(yesterday))
     if _is_edgar_facts_day(yesterday_dt + timedelta(days=1)):
         results["edgar_facts"]   = _run_job("edgar_facts",       _job_edgar_facts)

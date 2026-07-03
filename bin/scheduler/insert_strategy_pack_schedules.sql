@@ -22,6 +22,7 @@
 -- task_params.notification_rules is intentionally omitted (the scheduler
 -- would otherwise double-notify). Dedup is handled by DedupStore.
 --
+-- Idempotent: safe to re-run (ON CONFLICT (user_id, name) DO NOTHING).
 -- DBeaver: to execute every statement in this file, use "Execute SQL Script"
 --          (Alt+X) or select-all + Ctrl+Enter. Plain Ctrl+Enter runs only the
 --          statement under the cursor.
@@ -56,7 +57,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 
 -- -----------------------------------------------------------------------------
@@ -85,7 +86,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 
 -- -----------------------------------------------------------------------------
@@ -113,7 +114,7 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 
 -- -----------------------------------------------------------------------------
@@ -140,4 +141,4 @@ VALUES (
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-);
+) ON CONFLICT (user_id, name) DO NOTHING;
