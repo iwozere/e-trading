@@ -1725,6 +1725,9 @@ class DataManager:
             if self._is_provider_on_cooldown(provider_name):
                 continue
 
+            # Enforce rate limiter check/wait (staggers concurrent requests across threads)
+            if provider_name in self.rate_limiters:
+                self.rate_limiters[provider_name].wait_if_needed()
 
             success = False
 

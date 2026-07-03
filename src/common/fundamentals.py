@@ -29,7 +29,25 @@ async def get_fundamentals_unified(ticker: str, provider: str = None, force_refr
     """
     # First, try DataManager path which handles caching and multi-provider merge
     dm = get_data_manager()
-    combined = dm.get_fundamentals(symbol=ticker, force_refresh=force_refresh)
+    
+    providers_list = None
+    if provider:
+        provider_map = {
+            "yf": "yahoo",
+            "yahoo": "yahoo",
+            "fmp": "fmp",
+            "av": "alpha_vantage",
+            "alpha_vantage": "alpha_vantage",
+            "fh": "finnhub",
+            "finnhub": "finnhub",
+            "td": "twelvedata",
+            "twelvedata": "twelvedata"
+        }
+        mapped_prov = provider_map.get(provider.lower())
+        if mapped_prov:
+            providers_list = [mapped_prov]
+
+    combined = dm.get_fundamentals(symbol=ticker, providers=providers_list, force_refresh=force_refresh)
 
     fundamental_data = {
         'ticker': ticker,
