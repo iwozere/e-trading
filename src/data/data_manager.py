@@ -2300,6 +2300,7 @@ class DataManager:
 
 # Convenience functions for easy access
 _provider_selector_cache = None
+_data_manager_cache = None
 
 def get_provider_selector(config_path: Optional[str] = None, cache_dir: Optional[str] = None) -> ProviderSelector:
     """
@@ -2329,4 +2330,7 @@ def get_data_manager(cache_dir: str = DATA_CACHE_DIR, config_path: Optional[str]
     Returns:
         DataManager instance
     """
-    return DataManager(cache_dir, config_path)
+    global _data_manager_cache
+    if _data_manager_cache is None:
+        _data_manager_cache = DataManager(cache_dir, config_path)
+    return _data_manager_cache
