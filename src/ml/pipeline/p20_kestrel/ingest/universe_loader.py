@@ -8,6 +8,7 @@ rows into k20_universe. Marks tickers absent from the CSV as 'delisted'.
 from __future__ import annotations
 
 import asyncio
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -18,7 +19,7 @@ sys.path.append(str(PROJECT_ROOT))
 import pandas as pd
 
 from src.common.fundamentals import get_fundamentals_unified
-from src.ml.pipeline.p20_kestrel.config import NASDAQ_TICKERS_CSV
+from src.ml.pipeline.p20_kestrel.config import NASDAQ_TICKERS_CSV, UNIVERSE_MIN_MCAP_USD
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 
 _kestrel = _KestrelService()
@@ -62,6 +63,19 @@ def _load_nasdaq_csv() -> pd.DataFrame:
     mask = df["ticker"].notna() & (df["ticker"] != "")
     result: pd.DataFrame = df[mask].reset_index(drop=True)  # type: ignore[assignment]
     return result
+
+
+# Tickers that are pure uppercase alpha, 1–5 chars.
+# Excludes: warrants (ABCDW), rights (ABCDR), units (ABCDU), slash-forms (BRK/B),
+# preferred (ABC-A), test issues (ZZZ^), and anything with digits.
+_STOCK_TICKER_RE = re.compile(r'^[A-Z]{1,5}$')
+# Five-char tickers ending in W/R/U are almost always warrants, rights, or units.
+_WARRANT_SUFFIX_RE = re.compile(r'^[A-Z]{4}[WRU]$')
+
+
+def _is_stock_ticker(ticker: str) -> bool:
+    """Return True if the ticker looks like an ordinary equity (not a warrant/right/unit)."""
+    return bool(_STOCK_TICKER_RE.match(ticker)) and not bool(_WARRANT_SUFFIX_RE.match(ticker))
 
 
 def _parse_mcap(raw: Any) -> Optional[float]:
@@ -119,6 +133,22 @@ def run() -> Dict[str, Any]:
     df = _load_nasdaq_csv()
     csv_tickers: set[str] = set(df["ticker"].tolist())
     _logger.info("CSV contains %d tickers", len(csv_tickers))
+
+    # --- Pre-filter 1: ticker format (drop warrants, rights, units, test issues) ---
+    before = len(df)
+    df = df[df["ticker"].apply(_is_stock_ticker)]
+    _logger.info("Ticker format filter: %d → %d (removed %d non-equity symbols)",
+                 before, len(df), before - len(df))
+
+    # --- Pre-filter 2: market cap floor when the CSV carries mcap data ---
+    if "mcap_raw" in df.columns:
+        mcap_vals = pd.Series(
+            [_parse_mcap(v) for v in df["mcap_raw"]], index=df.index, dtype=object
+        )
+        below_floor = mcap_vals.notna() & (mcap_vals.astype(float) < UNIVERSE_MIN_MCAP_USD)
+        if below_floor.any():
+            _logger.info("Mcap filter (<$%.0f): removed %d tickers", UNIVERSE_MIN_MCAP_USD, int(below_floor.sum()))
+            df = df[~below_floor].reset_index(drop=True)  # type: ignore[union-attr]
 
     tickers_list = df["ticker"].tolist()
     _logger.info(

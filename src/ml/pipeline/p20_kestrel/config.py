@@ -39,6 +39,12 @@ REVISIONS_FEED_AVAILABLE: bool = False
 # Columns must include at minimum: Symbol, Market Cap, Industry, Sector.
 NASDAQ_TICKERS_CSV = DATA_CACHE_PATH / "universe" / "nasdaq_screener.csv"
 
+# Minimum market cap (USD) to include in k20_universe.
+# Applied as a pre-filter when the CSV carries a Market Cap column (primary API).
+# Without Market Cap in the CSV (nasdaqtrader.com fallback), ticker-format
+# filtering is the only guard; screening steps apply real mcap gates.
+UNIVERSE_MIN_MCAP_USD: float = 10_000_000  # $10M floor — broad enough for small-cap focus
+
 # Curated activist investor list for 13D/G monitoring (Flow C in filings_ingest).
 ACTIVISTS_JSON = PROJECT_ROOT / "config" / "pipeline" / "activists.json"
 
