@@ -1,0 +1,52 @@
+● Here are all the commands in the correct execution order, grouped by phase. Run from the project root:
+
+  ---
+  Phase 0 — One-time prerequisites (if not done yet)
+  python src/ml/pipeline/p20_kestrel/jobs/register_jobs.py   # register scheduler jobs
+
+  ---
+  Phase 1 — Weekly maintenance (run first to populate universe + aliases)
+  python src/ml/pipeline/p15_hidden_deps/p15_weekly.py
+  python src/ml/pipeline/p20_kestrel/jobs/run_weekly_maintenance.py
+
+  ---
+  Phase 2 — EOD ingest (evening, after market close)
+  python src/ml/pipeline/p20_kestrel/jobs/run_ingest_eod.py
+  python src/ml/pipeline/p20_kestrel/jobs/run_ingest_filings.py
+  python src/ml/pipeline/p20_kestrel/jobs/run_catalyst_sync.py
+
+  ---
+  Phase 3 — Screening (needs EOD signals)
+  python src/ml/pipeline/p20_kestrel/jobs/run_screen_turnaround.py   # Sleeve A
+  python src/ml/pipeline/p20_kestrel/jobs/run_screen_spinoffs.py     # Sleeve B
+  python src/ml/pipeline/p20_kestrel/jobs/run_momentum_rank.py       # Sleeve C
+
+  ---
+  Phase 4 — Sentiment (morning chain, pre-digest)
+  python src/ml/pipeline/p20_kestrel/jobs/run_gdelt_process.py
+  python src/ml/pipeline/p20_kestrel/jobs/run_social_poll.py
+  python src/ml/pipeline/p20_kestrel/jobs/run_trends_watchlist.py
+  python src/ml/pipeline/p20_kestrel/jobs/run_av_sentiment.py
+  python src/ml/pipeline/p20_kestrel/jobs/run_sentiment_aggregate.py
+
+  ---
+  Phase 5 — LLM (needs filings + watchlist candidates)
+  python src/ml/pipeline/p20_kestrel/jobs/run_llm_classify_filings.py
+  python src/ml/pipeline/p20_kestrel/jobs/run_llm_dossiers.py
+  python src/ml/pipeline/p20_kestrel/jobs/run_llm_risk_diff.py       # weekly, 10-K/Q
+
+  ---
+  Phase 6 — Reports
+  python src/ml/pipeline/p20_kestrel/jobs/run_data_health.py         # freshness guard
+  python src/ml/pipeline/p20_kestrel/jobs/run_digest_send.py         # morning digest
+  python src/ml/pipeline/p20_kestrel/jobs/run_weekly_report.py       # Sunday
+
+  ---
+  Intraday / on-demand
+  python src/ml/pipeline/p20_kestrel/jobs/run_risk_check.py          # stop/target check
+  python src/ml/pipeline/p20_kestrel/jobs/run_gdelt_backfill.py      # historical backfill
+
+  ---
+  Each script prints __SCHEDULER_RESULT__:{...} on success. If you see that line, the job ran cleanly. Errors go to the logger (check your log output).
+
+  Start with run_weekly_maintenance.py → run_ingest_eod.py → run_data_health.py to validate the stack end-to-end before running the LLM and sentiment jobs.
