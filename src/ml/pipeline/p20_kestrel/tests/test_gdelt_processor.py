@@ -44,13 +44,13 @@ def test_fuzzy_score_near_match():
 
 
 def test_parse_v2tone_basic():
-    """Parse a valid V2Tone string into (tone, pos, neg) tuple."""
-    result = _parse_v2tone("2.5;3.0;0.5;1.0;10;5;3")
+    """Parse a valid V2Tone string (comma-delimited per GKG 2.1 spec)."""
+    result = _parse_v2tone("2.5,3.0,-0.5,1.0,10,5,3")
     assert result is not None
     tone, pos, neg = result
-    assert isinstance(tone, float)
-    assert isinstance(pos, float)
-    assert isinstance(neg, float)
+    assert tone == 2.5
+    assert pos == 3.0
+    assert neg == 0.5  # negative score is stored as abs()
 
 
 def test_parse_v2tone_invalid():

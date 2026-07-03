@@ -52,6 +52,8 @@ def test_b1_returns_fda_candidate():
               return_value=[_catalyst()]),
         patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
               return_value=_universe()),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal",
+              return_value=None),
     ):
         result = screen_b1(date.today())
 
@@ -100,10 +102,10 @@ def test_b1_excludes_mcap_too_small():
 
 
 def test_b1_crowding_spike_skips_near_event():
-    """Crowding z-score > 3 within T-10 causes skip."""
+    """Crowding z-score > 3 causes skip anywhere in the entry window."""
     with (
         patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window",
-              return_value=[_catalyst(days_out=5)]),
+              return_value=[_catalyst(days_out=15)]),
         patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
               return_value=_universe()),
         patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal",
@@ -115,7 +117,22 @@ def test_b1_crowding_spike_skips_near_event():
 
 
 def test_b1_no_crowding_data_does_not_skip():
-    """Missing crowding signal (None) within T-10 does not cause skip."""
+    """Missing crowding signal (None) does not cause skip."""
+    with (
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window",
+              return_value=[_catalyst(days_out=15)]),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
+              return_value=_universe()),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal",
+              return_value=None),
+    ):
+        result = screen_b1(date.today())
+
+    assert len(result) == 1
+
+
+def test_b1_excludes_inside_t10():
+    """Candidates closer than T-10 are outside the entry window."""
     with (
         patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window",
               return_value=[_catalyst(days_out=5)]),
@@ -126,7 +143,7 @@ def test_b1_no_crowding_data_does_not_skip():
     ):
         result = screen_b1(date.today())
 
-    assert len(result) == 1
+    assert result == []
 
 
 # ---------------------------------------------------------------------------

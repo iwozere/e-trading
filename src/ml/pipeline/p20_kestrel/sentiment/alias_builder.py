@@ -42,6 +42,8 @@ def normalize_alias(text: str) -> str:
         Normalized alias string.
     """
     s = _STRIP_SUFFIXES.sub(" ", text)
+    # Suffix stripping can leave dangling punctuation ("Apple Inc." → "Apple .")
+    s = re.sub(r"[.,;:&]+(\s|$)", r"\1", s)
     s = _WHITESPACE.sub(" ", s).strip().lower()
     return s
 

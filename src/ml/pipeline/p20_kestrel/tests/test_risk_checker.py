@@ -65,10 +65,13 @@ def test_t2_target_hit():
 
 
 def test_t2_not_hit_when_first_third_unrealized():
-    """T2 alert does not fire if realized_thirds is still 0."""
+    """T2 alert does not fire while realized_thirds is 0 — T1 fires first."""
     pos = _pos(t2=160.0, realized_thirds=0)
-    # At T2 price but stop is lower and T1 hasn't fired yet
-    assert _check_position(pos, 161.0) is None
+    # Price is above both targets; with no third realized yet the T1
+    # scale-out must fire, never T2.
+    alert = _check_position(pos, 161.0)
+    assert alert is not None
+    assert alert["trigger"] == "t1_target"
 
 
 def test_intraday_loss_alert():
@@ -99,7 +102,13 @@ def test_no_alert_when_price_is_none():
     assert _check_position(_pos(), None) is None
 
 
-def test_no_alert_when_no_stop_set():
-    """No stop alert when stop_px is None."""
+def test_no_stop_alert_when_no_stop_set():
+    """No stop alert when stop_px is None — but the loss guard still applies."""
     pos = {**_pos(), "stop_px": None}
-    assert _check_position(pos, 50.0) is None
+    alert = _check_position(pos, 50.0)
+    # A -50% move without a stop must still surface via the intraday loss guard.
+    assert alert is not None
+    assert alert["trigger"] == "intraday_loss"
+
+    # Within the loss threshold, no stop and no alert.
+    assert _check_position(pos, 95.0) is None

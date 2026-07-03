@@ -44,7 +44,9 @@ def test_data_health_returns_required_keys():
 def test_sentiment_aggregator_handles_empty_watchlist():
     """Aggregator returns a valid dict when watchlist is empty."""
     with (
-        patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.get_active_tickers",
+        patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.get_watchlist_tickers",
+              return_value=[]),
+        patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.get_open_positions",
               return_value=[]),
         patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.start_job_run"),
         patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.finish_job_run"),

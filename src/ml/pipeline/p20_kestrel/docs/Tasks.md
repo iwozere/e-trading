@@ -62,13 +62,18 @@
 
 See [Code-Review-2026-07-03.md](Code-Review-2026-07-03.md) for full details.
 
-- [ ] **C2** — Crowding score (§7.6) never computes: only gdelt has `mention_z20`; compute z-scores in aggregator
-- [ ] **C3** — calendar_sync + risk_checker log alerts to DB but never send push (wire NotificationServiceClient)
-- [ ] **H1** — risk_checker: no alert dedup (17 duplicate alerts/day) + uses stale EOD close for "intraday" check
-- [ ] **H2** — social_poll Reddit env var names don't match donotshare (Reddit always skipped)
-- [ ] **H3** — 13D/G activist matching is dead code (cache has no ticker column)
-- [ ] **H4** — `insider_buy_value_90d` signal holds 1-day sum; sleeve_a treats it as 90-day aggregate
-- [ ] **M1** — sentiment_aggregator: ~35k sequential DB transactions per run; restrict to watchlist ∪ positions
+- [x] **C2** — Crowding score (§7.6) never computed — fixed: z-scores derived in aggregator from history
+- [x] **C3** — push alerts never sent — fixed: `notify.send_push()` wired into calendar_sync + risk_checker
+- [x] **C4** — `get_signals(ticker, date)` arg misuse in sleeves A/C — fixed via `get_signals_for_date`
+- [x] **C5** — sleeve_c regime filter treated float as dict — fixed
+- [x] **C6** — sleeve_b B1 crowding check unreachable — fixed: applies to whole entry window
+- [x] **C7** — `normalize_alias` left dangling punctuation — fixed
+- [x] **H1** — risk_checker alert dedup — fixed: one (ticker, trigger) per day
+- [x] **H4** — insider 90-day aggregation in sleeve_a — fixed
+- [x] **M1** — aggregator scope reduced to watchlist ∪ positions — fixed
+- [ ] **H2** — social_poll Reddit env var names don't match donotshare (Reddit always skipped) — needs auth-flow decision
+- [ ] **H3** — 13D/G activist matching is dead code (cache has no ticker column) — needs matching-strategy decision
+- [ ] **H1b** — risk_checker uses EOD close for "intraday" checks; wire intraday quotes or reduce cron frequency
 
 ## Known Issues
 

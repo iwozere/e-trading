@@ -21,8 +21,10 @@ _kestrel = _KestrelService()
 finish_job_run = _kestrel.finish_job_run
 get_latest_signal = _kestrel.get_latest_signal
 get_open_positions = _kestrel.get_open_positions
+get_today_alerts = _kestrel.get_today_alerts
 log_alert = _kestrel.log_alert
 start_job_run = _kestrel.start_job_run
+from src.ml.pipeline.p20_kestrel.notify import send_push
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -121,7 +123,16 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
         positions = get_open_positions()
         _logger.info("Checking %d open positions", len(positions))
 
+        # Dedup: the job runs every 30 min — fire each (ticker, trigger)
+        # at most once per day. Prices are EOD closes, so re-evaluating
+        # the same close can only produce the same alert anyway.
+        already_fired = {
+            (str(a.get("ticker", "")).upper(), str(a.get("trigger", "")))
+            for a in get_today_alerts()
+        }
+
         alerts_fired = 0
+        alerts_deduped = 0
         positions_checked = 0
 
         for pos in positions:
@@ -130,14 +141,22 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
 
             alert = _check_position(pos, close_price)
             if alert:
-                log_alert(
-                    ticker=ticker,
-                    trigger=alert["trigger"],
-                    payload=alert,
-                    channel="push",
-                )
-                alerts_fired += 1
-                _logger.info("Alert fired: %s — %s", ticker, alert["trigger"])
+                if (ticker, alert["trigger"]) in already_fired:
+                    alerts_deduped += 1
+                else:
+                    log_alert(
+                        ticker=ticker,
+                        trigger=alert["trigger"],
+                        payload=alert,
+                        channel="push",
+                    )
+                    send_push(
+                        title=f"Kestrel risk: {ticker} {alert['trigger']}",
+                        message=f"{ticker} @ {alert['close']:.2f} — {alert['action']}",
+                    )
+                    already_fired.add((ticker, alert["trigger"]))
+                    alerts_fired += 1
+                    _logger.info("Alert fired: %s — %s", ticker, alert["trigger"])
 
             positions_checked += 1
 
@@ -145,6 +164,7 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
         return {
             "positions_checked": positions_checked,
             "alerts_fired": alerts_fired,
+            "alerts_deduped": alerts_deduped,
         }
 
     except Exception as exc:

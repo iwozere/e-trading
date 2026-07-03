@@ -146,14 +146,61 @@ aggregator would z-score it uniformly — but note it when implementing C2.
 
 ---
 
-## Recommended fix order
+## Additional findings during the fix pass (2026-07-03, all fixed)
 
-1. **C1** — done (this commit); unblocks GDELT/filings testing on the Pi.
-2. **C3** — small, high value: wire NotificationServiceClient into
-   calendar_sync + risk_checker.
-3. **H1** — dedup via `get_today_alerts` (one guard clause), decide on
-   intraday price source separately.
-4. **C2** — z-scores in aggregator (option a).
-5. **H4** — 90-day insider aggregation in sleeve_a.
-6. **H2 / H3** — need product decisions (Reddit auth flow; 13D/G matching).
-7. **M1** — aggregate scope reduction, trivial win.
+### C4. `get_signals(ticker, target_date)` — wrong arguments in sleeves A and C
+
+`sleeve_a.py:210` and `sleeve_c.py:91,118` called
+`get_signals(ticker, target_date)`, passing a date where the repo expects
+`signal_type`. The query matched nothing → empty signals dict → **no ticker
+could ever pass Sleeve A hard filters or Sleeve C regime checks**.
+Fixed by adding `get_signals_for_date(ticker, date) → {signal_type: value}`
+to KestrelRepo/KestrelService and using it in both sleeves.
+
+### C5. sleeve_c regime filter crashed when SPY data exists
+
+`_regime_allows_new_entry` called `spy_sig.get("value", 1)` on a `float`
+return → AttributeError on the first run after SPY signals land. Fixed.
+
+### C6. sleeve_b B1 crowding check was unreachable
+
+The check ran only `if days_out <= 10`, but the entry-window filter had
+already excluded everything under T-10. The crowding skip now applies to the
+whole T-90..T-10 entry window (matching the spec intent: skip when the crowd
+has already piled in before we reach T-10).
+
+### C7. `normalize_alias` left dangling punctuation
+
+"Apple Inc." → "apple ." (trailing period kept) — GDELT org names would
+never exact-match. Punctuation is now stripped after suffix removal.
+
+### Test-suite corrections
+
+- `test_parse_v2tone_basic` used semicolons; GDELT GKG 2.1 V2Tone is
+  comma-delimited (the code was right, the test wrong).
+- Two risk_checker tests asserted no-alert where an alert is correct
+  behavior (T1 fires when price above both targets; intraday-loss guard
+  fires at −50% even without a stop).
+- Sleeve B crowding tests used `days_out=5` (outside the entry window);
+  moved to 15 and added an explicit T-10 window-exclusion test.
+
+---
+
+## Fix status
+
+| ID | Status |
+|---|---|
+| C1 hardcoded paths | ✅ fixed (commit 6bd6819) |
+| C2 crowding z-scores | ✅ fixed — computed in aggregator from history, ≥15-day warm-up |
+| C3 push alerts not sent | ✅ fixed — `notify.send_push()` wired into calendar_sync + risk_checker |
+| C4 get_signals misuse | ✅ fixed — new `get_signals_for_date` |
+| C5 sleeve_c float/dict crash | ✅ fixed |
+| C6 unreachable crowding check | ✅ fixed |
+| C7 alias punctuation | ✅ fixed |
+| H1 alert dedup | ✅ fixed — one (ticker, trigger) per day via `get_today_alerts`; stale-EOD-price limitation documented in code |
+| H4 insider 90d aggregation | ✅ fixed — sleeve_a sums the trailing 90-day window |
+| M1 aggregator scope | ✅ fixed — watchlist ∪ positions instead of all active tickers |
+| H2 Reddit env vars | ⬜ open — needs decision on auth flow |
+| H3 13D/G matching | ⬜ open — needs decision on matching strategy |
+| M2 eod_ingest fallback speed | ⬜ open — monitor first production run |
+| M3 staleness check semantics | ⬜ open — cosmetic |

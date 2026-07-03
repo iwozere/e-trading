@@ -115,6 +115,19 @@ class KestrelRepo:
         rows = self.session.execute(q).scalars().all()
         return [{"date": r.date, "value": r.value, "sleeve": r.sleeve} for r in rows]
 
+    def get_signals_for_date(self, ticker: str, on_date: date) -> Dict[str, float]:
+        """Return all signals for a ticker on a date as {signal_type: value}."""
+        rows = self.session.execute(
+            select(K20Signal.signal_type, K20Signal.value).where(
+                K20Signal.ticker == ticker, K20Signal.date == on_date
+            )
+        ).all()
+        return {
+            str(signal_type): float(value)
+            for signal_type, value in rows
+            if value is not None
+        }
+
     def get_latest_signal(self, ticker: str, signal_type: str) -> Optional[float]:
         """Return the most recent value for a (ticker, signal_type) pair."""
         row = self.session.execute(

@@ -62,6 +62,11 @@ class KestrelService(BaseDBService):
         return self.repos.kestrel.get_signals(ticker, signal_type, start_date, end_date)
 
     @with_uow
+    def get_signals_for_date(self, ticker: str, on_date: date) -> Dict[str, float]:
+        """Return all signals for a ticker on a date as {signal_type: value}."""
+        return self.repos.kestrel.get_signals_for_date(ticker, on_date)
+
+    @with_uow
     def get_latest_signal(self, ticker: str, signal_type: str) -> Optional[float]:
         """Return the most recent value for a (ticker, signal_type) pair."""
         return self.repos.kestrel.get_latest_signal(ticker, signal_type)

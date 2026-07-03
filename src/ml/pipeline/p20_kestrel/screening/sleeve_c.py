@@ -24,7 +24,7 @@ from src.data.db.services.kestrel_service import KestrelService as _KestrelServi
 _kestrel = _KestrelService()
 get_active_tickers = _kestrel.get_active_tickers
 get_latest_signal = _kestrel.get_latest_signal
-get_signals = _kestrel.get_signals
+get_signals_for_date = _kestrel.get_signals_for_date
 get_universe_row = _kestrel.get_universe_row
 upsert_signals = _kestrel.upsert_signals
 upsert_watchlist = _kestrel.upsert_watchlist
@@ -37,9 +37,8 @@ _RS_TOP_DECILE_CUTOFF = 0.90  # top 10% of RS scores
 _CROWDING_SKIP_THRESHOLD = 2.0
 
 
-def _compute_rs_score(signals: List[Dict[str, Any]]) -> Optional[float]:
+def _compute_rs_score(sig_map: Dict[str, float]) -> Optional[float]:
     """Compute RS score from 3m and 6m return signals."""
-    sig_map = {s["signal_type"]: float(s.get("value") or 0) for s in signals}
     r3m = sig_map.get("return_3m")
     r6m = sig_map.get("return_6m")
     if r3m is None or r6m is None:
@@ -52,7 +51,7 @@ def _regime_allows_new_entry() -> bool:
     spy_sig = get_latest_signal("SPY", "price_vs_200dma")
     if spy_sig is None:
         return True  # fail-open if no data
-    return float(spy_sig.get("value", 1)) > 0.5
+    return float(spy_sig) > 0.5
 
 
 def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
@@ -88,8 +87,7 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
         if revenue_growth is not None and revenue_growth <= 0:
             continue
 
-        signals = get_signals(ticker, target_date)
-        sig_map = {s["signal_type"]: float(s.get("value") or 0) for s in signals}
+        sig_map = get_signals_for_date(ticker, target_date)
 
         # Price regime: price > 50DMA > 200DMA
         price_vs_50 = sig_map.get("price_vs_50dma", 0)
@@ -101,7 +99,7 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
         if sma_50 is not None and sma_200 is not None and sma_50 <= sma_200:
             continue
 
-        rs = _compute_rs_score(signals)
+        rs = _compute_rs_score(sig_map)
         if rs is None:
             continue
 
@@ -115,8 +113,7 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
     candidates = 0
     for ticker, rs in top_decile:
         # Crowding overlay: skip if crowding > threshold
-        signals = get_signals(ticker, target_date)
-        sig_map = {s["signal_type"]: float(s.get("value") or 0) for s in signals}
+        sig_map = get_signals_for_date(ticker, target_date)
         crowding = sig_map.get("crowding_score")
         if crowding is not None and crowding > _CROWDING_SKIP_THRESHOLD:
             _logger.debug("Sleeve C crowding skip: %s (crowding=%.1f)", ticker, crowding)

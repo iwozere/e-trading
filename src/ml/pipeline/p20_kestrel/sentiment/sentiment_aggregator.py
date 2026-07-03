@@ -8,7 +8,7 @@ Runs after gdelt_process + social_poll + av_sentiment complete (DAG).
 from __future__ import annotations
 
 import sys
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -20,8 +20,10 @@ from src.data.db.services.kestrel_service import KestrelService as _KestrelServi
 
 _kestrel = _KestrelService()
 finish_job_run = _kestrel.finish_job_run
-get_active_tickers = _kestrel.get_active_tickers
 get_latest_sentiment = _kestrel.get_latest_sentiment
+get_open_positions = _kestrel.get_open_positions
+get_sentiment_history = _kestrel.get_sentiment_history
+get_watchlist_tickers = _kestrel.get_watchlist_tickers
 start_job_run = _kestrel.start_job_run
 upsert_signals = _kestrel.upsert_signals
 from src.notification.logger import setup_logger
@@ -29,10 +31,76 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 _JOB_NAME = "sentiment_aggregate"
+_MIN_PERIODS = 15  # same warm-up rule as gdelt_processor
 
 
 def _get_staleness_days(source: str) -> int:
     return STALENESS_DAYS.get(source, 3)
+
+
+def _z_from_history(
+    ticker: str,
+    source: str,
+    current_value: float,
+    as_of_date: date,
+) -> Optional[float]:
+    """
+    Compute a rolling z-score of `mentions` from 30 days of history.
+
+    Pollers (social_poll, trends_poll) store raw mentions only; the z-score
+    is derived here at aggregation time. gdelt rows carry a precomputed
+    mention_z20 and never reach this path.
+
+    Returns:
+        z-score, or None during warm-up (< _MIN_PERIODS days) or zero variance.
+    """
+    hist = get_sentiment_history(
+        ticker, source,
+        start=as_of_date - timedelta(days=30),
+        end=as_of_date,
+    )
+    vals = [
+        float(r["mentions"]) for r in hist
+        if r.get("mentions") is not None and r.get("date") != as_of_date
+    ]
+    if len(vals) < _MIN_PERIODS:
+        return None
+    mean = sum(vals) / len(vals)
+    var = sum((v - mean) ** 2 for v in vals) / (len(vals) - 1)
+    std = var ** 0.5
+    if std <= 0:
+        return None
+    return (current_value - mean) / std
+
+
+def _usable_mention_z(
+    ticker: str,
+    source: str,
+    staleness_group: str,
+    as_of_date: date,
+) -> Optional[float]:
+    """
+    Return the freshness-checked mention z-score for a (ticker, source) pair.
+
+    Uses the stored mention_z20 when present (gdelt); otherwise derives it
+    from history (social/trends sources store raw mentions only).
+    """
+    row = get_latest_sentiment(ticker, source)
+    if not row:
+        return None
+
+    age = (as_of_date - row["date"]).days if row.get("date") else 999
+    if age > _get_staleness_days(staleness_group):
+        return None
+
+    z = row.get("mention_z20")
+    if z is None and row.get("mentions") is not None:
+        z = _z_from_history(ticker, source, float(row["mentions"]), row["date"])
+
+    try:
+        return float(z) if z is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _compute_crowding_for_ticker(
@@ -58,37 +126,15 @@ def _compute_crowding_for_ticker(
     # social = max(stocktwits_mention_z, reddit_mention_z, apewisdom_mention_z)
     social_z_values: List[float] = []
     for source in ("stocktwits", "reddit", "apewisdom"):
-        row = get_latest_sentiment(ticker, source)
-        if row and row.get("mention_z20") is not None:
-            age = (as_of_date - row["date"]).days if row.get("date") else 999
-            if age <= _get_staleness_days("social"):
-                try:
-                    social_z_values.append(float(row["mention_z20"]))
-                except (TypeError, ValueError):
-                    pass
+        z = _usable_mention_z(ticker, source, "social", as_of_date)
+        if z is not None:
+            social_z_values.append(z)
 
     if social_z_values:
         components["social"] = max(social_z_values)
 
-    # gdelt
-    gdelt_row = get_latest_sentiment(ticker, "gdelt")
-    if gdelt_row and gdelt_row.get("mention_z20") is not None:
-        age = (as_of_date - gdelt_row["date"]).days if gdelt_row.get("date") else 999
-        if age <= _get_staleness_days("gdelt"):
-            try:
-                components["gdelt"] = float(gdelt_row["mention_z20"])
-            except (TypeError, ValueError):
-                pass
-
-    # trends
-    trends_row = get_latest_sentiment(ticker, "trends")
-    if trends_row and trends_row.get("mention_z20") is not None:
-        age = (as_of_date - trends_row["date"]).days if trends_row.get("date") else 999
-        if age <= _get_staleness_days("trends"):
-            try:
-                components["trends"] = float(trends_row["mention_z20"])
-            except (TypeError, ValueError):
-                pass
+    components["gdelt"] = _usable_mention_z(ticker, "gdelt", "gdelt", as_of_date)
+    components["trends"] = _usable_mention_z(ticker, "trends", "trends", as_of_date)
 
     usable = {k: v for k, v in components.items() if v is not None}
     crowding: Optional[float] = None
@@ -119,8 +165,13 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
     start_job_run(_JOB_NAME, target_date)
 
     try:
-        # All active tickers get crowding computed, but only watchlist has social data
-        tickers = get_active_tickers()
+        # Only watchlist + positions tickers have sentiment data — the pollers
+        # are scoped to them. Aggregating all ~7k active tickers would issue
+        # tens of thousands of no-op DB round-trips.
+        tickers = sorted(
+            set(get_watchlist_tickers())
+            | {str(p["ticker"]).upper() for p in get_open_positions()}
+        )
         _logger.info("Aggregating sentiment for %d tickers", len(tickers))
 
         signal_rows: List[Dict[str, Any]] = []

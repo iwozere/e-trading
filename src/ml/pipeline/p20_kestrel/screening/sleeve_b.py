@@ -79,12 +79,14 @@ def screen_b1(as_of_date: date) -> List[Dict[str, Any]]:
         if not mcap or not (_B1_MCAP_MIN <= mcap <= _B1_MCAP_MAX):
             continue
 
-        # Crowding spike check: skip if mention_z20 > 3σ before T−10
-        if days_out <= 10:
-            crowding = get_latest_signal(ticker, "z_social")
-            if crowding is not None and float(crowding) > _CROWDING_SPIKE_THRESHOLD:
-                _logger.info("B1 crowding skip: %s (z=%.1f, T-%d)", ticker, crowding, days_out)
-                continue
+        # Crowding spike check: the run-up entry is only attractive while the
+        # crowd hasn't piled in yet — skip any candidate whose social z-score
+        # already spiked. (Entry window is T-90..T-10, so every check here is
+        # "before T-10" by construction.)
+        crowding = get_latest_signal(ticker, "z_social")
+        if crowding is not None and float(crowding) > _CROWDING_SPIKE_THRESHOLD:
+            _logger.info("B1 crowding skip: %s (z=%.1f, T-%d)", ticker, crowding, days_out)
+            continue
 
         candidates.append({
             "ticker": ticker,

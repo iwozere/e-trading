@@ -25,6 +25,7 @@ log_alert = _kestrel.log_alert
 stamp_catalyst_alert = _kestrel.stamp_catalyst_alert
 start_job_run = _kestrel.start_job_run
 upsert_catalyst = _kestrel.upsert_catalyst
+from src.ml.pipeline.p20_kestrel.notify import send_push
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -80,6 +81,13 @@ def _fire_countdown_alert(catalyst: Dict[str, Any], days_out: int) -> None:
         trigger=trigger,
         payload=payload,
         channel="push",
+    )
+    send_push(
+        title=f"Kestrel: {catalyst['ticker']} {catalyst['event_type']} in {days_out}d",
+        message=(
+            f"T-{days_out} countdown: {catalyst['ticker']} "
+            f"{catalyst['event_type']} on {catalyst.get('event_date')}"
+        ),
     )
 
 

@@ -8,7 +8,7 @@ Implements §4.1 hard filters and §4.2.1 interim scoring
 from __future__ import annotations
 
 import sys
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -26,6 +26,7 @@ from src.data.db.services.kestrel_service import KestrelService as _KestrelServi
 _kestrel = _KestrelService()
 get_active_tickers = _kestrel.get_active_tickers
 get_signals = _kestrel.get_signals
+get_signals_for_date = _kestrel.get_signals_for_date
 get_universe_row = _kestrel.get_universe_row
 upsert_signals = _kestrel.upsert_signals
 upsert_watchlist = _kestrel.upsert_watchlist
@@ -207,14 +208,25 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
         if not universe_row:
             continue
 
-        signals_list = get_signals(ticker, target_date)
-        signals: Dict[str, Any] = {s["signal_type"]: s["value"] for s in signals_list}
+        signals: Dict[str, Any] = get_signals_for_date(ticker, target_date)
 
         fail_reason = _passes_hard_filters(universe_row, signals)
         if fail_reason:
             continue
 
         passed_filters += 1
+
+        # Insider signal rows hold per-day buy totals; the §4.2.1 scorer
+        # expects the trailing-90-day aggregate, so sum the window here.
+        insider_rows = get_signals(
+            ticker, "insider_buy_value_90d",
+            start_date=target_date - timedelta(days=90),
+            end_date=target_date,
+        )
+        signals["insider_buy_value_90d"] = sum(
+            float(r["value"] or 0) for r in insider_rows
+        )
+
         score_info = _score_interim(signals)
 
         upsert_watchlist({
