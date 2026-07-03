@@ -20,7 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.data.downloader.edgar_downloader import EdgarDownloader
-from src.ml.pipeline.p20_kestrel.config import DATA_CACHE_PATH
+from src.ml.pipeline.p20_kestrel.config import ACTIVISTS_JSON, DATA_CACHE_PATH
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 
 _kestrel = _KestrelService()
@@ -70,7 +70,9 @@ def _build_cik_to_ticker() -> Dict[str, str]:
         return {}
 
 
-def _read_p15_8k_index(as_of_date: date) -> List[Dict[str, Any]]:
+def _read_p15_8k_index(
+    as_of_date: date, cik_map: Optional[Dict[str, str]] = None
+) -> List[Dict[str, Any]]:
     """
     Read the 8-K filing index written by P15 for the given date.
 
@@ -91,7 +93,8 @@ def _read_p15_8k_index(as_of_date: date) -> List[Dict[str, Any]]:
 
     try:
         df = pd.read_csv(index_file, compression="gzip", dtype=str)
-        cik_map = _build_cik_to_ticker()
+        if cik_map is None:
+            cik_map = _build_cik_to_ticker()
         records = []
         for _, row in df.iterrows():
             cik = str(row.get("cik", "") or "").lstrip("0")
@@ -195,37 +198,111 @@ def _process_form4(as_of_date: date, target_tickers: Set[str]) -> int:
         return 0
 
 
-def _process_13dg_activist(
-    filings_13dg: List[Dict[str, Any]], target_tickers: Set[str]
-) -> int:
+def _load_activist_aliases() -> List[str]:
     """
-    Filter 13D/G filings for watched tickers and record activist signal.
-
-    Args:
-        filings_13dg: All 13D/G filings from the P15 cache.
-        target_tickers: Set of tickers to filter for.
+    Load lowercase activist name aliases from the curated ACTIVISTS_JSON list.
 
     Returns:
-        Number of activist filings matched.
+        Flat list of lowercase alias strings. Empty if file missing/malformed.
     """
-    matched = 0
+    try:
+        with open(ACTIVISTS_JSON, encoding="utf-8") as f:
+            raw = json.load(f)
+        return [
+            alias.lower()
+            for entry in raw.get("activists", [])
+            for alias in entry.get("aliases", [])
+        ]
+    except Exception:
+        _logger.warning("Could not load activists list from %s", ACTIVISTS_JSON)
+        return []
+
+
+def _process_13dg_activist(
+    filings_13dg: List[Dict[str, Any]],
+    target_tickers: Set[str],
+    cik_map: Dict[str, str],
+    as_of_date: date,
+) -> int:
+    """
+    Match 13D/G filings to tickers and record activist signals.
+
+    EDGAR's form index lists each SC 13D/G under BOTH the subject company and
+    the filing person, sharing one accession number. The subject company is a
+    listed issuer whose CIK resolves via company_tickers.json; the filer (a
+    fund) normally does not. Grouping rows by accession therefore yields the
+    subject ticker plus the filer name(s) for each filing.
+
+    A signal is recorded when:
+    - the subject ticker is in target_tickers (watchlist + positions), OR
+    - any filer name matches the curated activist list (Sleeve B3 discovery).
+
+    Args:
+        filings_13dg: Raw rows from the P15 cache for one filing date.
+        target_tickers: Watchlist + positions tickers.
+        cik_map: Zero-stripped CIK → ticker map.
+        as_of_date: Filing date being processed (used as the signal date).
+
+    Returns:
+        Number of filings recorded as signals.
+    """
+    activist_aliases = _load_activist_aliases()
+
+    by_accession: Dict[str, List[Dict[str, Any]]] = {}
     for f in filings_13dg:
-        ticker = str(f.get("ticker", "")).upper()
-        if ticker not in target_tickers:
+        acc = str(f.get("accession_number", ""))
+        if acc:
+            by_accession.setdefault(acc, []).append(f)
+
+    matched = 0
+    for acc, rows in by_accession.items():
+        subject_ticker = ""
+        filer_names: List[str] = []
+        form_type = ""
+
+        for r in rows:
+            form_type = str(r.get("form_type", "")) or form_type
+            cik_raw = str(r.get("cik", "") or "").strip().lstrip("0")
+            ticker = cik_map.get(cik_raw, "")
+            if ticker:
+                subject_ticker = ticker.upper()
+            else:
+                name = str(r.get("entity_name", "")).strip()
+                if name:
+                    filer_names.append(name)
+
+        if not subject_ticker:
             continue
-        form_type = str(f.get("form_type", ""))
-        # 13D = activist; 13G = passive
-        signal_type = "activist_13d" if "13D" in form_type and "/A" not in form_type else "activist_13g"
+
+        is_known_activist = any(
+            alias in name.lower()
+            for name in filer_names
+            for alias in activist_aliases
+        )
+
+        if subject_ticker not in target_tickers and not is_known_activist:
+            continue
+
+        # 13D = active intent; 13G = passive stake
+        is_13d = "13D" in form_type.upper()
+        signal_type = "activist_13d" if is_13d else "activist_13g"
         try:
             upsert_signals([{
-                "ticker": ticker,
-                "date": date.today(),
+                "ticker": subject_ticker,
+                "date": as_of_date,
                 "signal_type": signal_type,
                 "value": 1.0,
             }])
             matched += 1
+            _logger.info(
+                "13D/G matched: %s %s (filer: %s%s)",
+                subject_ticker, form_type,
+                filer_names[0] if filer_names else "unknown",
+                ", known activist" if is_known_activist else "",
+            )
         except Exception:
-            _logger.exception("Failed to record 13D/G signal for %s", ticker)
+            _logger.exception("Failed to record 13D/G signal for %s", subject_ticker)
+
     return matched
 
 
@@ -256,9 +333,11 @@ def run(as_of_date: Optional[date] = None, lookback_days: int = 1) -> Dict[str, 
             target_date - timedelta(days=i) for i in range(lookback_days)
         ]
 
+        cik_map = _build_cik_to_ticker()
+
         for check_date in dates_to_check:
             # 8-K discovery from P15 cache (CIK→ticker already resolved)
-            filings_8k = _read_p15_8k_index(check_date)
+            filings_8k = _read_p15_8k_index(check_date, cik_map)
             for f in filings_8k:
                 ticker = str(f.get("ticker", "")).upper()
                 if ticker in target_tickers:
@@ -266,7 +345,9 @@ def run(as_of_date: Optional[date] = None, lookback_days: int = 1) -> Dict[str, 
 
             # 13D/G activist signals from P15 cache
             filings_13dg = _read_p15_13dg(check_date)
-            activist_matches += _process_13dg_activist(filings_13dg, target_tickers)
+            activist_matches += _process_13dg_activist(
+                filings_13dg, target_tickers, cik_map, check_date
+            )
 
             # Form 4 insider buying from P15 cache
             form4_buys += _process_form4(check_date, target_tickers)

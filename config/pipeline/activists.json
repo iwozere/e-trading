@@ -1,0 +1,25 @@
+{
+  "_comment": "Curated activist investors for P20 Kestrel 13D/G monitoring (filings_ingest Flow C / Sleeve B3). Each alias is lowercase-substring-matched against the EDGAR filer entity_name.",
+  "activists": [
+    {"name": "Elliott Investment Management", "aliases": ["elliott investment", "elliott management", "elliott associates"]},
+    {"name": "Icahn Enterprises", "aliases": ["icahn"]},
+    {"name": "Starboard Value", "aliases": ["starboard value"]},
+    {"name": "ValueAct Capital", "aliases": ["valueact"]},
+    {"name": "Third Point", "aliases": ["third point"]},
+    {"name": "Pershing Square", "aliases": ["pershing square"]},
+    {"name": "JANA Partners", "aliases": ["jana partners"]},
+    {"name": "Trian Fund Management", "aliases": ["trian fund", "trian partners"]},
+    {"name": "Engaged Capital", "aliases": ["engaged capital"]},
+    {"name": "Ancora Advisors", "aliases": ["ancora"]},
+    {"name": "Sarissa Capital", "aliases": ["sarissa"]},
+    {"name": "Land & Buildings", "aliases": ["land & buildings", "land and buildings"]},
+    {"name": "Sachem Head Capital", "aliases": ["sachem head"]},
+    {"name": "Corvex Management", "aliases": ["corvex"]},
+    {"name": "Marcato Capital", "aliases": ["marcato"]},
+    {"name": "Legion Partners", "aliases": ["legion partners"]},
+    {"name": "Impactive Capital", "aliases": ["impactive capital"]},
+    {"name": "Politan Capital", "aliases": ["politan capital"]},
+    {"name": "Browning West", "aliases": ["browning west"]},
+    {"name": "Irenic Capital", "aliases": ["irenic capital"]}
+  ]
+}

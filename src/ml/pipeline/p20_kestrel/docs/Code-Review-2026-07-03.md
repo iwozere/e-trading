@@ -200,7 +200,17 @@ never exact-match. Punctuation is now stripped after suffix removal.
 | H1 alert dedup | ✅ fixed — one (ticker, trigger) per day via `get_today_alerts`; stale-EOD-price limitation documented in code |
 | H4 insider 90d aggregation | ✅ fixed — sleeve_a sums the trailing 90-day window |
 | M1 aggregator scope | ✅ fixed — watchlist ∪ positions instead of all active tickers |
-| H2 Reddit env vars | ⬜ open — needs decision on auth flow |
-| H3 13D/G matching | ⬜ open — needs decision on matching strategy |
+| H2 Reddit env vars | ✅ fixed — app-only (client_credentials) OAuth with donotshare's REDDIT_API_KEY/SECRET/USER_AGENT |
+| H3 13D/G matching | ✅ fixed — rows grouped by accession; subject CIK resolved via company_tickers.json; filer names matched against curated `config/pipeline/activists.json` (created, 20 activists) |
+| H1b intraday prices | ✅ fixed — risk_checker fetches delayed intraday quote via yfinance, falls back to EOD close |
 | M2 eod_ingest fallback speed | ⬜ open — monitor first production run |
-| M3 staleness check semantics | ⬜ open — cosmetic |
+| M3 staleness check semantics | ✅ fixed — freshness = any ok/skipped run within the STALENESS_DAYS window |
+
+### H3 implementation note
+
+EDGAR's quarterly form index lists each SC 13D/G under **both** the subject
+company and the reporting person(s), sharing one accession number. Grouping
+cache rows by accession yields the subject ticker (CIK resolves via
+company_tickers.json — funds don't) plus the filer names. A signal is
+recorded when the subject is on the watchlist/positions, or when any filer
+matches the curated activist list (Sleeve B3 discovery path).

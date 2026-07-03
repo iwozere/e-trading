@@ -133,30 +133,38 @@ def _fetch_reddit(ticker: str, reddit_headers: Dict[str, str]) -> int:
 
 
 def _get_reddit_headers() -> Optional[Dict[str, str]]:
-    """Get Reddit OAuth bearer token headers, or None if credentials missing."""
+    """
+    Get Reddit OAuth bearer headers via app-only (client_credentials) flow.
+
+    Uses the project-standard donotshare variables (REDDIT_API_KEY,
+    REDDIT_API_SECRET, REDDIT_USER_AGENT). App-only auth is sufficient for
+    read-only public subreddit searches — no username/password needed.
+
+    Returns:
+        Bearer headers dict, or None if credentials missing or auth fails.
+    """
     import os
-    client_id = os.environ.get("REDDIT_CLIENT_ID", "")
-    client_secret = os.environ.get("REDDIT_CLIENT_SECRET", "")
-    username = os.environ.get("REDDIT_USERNAME", "")
-    password = os.environ.get("REDDIT_PASSWORD", "")
-    if not all([client_id, client_secret, username, password]):
-        _logger.warning("Reddit credentials not set; skipping Reddit poll")
+    client_id = os.environ.get("REDDIT_API_KEY", "")
+    client_secret = os.environ.get("REDDIT_API_SECRET", "")
+    user_agent = os.environ.get("REDDIT_USER_AGENT", "") or "KestrelBot/1.0"
+    if not client_id or not client_secret:
+        _logger.warning("REDDIT_API_KEY/REDDIT_API_SECRET not set; skipping Reddit poll")
         return None
     try:
         resp = requests.post(
             _REDDIT_TOKEN_URL,
             auth=(client_id, client_secret),
-            data={"grant_type": "password", "username": username, "password": password},
-            headers={"User-Agent": "KestrelBot/1.0"},
+            data={"grant_type": "client_credentials"},
+            headers={"User-Agent": user_agent},
             timeout=10,
         )
         resp.raise_for_status()
         token = resp.json().get("access_token", "")
         if not token:
             return None
-        return {"Authorization": f"bearer {token}", "User-Agent": "KestrelBot/1.0"}
+        return {"Authorization": f"bearer {token}", "User-Agent": user_agent}
     except Exception:
-        _logger.debug("Reddit auth failed")
+        _logger.warning("Reddit app-only auth failed; skipping Reddit poll")
         return None
 
 

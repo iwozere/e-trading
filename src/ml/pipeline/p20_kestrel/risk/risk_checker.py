@@ -33,6 +33,28 @@ _JOB_NAME = "risk_check"
 _INTRADAY_LOSS_ALERT_PCT = -0.12  # -12% intraday fires push
 
 
+def _get_current_price(ticker: str) -> Optional[float]:
+    """
+    Get the freshest available price for a ticker.
+
+    Tries a delayed intraday quote via yfinance first (positions count is
+    small, so one request per ticker per 30-min run is fine); falls back to
+    the EOD close from k20_signals when the quote is unavailable.
+
+    Returns:
+        Latest price, or None if neither source has data.
+    """
+    try:
+        import yfinance as yf
+        px = yf.Ticker(ticker).fast_info.last_price
+        if px:
+            return float(px)
+    except Exception:
+        _logger.debug("Intraday quote unavailable for %s; using EOD close", ticker)
+
+    return get_latest_signal(ticker, "close")
+
+
 def _check_position(
     position: Dict[str, Any],
     close_price: Optional[float],
@@ -124,8 +146,8 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
         _logger.info("Checking %d open positions", len(positions))
 
         # Dedup: the job runs every 30 min — fire each (ticker, trigger)
-        # at most once per day. Prices are EOD closes, so re-evaluating
-        # the same close can only produce the same alert anyway.
+        # at most once per day. A stop that stays breached all day should
+        # page the human once, not every half hour.
         already_fired = {
             (str(a.get("ticker", "")).upper(), str(a.get("trigger", "")))
             for a in get_today_alerts()
@@ -137,7 +159,7 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
 
         for pos in positions:
             ticker = str(pos.get("ticker", "")).upper()
-            close_price = get_latest_signal(ticker, "close")
+            close_price = _get_current_price(ticker)
 
             alert = _check_position(pos, close_price)
             if alert:

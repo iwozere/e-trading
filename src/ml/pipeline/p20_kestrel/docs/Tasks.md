@@ -71,9 +71,11 @@ See [Code-Review-2026-07-03.md](Code-Review-2026-07-03.md) for full details.
 - [x] **H1** — risk_checker alert dedup — fixed: one (ticker, trigger) per day
 - [x] **H4** — insider 90-day aggregation in sleeve_a — fixed
 - [x] **M1** — aggregator scope reduced to watchlist ∪ positions — fixed
-- [ ] **H2** — social_poll Reddit env var names don't match donotshare (Reddit always skipped) — needs auth-flow decision
-- [ ] **H3** — 13D/G activist matching is dead code (cache has no ticker column) — needs matching-strategy decision
-- [ ] **H1b** — risk_checker uses EOD close for "intraday" checks; wire intraday quotes or reduce cron frequency
+- [x] **H2** — Reddit polling — fixed: app-only OAuth via donotshare REDDIT_API_KEY/SECRET/USER_AGENT
+- [x] **H3** — 13D/G matching — fixed: accession grouping + CIK→ticker + curated activists.json (Sleeve B3 live)
+- [x] **H1b** — risk_checker intraday prices — fixed: yfinance delayed quote with EOD-close fallback
+- [x] **M3** — data_health staleness — fixed: checks full STALENESS_DAYS window, not just yesterday
+- [ ] **M2** — eod_ingest per-ticker fallback speed — monitor first production run
 
 ## Known Issues
 

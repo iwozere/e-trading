@@ -61,17 +61,24 @@ def check_sentiment_staleness(today: date) -> List[str]:
     """
     Check if any major sentiment sources have stale data.
 
+    A source is stale when no ok/skipped run exists within its
+    STALENESS_DAYS window (not just yesterday) — a job that succeeded
+    two days ago within a 3-day window is still fresh.
+
     Returns:
         List of warning strings.
     """
     warnings: List[str] = []
     for job in ("gdelt_process", "social_poll", "av_sentiment_budgeted"):
-        status = get_job_run(job, today - timedelta(days=1))
         max_stale = STALENESS_DAYS.get(
             "gdelt" if "gdelt" in job else "social", 3
         )
-        if status not in ("ok", "skipped"):
-            warnings.append(f"⚠ {job} last run: no recent ok run (>{max_stale}d)")
+        fresh = any(
+            get_job_run(job, today - timedelta(days=offset)) in ("ok", "skipped")
+            for offset in range(1, max_stale + 1)
+        )
+        if not fresh:
+            warnings.append(f"⚠ {job}: no ok run in the last {max_stale}d")
 
     return warnings
 
