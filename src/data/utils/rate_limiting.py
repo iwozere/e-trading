@@ -156,8 +156,12 @@ class RateLimiter:
 
     def wait_if_needed(self):
         """Wait if necessary to comply with rate limits."""
-        while not self._can_make_request():
-            delay = self._calculate_delay()
+        while True:
+            with self._lock:
+                if self._can_make_request():
+                    self._record_request()
+                    return
+                delay = self._calculate_delay()
             time.sleep(delay)
             self._total_delays += 1
 
