@@ -94,6 +94,37 @@ def _build_aliases_for_ticker(
     return rows
 
 
+async def _fetch_company_names(tickers: List[str]) -> Dict[str, Optional[str]]:
+    """
+    Fetch company names for all tickers concurrently using Yahoo only.
+
+    Yahoo is the only provider that reliably returns company names on
+    free tier; using it exclusively avoids FMP/Polygon rate-limit noise
+    and relies on the shared on-disk fundamentals cache populated by
+    universe_loader (so most lookups are instant cache hits).
+    """
+    import asyncio
+    from src.common.fundamentals import get_fundamentals_unified
+
+    async def _one(ticker: str) -> tuple[str, Optional[str]]:
+        try:
+            fund = await get_fundamentals_unified(ticker, provider="yf")
+            name = getattr(fund, "company_name", None) or getattr(fund, "name", None)
+            return ticker, name
+        except Exception:
+            return ticker, None
+
+    _BATCH = 50
+    names: Dict[str, Optional[str]] = {}
+    for i in range(0, len(tickers), _BATCH):
+        batch = tickers[i: i + _BATCH]
+        results = await asyncio.gather(*(_one(t) for t in batch), return_exceptions=True)
+        for r in results:
+            if isinstance(r, tuple):
+                names[r[0]] = r[1]
+    return names
+
+
 def run() -> Dict[str, Any]:
     """
     Rebuild k20_company_aliases for all active universe tickers.
@@ -102,23 +133,15 @@ def run() -> Dict[str, Any]:
         Summary dict with tickers_processed, aliases_upserted.
     """
     import asyncio
-    from src.common.fundamentals import get_fundamentals_unified
 
     tickers = get_active_tickers()
     _logger.info("Alias builder processing %d tickers", len(tickers))
 
+    names = asyncio.run(_fetch_company_names(tickers))
+
     all_alias_rows: List[Dict[str, Any]] = []
     for ticker in tickers:
-        company_name: Optional[str] = None
-        edgar_name: Optional[str] = None
-
-        try:
-            fund = asyncio.run(get_fundamentals_unified(ticker))
-            company_name = getattr(fund, "company_name", None) or getattr(fund, "name", None)
-        except Exception:
-            _logger.debug("Could not get fundamentals for %s", ticker)
-
-        alias_rows = _build_aliases_for_ticker(ticker, company_name, edgar_name)
+        alias_rows = _build_aliases_for_ticker(ticker, names.get(ticker), None)
         all_alias_rows.extend(alias_rows)
 
     upserted = upsert_aliases(all_alias_rows)
