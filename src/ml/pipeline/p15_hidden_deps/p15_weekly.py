@@ -22,8 +22,9 @@ import json
 import sys
 import time
 from datetime import datetime, timezone
+from io import StringIO
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional, cast
 
 import pandas as pd
 import requests
@@ -43,6 +44,10 @@ _NASDAQ_API_URL = (
     "https://api.nasdaq.com/api/screener/stocks"
     "?tableonly=true&limit=25000&download=true"
 )
+# nasdaqtrader.com is the official programmatic mirror — no geo-blocking.
+# Two pipe-delimited files cover all US exchanges.
+_NASDAQTRADER_LISTED = "https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt"
+_NASDAQTRADER_OTHER = "https://www.nasdaqtrader.com/dynamic/symdir/otherlisted.txt"
 
 _logger = setup_logger(__name__)
 
@@ -115,48 +120,94 @@ def _job_nasdaq_screener() -> Optional[Dict[str, Any]]:
     """
     Download the Nasdaq all-stocks screener CSV and save to the shared data cache.
 
+    Tries api.nasdaq.com first (rich data: sector, industry, market cap).
+    Falls back to nasdaqtrader.com pipe-delimited files (ticker + exchange only,
+    no geo-blocking) when the primary API times out or returns an error.
+
     Destination: DATA_CACHE_DIR/universe/nasdaq_screener.csv
     P20 Kestrel universe_loader reads from the same path (via config.NASDAQ_TICKERS_CSV).
 
     Returns:
-        Dict with rows count and file path.
+        Dict with rows count, file path, and source used.
     """
-    headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; research-bot/1.0)",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.nasdaq.com/",
-    }
-    resp = requests.get(_NASDAQ_API_URL, headers=headers, timeout=60)
-    resp.raise_for_status()
-    payload = resp.json()
-    rows = payload.get("data", {}).get("rows", [])
-    if not rows:
-        raise ValueError("Nasdaq screener API returned no rows — response: %s" % str(payload)[:200])
+    df: Optional[pd.DataFrame] = None
+    source = "api.nasdaq.com"
 
-    df = pd.DataFrame(rows)
-    rename = {
-        "symbol": "Symbol",
-        "name": "Name",
-        "marketCap": "Market Cap",
-        "sector": "Sector",
-        "industry": "Industry",
-        "lastsale": "Last Sale",
-        "country": "Country",
-        "ipoyear": "IPO Year",
-        "volume": "Volume",
-        "netchange": "Net Change",
-        "pctchange": "% Change",
-        "url": "url",
-    }
-    df = df.rename(columns={k: v for k, v in rename.items() if k in df.columns})
-    if "Symbol" not in df.columns:
-        raise ValueError("Nasdaq screener response missing 'symbol' field; columns: %s" % list(df.columns))
+    # --- Primary: Nasdaq JSON API (rich data, geo-blocked on some servers) ---
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; research-bot/1.0)",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.nasdaq.com/",
+        }
+        resp = requests.get(_NASDAQ_API_URL, headers=headers, timeout=30)
+        resp.raise_for_status()
+        payload = resp.json()
+        rows = payload.get("data", {}).get("rows", [])
+        if rows:
+            df = pd.DataFrame(rows)
+            rename = {
+                "symbol": "Symbol",
+                "name": "Name",
+                "marketCap": "Market Cap",
+                "sector": "Sector",
+                "industry": "Industry",
+                "lastsale": "Last Sale",
+                "country": "Country",
+                "ipoyear": "IPO Year",
+                "volume": "Volume",
+                "netchange": "Net Change",
+                "pctchange": "% Change",
+                "url": "url",
+            }
+            df = df.rename(columns={k: v for k, v in rename.items() if k in df.columns})
+            if "Symbol" not in df.columns:
+                df = None
+                _logger.warning("nasdaq_screener primary: 'symbol' field missing, falling back")
+        else:
+            _logger.warning("nasdaq_screener primary: empty rows, falling back")
+    except Exception as exc:
+        _logger.warning("nasdaq_screener primary failed (%s), falling back to nasdaqtrader.com", exc)
+
+    # --- Fallback: nasdaqtrader.com pipe-delimited files (no geo-blocking) ---
+    if df is None:
+        source = "nasdaqtrader.com"
+        parts: List[pd.DataFrame] = []
+        for url, exch_col in [
+            (_NASDAQTRADER_LISTED, None),
+            (_NASDAQTRADER_OTHER, "Exchange"),
+        ]:
+            r = requests.get(url, timeout=30)
+            r.raise_for_status()
+            lines = r.text.splitlines()
+            # Last line is a File Creation timestamp — drop it
+            data_lines = [ln for ln in lines if not ln.startswith("File Creation")]
+            part = pd.read_csv(StringIO("\n".join(data_lines)), sep="|", dtype=str)
+            # nasdaqlisted.txt uses "Symbol"; otherlisted.txt uses "ACT Symbol"
+            if "ACT Symbol" in part.columns:
+                part = part.rename(columns={"ACT Symbol": "Symbol"})
+            if exch_col and "Exchange" in part.columns:
+                # Replace single-letter codes: A=NYSE American, N=NYSE, P=NYSE Arca, Z=BATS, V=IEX
+                _exch_map = {"A": "NYSE MKT", "N": "NYSE", "P": "NYSE ARCA", "Z": "BATS", "V": "IEX"}
+                part["Exchange"] = part["Exchange"].replace(_exch_map)
+            else:
+                part["Exchange"] = "NASDAQ"
+            part = part.rename(columns={"Security Name": "Name"})
+            # Drop file-footer rows (Symbol == "Symbol" header duplicates or NaN)
+            part = part[part["Symbol"].notna() & (part["Symbol"] != "Symbol")]
+            parts.append(cast(pd.DataFrame, part[["Symbol", "Name", "Exchange"]]))
+
+        merged: pd.DataFrame = cast(pd.DataFrame, pd.concat(parts, ignore_index=True))
+        # Dollar-sign suffixes denote warrants/units — exclude them
+        merged = cast(pd.DataFrame, merged[~merged["Symbol"].str.endswith("$", na=False)])
+        df = merged.drop_duplicates(subset=["Symbol"])
+        _logger.info("nasdaq_screener fallback: %d tickers from nasdaqtrader.com", len(df))
 
     _NASDAQ_SCREENER_CSV.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(_NASDAQ_SCREENER_CSV, index=False)
-    _logger.info("nasdaq_screener: saved %d tickers → %s", len(df), _NASDAQ_SCREENER_CSV)
-    return {"rows": len(df), "path": str(_NASDAQ_SCREENER_CSV)}
+    _logger.info("nasdaq_screener: saved %d tickers → %s (source: %s)", len(df), _NASDAQ_SCREENER_CSV, source)
+    return {"rows": len(df), "path": str(_NASDAQ_SCREENER_CSV), "source": source}
 
 
 # ---------------------------------------------------------------------------
