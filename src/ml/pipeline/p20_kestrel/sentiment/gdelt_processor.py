@@ -21,6 +21,7 @@ sys.path.append(str(PROJECT_ROOT))
 import pandas as pd
 from difflib import SequenceMatcher
 
+from src.ml.pipeline.p20_kestrel.config import DATA_CACHE_PATH
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 
 _kestrel = _KestrelService()
@@ -36,7 +37,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 _JOB_NAME = "gdelt_process"
-_P15_GKG_DIR = Path("R:/data-cache/gdelt/gkg")
+_P15_GKG_DIR = DATA_CACHE_PATH / "gdelt" / "gkg"
 _MIN_PERIODS = 15  # warm-up rule: z-score requires at least 15 days of history
 _FUZZY_THRESHOLD = 0.93
 

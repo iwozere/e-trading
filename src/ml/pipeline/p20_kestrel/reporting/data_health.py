@@ -21,6 +21,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.ml.pipeline.p20_kestrel.config import (
     AV_DAILY_QUOTA,
+    DATA_CACHE_PATH,
     LLM_MONTHLY_BUDGET_USD,
     STALENESS_DAYS,
 )
@@ -37,7 +38,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 _JOB_NAME = "data_health"
-_P15_GKG_DIR = Path("R:/data-cache/gdelt/gkg")
+_P15_GKG_DIR = DATA_CACHE_PATH / "gdelt" / "gkg"
 
 
 def check_gdelt_freshness(today: date) -> Optional[str]:

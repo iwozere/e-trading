@@ -20,6 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.data.downloader.edgar_downloader import EdgarDownloader
+from src.ml.pipeline.p20_kestrel.config import DATA_CACHE_PATH
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 
 _kestrel = _KestrelService()
@@ -34,9 +35,9 @@ _logger = setup_logger(__name__)
 
 _JOB_NAME = "ingest_filings"
 # Paths written by P15 daily; P20 reads only — never downloads.
-_P15_8K_INDEX_DIR = Path("R:/data-cache/edgar/8k/index")
-_P15_FORM4_DIR = Path("R:/data-cache/edgar/13f/form4")
-_P15_13DG_DIR = Path("R:/data-cache/edgar/13f/13dg")
+_P15_8K_INDEX_DIR = DATA_CACHE_PATH / "edgar" / "8k" / "index"
+_P15_FORM4_DIR = DATA_CACHE_PATH / "edgar" / "13f" / "form4"
+_P15_13DG_DIR = DATA_CACHE_PATH / "edgar" / "13f" / "13dg"
 _FORM4_BUY_CODES = {"P", "A"}  # P = open market purchase, A = grant
 
 

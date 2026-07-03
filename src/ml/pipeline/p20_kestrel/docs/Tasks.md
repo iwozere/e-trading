@@ -60,13 +60,22 @@
 
 ## Technical Debt
 
-*(none outstanding)*
+See [Code-Review-2026-07-03.md](Code-Review-2026-07-03.md) for full details.
+
+- [ ] **C2** — Crowding score (§7.6) never computes: only gdelt has `mention_z20`; compute z-scores in aggregator
+- [ ] **C3** — calendar_sync + risk_checker log alerts to DB but never send push (wire NotificationServiceClient)
+- [ ] **H1** — risk_checker: no alert dedup (17 duplicate alerts/day) + uses stale EOD close for "intraday" check
+- [ ] **H2** — social_poll Reddit env var names don't match donotshare (Reddit always skipped)
+- [ ] **H3** — 13D/G activist matching is dead code (cache has no ticker column)
+- [ ] **H4** — `insider_buy_value_90d` signal holds 1-day sum; sleeve_a treats it as 90-day aggregate
+- [ ] **M1** — sentiment_aggregator: ~35k sequential DB transactions per run; restrict to watchlist ∪ positions
 
 ## Known Issues
 
 - GDELT GKG alias fuzzy matching at 0.93 threshold may miss 2-char ticker typos
 - Trends poll has no persistent state for anchor-term calibration
 - `EdgarDownloader.download_form4_filings()` downloads ALL form 4s for a date — large payload on busy days
+- ~~Hardcoded `R:/data-cache` paths in 4 modules~~ — fixed 2026-07-03 (C1)
 
 ## Testing Requirements
 

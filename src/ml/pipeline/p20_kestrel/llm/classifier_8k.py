@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.ml.pipeline.p20_kestrel.config import HAIKU_MODEL, RESULTS_DIR
+from src.ml.pipeline.p20_kestrel.config import DATA_CACHE_PATH, HAIKU_MODEL, RESULTS_DIR
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 
 _kestrel = _KestrelService()
@@ -65,7 +65,7 @@ def _fetch_filing_body(filing: Dict[str, Any]) -> Optional[str]:
     accession = str(filing.get("accession", "")).replace("-", "")
     ticker = str(filing.get("ticker", "")).upper()
 
-    cache_path = Path(f"R:/data-cache/edgar/8k/{ticker}_{accession}.txt")
+    cache_path = DATA_CACHE_PATH / "edgar" / "8k" / f"{ticker}_{accession}.txt"
     if cache_path.exists():
         try:
             return cache_path.read_text(encoding="utf-8", errors="replace")
