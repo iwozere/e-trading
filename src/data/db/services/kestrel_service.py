@@ -12,9 +12,6 @@ from datetime import date
 from typing import Any, Dict, List, Optional
 
 from src.data.db.services.base_service import BaseDBService, with_uow
-from src.notification.logger import setup_logger
-
-_logger = setup_logger(__name__)
 
 
 class KestrelService(BaseDBService):

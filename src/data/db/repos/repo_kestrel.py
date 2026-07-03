@@ -29,6 +29,8 @@ from src.data.db.models.model_kestrel import (
     K20Universe,
     K20Watchlist,
 )
+
+
 class KestrelRepo:
     """All repository operations for k20_* tables, bound to a single Session."""
 

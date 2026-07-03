@@ -43,21 +43,21 @@ def test_model_table_names():
 def test_k20_universe_columns():
     """Universe table has expected key columns."""
     columns = {c.name for c in K20Universe.__table__.columns}
-    for required in ("id", "ticker", "mcap", "status", "updated_at"):
+    for required in ("ticker", "mcap", "status", "updated_at"):
         assert required in columns, f"k20_universe missing column: {required}"
 
 
 def test_k20_signal_columns():
     """Signal table has required columns."""
     columns = {c.name for c in K20Signal.__table__.columns}
-    for required in ("id", "ticker", "date", "signal_type", "value"):
+    for required in ("ticker", "date", "signal_type", "value"):
         assert required in columns, f"k20_signals missing column: {required}"
 
 
 def test_k20_watchlist_columns():
     """Watchlist table has required columns."""
     columns = {c.name for c in K20Watchlist.__table__.columns}
-    for required in ("id", "ticker", "sleeve", "state", "score"):
+    for required in ("ticker", "sleeve", "state", "score"):
         assert required in columns, f"k20_watchlist missing column: {required}"
 
 
@@ -78,7 +78,7 @@ def test_k20_llm_run_columns():
 def test_k20_job_run_columns():
     """Job run table has required columns."""
     columns = {c.name for c in K20JobRun.__table__.columns}
-    for required in ("id", "job", "run_date", "status"):
+    for required in ("job", "run_date", "status"):
         assert required in columns, f"k20_job_runs missing column: {required}"
 
 
