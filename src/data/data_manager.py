@@ -139,9 +139,11 @@ class DataManager:
     _DEFAULT_RATE_LIMIT = {'requests_per_minute': 10}
 
     # Override via PROVIDER_RATE_LIMITS env var (JSON) for runtime tuning without code changes.
+    # Yahoo Finance (yfinance) is an unofficial API — very aggressive throttling is required.
+    # burst_size=1 disables burst, requests_per_second=1 enforces ≤1 req/s per process.
     _BUILTIN_RATE_LIMITS = {
         'binance': {'requests_per_minute': 1200},
-        'yahoo': {'requests_per_minute': 100},
+        'yahoo': {'requests_per_minute': 60, 'requests_per_second': 1, 'burst_size': 1},
         'alpha_vantage': {'requests_per_minute': 5},
         'fmp': {'requests_per_minute': 3000},
         'tiingo': {'requests_per_minute': 100},
@@ -1761,22 +1763,17 @@ class DataManager:
                         _logger.warning("No fundamentals data returned from %s for %s", provider_name, symbol)
 
                 except RateLimitException as e:
-                    # Handle rate limiting with temporary cooldowns
+                    # Handle rate limiting with a short wait and then retry.
+                    # Use a modest fixed cooldown to allow the rate limiter to drain.
+                    # Do NOT set a multi-hour cooldown — Yahoo throttles per-IP per minute,
+                    # not permanently. A 60-second back-off is sufficient.
                     delay = self._calculate_rate_limit_delay(e, attempt)
-                    
-                    # Set a cooldown for the provider
-                    # For strong rate limits (long delay) or persistent failures, set a longer cooldown
-                    cooldown_seconds = 3600 if delay > 60 or attempt >= 1 else 60
-                    self._set_provider_cooldown(provider_name, cooldown_seconds)
-                    
-                    _logger.warning("Rate limit hit for %s %s, setting %ds cooldown and moving to next provider",
-                                  provider_name, symbol, cooldown_seconds)
-                    break # Stop retrying and move to next provider
-
-
-                    _logger.warning("Rate limit hit for %s %s, waiting %.2f seconds",
-                                  provider_name, symbol, delay)
+                    _logger.warning("Rate limit hit for %s %s (attempt %d), waiting %.2f seconds",
+                                  provider_name, symbol, attempt + 1, delay)
                     self._sleep_with_jitter(delay, retry_config['jitter'])
+                    # Re-acquire a rate-limited slot before retrying
+                    if provider_name in self.rate_limiters:
+                        self.rate_limiters[provider_name].wait_if_needed()
                     continue
 
                 except TimeoutException as e:

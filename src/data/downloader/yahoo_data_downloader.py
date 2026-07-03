@@ -19,12 +19,15 @@ Classes:
 """
 import logging
 import os
+import random
+import threading
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 
 import pandas as pd
+import requests
 import yfinance as yf
 from yfinance.exceptions import YFRateLimitError
 
@@ -33,6 +36,48 @@ from src.model.schemas import OptionalFundamentals, Fundamentals
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# User-Agent rotation helpers
+# ---------------------------------------------------------------------------
+# A pool of realistic browser User-Agent strings.  Each thread keeps its own
+# persistent requests.Session (thread-local) so HTTP keep-alive is preserved
+# while each session has a randomly assigned UA that differs from its peers.
+# This makes concurrent requests look like different browser clients to Yahoo.
+_UA_POOL = [
+    # Chrome 125 – Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    # Chrome 124 – macOS
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    # Firefox 126 – Linux
+    "Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
+    # Safari 17 – macOS
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15",
+    # Edge 125 – Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0",
+    # Chrome 123 – Android
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.118 Mobile Safari/537.36",
+    # Firefox 125 – Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
+    # Chrome 122 – Ubuntu
+    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+]
+
+_thread_local = threading.local()
+
+
+def _get_rotated_session() -> requests.Session:
+    """
+    Return a thread-local requests.Session with a randomly assigned User-Agent.
+
+    Each OS thread gets exactly one session so HTTP keep-alive is reused within
+    a thread, but each thread presents a different User-Agent to Yahoo Finance.
+    """
+    if not hasattr(_thread_local, "session"):
+        session = requests.Session()
+        session.headers.update({"User-Agent": random.choice(_UA_POOL)})
+        _thread_local.session = session
+    return _thread_local.session
 
 # Redirect yfinance cache away from the user home directory so the app works
 # regardless of which OS user (host vs Docker container) runs the process.
@@ -186,7 +231,7 @@ class YahooDataDownloader(BaseDataDownloader):
         """Download OHLCV data for a single request (no batching)."""
         _logger.debug("Downloading OHLCV data for %s (%s to %s)", symbol, start_date, end_date)
 
-        ticker = yf.Ticker(symbol)
+        ticker = yf.Ticker(symbol, session=_get_rotated_session())
         try:
             df = ticker.history(start=start_date, end=end_date, interval=interval)
         except Exception as e:
@@ -394,7 +439,7 @@ class YahooDataDownloader(BaseDataDownloader):
             Fundamentals: Comprehensive fundamental data for the stock
         """
         try:
-            ticker = yf.Ticker(symbol)
+            ticker = yf.Ticker(symbol, session=_get_rotated_session())
             info = ticker.info
 
             if not info:
@@ -904,7 +949,7 @@ class YahooDataDownloader(BaseDataDownloader):
             _logger.info("Testing Yahoo Finance connection...")
 
             # Try to fetch recent data for a well-known ticker
-            test_ticker = yf.Ticker("AAPL")
+            test_ticker = yf.Ticker("AAPL", session=_get_rotated_session())
             df = test_ticker.history(period="1d", interval="1d")
 
             if df is not None and not df.empty:
@@ -975,7 +1020,7 @@ class YahooDataDownloader(BaseDataDownloader):
             Dictionary with company profile data or None if failed
         """
         try:
-            ticker = yf.Ticker(symbol)
+            ticker = yf.Ticker(symbol, session=_get_rotated_session())
             info = ticker.info
 
             if not info:
@@ -1052,7 +1097,7 @@ class YahooDataDownloader(BaseDataDownloader):
                     delay *= 2
 
         try:
-            ticker = yf.Ticker(symbol)
+            ticker = yf.Ticker(symbol, session=_get_rotated_session())
             expirations = _fetch_with_retry(lambda: ticker.options, "options list")
             if not expirations:
                 _logger.debug("%s: no options expirations available", symbol)
