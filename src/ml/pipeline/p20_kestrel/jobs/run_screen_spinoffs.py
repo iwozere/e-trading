@@ -13,8 +13,12 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
+from src.ml.pipeline.p20_kestrel.jobs.run_common import setup_run_logging
+
+
 def main() -> None:
     """Run Sleeve B screen and print scheduler result."""
+    setup_run_logging()
     result = run()
     _logger.info("Sleeve B screen complete: %s", result)
     print(f"__SCHEDULER_RESULT__:{json.dumps(result, default=str)}")

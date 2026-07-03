@@ -13,8 +13,12 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
+from src.ml.pipeline.p20_kestrel.jobs.run_common import setup_run_logging
+
+
 def main() -> None:
     """Run data-health guard and print scheduler result."""
+    setup_run_logging()
     result = run()
     _logger.info("Data health complete: %s", result)
     print(f"__SCHEDULER_RESULT__:{json.dumps(result, default=str)}")

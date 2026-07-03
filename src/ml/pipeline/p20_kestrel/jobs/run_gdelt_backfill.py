@@ -20,8 +20,12 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
+from src.ml.pipeline.p20_kestrel.jobs.run_common import setup_run_logging
+
+
 def main() -> None:
     """Parse CLI args and run GDELT backfill for the given date range."""
+    setup_run_logging()
     parser = argparse.ArgumentParser(description="GDELT GKG backfill for a date range")
     parser.add_argument("--start", required=True, help="Start date (YYYY-MM-DD, inclusive)")
     parser.add_argument("--end", help="End date (YYYY-MM-DD, inclusive); defaults to yesterday")

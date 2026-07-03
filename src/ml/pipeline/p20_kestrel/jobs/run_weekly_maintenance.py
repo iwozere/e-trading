@@ -14,8 +14,12 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
+from src.ml.pipeline.p20_kestrel.jobs.run_common import setup_run_logging
+
+
 def main() -> None:
     """Run universe refresh then alias rebuild, print combined scheduler result."""
+    setup_run_logging()
     universe_result = run_universe()
     _logger.info("Universe refresh complete: %s", universe_result)
 
