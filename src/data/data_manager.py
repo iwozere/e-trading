@@ -1871,14 +1871,20 @@ class DataManager:
         """
         import signal
         import time
+        import threading
 
         def timeout_handler(signum, frame):
             raise TimeoutException(f"Request timed out after {timeout} seconds")
 
-        # Set up timeout handling (Unix-like systems)
-        if hasattr(signal, 'SIGALRM'):
-            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(int(timeout))
+        # Set up timeout handling (Unix-like systems, main thread only)
+        sigalrm_set = False
+        if hasattr(signal, 'SIGALRM') and threading.current_thread() is threading.main_thread():
+            try:
+                old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(int(timeout))
+                sigalrm_set = True
+            except ValueError:
+                pass
 
         try:
             start_time = time.time()
@@ -1891,9 +1897,12 @@ class DataManager:
 
         finally:
             # Clean up timeout handling
-            if hasattr(signal, 'SIGALRM'):
-                signal.alarm(0)
-                signal.signal(signal.SIGALRM, old_handler)
+            if sigalrm_set:
+                try:
+                    signal.alarm(0)
+                    signal.signal(signal.SIGALRM, old_handler)
+                except ValueError:
+                    pass
 
     def _calculate_exponential_backoff(self, attempt: int, config: Dict[str, Any]) -> float:
         """
