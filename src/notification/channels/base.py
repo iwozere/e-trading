@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Dict, List
 
-from src.notification.logger import setup_logger
+from src, Optional.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -40,10 +40,10 @@ class DeliveryResult:
 
     success: bool
     status: DeliveryStatus
-    external_id: str | None = None
-    response_time_ms: int | None = None
-    error_message: str | None = None
-    metadata: Dict[str, Any] | None = None
+    external_id: Optional[str] = None
+    response_time_ms: Optional[int] = None
+    error_message: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
         """Validate delivery result data."""
@@ -70,10 +70,10 @@ class ChannelHealth:
 
     status: ChannelHealthStatus
     last_check: datetime
-    response_time_ms: int | None = None
-    error_message: str | None = None
+    response_time_ms: Optional[int] = None
+    error_message: Optional[str] = None
     failure_count: int = 0
-    metadata: Dict[str, Any] | None = None
+    metadata: Optional[Dict[str, Any]] = None
 
     @property
     def is_healthy(self) -> bool:
@@ -91,10 +91,10 @@ class MessageContent:
     """Structured message content for delivery."""
 
     text: str
-    subject: str | None = None
-    html: str | None = None
-    attachments: List[Dict[str, Any]] | None = None
-    metadata: Dict[str, Any] | None = None
+    subject: Optional[str] = None
+    html: Optional[str] = None
+    attachments: Optional[List[Dict[str, Any]]] = None
+    metadata: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
         """Validate message content."""
@@ -150,7 +150,7 @@ class NotificationChannel(ABC):
 
     @abstractmethod
     async def send_message(
-        self, recipient: str, content: MessageContent, message_id: str | None = None, priority: str = "NORMAL"
+        self, recipient: str, content: MessageContent, message_id: Optional[str] = None, priority: str = "NORMAL"
     ) -> DeliveryResult:
         """
         Send a message through this channel.
@@ -214,7 +214,7 @@ class NotificationChannel(ABC):
         """
         return content
 
-    def get_max_message_length(self) -> int | None:
+    def get_max_message_length(self) -> Optional[int]:
         """
         Get maximum message length for this channel.
 
@@ -277,7 +277,7 @@ class NotificationChannel(ABC):
         self,
         recipient: str,
         content: MessageContent,
-        message_id: str | None = None,
+        message_id: Optional[str] = None,
         priority: str = "NORMAL",
         max_retries: int = 3,
     ) -> DeliveryResult:

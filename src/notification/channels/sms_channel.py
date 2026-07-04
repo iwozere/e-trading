@@ -11,7 +11,7 @@ from typing import Any, Dict
 
 import aiohttp
 
-from src.notification.channels.base import (
+from src, Optional.notification.channels.base import (
     ChannelHealth,
     ChannelHealthStatus,
     DeliveryResult,
@@ -146,7 +146,7 @@ class SMSChannel(NotificationChannel):
         validator.require_field("access_key", str, description="MessageBird Access Key", min_length=20)
 
     async def send_message(
-        self, recipient: str, content: MessageContent, message_id: str | None = None, priority: str = "NORMAL"
+        self, recipient: str, content: MessageContent, message_id: Optional[str] = None, priority: str = "NORMAL"
     ) -> DeliveryResult:
         """
         Send an SMS message.
@@ -266,10 +266,10 @@ class SMSChannel(NotificationChannel):
     async def _send_twilio_sms(
         self,
         to_number: str,
-        from_number: str | None,
-        messaging_service_sid: str | None,
+        from_number: Optional[str],
+        messaging_service_sid: Optional[str],
         message_parts: list[str],
-        message_id: str | None,
+        message_id: Optional[str],
     ) -> DeliveryResult:
         """Send SMS via Twilio API."""
         try:
@@ -336,7 +336,7 @@ class SMSChannel(NotificationChannel):
             return DeliveryResult(success=False, status=DeliveryStatus.FAILED, error_message=f"Twilio error: {str(e)}")
 
     async def _send_aws_sns_sms(
-        self, to_number: str, message_parts: list[str], message_id: str | None
+        self, to_number: str, message_parts: list[str], message_id: Optional[str]
     ) -> DeliveryResult:
         """Send SMS via AWS SNS (placeholder implementation)."""
         # This is a template - implement actual AWS SNS integration
@@ -347,7 +347,7 @@ class SMSChannel(NotificationChannel):
         )
 
     async def _send_nexmo_sms(
-        self, to_number: str, from_number: str | None, message_parts: list[str], message_id: str | None
+        self, to_number: str, from_number: Optional[str], message_parts: list[str], message_id: Optional[str]
     ) -> DeliveryResult:
         """Send SMS via Nexmo/Vonage (placeholder implementation)."""
         # This is a template - implement actual Nexmo integration
@@ -358,7 +358,7 @@ class SMSChannel(NotificationChannel):
         )
 
     async def _send_messagebird_sms(
-        self, to_number: str, from_number: str | None, message_parts: list[str], message_id: str | None
+        self, to_number: str, from_number: Optional[str], message_parts: list[str], message_id: Optional[str]
     ) -> DeliveryResult:
         """Send SMS via MessageBird (placeholder implementation)."""
         # This is a template - implement actual MessageBird integration

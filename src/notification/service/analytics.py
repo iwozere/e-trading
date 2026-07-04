@@ -9,7 +9,7 @@ import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
@@ -41,8 +41,8 @@ class ChannelStats:
     failed_attempts: int = 0
 
     avg_response_time_ms: float = 0.0
-    min_response_time_ms: int | None = None
-    max_response_time_ms: int | None = None
+    min_response_time_ms: Optional[int] = None
+    max_response_time_ms: Optional[int] = None
 
     # Rate calculations
     success_rate: float = 0.0
@@ -50,7 +50,7 @@ class ChannelStats:
 
     # Time-based metrics
     messages_per_hour: float = 0.0
-    peak_hour: int | None = None
+    peak_hour: Optional[int] = None
     peak_messages: int = 0
 
     def calculate_rates(self):
@@ -104,7 +104,7 @@ class UserStats:
     # Time-based metrics
     avg_response_time_ms: float = 0.0
     messages_per_day: float = 0.0
-    most_active_hour: int | None = None
+    most_active_hour: Optional[int] = None
 
     def calculate_rates(self):
         """Calculate success rates."""
@@ -206,7 +206,7 @@ class NotificationAnalytics:
         self._default_trend_days = 30
 
     async def get_delivery_rates(
-        self, channel: str | None = None, user_id: str | None = None, days: int = 30
+        self, channel: Optional[str] = None, user_id: Optional[str] = None, days: int = 30
     ) -> Dict[str, Any]:
         """
         Get delivery rate calculations per channel and user.
@@ -264,7 +264,7 @@ class NotificationAnalytics:
             self._logger.exception("Failed to get delivery rates:")
             raise
 
-    async def get_response_time_analysis(self, channel: str | None = None, days: int = 30) -> Dict[str, Any]:
+    async def get_response_time_analysis(self, channel: Optional[str] = None, days: int = 30) -> Dict[str, Any]:
         """
         Get detailed response time analysis.
 
@@ -342,7 +342,7 @@ class NotificationAnalytics:
             raise
 
     async def get_aggregated_statistics(
-        self, granularity: TimeGranularity = TimeGranularity.DAILY, days: int = 30, channel: str | None = None
+        self, granularity: TimeGranularity = TimeGranularity.DAILY, days: int = 30, channel: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Get aggregated statistics by time period.
@@ -385,7 +385,7 @@ class NotificationAnalytics:
             raise
 
     async def get_trend_analysis(
-        self, metric: str = "success_rate", days: int = 30, channel: str | None = None
+        self, metric: str = "success_rate", days: int = 30, channel: Optional[str] = None
     ) -> TrendAnalysis:
         """
         Perform trend analysis on a specific metric.
@@ -537,7 +537,7 @@ class NotificationAnalytics:
     # Helper methods
 
     def _get_message_statistics(
-        self, repo, channel: str | None, user_id: str | None, cutoff_date: datetime
+        self, repo, channel: Optional[str], user_id: Optional[str], cutoff_date: datetime
     ) -> Dict[str, Any]:
         """Get message statistics from database."""
         try:
@@ -556,7 +556,7 @@ class NotificationAnalytics:
             return {"total_messages": 0, "by_status": {}}
 
     def _calculate_channel_rates(
-        self, repo, channel: str | None, cutoff_date: datetime
+        self, repo, channel: Optional[str], cutoff_date: datetime
     ) -> Dict[str, Dict[str, Any]]:
         """Calculate delivery rates per channel."""
         try:
@@ -598,7 +598,7 @@ class NotificationAnalytics:
                 "avg_response_time_ms": None,
             }
 
-    def _get_response_time_data(self, repo, channel: str | None, cutoff_date: datetime) -> List[int]:
+    def _get_response_time_data(self, repo, channel: Optional[str], cutoff_date: datetime) -> List[int]:
         """Get response time data from database."""
         try:
             response_times = repo.delivery_status.get_response_time_data(cutoff_date=cutoff_date, channel=channel)
@@ -618,7 +618,7 @@ class NotificationAnalytics:
         }
 
     def _get_time_series_data(
-        self, repo, granularity: TimeGranularity, cutoff_date: datetime, channel: str | None
+        self, repo, granularity: TimeGranularity, cutoff_date: datetime, channel: Optional[str]
     ) -> List[Dict[str, Any]]:
         """Get time series data for aggregation."""
         try:
@@ -667,7 +667,7 @@ class NotificationAnalytics:
         }
 
     def _get_metric_time_series(
-        self, repo, metric: str, cutoff_date: datetime, channel: str | None
+        self, repo, metric: str, cutoff_date: datetime, channel: Optional[str]
     ) -> List[TimeSeriesPoint]:
         """Get time series data for a specific metric."""
         # This would query metric data over time

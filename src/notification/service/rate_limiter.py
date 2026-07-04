@@ -11,7 +11,7 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.data.db.models.model_notification import MessagePriority
 from src.data.db.services.database_service import get_database_service
@@ -184,7 +184,7 @@ class RateLimiter:
         """Get rate limit configuration for channel."""
         return self._default_configs.get(channel, self._default_configs["default"])
 
-    async def _load_bucket_from_db(self, user_id: str, channel: str) -> TokenBucket | None:
+    async def _load_bucket_from_db(self, user_id: str, channel: str) -> Optional[TokenBucket]:
         """Load token bucket state from database."""
         try:
             db_service = get_database_service()
@@ -270,7 +270,7 @@ class RateLimiter:
 
     async def check_rate_limit(
         self, user_id: str, channel: str, priority: MessagePriority = MessagePriority.NORMAL, tokens: int = 1
-    ) -> Tuple[RateLimitResult, float | None]:
+    ) -> Tuple[RateLimitResult, Optional[float]]:
         """
         Check if request is within rate limits.
 
@@ -428,9 +428,9 @@ class RateLimiter:
 
     def get_violations(
         self,
-        user_id: str | None = None,
-        channel: str | None = None,
-        since: datetime | None = None,
+        user_id: Optional[str] = None,
+        channel: Optional[str] = None,
+        since: Optional[datetime] = None,
         limit: int = 100,
     ) -> List[RateLimitViolation]:
         """
@@ -464,7 +464,7 @@ class RateLimiter:
         return violations[:limit]
 
     def get_statistics(
-        self, user_id: str | None = None, channel: str | None = None, hours: int = 24
+        self, user_id: Optional[str] = None, channel: Optional[str] = None, hours: int = 24
     ) -> Dict[str, Any]:
         """
         Get rate limiting statistics.
@@ -544,7 +544,7 @@ class RateLimiter:
 
         return removed_count
 
-    async def reset_user_limits(self, user_id: str, channel: str | None = None) -> int:
+    async def reset_user_limits(self, user_id: str, channel: Optional[str] = None) -> int:
         """
         Reset rate limits for a user (admin function).
 

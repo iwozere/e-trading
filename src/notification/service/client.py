@@ -10,11 +10,9 @@ import sys
 from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
-import aiohttp
-
-# Add project root to path if needed (P3.3 Fix)
+import aiohttp# Add project root to path if needed (P3.3 Fix)
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -143,8 +141,8 @@ class NotificationServiceClient:
 
     def __init__(
         self,
-        service_url: str | None = None,
-        base_url: str | None = None,  # For backward compatibility
+        service_url: Optional[str] = None,
+        base_url: Optional[str] = None,  # For backward compatibility
         timeout: int = 30,
         max_retries: int = 3,
     ):
@@ -184,7 +182,7 @@ class NotificationServiceClient:
 
         self.timeout = aiohttp.ClientTimeout(total=timeout)
         self.max_retries = max_retries
-        self._session: aiohttp.ClientSession | None = None
+        self._session: aiohttp.Optional[ClientSession] = None
 
         if self.database_only_mode:
             _logger.info("NotificationServiceClient initialized for database-only mode")
@@ -256,14 +254,14 @@ class NotificationServiceClient:
         title: str,
         message: str,
         priority: Union[str, MessagePriority] = MessagePriority.NORMAL,
-        data: Dict[str, Any] | None = None,
+        data: Optional[Dict[str, Any]] = None,
         source: str = "trading_bot",
-        channels: List[str] | None = None,
-        attachments: dict | None = None,
-        email_receiver: str | None = None,
-        reply_to_message_id: int | None = None,
-        telegram_chat_id: int | None = None,
-        recipient_id: str | None = None,
+        channels: Optional[List[str]] = None,
+        attachments: Optional[dict] = None,
+        email_receiver: Optional[str] = None,
+        reply_to_message_id: Optional[int] = None,
+        telegram_chat_id: Optional[int] = None,
+        recipient_id: Optional[str] = None,
     ) -> bool:
         """
         Send a notification through the service.
@@ -443,10 +441,10 @@ class NotificationServiceClient:
         side: str,
         price: float,
         quantity: float,
-        entry_price: float | None = None,
-        pnl: float | None = None,
-        exit_type: str | None = None,
-        recipient_id: str | None = None,
+        entry_price: Optional[float] = None,
+        pnl: Optional[float] = None,
+        exit_type: Optional[str] = None,
+        recipient_id: Optional[str] = None,
     ) -> bool:
         """
         Send a trade notification.
@@ -501,7 +499,7 @@ class NotificationServiceClient:
         )
 
     async def send_error_notification(
-        self, error_message: str, source: str = "trading_bot", recipient_id: str | None = None
+        self, error_message: str, source: str = "trading_bot", recipient_id: Optional[str] = None
     ) -> bool:
         """
         Send an error notification.
@@ -525,7 +523,7 @@ class NotificationServiceClient:
             recipient_id=recipient_id,
         )
 
-    async def get_message_status(self, message_id: int) -> Dict[str, Any] | None:
+    async def get_message_status(self, message_id: int) -> Optional[Dict[str, Any]]:
         """
         Get message status and details.
 
@@ -563,10 +561,10 @@ class NotificationServiceClient:
 
     async def list_messages(
         self,
-        status: str | None = None,
-        priority: str | None = None,
-        recipient_id: str | None = None,
-        message_type: str | None = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        recipient_id: Optional[str] = None,
+        message_type: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
     ) -> List[Dict[str, Any]]:
@@ -639,8 +637,8 @@ class NotificationServiceClient:
         message: str,
         notification_type: Union[str, MessageType] = MessageType.SYSTEM,
         priority: Union[str, MessagePriority] = MessagePriority.HIGH,
-        data: Dict[str, Any] | None = None,
-        channels: List[str] | None = None,
+        data: Optional[Dict[str, Any]] = None,
+        channels: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Send notification to all admin users.
@@ -764,10 +762,10 @@ class NotificationServiceClient:
 
 
 # Global client instance for easy access
-_notification_client: NotificationServiceClient | None = None
+_notification_client: Optional[NotificationServiceClient] = None
 
 
-def get_notification_client() -> NotificationServiceClient | None:
+def get_notification_client() -> Optional[NotificationServiceClient]:
     """Get the global notification client instance."""
     return _notification_client
 

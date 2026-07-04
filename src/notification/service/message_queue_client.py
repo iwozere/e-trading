@@ -14,7 +14,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any, Dict, List
 
-from src.data.db.models.model_notification import Message, MessagePriority, MessageStatus
+from src, Optional.data.db.models.model_notification import Message, MessagePriority, MessageStatus
 from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
 
@@ -35,7 +35,7 @@ class MessageQueueClient:
         self._db_service = get_database_service()
 
     def get_pending_messages_for_channels(
-        self, channels: List[str], limit: int = 10, priority: MessagePriority | None = None
+        self, channels: List[str], limit: int = 10, priority: Optional[MessagePriority] = None
     ) -> List[Dict[str, Any]]:
         """
         Get pending messages that include any of the specified channels.
@@ -132,7 +132,7 @@ class MessageQueueClient:
             self._logger.exception("Failed to mark message %s as processing:", message_id)
             return False
 
-    def mark_message_delivered(self, message_id: int, delivery_metadata: Dict[str, Any] | None = None) -> bool:
+    def mark_message_delivered(self, message_id: int, delivery_metadata: Optional[Dict[str, Any]] = None) -> bool:
         """
         Mark a message as successfully delivered.
 
@@ -207,7 +207,7 @@ class MessageQueueClient:
             self._logger.exception("Failed to mark message %s as failed:", message_id)
             return False
 
-    def get_message(self, message_id: int) -> Message | None:
+    def get_message(self, message_id: int) -> Optional[Message]:
         """
         Get a message by ID.
 

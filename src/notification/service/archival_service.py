@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
@@ -92,7 +92,7 @@ class ArchivalStats:
 class MessageArchivalService:
     """Service for archiving and cleaning up notification messages."""
 
-    def __init__(self, session: Session, policy: ArchivalPolicy | None = None):
+    def __init__(self, session: Session, policy: Optional[ArchivalPolicy] = None):
         """
         Initialize the archival service.
 
@@ -114,7 +114,7 @@ class MessageArchivalService:
             self.policy.delete_after_days,
         )
 
-    def is_low_traffic_period(self, current_time: datetime | None = None) -> bool:
+    def is_low_traffic_period(self, current_time: Optional[datetime] = None) -> bool:
         """
         Check if current time is within low traffic period.
 
@@ -363,7 +363,7 @@ class MessageArchivalService:
             _logger.error("Error deleting archived file %s: %s", file_path, e)
             raise
 
-    def archive_messages_batch(self, current_time: datetime | None = None) -> ArchivalStats:
+    def archive_messages_batch(self, current_time: Optional[datetime] = None) -> ArchivalStats:
         """
         Archive a batch of old messages.
 
@@ -454,7 +454,7 @@ class MessageArchivalService:
 
         return stats
 
-    def cleanup_archived_messages_batch(self, current_time: datetime | None = None) -> ArchivalStats:
+    def cleanup_archived_messages_batch(self, current_time: Optional[datetime] = None) -> ArchivalStats:
         """
         Clean up old archived messages.
 
@@ -514,7 +514,7 @@ class MessageArchivalService:
 
         return stats
 
-    def cleanup_failed_messages_batch(self, current_time: datetime | None = None) -> ArchivalStats:
+    def cleanup_failed_messages_batch(self, current_time: Optional[datetime] = None) -> ArchivalStats:
         """
         Clean up old failed messages.
 
@@ -608,7 +608,7 @@ class MessageArchivalService:
             _logger.exception("Error deleting messages from database:")
             raise
 
-    def run_full_archival_cycle(self, current_time: datetime | None = None) -> Dict[str, ArchivalStats]:
+    def run_full_archival_cycle(self, current_time: Optional[datetime] = None) -> Dict[str, ArchivalStats]:
         """
         Run a complete archival cycle including archiving, cleanup, and failed message cleanup.
 
@@ -849,7 +849,7 @@ class RetentionPolicyManager:
 class ScheduledCleanupService:
     """Service for scheduled cleanup operations during low-traffic periods."""
 
-    def __init__(self, session: Session, policy_manager: RetentionPolicyManager | None = None):
+    def __init__(self, session: Session, policy_manager: Optional[RetentionPolicyManager] = None):
         """
         Initialize the scheduled cleanup service.
 
@@ -863,7 +863,7 @@ class ScheduledCleanupService:
         self._running = False
         self._cleanup_tasks = []
 
-    def is_cleanup_time(self, current_time: datetime | None = None) -> bool:
+    def is_cleanup_time(self, current_time: Optional[datetime] = None) -> bool:
         """
         Check if it's time to run cleanup operations.
 
@@ -898,7 +898,7 @@ class ScheduledCleanupService:
         self._cleanup_tasks.append(task_info)
         _logger.info("Scheduled cleanup task '%s' with %d hour interval", task_name, interval_hours)
 
-    def run_cleanup_cycle(self, current_time: datetime | None = None) -> Dict[str, Any]:
+    def run_cleanup_cycle(self, current_time: Optional[datetime] = None) -> Dict[str, Any]:
         """
         Run a cleanup cycle for all scheduled tasks.
 
@@ -1033,7 +1033,7 @@ class ScheduledCleanupService:
 # Utility functions for archival operations
 
 
-def create_archival_service(session: Session, policy: ArchivalPolicy | None = None) -> MessageArchivalService:
+def create_archival_service(session: Session, policy: Optional[ArchivalPolicy] = None) -> MessageArchivalService:
     """
     Create a message archival service instance.
 
@@ -1073,7 +1073,7 @@ def create_scheduled_cleanup_service(session: Session) -> ScheduledCleanupServic
     return ScheduledCleanupService(session)
 
 
-def run_manual_archival(session: Session, policy: ArchivalPolicy | None = None) -> Dict[str, ArchivalStats]:
+def run_manual_archival(session: Session, policy: Optional[ArchivalPolicy] = None) -> Dict[str, ArchivalStats]:
     """
     Run manual archival operation.
 

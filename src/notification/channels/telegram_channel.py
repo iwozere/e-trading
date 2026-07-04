@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from typing import Any, Dict, List
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramForbiddenError
+from aiogram, Optional.exceptions import TelegramAPIError, TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import BufferedInputFile, FSInputFile
 
 from src.notification.channels.base import (
@@ -102,7 +102,7 @@ class TelegramChannel(NotificationChannel):
         self.bot = Bot(token=bot_token)
 
     async def send_message(
-        self, recipient: str, content: MessageContent, message_id: str | None = None, priority: str = "NORMAL"
+        self, recipient: str, content: MessageContent, message_id: Optional[str] = None, priority: str = "NORMAL"
     ) -> DeliveryResult:
         """
         Send a message via Telegram.
@@ -233,8 +233,8 @@ class TelegramChannel(NotificationChannel):
         self,
         chat_id: str,
         content: MessageContent,
-        reply_to_message_id: int | None,
-        message_thread_id: int | None,
+        reply_to_message_id: Optional[int],
+        message_thread_id: Optional[int],
         start_time: datetime,
     ) -> DeliveryResult:
         """Send message with attachments."""
@@ -331,8 +331,8 @@ class TelegramChannel(NotificationChannel):
         photo_data: bytes,
         filename: str,
         caption: str,
-        reply_to_message_id: int | None,
-        message_thread_id: int | None,
+        reply_to_message_id: Optional[int],
+        message_thread_id: Optional[int],
     ):
         """Send photo with caption, handling long captions."""
         _logger.info(
@@ -374,8 +374,8 @@ class TelegramChannel(NotificationChannel):
         document_data: bytes,
         filename: str,
         caption: str,
-        reply_to_message_id: int | None,
-        message_thread_id: int | None,
+        reply_to_message_id: Optional[int],
+        message_thread_id: Optional[int],
     ):
         """Send document with caption."""
         if len(caption) > self.MAX_CAPTION_LENGTH:
@@ -407,8 +407,8 @@ class TelegramChannel(NotificationChannel):
         file_path: str,
         filename: str,
         caption: str,
-        reply_to_message_id: int | None,
-        message_thread_id: int | None,
+        reply_to_message_id: Optional[int],
+        message_thread_id: Optional[int],
     ):
         """Send file from path with caption."""
         if len(caption) > self.MAX_CAPTION_LENGTH:
@@ -461,8 +461,8 @@ class TelegramChannel(NotificationChannel):
         self,
         chat_id: str,
         text: str,
-        reply_to_message_id: int | None = None,
-        message_thread_id: int | None = None,
+        reply_to_message_id: Optional[int] = None,
+        message_thread_id: Optional[int] = None,
     ):
         """Send text message with automatic splitting for long messages."""
         if len(text) <= self.MAX_MESSAGE_LENGTH:

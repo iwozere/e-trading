@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from src.data.db.models.model_notification import MessagePriority
 from src.notification.logger import setup_logger
@@ -37,7 +37,7 @@ class PriorityQueueItem:
     priority: int
     timestamp: float
     message: QueuedMessage
-    sla_deadline: float | None = None
+    sla_deadline: Optional[float] = None
 
     def __lt__(self, other):
         """Compare items for priority queue ordering."""
@@ -64,7 +64,7 @@ class PriorityQueueItem:
         return time.time() > self.sla_deadline
 
     @property
-    def sla_remaining_seconds(self) -> float | None:
+    def sla_remaining_seconds(self) -> Optional[float]:
         """Get remaining seconds until SLA violation."""
         if self.sla_deadline is None:
             return None
@@ -221,7 +221,7 @@ class PriorityMessageHandler:
             self._logger.error("Failed to enqueue message %s: %s", message.id, e)
             return False
 
-    async def dequeue_next_message(self, timeout: float | None = None) -> QueuedMessage | None:
+    async def dequeue_next_message(self, timeout: Optional[float] = None) -> Optional[QueuedMessage]:
         """
         Dequeue the next highest priority message.
 
@@ -451,7 +451,7 @@ class PriorityMessageHandler:
         self._logger.warning("Cleared priority queue: %d messages removed", count)
         return count
 
-    def get_next_sla_deadline(self) -> Tuple[datetime, MessagePriority] | None:
+    def get_next_sla_deadline(self) -> Optional[Tuple[datetime, MessagePriority]]:
         """
         Get the next SLA deadline in the queue.
 

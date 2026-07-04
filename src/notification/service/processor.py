@@ -20,7 +20,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 
 from src.data.db.models.model_notification import Message, MessageStatus
 from src.notification.channels.base import MessageContent, channel_registry
@@ -39,9 +39,9 @@ class ProcessingResult:
 
     message_id: int
     success: bool
-    error_message: str | None = None
-    delivery_results: Dict[str, Any] | None = None
-    processing_time_ms: int | None = None
+    error_message: Optional[str] = None
+    delivery_results: Optional[Dict[str, Any]] = None
+    processing_time_ms: Optional[int] = None
 
 
 class MessageProcessor:

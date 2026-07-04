@@ -10,7 +10,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from src.notification.channels.base import DeliveryResult, DeliveryStatus, MessageContent, NotificationChannel
 from src.notification.logger import setup_logger
@@ -77,7 +77,7 @@ class FailedMessage:
     failure_details: str
     failed_at: datetime
     retry_count: int = 0
-    last_retry_at: datetime | None = None
+    last_retry_at: Optional[datetime] = None
     attempted_channels: Set[str] = field(default_factory=set)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -219,7 +219,7 @@ class FallbackManager:
         content: MessageContent,
         priority: str = "NORMAL",
         channel_instances: Dict[str, NotificationChannel] = None,
-    ) -> Tuple[bool, List[DeliveryResult], FailedMessage | None]:
+    ) -> Tuple[bool, List[DeliveryResult], Optional[FailedMessage]]:
         """
         Attempt message delivery with automatic fallback.
 
@@ -649,7 +649,7 @@ class FallbackManager:
         self,
         message_id: int,
         channel_instances: Dict[str, NotificationChannel],
-        force_channels: List[str] | None = None,
+        force_channels: Optional[List[str]] = None,
     ) -> Tuple[bool, str]:
         """
         Manually reprocess a message from the dead letter queue.

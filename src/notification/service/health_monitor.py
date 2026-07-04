@@ -12,7 +12,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Dict, List, Set
+from typing import Any, Callable, Dict, List, Optional, Set
 
 from src.notification.logger import setup_logger
 
@@ -68,14 +68,14 @@ class HealthThreshold:
     """Health threshold configuration for a metric."""
 
     metric_type: HealthCheckType
-    healthy_min: float | None = None
-    healthy_max: float | None = None
-    degraded_min: float | None = None
-    degraded_max: float | None = None
-    unhealthy_min: float | None = None
-    unhealthy_max: float | None = None
-    critical_min: float | None = None
-    critical_max: float | None = None
+    healthy_min: Optional[float] = None
+    healthy_max: Optional[float] = None
+    degraded_min: Optional[float] = None
+    degraded_max: Optional[float] = None
+    unhealthy_min: Optional[float] = None
+    unhealthy_max: Optional[float] = None
+    critical_min: Optional[float] = None
+    critical_max: Optional[float] = None
 
     def evaluate_status(self, value: float) -> HealthStatus:
         """Evaluate health status based on metric value."""
@@ -116,8 +116,8 @@ class ChannelHealthStatus:
     metrics: Dict[HealthCheckType, HealthMetric] = field(default_factory=dict)
     failure_count: int = 0
     consecutive_failures: int = 0
-    last_failure: datetime | None = None
-    last_success: datetime | None = None
+    last_failure: Optional[datetime] = None
+    last_success: Optional[datetime] = None
     uptime_percentage: float = 100.0
     average_response_time_ms: float = 0.0
     is_enabled: bool = True
@@ -378,7 +378,7 @@ class HealthMonitor:
             self._logger.error("Health check error for channel %s: %s", channel, e)
             self._stats["failed_checks"] += 1
 
-    async def _perform_single_check(self, channel: str, check_type: HealthCheckType) -> HealthMetric | None:
+    async def _perform_single_check(self, channel: str, check_type: HealthCheckType) -> Optional[HealthMetric]:
         """Perform a single health check."""
         start_time = time.time()
 
@@ -727,7 +727,7 @@ class HealthMonitor:
         """Add callback for health alerts."""
         self._health_alert_callbacks.append(callback)
 
-    def get_channel_status(self, channel: str) -> ChannelHealthStatus | None:
+    def get_channel_status(self, channel: str) -> Optional[ChannelHealthStatus]:
         """Get current health status for a channel."""
         with self._lock:
             return self._status.get(channel)
@@ -737,7 +737,7 @@ class HealthMonitor:
         with self._lock:
             return self._status.copy()
 
-    def get_channel_metrics(self, channel: str, metric_type: HealthCheckType | None = None) -> List[HealthMetric]:
+    def get_channel_metrics(self, channel: str, metric_type: Optional[HealthCheckType] = None) -> List[HealthMetric]:
         """Get metric history for a channel."""
         with self._lock:
             if channel not in self._metric_history:

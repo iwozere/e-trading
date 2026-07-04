@@ -12,7 +12,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List
 
-from src.data.db.models.model_notification import MessagePriority
+from src, Optional.data.db.models.model_notification import MessagePriority
 from src.notification.logger import setup_logger
 from src.notification.service.message_queue import QueuedMessage
 
@@ -61,11 +61,11 @@ class MessageBatch:
     channel: str
     messages: List[QueuedMessage] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
-    trigger: BatchTrigger | None = None
+    trigger: Optional[BatchTrigger] = None
 
     # Grouping criteria
-    recipient_id: str | None = None
-    message_type: str | None = None
+    recipient_id: Optional[str] = None
+    message_type: Optional[str] = None
 
     @property
     def size(self) -> int:
@@ -213,7 +213,7 @@ class BatchProcessor:
         self._logger = setup_logger(f"{__name__}.BatchProcessor")
 
         # Processing callback
-        self._batch_processor_callback: Callable | None = None
+        self._batch_processor_callback: Optional[Callable] = None
 
         # Default configurations
         self._default_configs = {
@@ -423,7 +423,7 @@ class BatchProcessor:
         # Continue processing pending messages
         await self._process_pending_messages(channel)
 
-    async def flush_channel(self, channel: str) -> MessageBatch | None:
+    async def flush_channel(self, channel: str) -> Optional[MessageBatch]:
         """
         Flush current batch for a channel immediately.
 

@@ -6,7 +6,7 @@ for the notification service to improve performance under high load.
 """
 
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from typing import cast as typing_cast
 
 from sqlalchemy import Index, and_, asc, cast, desc, func, inspect, or_, text
@@ -68,7 +68,7 @@ class OptimizedMessageRepository:
             _logger.exception("Failed to create message:")
             raise
 
-    def get_message(self, message_id: int) -> Message | None:
+    def get_message(self, message_id: int) -> Optional[Message]:
         """
         Get a message by ID.
 
@@ -82,10 +82,10 @@ class OptimizedMessageRepository:
 
     def list_messages(
         self,
-        status: MessageStatus | None = None,
-        priority: MessagePriority | None = None,
-        recipient_id: str | None = None,
-        message_type: str | None = None,
+        status: Optional[MessageStatus] = None,
+        priority: Optional[MessagePriority] = None,
+        recipient_id: Optional[str] = None,
+        message_type: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
         order_by: str = "created_at",
@@ -131,7 +131,7 @@ class OptimizedMessageRepository:
         return query.offset(offset).limit(limit).all()
 
     def get_pending_messages_with_lock(
-        self, limit: int = 10, lock_instance_id: str | None = None, channels: List[str] | None = None
+        self, limit: int = 10, lock_instance_id: Optional[str] = None, channels: Optional[List[str]] = None
     ) -> List[Message]:
         """
         Get pending messages with distributed locking for database-centric processing.
@@ -221,8 +221,8 @@ class OptimizedMessageRepository:
     def get_pending_messages(
         self,
         current_time: datetime,
-        priority: MessagePriority | None = None,
-        channels: List[str] | None = None,
+        priority: Optional[MessagePriority] = None,
+        channels: Optional[List[str]] = None,
         limit: int = 100,
     ) -> List[Message]:
         """
@@ -244,8 +244,8 @@ class OptimizedMessageRepository:
     def get_pending_messages_optimized(
         self,
         current_time: datetime,
-        priority: MessagePriority | None = None,
-        channels: List[str] | None = None,
+        priority: Optional[MessagePriority] = None,
+        channels: Optional[List[str]] = None,
         limit: int = 100,
     ) -> List[Message]:
         """
@@ -293,7 +293,7 @@ class OptimizedMessageRepository:
         )
 
     def bulk_update_message_status(
-        self, message_ids: List[int], status: MessageStatus, processed_at: datetime | None = None
+        self, message_ids: List[int], status: MessageStatus, processed_at: Optional[datetime] = None
     ) -> int:
         """
         Bulk update message status for better performance.
@@ -386,7 +386,7 @@ class OptimizedMessageRepository:
 
         return results
 
-    def update_message(self, message_id: int, update_data: Dict[str, Any]) -> Message | None:
+    def update_message(self, message_id: int, update_data: Dict[str, Any]) -> Optional[Message]:
         """
         Update a message.
 
@@ -412,7 +412,7 @@ class OptimizedMessageRepository:
             self.session.rollback()
             raise
 
-    def get_message(self, message_id: int) -> Message | None:
+    def get_message(self, message_id: int) -> Optional[Message]:
         """
         Get a message by ID.
 
@@ -658,11 +658,11 @@ class OptimizedDeliveryStatusRepository:
 
     def get_delivery_history_optimized(
         self,
-        user_id: str | None = None,
-        channel: str | None = None,
-        status: DeliveryStatus | None = None,
-        start_date: datetime | None = None,
-        end_date: datetime | None = None,
+        user_id: Optional[str] = None,
+        channel: Optional[str] = None,
+        status: Optional[DeliveryStatus] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
         limit: int = 100,
         offset: int = 0,
     ) -> Tuple[List[MessageDeliveryStatus], int]:
@@ -722,7 +722,7 @@ class OptimizedDeliveryStatusRepository:
         return deliveries, total_count
 
     def get_channel_performance_metrics(
-        self, start_date: datetime, end_date: datetime, channels: List[str] | None = None
+        self, start_date: datetime, end_date: datetime, channels: Optional[List[str]] = None
     ) -> Dict[str, Dict[str, Any]]:
         """
         Optimized query for channel performance metrics.
@@ -792,7 +792,7 @@ class OptimizedDeliveryStatusRepository:
 
     def get_delivery_statistics(
         self,
-        channel: str | None = None,
+        channel: Optional[str] = None,
         days: int = 30,
     ) -> Dict[str, Any]:
         """
@@ -836,7 +836,7 @@ class OptimizedDeliveryStatusRepository:
             total_count += row.cnt
 
         # Average response time for delivered messages only
-        avg_response_time: float | None = None
+        avg_response_time: Optional[float] = None
         delivered = (
             base_query.filter(
                 and_(

@@ -11,7 +11,7 @@ import inspect
 import pkgutil
 import sys
 from pathlib import Path
-from typing import Dict, List, Type
+from typing import Dict, List, Optional, Type
 
 from src.notification.channels.base import NotificationChannel, channel_registry
 from src.notification.logger import setup_logger
@@ -71,7 +71,7 @@ class PluginLoader:
 
         return plugins
 
-    def load_plugin_module(self, module_name: str) -> Type[NotificationChannel] | None:
+    def load_plugin_module(self, module_name: str) -> Optional[Type[NotificationChannel]]:
         """
         Load a plugin from a module.
 
@@ -100,7 +100,7 @@ class PluginLoader:
             _logger.error("Error loading plugin from module %s: %s", module_name, e)
             return None
 
-    def load_plugin_from_file(self, file_path: str, channel_name: str) -> Type[NotificationChannel] | None:
+    def load_plugin_from_file(self, file_path: str, channel_name: str) -> Optional[Type[NotificationChannel]]:
         """
         Load a plugin from a Python file.
 

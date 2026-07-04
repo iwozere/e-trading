@@ -6,9 +6,9 @@ Handles environment variables, database settings, and service configuration.
 """
 
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, Field, List
 
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Optional, field_validator
 from pydantic_settings import BaseSettings
 
 try:
@@ -163,7 +163,7 @@ class NotificationServiceConfig(BaseSettings):
     channels: ChannelConfig = Field(default_factory=ChannelConfig)
 
     # Security
-    api_key: str | None = Field(
+    api_key: Optional[str] = Field(
         default=None, env="NOTIFICATION_API_KEY", description="API key for service authentication"
     )
     allowed_origins: List[str] = Field(
@@ -217,7 +217,7 @@ class NotificationServiceConfig(BaseSettings):
 
     model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=False)
 
-    def get_channel_config(self, channel_name: str) -> Dict[str, Any] | None:
+    def get_channel_config(self, channel_name: str) -> Optional[Dict[str, Any]]:
         """
         Get configuration for a specific channel.
 

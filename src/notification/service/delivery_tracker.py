@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Dict, List
 
-from src.data.db.models.model_notification import MessagePriority
+from src, Optional.data.db.models.model_notification import MessagePriority
 from src.notification.logger import setup_logger
 from src.notification.service.message_queue import QueuedMessage
 
@@ -50,10 +50,10 @@ class ChannelDeliveryAttempt:
     channel: str
     status: DeliveryStatus
     started_at: datetime
-    completed_at: datetime | None = None
-    response_time_ms: int | None = None
-    external_id: str | None = None
-    error_message: str | None = None
+    completed_at: Optional[datetime] = None
+    response_time_ms: Optional[int] = None
+    external_id: Optional[str] = None
+    error_message: Optional[str] = None
     retry_count: int = 0
 
     def __post_init__(self):
@@ -62,7 +62,7 @@ class ChannelDeliveryAttempt:
             self.attempt_id = str(uuid.uuid4())
 
     @property
-    def duration_ms(self) -> int | None:
+    def duration_ms(self) -> Optional[int]:
         """Get attempt duration in milliseconds."""
         if self.completed_at and self.started_at:
             delta = self.completed_at - self.started_at
@@ -107,7 +107,7 @@ class MessageDeliveryStatus:
 
     # Overall status
     overall_status: DeliveryResult = DeliveryResult.PENDING
-    completed_at: datetime | None = None
+    completed_at: Optional[datetime] = None
 
     # Callbacks for status updates
     status_callbacks: List[Callable] = field(default_factory=list)
@@ -121,7 +121,7 @@ class MessageDeliveryStatus:
         self.channel_attempts[channel].append(attempt)
         self._update_overall_status()
 
-    def get_latest_attempt(self, channel: str) -> ChannelDeliveryAttempt | None:
+    def get_latest_attempt(self, channel: str) -> Optional[ChannelDeliveryAttempt]:
         """Get the latest delivery attempt for a channel."""
         attempts = self.channel_attempts.get(channel, [])
         return attempts[-1] if attempts else None
@@ -181,7 +181,7 @@ class MessageDeliveryStatus:
             # Still have pending channels
             self.overall_status = DeliveryResult.PENDING
 
-    def get_total_response_time_ms(self) -> int | None:
+    def get_total_response_time_ms(self) -> Optional[int]:
         """Get total response time across all successful deliveries."""
         total_time = 0
         successful_count = 0
@@ -194,7 +194,7 @@ class MessageDeliveryStatus:
 
         return total_time if successful_count > 0 else None
 
-    def get_average_response_time_ms(self) -> float | None:
+    def get_average_response_time_ms(self) -> Optional[float]:
         """Get average response time across all successful deliveries."""
         total_time = 0
         successful_count = 0
@@ -260,8 +260,8 @@ class DeliveryStats:
     failed_attempts: int = 0
 
     avg_response_time_ms: float = 0.0
-    min_response_time_ms: int | None = None
-    max_response_time_ms: int | None = None
+    min_response_time_ms: Optional[int] = None
+    max_response_time_ms: Optional[int] = None
 
     # Per-channel statistics
     channel_stats: Dict[str, Dict[str, Any]] = field(default_factory=dict)
@@ -395,7 +395,7 @@ class DeliveryTracker:
         self._cleanup_interval_hours = 1
 
         # Background tasks
-        self._cleanup_task: asyncio.Task | None = None
+        self._cleanup_task: asyncio.Optional[Task] = None
         self._running = False
 
     async def start_tracking(self, message: QueuedMessage) -> MessageDeliveryStatus:
@@ -427,7 +427,7 @@ class DeliveryTracker:
 
         return delivery_status
 
-    async def start_channel_attempt(self, message_id: int, channel: str) -> ChannelDeliveryAttempt | None:
+    async def start_channel_attempt(self, message_id: int, channel: str) -> Optional[ChannelDeliveryAttempt]:
         """
         Start a delivery attempt for a specific channel.
 
@@ -482,9 +482,9 @@ class DeliveryTracker:
         self,
         attempt_id: str,
         status: DeliveryStatus,
-        response_time_ms: int | None = None,
-        external_id: str | None = None,
-        error_message: str | None = None,
+        response_time_ms: Optional[int] = None,
+        external_id: Optional[str] = None,
+        error_message: Optional[str] = None,
     ) -> bool:
         """
         Complete a delivery attempt.
@@ -552,7 +552,7 @@ class DeliveryTracker:
 
         return True
 
-    async def get_delivery_status(self, message_id: int) -> MessageDeliveryStatus | None:
+    async def get_delivery_status(self, message_id: int) -> Optional[MessageDeliveryStatus]:
         """
         Get delivery status for a message.
 
@@ -573,10 +573,10 @@ class DeliveryTracker:
 
     async def get_delivery_history(
         self,
-        recipient_id: str | None = None,
-        channel: str | None = None,
-        status: DeliveryResult | None = None,
-        since: datetime | None = None,
+        recipient_id: Optional[str] = None,
+        channel: Optional[str] = None,
+        status: Optional[DeliveryResult] = None,
+        since: Optional[datetime] = None,
         limit: int = 100,
     ) -> List[MessageDeliveryStatus]:
         """
@@ -618,7 +618,7 @@ class DeliveryTracker:
         results.sort(key=lambda d: d.created_at, reverse=True)
         return results[:limit]
 
-    def get_statistics(self, since: datetime | None = None, channel: str | None = None) -> Dict[str, Any]:
+    def get_statistics(self, since: Optional[datetime] = None, channel: Optional[str] = None) -> Dict[str, Any]:
         """
         Get delivery statistics.
 
@@ -704,7 +704,7 @@ class DeliveryTracker:
         except Exception as e:
             self._logger.error("Failed to save delivery attempt %s: %s", attempt.attempt_id, e)
 
-    async def _load_delivery_status(self, message_id: int) -> MessageDeliveryStatus | None:
+    async def _load_delivery_status(self, message_id: int) -> Optional[MessageDeliveryStatus]:
         """Load delivery status from database."""
         try:
             # For now, return None since we don't have database persistence

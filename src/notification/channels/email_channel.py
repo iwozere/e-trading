@@ -19,7 +19,7 @@ from typing import Any, Dict, List
 
 import aiosmtplib
 
-from src.data.db.services.users_service import users_service
+from src, Optional.data.db.services.users_service import users_service
 from src.notification.channels.base import (
     ChannelHealth,
     ChannelHealthStatus,
@@ -114,7 +114,7 @@ class EmailChannel(NotificationChannel):
             self.config["max_attachment_size_mb"] = 25  # Common email limit
 
     async def send_message(
-        self, recipient: str, content: MessageContent, message_id: str | None = None, priority: str = "NORMAL"
+        self, recipient: str, content: MessageContent, message_id: Optional[str] = None, priority: str = "NORMAL"
     ) -> DeliveryResult:
         """
         Send an email message.
@@ -257,8 +257,8 @@ class EmailChannel(NotificationChannel):
         content: MessageContent,
         cc_emails: List[str],
         bcc_emails: List[str],
-        reply_to: str | None,
-        message_id: str | None,
+        reply_to: Optional[str],
+        message_id: Optional[str],
     ) -> MIMEMultipart:
         """Create email message with attachments."""
         # Create message
@@ -567,7 +567,7 @@ class EmailChannel(NotificationChannel):
 
         return supported_features.get(feature, False)
 
-    def get_max_message_length(self) -> int | None:
+    def get_max_message_length(self) -> Optional[int]:
         """
         Get maximum message length for Email.
 

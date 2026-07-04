@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Dict, List
 
-from sqlalchemy import event, text
+from sqlalchemy import event, Optional, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
@@ -32,7 +32,7 @@ class QueryMetrics:
     min_time: float = float("inf")
     max_time: float = 0.0
     avg_time: float = 0.0
-    last_executed: datetime | None = None
+    last_executed: Optional[datetime] = None
     execution_times: List[float] = field(default_factory=list)
 
     def add_execution(self, execution_time: float):

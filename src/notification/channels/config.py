@@ -7,7 +7,7 @@ Provides type-safe configuration handling and validation.
 
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 from src.notification.logger import setup_logger
 
@@ -17,7 +17,7 @@ _logger = setup_logger(__name__)
 class ConfigValidationError(Exception):
     """Exception raised when configuration validation fails."""
 
-    def __init__(self, message: str, field: str | None = None, value: Any = None):
+    def __init__(self, message: str, field: Optional[str] = None, value: Any = None):
         """
         Initialize configuration validation error.
 
@@ -37,14 +37,14 @@ class ValidationRule:
 
     field_name: str
     required: bool = True
-    field_type: Type | None = None
-    min_length: int | None = None
-    max_length: int | None = None
-    min_value: Union[int, float] | None = None
-    max_value: Union[int, float] | None = None
-    pattern: str | None = None
-    allowed_values: List[Any] | None = None
-    custom_validator: callable | None = None
+    field_type: Optional[Type] = None
+    min_length: Optional[int] = None
+    max_length: Optional[int] = None
+    min_value: Optional[Union[int, float]] = None
+    max_value: Optional[Union[int, float]] = None
+    pattern: Optional[str] = None
+    allowed_values: Optional[List[Any]] = None
+    custom_validator: Optional[Callable] = None
     description: str = ""
 
     def validate(self, value: Any) -> None:

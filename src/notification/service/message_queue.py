@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List
 
-from src.data.db.models.model_notification import Message, MessagePriority, MessageStatus
+from src, Optional.data.db.models.model_notification import Message, MessagePriority, MessageStatus
 from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
 
@@ -34,10 +34,10 @@ class QueuedMessage:
     message_type: str
     priority: MessagePriority
     channels: List[str]
-    recipient_id: str | None
-    template_name: str | None
+    recipient_id: Optional[str]
+    template_name: Optional[str]
     content: Dict[str, Any]
-    metadata: Dict[str, Any] | None
+    metadata: Optional[Dict[str, Any]]
     scheduled_for: datetime
     retry_count: int
     max_retries: int
@@ -124,7 +124,7 @@ class MessageQueue:
         self,
         message_data: Dict[str, Any],
         priority: MessagePriority = MessagePriority.NORMAL,
-        scheduled_for: datetime | None = None,
+        scheduled_for: Optional[datetime] = None,
     ) -> int:
         """
         Enqueue a message for processing.
@@ -171,7 +171,7 @@ class MessageQueue:
             raise
 
     def dequeue(
-        self, limit: int = 10, priority_filter: MessagePriority | None = None, channels: List[str] | None = None
+        self, limit: int = 10, priority_filter: Optional[MessagePriority] = None, channels: Optional[List[str]] = None
     ) -> List[QueuedMessage]:
         """
         Dequeue messages ready for processing.
@@ -215,7 +215,7 @@ class MessageQueue:
             self._logger.exception("Failed to dequeue messages:")
             raise
 
-    def dequeue_high_priority(self, limit: int = 5, channels: List[str] | None = None) -> List[QueuedMessage]:
+    def dequeue_high_priority(self, limit: int = 5, channels: Optional[List[str]] = None) -> List[QueuedMessage]:
         """
         Dequeue only high priority messages (HIGH and CRITICAL).
 
