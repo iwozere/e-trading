@@ -34,7 +34,7 @@ def calculate_technicals_talib(df: pd.DataFrame) -> Technicals:
 
     # Check for sufficient data
     if len(close) < 50:
-        _logger.warning("Insufficient data for indicator calculations: %d points (need at least 50)", len(close))
+        _logger.debug("Insufficient data for indicator calculations: %d points (need at least 50)", len(close))
 
     # Calculate all indicators using TALib
     try:

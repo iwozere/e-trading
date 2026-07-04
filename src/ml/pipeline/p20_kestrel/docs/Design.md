@@ -90,3 +90,162 @@ k20_*          ─→  weekly_report      ─→  Notification push
 5. **Repository pattern**: No SQLAlchemy Session objects outside repos.py.
 6. **Budget-aware LLM**: Monthly $ cap with graceful degradation tiers.
 7. **EDGAR via downloader**: Uses existing EdgarDownloader; Form 4 fetched for date not per-ticker.
+
+---
+
+## Notification System
+
+### Channel
+
+All notifications are delivered exclusively via **Telegram** to every user whose
+`is_admin = True` in the `telegram_users` table.
+
+The shared helper `notify.send_push(title, message)` wraps
+`NotificationServiceClient.send_to_admins()` and is **fail-soft** — a delivery
+failure never raises an exception or aborts the job.
+
+**Delivery path:**
+
+```
+Job code
+  └─ send_push() / send_to_admins()
+       ├─ HTTP POST → Main API (localhost:5003)     [primary]
+       └─ direct INSERT → notifications table       [fallback if API down]
+            └─ Telegram bot worker picks up and delivers
+```
+
+---
+
+### Event 1 — Daily Digest
+
+| Property | Value |
+|---|---|
+| **Trigger** | Scheduled job `digest_send` at 07:30 Europe/Zurich on weekdays |
+| **File** | `reporting/daily_digest.py` → `jobs/run_digest_send.py` |
+| **Title** | `Kestrel Daily Digest — YYYY-MM-DD` |
+| **Priority** | HIGH |
+| **Audit trail** | `k20_job_runs` + `results/p20_kestrel/digest_YYYY-MM-DD.txt` |
+
+**Content sections (in order):**
+
+```
+=== Kestrel Daily Digest — 2026-07-04 ===
+
+Regime: RISK-ON | SPY/200DMA: above | VIX 14.2
+
+Open Positions:
+  AAPL (SleeveA): P&L +3.1% | stop -8.0% away | t1=195
+  ...
+
+Catalysts next 5d:
+  2026-07-07 — NVDA earnings [active]
+  ...
+
+New Candidates:          ← top 3 by score, state = 'candidate'
+  TSLA (Sleeve B): score 82 | bullish | LLM thesis excerpt (80 chars)
+  ...
+
+Data Health: OK          ← or warnings if REVISIONS_FEED_AVAILABLE=False
+
+=== End of digest ===
+```
+
+**Data sources:** `k20_signals` (SPY/VIX close, price_vs_200dma),
+`k20_positions`, `k20_catalysts`, `k20_watchlist`.
+
+---
+
+### Event 2 — Weekly Report
+
+| Property | Value |
+|---|---|
+| **Trigger** | Scheduled job `weekly_report` at Sunday 18:00 |
+| **File** | `reporting/weekly_report.py` → `jobs/run_weekly_report.py` |
+| **Title** | `Kestrel Weekly Report — YYYY-MM-DD` |
+| **Priority** | HIGH |
+| **Audit trail** | `k20_job_runs` + `results/p20_kestrel/weekly_YYYY-MM-DD.txt` |
+
+**Content sections (in order):**
+
+```
+=== Kestrel Weekly Report — week of 2026-06-28 to 2026-07-04 ===
+
+⚠ Interim mode active — ...    ← only if REVISIONS_FEED_AVAILABLE=False
+
+Open Positions: 3
+
+Funnel: candidate: 12 | monitor: 5 | watchlist: 8
+
+Catalyst Calendar (14d):
+  2026-07-07 — NVDA earnings [active]
+  ...
+
+LLM spend: $12.40 / $50 (25% of monthly budget)
+
+=== End of weekly report ===
+```
+
+**Data sources:** `k20_positions`, `k20_watchlist`, `k20_catalysts`,
+`k20_llm_runs` (spend aggregation).
+
+---
+
+### Event 3 — Risk Alert (per position)
+
+| Property | Value |
+|---|---|
+| **Trigger** | Per open position during `run_risk_check.py` (daily, after market close) |
+| **File** | `risk/risk_checker.py` via `notify.send_push()` |
+| **Title** | `Kestrel risk: {TICKER} {trigger}` |
+| **Message** | `{TICKER} @ {close:.2f} — {action}` |
+| **Priority** | HIGH |
+| **Audit trail** | `k20_alerts_log` row with `channel="push"` |
+
+**Trigger conditions** (defined by `risk_checker.py`):
+
+- Stop-loss hit: `close ≤ stop_px`
+- Target hit: `close ≥ t1_px`
+- Other risk conditions as defined in the risk evaluation logic
+
+**Deduplication:** An `(ticker, trigger)` pair is only fired **once per job run**.
+The in-memory set `already_fired` suppresses duplicates within the same execution;
+`k20_alerts_log` provides cross-run history for manual review.
+
+---
+
+### Event 4 — Catalyst Countdown (T-10 / T-3)
+
+| Property | Value |
+|---|---|
+| **Trigger** | Per active catalyst during `run_catalyst_sync.py` (daily) |
+| **File** | `ingest/calendar_sync.py` via `notify.send_push()` |
+| **Title** | `Kestrel: {TICKER} {event_type} in {N}d` |
+| **Message** | `T-{N} countdown: {TICKER} {event_type} on {event_date}` |
+| **Priority** | HIGH |
+| **Audit trail** | `k20_alerts_log` row with `channel="push"` |
+
+**Trigger thresholds:**
+
+| Days until event | Alert fired |
+|---|---|
+| 10 | T-10 countdown (once, idempotent) |
+| 3 | T-3 countdown (once, idempotent) |
+
+**Idempotency:** Each threshold fires **at most once** per catalyst via a DB
+flag column. If the event date changes, the flag resets and the countdown restarts.
+
+---
+
+### Notification Helper (`notify.py`)
+
+```python
+# src/ml/pipeline/p20_kestrel/notify.py
+def send_push(title: str, message: str) -> bool:
+    """Fail-soft wrapper — never raises, returns False on failure."""
+    client = NotificationServiceClient()
+    asyncio.run(client.send_to_admins(title=title, message=message))
+```
+
+- Used by: `risk_checker.py`, `calendar_sync.py`
+- `daily_digest.py` and `weekly_report.py` call `send_to_admins()` directly
+  (they need the `sent: bool` return value for their result dict).

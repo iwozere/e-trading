@@ -7,10 +7,12 @@ and upserts signal rows into k20_signals.
 
 from __future__ import annotations
 
+import functools
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
@@ -33,6 +35,7 @@ _logger = setup_logger(__name__)
 
 _JOB_NAME = "ingest_eod"
 _OHLCV_LOOKBACK_DAYS = 730  # 2 years
+_EOD_COMPUTE_WORKERS = 4    # parallel TALib compute threads (matches Pi 4 core count)
 
 
 def _compute_signals_for_ticker(
@@ -94,9 +97,9 @@ def _compute_signals_for_ticker(
 
         # Momentum returns
         if len(close) >= 63:
-            _signal("return_3m", float(close.pct_change(63).iloc[-1]))
+            _signal("return_3m", float(close.pct_change(63, fill_method=None).iloc[-1]))
         if len(close) >= 126:
-            _signal("return_6m", float(close.pct_change(126).iloc[-1]))
+            _signal("return_6m", float(close.pct_change(126, fill_method=None).iloc[-1]))
 
         # SMA-50 slope: rising if recent 5-day mean > prior 5-day mean
         if ta.sma_fast is not None and len(close) >= 60:
@@ -111,9 +114,55 @@ def _compute_signals_for_ticker(
     return rows
 
 
+def _process_ticker(
+    ticker: str,
+    *,
+    ohlcv_batch: Dict[str, pd.DataFrame],
+    dm: DataManager,
+    start_dt: datetime,
+    end_dt: datetime,
+    target_date: date,
+) -> Tuple[str, List[Dict[str, Any]], bool]:
+    """
+    Resolve OHLCV (batch hit or individual fallback) and compute signals.
+
+    Designed as a module-level function so it can be called from a
+    ThreadPoolExecutor worker thread.  All inputs are either read-only
+    or thread-safe (DataManager cache reads hold no write lock).
+
+    Args:
+        ticker: Ticker symbol to process.
+        ohlcv_batch: Pre-fetched batch keyed by ticker (may be empty dict).
+        dm: Shared DataManager instance.
+        start_dt: Start of the OHLCV window.
+        end_dt: End of the OHLCV window.
+        target_date: Signal date to attach to computed rows.
+
+    Returns:
+        (ticker, signal_rows, ok) — ok is False when no data or on error.
+    """
+    try:
+        ohlcv = ohlcv_batch.get(ticker)
+        if ohlcv is None or ohlcv.empty:
+            # Batch missed this ticker (e.g. delisted mid-batch); try individually.
+            ohlcv = dm.get_ohlcv(ticker, "1d", start_date=start_dt, end_date=end_dt)
+        if ohlcv is None or ohlcv.empty:
+            _logger.debug("No OHLCV data for %s", ticker)
+            return ticker, [], False
+        rows = _compute_signals_for_ticker(ticker, ohlcv, target_date)
+        return ticker, rows, True
+    except Exception:
+        _logger.exception("Failed to process ticker %s", ticker)
+        return ticker, [], False
+
+
 def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
     """
     Ingest EOD data for all active universe tickers into k20_signals.
+
+    Phase 1 — batch OHLCV download  (single yf.download call, fast)
+    Phase 2 — parallel signal compute (ThreadPoolExecutor, _EOD_COMPUTE_WORKERS)
+    Phase 3 — bulk DB upsert          (single call, fast)
 
     Args:
         as_of_date: Date to ingest. Defaults to yesterday.
@@ -137,27 +186,36 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
     tickers_failed = 0
 
     try:
+        # ── Phase 1: batch OHLCV download ────────────────────────────────
         try:
             ohlcv_batch = dm.get_ohlcv_batch(tickers, "1d", start_date=start_dt, end_date=end_dt)
         except Exception:
             _logger.exception("get_ohlcv_batch failed — falling back to per-ticker fetch")
             ohlcv_batch = {}
 
-        for ticker in tickers:
-            try:
-                ohlcv = ohlcv_batch.get(ticker) if ohlcv_batch else None
-                if ohlcv is None or ohlcv.empty:
-                    ohlcv = dm.get_ohlcv(ticker, "1d", start_date=start_dt, end_date=end_dt)
-                if ohlcv is None or ohlcv.empty:
-                    _logger.debug("No OHLCV data for %s", ticker)
-                    continue
-                sig_rows = _compute_signals_for_ticker(ticker, ohlcv, target_date)
-                all_signal_rows.extend(sig_rows)
-                tickers_ok += 1
-            except Exception:
-                _logger.exception("Failed to process ticker %s", ticker)
-                tickers_failed += 1
+        # ── Phase 2: parallel TALib compute ──────────────────────────────
+        worker = functools.partial(
+            _process_ticker,
+            ohlcv_batch=ohlcv_batch,
+            dm=dm,
+            start_dt=start_dt,
+            end_dt=end_dt,
+            target_date=target_date,
+        )
 
+        _logger.info(
+            "Computing signals for %d tickers using %d workers",
+            len(tickers), _EOD_COMPUTE_WORKERS,
+        )
+        with ThreadPoolExecutor(max_workers=_EOD_COMPUTE_WORKERS) as pool:
+            for _ticker, rows, ok in pool.map(worker, tickers):
+                if ok:
+                    all_signal_rows.extend(rows)
+                    tickers_ok += 1
+                else:
+                    tickers_failed += 1
+
+        # ── Phase 3: bulk DB upsert ───────────────────────────────────────
         upserted = upsert_signals(all_signal_rows)
         _logger.info(
             "EOD ingest done: %d tickers ok, %d failed, %d signals upserted",

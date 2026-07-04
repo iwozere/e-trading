@@ -324,7 +324,8 @@ class YahooDataDownloader(BaseDataDownloader):
                     start=start_date,
                     end=end_date,
                     interval=interval,
-                    group_by='ticker'
+                    group_by='ticker',
+                    auto_adjust=True,   # explicit: use split/dividend-adjusted prices
                 )
             except Exception as e:
                 if "YFTzMissingError" in str(type(e)):
