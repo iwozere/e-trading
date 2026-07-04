@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import List, Dict, Optional, Any
 
 import pandas as pd
-import requests
+from curl_cffi import requests as curl_requests
 import yfinance as yf
 from yfinance.exceptions import YFRateLimitError
 
@@ -38,45 +38,43 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 # ---------------------------------------------------------------------------
-# User-Agent rotation helpers
+# curl_cffi browser-impersonation session rotation
 # ---------------------------------------------------------------------------
-# A pool of realistic browser User-Agent strings.  Each thread keeps its own
-# persistent requests.Session (thread-local) so HTTP keep-alive is preserved
-# while each session has a randomly assigned UA that differs from its peers.
-# This makes concurrent requests look like different browser clients to Yahoo.
-_UA_POOL = [
-    # Chrome 125 – Windows
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-    # Chrome 124 – macOS
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    # Firefox 126 – Linux
-    "Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
-    # Safari 17 – macOS
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15",
-    # Edge 125 – Windows
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0",
-    # Chrome 123 – Android
-    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.118 Mobile Safari/537.36",
-    # Firefox 125 – Windows
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
-    # Chrome 122 – Ubuntu
-    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+# yfinance 1.x requires a curl_cffi session (not requests.Session) because
+# Yahoo Finance validates TLS fingerprints.  We rotate through different
+# browser impersonation targets so each OS thread presents a distinct TLS
+# fingerprint, making concurrent requests look like different real browsers.
+# curl_cffi replicates the full JA3/JA4 fingerprint of the target browser,
+# so this is far more effective than simply varying the User-Agent header.
+_BROWSER_IMPERSONATION_POOL = [
+    "chrome136",
+    "chrome131",
+    "chrome124",
+    "chrome120",
+    "chrome116",
+    "edge101",
+    "firefox135",
+    "firefox133",
+    "safari184",
+    "safari180",
+    "safari17_0",
 ]
 
 _thread_local = threading.local()
 
 
-def _get_rotated_session() -> requests.Session:
+def _get_rotated_session() -> curl_requests.Session:
     """
-    Return a thread-local requests.Session with a randomly assigned User-Agent.
+    Return a thread-local curl_cffi Session with a randomly chosen browser impersonation.
 
-    Each OS thread gets exactly one session so HTTP keep-alive is reused within
-    a thread, but each thread presents a different User-Agent to Yahoo Finance.
+    Each OS thread gets exactly one session (so TCP keep-alive is reused within
+    a thread), but each thread impersonates a different browser version — giving
+    each concurrent worker a distinct TLS fingerprint as seen by Yahoo Finance.
     """
     if not hasattr(_thread_local, "session"):
-        session = requests.Session()
-        session.headers.update({"User-Agent": random.choice(_UA_POOL)})
-        _thread_local.session = session
+        target = random.choice(_BROWSER_IMPERSONATION_POOL)
+        _thread_local.session = curl_requests.Session(impersonate=target)
+        _logger.debug("Created curl_cffi session impersonating: %s", target)
     return _thread_local.session
 
 # Redirect yfinance cache away from the user home directory so the app works
