@@ -97,7 +97,7 @@ def _parse_mcap(raw: Any) -> Optional[float]:
         return None
 
 
-_FUNDAMENTALS_WORKERS = 8      # concurrent Yahoo fetch threads
+_FUNDAMENTALS_WORKERS = 1      # concurrent Yahoo fetch threads
 _PROGRESS_LOG_EVERY = 500      # progress log interval (tickers)
 
 
