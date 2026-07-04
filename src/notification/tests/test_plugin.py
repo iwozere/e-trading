@@ -5,15 +5,19 @@ A simple test implementation of the notification channel interface.
 Used for testing and as an example for plugin development.
 """
 
-from typing import Dict, Any
-from datetime import datetime, timezone
 import asyncio
+from datetime import UTC, datetime
+from typing import Any, Dict
 
 from src.notification.channels.base import (
-    NotificationChannel, DeliveryResult, ChannelHealth, MessageContent,
-    DeliveryStatus, ChannelHealthStatus
+    ChannelHealth,
+    ChannelHealthStatus,
+    DeliveryResult,
+    DeliveryStatus,
+    MessageContent,
+    NotificationChannel,
 )
-from src.notification.channels.config import ConfigValidator, CommonValidationRules
+from src.notification.channels.config import CommonValidationRules, ConfigValidator
 
 
 class TestChannel(NotificationChannel):
@@ -42,15 +46,11 @@ class TestChannel(NotificationChannel):
             int,
             description="Simulated delivery delay in milliseconds",
             min_value=0,
-            max_value=5000
+            max_value=5000,
         )
 
         validator.optional_field(
-            "failure_rate",
-            float,
-            description="Simulated failure rate (0.0 to 1.0)",
-            min_value=0.0,
-            max_value=1.0
+            "failure_rate", float, description="Simulated failure rate (0.0 to 1.0)", min_value=0.0, max_value=1.0
         )
 
         validator.optional_field(
@@ -58,7 +58,7 @@ class TestChannel(NotificationChannel):
             int,
             description="Maximum message length for testing splitting",
             min_value=10,
-            max_value=10000
+            max_value=10000,
         )
 
         validator.add_rule(CommonValidationRules.timeout_seconds())
@@ -70,11 +70,7 @@ class TestChannel(NotificationChannel):
         self.config.update(validated_config)
 
     async def send_message(
-        self,
-        recipient: str,
-        content: MessageContent,
-        message_id: str = None,
-        priority: str = "NORMAL"
+        self, recipient: str, content: MessageContent, message_id: str = None, priority: str = "NORMAL"
     ) -> DeliveryResult:
         """
         Simulate sending a message.
@@ -88,7 +84,7 @@ class TestChannel(NotificationChannel):
         Returns:
             DeliveryResult with simulated delivery status
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         # Simulate processing delay
         delay_ms = self.config.get("simulate_delay_ms", 100)
@@ -97,6 +93,7 @@ class TestChannel(NotificationChannel):
 
         # Simulate failure rate
         import random
+
         failure_rate = self.config.get("failure_rate", 0.0)
 
         if random.random() < failure_rate:
@@ -104,23 +101,23 @@ class TestChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message="Simulated delivery failure",
-                response_time_ms=delay_ms
+                response_time_ms=delay_ms,
             )
 
         # Simulate successful delivery
-        response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+        response_time = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
 
         return DeliveryResult(
             success=True,
             status=DeliveryStatus.DELIVERED,
-            external_id=f"test_{message_id or 'unknown'}_{int(datetime.now(timezone.utc).timestamp())}",
+            external_id=f"test_{message_id or 'unknown'}_{int(datetime.now(UTC).timestamp())}",
             response_time_ms=response_time,
             metadata={
                 "recipient": recipient,
                 "message_length": len(content.text),
                 "priority": priority,
-                "simulated": True
-            }
+                "simulated": True,
+            },
         )
 
     async def check_health(self) -> ChannelHealth:
@@ -132,12 +129,9 @@ class TestChannel(NotificationChannel):
         """
         return ChannelHealth(
             status=ChannelHealthStatus.HEALTHY,
-            last_check=datetime.now(timezone.utc),
+            last_check=datetime.now(UTC),
             response_time_ms=self.config.get("simulate_delay_ms", 100),
-            metadata={
-                "simulated": True,
-                "config": self.config
-            }
+            metadata={"simulated": True, "config": self.config},
         )
 
     def get_rate_limit(self) -> int:
@@ -165,7 +159,7 @@ class TestChannel(NotificationChannel):
             "replies": False,
             "formatting": True,
             "splitting": True,
-            "priority": True
+            "priority": True,
         }
 
         return supported_features.get(feature, False)
@@ -196,5 +190,5 @@ class TestChannel(NotificationChannel):
             subject=content.subject,
             html=f"<p><strong>[TEST]</strong> {content.html}</p>" if content.html else None,
             attachments=content.attachments,
-            metadata=content.metadata
+            metadata=content.metadata,
         )

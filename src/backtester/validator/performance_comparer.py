@@ -20,13 +20,14 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-import json
 import csv
-from datetime import datetime as dt
-from typing import Dict, List, Tuple
+import json
 from collections import defaultdict
+from datetime import datetime as dt
+from typing import Dict, List
 
 import pandas as pd
+
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -58,19 +59,19 @@ def load_all_results(base_dir: str) -> Dict[str, Dict]:
         _logger.info("Loading results from %s", year_path)
         year_results = {}
 
-        json_files = [f for f in os.listdir(year_path) if f.endswith('.json')]
+        json_files = [f for f in os.listdir(year_path) if f.endswith(".json")]
 
         for json_file in json_files:
             try:
                 file_path = os.path.join(year_path, json_file)
-                with open(file_path, 'r') as f:
+                with open(file_path) as f:
                     result = json.load(f)
 
                 # Extract strategy key
-                symbol = result.get('symbol', '')
-                timeframe = result.get('timeframe', '')
-                entry_name = result.get('best_params', {}).get('entry_logic', {}).get('name', '')
-                exit_name = result.get('best_params', {}).get('exit_logic', {}).get('name', '')
+                symbol = result.get("symbol", "")
+                timeframe = result.get("timeframe", "")
+                entry_name = result.get("best_params", {}).get("entry_logic", {}).get("name", "")
+                exit_name = result.get("best_params", {}).get("exit_logic", {}).get("name", "")
 
                 if not all([symbol, timeframe, entry_name, exit_name]):
                     _logger.warning("Skipping %s: missing key fields", json_file)
@@ -107,7 +108,7 @@ def safe_float(value, default: float = 0.0) -> float:
     Returns:
         Float value or default
     """
-    if value is None or value == '' or value == 'None' or value == 'null':
+    if value is None or value == "" or value == "None" or value == "null":
         return default
 
     try:
@@ -127,7 +128,7 @@ def safe_int(value, default: int = 0) -> int:
     Returns:
         Int value or default
     """
-    if value is None or value == '' or value == 'None' or value == 'null':
+    if value is None or value == "" or value == "None" or value == "null":
         return default
 
     try:
@@ -148,54 +149,58 @@ def calculate_degradation_metrics(is_result: dict, oos_result: dict) -> dict:
         dict: Calculated metrics
     """
     # Extract IS metrics
-    is_profit = safe_float(is_result.get('total_profit_with_commission'))
-    is_trades = safe_int(is_result.get('total_trades'))
-    is_analyzers = is_result.get('analyzers', {})
+    is_profit = safe_float(is_result.get("total_profit_with_commission"))
+    is_trades = safe_int(is_result.get("total_trades"))
+    is_analyzers = is_result.get("analyzers", {})
 
     # Extract OOS metrics
-    oos_profit = safe_float(oos_result.get('total_profit_with_commission'))
-    oos_trades = safe_int(oos_result.get('total_trades'))
-    oos_analyzers = oos_result.get('analyzers', {})
+    oos_profit = safe_float(oos_result.get("total_profit_with_commission"))
+    oos_trades = safe_int(oos_result.get("total_trades"))
+    oos_analyzers = oos_result.get("analyzers", {})
 
     # Profit degradation
     profit_degradation_ratio = safe_divide(oos_profit, is_profit, default=0.0)
     profit_degradation_pct = ((is_profit - oos_profit) / abs(is_profit) * 100) if is_profit != 0 else 0.0
 
     # Win rate
-    is_winrate_data = is_analyzers.get('winrate', {})
-    is_win_rate = safe_float(is_winrate_data.get('winrate') if isinstance(is_winrate_data, dict) else is_winrate_data)
+    is_winrate_data = is_analyzers.get("winrate", {})
+    is_win_rate = safe_float(is_winrate_data.get("winrate") if isinstance(is_winrate_data, dict) else is_winrate_data)
 
-    oos_winrate_data = oos_analyzers.get('winrate', {})
-    oos_win_rate = safe_float(oos_winrate_data.get('winrate') if isinstance(oos_winrate_data, dict) else oos_winrate_data)
+    oos_winrate_data = oos_analyzers.get("winrate", {})
+    oos_win_rate = safe_float(
+        oos_winrate_data.get("winrate") if isinstance(oos_winrate_data, dict) else oos_winrate_data
+    )
 
     win_rate_degradation = abs(is_win_rate - oos_win_rate)
 
     # Sharpe ratio
-    is_sharpe_data = is_analyzers.get('sharpe', {})
-    is_sharpe = safe_float(is_sharpe_data.get('sharperatio') if isinstance(is_sharpe_data, dict) else is_sharpe_data)
+    is_sharpe_data = is_analyzers.get("sharpe", {})
+    is_sharpe = safe_float(is_sharpe_data.get("sharperatio") if isinstance(is_sharpe_data, dict) else is_sharpe_data)
 
-    oos_sharpe_data = oos_analyzers.get('sharpe', {})
-    oos_sharpe = safe_float(oos_sharpe_data.get('sharperatio') if isinstance(oos_sharpe_data, dict) else oos_sharpe_data)
+    oos_sharpe_data = oos_analyzers.get("sharpe", {})
+    oos_sharpe = safe_float(
+        oos_sharpe_data.get("sharperatio") if isinstance(oos_sharpe_data, dict) else oos_sharpe_data
+    )
 
     sharpe_degradation = safe_divide(is_sharpe - oos_sharpe, abs(is_sharpe), default=0.0) if is_sharpe != 0 else 0.0
 
     # Drawdown
-    is_drawdown_data = is_analyzers.get('drawdown', {})
-    is_max_data = is_drawdown_data.get('max', {}) if isinstance(is_drawdown_data, dict) else {}
-    is_max_dd = safe_float(is_max_data.get('drawdown') if isinstance(is_max_data, dict) else is_max_data)
+    is_drawdown_data = is_analyzers.get("drawdown", {})
+    is_max_data = is_drawdown_data.get("max", {}) if isinstance(is_drawdown_data, dict) else {}
+    is_max_dd = safe_float(is_max_data.get("drawdown") if isinstance(is_max_data, dict) else is_max_data)
 
-    oos_drawdown_data = oos_analyzers.get('drawdown', {})
-    oos_max_data = oos_drawdown_data.get('max', {}) if isinstance(oos_drawdown_data, dict) else {}
-    oos_max_dd = safe_float(oos_max_data.get('drawdown') if isinstance(oos_max_data, dict) else oos_max_data)
+    oos_drawdown_data = oos_analyzers.get("drawdown", {})
+    oos_max_data = oos_drawdown_data.get("max", {}) if isinstance(oos_drawdown_data, dict) else {}
+    oos_max_dd = safe_float(oos_max_data.get("drawdown") if isinstance(oos_max_data, dict) else oos_max_data)
 
     drawdown_increase = oos_max_dd - is_max_dd
 
     # Profit factor
-    is_pf_data = is_analyzers.get('profit_factor', {})
-    is_profit_factor = safe_float(is_pf_data.get('profit_factor') if isinstance(is_pf_data, dict) else is_pf_data)
+    is_pf_data = is_analyzers.get("profit_factor", {})
+    is_profit_factor = safe_float(is_pf_data.get("profit_factor") if isinstance(is_pf_data, dict) else is_pf_data)
 
-    oos_pf_data = oos_analyzers.get('profit_factor', {})
-    oos_profit_factor = safe_float(oos_pf_data.get('profit_factor') if isinstance(oos_pf_data, dict) else oos_pf_data)
+    oos_pf_data = oos_analyzers.get("profit_factor", {})
+    oos_profit_factor = safe_float(oos_pf_data.get("profit_factor") if isinstance(oos_pf_data, dict) else oos_pf_data)
 
     # Trade count consistency
     trade_count_ratio = safe_divide(oos_trades, is_trades, default=0.0)
@@ -207,36 +212,36 @@ def calculate_degradation_metrics(is_result: dict, oos_result: dict) -> dict:
     win_rate_inconsistency = win_rate_degradation / 100.0  # Normalize to 0-1
 
     overfitting_score = (
-        0.4 * profit_penalty +
-        0.3 * min(sharpe_penalty, 1.0) +
-        0.2 * min(trade_inconsistency, 1.0) +
-        0.1 * min(win_rate_inconsistency, 1.0)
+        0.4 * profit_penalty
+        + 0.3 * min(sharpe_penalty, 1.0)
+        + 0.2 * min(trade_inconsistency, 1.0)
+        + 0.1 * min(win_rate_inconsistency, 1.0)
     )
 
     # Robustness score (inverse of overfitting)
     robustness_score = 1.0 - overfitting_score
 
     return {
-        'is_total_profit': is_profit,
-        'oos_total_profit': oos_profit,
-        'profit_degradation_ratio': profit_degradation_ratio,
-        'profit_degradation_pct': profit_degradation_pct,
-        'is_trade_count': is_trades,
-        'oos_trade_count': oos_trades,
-        'trade_count_ratio': trade_count_ratio,
-        'is_win_rate': is_win_rate,
-        'oos_win_rate': oos_win_rate,
-        'win_rate_degradation': win_rate_degradation,
-        'is_sharpe_ratio': is_sharpe,
-        'oos_sharpe_ratio': oos_sharpe,
-        'sharpe_degradation': sharpe_degradation,
-        'is_max_drawdown': is_max_dd,
-        'oos_max_drawdown': oos_max_dd,
-        'drawdown_increase': drawdown_increase,
-        'is_profit_factor': is_profit_factor,
-        'oos_profit_factor': oos_profit_factor,
-        'overfitting_score': overfitting_score,
-        'robustness_score': robustness_score,
+        "is_total_profit": is_profit,
+        "oos_total_profit": oos_profit,
+        "profit_degradation_ratio": profit_degradation_ratio,
+        "profit_degradation_pct": profit_degradation_pct,
+        "is_trade_count": is_trades,
+        "oos_trade_count": oos_trades,
+        "trade_count_ratio": trade_count_ratio,
+        "is_win_rate": is_win_rate,
+        "oos_win_rate": oos_win_rate,
+        "win_rate_degradation": win_rate_degradation,
+        "is_sharpe_ratio": is_sharpe,
+        "oos_sharpe_ratio": oos_sharpe,
+        "sharpe_degradation": sharpe_degradation,
+        "is_max_drawdown": is_max_dd,
+        "oos_max_drawdown": oos_max_dd,
+        "drawdown_increase": drawdown_increase,
+        "is_profit_factor": is_profit_factor,
+        "oos_profit_factor": oos_profit_factor,
+        "overfitting_score": overfitting_score,
+        "robustness_score": robustness_score,
     }
 
 
@@ -254,40 +259,40 @@ def generate_comparison_csv(comparisons: List[dict], output_path: str):
 
     # Define CSV columns
     fieldnames = [
-        'strategy_id',
-        'window_name',
-        'symbol',
-        'timeframe',
-        'entry_mixin',
-        'exit_mixin',
-        'is_period',
-        'oos_period',
-        'is_total_profit',
-        'oos_total_profit',
-        'profit_degradation_ratio',
-        'profit_degradation_pct',
-        'is_trade_count',
-        'oos_trade_count',
-        'trade_count_ratio',
-        'is_win_rate',
-        'oos_win_rate',
-        'win_rate_degradation',
-        'is_sharpe_ratio',
-        'oos_sharpe_ratio',
-        'sharpe_degradation',
-        'is_max_drawdown',
-        'oos_max_drawdown',
-        'drawdown_increase',
-        'is_profit_factor',
-        'oos_profit_factor',
-        'overfitting_score',
-        'robustness_score',
+        "strategy_id",
+        "window_name",
+        "symbol",
+        "timeframe",
+        "entry_mixin",
+        "exit_mixin",
+        "is_period",
+        "oos_period",
+        "is_total_profit",
+        "oos_total_profit",
+        "profit_degradation_ratio",
+        "profit_degradation_pct",
+        "is_trade_count",
+        "oos_trade_count",
+        "trade_count_ratio",
+        "is_win_rate",
+        "oos_win_rate",
+        "win_rate_degradation",
+        "is_sharpe_ratio",
+        "oos_sharpe_ratio",
+        "sharpe_degradation",
+        "is_max_drawdown",
+        "oos_max_drawdown",
+        "drawdown_increase",
+        "is_profit_factor",
+        "oos_profit_factor",
+        "overfitting_score",
+        "robustness_score",
     ]
 
     # Create output directory if needed
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    with open(output_path, 'w', newline='') as csvfile:
+    with open(output_path, "w", newline="") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
@@ -312,80 +317,80 @@ def generate_degradation_json(comparisons: List[dict], output_path: str):
 
     # Calculate summary statistics
     total_strategies = len(comparisons)
-    positive_oos = sum(1 for c in comparisons if c['oos_total_profit'] > 0)
+    positive_oos = sum(1 for c in comparisons if c["oos_total_profit"] > 0)
     negative_oos = total_strategies - positive_oos
 
-    avg_profit_degradation = sum(c['profit_degradation_ratio'] for c in comparisons) / total_strategies
-    avg_sharpe_degradation = sum(c['sharpe_degradation'] for c in comparisons) / total_strategies
-    avg_robustness = sum(c['robustness_score'] for c in comparisons) / total_strategies
+    avg_profit_degradation = sum(c["profit_degradation_ratio"] for c in comparisons) / total_strategies
+    avg_sharpe_degradation = sum(c["sharpe_degradation"] for c in comparisons) / total_strategies
+    avg_robustness = sum(c["robustness_score"] for c in comparisons) / total_strategies
 
-    high_robustness = sum(1 for c in comparisons if c['robustness_score'] > 0.7)
+    high_robustness = sum(1 for c in comparisons if c["robustness_score"] > 0.7)
 
     # Group by window
     by_window = defaultdict(list)
     for c in comparisons:
-        by_window[c['window_name']].append(c)
+        by_window[c["window_name"]].append(c)
 
     window_stats = {}
     for window_name, window_comps in by_window.items():
-        avg_deg = sum(c['profit_degradation_ratio'] for c in window_comps) / len(window_comps)
-        sorted_by_oos = sorted(window_comps, key=lambda x: x['oos_total_profit'], reverse=True)
+        avg_deg = sum(c["profit_degradation_ratio"] for c in window_comps) / len(window_comps)
+        sorted_by_oos = sorted(window_comps, key=lambda x: x["oos_total_profit"], reverse=True)
 
         window_stats[window_name] = {
-            'avg_profit_degradation': round(avg_deg, 4),
-            'total_strategies': len(window_comps),
-            'best_strategy': sorted_by_oos[0]['strategy_id'] if sorted_by_oos else None,
-            'best_oos_profit': round(sorted_by_oos[0]['oos_total_profit'], 2) if sorted_by_oos else 0,
-            'worst_strategy': sorted_by_oos[-1]['strategy_id'] if sorted_by_oos else None,
-            'worst_oos_profit': round(sorted_by_oos[-1]['oos_total_profit'], 2) if sorted_by_oos else 0,
+            "avg_profit_degradation": round(avg_deg, 4),
+            "total_strategies": len(window_comps),
+            "best_strategy": sorted_by_oos[0]["strategy_id"] if sorted_by_oos else None,
+            "best_oos_profit": round(sorted_by_oos[0]["oos_total_profit"], 2) if sorted_by_oos else 0,
+            "worst_strategy": sorted_by_oos[-1]["strategy_id"] if sorted_by_oos else None,
+            "worst_oos_profit": round(sorted_by_oos[-1]["oos_total_profit"], 2) if sorted_by_oos else 0,
         }
 
     # Group by symbol
     by_symbol = defaultdict(list)
     for c in comparisons:
-        by_symbol[c['symbol']].append(c)
+        by_symbol[c["symbol"]].append(c)
 
     symbol_stats = {}
     for symbol, symbol_comps in by_symbol.items():
-        avg_deg = sum(c['profit_degradation_ratio'] for c in symbol_comps) / len(symbol_comps)
+        avg_deg = sum(c["profit_degradation_ratio"] for c in symbol_comps) / len(symbol_comps)
         symbol_stats[symbol] = {
-            'avg_profit_degradation': round(avg_deg, 4),
-            'total_strategies': len(symbol_comps),
+            "avg_profit_degradation": round(avg_deg, 4),
+            "total_strategies": len(symbol_comps),
         }
 
     # Group by timeframe
     by_timeframe = defaultdict(list)
     for c in comparisons:
-        by_timeframe[c['timeframe']].append(c)
+        by_timeframe[c["timeframe"]].append(c)
 
     timeframe_stats = {}
     for timeframe, tf_comps in by_timeframe.items():
-        avg_deg = sum(c['profit_degradation_ratio'] for c in tf_comps) / len(tf_comps)
+        avg_deg = sum(c["profit_degradation_ratio"] for c in tf_comps) / len(tf_comps)
         timeframe_stats[timeframe] = {
-            'avg_profit_degradation': round(avg_deg, 4),
-            'total_strategies': len(tf_comps),
+            "avg_profit_degradation": round(avg_deg, 4),
+            "total_strategies": len(tf_comps),
         }
 
     # Top strategies by OOS profit
-    sorted_by_oos_profit = sorted(comparisons, key=lambda x: x['oos_total_profit'], reverse=True)[:10]
+    sorted_by_oos_profit = sorted(comparisons, key=lambda x: x["oos_total_profit"], reverse=True)[:10]
     top_strategies = [
         {
-            'strategy_id': c['strategy_id'],
-            'oos_total_profit': round(c['oos_total_profit'], 2),
-            'degradation_ratio': round(c['profit_degradation_ratio'], 4),
-            'robustness_score': round(c['robustness_score'], 4),
+            "strategy_id": c["strategy_id"],
+            "oos_total_profit": round(c["oos_total_profit"], 2),
+            "degradation_ratio": round(c["profit_degradation_ratio"], 4),
+            "robustness_score": round(c["robustness_score"], 4),
         }
         for c in sorted_by_oos_profit
     ]
 
     # Most robust strategies
-    sorted_by_robustness = sorted(comparisons, key=lambda x: x['robustness_score'], reverse=True)[:10]
+    sorted_by_robustness = sorted(comparisons, key=lambda x: x["robustness_score"], reverse=True)[:10]
     most_robust = [
         {
-            'strategy_id': c['strategy_id'],
-            'degradation_ratio': round(c['profit_degradation_ratio'], 4),
-            'robustness_score': round(c['robustness_score'], 4),
-            'oos_total_profit': round(c['oos_total_profit'], 2),
+            "strategy_id": c["strategy_id"],
+            "degradation_ratio": round(c["profit_degradation_ratio"], 4),
+            "robustness_score": round(c["robustness_score"], 4),
+            "oos_total_profit": round(c["oos_total_profit"], 2),
         }
         for c in sorted_by_robustness
     ]
@@ -393,45 +398,49 @@ def generate_degradation_json(comparisons: List[dict], output_path: str):
     # Warning flags
     warning_flags = []
     for c in comparisons:
-        if c['profit_degradation_ratio'] < 0.5 and c['is_total_profit'] > 0:
-            warning_flags.append({
-                'strategy_id': c['strategy_id'],
-                'issue': 'Profit degradation > 50%',
-                'degradation_ratio': round(c['profit_degradation_ratio'], 4),
-                'recommendation': 'Likely overfit, avoid using',
-            })
-        elif c['oos_total_profit'] < 0 and c['is_total_profit'] > 0:
-            warning_flags.append({
-                'strategy_id': c['strategy_id'],
-                'issue': 'OOS losses when IS profitable',
-                'oos_total_profit': round(c['oos_total_profit'], 2),
-                'recommendation': 'Strategy failed OOS test',
-            })
+        if c["profit_degradation_ratio"] < 0.5 and c["is_total_profit"] > 0:
+            warning_flags.append(
+                {
+                    "strategy_id": c["strategy_id"],
+                    "issue": "Profit degradation > 50%",
+                    "degradation_ratio": round(c["profit_degradation_ratio"], 4),
+                    "recommendation": "Likely overfit, avoid using",
+                }
+            )
+        elif c["oos_total_profit"] < 0 and c["is_total_profit"] > 0:
+            warning_flags.append(
+                {
+                    "strategy_id": c["strategy_id"],
+                    "issue": "OOS losses when IS profitable",
+                    "oos_total_profit": round(c["oos_total_profit"], 2),
+                    "recommendation": "Strategy failed OOS test",
+                }
+            )
 
     # Construct final JSON
     analysis = {
-        'summary': {
-            'total_strategies': total_strategies,
-            'total_windows': len(by_window),
-            'avg_profit_degradation_ratio': round(avg_profit_degradation, 4),
-            'avg_sharpe_degradation': round(avg_sharpe_degradation, 4),
-            'avg_robustness_score': round(avg_robustness, 4),
-            'strategies_with_positive_oos': positive_oos,
-            'strategies_with_negative_oos': negative_oos,
-            'high_robustness_strategies': high_robustness,
+        "summary": {
+            "total_strategies": total_strategies,
+            "total_windows": len(by_window),
+            "avg_profit_degradation_ratio": round(avg_profit_degradation, 4),
+            "avg_sharpe_degradation": round(avg_sharpe_degradation, 4),
+            "avg_robustness_score": round(avg_robustness, 4),
+            "strategies_with_positive_oos": positive_oos,
+            "strategies_with_negative_oos": negative_oos,
+            "high_robustness_strategies": high_robustness,
         },
-        'by_window': window_stats,
-        'by_symbol': symbol_stats,
-        'by_timeframe': timeframe_stats,
-        'top_strategies_by_oos_profit': top_strategies,
-        'most_robust_strategies': most_robust,
-        'warning_flags': warning_flags,
+        "by_window": window_stats,
+        "by_symbol": symbol_stats,
+        "by_timeframe": timeframe_stats,
+        "top_strategies_by_oos_profit": top_strategies,
+        "most_robust_strategies": most_robust,
+        "warning_flags": warning_flags,
     }
 
     # Create output directory if needed
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         json.dump(analysis, f, indent=4)
 
     _logger.info("Saved degradation analysis JSON to %s", output_path)
@@ -452,21 +461,21 @@ def generate_robustness_summary_csv(comparisons: List[dict], output_path: str):
     # Group by strategy (across all windows)
     by_strategy = defaultdict(list)
     for c in comparisons:
-        strategy_id = c['strategy_id']
+        strategy_id = c["strategy_id"]
         by_strategy[strategy_id].append(c)
 
     # Calculate aggregated metrics
     summary_rows = []
     for strategy_id, strategy_comps in by_strategy.items():
         windows_tested = len(strategy_comps)
-        avg_oos_profit = sum(c['oos_total_profit'] for c in strategy_comps) / windows_tested
-        std_oos_profit = pd.Series([c['oos_total_profit'] for c in strategy_comps]).std()
+        avg_oos_profit = sum(c["oos_total_profit"] for c in strategy_comps) / windows_tested
+        std_oos_profit = pd.Series([c["oos_total_profit"] for c in strategy_comps]).std()
 
-        avg_degradation = sum(c['profit_degradation_ratio'] for c in strategy_comps) / windows_tested
-        min_degradation = min(c['profit_degradation_ratio'] for c in strategy_comps)
-        max_degradation = max(c['profit_degradation_ratio'] for c in strategy_comps)
+        avg_degradation = sum(c["profit_degradation_ratio"] for c in strategy_comps) / windows_tested
+        min_degradation = min(c["profit_degradation_ratio"] for c in strategy_comps)
+        max_degradation = max(c["profit_degradation_ratio"] for c in strategy_comps)
 
-        avg_robustness = sum(c['robustness_score'] for c in strategy_comps) / windows_tested
+        avg_robustness = sum(c["robustness_score"] for c in strategy_comps) / windows_tested
 
         # Consistency score (lower std_oos_profit relative to avg is better)
         consistency_score = 1.0 - min(std_oos_profit / (abs(avg_oos_profit) + 1.0), 1.0)
@@ -489,48 +498,50 @@ def generate_robustness_summary_csv(comparisons: List[dict], output_path: str):
         # Extract metadata from first comparison
         first_comp = strategy_comps[0]
 
-        summary_rows.append({
-            'strategy_id': strategy_id,
-            'symbol': first_comp['symbol'],
-            'timeframe': first_comp['timeframe'],
-            'entry_mixin': first_comp['entry_mixin'],
-            'exit_mixin': first_comp['exit_mixin'],
-            'windows_tested': windows_tested,
-            'avg_oos_profit': round(avg_oos_profit, 2),
-            'std_oos_profit': round(std_oos_profit, 2),
-            'avg_degradation_ratio': round(avg_degradation, 4),
-            'min_degradation_ratio': round(min_degradation, 4),
-            'max_degradation_ratio': round(max_degradation, 4),
-            'consistency_score': round(consistency_score, 4),
-            'overall_robustness_score': round(overall_robustness, 4),
-            'recommendation': recommendation,
-        })
+        summary_rows.append(
+            {
+                "strategy_id": strategy_id,
+                "symbol": first_comp["symbol"],
+                "timeframe": first_comp["timeframe"],
+                "entry_mixin": first_comp["entry_mixin"],
+                "exit_mixin": first_comp["exit_mixin"],
+                "windows_tested": windows_tested,
+                "avg_oos_profit": round(avg_oos_profit, 2),
+                "std_oos_profit": round(std_oos_profit, 2),
+                "avg_degradation_ratio": round(avg_degradation, 4),
+                "min_degradation_ratio": round(min_degradation, 4),
+                "max_degradation_ratio": round(max_degradation, 4),
+                "consistency_score": round(consistency_score, 4),
+                "overall_robustness_score": round(overall_robustness, 4),
+                "recommendation": recommendation,
+            }
+        )
 
     # Sort by overall robustness (descending)
-    summary_rows.sort(key=lambda x: x['overall_robustness_score'], reverse=True)
+    summary_rows.sort(key=lambda x: x["overall_robustness_score"], reverse=True)
 
     # Write CSV
     fieldnames = [
-        'strategy_id',
-        'symbol',
-        'timeframe',
-        'entry_mixin',
-        'exit_mixin',
-        'windows_tested',
-        'avg_oos_profit',
-        'std_oos_profit',
-        'avg_degradation_ratio',
-        'min_degradation_ratio',
-        'max_degradation_ratio',
-        'consistency_score',
-        'overall_robustness_score',
-        'recommendation',
+        "strategy_id",
+        "symbol",
+        "timeframe",
+        "entry_mixin",
+        "exit_mixin",
+        "windows_tested",
+        "avg_oos_profit",
+        "std_oos_profit",
+        "avg_degradation_ratio",
+        "min_degradation_ratio",
+        "max_degradation_ratio",
+        "consistency_score",
+        "overall_robustness_score",
+        "recommendation",
     ]
 
     # Create output directory if needed
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    with open(output_path, 'w', newline='') as csvfile:
+    with open(output_path, "w", newline="") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         for row in summary_rows:
@@ -564,7 +575,7 @@ def main():
 
         for strategy_key, oos_result in oos_results.items():
             # Determine which IS year this OOS result corresponds to
-            trained_on_year = oos_result.get('trained_on_year')
+            trained_on_year = oos_result.get("trained_on_year")
 
             if not trained_on_year:
                 _logger.warning("OOS result for %s missing 'trained_on_year', skipping", strategy_key)
@@ -588,15 +599,15 @@ def main():
 
             # Build comparison record
             comparison = {
-                'strategy_id': strategy_key,
-                'window_name': oos_result.get('window_name', ''),
-                'symbol': oos_result.get('symbol', ''),
-                'timeframe': oos_result.get('timeframe', ''),
-                'entry_mixin': oos_result.get('best_params', {}).get('entry_logic', {}).get('name', ''),
-                'exit_mixin': oos_result.get('best_params', {}).get('exit_logic', {}).get('name', ''),
-                'is_period': trained_on_year,
-                'oos_period': oos_year,
-                **metrics
+                "strategy_id": strategy_key,
+                "window_name": oos_result.get("window_name", ""),
+                "symbol": oos_result.get("symbol", ""),
+                "timeframe": oos_result.get("timeframe", ""),
+                "entry_mixin": oos_result.get("best_params", {}).get("entry_logic", {}).get("name", ""),
+                "exit_mixin": oos_result.get("best_params", {}).get("exit_logic", {}).get("name", ""),
+                "is_period": trained_on_year,
+                "oos_period": oos_year,
+                **metrics,
             }
 
             comparisons.append(comparison)
@@ -604,9 +615,9 @@ def main():
             _logger.debug(
                 "  Compared: %s | IS Profit: %.2f | OOS Profit: %.2f | Degradation: %.2f%%",
                 strategy_key,
-                metrics['is_total_profit'],
-                metrics['oos_total_profit'],
-                metrics['profit_degradation_pct']
+                metrics["is_total_profit"],
+                metrics["oos_total_profit"],
+                metrics["profit_degradation_pct"],
             )
 
     # Generate reports

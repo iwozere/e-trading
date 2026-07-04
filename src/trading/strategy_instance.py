@@ -8,31 +8,36 @@ broker connection, data feed, and Backtrader engine.
 import asyncio
 import threading
 import time
-from datetime import datetime, timezone
-from typing import Dict, Optional, Any
+from datetime import UTC, datetime
+from typing import Any, Dict
 
+from src.data.db.services.trading_service import trading_service
+from src.data.feed.data_feed_factory import DataFeedFactory
+from src.notification.logger import setup_logger
+from src.notification.service.client import MessagePriority, MessageType, NotificationServiceClient
+from src.trading.base_trading_bot import BaseTradingBot, _run_async, is_file_based_simulation_config
 from src.trading.broker.backtrader_availability import BACKTRADER_AVAILABLE
 from src.trading.broker.broker_factory import get_broker
 from src.trading.strategy_handler import strategy_handler
-from src.data.feed.data_feed_factory import DataFeedFactory
-from src.trading.base_trading_bot import BaseTradingBot, _run_async, is_file_based_simulation_config
-from src.notification.logger import setup_logger
-from src.data.db.services.trading_service import trading_service
-from src.notification.service.client import NotificationServiceClient, MessageType, MessagePriority
 from src.trading.trading_notification_recipient import get_trading_bot_notification_recipient
 
 _logger = setup_logger(__name__)
 
+
 class StrategyInstance:
     """Represents a single strategy instance with its own configuration and broker."""
 
-    def __init__(self, instance_id: str, config: Dict[str, Any],
-                 notification_client: Optional[NotificationServiceClient] = None,
-                 trade_repository: Any = None):
+    def __init__(
+        self,
+        instance_id: str,
+        config: Dict[str, Any],
+        notification_client: NotificationServiceClient | None = None,
+        trade_repository: Any = None,
+    ):
         """Initialize strategy instance."""
         self.instance_id = instance_id
         self.config = config
-        self.name = config.get('name', f'Strategy_{instance_id}')
+        self.name = config.get("name", f"Strategy_{instance_id}")
         self.notification_client = notification_client
         self.trade_repository = trade_repository
 
@@ -43,7 +48,7 @@ class StrategyInstance:
         self.cerebro = None
 
         # Status tracking
-        self.status = 'stopped'
+        self.status = "stopped"
         self.start_time = None
         self.error_count = 0
         self.last_error = None
@@ -64,10 +69,10 @@ class StrategyInstance:
             _logger.info("Starting strategy instance: %s", self.name)
 
             # Create broker
-            broker_config = self.config['broker']
-            broker_type = broker_config.get('type', '').lower()
+            broker_config = self.config["broker"]
+            broker_type = broker_config.get("type", "").lower()
 
-            if broker_type == 'backtrader':
+            if broker_type == "backtrader":
                 _logger.info("Using Backtrader's built-in broker (no custom broker needed)")
                 self.broker = None
             else:
@@ -75,14 +80,16 @@ class StrategyInstance:
                 if not self.broker:
                     raise Exception("Failed to create broker")
 
-                _logger.info("Created broker for %s: %s (mode: %s)",
-                            self.name,
-                            broker_config.get('type'),
-                            broker_config.get('trading_mode'))
+                _logger.info(
+                    "Created broker for %s: %s (mode: %s)",
+                    self.name,
+                    broker_config.get("type"),
+                    broker_config.get("trading_mode"),
+                )
 
             # Get strategy class
-            strategy_config = self.config['strategy']
-            strategy_class = self._get_strategy_class(strategy_config['type'])
+            strategy_config = self.config["strategy"]
+            strategy_class = self._get_strategy_class(strategy_config["type"])
             _logger.info("Loaded strategy class: %s", strategy_class.__name__)
 
             # Create data feed
@@ -101,8 +108,8 @@ class StrategyInstance:
             self._start_threads()
 
             # Set status
-            self.status = 'running'
-            self.start_time = datetime.now(timezone.utc)
+            self.status = "running"
+            self.start_time = datetime.now(UTC)
             self.is_running = True
             self.error_count = 0
             self.last_error = None
@@ -132,7 +139,7 @@ class StrategyInstance:
             return True
 
         except Exception as e:
-            self.status = 'error'
+            self.status = "error"
             self.error_count += 1
             self.last_error = str(e)
             _logger.exception("❌ Failed to start strategy instance %s:", self.name)
@@ -146,17 +153,11 @@ class StrategyInstance:
 
     def _start_threads(self):
         """Start monitoring and heartbeat threads."""
-        self.monitor_thread = threading.Thread(
-            target=self._monitor_data_feed,
-            daemon=True,
-            name=f"Monitor-{self.name}"
-        )
+        self.monitor_thread = threading.Thread(target=self._monitor_data_feed, daemon=True, name=f"Monitor-{self.name}")
         self.monitor_thread.start()
 
         self.heartbeat_thread = threading.Thread(
-            target=self._heartbeat_loop,
-            daemon=True,
-            name=f"Heartbeat-{self.name}"
+            target=self._heartbeat_loop, daemon=True, name=f"Heartbeat-{self.name}"
         )
         self.heartbeat_thread.start()
 
@@ -183,7 +184,7 @@ class StrategyInstance:
                 except Exception:
                     _logger.exception("Error disconnecting broker for %s:", self.name)
 
-            self.status = 'stopped'
+            self.status = "stopped"
             try:
                 trading_service.update_bot_status(self.instance_id, "stopped")
                 _logger.info("Bot status updated to stopped for %s", self.name)
@@ -193,7 +194,7 @@ class StrategyInstance:
             _logger.info("✅ Strategy instance %s stopped successfully", self.name)
             return True
         except Exception:
-            self.status = 'error'
+            self.status = "error"
             _logger.exception("❌ Failed to stop strategy instance %s: %s", self.name)
             return False
 
@@ -207,26 +208,26 @@ class StrategyInstance:
         """Get strategy instance status summary."""
         uptime = 0
         if self.start_time:
-            uptime = (datetime.now(timezone.utc) - self.start_time).total_seconds()
+            uptime = (datetime.now(UTC) - self.start_time).total_seconds()
 
         heartbeat_age = None
         if self.last_heartbeat:
-            heartbeat_age = (datetime.now(timezone.utc) - self.last_heartbeat).total_seconds()
+            heartbeat_age = (datetime.now(UTC) - self.last_heartbeat).total_seconds()
 
         return {
-            'instance_id': self.instance_id,
-            'name': self.name,
-            'status': self.status,
-            'uptime_seconds': uptime,
-            'error_count': self.error_count,
-            'last_error': self.last_error,
-            'broker_type': self.config['broker'].get('type'),
-            'trading_mode': self.config['broker'].get('trading_mode'),
-            'symbol': self.config.get('symbol'),
-            'strategy_type': self.config['strategy'].get('type'),
-            'last_heartbeat': self.last_heartbeat.isoformat() if self.last_heartbeat else None,
-            'heartbeat_age_seconds': heartbeat_age,
-            'is_healthy': heartbeat_age < (self.heartbeat_interval * 2) if heartbeat_age else False
+            "instance_id": self.instance_id,
+            "name": self.name,
+            "status": self.status,
+            "uptime_seconds": uptime,
+            "error_count": self.error_count,
+            "last_error": self.last_error,
+            "broker_type": self.config["broker"].get("type"),
+            "trading_mode": self.config["broker"].get("trading_mode"),
+            "symbol": self.config.get("symbol"),
+            "strategy_type": self.config["strategy"].get("type"),
+            "last_heartbeat": self.last_heartbeat.isoformat() if self.last_heartbeat else None,
+            "heartbeat_age_seconds": heartbeat_age,
+            "is_healthy": heartbeat_age < (self.heartbeat_interval * 2) if heartbeat_age else False,
         }
 
     def _get_strategy_class(self, strategy_type: str):
@@ -236,28 +237,26 @@ class StrategyInstance:
     def _build_bot_config(self) -> Dict[str, Any]:
         """Build configuration for BaseTradingBot."""
         return {
-            'trading_pair': self.config.get('symbol', 'BTCUSDT'),
-            'initial_balance': self.config['broker'].get('cash', 10000.0),
-            'notifications': self.config.get('notifications', {}),
-            'user_id': self.config.get('user_id'),
-            'risk_management': self.config.get('risk_management', {}),
-            'logging': self.config.get('logging', {}),
-            'data': self.config.get('data', {}),
-            'trading': self.config.get('trading', {})
+            "trading_pair": self.config.get("symbol", "BTCUSDT"),
+            "initial_balance": self.config["broker"].get("cash", 10000.0),
+            "notifications": self.config.get("notifications", {}),
+            "user_id": self.config.get("user_id"),
+            "risk_management": self.config.get("risk_management", {}),
+            "logging": self.config.get("logging", {}),
+            "data": self.config.get("data", {}),
+            "trading": self.config.get("trading", {}),
         }
 
     async def _create_trading_bot(self) -> bool:
         """Instantiate the BaseTradingBot for this instance."""
         try:
             bot_config = self._build_bot_config()
-            strategy_class = self._get_strategy_class(self.config['strategy']['type'])
-            parameters = self.config['strategy'].get('parameters', {})
-            paper = (self.config['broker'].get('trading_mode', 'paper') == 'paper')
+            strategy_class = self._get_strategy_class(self.config["strategy"]["type"])
+            parameters = self.config["strategy"].get("parameters", {})
+            paper = self.config["broker"].get("trading_mode", "paper") == "paper"
 
             trade_hook = (
-                None
-                if is_file_based_simulation_config(self.config)
-                else self._schedule_user_trade_notification
+                None if is_file_based_simulation_config(self.config) else self._schedule_user_trade_notification
             )
             self.trading_bot = BaseTradingBot(
                 config=bot_config,
@@ -284,7 +283,7 @@ class StrategyInstance:
             await asyncio.get_event_loop().run_in_executor(None, self.trading_bot.run)
         except Exception:
             _logger.exception("Error in BaseTradingBot loop for %s:", self.name)
-            self.status = 'error'
+            self.status = "error"
 
     async def _stop_trading_bot(self):
         """Stop the trading bot gracefully."""
@@ -298,18 +297,23 @@ class StrategyInstance:
     def _create_data_feed(self) -> bool:
         """Create and initialize the data feed."""
         try:
-            data_config = dict(self.config.get('data', {
-                'data_source': self.config['broker'].get('type', 'binance'),
-                'symbol': self.config.get('symbol', 'BTCUSDT'),
-                'interval': '1h',
-                'lookback_bars': 500
-            }))
+            data_config = dict(
+                self.config.get(
+                    "data",
+                    {
+                        "data_source": self.config["broker"].get("type", "binance"),
+                        "symbol": self.config.get("symbol", "BTCUSDT"),
+                        "interval": "1h",
+                        "lookback_bars": 500,
+                    },
+                )
+            )
 
             # Ensure required fields for DataFeedFactory when config.data is partial.
             if not data_config.get("data_source"):
-                data_config["data_source"] = self.config['broker'].get('type', 'binance')
+                data_config["data_source"] = self.config["broker"].get("type", "binance")
             if not data_config.get("symbol"):
-                data_config["symbol"] = self.config.get('symbol', 'BTCUSDT')
+                data_config["symbol"] = self.config.get("symbol", "BTCUSDT")
             if not data_config.get("interval"):
                 data_config["interval"] = "1h"
             if data_config.get("lookback_bars") is None:
@@ -339,7 +343,8 @@ class StrategyInstance:
             self.cerebro = bt.Cerebro()
             self.cerebro.adddata(self.data_feed)
 
-            strategy_params = self.config['strategy'].get('parameters', {})
+            strategy_params = self.config["strategy"].get("parameters", {})
+
             def _bt_signal_execute(signal: dict) -> None:
                 """Execute a signal synchronously in the Backtrader thread.
 
@@ -357,13 +362,10 @@ class StrategyInstance:
                 try:
                     price = float(signal.get("price") or 0.0)
                     size = float(
-                        signal.get("size") if signal.get("size") is not None
-                        else signal.get("quantity") or 0.0
+                        signal.get("size") if signal.get("size") is not None else signal.get("quantity") or 0.0
                     )
                 except (TypeError, ValueError):
-                    _logger.warning(
-                        "Ignoring Backtrader signal with non-numeric price/size: %s", signal
-                    )
+                    _logger.warning("Ignoring Backtrader signal with non-numeric price/size: %s", signal)
                     return
                 self.trading_bot.execute_trade(side, price, size)
 
@@ -375,10 +377,10 @@ class StrategyInstance:
             )
 
             # Setup broker
-            broker_config = self.config['broker']
-            if broker_config.get('type', '').lower() == 'backtrader':
-                self.cerebro.broker.setcash(broker_config.get('cash', 10000.0))
-                self.cerebro.broker.setcommission(commission=broker_config.get('commission', 0.001))
+            broker_config = self.config["broker"]
+            if broker_config.get("type", "").lower() == "backtrader":
+                self.cerebro.broker.setcash(broker_config.get("cash", 10000.0))
+                self.cerebro.broker.setcommission(commission=broker_config.get("commission", 0.001))
             elif self.broker:
                 from src.trading.broker.backtrader_broker_bridge import wrap_broker_for_cerebro
 
@@ -395,7 +397,7 @@ class StrategyInstance:
             await asyncio.get_event_loop().run_in_executor(None, self.cerebro.run)
         except Exception:
             _logger.exception("Error in Backtrader engine for %s: %s", self.name)
-            self.status = 'error'
+            self.status = "error"
 
     def _monitor_data_feed(self):
         """Monitor data feed health and reconnect if needed."""
@@ -420,7 +422,7 @@ class StrategyInstance:
         """
         while self.is_running and not self.should_stop:
             try:
-                self.last_heartbeat = datetime.now(timezone.utc)
+                self.last_heartbeat = datetime.now(UTC)
 
                 # Persist heartbeat timestamp to DB so health monitors see
                 # a live signal.  Also sync current_balance if the trading
@@ -433,9 +435,7 @@ class StrategyInstance:
                             current_balance=self.trading_bot.current_balance,
                         )
                 except Exception:
-                    _logger.debug(
-                        "Failed to persist heartbeat for instance %s", self.name
-                    )
+                    _logger.debug("Failed to persist heartbeat for instance %s", self.name)
 
                 time.sleep(self.heartbeat_interval)
             except Exception:
@@ -457,21 +457,21 @@ class StrategyInstance:
                 return
 
             # Check if this notification type is enabled
-            notif_config = self.config.get('notifications', {})
-            if order_type.lower() == 'buy' and not notif_config.get('position_opened', False):
+            notif_config = self.config.get("notifications", {})
+            if order_type.lower() == "buy" and not notif_config.get("position_opened", False):
                 return
-            if order_type.lower() == 'sell' and not notif_config.get('position_closed', False):
+            if order_type.lower() == "sell" and not notif_config.get("position_closed", False):
                 return
 
             # Get symbol and trading mode
-            symbol = self.config.get('symbol', 'UNKNOWN')
-            trading_mode = self.config['broker'].get('trading_mode', 'paper')
+            symbol = self.config.get("symbol", "UNKNOWN")
+            trading_mode = self.config["broker"].get("trading_mode", "paper")
 
             # Format message
-            if order_type.lower() == 'buy':
+            if order_type.lower() == "buy":
                 title = f"Position Opened: {symbol}"
                 message = f"BUY {size:.4f} {symbol} @ ${price:,.2f}"
-                if trading_mode == 'paper':
+                if trading_mode == "paper":
                     message += " (Paper Trading)"
                 notification_type = MessageType.TRADE_ENTRY
             else:
@@ -480,7 +480,7 @@ class StrategyInstance:
                 if pnl is not None:
                     pnl_pct = (pnl / (price * size)) * 100 if (price * size) > 0 else 0
                     message += f" (P&L: ${pnl:,.2f} / {pnl_pct:+.2f}%)"
-                if trading_mode == 'paper':
+                if trading_mode == "paper":
                     message += " (Paper Trading)"
                 notification_type = MessageType.TRADE_EXIT
 
@@ -493,22 +493,22 @@ class StrategyInstance:
                 title=title,
                 message=message,
                 priority=MessagePriority.HIGH,
-                channels=user_details['channels'],
-                recipient_id=user_details['recipient_id'],
-                email_receiver=user_details['email'],
-                telegram_chat_id=user_details.get('telegram_user_id'),
+                channels=user_details["channels"],
+                recipient_id=user_details["recipient_id"],
+                email_receiver=user_details["email"],
+                telegram_chat_id=user_details.get("telegram_user_id"),
                 data={
-                    'bot_id': self.instance_id,
-                    'bot_name': self.name,
-                    'symbol': symbol,
-                    'order_type': order_type.upper(),
-                    'price': price,
-                    'size': size,
-                    'pnl': pnl,
-                    'trading_mode': trading_mode,
-                    'timestamp': datetime.now(timezone.utc).isoformat()
+                    "bot_id": self.instance_id,
+                    "bot_name": self.name,
+                    "symbol": symbol,
+                    "order_type": order_type.upper(),
+                    "price": price,
+                    "size": size,
+                    "pnl": pnl,
+                    "trading_mode": trading_mode,
+                    "timestamp": datetime.now(UTC).isoformat(),
                 },
-                source="trading_bot"
+                source="trading_bot",
             )
 
             _logger.info("Sent %s notification for %s", order_type.upper(), self.name)
@@ -527,31 +527,31 @@ class StrategyInstance:
             if not self.notification_client:
                 return
 
-            notif_config = self.config.get('notifications', {})
-            notify_owner = notif_config.get('error_notifications', False)
+            notif_config = self.config.get("notifications", {})
+            notify_owner = notif_config.get("error_notifications", False)
 
-            symbol = self.config.get('symbol', 'UNKNOWN')
-            trading_mode = self.config['broker'].get('trading_mode', 'paper')
+            symbol = self.config.get("symbol", "UNKNOWN")
+            trading_mode = self.config["broker"].get("trading_mode", "paper")
 
             title = f"Bot Error: {self.name}"
             message = f"[{self.name}] {error_type}: {error_message}"
-            if trading_mode == 'paper':
+            if trading_mode == "paper":
                 message += " (Paper Trading)"
 
             payload_data = {
-                'bot_id': self.instance_id,
-                'bot_name': self.name,
-                'symbol': symbol,
-                'error_type': error_type,
-                'error_message': error_message,
-                'trading_mode': trading_mode,
-                'timestamp': datetime.now(timezone.utc).isoformat(),
+                "bot_id": self.instance_id,
+                "bot_name": self.name,
+                "symbol": symbol,
+                "error_type": error_type,
+                "error_message": error_message,
+                "trading_mode": trading_mode,
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
             if notify_owner:
                 user_details = self._get_user_notification_details()
                 if user_details:
-                    tg_raw = user_details.get('telegram_user_id')
+                    tg_raw = user_details.get("telegram_user_id")
                     tg_id = None
                     if tg_raw is not None:
                         s = str(tg_raw).strip()
@@ -562,9 +562,9 @@ class StrategyInstance:
                         title=title,
                         message=message,
                         priority=MessagePriority.CRITICAL,
-                        channels=user_details['channels'],
-                        recipient_id=user_details['recipient_id'],
-                        email_receiver=user_details['email'],
+                        channels=user_details["channels"],
+                        recipient_id=user_details["recipient_id"],
+                        email_receiver=user_details["email"],
                         telegram_chat_id=tg_id,
                         data=payload_data,
                         source="trading_bot",
@@ -575,7 +575,7 @@ class StrategyInstance:
                 message=message,
                 notification_type=MessageType.ERROR,
                 priority=MessagePriority.CRITICAL,
-                data={**payload_data, 'admin_notification': True},
+                data={**payload_data, "admin_notification": True},
                 channels=["telegram", "email"],
             )
 
@@ -584,7 +584,7 @@ class StrategyInstance:
         except Exception:
             _logger.exception("Error sending error notification for %s:", self.name)
 
-    def _get_user_notification_details(self) -> Optional[Dict[str, Any]]:
+    def _get_user_notification_details(self) -> Dict[str, Any] | None:
         """Resolve the sole bot owner's Telegram/email targets."""
         try:
             return get_trading_bot_notification_recipient(
@@ -602,7 +602,7 @@ class StrategyInstance:
         side: str,
         price: float,
         size: float,
-        pnl: Optional[float] = None,
+        pnl: float | None = None,
     ) -> None:
         """Notify configured user channels after BaseTradingBot executes a trade."""
         _run_async(self._send_trade_notification(side, price, size, pnl))

@@ -1,6 +1,8 @@
-from typing import Any, Dict, List
 from abc import ABC, abstractmethod
+from typing import Any, Dict, List
+
 import pandas as pd
+
 
 class SignalPlugin(ABC):
     """
@@ -19,7 +21,7 @@ class SignalPlugin(ABC):
     @abstractmethod
     def schema(self) -> Dict[str, Any]:
         """
-        Returns a JSON schema dictionary for validating the 'params' 
+        Returns a JSON schema dictionary for validating the 'params'
         this plugin expects from the frontend ConfigBuilder.
         """
         pass
@@ -41,18 +43,15 @@ class SignalPlugin(ABC):
         pass
 
     @abstractmethod
-    def evaluate(self, 
-                 params: Dict[str, Any], 
-                 market_data: pd.DataFrame, 
-                 indicators: Dict[str, pd.Series]) -> bool:
+    def evaluate(self, params: Dict[str, Any], market_data: pd.DataFrame, indicators: Dict[str, pd.Series]) -> bool:
         """
         Evaluate the logic condition based on the provided data.
-        
+
         Args:
             params: The parameters provided by the user in the rule configuration.
             market_data: OHLCV DataFrame
             indicators: Dictionary of pre-calculated indicator series (keyed by "output" from get_required_indicators)
-            
+
         Returns:
             True if the condition is met (alert triggers), False otherwise.
         """

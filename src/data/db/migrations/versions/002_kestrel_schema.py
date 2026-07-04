@@ -8,8 +8,8 @@ Adds all k20_* tables for the P20 Kestrel pipeline.
 Does NOT modify any existing tables.
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "002_kestrel"
@@ -33,9 +33,7 @@ def upgrade() -> None:
         sa.Column("interest_coverage", sa.Numeric(), nullable=True),
         sa.Column("status", sa.Text(), nullable=False, server_default="active"),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.CheckConstraint(
-            "status IN ('active','delisted','suspended')", name="ck_k20_universe_status"
-        ),
+        sa.CheckConstraint("status IN ('active','delisted','suspended')", name="ck_k20_universe_status"),
         sa.PrimaryKeyConstraint("ticker"),
     )
     op.create_index("idx_k20_universe_status", "k20_universe", ["status"])
@@ -205,9 +203,7 @@ def upgrade() -> None:
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("rows_out", sa.Integer(), nullable=True),
         sa.Column("error", sa.Text(), nullable=True),
-        sa.CheckConstraint(
-            "status IN ('running','ok','failed','skipped')", name="ck_k20_job_run_status"
-        ),
+        sa.CheckConstraint("status IN ('running','ok','failed','skipped')", name="ck_k20_job_run_status"),
         sa.PrimaryKeyConstraint("job", "run_date"),
     )
     op.create_index("idx_k20_job_runs_status", "k20_job_runs", ["status"])

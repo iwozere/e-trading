@@ -5,12 +5,11 @@ Downloads and caches S&P 500 and Nasdaq-100 constituent changes.
 Cache: DATA_CACHE_DIR/index_changes/YYYY-MM-DD.csv.gz (cached daily)
 """
 
-from datetime import date
-import json
-from pathlib import Path
 import re
 import sys
-from typing import List, Optional
+from datetime import date
+from pathlib import Path
+from typing import List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
@@ -54,6 +53,7 @@ class WikipediaDownloader(BaseDataDownloader):
         caching the output as a gzip-compressed CSV.
         """
         from io import StringIO
+
         dest = self._cache_dir / f"{as_of_date.isoformat()}.csv.gz"
         headers = {"User-Agent": "Mozilla/5.0"}
 
@@ -91,7 +91,7 @@ class WikipediaDownloader(BaseDataDownloader):
 
         def clean_date(date_str):
             try:
-                clean_str = re.sub(r'\[\d+\]', '', str(date_str)).strip()
+                clean_str = re.sub(r"\[\d+\]", "", str(date_str)).strip()
                 return pd.to_datetime(clean_str).strftime("%Y-%m-%d")
             except Exception:
                 return None
@@ -100,7 +100,15 @@ class WikipediaDownloader(BaseDataDownloader):
         merged = merged.dropna(subset=["date"])
         merged = merged.sort_values(by="date", ascending=False).reset_index(drop=True)
 
-        final_cols = ["date", "index_name", "Added_Ticker", "Added_Security", "Removed_Ticker", "Removed_Security", "Reason"]
+        final_cols = [
+            "date",
+            "index_name",
+            "Added_Ticker",
+            "Added_Security",
+            "Removed_Ticker",
+            "Removed_Security",
+            "Reason",
+        ]
         for col in final_cols:
             if col not in merged.columns:
                 merged[col] = None

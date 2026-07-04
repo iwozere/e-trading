@@ -1,17 +1,19 @@
 """
 BaseDBService: Provides UoW pattern and error handling for DB services.
 """
+
 from contextvars import ContextVar
-from typing import Callable, Optional, TypeVar
 from functools import wraps
-from src.data.db.services.database_service import get_database_service, ReposBundle
+from typing import Callable, TypeVar
+
+from src.data.db.services.database_service import ReposBundle, get_database_service
 from src.notification.logger import setup_logger
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 # Per-context (thread / asyncio task) variable holding the current ReposBundle.
 # Each concurrent caller gets its own value; no instance attribute is needed.
-_current_repos: ContextVar[Optional[ReposBundle]] = ContextVar('_current_repos', default=None)
+_current_repos: ContextVar[ReposBundle | None] = ContextVar("_current_repos", default=None)
 
 
 def with_uow(func: Callable[..., T]) -> Callable[..., T]:
@@ -22,6 +24,7 @@ def with_uow(func: Callable[..., T]) -> Callable[..., T]:
     each maintain their own session without interfering with each other.
     Nested calls reuse the already-open session from the current context.
     """
+
     @wraps(func)
     def wrapper(self, *args, **kwargs) -> T:
         # If already inside a UoW for this context, reuse it (no nesting).
@@ -43,6 +46,7 @@ def handle_db_error(func: Callable[..., T]) -> Callable[..., T]:
     """
     Decorator to handle database errors consistently.
     """
+
     @wraps(func)
     def wrapper(self, *args, **kwargs) -> T:
         try:
@@ -50,6 +54,7 @@ def handle_db_error(func: Callable[..., T]) -> Callable[..., T]:
         except Exception:
             self._logger.exception("Database error in %s", func.__name__)
             raise
+
     return wrapper
 
 
@@ -66,12 +71,11 @@ class BaseDBService:
         repos = _current_repos.get()
         if repos is None:
             raise RuntimeError(
-                "Repositories not available. This property can only be accessed from methods "
-                "decorated with @with_uow."
+                "Repositories not available. This property can only be accessed from methods decorated with @with_uow."
             )
         return repos
 
     @property
     def uow(self) -> ReposBundle:
         """Alias for self.repos (backward compatibility)."""
-        return self.repos
+        return self.repos

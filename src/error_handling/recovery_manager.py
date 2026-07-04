@@ -14,16 +14,14 @@ Features:
 """
 
 import time
-from typing import Callable, Optional, Dict, Any
 from functools import wraps
+from typing import Any, Callable, Dict
 
+from src.error_handling.exceptions import RecoveryException, TradingException
 from src.model.error_handling import RecoveryConfig, RecoveryStrategy
-from src.error_handling.exceptions import TradingException, RecoveryException
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
-
-
 
 
 class ErrorRecoveryManager:
@@ -40,16 +38,9 @@ class ErrorRecoveryManager:
     def __init__(self):
         """Initialize recovery manager."""
         self.recovery_configs: Dict[str, RecoveryConfig] = {}
-        self.metrics = {
-            'total_recoveries': 0,
-            'successful_recoveries': 0,
-            'failed_recoveries': 0,
-            'recovery_time': 0.0
-        }
+        self.metrics = {"total_recoveries": 0, "successful_recoveries": 0, "failed_recoveries": 0, "recovery_time": 0.0}
 
-    def register_recovery(self,
-                         error_type: str,
-                         config: RecoveryConfig) -> None:
+    def register_recovery(self, error_type: str, config: RecoveryConfig) -> None:
         """
         Register recovery configuration for an error type.
 
@@ -60,9 +51,7 @@ class ErrorRecoveryManager:
         self.recovery_configs[error_type] = config
         _logger.info("Registered recovery strategy for %s: %s", error_type, config.strategy.value)
 
-    def execute_recovery(self,
-                        error: Exception,
-                        context: Optional[Dict[str, Any]] = None) -> Any:
+    def execute_recovery(self, error: Exception, context: Dict[str, Any] | None = None) -> Any:
         """
         Execute recovery strategy for an error.
 
@@ -79,7 +68,7 @@ class ErrorRecoveryManager:
         context = context or {}
 
         # Use context component if provided, otherwise classify error
-        error_type = context.get('component') or self._classify_error(error)
+        error_type = context.get("component") or self._classify_error(error)
 
         config = self.recovery_configs.get(error_type)
 
@@ -88,12 +77,12 @@ class ErrorRecoveryManager:
             return None
 
         start_time = time.time()
-        self.metrics['total_recoveries'] += 1
+        self.metrics["total_recoveries"] += 1
 
         try:
             result = self._execute_strategy(config, error, context)
-            self.metrics['successful_recoveries'] += 1
-            self.metrics['recovery_time'] += time.time() - start_time
+            self.metrics["successful_recoveries"] += 1
+            self.metrics["recovery_time"] += time.time() - start_time
 
             if config.log_recovery:
                 _logger.info("Recovery successful for %s: %s", error_type, config.strategy.value)
@@ -101,8 +90,8 @@ class ErrorRecoveryManager:
             return result
 
         except Exception:
-            self.metrics['failed_recoveries'] += 1
-            self.metrics['recovery_time'] += time.time() - start_time
+            self.metrics["failed_recoveries"] += 1
+            self.metrics["recovery_time"] += time.time() - start_time
 
             if config.log_recovery:
                 _logger.exception("Recovery failed for %s: %s")
@@ -110,35 +99,32 @@ class ErrorRecoveryManager:
             raise RecoveryException(
                 f"Recovery strategy {config.strategy.value} failed for {error_type}",
                 original_error=error,
-                recovery_strategy=config.strategy.value
+                recovery_strategy=config.strategy.value,
             )
 
     def _classify_error(self, error: Exception) -> str:
         """Classify error type for recovery strategy selection."""
         if isinstance(error, TradingException):
             # Use component from TradingException
-            return error.context.get('component', 'unknown')
+            return error.context.get("component", "unknown")
 
         # Classify based on exception type
         error_type = type(error).__name__.lower()
 
-        if 'network' in error_type or 'connection' in error_type:
-            return 'network'
-        elif 'database' in error_type or 'sql' in error_type:
-            return 'database'
-        elif 'api' in error_type or 'http' in error_type:
-            return 'api'
-        elif 'validation' in error_type:
-            return 'validation'
-        elif 'timeout' in error_type:
-            return 'timeout'
+        if "network" in error_type or "connection" in error_type:
+            return "network"
+        elif "database" in error_type or "sql" in error_type:
+            return "database"
+        elif "api" in error_type or "http" in error_type:
+            return "api"
+        elif "validation" in error_type:
+            return "validation"
+        elif "timeout" in error_type:
+            return "timeout"
         else:
-            return 'general'
+            return "general"
 
-    def _execute_strategy(self,
-                         config: RecoveryConfig,
-                         error: Exception,
-                         context: Dict[str, Any]) -> Any:
+    def _execute_strategy(self, config: RecoveryConfig, error: Exception, context: Dict[str, Any]) -> Any:
         """Execute specific recovery strategy."""
         if config.strategy == RecoveryStrategy.RETRY:
             return self._execute_retry(config, error, context)
@@ -155,17 +141,14 @@ class ErrorRecoveryManager:
         else:
             raise ValueError(f"Unknown recovery strategy: {config.strategy}")
 
-    def _execute_retry(self,
-                      config: RecoveryConfig,
-                      error: Exception,
-                      context: Dict[str, Any]) -> Any:
+    def _execute_retry(self, config: RecoveryConfig, error: Exception, context: Dict[str, Any]) -> Any:
         """Execute retry strategy."""
         for attempt in range(config.max_attempts):
             try:
                 # Get the original function from context
-                func = context.get('function')
-                args = context.get('args', [])
-                kwargs = context.get('kwargs', {})
+                func = context.get("function")
+                args = context.get("args", [])
+                kwargs = context.get("kwargs", {})
 
                 if func:
                     return func(*args, **kwargs)
@@ -180,63 +163,48 @@ class ErrorRecoveryManager:
                 else:
                     raise retry_error
 
-    def _execute_fallback(self,
-                         config: RecoveryConfig,
-                         error: Exception,
-                         context: Dict[str, Any]) -> Any:
+    def _execute_fallback(self, config: RecoveryConfig, error: Exception, context: Dict[str, Any]) -> Any:
         """Execute fallback strategy."""
         if not config.fallback_function:
             raise ValueError("Fallback function not configured")
 
-        args = context.get('fallback_args', [])
-        kwargs = context.get('fallback_kwargs', {})
+        args = context.get("fallback_args", [])
+        kwargs = context.get("fallback_kwargs", {})
 
         return config.fallback_function(*args, **kwargs)
 
-    def _execute_degrade(self,
-                        config: RecoveryConfig,
-                        error: Exception,
-                        context: Dict[str, Any]) -> Any:
+    def _execute_degrade(self, config: RecoveryConfig, error: Exception, context: Dict[str, Any]) -> Any:
         """Execute degradation strategy."""
         if not config.degrade_function:
             raise ValueError("Degrade function not configured")
 
-        args = context.get('degrade_args', [])
-        kwargs = context.get('degrade_kwargs', {})
+        args = context.get("degrade_args", [])
+        kwargs = context.get("degrade_kwargs", {})
 
         return config.degrade_function(*args, **kwargs)
 
-    def _execute_restart(self,
-                        config: RecoveryConfig,
-                        error: Exception,
-                        context: Dict[str, Any]) -> Any:
+    def _execute_restart(self, config: RecoveryConfig, error: Exception, context: Dict[str, Any]) -> Any:
         """Execute restart strategy."""
         # Get restart function from context
-        restart_func = context.get('restart_function')
+        restart_func = context.get("restart_function")
         if not restart_func:
             raise ValueError("Restart function not provided in context")
 
         time.sleep(config.restart_delay)
         return restart_func()
 
-    def _execute_ignore(self,
-                       config: RecoveryConfig,
-                       error: Exception,
-                       context: Dict[str, Any]) -> Any:
+    def _execute_ignore(self, config: RecoveryConfig, error: Exception, context: Dict[str, Any]) -> Any:
         """Execute ignore strategy."""
         _logger.info("Ignoring error: %s", error)
-        return context.get('default_value')
+        return context.get("default_value")
 
-    def _execute_alert(self,
-                      config: RecoveryConfig,
-                      error: Exception,
-                      context: Dict[str, Any]) -> Any:
+    def _execute_alert(self, config: RecoveryConfig, error: Exception, context: Dict[str, Any]) -> Any:
         """Execute alert strategy."""
         if config.alert_function:
             config.alert_function(error, context)
 
         # Return default value or re-raise
-        default_value = context.get('default_value')
+        default_value = context.get("default_value")
         if default_value is not None:
             return default_value
         else:
@@ -245,31 +213,24 @@ class ErrorRecoveryManager:
     def get_metrics(self) -> Dict[str, Any]:
         """Get recovery metrics."""
         metrics = self.metrics.copy()
-        if metrics['total_recoveries'] > 0:
-            metrics['success_rate'] = metrics['successful_recoveries'] / metrics['total_recoveries']
-            metrics['average_recovery_time'] = metrics['recovery_time'] / metrics['total_recoveries']
+        if metrics["total_recoveries"] > 0:
+            metrics["success_rate"] = metrics["successful_recoveries"] / metrics["total_recoveries"]
+            metrics["average_recovery_time"] = metrics["recovery_time"] / metrics["total_recoveries"]
         else:
-            metrics['success_rate'] = 0.0
-            metrics['average_recovery_time'] = 0.0
+            metrics["success_rate"] = 0.0
+            metrics["average_recovery_time"] = 0.0
         return metrics
 
     def reset_metrics(self):
         """Reset recovery metrics."""
-        self.metrics = {
-            'total_recoveries': 0,
-            'successful_recoveries': 0,
-            'failed_recoveries': 0,
-            'recovery_time': 0.0
-        }
+        self.metrics = {"total_recoveries": 0, "successful_recoveries": 0, "failed_recoveries": 0, "recovery_time": 0.0}
 
 
 # Global recovery manager instance
 recovery_manager = ErrorRecoveryManager()
 
 
-def with_recovery(error_type: str,
-                 strategy: RecoveryStrategy,
-                 **strategy_kwargs):
+def with_recovery(error_type: str, strategy: RecoveryStrategy, **strategy_kwargs):
     """
     Decorator for adding recovery functionality to functions.
 
@@ -284,6 +245,7 @@ def with_recovery(error_type: str,
             # Function that may fail
             pass
     """
+
     def decorator(func: Callable) -> Callable:
         config = RecoveryConfig(strategy=strategy, **strategy_kwargs)
         recovery_manager.register_recovery(error_type, config)
@@ -293,11 +255,7 @@ def with_recovery(error_type: str,
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                context = {
-                    'function': func,
-                    'args': args,
-                    'kwargs': kwargs
-                }
+                context = {"function": func, "args": args, "kwargs": kwargs}
                 return recovery_manager.execute_recovery(e, context)
 
         return wrapper
@@ -306,40 +264,24 @@ def with_recovery(error_type: str,
 
 
 # Pre-configured recovery decorators
-def with_fallback(fallback_func: Callable, error_type: str = 'general'):
+def with_fallback(fallback_func: Callable, error_type: str = "general"):
     """Decorator for adding fallback functionality."""
-    return with_recovery(
-        error_type=error_type,
-        strategy=RecoveryStrategy.FALLBACK,
-        fallback_function=fallback_func
-    )
+    return with_recovery(error_type=error_type, strategy=RecoveryStrategy.FALLBACK, fallback_function=fallback_func)
 
 
-def with_degradation(degrade_func: Callable, error_type: str = 'general'):
+def with_degradation(degrade_func: Callable, error_type: str = "general"):
     """Decorator for adding degradation functionality."""
-    return with_recovery(
-        error_type=error_type,
-        strategy=RecoveryStrategy.DEGRADE,
-        degrade_function=degrade_func
-    )
+    return with_recovery(error_type=error_type, strategy=RecoveryStrategy.DEGRADE, degrade_function=degrade_func)
 
 
-def with_retry(max_attempts: int = 3, error_type: str = 'general'):
+def with_retry(max_attempts: int = 3, error_type: str = "general"):
     """Decorator for adding retry functionality."""
-    return with_recovery(
-        error_type=error_type,
-        strategy=RecoveryStrategy.RETRY,
-        max_attempts=max_attempts
-    )
+    return with_recovery(error_type=error_type, strategy=RecoveryStrategy.RETRY, max_attempts=max_attempts)
 
 
-def with_alert(alert_func: Callable, error_type: str = 'general'):
+def with_alert(alert_func: Callable, error_type: str = "general"):
     """Decorator for adding alert functionality."""
-    return with_recovery(
-        error_type=error_type,
-        strategy=RecoveryStrategy.ALERT,
-        alert_function=alert_func
-    )
+    return with_recovery(error_type=error_type, strategy=RecoveryStrategy.ALERT, alert_function=alert_func)
 
 
 # Common recovery strategies
@@ -351,37 +293,25 @@ class CommonRecoveryStrategies:
         """Setup default recovery strategies."""
 
         # Network errors - retry with fallback
-        recovery_manager.register_recovery('network', RecoveryConfig(
-            strategy=RecoveryStrategy.RETRY,
-            max_attempts=3,
-            timeout=30.0
-        ))
+        recovery_manager.register_recovery(
+            "network", RecoveryConfig(strategy=RecoveryStrategy.RETRY, max_attempts=3, timeout=30.0)
+        )
 
         # Database errors - retry with alert
-        recovery_manager.register_recovery('database', RecoveryConfig(
-            strategy=RecoveryStrategy.RETRY,
-            max_attempts=2,
-            timeout=10.0
-        ))
+        recovery_manager.register_recovery(
+            "database", RecoveryConfig(strategy=RecoveryStrategy.RETRY, max_attempts=2, timeout=10.0)
+        )
 
         # API errors - fallback to cached data
-        recovery_manager.register_recovery('api', RecoveryConfig(
-            strategy=RecoveryStrategy.FALLBACK,
-            timeout=15.0
-        ))
+        recovery_manager.register_recovery("api", RecoveryConfig(strategy=RecoveryStrategy.FALLBACK, timeout=15.0))
 
         # Validation errors - ignore with default
-        recovery_manager.register_recovery('validation', RecoveryConfig(
-            strategy=RecoveryStrategy.IGNORE,
-            timeout=5.0
-        ))
+        recovery_manager.register_recovery("validation", RecoveryConfig(strategy=RecoveryStrategy.IGNORE, timeout=5.0))
 
         # Timeout errors - retry with longer timeout
-        recovery_manager.register_recovery('timeout', RecoveryConfig(
-            strategy=RecoveryStrategy.RETRY,
-            max_attempts=2,
-            timeout=60.0
-        ))
+        recovery_manager.register_recovery(
+            "timeout", RecoveryConfig(strategy=RecoveryStrategy.RETRY, max_attempts=2, timeout=60.0)
+        )
 
         _logger.info("Default recovery strategies configured")
 

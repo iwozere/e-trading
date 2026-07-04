@@ -8,22 +8,23 @@ Tracks metrics like PnL, Win Rate, and Max Drawdown.
 import json
 import threading
 import time
-from pathlib import Path
-from typing import Any, Dict, Optional
-from dataclasses import dataclass, asdict, field
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from typing import Any, Dict
 
-from src.trading.constants import DATA_DIR
 from src.notification.logger import setup_logger
+from src.trading.constants import DATA_DIR
 
 _logger = setup_logger(__name__)
 
 # Minimum denominator for drawdown % vs peak (avoids div-by-zero / unstable FP when peak is ~0)
 _PEAK_DRAWDOWN_EPS = 1e-12
 
+
 @dataclass
 class PerformanceMetrics:
     """Dataclass for storing performance metrics for a bot."""
+
     bot_id: str
     symbol: str
     total_trades: int = 0
@@ -36,7 +37,7 @@ class PerformanceMetrics:
     current_drawdown: float = 0.0
     peak_balance: float = 0.0
     current_balance: float = 0.0
-    last_updated: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    last_updated: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def update(self, trade_pnl: float, trade_pnl_pct: float, current_balance: float):
         """Update metrics with a new completed trade."""
@@ -67,7 +68,8 @@ class PerformanceMetrics:
                 if dd > self.max_drawdown:
                     self.max_drawdown = dd
 
-        self.last_updated = datetime.now(timezone.utc).isoformat()
+        self.last_updated = datetime.now(UTC).isoformat()
+
 
 class MetricsRegistry:
     """
@@ -93,13 +95,13 @@ class MetricsRegistry:
         """Singleton pattern implementation."""
         with cls._lock:
             if cls._instance is None:
-                cls._instance = super(MetricsRegistry, cls).__new__(cls)
+                cls._instance = super().__new__(cls)
             return cls._instance
 
     def __init__(self):
         """Initialize the registry and load existing metrics."""
         # Only initialize once (singleton)
-        if hasattr(self, '_initialized') and self._initialized:
+        if hasattr(self, "_initialized") and self._initialized:
             return
 
         self.metrics_file = DATA_DIR / "metrics.json"
@@ -129,7 +131,7 @@ class MetricsRegistry:
             return
 
         try:
-            with open(self.metrics_file, "r", encoding="utf-8") as f:
+            with open(self.metrics_file, encoding="utf-8") as f:
                 data = json.load(f)
                 for bot_id, metrics_dict in data.items():
                     self.bot_metrics[bot_id] = PerformanceMetrics(**metrics_dict)
@@ -147,7 +149,7 @@ class MetricsRegistry:
             if not self._dirty:
                 return
             try:
-                tmp_path = self.metrics_file.with_suffix('.tmp')
+                tmp_path = self.metrics_file.with_suffix(".tmp")
                 with open(tmp_path, "w", encoding="utf-8") as f:
                     data = {bot_id: asdict(m) for bot_id, m in self.bot_metrics.items()}
                     json.dump(data, f, indent=2, default=str)
@@ -167,10 +169,7 @@ class MetricsRegistry:
         with self._registry_lock:
             if bot_id not in self.bot_metrics:
                 self.bot_metrics[bot_id] = PerformanceMetrics(
-                    bot_id=bot_id,
-                    symbol=symbol,
-                    current_balance=initial_balance,
-                    peak_balance=initial_balance
+                    bot_id=bot_id, symbol=symbol, current_balance=initial_balance, peak_balance=initial_balance
                 )
             return self.bot_metrics[bot_id]
 
@@ -189,7 +188,9 @@ class MetricsRegistry:
             self._dirty = True
             _logger.info(
                 "Metrics updated for bot %s: PnL=%.2f, WinRate=%.1f%%",
-                bot_id, metrics.total_pnl, metrics.win_rate,
+                bot_id,
+                metrics.total_pnl,
+                metrics.win_rate,
             )
 
     def get_global_summary(self) -> Dict[str, Any]:
@@ -197,13 +198,14 @@ class MetricsRegistry:
         with self._registry_lock:
             total_pnl = sum(m.total_pnl for m in self.bot_metrics.values())
             total_trades = sum(m.total_trades for m in self.bot_metrics.values())
-            
+
             return {
                 "active_bots": len(self.bot_metrics),
                 "total_pnl": total_pnl,
                 "total_trades": total_trades,
-                "bot_breakdown": {bot_id: asdict(m) for bot_id, m in self.bot_metrics.items()}
+                "bot_breakdown": {bot_id: asdict(m) for bot_id, m in self.bot_metrics.items()},
             }
+
 
 # Singleton instance for easy access
 metrics_registry = MetricsRegistry()

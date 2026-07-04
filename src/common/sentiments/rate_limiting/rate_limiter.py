@@ -6,13 +6,13 @@ with configurable burst capacity and refill rates.
 """
 
 import asyncio
-import time
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from pathlib import Path
 import sys
 import threading
+import time
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Dict, List
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -26,6 +26,7 @@ _logger = setup_logger(__name__)
 @dataclass
 class RateLimitConfig:
     """Configuration for rate limiter."""
+
     requests_per_second: float = 1.0
     burst_capacity: int = 5
     window_size_seconds: int = 60
@@ -33,14 +34,14 @@ class RateLimitConfig:
     strict_mode: bool = False  # If True, reject requests when limit exceeded
 
     @classmethod
-    def from_dict(cls, config: Dict[str, Any]) -> 'RateLimitConfig':
+    def from_dict(cls, config: Dict[str, Any]) -> "RateLimitConfig":
         """Create configuration from dictionary."""
         return cls(
-            requests_per_second=float(config.get('requests_per_second', 1.0)),
-            burst_capacity=int(config.get('burst_capacity', 5)),
-            window_size_seconds=int(config.get('window_size_seconds', 60)),
-            enable_burst=config.get('enable_burst', True),
-            strict_mode=config.get('strict_mode', False)
+            requests_per_second=float(config.get("requests_per_second", 1.0)),
+            burst_capacity=int(config.get("burst_capacity", 5)),
+            window_size_seconds=int(config.get("window_size_seconds", 60)),
+            enable_burst=config.get("enable_burst", True),
+            strict_mode=config.get("strict_mode", False),
         )
 
 
@@ -119,10 +120,10 @@ class TokenBucket:
         with self._lock:
             self._refill()
             return {
-                'tokens_available': self.tokens,
-                'capacity': self.capacity,
-                'rate': self.rate,
-                'utilization': 1.0 - (self.tokens / self.capacity)
+                "tokens_available": self.tokens,
+                "capacity": self.capacity,
+                "rate": self.rate,
+                "utilization": 1.0 - (self.tokens / self.capacity),
             }
 
 
@@ -151,10 +152,10 @@ class RateLimiter:
         self.allowed_requests = 0
         self.rejected_requests = 0
         self.total_wait_time = 0.0
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         self._lock = threading.Lock()
 
-    async def acquire(self, tokens: int = 1, timeout: Optional[float] = None) -> bool:
+    async def acquire(self, tokens: int = 1, timeout: float | None = None) -> bool:
         """
         Acquire tokens from the rate limiter.
 
@@ -188,8 +189,7 @@ class RateLimiter:
         if timeout is not None and wait_time > timeout:
             with self._lock:
                 self.rejected_requests += 1
-            _logger.debug("Rate limit timeout for %s (%.2fs > %.2fs)",
-                         self.name, wait_time, timeout)
+            _logger.debug("Rate limit timeout for %s (%.2fs > %.2fs)", self.name, wait_time, timeout)
             return False
 
         # Wait for tokens
@@ -247,27 +247,27 @@ class RateLimiter:
     def get_statistics(self) -> Dict[str, Any]:
         """Get rate limiter statistics."""
         with self._lock:
-            uptime = (datetime.now(timezone.utc) - self.created_at).total_seconds()
+            uptime = (datetime.now(UTC) - self.created_at).total_seconds()
 
             stats = {
-                'name': self.name,
-                'config': {
-                    'requests_per_second': self.config.requests_per_second,
-                    'burst_capacity': self.config.burst_capacity,
-                    'strict_mode': self.config.strict_mode
+                "name": self.name,
+                "config": {
+                    "requests_per_second": self.config.requests_per_second,
+                    "burst_capacity": self.config.burst_capacity,
+                    "strict_mode": self.config.strict_mode,
                 },
-                'statistics': {
-                    'total_requests': self.total_requests,
-                    'allowed_requests': self.allowed_requests,
-                    'rejected_requests': self.rejected_requests,
-                    'success_rate': self.allowed_requests / max(1, self.total_requests),
-                    'rejection_rate': self.rejected_requests / max(1, self.total_requests),
-                    'total_wait_time_seconds': self.total_wait_time,
-                    'avg_wait_time_seconds': self.total_wait_time / max(1, self.allowed_requests),
-                    'uptime_seconds': uptime,
-                    'requests_per_second_actual': self.total_requests / max(1, uptime)
+                "statistics": {
+                    "total_requests": self.total_requests,
+                    "allowed_requests": self.allowed_requests,
+                    "rejected_requests": self.rejected_requests,
+                    "success_rate": self.allowed_requests / max(1, self.total_requests),
+                    "rejection_rate": self.rejected_requests / max(1, self.total_requests),
+                    "total_wait_time_seconds": self.total_wait_time,
+                    "avg_wait_time_seconds": self.total_wait_time / max(1, self.allowed_requests),
+                    "uptime_seconds": uptime,
+                    "requests_per_second_actual": self.total_requests / max(1, uptime),
                 },
-                'bucket_status': self.bucket.get_status()
+                "bucket_status": self.bucket.get_status(),
             }
 
         return stats
@@ -279,7 +279,7 @@ class RateLimiter:
             self.allowed_requests = 0
             self.rejected_requests = 0
             self.total_wait_time = 0.0
-            self.created_at = datetime.now(timezone.utc)
+            self.created_at = datetime.now(UTC)
 
     def update_config(self, config: RateLimitConfig) -> None:
         """
@@ -290,8 +290,12 @@ class RateLimiter:
         """
         self.config = config
         self.bucket = TokenBucket(config.requests_per_second, config.burst_capacity)
-        _logger.info("Updated rate limiter config for %s: %.2f req/s, burst %d",
-                    self.name, config.requests_per_second, config.burst_capacity)
+        _logger.info(
+            "Updated rate limiter config for %s: %.2f req/s, burst %d",
+            self.name,
+            config.requests_per_second,
+            config.burst_capacity,
+        )
 
     def is_available(self) -> bool:
         """Check if tokens are immediately available."""
@@ -300,7 +304,7 @@ class RateLimiter:
     def get_utilization(self) -> float:
         """Get current utilization (0.0 = unused, 1.0 = fully utilized)."""
         bucket_status = self.bucket.get_status()
-        return bucket_status['utilization']
+        return bucket_status["utilization"]
 
 
 class RateLimiterPool:
@@ -330,11 +334,10 @@ class RateLimiterPool:
         with self._lock:
             limiter = RateLimiter(config, name)
             self._limiters[name] = limiter
-            _logger.info("Added rate limiter: %s (%.2f req/s)",
-                        name, config.requests_per_second)
+            _logger.info("Added rate limiter: %s (%.2f req/s)", name, config.requests_per_second)
             return limiter
 
-    def get_limiter(self, name: str) -> Optional[RateLimiter]:
+    def get_limiter(self, name: str) -> RateLimiter | None:
         """
         Get a rate limiter by name.
 
@@ -378,12 +381,12 @@ class RateLimiterPool:
             total_rejected = sum(l.rejected_requests for l in self._limiters.values())
 
             return {
-                'limiter_count': len(self._limiters),
-                'total_requests': total_requests,
-                'total_allowed': total_allowed,
-                'total_rejected': total_rejected,
-                'overall_success_rate': total_allowed / max(1, total_requests),
-                'limiter_names': list(self._limiters.keys())
+                "limiter_count": len(self._limiters),
+                "total_requests": total_requests,
+                "total_allowed": total_allowed,
+                "total_rejected": total_rejected,
+                "overall_success_rate": total_allowed / max(1, total_requests),
+                "limiter_names": list(self._limiters.keys()),
             }
 
     def list_limiters(self) -> List[str]:
@@ -392,7 +395,7 @@ class RateLimiterPool:
 
 
 # Global rate limiter pool
-_global_pool: Optional[RateLimiterPool] = None
+_global_pool: RateLimiterPool | None = None
 
 
 def get_rate_limiter_pool() -> RateLimiterPool:

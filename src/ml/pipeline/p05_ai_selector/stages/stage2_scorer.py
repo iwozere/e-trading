@@ -1,25 +1,24 @@
 """Stage 2 — Deterministic Signal Scoring: ~200 → top-25 candidates."""
 
 import json
+import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, Optional
-import sys
+from typing import Any, Dict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
 
-from src.ml.pipeline.p05_ai_selector.config import (
-    STAGE2_TOP_N,
-    STAGE2_CACHE_DIR,
-    P18_HIGH_SCORE_THRESHOLD,
-    P18_WEIGHTS,
-    CRYPTO_TICKERS,
-)
 from src.data.data_manager import DataManager
-from src.ml.pipeline.p05_ai_selector.signals.fundamental import score_fundamentals, build_sector_medians
+from src.ml.pipeline.p05_ai_selector.config import (
+    CRYPTO_TICKERS,
+    P18_WEIGHTS,
+    STAGE2_CACHE_DIR,
+    STAGE2_TOP_N,
+)
+from src.ml.pipeline.p05_ai_selector.signals.fundamental import build_sector_medians, score_fundamentals
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -35,7 +34,7 @@ class Stage2Scorer:
     Ties broken by volume_surge_ratio.
     """
 
-    def __init__(self, cache_dir: Optional[Path] = None):
+    def __init__(self, cache_dir: Path | None = None):
         self._cache_dir = cache_dir or STAGE2_CACHE_DIR
 
     def run(
@@ -110,25 +109,29 @@ class Stage2Scorer:
 
             total_score = momentum_score + fundamental_score + p18_score
 
-            rows.append({
-                "ticker": ticker,
-                "asset_type": asset_type,
-                "last_price": last_price,
-                "market_cap_b": market_cap_b,
-                "total_score": round(total_score, 2),
-                "momentum_score": round(momentum_score, 2),
-                "fundamental_score": round(fundamental_score, 2),
-                "p18_score": round(p18_score, 2),
-                "volume_surge_ratio": vol_surge,
-                "earnings_flag": earnings_flag,
-                "earnings_date": str(earnings_date) if earnings_date else "",
-                "fundamentals_available": fundamentals_available,
-                "signal_breakdown": json.dumps({
-                    **json.loads(s1_row.get("signal_breakdown", "{}")),
-                    "fundamentals": fund_breakdown,
-                    "p18": p18_breakdown,
-                }),
-            })
+            rows.append(
+                {
+                    "ticker": ticker,
+                    "asset_type": asset_type,
+                    "last_price": last_price,
+                    "market_cap_b": market_cap_b,
+                    "total_score": round(total_score, 2),
+                    "momentum_score": round(momentum_score, 2),
+                    "fundamental_score": round(fundamental_score, 2),
+                    "p18_score": round(p18_score, 2),
+                    "volume_surge_ratio": vol_surge,
+                    "earnings_flag": earnings_flag,
+                    "earnings_date": str(earnings_date) if earnings_date else "",
+                    "fundamentals_available": fundamentals_available,
+                    "signal_breakdown": json.dumps(
+                        {
+                            **json.loads(s1_row.get("signal_breakdown", "{}")),
+                            "fundamentals": fund_breakdown,
+                            "p18": p18_breakdown,
+                        }
+                    ),
+                }
+            )
 
         df = pd.DataFrame(rows)
         df = (
@@ -160,9 +163,7 @@ class Stage2Scorer:
 
         return result
 
-    def _compute_p18_score(
-        self, ticker: str, p18_data: Dict[str, Any]
-    ) -> tuple:
+    def _compute_p18_score(self, ticker: str, p18_data: Dict[str, Any]) -> tuple:
         """Apply P18 signal boosts per spec §6.3."""
         score = 0.0
         breakdown: Dict[str, object] = {}

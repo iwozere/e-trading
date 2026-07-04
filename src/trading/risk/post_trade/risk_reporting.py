@@ -3,7 +3,9 @@ Risk Reporting Module
 
 Implements risk dashboard/report generation for post-trade analysis.
 """
-from typing import Dict, Any
+
+from typing import Any, Dict
+
 
 def generate_risk_report(metrics: Dict[str, Any]) -> str:
     """
@@ -16,4 +18,4 @@ def generate_risk_report(metrics: Dict[str, Any]) -> str:
     report_lines = ["RISK REPORT"]
     for key, value in metrics.items():
         report_lines.append(f"{key}: {value}")
-    return "\n".join(report_lines) 
+    return "\n".join(report_lines)

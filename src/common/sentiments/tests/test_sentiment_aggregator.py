@@ -10,17 +10,19 @@ Tests cover:
 - Adaptive weighting based on data quality
 """
 
-import unittest
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
 import sys
+import unittest
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.common.sentiments.processing.sentiment_aggregator import (
-    SentimentAggregator, SourceSentiment, AggregatedSentiment
+    AggregatedSentiment,
+    SentimentAggregator,
+    SourceSentiment,
 )
 
 
@@ -31,22 +33,12 @@ class TestSentimentAggregator(unittest.TestCase):
         """Set up test fixtures."""
         self.config = {
             "aggregation_method": "weighted_average",
-            "quality_weights": {
-                "excellent": 1.0,
-                "good": 0.8,
-                "fair": 0.6,
-                "poor": 0.3
-            },
-            "source_weights": {
-                "stocktwits": 0.3,
-                "reddit": 0.3,
-                "twitter": 0.2,
-                "news": 0.2
-            },
+            "quality_weights": {"excellent": 1.0, "good": 0.8, "fair": 0.6, "poor": 0.3},
+            "source_weights": {"stocktwits": 0.3, "reddit": 0.3, "twitter": 0.2, "news": 0.2},
             "min_confidence": 0.1,
             "confidence_boost_threshold": 3,
             "outlier_threshold": 2.0,
-            "enable_outlier_removal": True
+            "enable_outlier_removal": True,
         }
         self.aggregator = SentimentAggregator(self.config)
 
@@ -74,7 +66,7 @@ class TestSentimentAggregator(unittest.TestCase):
             confidence=0.8,
             data_quality="good",
             sample_size=50,
-            raw_data={"test": "data"}
+            raw_data={"test": "data"},
         )
 
         self.assertEqual(source.source_name, "stocktwits")
@@ -90,9 +82,9 @@ class TestSentimentAggregator(unittest.TestCase):
         source = self.aggregator.create_source_sentiment(
             source_name="test",
             sentiment_score=2.0,  # Should be clamped to 1.0
-            confidence=1.5,       # Should be clamped to 1.0
+            confidence=1.5,  # Should be clamped to 1.0
             data_quality="good",
-            sample_size=-5        # Should be clamped to 0
+            sample_size=-5,  # Should be clamped to 0
         )
 
         self.assertEqual(source.sentiment_score, 1.0)
@@ -117,8 +109,8 @@ class TestSentimentAggregator(unittest.TestCase):
             confidence=0.8,
             data_quality="good",
             sample_size=25,
-            timestamp=datetime.now(timezone.utc),
-            raw_data={}
+            timestamp=datetime.now(UTC),
+            raw_data={},
         )
 
         result = self.aggregator.aggregate_sentiment([source])
@@ -138,8 +130,8 @@ class TestSentimentAggregator(unittest.TestCase):
                 confidence=0.9,
                 data_quality="excellent",
                 sample_size=100,
-                timestamp=datetime.now(timezone.utc),
-                raw_data={}
+                timestamp=datetime.now(UTC),
+                raw_data={},
             ),
             SourceSentiment(
                 source_name="reddit",
@@ -147,8 +139,8 @@ class TestSentimentAggregator(unittest.TestCase):
                 confidence=0.7,
                 data_quality="good",
                 sample_size=50,
-                timestamp=datetime.now(timezone.utc),
-                raw_data={}
+                timestamp=datetime.now(UTC),
+                raw_data={},
             ),
             SourceSentiment(
                 source_name="twitter",
@@ -156,9 +148,9 @@ class TestSentimentAggregator(unittest.TestCase):
                 confidence=0.8,
                 data_quality="fair",
                 sample_size=75,
-                timestamp=datetime.now(timezone.utc),
-                raw_data={}
-            )
+                timestamp=datetime.now(UTC),
+                raw_data={},
+            ),
         ]
 
         result = self.aggregator.aggregate_sentiment(sources)
@@ -174,9 +166,9 @@ class TestSentimentAggregator(unittest.TestCase):
     def test_aggregation_methods(self):
         """Test different aggregation methods."""
         sources = [
-            SourceSentiment("source1", 0.8, 0.9, "excellent", 100, datetime.now(timezone.utc), {}),
-            SourceSentiment("source2", 0.4, 0.7, "good", 50, datetime.now(timezone.utc), {}),
-            SourceSentiment("source3", 0.6, 0.8, "fair", 75, datetime.now(timezone.utc), {})
+            SourceSentiment("source1", 0.8, 0.9, "excellent", 100, datetime.now(UTC), {}),
+            SourceSentiment("source2", 0.4, 0.7, "good", 50, datetime.now(UTC), {}),
+            SourceSentiment("source3", 0.6, 0.8, "fair", 75, datetime.now(UTC), {}),
         ]
 
         # Test weighted average
@@ -202,10 +194,10 @@ class TestSentimentAggregator(unittest.TestCase):
     def test_outlier_removal(self):
         """Test outlier detection and removal."""
         sources = [
-            SourceSentiment("source1", 0.5, 0.8, "good", 50, datetime.now(timezone.utc), {}),
-            SourceSentiment("source2", 0.6, 0.8, "good", 50, datetime.now(timezone.utc), {}),
-            SourceSentiment("source3", 0.55, 0.8, "good", 50, datetime.now(timezone.utc), {}),
-            SourceSentiment("outlier", -0.9, 0.8, "good", 50, datetime.now(timezone.utc), {})  # Outlier
+            SourceSentiment("source1", 0.5, 0.8, "good", 50, datetime.now(UTC), {}),
+            SourceSentiment("source2", 0.6, 0.8, "good", 50, datetime.now(UTC), {}),
+            SourceSentiment("source3", 0.55, 0.8, "good", 50, datetime.now(UTC), {}),
+            SourceSentiment("outlier", -0.9, 0.8, "good", 50, datetime.now(UTC), {}),  # Outlier
         ]
 
         # With outlier removal enabled
@@ -235,14 +227,11 @@ class TestSentimentAggregator(unittest.TestCase):
         """Test confidence calculation logic."""
         # High confidence scenario: many sources, high individual confidence
         high_conf_sources = [
-            SourceSentiment(f"source{i}", 0.6, 0.9, "excellent", 100, datetime.now(timezone.utc), {})
-            for i in range(5)
+            SourceSentiment(f"source{i}", 0.6, 0.9, "excellent", 100, datetime.now(UTC), {}) for i in range(5)
         ]
 
         # Low confidence scenario: few sources, low individual confidence
-        low_conf_sources = [
-            SourceSentiment("source1", 0.6, 0.3, "poor", 5, datetime.now(timezone.utc), {})
-        ]
+        low_conf_sources = [SourceSentiment("source1", 0.6, 0.3, "poor", 5, datetime.now(UTC), {})]
 
         high_result = self.aggregator.aggregate_sentiment(high_conf_sources)
         low_result = self.aggregator.aggregate_sentiment(low_conf_sources)
@@ -252,14 +241,14 @@ class TestSentimentAggregator(unittest.TestCase):
 
     def test_temporal_trend_analysis(self):
         """Test temporal trend analysis."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Improving trend: older sources negative, newer positive
         sources = [
             SourceSentiment("old1", -0.5, 0.8, "good", 50, now - timedelta(hours=8), {}),
             SourceSentiment("old2", -0.3, 0.8, "good", 50, now - timedelta(hours=7), {}),
             SourceSentiment("new1", 0.4, 0.8, "good", 50, now - timedelta(hours=2), {}),
-            SourceSentiment("new2", 0.6, 0.8, "good", 50, now - timedelta(hours=1), {})
+            SourceSentiment("new2", 0.6, 0.8, "good", 50, now - timedelta(hours=1), {}),
         ]
 
         result = self.aggregator.aggregate_sentiment(sources)
@@ -268,9 +257,9 @@ class TestSentimentAggregator(unittest.TestCase):
     def test_confidence_interval_calculation(self):
         """Test confidence interval calculation."""
         sources = [
-            SourceSentiment("source1", 0.5, 0.8, "good", 50, datetime.now(timezone.utc), {}),
-            SourceSentiment("source2", 0.7, 0.8, "good", 50, datetime.now(timezone.utc), {}),
-            SourceSentiment("source3", 0.6, 0.8, "good", 50, datetime.now(timezone.utc), {})
+            SourceSentiment("source1", 0.5, 0.8, "good", 50, datetime.now(UTC), {}),
+            SourceSentiment("source2", 0.7, 0.8, "good", 50, datetime.now(UTC), {}),
+            SourceSentiment("source3", 0.6, 0.8, "good", 50, datetime.now(UTC), {}),
         ]
 
         result = self.aggregator.aggregate_sentiment(sources)
@@ -285,9 +274,9 @@ class TestSentimentAggregator(unittest.TestCase):
         """Test source validation logic."""
         # Invalid sources that should be filtered out
         invalid_sources = [
-            SourceSentiment("invalid1", 2.0, 0.8, "good", 50, datetime.now(timezone.utc), {}),  # Invalid score
-            SourceSentiment("invalid2", 0.5, 1.5, "good", 50, datetime.now(timezone.utc), {}),  # Invalid confidence
-            SourceSentiment("invalid3", 0.5, 0.8, "good", 0, datetime.now(timezone.utc), {})   # Zero sample size
+            SourceSentiment("invalid1", 2.0, 0.8, "good", 50, datetime.now(UTC), {}),  # Invalid score
+            SourceSentiment("invalid2", 0.5, 1.5, "good", 50, datetime.now(UTC), {}),  # Invalid confidence
+            SourceSentiment("invalid3", 0.5, 0.8, "good", 0, datetime.now(UTC), {}),  # Zero sample size
         ]
 
         # Should return empty result due to no valid sources
@@ -298,8 +287,8 @@ class TestSentimentAggregator(unittest.TestCase):
     def test_source_weight_calculation(self):
         """Test dynamic source weight calculation."""
         sources = [
-            SourceSentiment("high_quality", 0.6, 0.9, "excellent", 200, datetime.now(timezone.utc), {}),
-            SourceSentiment("low_quality", 0.6, 0.3, "poor", 10, datetime.now(timezone.utc), {})
+            SourceSentiment("high_quality", 0.6, 0.9, "excellent", 200, datetime.now(UTC), {}),
+            SourceSentiment("low_quality", 0.6, 0.3, "poor", 10, datetime.now(UTC), {}),
         ]
 
         weights = self.aggregator._calculate_source_weights(sources)
@@ -329,7 +318,7 @@ class TestSourceSentiment(unittest.TestCase):
 
     def test_source_sentiment_creation(self):
         """Test SourceSentiment object creation."""
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
         raw_data = {"test": "data", "count": 42}
 
         source = SourceSentiment(
@@ -339,7 +328,7 @@ class TestSourceSentiment(unittest.TestCase):
             data_quality="excellent",
             sample_size=100,
             timestamp=timestamp,
-            raw_data=raw_data
+            raw_data=raw_data,
         )
 
         self.assertEqual(source.source_name, "test_source")
@@ -371,7 +360,7 @@ class TestAggregatedSentiment(unittest.TestCase):
             confidence_interval=confidence_interval,
             temporal_trend="improving",
             aggregation_method="weighted_average",
-            metadata=metadata
+            metadata=metadata,
         )
 
         self.assertEqual(result.final_score, 0.65)

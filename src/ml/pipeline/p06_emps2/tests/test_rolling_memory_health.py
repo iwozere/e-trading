@@ -5,8 +5,7 @@ Tests for Phase 6.3 — rolling memory bootstrap health check.
 import json
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-import pytest
+from unittest.mock import MagicMock
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 if str(PROJECT_ROOT) not in sys.path:
@@ -15,6 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 def _make_scanner(results_base: Path, target_date: str = "2026-06-09"):
     from src.ml.pipeline.p06_emps2.rolling_memory import RollingMemoryScanner
+
     config = MagicMock()
     config.lookback_days = 14
     return RollingMemoryScanner(
@@ -26,7 +26,6 @@ def _make_scanner(results_base: Path, target_date: str = "2026-06-09"):
 
 
 class TestCheckBootstrapHealth:
-
     def test_persists_first_run_date_on_first_call(self, tmp_path):
         scanner = _make_scanner(tmp_path, "2026-06-09")
         scanner.check_bootstrap_health(phase1_count=3)
@@ -52,6 +51,7 @@ class TestCheckBootstrapHealth:
 
     def test_no_error_when_detections_present(self, tmp_path, caplog):
         import logging
+
         scanner = _make_scanner(tmp_path, "2026-06-09")
         # First run 20 days ago
         existing_state = {
@@ -68,6 +68,7 @@ class TestCheckBootstrapHealth:
 
     def test_error_emitted_when_zero_detections_after_lookback(self, tmp_path, caplog):
         import logging
+
         scanner = _make_scanner(tmp_path, "2026-06-09")
         # First run 20 days ago (> lookback of 14), zero cumulative detections
         existing_state = {
@@ -86,6 +87,7 @@ class TestCheckBootstrapHealth:
 
     def test_no_error_when_still_within_lookback(self, tmp_path, caplog):
         import logging
+
         scanner = _make_scanner(tmp_path, "2026-06-09")
         # First run only 5 days ago (< lookback of 14) — too soon to flag
         existing_state = {

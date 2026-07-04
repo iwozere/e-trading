@@ -8,12 +8,14 @@ Tests cover:
 - Rate limiting across different APIs
 - Sentiment analysis and aggregation
 """
+
+import sys
+from pathlib import Path
+from unittest.mock import AsyncMock, Mock, patch
+
+import aiohttp
 import pytest
 import pytest_asyncio
-import aiohttp
-from unittest.mock import Mock, AsyncMock, patch
-from pathlib import Path
-import sys
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -40,7 +42,7 @@ class TestAsyncNewsAdapter:
             concurrency=2,
             rate_limit_delay=0.01,
             max_retries=1,
-            session=mock_session
+            session=mock_session,
         )
         yield adapter
         await adapter.close()
@@ -55,7 +57,7 @@ class TestAsyncNewsAdapter:
                 "summary": "Apple Inc reported better than expected earnings with strong iPhone sales driving growth.",
                 "url": "https://reuters.com/article/aapl-earnings",
                 "source": "Reuters",
-                "datetime": 1672531200  # 2023-01-01 00:00:00
+                "datetime": 1672531200,  # 2023-01-01 00:00:00
             },
             {
                 "id": 123457,
@@ -63,8 +65,8 @@ class TestAsyncNewsAdapter:
                 "summary": "Apple stock may face challenges due to supply chain concerns and market volatility.",
                 "url": "https://bloomberg.com/article/aapl-challenges",
                 "source": "Bloomberg",
-                "datetime": 1672527600  # 2022-12-31 23:00:00
-            }
+                "datetime": 1672527600,  # 2022-12-31 23:00:00
+            },
         ]
 
     @pytest.fixture
@@ -85,9 +87,9 @@ class TestAsyncNewsAdapter:
                             "ticker": "AAPL",
                             "relevance_score": 0.9,
                             "ticker_sentiment_score": 0.8,
-                            "ticker_sentiment_label": "Bullish"
+                            "ticker_sentiment_label": "Bullish",
                         }
-                    ]
+                    ],
                 }
             ]
         }
@@ -103,7 +105,7 @@ class TestAsyncNewsAdapter:
                     "url": "https://techcrunch.com/article/apple-products",
                     "source": {"name": "TechCrunch"},
                     "author": "Tech Reporter",
-                    "publishedAt": "2023-01-01T12:00:00Z"
+                    "publishedAt": "2023-01-01T12:00:00Z",
                 }
             ]
         }
@@ -111,11 +113,7 @@ class TestAsyncNewsAdapter:
     @pytest.mark.asyncio
     async def test_initialization_with_tokens(self):
         """Test adapter initialization with API tokens."""
-        adapter = AsyncNewsAdapter(
-            finnhub_token="fh_token",
-            alpha_vantage_token="av_token",
-            newsapi_token="na_token"
-        )
+        adapter = AsyncNewsAdapter(finnhub_token="fh_token", alpha_vantage_token="av_token", newsapi_token="na_token")
 
         try:
             assert adapter.finnhub_token == "fh_token"
@@ -151,8 +149,11 @@ class TestAsyncNewsAdapter:
             ("Stock Could Surge", "This might be speculation", {"speculative": True}),
             ("Shocking Market News", "Incredible gains today", {"emotional": True}),
             ("Regular Market Update", "Standard earnings report", {}),  # No bias
-            ("Mixed Content", "This could be amazing sponsored content",
-             {"promotional": True, "speculative": True, "emotional": True}),
+            (
+                "Mixed Content",
+                "This could be amazing sponsored content",
+                {"promotional": True, "speculative": True, "emotional": True},
+            ),
         ]
 
         for title, content, expected_bias in test_cases:
@@ -160,29 +161,32 @@ class TestAsyncNewsAdapter:
 
             for bias_type in ["promotional", "speculative", "emotional"]:
                 expected_value = expected_bias.get(bias_type, False)
-                assert bias[bias_type] == expected_value, f"Failed for {bias_type} in '{title}': expected {expected_value}, got {bias[bias_type]}"
+                assert bias[bias_type] == expected_value, (
+                    f"Failed for {bias_type} in '{title}': expected {expected_value}, got {bias[bias_type]}"
+                )
 
     def test_rate_limit_checking(self, adapter):
         """Test rate limit checking for different APIs."""
         import time
+
         current_time = time.time()
 
         # Test Finnhub rate limit
-        assert adapter._check_rate_limit('finnhub') is True
+        assert adapter._check_rate_limit("finnhub") is True
 
         # Simulate many requests
         adapter._finnhub_requests = [current_time - i for i in range(60)]
-        assert adapter._check_rate_limit('finnhub') is False
+        assert adapter._check_rate_limit("finnhub") is False
 
         # Test Alpha Vantage rate limit
-        assert adapter._check_rate_limit('alpha_vantage') is True
+        assert adapter._check_rate_limit("alpha_vantage") is True
         adapter._alpha_vantage_requests = [current_time - i for i in range(5)]
-        assert adapter._check_rate_limit('alpha_vantage') is False
+        assert adapter._check_rate_limit("alpha_vantage") is False
 
         # Test NewsAPI rate limit (daily)
-        assert adapter._check_rate_limit('newsapi') is True
+        assert adapter._check_rate_limit("newsapi") is True
         adapter._newsapi_requests = [current_time - i for i in range(1000)]
-        assert adapter._check_rate_limit('newsapi') is False
+        assert adapter._check_rate_limit("newsapi") is False
 
     def test_record_request(self, adapter):
         """Test request recording for different APIs."""
@@ -190,9 +194,9 @@ class TestAsyncNewsAdapter:
         initial_av = len(adapter._alpha_vantage_requests)
         initial_na = len(adapter._newsapi_requests)
 
-        adapter._record_request('finnhub')
-        adapter._record_request('alpha_vantage')
-        adapter._record_request('newsapi')
+        adapter._record_request("finnhub")
+        adapter._record_request("alpha_vantage")
+        adapter._record_request("newsapi")
 
         assert len(adapter._finnhub_requests) == initial_fh + 1
         assert len(adapter._alpha_vantage_requests) == initial_av + 1
@@ -201,7 +205,7 @@ class TestAsyncNewsAdapter:
     @pytest.mark.asyncio
     async def test_fetch_finnhub_news_success(self, adapter, sample_finnhub_response):
         """Test successful Finnhub news fetching."""
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = sample_finnhub_response
 
             articles = await adapter._fetch_finnhub_news("AAPL", limit=10)
@@ -230,7 +234,7 @@ class TestAsyncNewsAdapter:
     @pytest.mark.asyncio
     async def test_fetch_alpha_vantage_news_success(self, adapter, sample_alpha_vantage_response):
         """Test successful Alpha Vantage news fetching."""
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = sample_alpha_vantage_response
 
             articles = await adapter._fetch_alpha_vantage_news("AAPL", limit=10)
@@ -247,7 +251,7 @@ class TestAsyncNewsAdapter:
     @pytest.mark.asyncio
     async def test_fetch_newsapi_news_success(self, adapter, sample_newsapi_response):
         """Test successful NewsAPI fetching."""
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = sample_newsapi_response
 
             articles = await adapter._fetch_newsapi_news("AAPL", limit=10)
@@ -261,12 +265,13 @@ class TestAsyncNewsAdapter:
             assert article["author"] == "Tech Reporter"
 
     @pytest.mark.asyncio
-    async def test_fetch_messages_success(self, adapter, sample_finnhub_response,
-                                        sample_alpha_vantage_response, sample_newsapi_response):
+    async def test_fetch_messages_success(
+        self, adapter, sample_finnhub_response, sample_alpha_vantage_response, sample_newsapi_response
+    ):
         """Test successful message fetching from all sources."""
-        with patch.object(adapter, '_fetch_finnhub_news', new_callable=AsyncMock) as mock_fh:
-            with patch.object(adapter, '_fetch_alpha_vantage_news', new_callable=AsyncMock) as mock_av:
-                with patch.object(adapter, '_fetch_newsapi_news', new_callable=AsyncMock) as mock_na:
+        with patch.object(adapter, "_fetch_finnhub_news", new_callable=AsyncMock) as mock_fh:
+            with patch.object(adapter, "_fetch_alpha_vantage_news", new_callable=AsyncMock) as mock_av:
+                with patch.object(adapter, "_fetch_newsapi_news", new_callable=AsyncMock) as mock_na:
                     # Mock responses from each API
                     mock_fh.return_value = [{"id": "fh1", "url": "https://reuters.com/1", "title": "FH Article"}]
                     mock_av.return_value = [{"id": "av1", "url": "https://cnbc.com/1", "title": "AV Article"}]
@@ -295,9 +300,9 @@ class TestAsyncNewsAdapter:
             {"id": "3", "url": "https://example.com/different", "title": "Article 3"},
         ]
 
-        with patch.object(adapter, '_fetch_finnhub_news', new_callable=AsyncMock) as mock_fh:
-            with patch.object(adapter, '_fetch_alpha_vantage_news', new_callable=AsyncMock) as mock_av:
-                with patch.object(adapter, '_fetch_newsapi_news', new_callable=AsyncMock) as mock_na:
+        with patch.object(adapter, "_fetch_finnhub_news", new_callable=AsyncMock) as mock_fh:
+            with patch.object(adapter, "_fetch_alpha_vantage_news", new_callable=AsyncMock) as mock_av:
+                with patch.object(adapter, "_fetch_newsapi_news", new_callable=AsyncMock) as mock_na:
                     mock_fh.return_value = duplicate_articles
                     mock_av.return_value = []
                     mock_na.return_value = []
@@ -332,9 +337,9 @@ class TestAsyncNewsAdapter:
     @pytest.mark.asyncio
     async def test_fetch_messages_with_since_ts(self, adapter):
         """Test fetch messages with since_ts parameter."""
-        with patch.object(adapter, '_fetch_finnhub_news', new_callable=AsyncMock) as mock_fh:
-            with patch.object(adapter, '_fetch_alpha_vantage_news', new_callable=AsyncMock) as mock_av:
-                with patch.object(adapter, '_fetch_newsapi_news', new_callable=AsyncMock) as mock_na:
+        with patch.object(adapter, "_fetch_finnhub_news", new_callable=AsyncMock) as mock_fh:
+            with patch.object(adapter, "_fetch_alpha_vantage_news", new_callable=AsyncMock) as mock_av:
+                with patch.object(adapter, "_fetch_newsapi_news", new_callable=AsyncMock) as mock_na:
                     mock_fh.return_value = []
                     mock_av.return_value = []
                     mock_na.return_value = []
@@ -353,28 +358,50 @@ class TestAsyncNewsAdapter:
         """Test successful summary generation."""
         # Create articles with clear sentiment patterns
         articles = [
-            {"title": "AAPL surge rally strong", "content": "Positive growth outlook",
-             "credibility": 0.9, "source": "Reuters", "bias_indicators": {"promotional": False}},
-            {"title": "AAPL decline fall weak", "content": "Bearish market conditions",
-             "credibility": 0.8, "source": "Bloomberg", "bias_indicators": {"promotional": False}},
-            {"title": "AAPL analysis report", "content": "Neutral market assessment",
-             "credibility": 0.7, "source": "CNBC", "bias_indicators": {"promotional": False}},
-            {"title": "AAPL bullish upgrade buy", "content": "Strong recommendation",
-             "credibility": 0.95, "source": "WSJ", "bias_indicators": {"promotional": True}},
+            {
+                "title": "AAPL surge rally strong",
+                "content": "Positive growth outlook",
+                "credibility": 0.9,
+                "source": "Reuters",
+                "bias_indicators": {"promotional": False},
+            },
+            {
+                "title": "AAPL decline fall weak",
+                "content": "Bearish market conditions",
+                "credibility": 0.8,
+                "source": "Bloomberg",
+                "bias_indicators": {"promotional": False},
+            },
+            {
+                "title": "AAPL analysis report",
+                "content": "Neutral market assessment",
+                "credibility": 0.7,
+                "source": "CNBC",
+                "bias_indicators": {"promotional": False},
+            },
+            {
+                "title": "AAPL bullish upgrade buy",
+                "content": "Strong recommendation",
+                "credibility": 0.95,
+                "source": "WSJ",
+                "bias_indicators": {"promotional": True},
+            },
         ]
 
-        with patch.object(adapter, 'fetch_messages', new_callable=AsyncMock) as mock_fetch:
+        with patch.object(adapter, "fetch_messages", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = articles
 
             summary = await adapter.fetch_summary("AAPL")
 
             assert summary["mentions"] == 4
             assert summary["bullish"] == 2  # Two bullish articles
-            assert summary["bearish"] == 1   # One bearish article
-            assert summary["neutral"] == 1   # One neutral article
+            assert summary["bearish"] == 1  # One bearish article
+            assert summary["neutral"] == 1  # One neutral article
             assert summary["sentiment_score"] == 0.25  # (2-1)/4 = 0.25
             assert summary["provider"] == "news"
-            assert abs(summary["avg_credibility"] - 0.8625) < 0.001  # (0.9+0.8+0.7+0.95)/4 with floating point tolerance
+            assert (
+                abs(summary["avg_credibility"] - 0.8625) < 0.001
+            )  # (0.9+0.8+0.7+0.95)/4 with floating point tolerance
             assert "timestamp" in summary
 
             # Check source distribution
@@ -389,15 +416,36 @@ class TestAsyncNewsAdapter:
     async def test_fetch_summary_alpha_vantage_sentiment(self, adapter):
         """Test summary generation using Alpha Vantage sentiment labels."""
         articles = [
-            {"provider": "alpha_vantage", "overall_sentiment": "Bullish",
-             "title": "Test", "content": "", "credibility": 0.8, "source": "AV", "bias_indicators": {}},
-            {"provider": "alpha_vantage", "overall_sentiment": "Bearish",
-             "title": "Test", "content": "", "credibility": 0.8, "source": "AV", "bias_indicators": {}},
-            {"provider": "alpha_vantage", "overall_sentiment": "Neutral",
-             "title": "Test", "content": "", "credibility": 0.8, "source": "AV", "bias_indicators": {}},
+            {
+                "provider": "alpha_vantage",
+                "overall_sentiment": "Bullish",
+                "title": "Test",
+                "content": "",
+                "credibility": 0.8,
+                "source": "AV",
+                "bias_indicators": {},
+            },
+            {
+                "provider": "alpha_vantage",
+                "overall_sentiment": "Bearish",
+                "title": "Test",
+                "content": "",
+                "credibility": 0.8,
+                "source": "AV",
+                "bias_indicators": {},
+            },
+            {
+                "provider": "alpha_vantage",
+                "overall_sentiment": "Neutral",
+                "title": "Test",
+                "content": "",
+                "credibility": 0.8,
+                "source": "AV",
+                "bias_indicators": {},
+            },
         ]
 
-        with patch.object(adapter, 'fetch_messages', new_callable=AsyncMock) as mock_fetch:
+        with patch.object(adapter, "fetch_messages", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = articles
 
             summary = await adapter.fetch_summary("AAPL")
@@ -410,7 +458,7 @@ class TestAsyncNewsAdapter:
     @pytest.mark.asyncio
     async def test_fetch_summary_no_articles(self, adapter):
         """Test summary generation with no articles."""
-        with patch.object(adapter, 'fetch_messages', new_callable=AsyncMock) as mock_fetch:
+        with patch.object(adapter, "fetch_messages", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = []
 
             summary = await adapter.fetch_summary("AAPL")
@@ -435,10 +483,18 @@ class TestAsyncNewsAdapter:
         ]
 
         for title, content, expected_sentiment in test_cases:
-            articles = [{"title": title, "content": content, "credibility": 0.8,
-                       "source": "test", "bias_indicators": {}, "provider": "test"}]
+            articles = [
+                {
+                    "title": title,
+                    "content": content,
+                    "credibility": 0.8,
+                    "source": "test",
+                    "bias_indicators": {},
+                    "provider": "test",
+                }
+            ]
 
-            with patch.object(adapter, 'fetch_messages', new_callable=AsyncMock) as mock_fetch:
+            with patch.object(adapter, "fetch_messages", new_callable=AsyncMock) as mock_fetch:
                 mock_fetch.return_value = articles
 
                 summary = await adapter.fetch_summary("TEST")
@@ -502,9 +558,9 @@ class TestAsyncNewsAdapter:
     @pytest.mark.asyncio
     async def test_api_error_handling(self, adapter):
         """Test handling of API errors during fetching."""
-        with patch.object(adapter, '_fetch_finnhub_news', new_callable=AsyncMock) as mock_fh:
-            with patch.object(adapter, '_fetch_alpha_vantage_news', new_callable=AsyncMock) as mock_av:
-                with patch.object(adapter, '_fetch_newsapi_news', new_callable=AsyncMock) as mock_na:
+        with patch.object(adapter, "_fetch_finnhub_news", new_callable=AsyncMock) as mock_fh:
+            with patch.object(adapter, "_fetch_alpha_vantage_news", new_callable=AsyncMock) as mock_av:
+                with patch.object(adapter, "_fetch_newsapi_news", new_callable=AsyncMock) as mock_na:
                     # Simulate API errors
                     mock_fh.side_effect = Exception("Finnhub API error")
                     mock_av.return_value = [{"id": "av1", "url": "https://test.com", "title": "AV Article"}]
@@ -525,9 +581,9 @@ class TestAsyncNewsAdapter:
             {"id": "middle", "url": "https://middle.com", "published_at": "2023-01-01T11:00:00Z"},
         ]
 
-        with patch.object(adapter, '_fetch_finnhub_news', new_callable=AsyncMock) as mock_fh:
-            with patch.object(adapter, '_fetch_alpha_vantage_news', new_callable=AsyncMock) as mock_av:
-                with patch.object(adapter, '_fetch_newsapi_news', new_callable=AsyncMock) as mock_na:
+        with patch.object(adapter, "_fetch_finnhub_news", new_callable=AsyncMock) as mock_fh:
+            with patch.object(adapter, "_fetch_alpha_vantage_news", new_callable=AsyncMock) as mock_av:
+                with patch.object(adapter, "_fetch_newsapi_news", new_callable=AsyncMock) as mock_na:
                     mock_fh.return_value = articles
                     mock_av.return_value = []
                     mock_na.return_value = []

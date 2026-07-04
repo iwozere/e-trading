@@ -13,8 +13,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
-from src.notification.logger import setup_logger
 from src.ml.pipeline.p19_penny_intraday.models.intraday_signal import IntradaySignal
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -22,14 +22,34 @@ DEFAULT_DB_PATH = "results/p19_penny_intraday/shadow.sqlite"
 
 # Columns persisted per poll. Mirrors IntradaySignal.to_dict() + a `date` partition.
 _COLUMNS = [
-    "date", "ts", "ticker", "source", "tier",
-    "price", "day_open", "day_high", "day_low", "prev_close",
-    "pct_from_open", "pct_from_prev_close",
-    "day_volume", "avg_volume_30d", "rvol_so_far", "dollar_volume_so_far",
-    "volume_is_delayed", "fresh_catalyst", "catalyst_signals",
-    "short_squeeze_score", "dilution_penalty", "sentiment",
-    "severity", "trigger_reason",
-    "eod_open", "eod_high", "eod_low", "eod_close",
+    "date",
+    "ts",
+    "ticker",
+    "source",
+    "tier",
+    "price",
+    "day_open",
+    "day_high",
+    "day_low",
+    "prev_close",
+    "pct_from_open",
+    "pct_from_prev_close",
+    "day_volume",
+    "avg_volume_30d",
+    "rvol_so_far",
+    "dollar_volume_so_far",
+    "volume_is_delayed",
+    "fresh_catalyst",
+    "catalyst_signals",
+    "short_squeeze_score",
+    "dilution_penalty",
+    "sentiment",
+    "severity",
+    "trigger_reason",
+    "eod_open",
+    "eod_high",
+    "eod_low",
+    "eod_close",
 ]
 
 
@@ -45,18 +65,14 @@ class ShadowStore:
     def _ensure_schema(self) -> None:
         cols = ",\n  ".join(f"{c} {self._col_type(c)}" for c in _COLUMNS)
         self._conn.execute(
-            f"CREATE TABLE IF NOT EXISTS shadow_log (\n  "
-            f"id INTEGER PRIMARY KEY AUTOINCREMENT,\n  {cols}\n)"
+            f"CREATE TABLE IF NOT EXISTS shadow_log (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  {cols}\n)"
         )
-        self._conn.execute(
-            "CREATE INDEX IF NOT EXISTS ix_shadow_date_ticker ON shadow_log(date, ticker)"
-        )
+        self._conn.execute("CREATE INDEX IF NOT EXISTS ix_shadow_date_ticker ON shadow_log(date, ticker)")
         self._conn.commit()
 
     @staticmethod
     def _col_type(col: str) -> str:
-        if col in ("date", "ts", "ticker", "source", "tier", "trigger_reason",
-                   "catalyst_signals", "sentiment"):
+        if col in ("date", "ts", "ticker", "source", "tier", "trigger_reason", "catalyst_signals", "sentiment"):
             return "TEXT"
         if col in ("volume_is_delayed", "fresh_catalyst"):
             return "INTEGER"
@@ -102,10 +118,8 @@ class ShadowStore:
 
     def update_eod(self, date: str, ticker: str, ohlc: Dict[str, float]) -> int:
         cur = self._conn.execute(
-            "UPDATE shadow_log SET eod_open=?, eod_high=?, eod_low=?, eod_close=? "
-            "WHERE date=? AND ticker=?",
-            (ohlc.get("open"), ohlc.get("high"), ohlc.get("low"), ohlc.get("close"),
-             date, ticker),
+            "UPDATE shadow_log SET eod_open=?, eod_high=?, eod_low=?, eod_close=? WHERE date=? AND ticker=?",
+            (ohlc.get("open"), ohlc.get("high"), ohlc.get("low"), ohlc.get("close"), date, ticker),
         )
         self._conn.commit()
         return cur.rowcount

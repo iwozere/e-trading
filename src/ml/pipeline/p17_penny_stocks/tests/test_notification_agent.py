@@ -1,8 +1,8 @@
 """Tests for P17 NotificationAgent (Tier A/B email build + queue)."""
 
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -26,6 +26,7 @@ def _agent(user_id="123", **cfg_kw) -> NotificationAgent:
 
 # ── Filtering / early returns ───────────────────────────────────────────────
 
+
 def test_skips_when_email_disabled():
     agent = _agent(email_enabled=False)
     assert agent.run([_cand("AAA", "B", 60)])["emailed"] == 0
@@ -43,6 +44,7 @@ def test_skips_when_no_tier_ab():
 
 
 # ── Queue path (services injected) ──────────────────────────────────────────
+
 
 def _inject_services(monkeypatch, email="me@example.com"):
     created = {}
@@ -68,7 +70,7 @@ def test_queues_email_for_tier_ab(monkeypatch):
     created = _inject_services(monkeypatch)
     agent = _agent()
     res = agent.run([_cand("AAA", "B", 60), _cand("ZZZ", "A", 80), _cand("CCC", "C", 40)])
-    assert res["emailed"] == 2                      # A and B only
+    assert res["emailed"] == 2  # A and B only
     payload = created["payload"]
     assert payload["channels"] == ["email"]
     assert payload["content"]["source"] == "p17_penny_stocks"
@@ -85,15 +87,14 @@ def test_no_email_channel_skips(monkeypatch):
 
 # ── Formatting ──────────────────────────────────────────────────────────────
 
+
 def test_pretty_catalysts_humanises_slug():
-    c = _cand("AAA", "B", 60,
-              catalyst_signals=["catalyst_material_agreement_2026-06-25"])
+    c = _cand("AAA", "B", 60, catalyst_signals=["catalyst_material_agreement_2026-06-25"])
     assert NotificationAgent._pretty_catalysts(c) == "material agreement (2026-06-25)"
 
 
 def test_format_text_and_html_contain_picks():
-    picks = [_cand("AAA", "B", 60, company_name="Alpha Inc",
-                   catalyst_signals=["catalyst_tier1_news_2026-06-20"])]
+    picks = [_cand("AAA", "B", 60, company_name="Alpha Inc", catalyst_signals=["catalyst_tier1_news_2026-06-20"])]
     text = NotificationAgent.format_text(picks, DATE)
     html = NotificationAgent.format_html(picks, DATE)
     assert "AAA" in text and "Alpha Inc" in text and DATE in text

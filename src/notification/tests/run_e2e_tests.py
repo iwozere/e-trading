@@ -9,10 +9,10 @@ Runs comprehensive end-to-end tests covering:
 """
 
 import asyncio
-import sys
 import subprocess
+import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -33,12 +33,9 @@ class E2ETestRunner:
 
     def log_result(self, test_name: str, success: bool, message: str = ""):
         """Log test result."""
-        self.test_results.append({
-            "test": test_name,
-            "success": success,
-            "message": message,
-            "timestamp": datetime.now(timezone.utc)
-        })
+        self.test_results.append(
+            {"test": test_name, "success": success, "message": message, "timestamp": datetime.now(UTC)}
+        )
 
         status = "✓ PASS" if success else "✗ FAIL"
         print(f"{status} {test_name}" + (f" - {message}" if message else ""))
@@ -72,6 +69,7 @@ class E2ETestRunner:
             # Check if pytest is available
             try:
                 import pytest
+
                 pytest_available = True
             except ImportError:
                 pytest_available = False
@@ -88,13 +86,15 @@ class E2ETestRunner:
                 return False
 
             # Run pytest programmatically
-            exit_code = pytest.main([
-                str(test_file),
-                "-v",
-                "--tb=short",
-                "-x",  # Stop on first failure
-                "--disable-warnings"
-            ])
+            exit_code = pytest.main(
+                [
+                    str(test_file),
+                    "-v",
+                    "--tb=short",
+                    "-x",  # Stop on first failure
+                    "--disable-warnings",
+                ]
+            )
 
             if exit_code == 0:
                 self.log_result("Pytest E2E Tests", True, "All pytest tests passed")
@@ -120,9 +120,7 @@ class E2ETestRunner:
                 return False
 
             # Run as subprocess
-            result = subprocess.run([
-                sys.executable, str(test_script)
-            ], capture_output=True, text=True, timeout=60)
+            result = subprocess.run([sys.executable, str(test_script)], capture_output=True, text=True, timeout=60)
 
             if result.returncode == 0:
                 self.log_result("Infrastructure Tests", True, "Infrastructure tests passed")
@@ -152,9 +150,7 @@ class E2ETestRunner:
                 return False
 
             # Run as subprocess
-            result = subprocess.run([
-                sys.executable, str(test_script)
-            ], capture_output=True, text=True, timeout=30)
+            result = subprocess.run([sys.executable, str(test_script)], capture_output=True, text=True, timeout=30)
 
             if result.returncode == 0:
                 self.log_result("Core Systems Tests", True, "Core systems tests passed")
@@ -176,8 +172,8 @@ class E2ETestRunner:
         print("\n=== Checking Service Health ===")
 
         try:
-            from src.notification.service.config import config
             from src.data.db.services.database_service import get_database_service
+            from src.notification.service.config import config
 
             # Test database connection
             try:
@@ -207,7 +203,7 @@ class E2ETestRunner:
 
     async def run_all_tests(self):
         """Run all end-to-end tests."""
-        self.start_time = datetime.now(timezone.utc)
+        self.start_time = datetime.now(UTC)
 
         print("🚀 Starting Notification Service End-to-End Tests")
         print(f"Start time: {self.start_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
@@ -236,7 +232,7 @@ class E2ETestRunner:
         # 4. Pytest-based tests (if available)
         test_results.append(self.run_pytest_tests())
 
-        self.end_time = datetime.now(timezone.utc)
+        self.end_time = datetime.now(UTC)
         duration = self.end_time - self.start_time
 
         # Print final summary

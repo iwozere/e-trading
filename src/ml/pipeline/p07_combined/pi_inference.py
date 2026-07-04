@@ -1,9 +1,10 @@
+import json
+from pathlib import Path
+
+import numpy as np
 import onnxruntime as ort
 import pandas as pd
-import numpy as np
-import json
-import talib
-from pathlib import Path
+
 
 class P07PiClient:
     """
@@ -13,13 +14,13 @@ class P07PiClient:
 
     def __init__(self, model_path: Path, metadata_path: Path):
         self.session = ort.InferenceSession(str(model_path))
-        with open(metadata_path, 'r') as f:
+        with open(metadata_path) as f:
             self.metadata = json.load(f)
 
-        self.feature_names = self.metadata['feature_names']
+        self.feature_names = self.metadata["feature_names"]
         # Scaler params for manual reconstruction to avoid sklearn dependency
-        self.means = np.array(self.metadata['scaler_params']['mean'])
-        self.scales = np.array(self.metadata['scaler_params']['scale'])
+        self.means = np.array(self.metadata["scaler_params"]["mean"])
+        self.scales = np.array(self.metadata["scaler_params"]["scale"])
 
     def preprocess(self, latest_ohlcv: pd.DataFrame) -> np.ndarray:
         """
@@ -36,7 +37,8 @@ class P07PiClient:
         inputs = {self.session.get_inputs()[0].name: feature_vector}
         probs = self.session.run(None, inputs)[0]
         # probs: [Sell, Hold, Buy]
-        return int(np.argmax(probs) - 1) # -1, 0, 1
+        return int(np.argmax(probs) - 1)  # -1, 0, 1
+
 
 if __name__ == "__main__":
     # Minimal example

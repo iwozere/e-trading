@@ -7,19 +7,20 @@ while respecting API constraints.
 """
 
 import statistics
-from typing import Dict, Optional, Any
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from collections import deque
-from pathlib import Path
 import sys
+from collections import deque
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Dict
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
-from .rate_limiter import RateLimiter, RateLimitConfig
+
+from .rate_limiter import RateLimitConfig, RateLimiter
 
 _logger = setup_logger(__name__)
 
@@ -27,17 +28,19 @@ _logger = setup_logger(__name__)
 @dataclass
 class ResponseMetrics:
     """Metrics for API response analysis."""
+
     response_time_ms: float
-    status_code: Optional[int]
+    status_code: int | None
     success: bool
     timestamp: datetime
     rate_limited: bool = False
-    error_type: Optional[str] = None
+    error_type: str | None = None
 
 
 @dataclass
 class AdaptiveConfig:
     """Configuration for adaptive rate limiting."""
+
     # Base rate limiting
     base_requests_per_second: float = 1.0
     min_requests_per_second: float = 0.1
@@ -83,18 +86,16 @@ class AdaptiveRateLimiter:
         rate_config = RateLimitConfig(
             requests_per_second=config.base_requests_per_second,
             burst_capacity=max(5, int(config.base_requests_per_second * 2)),
-            strict_mode=False
+            strict_mode=False,
         )
         self.rate_limiter = RateLimiter(rate_config, name)
 
         # Response tracking
-        self.response_history: deque[ResponseMetrics] = deque(
-            maxlen=config.adaptation_window_size
-        )
+        self.response_history: deque[ResponseMetrics] = deque(maxlen=config.adaptation_window_size)
 
         # Adaptation state
         self.current_rate = config.base_requests_per_second
-        self.last_adaptation_time = datetime.now(timezone.utc)
+        self.last_adaptation_time = datetime.now(UTC)
         self.consecutive_good_periods = 0
         self.consecutive_bad_periods = 0
 
@@ -103,7 +104,7 @@ class AdaptiveRateLimiter:
         self.rate_increases = 0
         self.rate_decreases = 0
 
-    async def acquire(self, timeout: Optional[float] = None) -> bool:
+    async def acquire(self, timeout: float | None = None) -> bool:
         """
         Acquire permission to make a request.
 
@@ -115,9 +116,13 @@ class AdaptiveRateLimiter:
         """
         return await self.rate_limiter.acquire(1, timeout)
 
-    def record_response(self, response_time_ms: float, success: bool,
-                       status_code: Optional[int] = None,
-                       error_type: Optional[str] = None) -> None:
+    def record_response(
+        self,
+        response_time_ms: float,
+        success: bool,
+        status_code: int | None = None,
+        error_type: str | None = None,
+    ) -> None:
         """
         Record API response metrics for adaptation.
 
@@ -129,18 +134,18 @@ class AdaptiveRateLimiter:
         """
         # Detect rate limiting
         rate_limited = (
-            status_code in [429, 503] or
-            error_type in ['rate_limit', 'throttled'] or
-            response_time_ms > self.config.response_time_threshold_ms * 2
+            status_code in [429, 503]
+            or error_type in ["rate_limit", "throttled"]
+            or response_time_ms > self.config.response_time_threshold_ms * 2
         )
 
         metrics = ResponseMetrics(
             response_time_ms=response_time_ms,
             status_code=status_code,
             success=success,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             rate_limited=rate_limited,
-            error_type=error_type
+            error_type=error_type,
         )
 
         self.response_history.append(metrics)
@@ -155,11 +160,13 @@ class AdaptiveRateLimiter:
 
     def _check_adaptation_schedule(self) -> None:
         """Check if it's time for periodic rate adaptation."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         time_since_last = (now - self.last_adaptation_time).total_seconds()
 
-        if (time_since_last >= self.config.adaptation_interval_seconds and
-            len(self.response_history) >= self.config.min_samples_for_adjustment):
+        if (
+            time_since_last >= self.config.adaptation_interval_seconds
+            and len(self.response_history) >= self.config.min_samples_for_adjustment
+        ):
             self._adapt_rate()
 
     def _adapt_rate(self, force: bool = False) -> None:
@@ -170,7 +177,7 @@ class AdaptiveRateLimiter:
             force: Force adaptation even if not enough time has passed
         """
         if not force:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             time_since_last = (now - self.last_adaptation_time).total_seconds()
             if time_since_last < self.config.adaptation_interval_seconds:
                 return
@@ -179,7 +186,7 @@ class AdaptiveRateLimiter:
             return
 
         # Analyze recent performance
-        recent_responses = list(self.response_history)[-self.config.stability_window_size:]
+        recent_responses = list(self.response_history)[-self.config.stability_window_size :]
 
         # Calculate metrics
         error_rate = sum(1 for r in recent_responses if not r.success) / len(recent_responses)
@@ -215,9 +222,11 @@ class AdaptiveRateLimiter:
             self.consecutive_good_periods = 0
             adaptation_reason = f"slow_response ({avg_response_time:.0f}ms)"
 
-        elif (error_rate < 0.05 and
-              avg_response_time < self.config.response_time_threshold_ms * 0.5 and
-              rate_limited_rate == 0):
+        elif (
+            error_rate < 0.05
+            and avg_response_time < self.config.response_time_threshold_ms * 0.5
+            and rate_limited_rate == 0
+        ):
             # Good performance - consider increasing
             self.consecutive_good_periods += 1
             self.consecutive_bad_periods = 0
@@ -233,8 +242,7 @@ class AdaptiveRateLimiter:
 
         # Apply bounds
         self.current_rate = max(
-            self.config.min_requests_per_second,
-            min(self.config.max_requests_per_second, self.current_rate)
+            self.config.min_requests_per_second, min(self.config.max_requests_per_second, self.current_rate)
         )
 
         # Update rate limiter if rate changed
@@ -249,17 +257,18 @@ class AdaptiveRateLimiter:
 
             _logger.info(
                 "Adapted rate for %s: %.2f -> %.2f req/s (reason: %s)",
-                self.name, old_rate, self.current_rate, adaptation_reason
+                self.name,
+                old_rate,
+                self.current_rate,
+                adaptation_reason,
             )
 
-        self.last_adaptation_time = datetime.now(timezone.utc)
+        self.last_adaptation_time = datetime.now(UTC)
 
     def _update_rate_limiter(self) -> None:
         """Update the underlying rate limiter with new rate."""
         new_config = RateLimitConfig(
-            requests_per_second=self.current_rate,
-            burst_capacity=max(5, int(self.current_rate * 2)),
-            strict_mode=False
+            requests_per_second=self.current_rate, burst_capacity=max(5, int(self.current_rate * 2)), strict_mode=False
         )
         self.rate_limiter.update_config(new_config)
 
@@ -276,37 +285,41 @@ class AdaptiveRateLimiter:
         successful_responses = [r for r in recent_responses if r.success]
 
         metrics = {
-            'total_responses': len(recent_responses),
-            'successful_responses': len(successful_responses),
-            'error_rate': (len(recent_responses) - len(successful_responses)) / len(recent_responses),
-            'rate_limited_count': sum(1 for r in recent_responses if r.rate_limited),
-            'current_rate': self.current_rate,
-            'base_rate': self.config.base_requests_per_second
+            "total_responses": len(recent_responses),
+            "successful_responses": len(successful_responses),
+            "error_rate": (len(recent_responses) - len(successful_responses)) / len(recent_responses),
+            "rate_limited_count": sum(1 for r in recent_responses if r.rate_limited),
+            "current_rate": self.current_rate,
+            "base_rate": self.config.base_requests_per_second,
         }
 
         if successful_responses:
             response_times = [r.response_time_ms for r in successful_responses]
-            metrics.update({
-                'avg_response_time_ms': statistics.mean(response_times),
-                'median_response_time_ms': statistics.median(response_times),
-                'p95_response_time_ms': statistics.quantiles(response_times, n=20)[18] if len(response_times) > 10 else max(response_times),
-                'min_response_time_ms': min(response_times),
-                'max_response_time_ms': max(response_times)
-            })
+            metrics.update(
+                {
+                    "avg_response_time_ms": statistics.mean(response_times),
+                    "median_response_time_ms": statistics.median(response_times),
+                    "p95_response_time_ms": statistics.quantiles(response_times, n=20)[18]
+                    if len(response_times) > 10
+                    else max(response_times),
+                    "min_response_time_ms": min(response_times),
+                    "max_response_time_ms": max(response_times),
+                }
+            )
 
         return metrics
 
     def get_adaptation_statistics(self) -> Dict[str, Any]:
         """Get adaptation behavior statistics."""
         return {
-            'total_adaptations': self.total_adaptations,
-            'rate_increases': self.rate_increases,
-            'rate_decreases': self.rate_decreases,
-            'consecutive_good_periods': self.consecutive_good_periods,
-            'consecutive_bad_periods': self.consecutive_bad_periods,
-            'adaptation_efficiency': self.rate_increases / max(1, self.total_adaptations),
-            'last_adaptation_time': self.last_adaptation_time,
-            'response_history_size': len(self.response_history)
+            "total_adaptations": self.total_adaptations,
+            "rate_increases": self.rate_increases,
+            "rate_decreases": self.rate_decreases,
+            "consecutive_good_periods": self.consecutive_good_periods,
+            "consecutive_bad_periods": self.consecutive_bad_periods,
+            "adaptation_efficiency": self.rate_increases / max(1, self.total_adaptations),
+            "last_adaptation_time": self.last_adaptation_time,
+            "response_history_size": len(self.response_history),
         }
 
     def reset_adaptation_history(self) -> None:
@@ -330,12 +343,9 @@ class AdaptiveRateLimiter:
             reason: Reason for the adjustment
         """
         old_rate = self.current_rate
-        self.current_rate = max(
-            self.config.min_requests_per_second,
-            min(self.config.max_requests_per_second, new_rate)
-        )
+        self.current_rate = max(self.config.min_requests_per_second, min(self.config.max_requests_per_second, new_rate))
 
-        if abs(new_rate - old_rate) < 0.01 and reason == getattr(self, '_last_adjustment_reason', ''):
+        if abs(new_rate - old_rate) < 0.01 and reason == getattr(self, "_last_adjustment_reason", ""):
             return
 
         self._update_rate_limiter()
@@ -344,21 +354,24 @@ class AdaptiveRateLimiter:
 
         _logger.info(
             "Manual rate adjustment for %s: %.2f -> %.2f req/s (reason: %s)",
-            self.name, old_rate, self.current_rate, reason
+            self.name,
+            old_rate,
+            self.current_rate,
+            reason,
         )
 
     def get_comprehensive_stats(self) -> Dict[str, Any]:
         """Get comprehensive statistics including base limiter stats."""
         stats = {
-            'adaptive_metrics': self.get_performance_metrics(),
-            'adaptation_stats': self.get_adaptation_statistics(),
-            'base_limiter_stats': self.rate_limiter.get_statistics(),
-            'config': {
-                'base_rate': self.config.base_requests_per_second,
-                'min_rate': self.config.min_requests_per_second,
-                'max_rate': self.config.max_requests_per_second,
-                'response_threshold_ms': self.config.response_time_threshold_ms,
-                'error_threshold': self.config.error_rate_threshold
-            }
+            "adaptive_metrics": self.get_performance_metrics(),
+            "adaptation_stats": self.get_adaptation_statistics(),
+            "base_limiter_stats": self.rate_limiter.get_statistics(),
+            "config": {
+                "base_rate": self.config.base_requests_per_second,
+                "min_rate": self.config.min_requests_per_second,
+                "max_rate": self.config.max_requests_per_second,
+                "response_threshold_ms": self.config.response_time_threshold_ms,
+                "error_threshold": self.config.error_rate_threshold,
+            },
         }
         return stats

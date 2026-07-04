@@ -9,11 +9,11 @@ checkpoint/resume support to survive interruptions on large universes.
 """
 
 import dataclasses
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 import sys
 import time
-from typing import Dict, List, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from typing import Dict, List
 
 import pandas as pd
 
@@ -21,12 +21,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
+from src.data.cache.fundamentals_cache import FundamentalsCache
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.ml.pipeline.p17_penny_stocks.config import P17FilterConfig
 from src.ml.pipeline.shared.config import UniverseConfig
 from src.ml.pipeline.shared.universe_downloader import NasdaqUniverseDownloader
-from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
-from src.data.cache.fundamentals_cache import FundamentalsCache
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -34,10 +34,10 @@ _FUNDAMENTALS_CACHE_TTL_DAYS = 1
 
 # yfinance exchange code → normalised exchange name
 _EXCHANGE_MAP: Dict[str, str] = {
-    "NMS": "NASDAQ",        # NASDAQ Global Select Market
-    "NGM": "NASDAQ",        # NASDAQ Global Market
-    "NCM": "NASDAQ",        # NASDAQ Capital Market
-    "ASE": "NYSE_AMERICAN", # NYSE American (formerly AMEX)
+    "NMS": "NASDAQ",  # NASDAQ Global Select Market
+    "NGM": "NASDAQ",  # NASDAQ Global Market
+    "NCM": "NASDAQ",  # NASDAQ Capital Market
+    "ASE": "NYSE_AMERICAN",  # NYSE American (formerly AMEX)
     "NYQ": "NYSE",
     "PCX": "NYSE_ARCA",
     "PNK": "OTC",
@@ -48,7 +48,7 @@ _EXCHANGE_MAP: Dict[str, str] = {
 _ALLOWED_EXCHANGES = {"NASDAQ", "NYSE_AMERICAN"}
 
 
-def _safe_float(value, default: Optional[float] = None) -> Optional[float]:
+def _safe_float(value, default: float | None = None) -> float | None:
     """Coerce value to float, returning default on failure or NaN."""
     try:
         v = float(value)
@@ -89,7 +89,7 @@ class UniverseAgent:
     def run(
         self,
         force_refresh: bool = False,
-        tickers: Optional[List[str]] = None,
+        tickers: List[str] | None = None,
     ) -> pd.DataFrame:
         """
         Run universe download and hard-filter pass.
@@ -180,7 +180,7 @@ class UniverseAgent:
                     results.append(result)
         return results
 
-    def _fetch_ticker_info(self, ticker: str, max_retries: int = 3) -> Optional[dict]:
+    def _fetch_ticker_info(self, ticker: str, max_retries: int = 3) -> dict | None:
         cache_meta = self._fundamentals_cache.find_latest_json(
             ticker, provider="yahoo", max_age_days=_FUNDAMENTALS_CACHE_TTL_DAYS
         )
@@ -200,8 +200,10 @@ class UniverseAgent:
             except Exception as e:
                 err = str(e)
                 if "Too Many Requests" in err or "Rate limited" in err:
-                    delay = 2 ** attempt
-                    _logger.debug("Rate limited on %s (attempt %d/%d), retrying in %ds", ticker, attempt + 1, max_retries, delay)
+                    delay = 2**attempt
+                    _logger.debug(
+                        "Rate limited on %s (attempt %d/%d), retrying in %ds", ticker, attempt + 1, max_retries, delay
+                    )
                     time.sleep(delay)
                 else:
                     _logger.debug("Failed to fetch info for %s: %s", ticker, e)
@@ -210,7 +212,7 @@ class UniverseAgent:
         _logger.debug("Giving up on %s after %d attempts (rate limited)", ticker, max_retries)
         return None
 
-    def _fundamentals_to_universe_record(self, ticker: str, f: dict) -> Optional[dict]:
+    def _fundamentals_to_universe_record(self, ticker: str, f: dict) -> dict | None:
         """Map a cached Fundamentals dict to the universe record format, applying equity/price filters."""
         if f.get("quote_type") not in ("EQUITY", None):
             return None
@@ -243,40 +245,40 @@ class UniverseAgent:
 
         # Exchange
         df = df.copy()
-        df["exchange_norm"] = df["exchange"].map(
-            lambda x: _EXCHANGE_MAP.get(str(x), "OTHER")
-        )
+        df["exchange_norm"] = df["exchange"].map(lambda x: _EXCHANGE_MAP.get(str(x), "OTHER"))
         df = df.loc[df["exchange_norm"].isin(list(_ALLOWED_EXCHANGES))].copy()
         _logger.info("Exchange filter: %d → %d", n0, len(df))
 
         # Price range
         n = len(df)
-        df = df.loc[
-            (df["price"] >= self.config.min_price) & (df["price"] <= self.config.max_price)
-        ].copy()
+        df = df.loc[(df["price"] >= self.config.min_price) & (df["price"] <= self.config.max_price)].copy()
         _logger.info("Price $%.2f–$%.2f: %d → %d", self.config.min_price, self.config.max_price, n, len(df))
 
         # Market cap
         n = len(df)
         df = df.loc[
-            (df["market_cap"] >= self.config.min_market_cap)
-            & (df["market_cap"] <= self.config.max_market_cap)
+            (df["market_cap"] >= self.config.min_market_cap) & (df["market_cap"] <= self.config.max_market_cap)
         ].copy()
-        _logger.info("Market cap $%dM–$%dB: %d → %d",
-                     self.config.min_market_cap // 1_000_000,
-                     self.config.max_market_cap // 1_000_000_000,
-                     n, len(df))
+        _logger.info(
+            "Market cap $%dM–$%dB: %d → %d",
+            self.config.min_market_cap // 1_000_000,
+            self.config.max_market_cap // 1_000_000_000,
+            n,
+            len(df),
+        )
 
         # Float
         n = len(df)
         df = df.loc[
-            (df["float_shares"] >= self.config.min_float)
-            & (df["float_shares"] <= self.config.max_float)
+            (df["float_shares"] >= self.config.min_float) & (df["float_shares"] <= self.config.max_float)
         ].copy()
-        _logger.info("Float %dM–%dM shares: %d → %d",
-                     self.config.min_float // 1_000_000,
-                     self.config.max_float // 1_000_000,
-                     n, len(df))
+        _logger.info(
+            "Float %dM–%dM shares: %d → %d",
+            self.config.min_float // 1_000_000,
+            self.config.max_float // 1_000_000,
+            n,
+            len(df),
+        )
 
         # Average volume
         n = len(df)
@@ -287,7 +289,6 @@ class UniverseAgent:
         n = len(df)
         df["avg_dollar_volume"] = df["avg_volume"] * df["price"]
         df = df.loc[df["avg_dollar_volume"] >= self.config.min_avg_dollar_volume].copy()
-        _logger.info("Avg dollar volume ≥$%.0f: %d → %d",
-                     self.config.min_avg_dollar_volume, n, len(df))
+        _logger.info("Avg dollar volume ≥$%.0f: %d → %d", self.config.min_avg_dollar_volume, n, len(df))
 
         return df.reset_index(drop=True)

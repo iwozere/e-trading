@@ -7,25 +7,28 @@ Provides a centralized way to log trading activity across all bot instances.
 
 import json
 import threading
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict
-from datetime import datetime, timezone
 
-from src.trading.constants import TRADING_LOGS_DIR
 from src.notification.logger import setup_logger
+from src.trading.constants import TRADING_LOGS_DIR
 
 _logger = setup_logger(__name__)
 
+
 class ExecutionPersistenceError(Exception):
     """Exception raised for errors in execution persistence."""
+
     pass
+
 
 class ExecutionPersistenceService:
     """
     Service for persisting trading execution data (orders and trades).
     Ensures thread-safe access to log files and consistent data formatting.
     """
-    
+
     _instance = None
     _lock = threading.Lock()
     _file_locks: Dict[str, threading.RLock] = {}
@@ -34,15 +37,15 @@ class ExecutionPersistenceService:
         """Singleton pattern implementation."""
         with cls._lock:
             if cls._instance is None:
-                cls._instance = super(ExecutionPersistenceService, cls).__new__(cls)
+                cls._instance = super().__new__(cls)
             return cls._instance
 
     def __init__(self):
         """Initialize the service and ensure directories exist."""
         # Only initialize once (singleton)
-        if hasattr(self, '_initialized') and self._initialized:
+        if hasattr(self, "_initialized") and self._initialized:
             return
-            
+
         self.logs_dir = TRADING_LOGS_DIR
         self.logs_dir.mkdir(parents=True, exist_ok=True)
         self._initialized = True
@@ -102,13 +105,14 @@ class ExecutionPersistenceService:
                 last_line = f.read().rstrip()
             json.loads(last_line)
         except (json.JSONDecodeError, ValueError):
-            ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+            ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
             quarantine = file_path.with_name(f"{file_path.stem}.corrupt.{ts}{file_path.suffix}")
             try:
                 file_path.rename(quarantine)
                 _logger.error(
                     "Corrupt JSONL file quarantined: %s -> %s. A fresh log will be started.",
-                    file_path.name, quarantine.name,
+                    file_path.name,
+                    quarantine.name,
                 )
             except OSError:
                 _logger.exception("Could not quarantine corrupt log file %s:", file_path)
@@ -126,7 +130,7 @@ class ExecutionPersistenceService:
         if "bot_id" not in order_data:
             order_data["bot_id"] = bot_id
         if "persisted_at" not in order_data:
-            order_data["persisted_at"] = datetime.now(timezone.utc).isoformat()
+            order_data["persisted_at"] = datetime.now(UTC).isoformat()
 
         path = self.logs_dir / "orders.jsonl"
         self._append_record(path, order_data)
@@ -143,11 +147,12 @@ class ExecutionPersistenceService:
         if "bot_id" not in trade_data:
             trade_data["bot_id"] = bot_id
         if "persisted_at" not in trade_data:
-            trade_data["persisted_at"] = datetime.now(timezone.utc).isoformat()
+            trade_data["persisted_at"] = datetime.now(UTC).isoformat()
 
         path = self.logs_dir / "trades.jsonl"
         self._append_record(path, trade_data)
         _logger.debug("Trade saved for bot %s", bot_id)
+
 
 # Singleton instance for easy access
 execution_persistence = ExecutionPersistenceService()

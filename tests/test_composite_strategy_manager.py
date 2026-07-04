@@ -3,23 +3,18 @@
 Integration tests for composite_strategy_manager module
 """
 
-import unittest
-import pandas as pd
-import numpy as np
-from datetime import datetime
-from unittest.mock import Mock
-import tempfile
 import json
 import os
+import tempfile
+import unittest
+from datetime import datetime
+from unittest.mock import Mock
 
-from src.strategy.future.composite_strategy_manager import (
-    StrategyComposer,
-    AdvancedStrategyFramework
-)
-from src.strategy.future.strategy_core import (
-    BaseStrategy,
-    StrategySignal
-)
+import numpy as np
+import pandas as pd
+
+from src.strategy.future.composite_strategy_manager import AdvancedStrategyFramework, StrategyComposer
+from src.strategy.future.strategy_core import BaseStrategy, StrategySignal
 
 
 class TestStrategyComposer(unittest.TestCase):
@@ -37,7 +32,7 @@ class TestStrategyComposer(unittest.TestCase):
             confidence=0.8,
             weight=1.0,
             timestamp=datetime.now(),
-            metadata={}
+            metadata={},
         )
 
         self.mock_strategy2 = Mock(spec=BaseStrategy)
@@ -49,7 +44,7 @@ class TestStrategyComposer(unittest.TestCase):
             confidence=0.6,
             weight=1.0,
             timestamp=datetime.now(),
-            metadata={}
+            metadata={},
         )
 
         self.strategies = [self.mock_strategy1, self.mock_strategy2]
@@ -133,6 +128,7 @@ class TestAdvancedStrategyFramework(unittest.TestCase):
     def tearDown(self):
         """Clean up test fixtures."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def create_test_configs(self):
@@ -147,22 +143,15 @@ class TestAdvancedStrategyFramework(unittest.TestCase):
                         "name": "rsi_strategy",
                         "type": "rsi_momentum",
                         "weight": 1.0,
-                        "params": {
-                            "rsi_period": 14,
-                            "rsi_oversold": 30,
-                            "rsi_overbought": 70
-                        }
+                        "params": {"rsi_period": 14, "rsi_oversold": 30, "rsi_overbought": 70},
                     },
                     {
                         "name": "supertrend_strategy",
                         "type": "supertrend",
                         "weight": 1.0,
-                        "params": {
-                            "atr_period": 14,
-                            "multiplier": 3.0
-                        }
-                    }
-                ]
+                        "params": {"atr_period": 14, "multiplier": 3.0},
+                    },
+                ],
             }
         }
 
@@ -176,29 +165,16 @@ class TestAdvancedStrategyFramework(unittest.TestCase):
                     "primary": "1h",
                     "secondary": ["4h", "1d"],
                     "trend_timeframe": "4h",
-                    "entry_timeframe": "1h"
+                    "entry_timeframe": "1h",
                 },
                 "strategy_config": {
-                    "trend_analysis": {
-                        "method": "supertrend",
-                        "params": {
-                            "atr_period": 14,
-                            "multiplier": 3.0
-                        }
-                    },
+                    "trend_analysis": {"method": "supertrend", "params": {"atr_period": 14, "multiplier": 3.0}},
                     "entry_signals": {
                         "method": "rsi_volume",
-                        "params": {
-                            "rsi_period": 14,
-                            "rsi_oversold": 30,
-                            "rsi_overbought": 70,
-                            "volume_threshold": 1.5
-                        }
-                    }
+                        "params": {"rsi_period": 14, "rsi_oversold": 30, "rsi_overbought": 70, "volume_threshold": 1.5},
+                    },
                 },
-                "rules": {
-                    "entry_only_in_trend_direction": True
-                }
+                "rules": {"entry_only_in_trend_direction": True},
             }
         }
 
@@ -211,7 +187,7 @@ class TestAdvancedStrategyFramework(unittest.TestCase):
                 "trending_volatile": "test_composite",
                 "trending_stable": "test_mtf",
                 "ranging_volatile": "test_composite",
-                "ranging_stable": "test_mtf"
+                "ranging_stable": "test_mtf",
             }
         }
 
@@ -232,13 +208,15 @@ class TestAdvancedStrategyFramework(unittest.TestCase):
         framework = AdvancedStrategyFramework(self.config_path)
 
         # Create test data
-        test_data = pd.DataFrame({
-            'open': [100, 101, 102],
-            'high': [102, 103, 104],
-            'low': [99, 100, 101],
-            'close': [101, 102, 103],
-            'volume': [1000, 1100, 1200]
-        })
+        test_data = pd.DataFrame(
+            {
+                "open": [100, 101, 102],
+                "high": [102, 103, 104],
+                "low": [99, 100, 101],
+                "close": [101, 102, 103],
+                "volume": [1000, 1100, 1200],
+            }
+        )
 
         data_feeds = {"1h": test_data}
 
@@ -259,13 +237,9 @@ class TestAdvancedStrategyFramework(unittest.TestCase):
         noise = np.random.normal(0, 2, 30)
         prices = trend + noise
 
-        test_data = pd.DataFrame({
-            'open': prices,
-            'high': prices + 1,
-            'low': prices - 1,
-            'close': prices,
-            'volume': np.ones(30) * 1000
-        })
+        test_data = pd.DataFrame(
+            {"open": prices, "high": prices + 1, "low": prices - 1, "close": prices, "volume": np.ones(30) * 1000}
+        )
 
         data_feeds = {"1h": test_data}
 
@@ -279,13 +253,15 @@ class TestAdvancedStrategyFramework(unittest.TestCase):
         framework = AdvancedStrategyFramework(self.config_path)
 
         # Create test data
-        test_data = pd.DataFrame({
-            'open': [100, 101, 102],
-            'high': [102, 103, 104],
-            'low': [99, 100, 101],
-            'close': [101, 102, 103],
-            'volume': [1000, 1100, 1200]
-        })
+        test_data = pd.DataFrame(
+            {
+                "open": [100, 101, 102],
+                "high": [102, 103, 104],
+                "low": [99, 100, 101],
+                "close": [101, 102, 103],
+                "volume": [1000, 1100, 1200],
+            }
+        )
 
         data_feeds = {"1h": test_data}
 
@@ -315,13 +291,17 @@ class TestAdvancedStrategyFramework(unittest.TestCase):
     def test_framework_strategy_not_found(self):
         """Test framework returns hold signal if strategy not found."""
         framework = AdvancedStrategyFramework(self.config_path)
-        data_feeds = {"1h": pd.DataFrame({
-            'open': [100, 101, 102],
-            'high': [102, 103, 104],
-            'low': [99, 100, 101],
-            'close': [101, 102, 103],
-            'volume': [1000, 1100, 1200]
-        })}
+        data_feeds = {
+            "1h": pd.DataFrame(
+                {
+                    "open": [100, 101, 102],
+                    "high": [102, 103, 104],
+                    "low": [99, 100, 101],
+                    "close": [101, 102, 103],
+                    "volume": [1000, 1100, 1200],
+                }
+            )
+        }
         result = framework.get_composite_signal("nonexistent_strategy", data_feeds)
         self.assertEqual(result.signal_type, "hold")
         self.assertIn("error", result.metadata)

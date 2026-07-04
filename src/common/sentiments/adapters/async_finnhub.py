@@ -8,24 +8,27 @@ Provides:
 
 Uses Finnhub's dedicated /news-sentiment and /stock/social-sentiment endpoints.
 """
+
 import asyncio
-import aiohttp
 import os
 import sys
-from typing import List, Dict, Optional, Any
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
+from typing import Any, Dict, List
+
+import aiohttp
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
 from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
 from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class AsyncFinnhubSentimentAdapter(BaseSentimentAdapter):
     """
@@ -35,11 +38,17 @@ class AsyncFinnhubSentimentAdapter(BaseSentimentAdapter):
     sentiment scores rather than just raw news articles.
     """
 
-    def __init__(self, name: str = "finnhub", session: Optional[aiohttp.ClientSession] = None,
-                 concurrency: int = 2, rate_limit_delay: float = 1.0, max_retries: int = 3,
-                 api_key: Optional[str] = None):
+    def __init__(
+        self,
+        name: str = "finnhub",
+        session: aiohttp.ClientSession | None = None,
+        concurrency: int = 2,
+        rate_limit_delay: float = 1.0,
+        max_retries: int = 3,
+        api_key: str | None = None,
+    ):
         super().__init__(name, concurrency, rate_limit_delay)
-        self.api_key = api_key or os.getenv('FINNHUB_API_KEY')
+        self.api_key = api_key or os.getenv("FINNHUB_API_KEY")
         if not self.api_key:
             _logger.warning("Finnhub API key not found for sentiment adapter")
 
@@ -49,7 +58,9 @@ class AsyncFinnhubSentimentAdapter(BaseSentimentAdapter):
         self._provided_session = session is not None
         self._analyzer = HeuristicSentimentAnalyzer()
 
-    async def fetch_messages(self, ticker: str, since_ts: Optional[int] = None, limit: int = 200) -> List[Dict[str, Any]]:
+    async def fetch_messages(
+        self, ticker: str, since_ts: int | None = None, limit: int = 200
+    ) -> List[Dict[str, Any]]:
         """
         Fetch news articles from Finnhub as individual messages.
         Used primarily for local analysis or HuggingFace enrichment.
@@ -60,11 +71,11 @@ class AsyncFinnhubSentimentAdapter(BaseSentimentAdapter):
         symbol = ticker.upper().strip()
         try:
             # Calculate date range
-            to_date = datetime.now().strftime('%Y-%m-%d')
+            to_date = datetime.now().strftime("%Y-%m-%d")
             if since_ts:
-                from_date = datetime.fromtimestamp(since_ts).strftime('%Y-%m-%d')
+                from_date = datetime.fromtimestamp(since_ts).strftime("%Y-%m-%d")
             else:
-                from_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                from_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
 
             raw_news = await self.downloader.get_company_news(symbol, from_date, to_date)
             if not raw_news:
@@ -72,20 +83,22 @@ class AsyncFinnhubSentimentAdapter(BaseSentimentAdapter):
 
             msgs = []
             for article in raw_news[:limit]:
-                msgs.append({
-                    "id": f"finnhub_{article.get('id', '')}",
-                    "body": f"{article.get('headline', '')} {article.get('summary', '')}",
-                    "created_at": datetime.fromtimestamp(article.get('datetime', 0)).isoformat(),
-                    "url": article.get('url', ''),
-                    "user": {"username": article.get('source', 'finnhub')},
-                    "provider": "finnhub"
-                })
+                msgs.append(
+                    {
+                        "id": f"finnhub_{article.get('id', '')}",
+                        "body": f"{article.get('headline', '')} {article.get('summary', '')}",
+                        "created_at": datetime.fromtimestamp(article.get("datetime", 0)).isoformat(),
+                        "url": article.get("url", ""),
+                        "user": {"username": article.get("source", "finnhub")},
+                        "provider": "finnhub",
+                    }
+                )
             return msgs
         except Exception as e:
             _logger.error("Error fetching Finnhub news messages for %s: %s", symbol, e)
             return []
 
-    async def _fetch_summary_fallback(self, symbol: str, since_ts: Optional[int] = None) -> Dict[str, Any]:
+    async def _fetch_summary_fallback(self, symbol: str, since_ts: int | None = None) -> Dict[str, Any]:
         """Fallback to raw news analysis if premium sentiment endpoints are blocked."""
         try:
             msgs = await self.fetch_messages(symbol, since_ts)
@@ -95,7 +108,7 @@ class AsyncFinnhubSentimentAdapter(BaseSentimentAdapter):
                     "sentiment_score": 0.0,
                     "provider": "finnhub",
                     "status": "no_data",
-                    "timestamp": datetime.now(timezone.utc).isoformat()
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
 
             bullish = 0
@@ -123,13 +136,19 @@ class AsyncFinnhubSentimentAdapter(BaseSentimentAdapter):
                 "neutral": neutral,
                 "provider": "finnhub",
                 "status": "fallback_news",
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         except Exception as e:
             _logger.error("Error in Finnhub fallback analysis for %s: %s", symbol, e)
-            return {"mentions": 0, "sentiment_score": 0.0, "error": str(e), "provider": "finnhub", "timestamp": datetime.now(timezone.utc).isoformat()}
+            return {
+                "mentions": 0,
+                "sentiment_score": 0.0,
+                "error": str(e),
+                "provider": "finnhub",
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
 
-    async def fetch_summary(self, ticker: str, since_ts: Optional[int] = None) -> Dict[str, Any]:
+    async def fetch_summary(self, ticker: str, since_ts: int | None = None) -> Dict[str, Any]:
         """
         Fetch aggregated sentiment summary from Finnhub.
         Attempts premium endpoints first, then falls back to news analysis.
@@ -157,12 +176,12 @@ class AsyncFinnhubSentimentAdapter(BaseSentimentAdapter):
 
             # news_data is a SentimentData object if success
             if news_data:
-                sources['news'] = {
-                    'sentiment_score': news_data.sentiment_score,
-                    'bullish_percent': news_data.bullish_score,
-                    'bearish_percent': news_data.bearish_score,
-                    'buzz_ratio': news_data.buzz_ratio,
-                    'article_count': news_data.article_count
+                sources["news"] = {
+                    "sentiment_score": news_data.sentiment_score,
+                    "bullish_percent": news_data.bullish_score,
+                    "bearish_percent": news_data.bearish_score,
+                    "buzz_ratio": news_data.buzz_ratio,
+                    "article_count": news_data.article_count,
                 }
                 mentions += news_data.article_count or 0
                 sentiment_score += (news_data.sentiment_score or 0.0) * 0.6
@@ -172,13 +191,13 @@ class AsyncFinnhubSentimentAdapter(BaseSentimentAdapter):
                 reddit = social_data.reddit_data or {}
                 twitter = social_data.twitter_data or {}
 
-                sources['social'] = {
-                    'sentiment_score': social_data.sentiment_score,
-                    'reddit_mentions': reddit.get('mentions', 0),
-                    'twitter_mentions': twitter.get('mentions', 0)
+                sources["social"] = {
+                    "sentiment_score": social_data.sentiment_score,
+                    "reddit_mentions": reddit.get("mentions", 0),
+                    "twitter_mentions": twitter.get("mentions", 0),
                 }
 
-                social_mentions = reddit.get('mentions', 0) + twitter.get('mentions', 0)
+                social_mentions = reddit.get("mentions", 0) + twitter.get("mentions", 0)
                 mentions += social_mentions
                 sentiment_score += (social_data.sentiment_score or 0.0) * 0.4
 
@@ -195,13 +214,13 @@ class AsyncFinnhubSentimentAdapter(BaseSentimentAdapter):
             return {
                 "mentions": mentions,
                 "sentiment_score": float(final_score),
-                "bullish": 1 if final_score > 0.1 else 0, # Rough mapping for basic metrics
+                "bullish": 1 if final_score > 0.1 else 0,  # Rough mapping for basic metrics
                 "bearish": 1 if final_score < -0.1 else 0,
                 "neutral": 1 if -0.1 <= final_score <= 0.1 else 0,
                 "provider": "finnhub",
                 "status": "premium_api",
                 "sources": sources,
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
         except Exception as e:

@@ -10,13 +10,13 @@ Tests cover:
 - Statistics and cleanup
 - Pending/failed message retrieval
 """
-import pytest
-from datetime import datetime, timezone, timedelta
 
+from datetime import UTC, datetime, timedelta
+
+import pytest
+
+from src.data.db.models.model_notification import DeliveryStatus, MessageStatus
 from src.data.db.services.notification_service import NotificationService
-from src.data.db.models.model_notification import (
-    MessageStatus, DeliveryStatus
-)
 from src.data.db.tests.fixtures.factory_notifications import MessageFactory
 
 
@@ -51,7 +51,7 @@ class TestNotificationServiceMessages:
             "message_type": "test",
             "channels": ["telegram"],
             "recipient_id": "user_1",
-            "content": {"text": "test"}
+            "content": {"text": "test"},
         }
 
         message = service.create_message(message_data=message_data)
@@ -172,10 +172,7 @@ class TestNotificationServiceMessages:
         message = service.create_message(message_data=message_data)
 
         # Update status
-        updated = service.update_message_status(
-            message_id=message.id,
-            status=MessageStatus.DELIVERED.value
-        )
+        updated = service.update_message_status(message_id=message.id, status=MessageStatus.DELIVERED.value)
 
         assert updated is not None
         assert updated.status == MessageStatus.DELIVERED.value
@@ -191,9 +188,7 @@ class TestNotificationServiceMessages:
 
         # Update status with error
         updated = service.update_message_status(
-            message_id=message.id,
-            status=MessageStatus.FAILED.value,
-            error_message="Connection timeout"
+            message_id=message.id, status=MessageStatus.FAILED.value, error_message="Connection timeout"
         )
 
         assert updated is not None
@@ -209,9 +204,7 @@ class TestNotificationServiceDeliveryStatus:
         service = NotificationService(db_service=mock_database_service)
 
         # Create a message with multiple channels
-        message_data = MessageFactory.create_data(
-            channels=["telegram", "email", "sms"]
-        )
+        message_data = MessageFactory.create_data(channels=["telegram", "email", "sms"])
         message = service.create_message(message_data=message_data)
 
         # Get delivery statuses
@@ -238,7 +231,7 @@ class TestNotificationServiceDeliveryStatus:
             delivery_id=delivery_id,
             status=DeliveryStatus.DELIVERED.value,
             response_time_ms=150,
-            external_id="ext_telegram_123"
+            external_id="ext_telegram_123",
         )
 
         assert updated is not None
@@ -261,9 +254,7 @@ class TestNotificationServiceDeliveryStatus:
 
         # Update to failed
         updated = service.update_delivery_status(
-            delivery_id=delivery_id,
-            status=DeliveryStatus.FAILED.value,
-            error_message="API rate limit exceeded"
+            delivery_id=delivery_id, status=DeliveryStatus.FAILED.value, error_message="API rate limit exceeded"
         )
 
         assert updated is not None
@@ -278,10 +269,7 @@ class TestNotificationServiceChannelHealth:
         """Test updating channel health to healthy."""
         service = NotificationService(db_service=mock_database_service)
 
-        health = service.update_channel_health(
-            channel="telegram",
-            status="HEALTHY"
-        )
+        health = service.update_channel_health(channel="telegram", status="HEALTHY")
 
         assert health is not None
         assert health.channel == "telegram"
@@ -293,9 +281,7 @@ class TestNotificationServiceChannelHealth:
         service = NotificationService(db_service=mock_database_service)
 
         health = service.update_channel_health(
-            channel="email",
-            status="DEGRADED",
-            error_message="High latency detected"
+            channel="email", status="DEGRADED", error_message="High latency detected"
         )
 
         assert health is not None
@@ -330,7 +316,7 @@ class TestNotificationServicePendingAndFailed:
         # Create pending messages scheduled for now
         for i in range(3):
             message_data = MessageFactory.alert_message(recipient_id=f"user_{i}")
-            message_data["scheduled_for"] = datetime.now(timezone.utc) - timedelta(minutes=1)
+            message_data["scheduled_for"] = datetime.now(UTC) - timedelta(minutes=1)
             service.create_message(message_data=message_data)
 
         # Get pending messages
@@ -348,9 +334,7 @@ class TestNotificationServicePendingAndFailed:
         message = service.create_message(message_data=message_data)
 
         service.update_message_status(
-            message_id=message.id,
-            status=MessageStatus.FAILED.value,
-            error_message="Temporary error"
+            message_id=message.id, status=MessageStatus.FAILED.value, error_message="Temporary error"
         )
 
         # Get failed messages for retry
@@ -374,10 +358,7 @@ class TestNotificationServiceStatistics:
         # Update one delivery to delivered
         statuses = service.get_delivery_status(message_id=message.id)
         if statuses:
-            service.update_delivery_status(
-                delivery_id=statuses[0].id,
-                status=DeliveryStatus.DELIVERED.value
-            )
+            service.update_delivery_status(delivery_id=statuses[0].id, status=DeliveryStatus.DELIVERED.value)
 
         # Get statistics
         stats = service.get_delivery_statistics(days=30)
@@ -404,13 +385,10 @@ class TestNotificationServiceStatistics:
 
         # Create an old delivered message
         old_message_data = MessageFactory.alert_message()
-        old_message_data["scheduled_for"] = datetime.now(timezone.utc) - timedelta(days=100)
+        old_message_data["scheduled_for"] = datetime.now(UTC) - timedelta(days=100)
         old_message = service.create_message(message_data=old_message_data)
 
-        service.update_message_status(
-            message_id=old_message.id,
-            status=MessageStatus.DELIVERED.value
-        )
+        service.update_message_status(message_id=old_message.id, status=MessageStatus.DELIVERED.value)
 
         db_session.commit()
 
@@ -469,16 +447,11 @@ class TestNotificationServiceIntegration:
         statuses = service.get_delivery_status(message_id=message.id)
         for status in statuses:
             service.update_delivery_status(
-                delivery_id=status.id,
-                status=DeliveryStatus.DELIVERED.value,
-                response_time_ms=100
+                delivery_id=status.id, status=DeliveryStatus.DELIVERED.value, response_time_ms=100
             )
 
         # 5. Update message to delivered
-        final_message = service.update_message_status(
-            message_id=message.id,
-            status=MessageStatus.DELIVERED.value
-        )
+        final_message = service.update_message_status(message_id=message.id, status=MessageStatus.DELIVERED.value)
 
         assert final_message.status == MessageStatus.DELIVERED.value
         assert final_message.processed_at is not None
@@ -496,19 +469,11 @@ class TestNotificationServiceIntegration:
         assert len(statuses) == 3  # telegram, email, sms
 
         # Update each channel differently
+        service.update_delivery_status(delivery_id=statuses[0].id, status=DeliveryStatus.DELIVERED.value)
         service.update_delivery_status(
-            delivery_id=statuses[0].id,
-            status=DeliveryStatus.DELIVERED.value
+            delivery_id=statuses[1].id, status=DeliveryStatus.FAILED.value, error_message="Bounce"
         )
-        service.update_delivery_status(
-            delivery_id=statuses[1].id,
-            status=DeliveryStatus.FAILED.value,
-            error_message="Bounce"
-        )
-        service.update_delivery_status(
-            delivery_id=statuses[2].id,
-            status=DeliveryStatus.PENDING.value
-        )
+        service.update_delivery_status(delivery_id=statuses[2].id, status=DeliveryStatus.PENDING.value)
 
         # Verify mixed delivery states
         final_statuses = service.get_delivery_status(message_id=message.id)
@@ -528,9 +493,7 @@ class TestNotificationServiceIntegration:
 
         # Simulate failure
         service.update_message_status(
-            message_id=message.id,
-            status=MessageStatus.FAILED.value,
-            error_message="Temporary error"
+            message_id=message.id, status=MessageStatus.FAILED.value, error_message="Temporary error"
         )
 
         # Get failed messages for retry

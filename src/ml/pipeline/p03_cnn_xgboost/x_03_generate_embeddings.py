@@ -15,7 +15,7 @@ sys.path.append(str(project_root))
 
 import json
 import pickle
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -25,6 +25,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from src.notification.logger import setup_logger
 from src.util.config import load_config
+
 _logger = setup_logger(__name__)
 
 
@@ -35,12 +36,14 @@ class CNN1D(nn.Module):
     This is the same architecture as used in the training stage.
     """
 
-    def __init__(self,
-                 input_channels: int = 5,
-                 sequence_length: int = 120,
-                 num_filters: List[int] = [32, 64, 128],
-                 kernel_sizes: List[int] = [3, 5, 7],
-                 dropout_rate: float = 0.3) -> None:
+    def __init__(
+        self,
+        input_channels: int = 5,
+        sequence_length: int = 120,
+        num_filters: List[int] = [32, 64, 128],
+        kernel_sizes: List[int] = [3, 5, 7],
+        dropout_rate: float = 0.3,
+    ) -> None:
         """
         Initialize the 1D CNN architecture.
 
@@ -51,7 +54,7 @@ class CNN1D(nn.Module):
             kernel_sizes: List of kernel sizes for each convolutional layer
             dropout_rate: Dropout rate for regularization
         """
-        super(CNN1D, self).__init__()
+        super().__init__()
 
         self.input_channels = input_channels
         self.sequence_length = sequence_length
@@ -61,12 +64,14 @@ class CNN1D(nn.Module):
         in_channels = input_channels
 
         for i, (filters, kernel_size) in enumerate(zip(num_filters, kernel_sizes)):
-            layers.extend([
-                nn.Conv1d(in_channels, filters, kernel_size, padding=kernel_size//2),
-                nn.BatchNorm1d(filters),
-                nn.ReLU(),
-                nn.Dropout(dropout_rate)
-            ])
+            layers.extend(
+                [
+                    nn.Conv1d(in_channels, filters, kernel_size, padding=kernel_size // 2),
+                    nn.BatchNorm1d(filters),
+                    nn.ReLU(),
+                    nn.Dropout(dropout_rate),
+                ]
+            )
             in_channels = filters
 
         self.conv_layers = nn.Sequential(*layers)
@@ -177,7 +182,7 @@ class EmbeddingGenerator:
 
         _logger.info("Loading model configuration from: %s", config_path)
 
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             self.model_config = json.load(f)
 
         # Extract model ID from config filename to find corresponding scaler and model files
@@ -197,7 +202,7 @@ class EmbeddingGenerator:
             sequence_length=self.model_config["sequence_length"],
             num_filters=self.model_config["num_filters"],
             kernel_sizes=self.model_config["kernel_sizes"],
-            dropout_rate=self.model_config["dropout_rate"]
+            dropout_rate=self.model_config["dropout_rate"],
         ).to(self.device)
 
         # Load trained weights
@@ -240,12 +245,7 @@ class EmbeddingGenerator:
         """
         _logger.info("Generating embeddings for %d files", len(data_files))
 
-        results = {
-            "files_processed": 0,
-            "total_embeddings": 0,
-            "failed_files": [],
-            "file_results": []
-        }
+        results = {"files_processed": 0, "total_embeddings": 0, "failed_files": [], "file_results": []}
 
         for file_path in data_files:
             try:
@@ -258,13 +258,13 @@ class EmbeddingGenerator:
 
             except Exception as e:
                 _logger.warning("Failed to process %s: %s", file_path, e)
-                results["failed_files"].append({
-                    "file": str(file_path),
-                    "error": str(e)
-                })
+                results["failed_files"].append({"file": str(file_path), "error": str(e)})
 
-        _logger.info("Embedding generation completed: %d files processed, %d total embeddings",
-                    results["files_processed"], results["total_embeddings"])
+        _logger.info(
+            "Embedding generation completed: %d files processed, %d total embeddings",
+            results["files_processed"],
+            results["total_embeddings"],
+        )
 
         return results
 
@@ -316,7 +316,7 @@ class EmbeddingGenerator:
             "embeddings_count": len(embeddings),
             "embedding_dim": embeddings.shape[1],
             "original_rows": len(df),
-            "labeled_rows": len(labeled_df)
+            "labeled_rows": len(labeled_df),
         }
 
     def _create_sequences(self, data: np.ndarray, sequence_length: int) -> List[np.ndarray]:
@@ -333,7 +333,7 @@ class EmbeddingGenerator:
         sequences = []
 
         for i in range(len(data) - sequence_length + 1):
-            sequence = data[i:i + sequence_length]
+            sequence = data[i : i + sequence_length]
             sequences.append(sequence)
 
         return sequences
@@ -382,10 +382,9 @@ class EmbeddingGenerator:
 
         return np.vstack(embeddings_list)
 
-    def _create_labeled_dataframe(self,
-                                 original_df: pd.DataFrame,
-                                 embeddings: np.ndarray,
-                                 sequence_length: int) -> pd.DataFrame:
+    def _create_labeled_dataframe(
+        self, original_df: pd.DataFrame, embeddings: np.ndarray, sequence_length: int
+    ) -> pd.DataFrame:
         """
         Create labeled DataFrame with embeddings and original data.
 
@@ -404,13 +403,13 @@ class EmbeddingGenerator:
         embeddings_df = pd.DataFrame(embeddings, columns=embedding_cols)
 
         # Align with original data (skip first sequence_length-1 rows)
-        aligned_df = original_df.iloc[sequence_length-1:].reset_index(drop=True)
+        aligned_df = original_df.iloc[sequence_length - 1 :].reset_index(drop=True)
 
         # Combine original data with embeddings
         labeled_df = pd.concat([aligned_df, embeddings_df], axis=1)
 
         # Add metadata columns
-        labeled_df["sequence_start_idx"] = range(sequence_length-1, len(original_df))
+        labeled_df["sequence_start_idx"] = range(sequence_length - 1, len(original_df))
         labeled_df["sequence_end_idx"] = range(sequence_length, len(original_df) + 1)
 
         return labeled_df
@@ -452,7 +451,7 @@ class EmbeddingGenerator:
             "timestamp": pd.Timestamp.now().isoformat(),
             "device_used": str(self.device),
             "model_config": self.model_config,
-            "generation_results": generation_results
+            "generation_results": generation_results,
         }
 
         with open(summary_path, "w") as f:

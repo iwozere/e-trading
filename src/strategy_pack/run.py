@@ -30,8 +30,8 @@ if str(PROJECT_ROOT) not in sys.path:
 import argparse
 import asyncio
 import json
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set
+from datetime import UTC, datetime
+from typing import Any, Dict, List, Set
 
 from src.data.data_manager import DataManager
 from src.notification.logger import setup_logger
@@ -62,7 +62,7 @@ def _parse_strategies(arg: str) -> List[int]:
 
 def _jsonl_path(results_dir: Path) -> Path:
     results_dir.mkdir(parents=True, exist_ok=True)
-    day = datetime.now(timezone.utc).strftime("%Y%m%d")
+    day = datetime.now(UTC).strftime("%Y%m%d")
     return results_dir / f"pack_signals_{day}.jsonl"
 
 
@@ -83,9 +83,9 @@ async def _run_async(args: argparse.Namespace) -> int:
 
     strategies = _parse_strategies(args.strategy)
     variant = args.variant or "A"
-    user_id: Optional[int] = args.user_id
+    user_id: int | None = args.user_id
 
-    end = datetime.now(timezone.utc).replace(tzinfo=None)
+    end = datetime.now(UTC).replace(tzinfo=None)
     dm = DataManager()
 
     all_signals: List[PackSignal] = []
@@ -93,12 +93,14 @@ async def _run_async(args: argparse.Namespace) -> int:
         runner = RUNNERS.get(n)
         if not runner:
             _logger.error("Unknown strategy %s", n)
-            _emit_scheduler_result({
-                "success": False,
-                "error": f"unknown strategy {n}",
-                "strategies_requested": strategies,
-                "user_id": user_id,
-            })
+            _emit_scheduler_result(
+                {
+                    "success": False,
+                    "error": f"unknown strategy {n}",
+                    "strategies_requested": strategies,
+                    "user_id": user_id,
+                }
+            )
             return 2
         v = variant
         if n == 5 and args.variant:
@@ -118,9 +120,7 @@ async def _run_async(args: argparse.Namespace) -> int:
         client = NotificationServiceClient()
         try:
             recipient_id = str(user_id) if user_id is not None else None
-            notifications_sent = await send_pack_notifications(
-                client, all_signals, dedup, recipient_id=recipient_id
-            )
+            notifications_sent = await send_pack_notifications(client, all_signals, dedup, recipient_id=recipient_id)
             _logger.info("Sent %d notifications", notifications_sent)
         finally:
             await client.close()
@@ -129,16 +129,18 @@ async def _run_async(args: argparse.Namespace) -> int:
             _logger.info("DRY RUN %s", json.dumps(s.to_jsonl_dict()))
 
     notifiable = sum(1 for s in all_signals if s.notify_recommended)
-    _emit_scheduler_result({
-        "success": True,
-        "user_id": user_id,
-        "strategies_requested": strategies,
-        "variant": variant,
-        "signal_rows": len(all_signals),
-        "notifiable_signals": notifiable,
-        "notifications_sent": notifications_sent,
-        "dry_run": bool(args.dry_run),
-    })
+    _emit_scheduler_result(
+        {
+            "success": True,
+            "user_id": user_id,
+            "strategies_requested": strategies,
+            "variant": variant,
+            "signal_rows": len(all_signals),
+            "notifiable_signals": notifiable,
+            "notifications_sent": notifications_sent,
+            "dry_run": bool(args.dry_run),
+        }
+    )
     return 0
 
 
@@ -188,11 +190,13 @@ def main(argv: List[str] | None = None) -> int:
         return 130
     except Exception as exc:
         _logger.exception("strategy_pack run failed")
-        _emit_scheduler_result({
-            "success": False,
-            "error": str(exc),
-            "user_id": getattr(args, "user_id", None),
-        })
+        _emit_scheduler_result(
+            {
+                "success": False,
+                "error": str(exc),
+                "user_id": getattr(args, "user_id", None),
+            }
+        )
         return 1
 
 

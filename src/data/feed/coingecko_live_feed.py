@@ -18,11 +18,11 @@ Classes:
 """
 
 import time
-import requests
-from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
+from typing import Any, Dict
 
 import pandas as pd
+import requests
 
 from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 from src.notification.logger import setup_logger
@@ -46,11 +46,13 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
     adjusted to respect CoinGecko's rate limits.
     """
 
-    def __init__(self,
-                 symbol: str,
-                 interval: str,
-                 polling_interval: int = 60,  # Poll every 60 seconds to respect rate limits
-                 **kwargs):
+    def __init__(
+        self,
+        symbol: str,
+        interval: str,
+        polling_interval: int = 60,  # Poll every 60 seconds to respect rate limits
+        **kwargs,
+    ):
         """
         Initialize CoinGecko live data feed.
 
@@ -82,17 +84,17 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
             CoinGecko interval format
         """
         interval_map = {
-            '1m': '1m',
-            '5m': '5m',
-            '15m': '15m',
-            '30m': '30m',
-            '1h': '1h',
-            '4h': '4h',
-            '1d': '1d',
+            "1m": "1m",
+            "5m": "5m",
+            "15m": "15m",
+            "30m": "30m",
+            "1h": "1h",
+            "4h": "4h",
+            "1d": "1d",
         }
-        return interval_map.get(interval, '1d')
+        return interval_map.get(interval, "1d")
 
-    def _load_historical_data(self) -> Optional[pd.DataFrame]:
+    def _load_historical_data(self) -> pd.DataFrame | None:
         """
         Load historical data from CoinGecko REST API.
 
@@ -145,7 +147,7 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
             _logger.exception("Error loading historical data for %s: %s")
             return None
 
-    def _process_coin_data(self, data: Dict, start_timestamp: int, end_timestamp: int) -> Optional[pd.DataFrame]:
+    def _process_coin_data(self, data: Dict, start_timestamp: int, end_timestamp: int) -> pd.DataFrame | None:
         """
         Process CoinGecko API response into OHLCV DataFrame.
 
@@ -171,10 +173,7 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
 
             # Resample to requested interval
             rule = self._get_resample_rule()
-            ohlcv = df.resample(rule, on="timestamp").agg({
-                "close": ["first", "max", "min", "last"],
-                "volume": "sum"
-            })
+            ohlcv = df.resample(rule, on="timestamp").agg({"close": ["first", "max", "min", "last"], "volume": "sum"})
             ohlcv.columns = ["open", "high", "low", "close", "volume"]
             ohlcv = ohlcv.reset_index()
             ohlcv = ohlcv.rename(columns={"timestamp": "datetime"})
@@ -195,15 +194,15 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
             Resample rule string
         """
         interval_map = {
-            '1m': 'T',
-            '5m': '5T',
-            '15m': '15T',
-            '30m': '30T',
-            '1h': 'H',
-            '4h': '4H',
-            '1d': 'D',
+            "1m": "T",
+            "5m": "5T",
+            "15m": "15T",
+            "30m": "30T",
+            "1h": "H",
+            "4h": "4H",
+            "1d": "D",
         }
-        return interval_map.get(self.interval, 'D')
+        return interval_map.get(self.interval, "D")
 
     def _get_interval_minutes(self) -> int:
         """
@@ -213,17 +212,17 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
             Interval duration in minutes
         """
         interval_map = {
-            '1m': 1,
-            '5m': 5,
-            '15m': 15,
-            '30m': 30,
-            '1h': 60,
-            '4h': 240,
-            '1d': 1440,
+            "1m": 1,
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60,
+            "4h": 240,
+            "1d": 1440,
         }
         return interval_map.get(self.interval, 1440)
 
-    def _make_api_call(self, url: str, params: Dict) -> Optional[requests.Response]:
+    def _make_api_call(self, url: str, params: Dict) -> requests.Response | None:
         """
         Make API call with rate limiting.
 
@@ -293,7 +292,7 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
         """Disconnect from CoinGecko (no persistent connection to close)."""
         _logger.info("Disconnected from CoinGecko API")
 
-    def _get_latest_data(self) -> Optional[pd.DataFrame]:
+    def _get_latest_data(self) -> pd.DataFrame | None:
         """
         Get the latest data from CoinGecko via polling.
 
@@ -304,8 +303,7 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
             current_time = time.time()
 
             # Check if enough time has passed since last poll
-            if (self.last_poll_time is not None and
-                current_time - self.last_poll_time < self.polling_interval):
+            if self.last_poll_time is not None and current_time - self.last_poll_time < self.polling_interval:
                 return None
 
             # Get current price and volume
@@ -315,7 +313,7 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
                 "vs_currencies": "usd",
                 "include_24hr_vol": "true",
                 "include_24hr_change": "true",
-                "include_last_updated_at": "true"
+                "include_last_updated_at": "true",
             }
 
             response = self._make_api_call(url, params)
@@ -336,13 +334,16 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
             volume_24h = coin_data.get("usd_24h_vol", 0)
 
             # Create DataFrame with current data
-            new_bar = pd.DataFrame({
-                "open": [price],
-                "high": [price],
-                "low": [price],
-                "close": [price],
-                "volume": [volume_24h / 24]  # Approximate hourly volume
-            }, index=[timestamp])
+            new_bar = pd.DataFrame(
+                {
+                    "open": [price],
+                    "high": [price],
+                    "low": [price],
+                    "close": [price],
+                    "volume": [volume_24h / 24],  # Approximate hourly volume
+                },
+                index=[timestamp],
+            )
 
             self.last_poll_time = current_time
             return new_bar
@@ -376,5 +377,5 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
             "polling_interval": self.polling_interval,
             "api_calls_last_minute": len(self.call_times),
             "max_api_calls_per_minute": self.max_calls_per_minute,
-            "data_source": "CoinGecko"
+            "data_source": "CoinGecko",
         }

@@ -1,11 +1,12 @@
 # model_telegram.py  (aligned to DB)
 
 from __future__ import annotations
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import (
-    String, Integer, Boolean, DateTime, Text, ForeignKey, Index, func
-)
+
 from src.data.db.core.base import Base
+
 
 # telegram_broadcast_logs
 class TelegramBroadcastLog(Base):
@@ -16,6 +17,7 @@ class TelegramBroadcastLog(Base):
     success_count: Mapped[int | None] = mapped_column(Integer)
     total_count: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), default=func.now())
+
 
 # telegram_command_audits
 class TelegramCommandAudit(Base):
@@ -39,6 +41,7 @@ class TelegramCommandAudit(Base):
         Index("ix_telegram_command_audits_created", "created_at"),
     )
 
+
 # telegram_feedbacks
 class TelegramFeedback(Base):
     __tablename__ = "telegram_feedbacks"
@@ -49,9 +52,9 @@ class TelegramFeedback(Base):
     created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), default=func.now())
     status: Mapped[str | None] = mapped_column(String(20))
 
+
 # telegram_settings
 class TelegramSetting(Base):
     __tablename__ = "telegram_settings"
     key: Mapped[str] = mapped_column("key", String(100), primary_key=True)
     value: Mapped[str | None] = mapped_column(Text)
-

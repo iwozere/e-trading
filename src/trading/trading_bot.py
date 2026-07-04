@@ -1,4 +1,5 @@
 """This module runs the live trading bot."""
+
 import sys
 from pathlib import Path
 
@@ -7,16 +8,15 @@ sys.path.append(str(PROJECT_ROOT))
 
 import signal
 import time
-from typing import Optional
 
-from src.trading.live_trading_bot import LiveTradingBot
-from src.trading.config_validator import validate_config_file, print_validation_results
 from src.notification.logger import setup_logger
+from src.trading.config_validator import print_validation_results, validate_config_file
+from src.trading.live_trading_bot import LiveTradingBot
 
 _logger = setup_logger(__name__)
 
 
-def main(config_name: Optional[str] = None):
+def main(config_name: str | None = None):
     """
     Main function to run the live trading bot.
 
@@ -71,49 +71,34 @@ def main(config_name: Optional[str] = None):
                 """Health check function for trading bot."""
                 try:
                     # Check if bot is running and healthy
-                    if bot and hasattr(bot, 'is_running') and bot.is_running:
+                    if bot and hasattr(bot, "is_running") and bot.is_running:
                         # You can add more specific health checks here
                         # For example, check last trade time, connection status, etc.
                         return {
-                            'status': 'HEALTHY',
-                            'metadata': {
-                                'config_name': config_name,
-                                'bot_running': True,
-                                'last_check': time.time()
-                            }
+                            "status": "HEALTHY",
+                            "metadata": {"config_name": config_name, "bot_running": True, "last_check": time.time()},
                         }
                     elif bot:
                         return {
-                            'status': 'DOWN',
-                            'error_message': 'Trading bot not running',
-                            'metadata': {
-                                'config_name': config_name,
-                                'bot_running': False
-                            }
+                            "status": "DOWN",
+                            "error_message": "Trading bot not running",
+                            "metadata": {"config_name": config_name, "bot_running": False},
                         }
                     else:
                         return {
-                            'status': 'DOWN',
-                            'error_message': 'Trading bot not initialized',
-                            'metadata': {
-                                'config_name': config_name,
-                                'bot_running': False
-                            }
+                            "status": "DOWN",
+                            "error_message": "Trading bot not initialized",
+                            "metadata": {"config_name": config_name, "bot_running": False},
                         }
                 except Exception as e:
                     return {
-                        'status': 'DOWN',
-                        'error_message': f'Health check failed: {str(e)}',
-                        'metadata': {
-                            'config_name': config_name
-                        }
+                        "status": "DOWN",
+                        "error_message": f"Health check failed: {str(e)}",
+                        "metadata": {"config_name": config_name},
                     }
 
             # Create and start heartbeat manager
-            heartbeat_manager = HeartbeatManager(
-                system='trading_bot',
-                interval_seconds=30
-            )
+            heartbeat_manager = HeartbeatManager(system="trading_bot", interval_seconds=30)
             heartbeat_manager.set_health_check_function(trading_bot_health_check)
             heartbeat_manager.start_heartbeat()
 
@@ -142,13 +127,13 @@ def main(config_name: Optional[str] = None):
         _logger.info("Received keyboard interrupt, shutting down...")
         if heartbeat_manager:
             heartbeat_manager.stop_heartbeat()
-        if 'bot' in locals():
+        if "bot" in locals():
             bot.stop()
     except Exception:
         _logger.exception("Error running live trading bot:")
         if heartbeat_manager:
             heartbeat_manager.stop_heartbeat()
-        if 'bot' in locals():
+        if "bot" in locals():
             bot.stop()
         sys.exit(1)
 

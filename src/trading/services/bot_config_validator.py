@@ -8,8 +8,9 @@ Ensures all required fields are present and valid before bot startup.
 This module now delegates to schema_validator.py for JSON Schema-based validation.
 """
 
-from typing import Dict, Any, List, Tuple
 import json
+from typing import Any, Dict, List, Tuple
+
 from src.notification.logger import setup_logger
 from src.trading.services.schema_validator import validate_bot_configuration
 
@@ -212,8 +213,12 @@ class BotConfigValidator:
     def _validate_notifications_config(self, notif_config: Dict[str, Any]) -> None:
         """Validate notifications configuration."""
         boolean_fields = [
-            "position_opened", "position_closed", "email_enabled",
-            "telegram_enabled", "error_notifications", "risk_alerts"
+            "position_opened",
+            "position_closed",
+            "email_enabled",
+            "telegram_enabled",
+            "error_notifications",
+            "risk_alerts",
         ]
 
         for field in boolean_fields:
@@ -306,9 +311,9 @@ def print_validation_results(bot_id: str, is_valid: bool, errors: List[str], war
         errors: List of validation errors
         warnings: List of validation warnings
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"BOT CONFIGURATION VALIDATION - {bot_id}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     if is_valid:
         print("✅ Configuration is VALID")
@@ -328,4 +333,4 @@ def print_validation_results(bot_id: str, is_valid: bool, errors: List[str], war
     if not errors and not warnings:
         print("\n✅ No issues found!")
 
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")

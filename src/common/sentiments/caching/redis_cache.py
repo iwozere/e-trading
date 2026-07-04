@@ -7,16 +7,17 @@ failover to memory cache, and comprehensive error handling.
 
 import json
 import pickle
-import time
-from typing import Any, Optional, Dict
-from pathlib import Path
 import sys
+import time
+from pathlib import Path
+from typing import Any, Dict
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
+
 from .cache_metrics import get_cache_metrics
 
 _logger = setup_logger(__name__)
@@ -25,6 +26,7 @@ _logger = setup_logger(__name__)
 try:
     import redis
     from redis.connection import ConnectionPool
+
     REDIS_AVAILABLE = True
 except ImportError:
     redis = None
@@ -45,16 +47,18 @@ class RedisCache:
     - TTL support with Redis expiration
     """
 
-    def __init__(self,
-                 host: str = "localhost",
-                 port: int = 6379,
-                 db: int = 0,
-                 password: Optional[str] = None,
-                 max_connections: int = 10,
-                 socket_timeout: float = 5.0,
-                 socket_connect_timeout: float = 5.0,
-                 key_prefix: str = "sentiment:",
-                 serialization: str = "json"):
+    def __init__(
+        self,
+        host: str = "localhost",
+        port: int = 6379,
+        db: int = 0,
+        password: str | None = None,
+        max_connections: int = 10,
+        socket_timeout: float = 5.0,
+        socket_connect_timeout: float = 5.0,
+        key_prefix: str = "sentiment:",
+        serialization: str = "json",
+    ):
         """
         Initialize Redis cache.
 
@@ -76,8 +80,8 @@ class RedisCache:
         self.key_prefix = key_prefix
         self.serialization = serialization
         self._metrics = get_cache_metrics()
-        self._pool: Optional[ConnectionPool] = None
-        self._client: Optional[redis.Redis] = None
+        self._pool: ConnectionPool | None = None
+        self._client: redis.Redis | None = None
         self._available = False
         self._last_connection_attempt = 0
         self._connection_retry_interval = 30  # seconds
@@ -97,7 +101,7 @@ class RedisCache:
                 socket_timeout=socket_timeout,
                 socket_connect_timeout=socket_connect_timeout,
                 retry_on_timeout=True,
-                health_check_interval=30
+                health_check_interval=30,
             )
             self._client = redis.Redis(connection_pool=self._pool)
             self._test_connection()
@@ -128,8 +132,7 @@ class RedisCache:
         current_time = time.time()
 
         # Don't retry too frequently
-        if (not self._available and
-            current_time - self._last_connection_attempt < self._connection_retry_interval):
+        if not self._available and current_time - self._last_connection_attempt < self._connection_retry_interval:
             return False
 
         self._last_connection_attempt = current_time
@@ -156,7 +159,7 @@ class RedisCache:
     def _serialize_value(self, value: Any) -> bytes:
         """Serialize value for storage."""
         if self.serialization == "json":
-            return json.dumps(value, default=str).encode('utf-8')
+            return json.dumps(value, default=str).encode("utf-8")
         elif self.serialization == "pickle":
             # SECURITY: pickle.dumps/loads is an RCE sink if the Redis instance is
             # shared or reachable by untrusted parties.  Only use pickle mode with
@@ -169,7 +172,7 @@ class RedisCache:
     def _deserialize_value(self, data: bytes) -> Any:
         """Deserialize value from storage."""
         if self.serialization == "json":
-            return json.loads(data.decode('utf-8'))
+            return json.loads(data.decode("utf-8"))
         elif self.serialization == "pickle":
             # SECURITY: see _serialize_value.  Never deserialize pickle data from
             # a shared or multi-tenant Redis instance.
@@ -177,7 +180,7 @@ class RedisCache:
         else:
             raise ValueError(f"Unknown serialization method: {self.serialization}")
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """
         Get value from Redis cache.
 
@@ -212,7 +215,7 @@ class RedisCache:
             self._metrics.record_miss("redis", operation_id)
             return None
 
-    def set(self, key: str, value: Any, ttl_seconds: Optional[int] = None) -> bool:
+    def set(self, key: str, value: Any, ttl_seconds: int | None = None) -> bool:
         """
         Set value in Redis cache.
 
@@ -301,7 +304,7 @@ class RedisCache:
             self._available = False
             return False
 
-    def get_ttl(self, key: str) -> Optional[int]:
+    def get_ttl(self, key: str) -> int | None:
         """
         Get remaining TTL for a key.
 
@@ -330,7 +333,7 @@ class RedisCache:
             self._available = False
             return None
 
-    def clear_prefix(self, pattern: Optional[str] = None) -> int:
+    def clear_prefix(self, pattern: str | None = None) -> int:
         """
         Clear keys matching a pattern.
 
@@ -372,13 +375,13 @@ class RedisCache:
         try:
             info = self._client.info()
             return {
-                'redis_version': info.get('redis_version'),
-                'used_memory': info.get('used_memory'),
-                'used_memory_human': info.get('used_memory_human'),
-                'connected_clients': info.get('connected_clients'),
-                'total_commands_processed': info.get('total_commands_processed'),
-                'keyspace_hits': info.get('keyspace_hits'),
-                'keyspace_misses': info.get('keyspace_misses')
+                "redis_version": info.get("redis_version"),
+                "used_memory": info.get("used_memory"),
+                "used_memory_human": info.get("used_memory_human"),
+                "connected_clients": info.get("connected_clients"),
+                "total_commands_processed": info.get("total_commands_processed"),
+                "keyspace_hits": info.get("keyspace_hits"),
+                "keyspace_misses": info.get("keyspace_misses"),
             }
 
         except Exception as e:

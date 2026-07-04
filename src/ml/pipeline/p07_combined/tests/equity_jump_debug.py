@@ -1,12 +1,13 @@
-import vectorbt as vbt
 import pandas as pd
-import numpy as np
+
+import vectorbt as vbt
+
 
 def debug_terminal_equity():
     # 1. Setup Data: Price drops, then last bar is a tiny tick up
     # Scenario: Long trade entered in middle, never exited by signal.
     # VectorBT should close it at last index.
-    close = pd.Series([100, 100, 100, 110, 110, 115, 115], name='close')
+    close = pd.Series([100, 100, 100, 110, 110, 115, 115], name="close")
     entries = pd.Series([False, False, True, False, False, False, False])
     exits = pd.Series([False, False, False, False, False, False, False])
 
@@ -32,6 +33,7 @@ def debug_terminal_equity():
 
     if last_pnl != 0:
         print("CONFIRMED: VectorBT includes terminal exit PnL at the last index, causing the jump.")
+
 
 if __name__ == "__main__":
     debug_terminal_equity()

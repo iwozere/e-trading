@@ -1,7 +1,13 @@
-import tempfile
-import os
 import asyncio
-from src.notification.async_notification_manager import initialize_notification_manager, NotificationType, NotificationPriority
+import os
+import tempfile
+
+from src.notification.async_notification_manager import (
+    NotificationPriority,
+    NotificationType,
+    initialize_notification_manager,
+)
+
 
 def test_email_with_attachment():
     # Create a dummy file
@@ -12,8 +18,7 @@ def test_email_with_attachment():
 
     async def send_email():
         notification_manager = await initialize_notification_manager(
-            email_sender="sender@example.com",
-            email_receiver="receiver@example.com"
+            email_sender="sender@example.com", email_receiver="receiver@example.com"
         )
         await notification_manager.send_notification(
             notification_type=NotificationType.INFO,
@@ -23,7 +28,7 @@ def test_email_with_attachment():
             data={},
             source="test_email_with_attachment",
             channels=["email"],
-            attachments=[attachment_path]
+            attachments=[attachment_path],
         )
 
     try:

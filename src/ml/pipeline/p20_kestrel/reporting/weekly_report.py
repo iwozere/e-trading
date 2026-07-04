@@ -11,16 +11,16 @@ from __future__ import annotations
 import sys
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 from src.ml.pipeline.p20_kestrel.config import (
     LLM_MONTHLY_BUDGET_USD,
     REVISIONS_FEED_AVAILABLE,
 )
-from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 
 _kestrel = _KestrelService()
 finish_job_run = _kestrel.finish_job_run
@@ -39,6 +39,7 @@ _JOB_NAME = "weekly_report"
 def _build_funnel_stats() -> str:
     """Summarize the current watchlist funnel."""
     from collections import Counter
+
     watchlist = get_watchlist()
     counts = Counter(str(r.get("state", "?")) for r in watchlist)
     parts = [f"{state}: {cnt}" for state, cnt in sorted(counts.items())]
@@ -53,9 +54,7 @@ def _build_catalyst_calendar() -> str:
 
     lines = ["Catalyst Calendar (14d):"]
     for c in catalysts:
-        lines.append(
-            f"  {c.get('event_date')} — {c.get('ticker')} {c.get('event_type')} [{c.get('state')}]"
-        )
+        lines.append(f"  {c.get('event_date')} — {c.get('ticker')} {c.get('event_type')} [{c.get('state')}]")
     return "\n".join(lines)
 
 
@@ -106,7 +105,7 @@ def build_report(week_end: date) -> str:
     return "\n".join(sections)
 
 
-def run(week_end: Optional[date] = None) -> Dict[str, Any]:
+def run(week_end: date | None = None) -> Dict[str, Any]:
     """
     Build and send the weekly report.
 
@@ -124,13 +123,17 @@ def run(week_end: Optional[date] = None) -> Dict[str, Any]:
         report_text = build_report(target_date)
 
         try:
-            from src.notification.service.client import NotificationServiceClient
             import asyncio
+
+            from src.notification.service.client import NotificationServiceClient
+
             client = NotificationServiceClient()
-            asyncio.run(client.send_to_admins(
-                title=f"Kestrel Weekly Report — {target_date}",
-                message=report_text,
-            ))
+            asyncio.run(
+                client.send_to_admins(
+                    title=f"Kestrel Weekly Report — {target_date}",
+                    message=report_text,
+                )
+            )
             sent = True
         except Exception:
             _logger.exception("Failed to send weekly report notification")

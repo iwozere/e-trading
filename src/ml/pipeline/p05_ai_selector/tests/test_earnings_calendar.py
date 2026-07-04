@@ -1,15 +1,14 @@
 """Tests for EarningsCalendar."""
 
-from datetime import date, timedelta
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 import sys
+from datetime import date
+from pathlib import Path
+from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
-import pytest
 
 from src.ml.pipeline.p05_ai_selector.signals.earnings_calendar import EarningsCalendar
 
@@ -33,10 +32,12 @@ class TestEarningsCalendar:
         """Only returns tickers with earnings within the requested window."""
         cal = EarningsCalendar(api_key="fake", cache_dir=tmp_path)
         ref_date = date(2026, 6, 14)
-        earnings_df = pd.DataFrame([
-            {"symbol": "AAPL", "date": "2026-06-18", "eps": None, "epsEstimated": None},
-            {"symbol": "MSFT", "date": "2026-06-25", "eps": None, "epsEstimated": None},
-        ])
+        earnings_df = pd.DataFrame(
+            [
+                {"symbol": "AAPL", "date": "2026-06-18", "eps": None, "epsEstimated": None},
+                {"symbol": "MSFT", "date": "2026-06-25", "eps": None, "epsEstimated": None},
+            ]
+        )
 
         with patch.object(cal, "_fetch_from_fmp", return_value=earnings_df):
             result = cal.get_earnings_within_days(["AAPL", "MSFT"], ref_date, window_days=7)

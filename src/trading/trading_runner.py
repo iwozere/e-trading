@@ -27,19 +27,18 @@ Examples:
     python src/trading/trading_runner.py --user-id 1
 """
 
+import argparse
 import asyncio
 import signal
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
-from datetime import datetime, timezone
-import argparse
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.trading.strategy_manager import StrategyManager #noqa: E402
-from src.notification.logger import setup_logger #noqa: E402
+from src.notification.logger import setup_logger  # noqa: E402
+from src.trading.strategy_manager import StrategyManager  # noqa: E402
 
 _logger = setup_logger(__name__)
 
@@ -59,7 +58,7 @@ class TradingServiceRunner:
     - Coordinates startup/shutdown
     """
 
-    def __init__(self, user_id: Optional[int] = None, db_poll_interval: int = 60, resume_mode: bool = True):
+    def __init__(self, user_id: int | None = None, db_poll_interval: int = 60, resume_mode: bool = True):
         """
         Initialize the trading service runner.
 
@@ -87,7 +86,7 @@ class TradingServiceRunner:
             _logger.info("=" * 80)
 
             self.is_running = True
-            self.start_time = datetime.now(timezone.utc)
+            self.start_time = datetime.now(UTC)
 
             # StrategyManager handles ALL config loading (with crash recovery if enabled)
             _logger.info("Loading bot configurations from database...")
@@ -111,10 +110,7 @@ class TradingServiceRunner:
 
             # Start DB polling for hot-reload
             _logger.info("Starting database polling for configuration hot-reload...")
-            await self.strategy_manager.start_db_polling(
-                user_id=self.user_id,
-                interval_seconds=self.db_poll_interval
-            )
+            await self.strategy_manager.start_db_polling(user_id=self.user_id, interval_seconds=self.db_poll_interval)
 
             _logger.info("=" * 80)
             _logger.info("🎯 Trading Service is running with %d active bot(s)", started_count)
@@ -161,6 +157,7 @@ class TradingServiceRunner:
 
 def setup_signal_handlers(runner):
     """Setup signal handlers for graceful shutdown."""
+
     def signal_handler(signum, frame):
         _logger.info("Received signal %s, initiating shutdown...", signum)
         runner.is_running = False
@@ -171,25 +168,18 @@ def setup_signal_handlers(runner):
 
 async def main():
     """Main function - service entry point."""
-    parser = argparse.ArgumentParser(
-        description='Database-Driven Multi-Bot Trading Service'
-    )
+    parser = argparse.ArgumentParser(description="Database-Driven Multi-Bot Trading Service")
+    parser.add_argument("--user-id", type=int, default=None, help="User ID to filter bots (optional)")
     parser.add_argument(
-        '--user-id',
-        type=int,
-        default=None,
-        help='User ID to filter bots (optional)'
-    )
-    parser.add_argument(
-        '--poll-interval',
+        "--poll-interval",
         type=int,
         default=60,
-        help='Database polling interval in seconds for config hot-reload (default: 60)'
+        help="Database polling interval in seconds for config hot-reload (default: 60)",
     )
     parser.add_argument(
-        '--no-resume',
-        action='store_true',
-        help='Disable smart resume mode (start all enabled bots instead of only resuming crashed ones)'
+        "--no-resume",
+        action="store_true",
+        help="Disable smart resume mode (start all enabled bots instead of only resuming crashed ones)",
     )
 
     args = parser.parse_args()
@@ -198,7 +188,7 @@ async def main():
     runner = TradingServiceRunner(
         user_id=args.user_id,
         db_poll_interval=args.poll_interval,
-        resume_mode=not args.no_resume  # Invert --no-resume flag
+        resume_mode=not args.no_resume,  # Invert --no-resume flag
     )
     setup_signal_handlers(runner)
 

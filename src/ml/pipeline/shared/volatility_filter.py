@@ -9,21 +9,22 @@ Enhanced with EMPS accumulation indicators:
 - Volume/Volatility Ratio: Detects accumulation (high volume + low price volatility)
 """
 
-from pathlib import Path
 import sys
-from typing import List, Dict, Optional
 from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict, List
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import talib
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.data.data_manager import DataManager
+from src.notification.logger import setup_logger
+
 from .config import VolatilityFilterConfig
 from .ohlcv_timestamp import coerce_ohlcv_timestamp_column
 from .trf_downloader import get_trf_correction_factor
@@ -43,7 +44,13 @@ class VolatilityFilter:
     Filters for stocks showing early volatility expansion.
     """
 
-    def __init__(self, data_manager: DataManager, config: VolatilityFilterConfig, results_dir: Optional[Path] = None, target_date: Optional[str] = None):
+    def __init__(
+        self,
+        data_manager: DataManager,
+        config: VolatilityFilterConfig,
+        results_dir: Path | None = None,
+        target_date: str | None = None,
+    ):
         """
         Initialize volatility filter.
 
@@ -58,22 +65,24 @@ class VolatilityFilter:
 
         # Store target_date
         if target_date is None:
-            target_date = datetime.now().strftime('%Y-%m-%d')
+            target_date = datetime.now().strftime("%Y-%m-%d")
         self.target_date = target_date
 
         if results_dir:
             self._results_dir = results_dir
         else:
             self._results_dir = Path("results") / "shared" / target_date
-            
+
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
-        _logger.info("Volatility Filter initialized: ATR/Price>%.1f%%, range>%.1f%%, lookback=%dd, vol_zscore>%.1f, vol_rv_ratio>%.1f",
-                    config.min_volatility_threshold * 100,
-                    config.min_price_range * 100,
-                    config.lookback_days,
-                    config.min_vol_zscore,
-                    config.min_vol_rv_ratio)
+        _logger.info(
+            "Volatility Filter initialized: ATR/Price>%.1f%%, range>%.1f%%, lookback=%dd, vol_zscore>%.1f, vol_rv_ratio>%.1f",
+            config.min_volatility_threshold * 100,
+            config.min_price_range * 100,
+            config.lookback_days,
+            config.min_vol_zscore,
+            config.min_vol_rv_ratio,
+        )
 
     def apply_filters(self, tickers: List[str]) -> pd.DataFrame:
         """
@@ -90,20 +99,20 @@ class VolatilityFilter:
 
             # Calculate date range using target_date as reference
             from datetime import datetime as dt
-            end_date = dt.strptime(self.target_date, '%Y-%m-%d') + timedelta(days=1)  # Include target date
+
+            end_date = dt.strptime(self.target_date, "%Y-%m-%d") + timedelta(days=1)  # Include target date
             start_date = end_date - timedelta(days=self.config.lookback_days)
 
             # Download intraday data in batch
-            _logger.info("Downloading %s data for %d tickers (%s to %s)",
-                        self.config.interval, len(tickers),
-                        start_date.date(), end_date.date())
-
-            ohlcv_data = self.data_manager.get_ohlcv_batch(
-                tickers,
+            _logger.info(
+                "Downloading %s data for %d tickers (%s to %s)",
                 self.config.interval,
-                start_date,
-                end_date
+                len(tickers),
+                start_date.date(),
+                end_date.date(),
             )
+
+            ohlcv_data = self.data_manager.get_ohlcv_batch(tickers, self.config.interval, start_date, end_date)
 
             # Load TRF volume correction factors
             trf_corrections = self._load_trf_volume_corrections()
@@ -123,55 +132,59 @@ class VolatilityFilter:
 
                     if df is None or df.empty:
                         _logger.debug("No data for %s", ticker)
-                        diagnostic_data.append({
-                            'ticker': ticker,
-                            'status': 'FAILED',
-                            'reason': 'no_data',
-                            'last_price': None,
-                            'atr': None,
-                            'atr_ratio': None,
-                            'price_range': None,
-                            'vol_zscore': None,
-                            'vol_rv_ratio': None,
-                            'rv_short': None,
-                            'rv_long': None,
-                            'z_vol_delta': None,
-                            'z_intensity': None,
-                            'z_gap': None,
-                            'z_atr': None,
-                            'phase1_flag': False,
-                            'phase2_flag': False,
-                            'entry_flag': False,
-                            'bars_count': 0,
-                            'trf_correction_factor': None
-                        })
+                        diagnostic_data.append(
+                            {
+                                "ticker": ticker,
+                                "status": "FAILED",
+                                "reason": "no_data",
+                                "last_price": None,
+                                "atr": None,
+                                "atr_ratio": None,
+                                "price_range": None,
+                                "vol_zscore": None,
+                                "vol_rv_ratio": None,
+                                "rv_short": None,
+                                "rv_long": None,
+                                "z_vol_delta": None,
+                                "z_intensity": None,
+                                "z_gap": None,
+                                "z_atr": None,
+                                "phase1_flag": False,
+                                "phase2_flag": False,
+                                "entry_flag": False,
+                                "bars_count": 0,
+                                "trf_correction_factor": None,
+                            }
+                        )
                         continue
 
                     # Check minimum bars requirement
                     if len(df) < 20:
                         _logger.debug("%s has insufficient data (%d bars)", ticker, len(df))
-                        diagnostic_data.append({
-                            'ticker': ticker,
-                            'status': 'FAILED',
-                            'reason': 'insufficient_bars',
-                            'last_price': None,
-                            'atr': None,
-                            'atr_ratio': None,
-                            'price_range': None,
-                            'vol_zscore': None,
-                            'vol_rv_ratio': None,
-                            'rv_short': None,
-                            'rv_long': None,
-                            'z_vol_delta': None,
-                            'z_intensity': None,
-                            'z_gap': None,
-                            'z_atr': None,
-                            'phase1_flag': False,
-                            'phase2_flag': False,
-                            'entry_flag': False,
-                            'bars_count': len(df),
-                            'trf_correction_factor': None
-                        })
+                        diagnostic_data.append(
+                            {
+                                "ticker": ticker,
+                                "status": "FAILED",
+                                "reason": "insufficient_bars",
+                                "last_price": None,
+                                "atr": None,
+                                "atr_ratio": None,
+                                "price_range": None,
+                                "vol_zscore": None,
+                                "vol_rv_ratio": None,
+                                "rv_short": None,
+                                "rv_long": None,
+                                "z_vol_delta": None,
+                                "z_intensity": None,
+                                "z_gap": None,
+                                "z_atr": None,
+                                "phase1_flag": False,
+                                "phase2_flag": False,
+                                "entry_flag": False,
+                                "bars_count": len(df),
+                                "trf_correction_factor": None,
+                            }
+                        )
                         continue
 
                     # Apply TRF volume correction if available (wildcard "*" from _load_trf_volume_corrections)
@@ -187,69 +200,77 @@ class VolatilityFilter:
 
                     # Add TRF correction factor to metrics
                     if metrics:
-                        metrics['trf_correction_factor'] = trf_factor
+                        metrics["trf_correction_factor"] = trf_factor
 
                     if passed:
                         passed_tickers.append(ticker)
                         results_data.append(metrics)
                         # Add to diagnostics with PASSED status
                         diag_entry = metrics.copy()
-                        diag_entry['status'] = 'PASSED'
-                        diag_entry['reason'] = 'all_filters_passed'
+                        diag_entry["status"] = "PASSED"
+                        diag_entry["reason"] = "all_filters_passed"
                         diagnostic_data.append(diag_entry)
                     else:
                         # Add to diagnostics with failure reason
-                        diag_entry = metrics.copy() if metrics else {
-                            'ticker': ticker,
-                            'last_price': None,
-                            'atr': None,
-                            'atr_ratio': None,
-                            'price_range': None,
-                            'vol_zscore': None,
-                            'vol_rv_ratio': None,
-                            'rv_short': None,
-                            'rv_long': None,
-                            'z_vol_delta': None,
-                            'z_intensity': None,
-                            'z_gap': None,
-                            'z_atr': None,
-                            'phase1_flag': False,
-                            'phase2_flag': False,
-                            'entry_flag': False,
-                            'bars_count': len(df)
-                        }
-                        diag_entry['status'] = 'FAILED'
-                        diag_entry['reason'] = reason
+                        diag_entry = (
+                            metrics.copy()
+                            if metrics
+                            else {
+                                "ticker": ticker,
+                                "last_price": None,
+                                "atr": None,
+                                "atr_ratio": None,
+                                "price_range": None,
+                                "vol_zscore": None,
+                                "vol_rv_ratio": None,
+                                "rv_short": None,
+                                "rv_long": None,
+                                "z_vol_delta": None,
+                                "z_intensity": None,
+                                "z_gap": None,
+                                "z_atr": None,
+                                "phase1_flag": False,
+                                "phase2_flag": False,
+                                "entry_flag": False,
+                                "bars_count": len(df),
+                            }
+                        )
+                        diag_entry["status"] = "FAILED"
+                        diag_entry["reason"] = reason
                         diagnostic_data.append(diag_entry)
 
                 except Exception:
                     _logger.exception("Error processing %s:", ticker)
-                    diagnostic_data.append({
-                        'ticker': ticker,
-                        'status': 'ERROR',
-                        'reason': 'exception',
-                        'last_price': None,
-                        'atr': None,
-                        'atr_ratio': None,
-                        'price_range': None,
-                        'vol_zscore': None,
-                        'vol_rv_ratio': None,
-                        'rv_short': None,
-                        'rv_long': None,
-                        'z_vol_delta': None,
-                        'z_intensity': None,
-                        'z_gap': None,
-                        'z_atr': None,
-                        'phase1_flag': False,
-                        'phase2_flag': False,
-                        'entry_flag': False,
-                        'bars_count': 0
-                    })
+                    diagnostic_data.append(
+                        {
+                            "ticker": ticker,
+                            "status": "ERROR",
+                            "reason": "exception",
+                            "last_price": None,
+                            "atr": None,
+                            "atr_ratio": None,
+                            "price_range": None,
+                            "vol_zscore": None,
+                            "vol_rv_ratio": None,
+                            "rv_short": None,
+                            "rv_long": None,
+                            "z_vol_delta": None,
+                            "z_intensity": None,
+                            "z_gap": None,
+                            "z_atr": None,
+                            "phase1_flag": False,
+                            "phase2_flag": False,
+                            "entry_flag": False,
+                            "bars_count": 0,
+                        }
+                    )
                     continue
 
-            _logger.info("After volatility filtering: %d tickers (%.1f%%)",
-                        len(passed_tickers),
-                        100.0 * len(passed_tickers) / len(tickers) if tickers else 0)
+            _logger.info(
+                "After volatility filtering: %d tickers (%.1f%%)",
+                len(passed_tickers),
+                100.0 * len(passed_tickers) / len(tickers) if tickers else 0,
+            )
 
             # Save diagnostics (all tickers)
             self._save_diagnostics(diagnostic_data)
@@ -280,10 +301,10 @@ class VolatilityFilter:
         """
         try:
             # Ensure data is sorted by timestamp
-            df = df.sort_values('timestamp').copy()
+            df = df.sort_values("timestamp").copy()
 
             # Get latest price
-            last_price = df['close'].iloc[-1]
+            last_price = df["close"].iloc[-1]
 
             # Calculate all metrics first (for diagnostics)
             # Calculate ATR using TA-Lib
@@ -294,8 +315,8 @@ class VolatilityFilter:
                 atr_ratio = atr / last_price
 
             # Price range filter
-            price_high = df['high'].max()
-            price_low = df['low'].min()
+            price_high = df["high"].max()
+            price_low = df["low"].min()
 
             if price_low > 0:
                 price_range = (price_high - price_low) / price_low
@@ -313,54 +334,69 @@ class VolatilityFilter:
 
             # Build metrics dictionary with all calculated values
             metrics = {
-                'ticker': ticker,
-                'last_price': last_price,
-                'open': df['open'].iloc[-1],
-                'high': df['high'].iloc[-1],
-                'low': df['low'].iloc[-1],
-                'close': df['close'].iloc[-1],
-                'volume': df['volume'].iloc[-1],
-                'atr': atr,
-                'atr_ratio': atr_ratio,
-                'price_range': price_range,
-                'price_high': price_high,
-                'price_low': price_low,
-                'vol_zscore': vol_zscore,
-                'vol_rv_ratio': vol_rv_ratio,
-                'rv_short': rv_short,
-                'rv_long': rv_long,
+                "ticker": ticker,
+                "last_price": last_price,
+                "open": df["open"].iloc[-1],
+                "high": df["high"].iloc[-1],
+                "low": df["low"].iloc[-1],
+                "close": df["close"].iloc[-1],
+                "volume": df["volume"].iloc[-1],
+                "atr": atr,
+                "atr_ratio": atr_ratio,
+                "price_range": price_range,
+                "price_high": price_high,
+                "price_low": price_low,
+                "vol_zscore": vol_zscore,
+                "vol_rv_ratio": vol_rv_ratio,
+                "rv_short": rv_short,
+                "rv_long": rv_long,
                 **adv_metrics,
-                'bars_count': len(df)
+                "bars_count": len(df),
             }
 
             # Now apply filters with specific failure reasons
             # Price filter
             if last_price < self.config.min_price:
-                return False, metrics, f'price_too_low (${last_price:.2f} < ${self.config.min_price})'
+                return False, metrics, f"price_too_low (${last_price:.2f} < ${self.config.min_price})"
 
             # ATR check
             if atr is None or pd.isna(atr):
-                _logger.warning("ATR calculation failed for %s. Data length: %d, Price range: %.2f-%.2f, OHLC Sample:\n%s",
-                                ticker, len(df), price_low, price_high, df[['high', 'low', 'close']].tail())
-                return False, metrics, 'atr_calculation_failed'
+                _logger.warning(
+                    "ATR calculation failed for %s. Data length: %d, Price range: %.2f-%.2f, OHLC Sample:\n%s",
+                    ticker,
+                    len(df),
+                    price_low,
+                    price_high,
+                    df[["high", "low", "close"]].tail(),
+                )
+                return False, metrics, "atr_calculation_failed"
 
             # Define pass criteria based on new flags
             # A ticker passes if it's in Phase 1 (Accumulation) OR Phase 2 (Breakout)
-            is_phase1 = metrics.get('phase1_flag', False)
-            is_phase2 = metrics.get('phase2_flag', False)
+            is_phase1 = metrics.get("phase1_flag", False)
+            is_phase2 = metrics.get("phase2_flag", False)
 
             if not (is_phase1 or is_phase2):
-                return False, metrics, 'not_in_phase_1_or_2'
+                return False, metrics, "not_in_phase_1_or_2"
 
             # Passed all filters
-            _logger.debug("%s passed: phase1=%s, phase2=%s, price=$%.2f, ATR/Price=%.3f, range=%.3f, vol_zscore=%.2f, vol_rv_ratio=%.2f",
-                         ticker, is_phase1, is_phase2, last_price, atr_ratio, price_range, vol_zscore, vol_rv_ratio)
+            _logger.debug(
+                "%s passed: phase1=%s, phase2=%s, price=$%.2f, ATR/Price=%.3f, range=%.3f, vol_zscore=%.2f, vol_rv_ratio=%.2f",
+                ticker,
+                is_phase1,
+                is_phase2,
+                last_price,
+                atr_ratio,
+                price_range,
+                vol_zscore,
+                vol_rv_ratio,
+            )
 
-            return True, metrics, 'all_filters_passed'
+            return True, metrics, "all_filters_passed"
 
         except Exception:
             _logger.exception("Error checking filters for %s:", ticker)
-            return False, {}, 'exception_during_calculation'
+            return False, {}, "exception_during_calculation"
 
     def _compute_atr(self, df: pd.DataFrame) -> float:
         """
@@ -374,40 +410,41 @@ class VolatilityFilter:
         """
         try:
             # Debug: Print DataFrame info
-            #_logger.debug("DataFrame shape: %s", df.shape)
-            #_logger.debug("DataFrame head:\n%s", df[['high', 'low', 'close']].head())
+            # _logger.debug("DataFrame shape: %s", df.shape)
+            # _logger.debug("DataFrame head:\n%s", df[['high', 'low', 'close']].head())
 
             # Check for required columns
-            required_columns = ['high', 'low', 'close']
+            required_columns = ["high", "low", "close"]
             if not all(col in df.columns for col in required_columns):
                 _logger.error("Missing required columns in DataFrame. Available columns: %s", df.columns.tolist())
                 return None
 
             # Check for NaN values in input data
-            if df[['high', 'low', 'close']].isna().any().any():
+            if df[["high", "low", "close"]].isna().any().any():
                 _logger.warning("NaN values found in price data. Filling with previous values.")
-                df[['high', 'low', 'close']] = df[['high', 'low', 'close']].ffill()
+                df[["high", "low", "close"]] = df[["high", "low", "close"]].ffill()
 
             # Ensure we have enough data points
             min_required_bars = self.config.atr_period + 1  # ATR needs at least period + 1 bars
             if len(df) < min_required_bars:
-                _logger.warning("Insufficient data points for ATR calculation. Need at least %d, got %d",
-                            min_required_bars, len(df))
+                _logger.warning(
+                    "Insufficient data points for ATR calculation. Need at least %d, got %d", min_required_bars, len(df)
+                )
                 return None
 
             # TA-Lib expects numpy arrays
-            high = df['high'].values
-            low = df['low'].values
-            close = df['close'].values
+            high = df["high"].values
+            low = df["low"].values
+            close = df["close"].values
 
             # Debug: Print first few values
-            #_logger.debug("First few values - High: %s, Low: %s, Close: %s", high[:5], low[:5], close[:5])
+            # _logger.debug("First few values - High: %s, Low: %s, Close: %s", high[:5], low[:5], close[:5])
 
             # Calculate ATR
             atr_values = talib.ATR(high, low, close, timeperiod=self.config.atr_period)
 
             # Debug: Print ATR values
-            #_logger.debug("ATR values: %s", atr_values)
+            # _logger.debug("ATR values: %s", atr_values)
 
             # Return latest ATR (skip NaN values)
             valid_atr = atr_values[~pd.isna(atr_values)]
@@ -440,7 +477,7 @@ class VolatilityFilter:
             if len(df) < lookback + 1:
                 return 0.0
 
-            volume = df['volume'].values
+            volume = df["volume"].values
 
             # Calculate rolling mean and std
             vol_mean = pd.Series(volume).rolling(window=lookback, min_periods=lookback).mean()
@@ -461,10 +498,9 @@ class VolatilityFilter:
             _logger.exception("Error computing volume z-score:")
             return 0.0
 
-    def _compute_volume_volatility_ratio(self, df: pd.DataFrame,
-                                          short_window: int = 5,
-                                          long_window: int = 40,
-                                          vol_window: int = 20) -> tuple:
+    def _compute_volume_volatility_ratio(
+        self, df: pd.DataFrame, short_window: int = 5, long_window: int = 40, vol_window: int = 20
+    ) -> tuple:
         """
         Calculate Volume/Volatility Ratio for accumulation detection.
 
@@ -488,20 +524,17 @@ class VolatilityFilter:
         """
         try:
             if len(df) < max(long_window + 1, vol_window + 1):
-                _logger.debug(f"Insufficient data for volatility ratio calculation: {len(df)} bars < {max(long_window + 1, vol_window + 1)}")
+                _logger.debug(
+                    f"Insufficient data for volatility ratio calculation: {len(df)} bars < {max(long_window + 1, vol_window + 1)}"
+                )
                 return 0.0, 0.0, 0.0
 
             # Calculate log returns for price volatility
-            close = df['close'].values
+            close = df["close"].values
             log_returns = np.log(close[1:] / close[:-1])
 
             # Determine bars per day based on interval
-            interval_map = {
-                '5m': 78,
-                '15m': 26,
-                '30m': 13,
-                '1h': 6.5
-            }
+            interval_map = {"5m": 78, "15m": 26, "30m": 13, "1h": 6.5}
             bars_per_day = interval_map.get(self.config.interval, 26)
 
             # Calculate realized volatility (short-term)
@@ -513,7 +546,7 @@ class VolatilityFilter:
                 return 0.0, 0.0, 0.0
 
             # Calculate volume z-score
-            volume = df['volume'].values
+            volume = df["volume"].values
             if len(volume) >= vol_window:
                 vol_mean = np.mean(volume[-vol_window:])
                 vol_std = np.std(volume[-vol_window:])
@@ -531,7 +564,9 @@ class VolatilityFilter:
             if rv_short > 0 and not np.isnan(rv_short):
                 vol_rv_ratio = current_vol_zscore / rv_short
             else:
-                _logger.debug(f"Invalid RV short for vol_rv_ratio: rv_short={rv_short}, nan={np.isnan(rv_short)}, rv_long={rv_long}, current_vol_zscore={current_vol_zscore}")
+                _logger.debug(
+                    f"Invalid RV short for vol_rv_ratio: rv_short={rv_short}, nan={np.isnan(rv_short)}, rv_long={rv_long}, current_vol_zscore={current_vol_zscore}"
+                )
                 vol_rv_ratio = 0.0
 
             return float(vol_rv_ratio), float(rv_short), float(rv_long)
@@ -568,67 +603,63 @@ class VolatilityFilter:
             df = df.copy()
 
             # vol_delta = volume * (close - open) / (high - low)
-            df['vol_delta'] = df['volume'] * (df['close'] - df['open']) / (df['high'] - df['low'] + eps)
+            df["vol_delta"] = df["volume"] * (df["close"] - df["open"]) / (df["high"] - df["low"] + eps)
 
             # intensity = range * volume
-            df['intensity'] = (df['high'] - df['low']) * df['volume']
+            df["intensity"] = (df["high"] - df["low"]) * df["volume"]
 
             # gap = close - prev_close
-            df['gap'] = df['close'].diff()
+            df["gap"] = df["close"].diff()
 
             # close_pos = (close - low) / (high - low)
-            df['close_pos'] = (df['close'] - df['low']) / (df['high'] - df['low'] + eps)
+            df["close_pos"] = (df["close"] - df["low"]) / (df["high"] - df["low"] + eps)
 
             # 2. Rolling Z-Scores
             def z_score(series):
                 return (series - series.rolling(window=lookback).mean()) / (series.rolling(window=lookback).std() + eps)
 
-            df['z_volume'] = z_score(df['volume'])
-            df['z_vol_delta'] = z_score(df['vol_delta'])
-            df['z_intensity'] = z_score(df['intensity'])
-            df['z_gap'] = z_score(df['gap'])
+            df["z_volume"] = z_score(df["volume"])
+            df["z_vol_delta"] = z_score(df["vol_delta"])
+            df["z_intensity"] = z_score(df["intensity"])
+            df["z_gap"] = z_score(df["gap"])
 
             # ATR Z-score (using the ATR values computed earlier in the pipeline)
             # We need to compute it here on a rolling basis for the Z-score
-            atr_values = talib.ATR(df['high'].values, df['low'].values, df['close'].values, timeperiod=self.config.atr_period)
-            df['atr_vals'] = atr_values
-            df['z_atr'] = z_score(df['atr_vals'])
+            atr_values = talib.ATR(
+                df["high"].values, df["low"].values, df["close"].values, timeperiod=self.config.atr_period
+            )
+            df["atr_vals"] = atr_values
+            df["z_atr"] = z_score(df["atr_vals"])
 
             # 3. Phase Logic
             last = df.iloc[-1]
             prev = df.iloc[-2] if len(df) > 1 else last
 
             # Phase 1: Quiet Accumulation
-            phase1_flag = (
-                last['z_volume'] > 1.0 and
-                last['z_gap'] > self.config.min_z_gap
-            )
+            phase1_flag = last["z_volume"] > 1.0 and last["z_gap"] > self.config.min_z_gap
 
             # Phase 2: Early Public Signal (Breakout)
-            phase2_flag = (
-                last['z_vol_delta'] > self.config.min_z_vol_delta and
-                (
-                    last['z_intensity'] > self.config.min_z_intensity or
-                    last['z_atr'] > self.config.min_z_atr or
-                    last['close_pos'] > self.config.min_close_pos
-                )
+            phase2_flag = last["z_vol_delta"] > self.config.min_z_vol_delta and (
+                last["z_intensity"] > self.config.min_z_intensity
+                or last["z_atr"] > self.config.min_z_atr
+                or last["close_pos"] > self.config.min_close_pos
             )
 
             # Phase 3: Entry Timing
-            entry_flag = phase2_flag and (last['close'] > prev['high'])
+            entry_flag = phase2_flag and (last["close"] > prev["high"])
 
             return {
-                'vol_delta': last['vol_delta'],
-                'z_vol_delta': last['z_vol_delta'],
-                'intensity': last['intensity'],
-                'z_intensity': last['z_intensity'],
-                'gap': last['gap'],
-                'z_gap': last['z_gap'],
-                'z_atr': last['z_atr'],
-                'close_pos': last['close_pos'],
-                'phase1_flag': bool(phase1_flag),
-                'phase2_flag': bool(phase2_flag),
-                'entry_flag': bool(entry_flag)
+                "vol_delta": last["vol_delta"],
+                "z_vol_delta": last["z_vol_delta"],
+                "intensity": last["intensity"],
+                "z_intensity": last["z_intensity"],
+                "gap": last["gap"],
+                "z_gap": last["z_gap"],
+                "z_atr": last["z_atr"],
+                "close_pos": last["close_pos"],
+                "phase1_flag": bool(phase1_flag),
+                "phase2_flag": bool(phase2_flag),
+                "entry_flag": bool(entry_flag),
             }
 
         except Exception:
@@ -652,7 +683,9 @@ class VolatilityFilter:
             target_date = datetime.now() - timedelta(days=self.config.lookback_days)
 
             # Get the correction factor using the new function
-            correction_factor = get_trf_correction_factor("", target_date)  # Empty ticker will be handled by the function
+            correction_factor = get_trf_correction_factor(
+                "", target_date
+            )  # Empty ticker will be handled by the function
 
             # If we got a valid correction factor, return it in the expected format
             if correction_factor != 1.0:
@@ -690,9 +723,10 @@ class VolatilityFilter:
             historical_mask = ts.dt.date < today
 
             if historical_mask.any():
-                df.loc[historical_mask, 'volume'] = df.loc[historical_mask, 'volume'] * correction_factor
-                _logger.debug("Applied TRF correction (%.3f) to %d historical bars",
-                            correction_factor, historical_mask.sum())
+                df.loc[historical_mask, "volume"] = df.loc[historical_mask, "volume"] * correction_factor
+                _logger.debug(
+                    "Applied TRF correction (%.3f) to %d historical bars", correction_factor, historical_mask.sum()
+                )
 
             today_bars = (~historical_mask).sum()
             if today_bars > 0:
@@ -700,10 +734,9 @@ class VolatilityFilter:
 
             return df
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error applying TRF volume correction:")
             return df
-
 
     def _save_results(self, results_data: List[dict]) -> None:
         """
@@ -721,12 +754,12 @@ class VolatilityFilter:
 
             # Sort by Phase 2 (most explosive) then Phase 1 (accumulation)
             # Create a sort key
-            df['sort_rank'] = 0
-            df.loc[df['phase1_flag'], 'sort_rank'] = 1
-            df.loc[df['phase2_flag'], 'sort_rank'] = 2
+            df["sort_rank"] = 0
+            df.loc[df["phase1_flag"], "sort_rank"] = 1
+            df.loc[df["phase2_flag"], "sort_rank"] = 2
 
-            df = df.sort_values(['sort_rank', 'atr_ratio'], ascending=[False, False])
-            df = df.drop(columns=['sort_rank'])
+            df = df.sort_values(["sort_rank", "atr_ratio"], ascending=[False, False])
+            df = df.drop(columns=["sort_rank"])
 
             output_path = self._results_dir / "05_volatility_filtered.csv"
             df.to_csv(output_path, index=False)
@@ -736,9 +769,15 @@ class VolatilityFilter:
             # Log top candidates
             _logger.info("Top candidates by Phase & ATR/Price:")
             for _, row in df.head(10).iterrows():
-                phase = "PH2" if row['phase2_flag'] else "PH1"
-                _logger.info("  %s [%s]: ATR/Price=%.3f, Range=%.3f, Price=$%.2f",
-                            row['ticker'], phase, row['atr_ratio'], row['price_range'], row['last_price'])
+                phase = "PH2" if row["phase2_flag"] else "PH1"
+                _logger.info(
+                    "  %s [%s]: ATR/Price=%.3f, Range=%.3f, Price=$%.2f",
+                    row["ticker"],
+                    phase,
+                    row["atr_ratio"],
+                    row["price_range"],
+                    row["last_price"],
+                )
 
         except Exception:
             _logger.exception("Error saving volatility filter results:")
@@ -762,17 +801,37 @@ class VolatilityFilter:
 
             # Reorder columns for better readability
             column_order = [
-                'ticker', 'status', 'reason',
-                'phase1_flag', 'phase2_flag', 'entry_flag',
-                'last_price', 'open', 'high', 'low', 'close', 'volume',
-                'atr', 'atr_ratio', 'price_range',
-                'vol_zscore', 'vol_rv_ratio',
-                'vol_delta', 'z_vol_delta',
-                'intensity', 'z_intensity',
-                'gap', 'z_gap',
-                'z_atr', 'close_pos',
-                'rv_short', 'rv_long',
-                'price_high', 'price_low', 'bars_count', 'trf_correction_factor'
+                "ticker",
+                "status",
+                "reason",
+                "phase1_flag",
+                "phase2_flag",
+                "entry_flag",
+                "last_price",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+                "atr",
+                "atr_ratio",
+                "price_range",
+                "vol_zscore",
+                "vol_rv_ratio",
+                "vol_delta",
+                "z_vol_delta",
+                "intensity",
+                "z_intensity",
+                "gap",
+                "z_gap",
+                "z_atr",
+                "close_pos",
+                "rv_short",
+                "rv_long",
+                "price_high",
+                "price_low",
+                "bars_count",
+                "trf_correction_factor",
             ]
 
             # Only include columns that exist
@@ -780,10 +839,10 @@ class VolatilityFilter:
             df = df[available_cols]
 
             # Sort by status (PASSED first, then FAILED, then ERROR)
-            status_order = {'PASSED': 0, 'FAILED': 1, 'ERROR': 2}
-            df['_sort_order'] = df['status'].map(status_order)
-            df = df.sort_values(['_sort_order', 'ticker'])
-            df = df.drop(columns=['_sort_order'])
+            status_order = {"PASSED": 0, "FAILED": 1, "ERROR": 2}
+            df["_sort_order"] = df["status"].map(status_order)
+            df = df.sort_values(["_sort_order", "ticker"])
+            df = df.drop(columns=["_sort_order"])
 
             output_path = self._results_dir / "04_volatility_diagnostics.csv"
             df.to_csv(output_path, index=False)
@@ -791,16 +850,16 @@ class VolatilityFilter:
             _logger.info("Saved volatility diagnostics to: %s", output_path)
 
             # Log summary statistics
-            status_counts = df['status'].value_counts()
+            status_counts = df["status"].value_counts()
             _logger.info("Diagnostic Summary:")
             for status, count in status_counts.items():
                 _logger.info("  %s: %d tickers", status, count)
 
             # Log failure reason breakdown
-            if 'FAILED' in status_counts:
+            if "FAILED" in status_counts:
                 _logger.info("Failure Reasons:")
-                failed_df = df[df['status'] == 'FAILED']
-                reason_counts = failed_df['reason'].value_counts()
+                failed_df = df[df["status"] == "FAILED"]
+                reason_counts = failed_df["reason"].value_counts()
                 for reason, count in reason_counts.head(10).items():
                     _logger.info("  %s: %d tickers", reason, count)
 
@@ -808,10 +867,7 @@ class VolatilityFilter:
             _logger.exception("Error saving volatility diagnostics:")
 
 
-def create_volatility_filter(
-    data_manager: DataManager,
-    config: VolatilityFilterConfig
-) -> VolatilityFilter:
+def create_volatility_filter(data_manager: DataManager, config: VolatilityFilterConfig) -> VolatilityFilter:
     """
     Factory function to create volatility filter.
 

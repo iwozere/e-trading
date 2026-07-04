@@ -15,6 +15,7 @@ while a negative EOM indicates downward price movement with ease.
 """
 
 import backtrader as bt
+
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -34,28 +35,22 @@ class EOMIndicator(bt.Indicator):
         eom: Smoothed EOM value
     """
 
-    lines = ('eom',)
+    lines = ("eom",)
     params = (
-        ('timeperiod', 14),
-        ('scale', 100000000.0),
+        ("timeperiod", 14),
+        ("scale", 100000000.0),
     )
 
     def __init__(self):
         """Initialize the EOM indicator"""
         # Validate parameters
         if self.p.timeperiod <= 0:
-            _logger.warning(
-                "Invalid timeperiod %s for EOM, using default 14",
-                self.p.timeperiod
-            )
+            _logger.warning("Invalid timeperiod %s for EOM, using default 14", self.p.timeperiod)
             self.p.timeperiod = 14
 
         if self.p.scale <= 0:
-            _logger.warning(
-                "Invalid scale %s for EOM, using default 100000000",
-                self.p.scale
-            )
-            self.p.scale =100000000.0
+            _logger.warning("Invalid scale %s for EOM, using default 100000000", self.p.scale)
+            self.p.scale = 100000000.0
 
         # Calculate mid-point (High + Low) / 2
         mid_point = (self.data.high + self.data.low) / 2.0
@@ -73,7 +68,7 @@ class EOMIndicator(bt.Indicator):
         box_ratio = bt.If(
             bt.And(high_low_range > 0.0000001, self.data.volume > 0),
             (self.data.volume / self.p.scale) / high_low_range,
-            1e10  # Very large number to make raw_eom ≈ 0
+            1e10,  # Very large number to make raw_eom ≈ 0
         )
 
         # Calculate raw EOM
@@ -84,13 +79,10 @@ class EOMIndicator(bt.Indicator):
         # Smooth with SMA
         self.lines.eom = bt.indicators.SMA(raw_eom, period=self.p.timeperiod)
 
-        _logger.debug(
-            "EOM indicator initialized with timeperiod=%s, scale=%s",
-            self.p.timeperiod,
-            self.p.scale
-        )
+        _logger.debug("EOM indicator initialized with timeperiod=%s, scale=%s", self.p.timeperiod, self.p.scale)
 
 
 class EOM(EOMIndicator):
     """Alias for EOMIndicator for convenience"""
+
     pass

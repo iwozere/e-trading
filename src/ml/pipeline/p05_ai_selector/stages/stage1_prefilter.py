@@ -1,26 +1,27 @@
 """Stage 1 — Liquidity & Momentum Pre-filter: ~3,020 → ~200 candidates."""
 
 import json
-from datetime import date, datetime, time as dt_time
-from pathlib import Path
-from typing import List, Optional
 import sys
+from datetime import date, datetime
+from datetime import time as dt_time
+from pathlib import Path
+from typing import List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
 
+from src.data.data_manager import DataManager
 from src.ml.pipeline.p05_ai_selector.config import (
-    MIN_PRICE,
+    CRYPTO_TICKERS,
     MIN_AVG_DAILY_VOLUME_USD,
     MIN_CRYPTO_DAILY_VOLUME,
+    MIN_PRICE,
+    STAGE1_CACHE_DIR,
     STAGE1_LOOKBACK_DAYS,
     STAGE1_TOP_N,
-    STAGE1_CACHE_DIR,
-    CRYPTO_TICKERS,
 )
-from src.data.data_manager import DataManager
 from src.ml.pipeline.p05_ai_selector.signals.technical import score_technicals
 from src.notification.logger import setup_logger
 
@@ -41,7 +42,7 @@ class Stage1Prefilter:
     Soft scoring: SMA crossover, RSI, volume surge, momentum, ATR, 52-week proximity.
     """
 
-    def __init__(self, cache_dir: Optional[Path] = None):
+    def __init__(self, cache_dir: Path | None = None):
         self._cache_dir = cache_dir or STAGE1_CACHE_DIR
 
     def run(
@@ -74,9 +75,8 @@ class Stage1Prefilter:
 
         start_dt = datetime.combine(as_of_date, dt_time.min)
         from datetime import timedelta
-        lookback_start = datetime.combine(
-            as_of_date - timedelta(days=STAGE1_LOOKBACK_DAYS + 10), dt_time.min
-        )
+
+        lookback_start = datetime.combine(as_of_date - timedelta(days=STAGE1_LOOKBACK_DAYS + 10), dt_time.min)
 
         _logger.info("Stage1: batch-fetching OHLCV for %d symbols", len(tickers))
         ohlcv_map = dm.get_ohlcv_batch(tickers, "1d", lookback_start, start_dt, force_refresh=force_refresh)
@@ -113,15 +113,17 @@ class Stage1Prefilter:
                 momentum_score, breakdown = score_technicals(ohlcv)
                 vol_surge = breakdown.get("volume_surge_ratio", 1.0)
 
-                rows.append({
-                    "ticker": ticker,
-                    "asset_type": "crypto" if is_crypto else "equity",
-                    "last_price": round(last_price, 4),
-                    "avg_vol_usd": round(avg_vol_usd, 2),
-                    "momentum_score": momentum_score,
-                    "volume_surge_ratio": vol_surge,
-                    "signal_breakdown": json.dumps(breakdown),
-                })
+                rows.append(
+                    {
+                        "ticker": ticker,
+                        "asset_type": "crypto" if is_crypto else "equity",
+                        "last_price": round(last_price, 4),
+                        "avg_vol_usd": round(avg_vol_usd, 2),
+                        "momentum_score": momentum_score,
+                        "volume_surge_ratio": vol_surge,
+                        "signal_breakdown": json.dumps(breakdown),
+                    }
+                )
             except RuntimeError as e:
                 _logger.warning("Stage1: skipping %s — %s", ticker, e)
             except Exception:

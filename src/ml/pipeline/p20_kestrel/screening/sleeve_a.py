@@ -10,18 +10,18 @@ from __future__ import annotations
 import sys
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 from src.ml.pipeline.p20_kestrel.config import (
     REVISIONS_FEED_AVAILABLE,
     SLEEVE_A_DOSSIER_THRESHOLD,
     SLEEVE_A_MIN_ADV_USD,
     SLEEVE_A_PUSH_THRESHOLD,
 )
-from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 
 _kestrel = _KestrelService()
 get_active_tickers = _kestrel.get_active_tickers
@@ -47,7 +47,7 @@ _GROSS_MARGIN_MIN = 0.0
 def _passes_hard_filters(
     universe_row: Dict[str, Any],
     signals: Dict[str, Any],
-) -> Optional[str]:
+) -> str | None:
     """
     Check all §4.1 hard filters.
 
@@ -186,7 +186,7 @@ def _score_interim(signals: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
+def run(as_of_date: date | None = None) -> Dict[str, Any]:
     """
     Run the Sleeve A weekly screen and upsert results to watchlist.
 
@@ -219,47 +219,57 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
         # Insider signal rows hold per-day buy totals; the §4.2.1 scorer
         # expects the trailing-90-day aggregate, so sum the window here.
         insider_rows = get_signals(
-            ticker, "insider_buy_value_90d",
+            ticker,
+            "insider_buy_value_90d",
             start_date=target_date - timedelta(days=90),
             end_date=target_date,
         )
-        signals["insider_buy_value_90d"] = sum(
-            float(r["value"] or 0) for r in insider_rows
-        )
+        signals["insider_buy_value_90d"] = sum(float(r["value"] or 0) for r in insider_rows)
 
         score_info = _score_interim(signals)
 
-        upsert_watchlist({
-            "ticker": ticker,
-            "sleeve": _SLEEVE,
-            "score": score_info["score"],
-            "state": "screening",
-        })
+        upsert_watchlist(
+            {
+                "ticker": ticker,
+                "sleeve": _SLEEVE,
+                "score": score_info["score"],
+                "state": "screening",
+            }
+        )
 
         # Store score as a signal for tracking
-        upsert_signals([{
-            "ticker": ticker,
-            "date": target_date,
-            "signal_type": "sleeve_a_score",
-            "value": score_info["score"],
-            "sleeve": _SLEEVE,
-        }])
+        upsert_signals(
+            [
+                {
+                    "ticker": ticker,
+                    "date": target_date,
+                    "signal_type": "sleeve_a_score",
+                    "value": score_info["score"],
+                    "sleeve": _SLEEVE,
+                }
+            ]
+        )
 
         if score_info["score"] >= SLEEVE_A_DOSSIER_THRESHOLD:
             candidates.append({"ticker": ticker, **score_info})
             state_label = "candidate" if score_info["score"] < SLEEVE_A_PUSH_THRESHOLD else "candidate"
-            upsert_watchlist({
-                "ticker": ticker,
-                "sleeve": _SLEEVE,
-                "score": score_info["score"],
-                "state": state_label,
-            })
+            upsert_watchlist(
+                {
+                    "ticker": ticker,
+                    "sleeve": _SLEEVE,
+                    "score": score_info["score"],
+                    "state": state_label,
+                }
+            )
 
     candidates_sorted = sorted(candidates, key=lambda r: r["score"], reverse=True)
 
     _logger.info(
         "Sleeve A: %d tickers, %d passed filters, %d candidates (score≥%d)",
-        len(tickers), passed_filters, len(candidates_sorted), SLEEVE_A_DOSSIER_THRESHOLD,
+        len(tickers),
+        passed_filters,
+        len(candidates_sorted),
+        SLEEVE_A_DOSSIER_THRESHOLD,
     )
     return {
         "tickers_screened": len(tickers),

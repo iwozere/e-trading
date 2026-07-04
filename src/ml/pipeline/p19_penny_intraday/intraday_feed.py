@@ -15,8 +15,8 @@ unreachable, so the loop degrades instead of crashing.
 import math
 from typing import Any, Dict, List
 
-from src.notification.logger import setup_logger
 from src.ml.pipeline.p19_penny_intraday.config import P19FeedConfig
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -57,15 +57,22 @@ class IBKRIntradayFeed:
         for attempt in range(1, attempts + 1):
             ib = IB()
             try:
-                ib.connect(self.cfg.ibkr_host, self.cfg.ibkr_port,
-                           clientId=self.cfg.ibkr_client_id, timeout=15, readonly=True)
-                ib.reqMarketDataType(self.cfg.ibkr_market_data_type)   # 3 = delayed
+                ib.connect(
+                    self.cfg.ibkr_host, self.cfg.ibkr_port, clientId=self.cfg.ibkr_client_id, timeout=15, readonly=True
+                )
+                ib.reqMarketDataType(self.cfg.ibkr_market_data_type)  # 3 = delayed
                 self._ib = ib
                 return True
             except Exception as e:
-                _logger.warning("IBKR feed connect %s:%s attempt %d/%d failed (%s: %s)",
-                                self.cfg.ibkr_host, self.cfg.ibkr_port, attempt, attempts,
-                                type(e).__name__, e)
+                _logger.warning(
+                    "IBKR feed connect %s:%s attempt %d/%d failed (%s: %s)",
+                    self.cfg.ibkr_host,
+                    self.cfg.ibkr_port,
+                    attempt,
+                    attempts,
+                    type(e).__name__,
+                    e,
+                )
                 try:
                     ib.disconnect()
                 except Exception:
@@ -75,6 +82,7 @@ class IBKRIntradayFeed:
                         ib.sleep(backoff_seconds)
                     except Exception:
                         import time
+
                         time.sleep(backoff_seconds)
         return False
 
@@ -107,8 +115,7 @@ class IBKRIntradayFeed:
         while waited < settle_seconds:
             from_ib.sleep(0.5)
             waited += 0.5
-            ready = sum(1 for t in subs.values()
-                        if _num(getattr(t, "last", None)) or _num(getattr(t, "close", None)))
+            ready = sum(1 for t in subs.values() if _num(getattr(t, "last", None)) or _num(getattr(t, "close", None)))
             if ready >= target:
                 break
 

@@ -1,25 +1,27 @@
 from __future__ import annotations
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
-from src.data.db.repos.repo_system_health import SystemHealthRepository
 from src.data.db.models.model_system_health import SystemHealthStatus
+from src.data.db.repos.repo_system_health import SystemHealthRepository
 
-
-UTC = timezone.utc
+UTC = UTC
 
 
 def test_system_health_create_update_list(db_session: Session):
     repo = SystemHealthRepository(db_session)
 
     # create new record
-    rec = repo.create_or_update_system_health({
-        "system": "notification",
-        "component": "telegram",
-        "status": SystemHealthStatus.HEALTHY.value,
-        "last_success": datetime.now(UTC),
-    })
+    rec = repo.create_or_update_system_health(
+        {
+            "system": "notification",
+            "component": "telegram",
+            "status": SystemHealthStatus.HEALTHY.value,
+            "last_success": datetime.now(UTC),
+        }
+    )
     assert rec.id is not None
 
     # fetch

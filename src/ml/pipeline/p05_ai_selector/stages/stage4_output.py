@@ -1,10 +1,10 @@
 """Stage 4 — Output generation: CSV/MD/JSON writers + Telegram/email formatters."""
 
 import json
-from datetime import date, datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
 import sys
+from datetime import date
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -27,7 +27,7 @@ _DISCLAIMER = (
 class Stage4Output:
     """Writes all output artefacts and formats notification messages."""
 
-    def __init__(self, results_base: Optional[Path] = None):
+    def __init__(self, results_base: Path | None = None):
         self._results_base = results_base or RESULTS_BASE
 
     def write_results(
@@ -90,8 +90,7 @@ class Stage4Output:
             second_breaker = breakers[1] if len(breakers) > 1 else ""
             first_target = targets[0] if targets else {}
             target_str = (
-                f"${first_target.get('price_level', '?')} → {first_target.get('action', '')}"
-                if first_target else "n/a"
+                f"${first_target.get('price_level', '?')} → {first_target.get('action', '')}" if first_target else "n/a"
             )
 
             lines += [
@@ -134,7 +133,7 @@ class Stage4Output:
         pick_rows = "".join(
             f"<tr><td>{p['rank']}</td><td><b>{p['ticker']}</b></td>"
             f"<td>{p['bias']}</td><td>{p['confidence']}/10</td>"
-            f"<td>{p.get('time_horizon','?')}</td>"
+            f"<td>{p.get('time_horizon', '?')}</td>"
             f"<td>{'⚠ Earnings' if p.get('earnings_flag') else ''}</td>"
             f"<td>{p['thesis'][:120]}…</td></tr>"
             for p in picks
@@ -147,23 +146,22 @@ class Stage4Output:
             hold_cond = "".join(f"<li>{c}</li>" for c in ex.get("hold_conditions", []))
             breakers = "".join(f"<li>{c}</li>" for c in ex.get("thesis_breakers", []))
             targets_html = "".join(
-                f"<li><b>${t.get('price_level','?')}</b> — {t.get('action','')} "
-                f"<i>{t.get('note','')}</i></li>"
+                f"<li><b>${t.get('price_level', '?')}</b> — {t.get('action', '')} <i>{t.get('note', '')}</i></li>"
                 for t in ex.get("profit_targets", [])
             )
             risk_html = "".join(f"<li>{r}</li>" for r in p.get("risk_factors", []))
 
             pick_sections += f"""
-<h3>#{p['rank']} {p['ticker']} [{p['bias']}] — confidence {p['confidence']}/10</h3>
-<p><b>Thesis:</b> {p['thesis']}</p>
-<p><b>Time Horizon:</b> {p.get('time_horizon','?')}</p>
+<h3>#{p["rank"]} {p["ticker"]} [{p["bias"]}] — confidence {p["confidence"]}/10</h3>
+<p><b>Thesis:</b> {p["thesis"]}</p>
+<p><b>Time Horizon:</b> {p.get("time_horizon", "?")}</p>
 <h4>Risk Factors</h4><ul>{risk_html}</ul>
 <h4>Position Management</h4>
 <p><i>Entry conditions (when/where to add):</i></p><ul>{add_cond}</ul>
 <p><i>Hold conditions (what must remain true):</i></p><ul>{hold_cond}</ul>
 <p><i>Thesis-breakers (exit immediately if any):</i></p><ul>{breakers}</ul>
 <p><i>Profit targets:</i></p><ul>{targets_html}</ul>
-<p><i>Time horizon note:</i> {ex.get('time_horizon_note','')}</p>
+<p><i>Time horizon note:</i> {ex.get("time_horizon_note", "")}</p>
 <hr/>"""
 
         html = f"""<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:800px;margin:auto">
@@ -209,21 +207,21 @@ class Stage4Output:
         for p in picks:
             targets = p.get("exit_strategy", {}).get("profit_targets", [])
             first_target = targets[0] if targets else {}
-            rows.append({
-                "rank": p["rank"],
-                "ticker": p["ticker"],
-                "confidence": p["confidence"],
-                "bias": p["bias"],
-                "thesis": p["thesis"],
-                "time_horizon": p.get("time_horizon", ""),
-                "first_profit_target_price": first_target.get("price_level", ""),
-                "first_profit_target_action": first_target.get("action", ""),
-            })
+            rows.append(
+                {
+                    "rank": p["rank"],
+                    "ticker": p["ticker"],
+                    "confidence": p["confidence"],
+                    "bias": p["bias"],
+                    "thesis": p["thesis"],
+                    "time_horizon": p.get("time_horizon", ""),
+                    "first_profit_target_price": first_target.get("price_level", ""),
+                    "first_profit_target_action": first_target.get("action", ""),
+                }
+            )
         pd.DataFrame(rows).to_csv(run_dir / "top_picks.csv", index=False)
 
-    def _write_full_ranking_csv(
-        self, picks: List[Dict[str, Any]], stage2_df: pd.DataFrame, run_dir: Path
-    ) -> None:
+    def _write_full_ranking_csv(self, picks: List[Dict[str, Any]], stage2_df: pd.DataFrame, run_dir: Path) -> None:
         pick_map = {p["ticker"]: p for p in picks}
         df = stage2_df.copy()
         df["llm_rank"] = df["ticker"].map(lambda t: pick_map.get(t, {}).get("rank", ""))
@@ -269,8 +267,10 @@ class Stage4Output:
                 *[f"- {b}" for b in ex.get("thesis_breakers", [])],
                 "",
                 "**Profit Targets:**",
-                *[f"- ${t.get('price_level','?')} — {t.get('action','')} _{t.get('note','')}_"
-                  for t in ex.get("profit_targets", [])],
+                *[
+                    f"- ${t.get('price_level', '?')} — {t.get('action', '')} _{t.get('note', '')}_"
+                    for t in ex.get("profit_targets", [])
+                ],
                 "",
                 f"*{ex.get('time_horizon_note', '')}*",
                 "",
@@ -281,6 +281,4 @@ class Stage4Output:
         (run_dir / "report.md").write_text("\n".join(lines), encoding="utf-8")
 
     def _write_metadata_json(self, metadata: Dict[str, Any], run_dir: Path) -> None:
-        (run_dir / "metadata.json").write_text(
-            json.dumps(metadata, indent=2, default=str), encoding="utf-8"
-        )
+        (run_dir / "metadata.json").write_text(json.dumps(metadata, indent=2, default=str), encoding="utf-8")

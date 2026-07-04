@@ -5,15 +5,14 @@ This module provides functionality to fetch and process options data from the Tr
 Now refactored to inherit from BaseDataDownloader for consistency with other downloaders.
 """
 
+import json
 import os
 import time
-import json
-import requests
-from datetime import datetime, timedelta
-from typing import Any, List, Dict, Optional
-from pathlib import Path
+from datetime import datetime
+from typing import Any, List
 
 import pandas as pd
+import requests
 
 from src.data.downloader.base_data_downloader import BaseDataDownloader
 from src.notification.logger import setup_logger
@@ -31,7 +30,7 @@ class TradierDataDownloader(BaseDataDownloader):
 
     BASE_URL = "https://api.tradier.com/v1"
 
-    def __init__(self, api_key: Optional[str] = None, rate_limit_sleep: float = 0.3):
+    def __init__(self, api_key: str | None = None, rate_limit_sleep: float = 0.3):
         """
         Initialize Tradier data downloader.
 
@@ -47,10 +46,7 @@ class TradierDataDownloader(BaseDataDownloader):
 
         self.session = requests.Session()
         if self.api_key:
-            self.session.headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Accept": "application/json"
-            }
+            self.session.headers = {"Authorization": f"Bearer {self.api_key}", "Accept": "application/json"}
 
     def get_provider_name(self) -> str:
         """Return the canonical provider name for this downloader."""
@@ -64,14 +60,7 @@ class TradierDataDownloader(BaseDataDownloader):
         """
         return []  # Tradier doesn't provide interval-based OHLCV data
 
-    def get_ohlcv(
-        self,
-        symbol: str,
-        interval: str,
-        start_date: datetime,
-        end_date: datetime,
-        **kwargs
-    ) -> pd.DataFrame:
+    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> pd.DataFrame:
         """
         Download historical OHLCV data for a given symbol.
 
@@ -94,7 +83,7 @@ class TradierDataDownloader(BaseDataDownloader):
         )
         return pd.DataFrame()
 
-    def _get(self, endpoint: str, params: Optional[dict] = None) -> Optional[dict]:
+    def _get(self, endpoint: str, params: dict | None = None) -> dict | None:
         """
         Perform safe GET requests with rate limiting.
 
@@ -128,7 +117,7 @@ class TradierDataDownloader(BaseDataDownloader):
         Returns:
             List of expiration date strings
         """
-        data = self._get(f"/markets/options/expirations", {"symbol": ticker})
+        data = self._get("/markets/options/expirations", {"symbol": ticker})
         if not data or "expirations" not in data or "date" not in data["expirations"]:
             return []
         return data["expirations"]["date"]
@@ -144,7 +133,7 @@ class TradierDataDownloader(BaseDataDownloader):
         Returns:
             List of option contract dictionaries
         """
-        data = self._get(f"/markets/options/chains", {"symbol": ticker, "expiration": expiration})
+        data = self._get("/markets/options/chains", {"symbol": ticker, "expiration": expiration})
         if not data or "options" not in data or "option" not in data["options"]:
             return []
         return data["options"]["option"]

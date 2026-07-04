@@ -1,9 +1,9 @@
 """Earnings calendar — fetches upcoming earnings dates from FMP and caches monthly."""
 
-from datetime import date, datetime, timezone
-from pathlib import Path
-from typing import Dict, List, Optional
 import sys
+from datetime import date
+from pathlib import Path
+from typing import Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -28,7 +28,7 @@ except ImportError:
 class EarningsCalendar:
     """Fetches and caches the FMP earnings calendar."""
 
-    def __init__(self, api_key: Optional[str] = None, cache_dir: Optional[Path] = None):
+    def __init__(self, api_key: str | None = None, cache_dir: Path | None = None):
         self._api_key = api_key or FMP_API_KEY
         self._cache_dir = cache_dir or EARNINGS_CACHE_DIR
 
@@ -130,6 +130,7 @@ class EarningsCalendar:
         if not cache_file.exists():
             return False
         import time
+
         age_hours = (time.time() - cache_file.stat().st_mtime) / 3600
         return age_hours < _CACHE_TTL_HOURS
 

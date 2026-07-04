@@ -11,15 +11,15 @@ import os
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
 import requests
 
-from src.ml.pipeline.p20_kestrel.config import AV_DAILY_QUOTA
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+from src.ml.pipeline.p20_kestrel.config import AV_DAILY_QUOTA
 
 _kestrel = _KestrelService()
 finish_job_run = _kestrel.finish_job_run
@@ -38,7 +38,7 @@ _AV_URL = "https://www.alphavantage.co/query"
 _RETRY_RESERVE = 5  # calls reserved for retries
 
 
-def _fetch_av_news_sentiment(ticker: str, api_key: str) -> Optional[Dict[str, Any]]:
+def _fetch_av_news_sentiment(ticker: str, api_key: str) -> Dict[str, Any] | None:
     """
     Fetch Alpha Vantage NEWS_SENTIMENT for a single ticker.
 
@@ -130,7 +130,7 @@ def _build_priority_queue(today: date) -> List[str]:
     return queue
 
 
-def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
+def run(as_of_date: date | None = None) -> Dict[str, Any]:
     """
     Fetch AV news sentiment for up to (quota - reserve) tickers.
 
@@ -168,12 +168,14 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
             result = _fetch_av_news_sentiment(ticker, api_key)
             increment_budget_used("av_news", target_date)
             if result is not None:
-                all_rows.append({
-                    "ticker": ticker,
-                    "date": target_date,
-                    "source": "av_news",
-                    **result,
-                })
+                all_rows.append(
+                    {
+                        "ticker": ticker,
+                        "date": target_date,
+                        "source": "av_news",
+                        **result,
+                    }
+                )
                 fetched_ok += 1
 
         rows_upserted = upsert_sentiment(all_rows)

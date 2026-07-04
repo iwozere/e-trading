@@ -10,10 +10,10 @@ Coordinates all three signal layers:
 import json
 import logging
 import logging.handlers
-from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 import sys
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
@@ -24,11 +24,11 @@ from src.data.data_manager import DataManager
 from src.data.downloader.edgar_downloader import EdgarDownloader, EftsUnavailableError
 from src.data.downloader.openfigi_mapper import OpenFigiMapper
 from src.ml.pipeline.p18_institutional_flow_tracker.config import P18Config
-from src.ml.pipeline.p18_institutional_flow_tracker.processors.position_delta_calculator import PositionDeltaCalculator
-from src.ml.pipeline.p18_institutional_flow_tracker.processors.exit_screener import ExitScreener
 from src.ml.pipeline.p18_institutional_flow_tracker.processors.consensus_detector import ConsensusDetector
-from src.ml.pipeline.p18_institutional_flow_tracker.processors.volume_anomaly_detector import VolumeAnomalyDetector
+from src.ml.pipeline.p18_institutional_flow_tracker.processors.exit_screener import ExitScreener
 from src.ml.pipeline.p18_institutional_flow_tracker.processors.form4_monitor import Form4Monitor
+from src.ml.pipeline.p18_institutional_flow_tracker.processors.position_delta_calculator import PositionDeltaCalculator
+from src.ml.pipeline.p18_institutional_flow_tracker.processors.volume_anomaly_detector import VolumeAnomalyDetector
 from src.ml.pipeline.p18_institutional_flow_tracker.scoring.composite_scorer import CompositeScorer
 from src.notification.logger import setup_logger
 
@@ -45,7 +45,7 @@ class InstitutionalFlowPipeline:
     through Form 4 and volume-anomaly signals.
     """
 
-    def __init__(self, config: Optional[P18Config] = None):
+    def __init__(self, config: P18Config | None = None):
         """
         Args:
             config: Pipeline configuration. Defaults to P18Config.create_default().
@@ -78,8 +78,8 @@ class InstitutionalFlowPipeline:
 
     def run(
         self,
-        user_id: Optional[str] = None,
-        as_of_date: Optional[date] = None,
+        user_id: str | None = None,
+        as_of_date: date | None = None,
         force_refresh: bool = False,
     ) -> Dict[str, Any]:
         """
@@ -127,9 +127,7 @@ class InstitutionalFlowPipeline:
             if consensus_df.empty and not efts_available and run_date.weekday() < 5:
                 consensus_df = self._load_consensus_from_results(run_date)
                 if not consensus_df.empty:
-                    _logger.warning(
-                        "EFTS was unavailable — using prior consensus loaded from results directory"
-                    )
+                    _logger.warning("EFTS was unavailable — using prior consensus loaded from results directory")
                 else:
                     _logger.error(
                         "EDGAR EFTS unavailable and no prior consensus found in results directory "
@@ -146,7 +144,10 @@ class InstitutionalFlowPipeline:
                     "backfill_consensus.py --year %d --quarter %d "
                     "> /tmp/p18_backfill.log 2>&1 &\n"
                     "Then confirm %s appears before the next daily run.",
-                    year, quarter, year, quarter,
+                    year,
+                    quarter,
+                    year,
+                    quarter,
                     self._edgar._13f_dir / "consensus" / f"{year}_Q{quarter}.csv.gz",
                 )
 
@@ -209,15 +210,11 @@ class InstitutionalFlowPipeline:
                 "top_ticker": top_ticker,
                 "top_score": top_score,
                 "top_tickers": top_tickers,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
-            (run_dir / "run_summary.json").write_text(
-                json.dumps(run_summary, indent=2), encoding="utf-8"
-            )
+            (run_dir / "run_summary.json").write_text(json.dumps(run_summary, indent=2), encoding="utf-8")
 
-            _logger.info(
-                "Run complete: %d alerts, top=%s score=%d", len(scored_df), top_ticker, top_score
-            )
+            _logger.info("Run complete: %d alerts, top=%s score=%d", len(scored_df), top_ticker, top_score)
 
             return {
                 "success": True,
@@ -309,9 +306,7 @@ class InstitutionalFlowPipeline:
         cusips = curr_all["cusip"].dropna().unique().tolist()
         mapping = self._figi.map_cusips(cusips)
         curr_all["ticker"] = curr_all["cusip"].map(mapping)
-        prev_all["ticker"] = prev_all["cusip"].map(
-            self._figi.map_cusips(prev_all["cusip"].dropna().unique().tolist())
-        )
+        prev_all["ticker"] = prev_all["cusip"].map(self._figi.map_cusips(prev_all["cusip"].dropna().unique().tolist()))
 
         # Drop rows where CUSIP couldn't be mapped
         curr_all = curr_all.dropna(subset=["ticker"])
@@ -323,9 +318,7 @@ class InstitutionalFlowPipeline:
 
         # Persist updated consensus for the day
         if not consensus_df.empty:
-            cache_path = (
-                self._edgar._13f_dir / "consensus" / f"{year}_Q{quarter}.csv.gz"
-            )
+            cache_path = self._edgar._13f_dir / "consensus" / f"{year}_Q{quarter}.csv.gz"
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             consensus_df.to_csv(cache_path, index=False, compression="gzip")
 
@@ -350,7 +343,7 @@ class InstitutionalFlowPipeline:
             return pd.DataFrame()
 
         dm = DataManager()
-        end = datetime(as_of_date.year, as_of_date.month, as_of_date.day, tzinfo=timezone.utc)
+        end = datetime(as_of_date.year, as_of_date.month, as_of_date.day, tzinfo=UTC)
         start = end - timedelta(days=260)
 
         rows = []
@@ -362,12 +355,14 @@ class InstitutionalFlowPipeline:
                 high_52w = float(df["high"].max())
                 current_price = float(df["close"].iloc[-1])
                 if high_52w > 0 and current_price >= high_52w * 0.85:
-                    rows.append({
-                        "ticker": ticker,
-                        "below_52w_high_15pct": True,
-                        "current_price": round(current_price, 4),
-                        "high_52w": round(high_52w, 4),
-                    })
+                    rows.append(
+                        {
+                            "ticker": ticker,
+                            "below_52w_high_15pct": True,
+                            "current_price": round(current_price, 4),
+                            "high_52w": round(high_52w, 4),
+                        }
+                    )
             except Exception:
                 _logger.warning("Could not compute 52w proximity for %s", ticker)
 
@@ -442,9 +437,11 @@ class InstitutionalFlowPipeline:
 
         if not current_holdings_frames or not prior_holdings_frames:
             _logger.warning(
-                "Insufficient holdings data for %d Q%d rebuild "
-                "(current=%d filers, prior=%d filers)",
-                year, quarter, len(current_holdings_frames), len(prior_holdings_frames),
+                "Insufficient holdings data for %d Q%d rebuild (current=%d filers, prior=%d filers)",
+                year,
+                quarter,
+                len(current_holdings_frames),
+                len(prior_holdings_frames),
             )
             return pd.DataFrame()
 
@@ -454,9 +451,7 @@ class InstitutionalFlowPipeline:
         cusips = curr_all["cusip"].dropna().unique().tolist()
         mapping = self._figi.map_cusips(cusips)
         curr_all["ticker"] = curr_all["cusip"].map(mapping)
-        prev_all["ticker"] = prev_all["cusip"].map(
-            self._figi.map_cusips(prev_all["cusip"].dropna().unique().tolist())
-        )
+        prev_all["ticker"] = prev_all["cusip"].map(self._figi.map_cusips(prev_all["cusip"].dropna().unique().tolist()))
         curr_all = curr_all.dropna(subset=["ticker"])
         prev_all = prev_all.dropna(subset=["ticker"])
 
@@ -470,7 +465,10 @@ class InstitutionalFlowPipeline:
             consensus_df.to_csv(cache_path, index=False, compression="gzip")
             _logger.info(
                 "Rebuilt consensus for %d Q%d: %d tickers → %s",
-                year, quarter, len(consensus_df), cache_path,
+                year,
+                quarter,
+                len(consensus_df),
+                cache_path,
             )
 
         return consensus_df
@@ -515,9 +513,7 @@ class InstitutionalFlowPipeline:
 
         best_date, best_path = max(candidates, key=lambda x: x[0])
         age_days = (before_date - best_date).days
-        _logger.warning(
-            "Loaded fallback consensus from %s (aged %d day(s))", best_path, age_days
-        )
+        _logger.warning("Loaded fallback consensus from %s (aged %d day(s))", best_path, age_days)
         return pd.read_csv(best_path)
 
     def _setup_file_logging(self) -> None:
@@ -526,15 +522,16 @@ class InstitutionalFlowPipeline:
             str(log_file), maxBytes=50 * 1024 * 1024, backupCount=3, encoding="utf-8"
         )
         handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter(
-            "%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
-        ))
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s")
+        )
         logging.getLogger("src.ml.pipeline.p18_institutional_flow_tracker").addHandler(handler)
 
 
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
 
 def _resolve_current_quarter(ref_date: date) -> tuple:
     """Return (quarter_str, year, quarter_int) for the most recently completed quarter."""
@@ -581,12 +578,14 @@ def _build_top_tickers(scored_df: pd.DataFrame, top_n: int) -> List[Dict[str, An
         except (TypeError, ValueError):
             active_signals = []
         signals_active = row.get("signals_active")
-        top.append({
-            "ticker": row["ticker"],
-            "score": int(row["total_score"]),
-            "signals_active": int(signals_active) if signals_active is not None else len(active_signals),
-            "signals": active_signals,
-        })
+        top.append(
+            {
+                "ticker": row["ticker"],
+                "score": int(row["total_score"]),
+                "signals_active": int(signals_active) if signals_active is not None else len(active_signals),
+                "signals": active_signals,
+            }
+        )
     return top
 
 

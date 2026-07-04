@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
@@ -33,7 +33,7 @@ _JOB_NAME = "risk_check"
 _INTRADAY_LOSS_ALERT_PCT = -0.12  # -12% intraday fires push
 
 
-def _get_current_price(ticker: str) -> Optional[float]:
+def _get_current_price(ticker: str) -> float | None:
     """
     Get the freshest available price for a ticker.
 
@@ -46,6 +46,7 @@ def _get_current_price(ticker: str) -> Optional[float]:
     """
     try:
         import yfinance as yf
+
         px = yf.Ticker(ticker).fast_info.last_price
         if px:
             return float(px)
@@ -57,8 +58,8 @@ def _get_current_price(ticker: str) -> Optional[float]:
 
 def _check_position(
     position: Dict[str, Any],
-    close_price: Optional[float],
-) -> Optional[Dict[str, Any]]:
+    close_price: float | None,
+) -> Dict[str, Any] | None:
     """
     Check one position against stop/target prices.
 
@@ -79,7 +80,7 @@ def _check_position(
     entry_px = position.get("entry_px")
     realized_thirds = position.get("realized_thirds", 0)
 
-    alert: Optional[Dict[str, Any]] = None
+    alert: Dict[str, Any] | None = None
 
     # Stop check
     if stop_px is not None and close_price <= float(stop_px):
@@ -127,7 +128,7 @@ def _check_position(
     return alert
 
 
-def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
+def run(as_of_date: date | None = None) -> Dict[str, Any]:
     """
     Check all open positions for risk events and fire alerts.
 
@@ -148,10 +149,7 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
         # Dedup: the job runs every 30 min — fire each (ticker, trigger)
         # at most once per day. A stop that stays breached all day should
         # page the human once, not every half hour.
-        already_fired = {
-            (str(a.get("ticker", "")).upper(), str(a.get("trigger", "")))
-            for a in get_today_alerts()
-        }
+        already_fired = {(str(a.get("ticker", "")).upper(), str(a.get("trigger", ""))) for a in get_today_alerts()}
 
         alerts_fired = 0
         alerts_deduped = 0

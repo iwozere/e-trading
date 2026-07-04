@@ -1,10 +1,10 @@
 import io
+from pathlib import Path
 from typing import List
 
 import pandas as pd
 import requests
 import yfinance as yf
-from pathlib import Path
 
 
 def get_circulating_supply(ticker):
@@ -64,15 +64,15 @@ def _load_tickers_from_csv(filename: str) -> List[str]:
         # Get the path to the data/tickers directory relative to this file
         current_dir = Path(__file__).resolve().parent
         project_root = current_dir.parents[1]
-        csv_path = project_root / 'src' / 'data' / 'tickers' / filename
+        csv_path = project_root / "src" / "data" / "tickers" / filename
 
         if not csv_path.exists():
             print(f"Warning: CSV file not found: {csv_path}")
             return []
 
         df = pd.read_csv(csv_path)
-        if 'ticker' in df.columns:
-            return df['ticker'].tolist()
+        if "ticker" in df.columns:
+            return df["ticker"].tolist()
         else:
             print(f"Warning: No 'ticker' column found in {filename}")
             return []
@@ -126,34 +126,34 @@ def get_sp_midcap_yfinance():
         # Попытка получить компоненты индекса
         components = sp_midcap.components
         return list(components.index)
-    except:
+    except Exception:
         print("Could not get components from yfinance.")
         return []
 
 
 def get_all_us_tickers():
     """Load all US tickers from CSV file"""
-    return _load_tickers_from_csv('all_us_tickers.csv')
+    return _load_tickers_from_csv("all_us_tickers.csv")
 
 
 def get_us_delisted_tickers():
     """Load delisted US tickers from CSV file"""
-    return _load_tickers_from_csv('us_delisted_tickers.csv')
+    return _load_tickers_from_csv("us_delisted_tickers.csv")
 
 
 def get_us_small_cap_tickers():
     """Load US small cap tickers from CSV file"""
-    return _load_tickers_from_csv('us_small_cap_tickers.csv')
+    return _load_tickers_from_csv("us_small_cap_tickers.csv")
 
 
 def get_us_medium_cap_tickers():
     """Load US medium cap tickers from CSV file"""
-    return _load_tickers_from_csv('us_medium_cap_tickers.csv')
+    return _load_tickers_from_csv("us_medium_cap_tickers.csv")
 
 
 def get_us_large_cap_tickers():
     """Load US large cap tickers from CSV file"""
-    return _load_tickers_from_csv('us_large_cap_tickers.csv')
+    return _load_tickers_from_csv("us_large_cap_tickers.csv")
 
 
 # Example usage

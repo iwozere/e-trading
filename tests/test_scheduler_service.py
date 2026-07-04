@@ -7,30 +7,39 @@ Tests the complete scheduler service functionality including:
 - Error recovery and retry mechanisms
 """
 
-import pytest
-from datetime import datetime, timezone
-from unittest.mock import Mock, AsyncMock, patch
-from typing import Dict, Any
-
 # Add src to path
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, Dict
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.scheduler.scheduler_service import SchedulerService
-from src.data.db.services.jobs_service import JobsService
-from src.data.db.models.model_jobs import RunStatus
-from src.common.alerts.alert_evaluator import AlertEvaluator, AlertEvaluationResult
+from src.common.alerts.alert_evaluator import AlertEvaluationResult, AlertEvaluator
 from src.common.alerts.cron_parser import CronParser
+from src.data.db.models.model_jobs import RunStatus
+from src.data.db.services.jobs_service import JobsService
+from src.scheduler.scheduler_service import SchedulerService
 
 
 class MockSchedule:
     """Mock Schedule object for testing."""
 
-    def __init__(self, schedule_id: int, name: str, job_type: str, cron: str,
-                 enabled: bool = True, user_id: int = 1, target: str = "test",
-                 task_params: Dict[str, Any] = None):
+    def __init__(
+        self,
+        schedule_id: int,
+        name: str,
+        job_type: str,
+        cron: str,
+        enabled: bool = True,
+        user_id: int = 1,
+        target: str = "test",
+        task_params: Dict[str, Any] = None,
+    ):
         self.id = schedule_id
         self.name = name
         self.job_type = job_type
@@ -39,8 +48,8 @@ class MockSchedule:
         self.user_id = user_id
         self.target = target
         self.task_params = task_params or {}
-        self.created_at = datetime.now(timezone.utc)
-        self.updated_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
+        self.updated_at = datetime.now(UTC)
         self.next_run_at = None
 
 
@@ -54,7 +63,7 @@ class MockScheduleRun:
         self.job_type = "alert"
         self.job_id = str(schedule_id)
         self.user_id = 1
-        self.scheduled_for = datetime.now(timezone.utc)
+        self.scheduled_for = datetime.now(UTC)
         self.started_at = None
         self.finished_at = None
         self.result = None
@@ -95,9 +104,9 @@ def mock_alert_evaluator():
     evaluator.evaluate_alert.return_value = AlertEvaluationResult(
         triggered=True,
         rearmed=False,
-        state_updates={"status": "TRIGGERED", "last_triggered": datetime.now(timezone.utc).isoformat()},
+        state_updates={"status": "TRIGGERED", "last_triggered": datetime.now(UTC).isoformat()},
         notification_data={"ticker": "AAPL", "price": 150.0},
-        error=None
+        error=None,
     )
 
     return evaluator
@@ -110,7 +119,7 @@ def scheduler_service(mock_jobs_service, mock_alert_evaluator):
         jobs_service=mock_jobs_service,
         alert_evaluator=mock_alert_evaluator,
         database_url="sqlite:///:memory:",
-        max_workers=2
+        max_workers=2,
     )
 
 
@@ -149,7 +158,7 @@ class TestScheduleLoading:
     @pytest.mark.asyncio
     async def test_load_and_register_schedules(self, scheduler_service, mock_jobs_service):
         """Test loading schedules from database and registering with APScheduler."""
-        with patch.object(scheduler_service, '_register_schedule', new_callable=AsyncMock) as mock_register:
+        with patch.object(scheduler_service, "_register_schedule", new_callable=AsyncMock) as mock_register:
             # Test loading schedules
             count = await scheduler_service._load_and_register_schedules()
 
@@ -180,15 +189,15 @@ class TestScheduleLoading:
         # Verify job was added to scheduler
         mock_scheduler_instance.add_job.assert_called_once()
         job_call = mock_scheduler_instance.add_job.call_args
-        assert job_call[1]['id'] == 'schedule_1'
-        assert job_call[1]['args'] == [1]
+        assert job_call[1]["id"] == "schedule_1"
+        assert job_call[1]["args"] == [1]
 
     @pytest.mark.asyncio
     async def test_register_schedule_with_invalid_cron(self, scheduler_service):
         """Test registering a schedule with invalid cron expression."""
         mock_schedule = MockSchedule(1, "Test Alert", "alert", "invalid cron")
 
-        with patch.object(CronParser, 'validate_cron', return_value=False):
+        with patch.object(CronParser, "validate_cron", return_value=False):
             # Test registration should raise ValueError
             with pytest.raises(ValueError, match="Invalid cron expression"):
                 await scheduler_service._register_schedule(mock_schedule)
@@ -210,14 +219,15 @@ class TestJobExecution:
             rearmed=False,
             state_updates={"status": "TRIGGERED"},
             notification_data={"ticker": "AAPL", "price": 150.0},
-            error=None
+            error=None,
         )
 
-        with patch.object(scheduler_service, '_create_run_record', return_value=MockScheduleRun(1, 1)) as mock_create, \
-             patch.object(scheduler_service, '_complete_run_record', new_callable=AsyncMock) as mock_complete, \
-             patch.object(scheduler_service, '_update_schedule_state', new_callable=AsyncMock) as mock_update_state, \
-             patch.object(scheduler_service, '_send_notification', new_callable=AsyncMock) as mock_notify:
-
+        with (
+            patch.object(scheduler_service, "_create_run_record", return_value=MockScheduleRun(1, 1)) as mock_create,
+            patch.object(scheduler_service, "_complete_run_record", new_callable=AsyncMock) as mock_complete,
+            patch.object(scheduler_service, "_update_schedule_state", new_callable=AsyncMock) as mock_update_state,
+            patch.object(scheduler_service, "_send_notification", new_callable=AsyncMock) as mock_notify,
+        ):
             # Execute job
             await scheduler_service._execute_job(1)
 
@@ -239,9 +249,10 @@ class TestJobExecution:
         # Setup alert evaluation failure
         mock_alert_evaluator.evaluate_alert.side_effect = Exception("Alert evaluation failed")
 
-        with patch.object(scheduler_service, '_create_run_record', return_value=MockScheduleRun(1, 1)) as mock_create, \
-             patch.object(scheduler_service, '_complete_run_record', new_callable=AsyncMock) as mock_complete:
-
+        with (
+            patch.object(scheduler_service, "_create_run_record", return_value=MockScheduleRun(1, 1)) as mock_create,
+            patch.object(scheduler_service, "_complete_run_record", new_callable=AsyncMock) as mock_complete,
+        ):
             # Execute job
             await scheduler_service._execute_job(1)
 
@@ -311,9 +322,7 @@ class TestJobExecution:
         test_result = {"triggered": True, "notification_sent": True}
 
         # Complete run record
-        await scheduler_service._complete_run_record(
-            test_run, RunStatus.COMPLETED, test_result
-        )
+        await scheduler_service._complete_run_record(test_run, RunStatus.COMPLETED, test_result)
 
         # Verify update was called
         mock_jobs_service.update_run.assert_called_once()
@@ -370,7 +379,7 @@ class TestEventHandlers:
         # Create mock event
         event = Mock()
         event.job_id = "test_job_1"
-        event.scheduled_run_time = datetime.now(timezone.utc)
+        event.scheduled_run_time = datetime.now(UTC)
 
         # Test event handler
         scheduler_service._on_job_submitted(event)
@@ -405,7 +414,7 @@ class TestEventHandlers:
         # Create mock event
         event = Mock()
         event.job_id = "test_job_1"
-        event.scheduled_run_time = datetime.now(timezone.utc)
+        event.scheduled_run_time = datetime.now(UTC)
 
         # Test event handler
         scheduler_service._on_job_missed(event)
@@ -422,12 +431,15 @@ class TestSchedulerServiceIntegration:
         """Test complete alert execution flow from schedule to notification."""
         # Setup test data
         test_schedule = MockSchedule(
-            1, "Integration Test Alert", "alert", "0 9 * * *",
+            1,
+            "Integration Test Alert",
+            "alert",
+            "0 9 * * *",
             task_params={
                 "ticker": "AAPL",
                 "timeframe": "1h",
-                "rule": {"gt": {"lhs": {"field": "close"}, "rhs": {"value": 150.0}}}
-            }
+                "rule": {"gt": {"lhs": {"field": "close"}, "rhs": {"value": 150.0}}},
+            },
         )
         mock_jobs_service.get_schedule.return_value = test_schedule
 
@@ -435,20 +447,17 @@ class TestSchedulerServiceIntegration:
         mock_alert_evaluator.evaluate_alert.return_value = AlertEvaluationResult(
             triggered=True,
             rearmed=False,
-            state_updates={"status": "TRIGGERED", "last_triggered": datetime.now(timezone.utc).isoformat()},
-            notification_data={
-                "ticker": "AAPL",
-                "price": 155.0,
-                "message": "AAPL crossed above $150"
-            },
-            error=None
+            state_updates={"status": "TRIGGERED", "last_triggered": datetime.now(UTC).isoformat()},
+            notification_data={"ticker": "AAPL", "price": 155.0, "message": "AAPL crossed above $150"},
+            error=None,
         )
 
-        with patch.object(scheduler_service, '_create_run_record', return_value=MockScheduleRun(1, 1)) as mock_create, \
-             patch.object(scheduler_service, '_complete_run_record', new_callable=AsyncMock) as mock_complete, \
-             patch.object(scheduler_service, '_update_schedule_state', new_callable=AsyncMock) as mock_update_state, \
-             patch.object(scheduler_service, '_send_notification', new_callable=AsyncMock) as mock_notify:
-
+        with (
+            patch.object(scheduler_service, "_create_run_record", return_value=MockScheduleRun(1, 1)) as mock_create,
+            patch.object(scheduler_service, "_complete_run_record", new_callable=AsyncMock) as mock_complete,
+            patch.object(scheduler_service, "_update_schedule_state", new_callable=AsyncMock) as mock_update_state,
+            patch.object(scheduler_service, "_send_notification", new_callable=AsyncMock) as mock_notify,
+        ):
             # Execute the complete flow
             await scheduler_service._execute_job(1)
 
@@ -479,10 +488,13 @@ class TestSchedulerServiceIntegration:
         alert_schedule = MockSchedule(1, "Alert Job", "alert", "0 9 * * *")
         mock_jobs_service.get_schedule.return_value = alert_schedule
 
-        with patch.object(scheduler_service, '_execute_alert_job', new_callable=AsyncMock, return_value={"triggered": True}) as mock_alert, \
-             patch.object(scheduler_service, '_create_run_record', return_value=MockScheduleRun(1, 1)), \
-             patch.object(scheduler_service, '_complete_run_record', new_callable=AsyncMock):
-
+        with (
+            patch.object(
+                scheduler_service, "_execute_alert_job", new_callable=AsyncMock, return_value={"triggered": True}
+            ) as mock_alert,
+            patch.object(scheduler_service, "_create_run_record", return_value=MockScheduleRun(1, 1)),
+            patch.object(scheduler_service, "_complete_run_record", new_callable=AsyncMock),
+        ):
             await scheduler_service._execute_job(1)
             mock_alert.assert_called_once()
 
@@ -490,10 +502,16 @@ class TestSchedulerServiceIntegration:
         screener_schedule = MockSchedule(2, "Screener Job", "screener", "0 8 * * *")
         mock_jobs_service.get_schedule.return_value = screener_schedule
 
-        with patch.object(scheduler_service, '_execute_screener_job', new_callable=AsyncMock, return_value={"status": "not_implemented"}) as mock_screener, \
-             patch.object(scheduler_service, '_create_run_record', return_value=MockScheduleRun(2, 2)), \
-             patch.object(scheduler_service, '_complete_run_record', new_callable=AsyncMock):
-
+        with (
+            patch.object(
+                scheduler_service,
+                "_execute_screener_job",
+                new_callable=AsyncMock,
+                return_value={"status": "not_implemented"},
+            ) as mock_screener,
+            patch.object(scheduler_service, "_create_run_record", return_value=MockScheduleRun(2, 2)),
+            patch.object(scheduler_service, "_complete_run_record", new_callable=AsyncMock),
+        ):
             await scheduler_service._execute_job(2)
             mock_screener.assert_called_once()
 
@@ -501,10 +519,16 @@ class TestSchedulerServiceIntegration:
         report_schedule = MockSchedule(3, "Report Job", "report", "0 7 * * *")
         mock_jobs_service.get_schedule.return_value = report_schedule
 
-        with patch.object(scheduler_service, '_execute_report_job', new_callable=AsyncMock, return_value={"status": "not_implemented"}) as mock_report, \
-             patch.object(scheduler_service, '_create_run_record', return_value=MockScheduleRun(3, 3)), \
-             patch.object(scheduler_service, '_complete_run_record', new_callable=AsyncMock):
-
+        with (
+            patch.object(
+                scheduler_service,
+                "_execute_report_job",
+                new_callable=AsyncMock,
+                return_value={"status": "not_implemented"},
+            ) as mock_report,
+            patch.object(scheduler_service, "_create_run_record", return_value=MockScheduleRun(3, 3)),
+            patch.object(scheduler_service, "_complete_run_record", new_callable=AsyncMock),
+        ):
             await scheduler_service._execute_job(3)
             mock_report.assert_called_once()
 

@@ -15,10 +15,10 @@ Typical usage::
     exposures = sizer.compute_exposures(vix_series)
 """
 
-import pandas as pd
-import numpy as np
 from dataclasses import dataclass, field
-from typing import Dict, List, Any
+from typing import Any, Dict, List
+
+import pandas as pd
 
 from src.notification.logger import setup_logger
 
@@ -28,6 +28,7 @@ _logger = setup_logger(__name__)
 @dataclass
 class VixTier:
     """A single VIX Z-score entry tier."""
+
     z_threshold: float
     allocation: float
 
@@ -35,13 +36,16 @@ class VixTier:
 @dataclass
 class VixPositionSizerConfig:
     """Configuration for VixPositionSizer."""
+
     z_lookback: int = 63
     exit_z_threshold: float = 0.0
-    entry_tiers: List[Dict[str, float]] = field(default_factory=lambda: [
-        {"z_threshold": 1.0, "allocation": 0.25},
-        {"z_threshold": 1.5, "allocation": 0.25},
-        {"z_threshold": 2.0, "allocation": 0.50},
-    ])
+    entry_tiers: List[Dict[str, float]] = field(
+        default_factory=lambda: [
+            {"z_threshold": 1.0, "allocation": 0.25},
+            {"z_threshold": 1.5, "allocation": 0.25},
+            {"z_threshold": 2.0, "allocation": 0.50},
+        ]
+    )
 
 
 class VixPositionSizer:
@@ -102,8 +106,7 @@ class VixPositionSizer:
         lagged_z = z_scores.shift(1)
         exposures = lagged_z.map(self._exposure_from_z)
         _logger.debug(
-            "VixPositionSizer: computed exposures over %d bars "
-            "(non-zero bars: %d, max_exposure: %.2f)",
+            "VixPositionSizer: computed exposures over %d bars (non-zero bars: %d, max_exposure: %.2f)",
             len(exposures),
             int((exposures > 0).sum()),
             float(exposures.max()) if len(exposures) > 0 else 0.0,

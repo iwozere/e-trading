@@ -12,8 +12,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 import json
-from typing import Dict, Any, List, Optional, Tuple, Union
 from dataclasses import dataclass
+from typing import Any, Dict, List, Tuple, Union
+
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -24,16 +25,40 @@ SUPPORTED_LIST_TYPES = ["us_small_cap", "us_medium_cap", "us_large_cap", "swiss_
 
 # Supported fundamental indicators
 SUPPORTED_FUNDAMENTAL_INDICATORS = [
-    "PE", "Forward_PE", "PB", "PS", "PEG", "Debt_Equity", "Current_Ratio",
-    "Quick_Ratio", "ROE", "ROA", "Operating_Margin", "Profit_Margin",
-    "Revenue_Growth", "Net_Income_Growth", "Free_Cash_Flow", "Dividend_Yield",
-    "Payout_Ratio", "DCF"
+    "PE",
+    "Forward_PE",
+    "PB",
+    "PS",
+    "PEG",
+    "Debt_Equity",
+    "Current_Ratio",
+    "Quick_Ratio",
+    "ROE",
+    "ROA",
+    "Operating_Margin",
+    "Profit_Margin",
+    "Revenue_Growth",
+    "Net_Income_Growth",
+    "Free_Cash_Flow",
+    "Dividend_Yield",
+    "Payout_Ratio",
+    "DCF",
 ]
 
 # Supported technical indicators
 SUPPORTED_TECHNICAL_INDICATORS = [
-    "RSI", "MACD", "BollingerBands", "SMA", "EMA", "ADX", "ATR",
-    "Stochastic", "WilliamsR", "CCI", "ROC", "MFI"
+    "RSI",
+    "MACD",
+    "BollingerBands",
+    "SMA",
+    "EMA",
+    "ADX",
+    "ATR",
+    "Stochastic",
+    "WilliamsR",
+    "CCI",
+    "ROC",
+    "MFI",
 ]
 
 # Supported periods and intervals
@@ -45,6 +70,7 @@ SUPPORTED_PROVIDERS = ["yahoo", "alpha_vantage", "polygon", "binance", "twelveda
 @dataclass
 class FundamentalCriteria:
     """Fundamental screening criteria."""
+
     indicator: str
     operator: str  # "min", "max", "range"
     value: Union[float, Dict[str, float]]  # Single value or range {"min": x, "max": y}
@@ -55,6 +81,7 @@ class FundamentalCriteria:
 @dataclass
 class TechnicalCriteria:
     """Technical screening criteria."""
+
     indicator: str
     parameters: Dict[str, Any]  # Indicator-specific parameters
     condition: Dict[str, Any]  # Condition to check
@@ -65,13 +92,14 @@ class TechnicalCriteria:
 @dataclass
 class ScreenerConfig:
     """Configuration for an enhanced screener."""
+
     screener_type: str  # "fundamental", "technical", "hybrid"
     list_type: str
-    screener_name: Optional[str] = None  # Name of the screener (for email titles)
-    fundamental_criteria: Optional[List[FundamentalCriteria]] = None
-    technical_criteria: Optional[List[TechnicalCriteria]] = None
-    fmp_criteria: Optional[Dict[str, Any]] = None  # FMP screening criteria
-    fmp_strategy: Optional[str] = None  # Predefined FMP strategy name
+    screener_name: str | None = None  # Name of the screener (for email titles)
+    fundamental_criteria: List[FundamentalCriteria] | None = None
+    technical_criteria: List[TechnicalCriteria] | None = None
+    fmp_criteria: Dict[str, Any] | None = None  # FMP screening criteria
+    fmp_strategy: str | None = None  # Predefined FMP strategy name
     period: str = "1y"
     interval: str = "1d"
     provider: str = "yahoo"
@@ -80,7 +108,7 @@ class ScreenerConfig:
     include_technical_analysis: bool = False
     include_fundamental_analysis: bool = True
     email: bool = False
-    config_json: Optional[str] = None
+    config_json: str | None = None
 
 
 class ScreenerConfigParser:
@@ -120,16 +148,12 @@ class ScreenerConfigParser:
         # Parse fundamental criteria
         fundamental_criteria = None
         if "fundamental_criteria" in config_dict:
-            fundamental_criteria = self._parse_fundamental_criteria(
-                config_dict["fundamental_criteria"]
-            )
+            fundamental_criteria = self._parse_fundamental_criteria(config_dict["fundamental_criteria"])
 
         # Parse technical criteria
         technical_criteria = None
         if "technical_criteria" in config_dict:
-            technical_criteria = self._parse_technical_criteria(
-                config_dict["technical_criteria"]
-            )
+            technical_criteria = self._parse_technical_criteria(config_dict["technical_criteria"])
 
         # Parse FMP criteria
         fmp_criteria = config_dict.get("fmp_criteria")
@@ -151,7 +175,7 @@ class ScreenerConfigParser:
             include_technical_analysis=config_dict.get("include_technical_analysis", False),
             include_fundamental_analysis=config_dict.get("include_fundamental_analysis", True),
             email=config_dict.get("email", False),
-            config_json=json.dumps(config_dict)
+            config_json=json.dumps(config_dict),
         )
 
     def _parse_fundamental_criteria(self, criteria_list: List[Dict[str, Any]]) -> List[FundamentalCriteria]:
@@ -168,13 +192,11 @@ class ScreenerConfigParser:
             if not all([indicator, operator, value is not None]):
                 raise ValueError("Fundamental criteria must have indicator, operator, and value")
 
-            parsed_criteria.append(FundamentalCriteria(
-                indicator=indicator,
-                operator=operator,
-                value=value,
-                weight=weight,
-                required=required
-            ))
+            parsed_criteria.append(
+                FundamentalCriteria(
+                    indicator=indicator, operator=operator, value=value, weight=weight, required=required
+                )
+            )
 
         return parsed_criteria
 
@@ -192,13 +214,11 @@ class ScreenerConfigParser:
             if not all([indicator, condition]):
                 raise ValueError("Technical criteria must have indicator and condition")
 
-            parsed_criteria.append(TechnicalCriteria(
-                indicator=indicator,
-                parameters=parameters,
-                condition=condition,
-                weight=weight,
-                required=required
-            ))
+            parsed_criteria.append(
+                TechnicalCriteria(
+                    indicator=indicator, parameters=parameters, condition=condition, weight=weight, required=required
+                )
+            )
 
         return parsed_criteria
 
@@ -232,16 +252,12 @@ class ScreenerConfigParser:
 
         # Validate fundamental criteria
         if "fundamental_criteria" in config_dict:
-            fundamental_errors = self._validate_fundamental_criteria(
-                config_dict["fundamental_criteria"]
-            )
+            fundamental_errors = self._validate_fundamental_criteria(config_dict["fundamental_criteria"])
             errors.extend(fundamental_errors)
 
         # Validate technical criteria
         if "technical_criteria" in config_dict:
-            technical_errors = self._validate_technical_criteria(
-                config_dict["technical_criteria"]
-            )
+            technical_errors = self._validate_technical_criteria(config_dict["technical_criteria"])
             errors.extend(technical_errors)
 
         # Validate FMP criteria
@@ -360,26 +376,45 @@ class ScreenerConfigParser:
         # Import FMP integration for validation
         try:
             from src.telegram.screener.fmp_integration import validate_fmp_criteria
+
             is_valid, fmp_errors = validate_fmp_criteria(fmp_criteria)
             if not is_valid:
                 errors.extend(fmp_errors)
         except ImportError:
             # Fallback validation if FMP integration is not available
             supported_criteria = {
-                "marketCapMoreThan", "marketCapLowerThan",
-                "peRatioLessThan", "peRatioMoreThan",
-                "priceToBookRatioLessThan", "priceToBookRatioMoreThan",
-                "priceToSalesRatioLessThan", "priceToSalesRatioMoreThan",
-                "debtToEquityLessThan", "debtToEquityMoreThan",
-                "currentRatioMoreThan", "currentRatioLessThan",
-                "quickRatioMoreThan", "quickRatioLessThan",
-                "returnOnEquityMoreThan", "returnOnEquityLessThan",
-                "returnOnAssetsMoreThan", "returnOnAssetsLessThan",
-                "returnOnCapitalEmployedMoreThan", "returnOnCapitalEmployedLessThan",
-                "dividendYieldMoreThan", "dividendYieldLessThan",
-                "payoutRatioLessThan", "payoutRatioMoreThan",
-                "betaLessThan", "betaMoreThan",
-                "exchange", "Country", "isETF", "isFund", "isActivelyTrading", "limit"
+                "marketCapMoreThan",
+                "marketCapLowerThan",
+                "peRatioLessThan",
+                "peRatioMoreThan",
+                "priceToBookRatioLessThan",
+                "priceToBookRatioMoreThan",
+                "priceToSalesRatioLessThan",
+                "priceToSalesRatioMoreThan",
+                "debtToEquityLessThan",
+                "debtToEquityMoreThan",
+                "currentRatioMoreThan",
+                "currentRatioLessThan",
+                "quickRatioMoreThan",
+                "quickRatioLessThan",
+                "returnOnEquityMoreThan",
+                "returnOnEquityLessThan",
+                "returnOnAssetsMoreThan",
+                "returnOnAssetsLessThan",
+                "returnOnCapitalEmployedMoreThan",
+                "returnOnCapitalEmployedLessThan",
+                "dividendYieldMoreThan",
+                "dividendYieldLessThan",
+                "payoutRatioLessThan",
+                "payoutRatioMoreThan",
+                "betaLessThan",
+                "betaMoreThan",
+                "exchange",
+                "Country",
+                "isETF",
+                "isFund",
+                "isActivelyTrading",
+                "limit",
             }
 
             invalid_criteria = set(fmp_criteria.keys()) - supported_criteria
@@ -391,249 +426,190 @@ class ScreenerConfigParser:
     def create_sample_configs(self) -> Dict[str, str]:
         """Create sample configurations for different screener types."""
         samples = {
-            "fundamental_only": json.dumps({
-                "screener_type": "fundamental",
-                "list_type": "us_medium_cap",
-                "fundamental_criteria": [
-                    {
-                        "indicator": "PE",
-                        "operator": "max",
-                        "value": 15,
-                        "weight": 1.0,
-                        "required": True
-                    },
-                    {
-                        "indicator": "PB",
-                        "operator": "max",
-                        "value": 1.5,
-                        "weight": 0.8,
-                        "required": True
-                    },
-                    {
-                        "indicator": "ROE",
-                        "operator": "min",
-                        "value": 15,
-                        "weight": 0.9,
-                        "required": False
-                    }
-                ],
-                "max_results": 10,
-                "min_score": 7.0,
-                "email": True
-            }, indent=2),
-
-            "hybrid_fundamental_technical": json.dumps({
-                "screener_type": "hybrid",
-                "list_type": "us_medium_cap",
-                "fundamental_criteria": [
-                    {
-                        "indicator": "PE",
-                        "operator": "max",
-                        "value": 15,
-                        "weight": 1.0,
-                        "required": True
-                    },
-                    {
-                        "indicator": "ROE",
-                        "operator": "min",
-                        "value": 12,
-                        "weight": 0.8,
-                        "required": False
-                    }
-                ],
-                "technical_criteria": [
-                    {
-                        "indicator": "RSI",
-                        "parameters": {"period": 14},
-                        "condition": {"operator": "<", "value": 70},
-                        "weight": 0.6,
-                        "required": False
-                    },
-                    {
-                        "indicator": "BollingerBands",
-                        "parameters": {"period": 20, "deviation": 2},
-                        "condition": {"operator": "not_above_upper_band"},
-                        "weight": 0.5,
-                        "required": False
-                    }
-                ],
-                "period": "6mo",
-                "interval": "1d",
-                "max_results": 15,
-                "min_score": 6.5,
-                "include_technical_analysis": True,
-                "include_fundamental_analysis": True,
-                "email": True
-            }, indent=2),
-
-            "technical_only": json.dumps({
-                "screener_type": "technical",
-                "list_type": "us_large_cap",
-                "technical_criteria": [
-                    {
-                        "indicator": "RSI",
-                        "parameters": {"period": 14},
-                        "condition": {"operator": "<", "value": 30},
-                        "weight": 1.0,
-                        "required": True
-                    },
-                    {
-                        "indicator": "MACD",
-                        "parameters": {"fast_period": 12, "slow_period": 26, "signal_period": 9},
-                        "condition": {"operator": "above_signal"},
-                        "weight": 0.8,
-                        "required": False
-                    }
-                ],
-                "period": "3mo",
-                "interval": "1d",
-                "max_results": 8,
-                "min_score": 7.5,
-                "include_technical_analysis": True,
-                "include_fundamental_analysis": False,
-                "email": False
-            }, indent=2),
-
-            "advanced_hybrid": json.dumps({
-                "screener_type": "hybrid",
-                "list_type": "us_small_cap",
-                "fundamental_criteria": [
-                    {
-                        "indicator": "PE",
-                        "operator": "max",
-                        "value": 12,
-                        "weight": 1.0,
-                        "required": True
-                    },
-                    {
-                        "indicator": "PB",
-                        "operator": "max",
-                        "value": 1.2,
-                        "weight": 0.9,
-                        "required": True
-                    },
-                    {
-                        "indicator": "ROE",
-                        "operator": "min",
-                        "value": 18,
-                        "weight": 0.8,
-                        "required": False
-                    },
-                    {
-                        "indicator": "Debt_Equity",
-                        "operator": "max",
-                        "value": 0.4,
-                        "weight": 0.7,
-                        "required": False
-                    }
-                ],
-                "technical_criteria": [
-                    {
-                        "indicator": "RSI",
-                        "parameters": {"period": 14},
-                        "condition": {"operator": "range", "min": 30, "max": 70},
-                        "weight": 0.6,
-                        "required": False
-                    },
-                    {
-                        "indicator": "BollingerBands",
-                        "parameters": {"period": 20, "deviation": 2},
-                        "condition": {"operator": "between_bands"},
-                        "weight": 0.5,
-                        "required": False
-                    },
-                    {
-                        "indicator": "SMA",
-                        "parameters": {"period": 50},
-                        "condition": {"operator": "above", "value": "close"},
-                        "weight": 0.4,
-                        "required": False
-                    }
-                ],
-                "period": "1y",
-                "interval": "1d",
-                "provider": "yahoo",
-                "max_results": 12,
-                "min_score": 7.0,
-                "include_technical_analysis": True,
-                "include_fundamental_analysis": True,
-                "email": True
-            }, indent=2),
-
-            "fmp_enhanced_screener": json.dumps({
-                "screener_type": "hybrid",
-                "list_type": "us_medium_cap",
-                "fmp_criteria": {
-                    "marketCapMoreThan": 2000000000,
-                    "peRatioLessThan": 20,
-                    "returnOnEquityMoreThan": 0.12,
-                    "debtToEquityLessThan": 0.5,
-                    "limit": 50
+            "fundamental_only": json.dumps(
+                {
+                    "screener_type": "fundamental",
+                    "list_type": "us_medium_cap",
+                    "fundamental_criteria": [
+                        {"indicator": "PE", "operator": "max", "value": 15, "weight": 1.0, "required": True},
+                        {"indicator": "PB", "operator": "max", "value": 1.5, "weight": 0.8, "required": True},
+                        {"indicator": "ROE", "operator": "min", "value": 15, "weight": 0.9, "required": False},
+                    ],
+                    "max_results": 10,
+                    "min_score": 7.0,
+                    "email": True,
                 },
-                "fundamental_criteria": [
-                    {
-                        "indicator": "PE",
-                        "operator": "max",
-                        "value": 15,
-                        "weight": 1.0,
-                        "required": True
+                indent=2,
+            ),
+            "hybrid_fundamental_technical": json.dumps(
+                {
+                    "screener_type": "hybrid",
+                    "list_type": "us_medium_cap",
+                    "fundamental_criteria": [
+                        {"indicator": "PE", "operator": "max", "value": 15, "weight": 1.0, "required": True},
+                        {"indicator": "ROE", "operator": "min", "value": 12, "weight": 0.8, "required": False},
+                    ],
+                    "technical_criteria": [
+                        {
+                            "indicator": "RSI",
+                            "parameters": {"period": 14},
+                            "condition": {"operator": "<", "value": 70},
+                            "weight": 0.6,
+                            "required": False,
+                        },
+                        {
+                            "indicator": "BollingerBands",
+                            "parameters": {"period": 20, "deviation": 2},
+                            "condition": {"operator": "not_above_upper_band"},
+                            "weight": 0.5,
+                            "required": False,
+                        },
+                    ],
+                    "period": "6mo",
+                    "interval": "1d",
+                    "max_results": 15,
+                    "min_score": 6.5,
+                    "include_technical_analysis": True,
+                    "include_fundamental_analysis": True,
+                    "email": True,
+                },
+                indent=2,
+            ),
+            "technical_only": json.dumps(
+                {
+                    "screener_type": "technical",
+                    "list_type": "us_large_cap",
+                    "technical_criteria": [
+                        {
+                            "indicator": "RSI",
+                            "parameters": {"period": 14},
+                            "condition": {"operator": "<", "value": 30},
+                            "weight": 1.0,
+                            "required": True,
+                        },
+                        {
+                            "indicator": "MACD",
+                            "parameters": {"fast_period": 12, "slow_period": 26, "signal_period": 9},
+                            "condition": {"operator": "above_signal"},
+                            "weight": 0.8,
+                            "required": False,
+                        },
+                    ],
+                    "period": "3mo",
+                    "interval": "1d",
+                    "max_results": 8,
+                    "min_score": 7.5,
+                    "include_technical_analysis": True,
+                    "include_fundamental_analysis": False,
+                    "email": False,
+                },
+                indent=2,
+            ),
+            "advanced_hybrid": json.dumps(
+                {
+                    "screener_type": "hybrid",
+                    "list_type": "us_small_cap",
+                    "fundamental_criteria": [
+                        {"indicator": "PE", "operator": "max", "value": 12, "weight": 1.0, "required": True},
+                        {"indicator": "PB", "operator": "max", "value": 1.2, "weight": 0.9, "required": True},
+                        {"indicator": "ROE", "operator": "min", "value": 18, "weight": 0.8, "required": False},
+                        {"indicator": "Debt_Equity", "operator": "max", "value": 0.4, "weight": 0.7, "required": False},
+                    ],
+                    "technical_criteria": [
+                        {
+                            "indicator": "RSI",
+                            "parameters": {"period": 14},
+                            "condition": {"operator": "range", "min": 30, "max": 70},
+                            "weight": 0.6,
+                            "required": False,
+                        },
+                        {
+                            "indicator": "BollingerBands",
+                            "parameters": {"period": 20, "deviation": 2},
+                            "condition": {"operator": "between_bands"},
+                            "weight": 0.5,
+                            "required": False,
+                        },
+                        {
+                            "indicator": "SMA",
+                            "parameters": {"period": 50},
+                            "condition": {"operator": "above", "value": "close"},
+                            "weight": 0.4,
+                            "required": False,
+                        },
+                    ],
+                    "period": "1y",
+                    "interval": "1d",
+                    "provider": "yahoo",
+                    "max_results": 12,
+                    "min_score": 7.0,
+                    "include_technical_analysis": True,
+                    "include_fundamental_analysis": True,
+                    "email": True,
+                },
+                indent=2,
+            ),
+            "fmp_enhanced_screener": json.dumps(
+                {
+                    "screener_type": "hybrid",
+                    "list_type": "us_medium_cap",
+                    "fmp_criteria": {
+                        "marketCapMoreThan": 2000000000,
+                        "peRatioLessThan": 20,
+                        "returnOnEquityMoreThan": 0.12,
+                        "debtToEquityLessThan": 0.5,
+                        "limit": 50,
                     },
-                    {
-                        "indicator": "ROE",
-                        "operator": "min",
-                        "value": 15,
-                        "weight": 0.9,
-                        "required": False
-                    }
-                ],
-                "technical_criteria": [
-                    {
-                        "indicator": "RSI",
-                        "parameters": {"period": 14},
-                        "condition": {"operator": "<", "value": 70},
-                        "weight": 0.6,
-                        "required": False
-                    }
-                ],
-                "period": "6mo",
-                "interval": "1d",
-                "max_results": 15,
-                "min_score": 7.0,
-                "include_technical_analysis": True,
-                "include_fundamental_analysis": True,
-                "email": True
-            }, indent=2),
-
-            "fmp_strategy_screener": json.dumps({
-                "screener_type": "hybrid",
-                "list_type": "us_large_cap",
-                "fmp_strategy": "conservative_value",
-                "fundamental_criteria": [
-                    {
-                        "indicator": "PE",
-                        "operator": "max",
-                        "value": 12,
-                        "weight": 1.0,
-                        "required": True
-                    }
-                ],
-                "technical_criteria": [
-                    {
-                        "indicator": "BollingerBands",
-                        "parameters": {"period": 20, "deviation": 2},
-                        "condition": {"operator": "between_bands"},
-                        "weight": 0.5,
-                        "required": False
-                    }
-                ],
-                "period": "1y",
-                "interval": "1d",
-                "max_results": 10,
-                "min_score": 7.5,
-                "include_technical_analysis": True,
-                "include_fundamental_analysis": True,
-                "email": True
-            }, indent=2)
+                    "fundamental_criteria": [
+                        {"indicator": "PE", "operator": "max", "value": 15, "weight": 1.0, "required": True},
+                        {"indicator": "ROE", "operator": "min", "value": 15, "weight": 0.9, "required": False},
+                    ],
+                    "technical_criteria": [
+                        {
+                            "indicator": "RSI",
+                            "parameters": {"period": 14},
+                            "condition": {"operator": "<", "value": 70},
+                            "weight": 0.6,
+                            "required": False,
+                        }
+                    ],
+                    "period": "6mo",
+                    "interval": "1d",
+                    "max_results": 15,
+                    "min_score": 7.0,
+                    "include_technical_analysis": True,
+                    "include_fundamental_analysis": True,
+                    "email": True,
+                },
+                indent=2,
+            ),
+            "fmp_strategy_screener": json.dumps(
+                {
+                    "screener_type": "hybrid",
+                    "list_type": "us_large_cap",
+                    "fmp_strategy": "conservative_value",
+                    "fundamental_criteria": [
+                        {"indicator": "PE", "operator": "max", "value": 12, "weight": 1.0, "required": True}
+                    ],
+                    "technical_criteria": [
+                        {
+                            "indicator": "BollingerBands",
+                            "parameters": {"period": 20, "deviation": 2},
+                            "condition": {"operator": "between_bands"},
+                            "weight": 0.5,
+                            "required": False,
+                        }
+                    ],
+                    "period": "1y",
+                    "interval": "1d",
+                    "max_results": 10,
+                    "min_score": 7.5,
+                    "include_technical_analysis": True,
+                    "include_fundamental_analysis": True,
+                    "email": True,
+                },
+                indent=2,
+            ),
         }
         return samples
 
@@ -653,8 +629,15 @@ class ScreenerConfigParser:
     def get_optional_fields(self, screener_type: str) -> List[str]:
         """Get optional fields for a screener type."""
         common_fields = [
-            "screener_type", "period", "interval", "provider", "max_results",
-            "min_score", "include_technical_analysis", "include_fundamental_analysis", "email"
+            "screener_type",
+            "period",
+            "interval",
+            "provider",
+            "max_results",
+            "min_score",
+            "include_technical_analysis",
+            "include_fundamental_analysis",
+            "email",
         ]
 
         if screener_type == "fundamental":
@@ -673,10 +656,12 @@ def parse_screener_config(config_json: str) -> ScreenerConfig:
     parser = ScreenerConfigParser()
     return parser.parse_config(config_json)
 
+
 def validate_screener_config(config_json: str) -> Tuple[bool, List[str]]:
     """Validate screener configuration."""
     parser = ScreenerConfigParser()
     return parser.validate_config(config_json)
+
 
 def get_screener_summary(config_json: str) -> Dict[str, Any]:
     """Get a summary of the screener configuration."""
@@ -693,7 +678,7 @@ def get_screener_summary(config_json: str) -> Dict[str, Any]:
             "min_score": config.min_score,
             "include_technical_analysis": config.include_technical_analysis,
             "include_fundamental_analysis": config.include_fundamental_analysis,
-            "email": config.email
+            "email": config.email,
         }
 
         # Add FMP information if available

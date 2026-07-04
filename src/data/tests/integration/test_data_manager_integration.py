@@ -13,12 +13,13 @@ Test Coverage:
 - Error handling and retries
 """
 
+import shutil
 import sys
 import tempfile
-import shutil
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import Mock, patch
+
 import pandas as pd
 import pytest
 
@@ -52,13 +53,16 @@ class TestDataManagerIntegration:
     def mock_downloader(self):
         """Create a mock downloader for testing."""
         downloader = Mock()
-        downloader.get_ohlcv.return_value = pd.DataFrame({
-            'open': [100.0, 101.0, 102.0],
-            'high': [101.0, 102.0, 103.0],
-            'low': [99.0, 100.0, 101.0],
-            'close': [100.5, 101.5, 102.5],
-            'volume': [1000, 1100, 1200]
-        }, index=pd.date_range('2024-01-01', periods=3, freq='1h'))
+        downloader.get_ohlcv.return_value = pd.DataFrame(
+            {
+                "open": [100.0, 101.0, 102.0],
+                "high": [101.0, 102.0, 103.0],
+                "low": [99.0, 100.0, 101.0],
+                "close": [100.5, 101.5, 102.5],
+                "volume": [1000, 1100, 1200],
+            },
+            index=pd.date_range("2024-01-01", periods=3, freq="1h"),
+        )
         return downloader
 
     def test_cache_miss_then_hit(self, data_manager, mock_downloader):
@@ -69,12 +73,10 @@ class TestDataManagerIntegration:
         end_date = datetime(2024, 1, 1, 3)  # End at 3 AM to include the 3 data points
 
         # Mock the provider selector to return our mock downloader
-        with patch.object(data_manager.provider_selector, 'get_provider_with_failover') as mock_failover:
-            mock_failover.return_value = ['test_provider']
+        with patch.object(data_manager.provider_selector, "get_provider_with_failover") as mock_failover:
+            mock_failover.return_value = ["test_provider"]
 
-            with patch.dict(data_manager.provider_selector.downloaders, {
-                'test_provider': mock_downloader
-            }):
+            with patch.dict(data_manager.provider_selector.downloaders, {"test_provider": mock_downloader}):
                 # First request - should be cache miss
                 result1 = data_manager.get_ohlcv(symbol, timeframe, start_date, end_date)
 
@@ -83,7 +85,6 @@ class TestDataManagerIntegration:
 
                 # Second request - should be cache hit
                 result2 = data_manager.get_ohlcv(symbol, timeframe, start_date, end_date)
-
 
                 # Verify downloader was not called again
                 assert mock_downloader.get_ohlcv.call_count == 1
@@ -96,14 +97,14 @@ class TestDataManagerIntegration:
         # Test crypto symbol
         downloader = data_manager.provider_selector.get_best_downloader("BTCUSDT", "1h")
         assert downloader is not None
-        assert hasattr(downloader, 'get_ohlcv')
+        assert hasattr(downloader, "get_ohlcv")
 
     def test_provider_selection_stock(self, data_manager):
         """Test that stock symbols select appropriate providers."""
         # Test stock symbol
         downloader = data_manager.provider_selector.get_best_downloader("AAPL", "1d")
         assert downloader is not None
-        assert hasattr(downloader, 'get_ohlcv')
+        assert hasattr(downloader, "get_ohlcv")
 
     def test_provider_failover(self, data_manager):
         """Test provider failover mechanism."""
@@ -112,20 +113,20 @@ class TestDataManagerIntegration:
         primary_downloader.get_ohlcv.side_effect = Exception("API Error")
 
         fallback_downloader = Mock()
-        fallback_downloader.get_ohlcv.return_value = pd.DataFrame({
-            'open': [100.0], 'high': [101.0], 'low': [99.0],
-            'close': [100.5], 'volume': [1000]
-        }, index=pd.date_range('2024-01-01', periods=1, freq='1h'))
+        fallback_downloader.get_ohlcv.return_value = pd.DataFrame(
+            {"open": [100.0], "high": [101.0], "low": [99.0], "close": [100.5], "volume": [1000]},
+            index=pd.date_range("2024-01-01", periods=1, freq="1h"),
+        )
 
         # Mock provider selector to return failover chain
-        with patch.object(data_manager.provider_selector, 'get_provider_with_failover') as mock_failover:
-            mock_failover.return_value = ['primary', 'fallback']
+        with patch.object(data_manager.provider_selector, "get_provider_with_failover") as mock_failover:
+            mock_failover.return_value = ["primary", "fallback"]
 
             # Mock the downloaders dictionary
-            with patch.dict(data_manager.provider_selector.downloaders, {
-                'primary': primary_downloader,
-                'fallback': fallback_downloader
-            }):
+            with patch.dict(
+                data_manager.provider_selector.downloaders,
+                {"primary": primary_downloader, "fallback": fallback_downloader},
+            ):
                 result = data_manager.get_ohlcv("TEST", "1h", datetime(2024, 1, 1), datetime(2024, 1, 2))
 
                 # Verify primary was tried first
@@ -141,22 +142,23 @@ class TestDataManagerIntegration:
     def test_data_validation(self, data_manager, mock_downloader):
         """Test that data validation is performed."""
         # Create invalid data
-        invalid_data = pd.DataFrame({
-            'open': [100.0, 101.0, 102.0],
-            'high': [99.0, 100.0, 101.0],  # High < Open (invalid)
-            'low': [99.0, 100.0, 101.0],
-            'close': [100.5, 101.5, 102.5],
-            'volume': [1000, 1100, 1200]
-        }, index=pd.date_range('2024-01-01', periods=3, freq='1h'))
+        invalid_data = pd.DataFrame(
+            {
+                "open": [100.0, 101.0, 102.0],
+                "high": [99.0, 100.0, 101.0],  # High < Open (invalid)
+                "low": [99.0, 100.0, 101.0],
+                "close": [100.5, 101.5, 102.5],
+                "volume": [1000, 1100, 1200],
+            },
+            index=pd.date_range("2024-01-01", periods=3, freq="1h"),
+        )
 
         mock_downloader.get_ohlcv.return_value = invalid_data
 
-        with patch.object(data_manager.provider_selector, 'get_provider_with_failover') as mock_failover:
-            mock_failover.return_value = ['test_provider']
+        with patch.object(data_manager.provider_selector, "get_provider_with_failover") as mock_failover:
+            mock_failover.return_value = ["test_provider"]
 
-            with patch.dict(data_manager.provider_selector.downloaders, {
-                'test_provider': mock_downloader
-            }):
+            with patch.dict(data_manager.provider_selector.downloaders, {"test_provider": mock_downloader}):
                 # Should still return data but log validation warnings
                 result = data_manager.get_ohlcv("TEST", "1h", datetime(2024, 1, 1), datetime(2024, 1, 2))
 
@@ -165,12 +167,10 @@ class TestDataManagerIntegration:
 
     def test_live_feed_integration(self, data_manager, mock_downloader):
         """Test that live feeds use DataManager for historical data."""
-        with patch.object(data_manager.provider_selector, 'get_provider_with_failover') as mock_failover:
-            mock_failover.return_value = ['test_provider']
+        with patch.object(data_manager.provider_selector, "get_provider_with_failover") as mock_failover:
+            mock_failover.return_value = ["test_provider"]
 
-            with patch.dict(data_manager.provider_selector.downloaders, {
-                'test_provider': mock_downloader
-            }):
+            with patch.dict(data_manager.provider_selector.downloaders, {"test_provider": mock_downloader}):
                 # Create a mock live feed
                 class TestLiveFeed(BaseLiveDataFeed):
                     def _connect_realtime(self):
@@ -183,12 +183,7 @@ class TestDataManagerIntegration:
                         return None
 
                 # Test that live feed can be created with DataManager
-                feed = TestLiveFeed(
-                    symbol="BTCUSDT",
-                    interval="1h",
-                    lookback_bars=10,
-                    data_manager=data_manager
-                )
+                feed = TestLiveFeed(symbol="BTCUSDT", interval="1h", lookback_bars=10, data_manager=data_manager)
 
                 assert feed.data_manager == data_manager
                 assert feed.symbol == "BTCUSDT"
@@ -200,12 +195,10 @@ class TestDataManagerIntegration:
         failing_downloader = Mock()
         failing_downloader.get_ohlcv.side_effect = Exception("All providers failed")
 
-        with patch.object(data_manager.provider_selector, 'get_provider_with_failover') as mock_failover:
-            mock_failover.return_value = ['failing_provider']
+        with patch.object(data_manager.provider_selector, "get_provider_with_failover") as mock_failover:
+            mock_failover.return_value = ["failing_provider"]
 
-            with patch.dict(data_manager.provider_selector.downloaders, {
-                'failing_provider': failing_downloader
-            }):
+            with patch.dict(data_manager.provider_selector.downloaders, {"failing_provider": failing_downloader}):
                 # Should raise RuntimeError when all providers fail
                 with pytest.raises(RuntimeError, match="All providers failed"):
                     data_manager.get_ohlcv("TEST", "1h", datetime(2024, 1, 1), datetime(2024, 1, 2))
@@ -217,12 +210,10 @@ class TestDataManagerIntegration:
         start_date = datetime(2024, 1, 1)
         end_date = datetime(2024, 1, 2)
 
-        with patch.object(data_manager.provider_selector, 'get_provider_with_failover') as mock_failover:
-            mock_failover.return_value = ['test_provider']
+        with patch.object(data_manager.provider_selector, "get_provider_with_failover") as mock_failover:
+            mock_failover.return_value = ["test_provider"]
 
-            with patch.dict(data_manager.provider_selector.downloaders, {
-                'test_provider': mock_downloader
-            }):
+            with patch.dict(data_manager.provider_selector.downloaders, {"test_provider": mock_downloader}):
                 # Make a request
                 data_manager.get_ohlcv(symbol, timeframe, start_date, end_date)
 
@@ -242,17 +233,17 @@ class TestDataManagerIntegration:
         """Test that ProviderSelector uses configuration correctly."""
         # Test symbol classification
         crypto_info = data_manager.provider_selector.get_ticker_info("BTCUSDT")
-        assert crypto_info['symbol_type'] == 'crypto'
+        assert crypto_info["symbol_type"] == "crypto"
 
         stock_info = data_manager.provider_selector.get_ticker_info("AAPL")
-        assert stock_info['symbol_type'] == 'stock'
+        assert stock_info["symbol_type"] == "stock"
 
         # Test provider config generation
         crypto_config = data_manager.provider_selector.get_data_provider_config("BTCUSDT", "1h")
-        assert 'provider' in crypto_config
+        assert "provider" in crypto_config
 
         stock_config = data_manager.provider_selector.get_data_provider_config("AAPL", "1d")
-        assert 'provider' in stock_config
+        assert "provider" in stock_config
 
 
 class TestProviderSelectorIntegration:
@@ -294,16 +285,16 @@ class TestProviderSelectorIntegration:
 
         # Test valid tickers
         btc_validation = selector.validate_ticker("BTCUSDT")
-        assert btc_validation['valid'] == True
-        assert btc_validation['symbol_type'] == 'crypto'
+        assert btc_validation["valid"] == True
+        assert btc_validation["symbol_type"] == "crypto"
 
         aapl_validation = selector.validate_ticker("AAPL")
-        assert aapl_validation['valid'] == True
-        assert aapl_validation['symbol_type'] == 'stock'
+        assert aapl_validation["valid"] == True
+        assert aapl_validation["symbol_type"] == "stock"
 
         # Test invalid ticker
         invalid_validation = selector.validate_ticker("INVALID")
-        assert invalid_validation['valid'] == False
+        assert invalid_validation["valid"] == False
 
 
 def run_integration_tests():
@@ -312,12 +303,7 @@ def run_integration_tests():
     print("=" * 50)
 
     # Run pytest
-    pytest.main([
-        __file__,
-        "-v",
-        "--tb=short",
-        "--color=yes"
-    ])
+    pytest.main([__file__, "-v", "--tb=short", "--color=yes"])
 
 
 if __name__ == "__main__":

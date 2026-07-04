@@ -28,13 +28,13 @@ sys.path.append(str(project_root))
 import json
 import pickle
 from pathlib import Path
-from typing import Dict, List, Any, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
 import xgboost as xgb
+from sklearn.metrics import accuracy_score, classification_report, f1_score, log_loss, precision_score, recall_score
 from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import log_loss, accuracy_score, precision_score, recall_score, f1_score, classification_report
 
 from src.notification.logger import setup_logger
 from src.util.config import load_config
@@ -82,18 +82,19 @@ class XGBoostTrainer:
         """Get checkpoint file path for a specific target."""
         return self.checkpoints_dir / f"xgboost_checkpoint_{target}.pkl"
 
-    def save_checkpoint(self, model: xgb.XGBClassifier, target: str, iteration: int,
-                       train_metrics: dict, val_metrics: dict):
+    def save_checkpoint(
+        self, model: xgb.XGBClassifier, target: str, iteration: int, train_metrics: dict, val_metrics: dict
+    ):
         """Save model state so training can resume later."""
         ckpt_path = self._get_checkpoint_path(target)
         checkpoint = {
-            'iteration': iteration,
-            'train_metrics': train_metrics,
-            'val_metrics': val_metrics,
-            'best_params': self.best_params.get(target, {})
+            "iteration": iteration,
+            "train_metrics": train_metrics,
+            "val_metrics": val_metrics,
+            "best_params": self.best_params.get(target, {}),
         }
 
-        with open(ckpt_path, 'wb') as f:
+        with open(ckpt_path, "wb") as f:
             pickle.dump(checkpoint, f)
 
         _logger.info("Checkpoint saved for %s at %s (iteration %d)", target, ckpt_path, iteration)
@@ -102,17 +103,21 @@ class XGBoostTrainer:
         """Load model state to resume training if checkpoint exists."""
         ckpt_path = self._get_checkpoint_path(target)
         if ckpt_path.exists():
-            with open(ckpt_path, 'rb') as f:
+            with open(ckpt_path, "rb") as f:
                 checkpoint = pickle.load(f)
 
             # For now, just return the checkpoint info without loading the model state
             # since we can't access booster on unfitted model in XGBoost 3.x
-            start_iteration = checkpoint['iteration'] + 1
-            train_metrics = checkpoint['train_metrics']
-            val_metrics = checkpoint['val_metrics']
+            start_iteration = checkpoint["iteration"] + 1
+            train_metrics = checkpoint["train_metrics"]
+            val_metrics = checkpoint["val_metrics"]
 
-            _logger.info("Found checkpoint for %s at %s (iteration %d) - will start fresh training",
-                        target, ckpt_path, start_iteration)
+            _logger.info(
+                "Found checkpoint for %s at %s (iteration %d) - will start fresh training",
+                target,
+                ckpt_path,
+                start_iteration,
+            )
             return start_iteration, train_metrics, val_metrics
         else:
             return 0, {}, {}
@@ -145,15 +150,16 @@ class XGBoostTrainer:
                 if target in y_train_dict and target in self.best_params:
                     _logger.info("Training XGBoost model for target: %s", target)
 
-                    target_results = self._train_target_model(
-                        X_train, y_train_dict[target], target
-                    )
+                    target_results = self._train_target_model(X_train, y_train_dict[target], target)
 
                     training_results[target] = target_results
                     trained_models[target] = target_results["model"]
 
-                    _logger.info("Completed training for %s: final accuracy = %.4f",
-                                target, target_results["final_metrics"]["accuracy"])
+                    _logger.info(
+                        "Completed training for %s: final accuracy = %.4f",
+                        target,
+                        target_results["final_metrics"]["accuracy"],
+                    )
 
             # Save trained models
             self._save_trained_models(trained_models)
@@ -170,7 +176,7 @@ class XGBoostTrainer:
                 "status": "completed",
                 "targets_trained": list(training_results.keys()),
                 "training_results": training_results,
-                "ensemble_results": ensemble_results
+                "ensemble_results": ensemble_results,
             }
 
         except Exception as e:
@@ -188,7 +194,7 @@ class XGBoostTrainer:
         if not params_path.exists():
             raise FileNotFoundError(f"Best parameters file not found: {params_path}")
 
-        with open(params_path, "r") as f:
+        with open(params_path) as f:
             best_params = json.load(f)
 
         _logger.info("Loaded best parameters for targets: %s", list(best_params.keys()))
@@ -249,20 +255,22 @@ class XGBoostTrainer:
                 for target in self.targets:
                     if target in df.columns:
                         # Convert target to numeric type to handle string/int mismatches
-                        target_values = pd.to_numeric(df[target], errors='coerce')
+                        target_values = pd.to_numeric(df[target], errors="coerce")
 
                         # Check for any NaN values after conversion
                         nan_count = target_values.isna().sum()
                         if nan_count > 0:
-                            _logger.warning("Found %d NaN values in target %s for file %s",
-                                          nan_count, target, file_path.name)
+                            _logger.warning(
+                                "Found %d NaN values in target %s for file %s", nan_count, target, file_path.name
+                            )
                             # Fill NaN values with mode or most common value
-                            target_values = target_values.fillna(target_values.mode().iloc[0] if len(target_values.mode()) > 0 else 0)
+                            target_values = target_values.fillna(
+                                target_values.mode().iloc[0] if len(target_values.mode()) > 0 else 0
+                            )
 
                         all_targets[target].append(target_values.values)
 
-                _logger.debug("Processed %s: %d samples, %d features",
-                             file_path.name, len(features), len(feature_cols))
+                _logger.debug("Processed %s: %d samples, %d features", file_path.name, len(features), len(feature_cols))
 
             except Exception as e:
                 _logger.warning("Error processing %s: %s", file_path, e)
@@ -280,15 +288,11 @@ class XGBoostTrainer:
             if all_targets[target]:
                 y_train_dict[target] = np.concatenate(all_targets[target])
 
-        _logger.info("Prepared training data: X shape %s, targets: %s",
-                    X_train.shape, list(y_train_dict.keys()))
+        _logger.info("Prepared training data: X shape %s, targets: %s", X_train.shape, list(y_train_dict.keys()))
 
         return X_train, y_train_dict
 
-    def _train_target_model(self,
-                           X_train: np.ndarray,
-                           y_train: np.ndarray,
-                           target: str) -> Dict[str, Any]:
+    def _train_target_model(self, X_train: np.ndarray, y_train: np.ndarray, target: str) -> Dict[str, Any]:
         """
         Train XGBoost model for a specific target variable.
 
@@ -304,20 +308,11 @@ class XGBoostTrainer:
 
         # Get best parameters for this target
         best_params = self.best_params[target].copy()
-        best_params.update({
-            "random_state": 42,
-            "n_jobs": -1,
-            "eval_metric": "logloss"
-        })
+        best_params.update({"random_state": 42, "n_jobs": -1, "eval_metric": "logloss"})
 
         # Time series cross-validation
         tscv = TimeSeriesSplit(n_splits=self.cv_splits)
-        cv_results = {
-            "train_scores": [],
-            "val_scores": [],
-            "train_metrics": [],
-            "val_metrics": []
-        }
+        cv_results = {"train_scores": [], "val_scores": [], "train_metrics": [], "val_metrics": []}
 
         models = []
 
@@ -329,11 +324,7 @@ class XGBoostTrainer:
 
             # Train XGBoost model
             model = xgb.XGBClassifier(**best_params, early_stopping_rounds=50)
-            model.fit(
-                X_fold_train, y_fold_train,
-                eval_set=[(X_fold_val, y_fold_val)],
-                verbose=False
-            )
+            model.fit(X_fold_train, y_fold_train, eval_set=[(X_fold_val, y_fold_val)], verbose=False)
 
             models.append(model)
 
@@ -361,7 +352,7 @@ class XGBoostTrainer:
         final_model.fit(X_train, y_train)
 
         # Save checkpoint after training
-        final_iteration = final_model.n_estimators if hasattr(final_model, 'n_estimators') else 100
+        final_iteration = final_model.n_estimators if hasattr(final_model, "n_estimators") else 100
         self.save_checkpoint(final_model, target, final_iteration, train_metrics, val_metrics)
 
         # Final evaluation
@@ -385,13 +376,10 @@ class XGBoostTrainer:
             "feature_importance": feature_importance.tolist(),
             "classification_report": classification_rep,
             "cv_mean_val_score": np.mean(cv_results["val_scores"]),
-            "cv_std_val_score": np.std(cv_results["val_scores"])
+            "cv_std_val_score": np.std(cv_results["val_scores"]),
         }
 
-    def _calculate_metrics(self,
-                          y_true: np.ndarray,
-                          y_pred: np.ndarray,
-                          y_pred_proba: np.ndarray) -> Dict[str, float]:
+    def _calculate_metrics(self, y_true: np.ndarray, y_pred: np.ndarray, y_pred_proba: np.ndarray) -> Dict[str, float]:
         """
         Calculate comprehensive metrics for model evaluation.
 
@@ -406,15 +394,14 @@ class XGBoostTrainer:
         return {
             "log_loss": log_loss(y_true, y_pred_proba),
             "accuracy": accuracy_score(y_true, y_pred),
-            "precision": precision_score(y_true, y_pred, average='weighted', zero_division=0),
-            "recall": recall_score(y_true, y_pred, average='weighted', zero_division=0),
-            "f1_score": f1_score(y_true, y_pred, average='weighted', zero_division=0)
+            "precision": precision_score(y_true, y_pred, average="weighted", zero_division=0),
+            "recall": recall_score(y_true, y_pred, average="weighted", zero_division=0),
+            "f1_score": f1_score(y_true, y_pred, average="weighted", zero_division=0),
         }
 
-    def _generate_ensemble_predictions(self,
-                                     trained_models: Dict[str, xgb.XGBClassifier],
-                                     X_train: np.ndarray,
-                                     y_train_dict: Dict[str, np.ndarray]) -> Dict[str, Any]:
+    def _generate_ensemble_predictions(
+        self, trained_models: Dict[str, xgb.XGBClassifier], X_train: np.ndarray, y_train_dict: Dict[str, np.ndarray]
+    ) -> Dict[str, Any]:
         """
         Generate ensemble predictions using all trained models.
 
@@ -445,7 +432,7 @@ class XGBoostTrainer:
                     "predictions": y_pred.tolist(),
                     "probabilities": y_pred_proba.tolist(),
                     "true_labels": y_true.tolist(),
-                    "metrics": ensemble_metrics
+                    "metrics": ensemble_metrics,
                 }
 
         return ensemble_results
@@ -473,7 +460,7 @@ class XGBoostTrainer:
                 "n_features": model.n_features_in_,
                 "n_classes": len(model.classes_),
                 "classes": model.classes_.tolist(),
-                "feature_importances": model.feature_importances_.tolist()
+                "feature_importances": model.feature_importances_.tolist(),
             }
 
             with open(info_path, "w") as f:
@@ -481,9 +468,7 @@ class XGBoostTrainer:
 
         _logger.info("Saved %d trained models", len(trained_models))
 
-    def _save_training_summary(self,
-                              training_results: Dict[str, Any],
-                              ensemble_results: Dict[str, Any]) -> None:
+    def _save_training_summary(self, training_results: Dict[str, Any], ensemble_results: Dict[str, Any]) -> None:
         """
         Save training summary and results.
 
@@ -506,16 +491,13 @@ class XGBoostTrainer:
                 target: {
                     "cv_mean_val_score": results["cv_mean_val_score"],
                     "cv_std_val_score": results["cv_std_val_score"],
-                    "final_metrics": results["final_metrics"]
+                    "final_metrics": results["final_metrics"],
                 }
                 for target, results in training_results.items()
             },
             "ensemble_results": {
-                target: {
-                    "metrics": results["metrics"]
-                }
-                for target, results in ensemble_results.items()
-            }
+                target: {"metrics": results["metrics"]} for target, results in ensemble_results.items()
+            },
         }
 
         with open(summary_path, "w") as f:
@@ -529,14 +511,18 @@ class XGBoostTrainer:
             # Save detailed training results
             detailed_path = target_dir / "training_results.json"
             with open(detailed_path, "w") as f:
-                json.dump({
-                    "target": target,
-                    "best_params": results["best_params"],
-                    "cv_results": results["cv_results"],
-                    "final_metrics": results["final_metrics"],
-                    "classification_report": results["classification_report"],
-                    "feature_importance": results["feature_importance"]
-                }, f, indent=2)
+                json.dump(
+                    {
+                        "target": target,
+                        "best_params": results["best_params"],
+                        "cv_results": results["cv_results"],
+                        "final_metrics": results["final_metrics"],
+                        "classification_report": results["classification_report"],
+                        "feature_importance": results["feature_importance"],
+                    },
+                    f,
+                    indent=2,
+                )
 
         _logger.info("Saved training summary to %s", self.models_dir)
 

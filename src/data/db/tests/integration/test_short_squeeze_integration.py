@@ -10,24 +10,25 @@ This script tests the database integration for the short squeeze detection pipel
 IMPORTANT: This test uses isolated test database fixtures, NOT production database.
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 # Add src to path using pathlib
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-import pytest
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
 
-from src.data.db.services.short_squeeze_service import ShortSqueezeService
+import pytest
+
 from src.data.db.models.model_short_squeeze import (
-    ScreenerSnapshot, DeepScanMetrics, SqueezeAlert, AdHocCandidateModel,
-    AlertLevel
+    AlertLevel,
+    ScreenerSnapshot,
 )
+from src.data.db.services.short_squeeze_service import ShortSqueezeService
 from src.ml.pipeline.p04_short_squeeze.core.models import (
-    StructuralMetrics, TransientMetrics, Candidate, Alert, AdHocCandidate
+    StructuralMetrics,
 )
 
 
@@ -39,8 +40,8 @@ class TestShortSqueezeDatabase:
         service = ShortSqueezeService(db_session)
         stats = service.get_pipeline_statistics()
 
-        assert 'status' in stats
-        assert stats['status'] in ['healthy', 'error']
+        assert "status" in stats
+        assert stats["status"] in ["healthy", "error"]
         print("✅ Database connection test passed")
 
     def test_screener_snapshot_operations(self, db_session):
@@ -51,27 +52,27 @@ class TestShortSqueezeDatabase:
         run_date = date.today()
         test_results = [
             {
-                'ticker': 'TSLA',
-                'short_interest_pct': Decimal('0.25'),
-                'days_to_cover': Decimal('5.5'),
-                'float_shares': 1000000000,
-                'avg_volume_14d': 50000000,
-                'market_cap': 800000000000,
-                'screener_score': Decimal('0.85'),
-                'raw_payload': {'test': True},
-                'data_quality': Decimal('0.95')
+                "ticker": "TSLA",
+                "short_interest_pct": Decimal("0.25"),
+                "days_to_cover": Decimal("5.5"),
+                "float_shares": 1000000000,
+                "avg_volume_14d": 50000000,
+                "market_cap": 800000000000,
+                "screener_score": Decimal("0.85"),
+                "raw_payload": {"test": True},
+                "data_quality": Decimal("0.95"),
             },
             {
-                'ticker': 'GME',
-                'short_interest_pct': Decimal('0.30'),
-                'days_to_cover': Decimal('8.2'),
-                'float_shares': 76000000,
-                'avg_volume_14d': 15000000,
-                'market_cap': 12000000000,
-                'screener_score': Decimal('0.92'),
-                'raw_payload': {'test': True},
-                'data_quality': Decimal('0.98')
-            }
+                "ticker": "GME",
+                "short_interest_pct": Decimal("0.30"),
+                "days_to_cover": Decimal("8.2"),
+                "float_shares": 76000000,
+                "avg_volume_14d": 15000000,
+                "market_cap": 12000000000,
+                "screener_score": Decimal("0.92"),
+                "raw_payload": {"test": True},
+                "data_quality": Decimal("0.98"),
+            },
         ]
 
         # Save screener results
@@ -83,10 +84,10 @@ class TestShortSqueezeDatabase:
         assert len(top_candidates) >= 2
 
         # Verify data
-        gme_candidate = next((c for c in top_candidates if c['ticker'] == 'GME'), None)
+        gme_candidate = next((c for c in top_candidates if c["ticker"] == "GME"), None)
         assert gme_candidate is not None
-        assert gme_candidate['screener_score'] == 0.92
-        assert gme_candidate['short_interest_pct'] == 0.30
+        assert gme_candidate["screener_score"] == 0.92
+        assert gme_candidate["short_interest_pct"] == 0.30
         print("✅ Screener snapshot operations test passed")
 
     def test_deep_scan_metrics_operations(self, db_session):
@@ -97,25 +98,25 @@ class TestShortSqueezeDatabase:
         scan_date = date.today()
         test_metrics = [
             {
-                'ticker': 'TSLA',
-                'volume_spike': Decimal('3.5'),
-                'call_put_ratio': Decimal('1.2'),
-                'sentiment_24h': Decimal('0.65'),
-                'borrow_fee_pct': Decimal('0.08'),
-                'squeeze_score': Decimal('0.78'),
-                'alert_level': 'MEDIUM',
-                'raw_payload': {'test': True}
+                "ticker": "TSLA",
+                "volume_spike": Decimal("3.5"),
+                "call_put_ratio": Decimal("1.2"),
+                "sentiment_24h": Decimal("0.65"),
+                "borrow_fee_pct": Decimal("0.08"),
+                "squeeze_score": Decimal("0.78"),
+                "alert_level": "MEDIUM",
+                "raw_payload": {"test": True},
             },
             {
-                'ticker': 'GME',
-                'volume_spike': Decimal('5.8'),
-                'call_put_ratio': Decimal('2.1'),
-                'sentiment_24h': Decimal('0.82'),
-                'borrow_fee_pct': Decimal('0.15'),
-                'squeeze_score': Decimal('0.91'),
-                'alert_level': 'HIGH',
-                'raw_payload': {'test': True}
-            }
+                "ticker": "GME",
+                "volume_spike": Decimal("5.8"),
+                "call_put_ratio": Decimal("2.1"),
+                "sentiment_24h": Decimal("0.82"),
+                "borrow_fee_pct": Decimal("0.15"),
+                "squeeze_score": Decimal("0.91"),
+                "alert_level": "HIGH",
+                "raw_payload": {"test": True},
+            },
         ]
 
         # Save deep scan results
@@ -127,10 +128,10 @@ class TestShortSqueezeDatabase:
         assert len(top_scores) >= 2
 
         # Verify data
-        gme_score = next((s for s in top_scores if s['ticker'] == 'GME'), None)
+        gme_score = next((s for s in top_scores if s["ticker"] == "GME"), None)
         assert gme_score is not None
-        assert gme_score['squeeze_score'] == 0.91
-        assert gme_score['alert_level'] == 'HIGH'
+        assert gme_score["squeeze_score"] == 0.91
+        assert gme_score["alert_level"] == "HIGH"
         print("✅ Deep scan metrics operations test passed")
 
     def test_alert_operations(self, db_session):
@@ -139,35 +140,31 @@ class TestShortSqueezeDatabase:
 
         # Create alerts
         alert_id_1 = service.create_alert(
-            ticker='AAPL',
+            ticker="AAPL",
             alert_level=AlertLevel.HIGH,
-            reason='High squeeze score with volume spike',
+            reason="High squeeze score with volume spike",
             squeeze_score=0.89,
-            cooldown_days=7
+            cooldown_days=7,
         )
         assert alert_id_1 is not None
 
         # Mark first alert as sent to activate cooldown
-        success = service.mark_alert_sent(alert_id_1, 'notification_123')
+        success = service.mark_alert_sent(alert_id_1, "notification_123")
         assert success is True
 
         # Test cooldown - should not create duplicate alert
         alert_id_2 = service.create_alert(
-            ticker='AAPL',
+            ticker="AAPL",
             alert_level=AlertLevel.HIGH,
-            reason='Another high squeeze score',
+            reason="Another high squeeze score",
             squeeze_score=0.91,
-            cooldown_days=7
+            cooldown_days=7,
         )
         assert alert_id_2 is None  # Should be blocked by cooldown
 
         # Test different ticker - should work
         alert_id_3 = service.create_alert(
-            ticker='MSFT',
-            alert_level=AlertLevel.HIGH,
-            reason='High squeeze score',
-            squeeze_score=0.87,
-            cooldown_days=7
+            ticker="MSFT", alert_level=AlertLevel.HIGH, reason="High squeeze score", squeeze_score=0.87, cooldown_days=7
         )
         assert alert_id_3 is not None
         print("✅ Alert operations test passed")
@@ -177,39 +174,39 @@ class TestShortSqueezeDatabase:
         service = ShortSqueezeService(db_session)
 
         # Add ad-hoc candidates
-        success_1 = service.add_adhoc_candidate('NVDA', 'Unusual options activity', ttl_days=7)
+        success_1 = service.add_adhoc_candidate("NVDA", "Unusual options activity", ttl_days=7)
         assert success_1 is True
 
-        success_2 = service.add_adhoc_candidate('AMD', 'High short interest reported', ttl_days=10)
+        success_2 = service.add_adhoc_candidate("AMD", "High short interest reported", ttl_days=10)
         assert success_2 is True
 
         # Get candidates for deep scan
         candidates = service.get_candidates_for_deep_scan()
-        assert 'NVDA' in candidates
-        assert 'AMD' in candidates
+        assert "NVDA" in candidates
+        assert "AMD" in candidates
 
         # Remove candidate
-        removed = service.remove_adhoc_candidate('AMD')
+        removed = service.remove_adhoc_candidate("AMD")
         assert removed is True
 
         # Verify removal
         updated_candidates = service.get_candidates_for_deep_scan()
-        assert 'AMD' not in updated_candidates or len([c for c in updated_candidates if c == 'AMD']) == 0
+        assert "AMD" not in updated_candidates or len([c for c in updated_candidates if c == "AMD"]) == 0
         print("✅ Ad-hoc candidate operations test passed")
 
     def test_data_model_conversions(self, db_session):
         """Test conversions between database models and business logic models."""
         # Create a screener snapshot with unique ticker
-        test_ticker = f'TEST{datetime.now().microsecond}'
+        test_ticker = f"TEST{datetime.now().microsecond}"
         snapshot = ScreenerSnapshot(
             ticker=test_ticker,
             run_date=date.today(),
-            short_interest_pct=Decimal('0.25'),
-            days_to_cover=Decimal('5.5'),
+            short_interest_pct=Decimal("0.25"),
+            days_to_cover=Decimal("5.5"),
             float_shares=1000000,
             avg_volume_14d=500000,
             market_cap=1000000000,
-            screener_score=Decimal('0.75')
+            screener_score=Decimal("0.75"),
         )
         db_session.add(snapshot)
         db_session.flush()
@@ -231,7 +228,7 @@ class TestShortSqueezeDatabase:
                 days_to_cover=5.0,
                 float_shares=1000000,
                 avg_volume_14d=500000,
-                market_cap=1000000000
+                market_cap=1000000000,
             )
 
         with pytest.raises(ValueError, match="Days to cover must be non-negative"):
@@ -240,7 +237,7 @@ class TestShortSqueezeDatabase:
                 days_to_cover=-1.0,  # Invalid
                 float_shares=1000000,
                 avg_volume_14d=500000,
-                market_cap=1000000000
+                market_cap=1000000000,
             )
         print("✅ Business logic validations test passed")
 
@@ -250,20 +247,20 @@ class TestShortSqueezeDatabase:
 
         # Get pipeline statistics
         stats = service.get_pipeline_statistics()
-        assert 'status' in stats
-        assert 'latest_screener_run' in stats
-        assert 'active_adhoc_candidates' in stats
+        assert "status" in stats
+        assert "latest_screener_run" in stats
+        assert "active_adhoc_candidates" in stats
 
         # Test cleanup (with 0 days to clean everything for testing)
         cleanup_stats = service.cleanup_old_data(days_to_keep=0)
-        assert 'snapshots_deleted' in cleanup_stats
-        assert 'metrics_deleted' in cleanup_stats
-        assert 'alerts_deleted' in cleanup_stats
+        assert "snapshots_deleted" in cleanup_stats
+        assert "metrics_deleted" in cleanup_stats
+        assert "alerts_deleted" in cleanup_stats
 
         # Verify cleanup stats are valid integers
-        assert isinstance(cleanup_stats['snapshots_deleted'], int)
-        assert isinstance(cleanup_stats['metrics_deleted'], int)
-        assert isinstance(cleanup_stats['alerts_deleted'], int)
+        assert isinstance(cleanup_stats["snapshots_deleted"], int)
+        assert isinstance(cleanup_stats["metrics_deleted"], int)
+        assert isinstance(cleanup_stats["alerts_deleted"], int)
         print("✅ Pipeline statistics and cleanup test passed")
 
     def test_error_handling(self, db_session):
@@ -271,15 +268,15 @@ class TestShortSqueezeDatabase:
         service = ShortSqueezeService(db_session)
 
         # Test invalid ticker for ad-hoc candidate
-        success = service.add_adhoc_candidate('', 'Empty ticker test')
+        success = service.add_adhoc_candidate("", "Empty ticker test")
         assert success is False
 
         # Test removing non-existent ad-hoc candidate
-        removed = service.remove_adhoc_candidate('NONEXISTENT')
+        removed = service.remove_adhoc_candidate("NONEXISTENT")
         assert removed is False
 
         # Test marking non-existent alert as sent
-        marked = service.mark_alert_sent(99999, 'fake_notification')
+        marked = service.mark_alert_sent(99999, "fake_notification")
         assert marked is False
         print("✅ Error handling test passed")
 

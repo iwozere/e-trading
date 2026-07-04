@@ -10,18 +10,17 @@ This module provides a comprehensive retry mechanism with:
 - Circuit breaker integration
 """
 
-import time
-import random
 import logging
-from typing import Callable, Optional, Dict, Any
+import random
+import time
 from functools import wraps
+from typing import Any, Callable, Dict
 
-from src.model.error_handling import RetryConfig, RetryStrategy
 from src.error_handling.exceptions import TradingException
+from src.model.error_handling import RetryConfig, RetryStrategy
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
-
 
 
 class RetryManager:
@@ -36,7 +35,7 @@ class RetryManager:
     - Integration with circuit breaker
     """
 
-    def __init__(self, config: Optional[RetryConfig] = None):
+    def __init__(self, config: RetryConfig | None = None):
         """
         Initialize retry manager.
 
@@ -45,18 +44,14 @@ class RetryManager:
         """
         self.config = config or RetryConfig()
         self.stats = {
-            'total_calls': 0,
-            'successful_calls': 0,
-            'failed_calls': 0,
-            'retry_attempts': 0,
-            'total_retry_time': 0.0
+            "total_calls": 0,
+            "successful_calls": 0,
+            "failed_calls": 0,
+            "retry_attempts": 0,
+            "total_retry_time": 0.0,
         }
 
-    def execute(self,
-                func: Callable,
-                *args,
-                context: Optional[Dict[str, Any]] = None,
-                **kwargs) -> Any:
+    def execute(self, func: Callable, *args, context: Dict[str, Any] | None = None, **kwargs) -> Any:
         """
         Execute function with retry logic.
 
@@ -76,7 +71,7 @@ class RetryManager:
         last_exception = None
         start_time = time.time()
 
-        self.stats['total_calls'] += 1
+        self.stats["total_calls"] += 1
 
         for attempt in range(1, self.config.max_attempts + 1):
             try:
@@ -88,7 +83,7 @@ class RetryManager:
                     raise ValueError(f"Function returned failure result: {result}")
 
                 # Success
-                self.stats['successful_calls'] += 1
+                self.stats["successful_calls"] += 1
                 if attempt > 1:
                     self._log_retry_success(attempt, context)
                 return result
@@ -98,15 +93,15 @@ class RetryManager:
 
                 # Check if we should retry this exception
                 if not self._should_retry(e):
-                    self.stats['failed_calls'] += 1
+                    self.stats["failed_calls"] += 1
                     raise e
 
                 # Only increment retry attempts if we're actually going to retry
-                self.stats['retry_attempts'] += 1
+                self.stats["retry_attempts"] += 1
 
                 # Check if we've exhausted retries
                 if attempt >= self.config.max_attempts:
-                    self.stats['failed_calls'] += 1
+                    self.stats["failed_calls"] += 1
                     self._log_final_failure(attempt, e, context)
                     raise e
 
@@ -120,7 +115,7 @@ class RetryManager:
                 time.sleep(delay)
 
         # This should never be reached, but just in case
-        self.stats['failed_calls'] += 1
+        self.stats["failed_calls"] += 1
         raise last_exception
 
     def _should_retry(self, exception: Exception) -> bool:
@@ -174,9 +169,16 @@ class RetryManager:
             return
 
         log_level = getattr(logging, self.config.log_level.upper(), logging.WARNING)
-        _logger.log(log_level,
-                   "Retry attempt %d/%d failed: %s: %s. Retrying in %.2fs. Context: %s",
-                   attempt, self.config.max_attempts, type(exception).__name__, exception, delay, context)
+        _logger.log(
+            log_level,
+            "Retry attempt %d/%d failed: %s: %s. Retrying in %.2fs. Context: %s",
+            attempt,
+            self.config.max_attempts,
+            type(exception).__name__,
+            exception,
+            delay,
+            context,
+        )
 
     def _log_retry_success(self, attempt: int, context: Dict[str, Any]):
         """Log successful retry."""
@@ -184,40 +186,40 @@ class RetryManager:
             return
 
         log_level = getattr(logging, self.config.log_level.upper(), logging.WARNING)
-        _logger.log(log_level,
-                   "Retry succeeded after %d attempts. Context: %s",
-                   attempt, context)
+        _logger.log(log_level, "Retry succeeded after %d attempts. Context: %s", attempt, context)
 
     def _log_final_failure(self, attempt: int, exception: Exception, context: Dict[str, Any]):
         """Log final failure after all retries."""
         if not self.config.log_retries:
             return
 
-        _logger.exception("All %d retry attempts failed. Final error: %s: %s. ", attempt, type(exception).__name__, exception)
+        _logger.exception(
+            "All %d retry attempts failed. Final error: %s: %s. ", attempt, type(exception).__name__, exception
+        )
 
     def get_stats(self) -> Dict[str, Any]:
         """Get retry statistics."""
         stats = self.stats.copy()
-        if stats['total_calls'] > 0:
-            stats['success_rate'] = stats['successful_calls'] / stats['total_calls']
-            stats['retry_rate'] = stats['retry_attempts'] / stats['total_calls']
+        if stats["total_calls"] > 0:
+            stats["success_rate"] = stats["successful_calls"] / stats["total_calls"]
+            stats["retry_rate"] = stats["retry_attempts"] / stats["total_calls"]
         else:
-            stats['success_rate'] = 0.0
-            stats['retry_rate'] = 0.0
+            stats["success_rate"] = 0.0
+            stats["retry_rate"] = 0.0
         return stats
 
     def reset_stats(self):
         """Reset retry statistics."""
         self.stats = {
-            'total_calls': 0,
-            'successful_calls': 0,
-            'failed_calls': 0,
-            'retry_attempts': 0,
-            'total_retry_time': 0.0
+            "total_calls": 0,
+            "successful_calls": 0,
+            "failed_calls": 0,
+            "retry_attempts": 0,
+            "total_retry_time": 0.0,
         }
 
 
-def retry(config: Optional[RetryConfig] = None):
+def retry(config: RetryConfig | None = None):
     """
     Decorator for adding retry functionality to functions.
 
@@ -230,6 +232,7 @@ def retry(config: Optional[RetryConfig] = None):
             # Function that may fail
             pass
     """
+
     def decorator(func: Callable) -> Callable:
         retry_manager = RetryManager(config)
 
@@ -248,11 +251,12 @@ def retry(config: Optional[RetryConfig] = None):
 def retry_on_network_error(max_attempts: int = 3, base_delay: float = 1.0):
     """Retry decorator specifically for network errors."""
     from src.error_handling.exceptions import NetworkException
+
     config = RetryConfig(
         max_attempts=max_attempts,
         base_delay=base_delay,
         strategy=RetryStrategy.EXPONENTIAL,
-        retry_on_exceptions=(NetworkException, ConnectionError, TimeoutError)
+        retry_on_exceptions=(NetworkException, ConnectionError, TimeoutError),
     )
     return retry(config)
 
@@ -260,11 +264,12 @@ def retry_on_network_error(max_attempts: int = 3, base_delay: float = 1.0):
 def retry_on_api_error(max_attempts: int = 3, base_delay: float = 2.0):
     """Retry decorator specifically for API errors."""
     from src.error_handling.exceptions import BrokerException, DataFeedException
+
     config = RetryConfig(
         max_attempts=max_attempts,
         base_delay=base_delay,
         strategy=RetryStrategy.EXPONENTIAL,
-        retry_on_exceptions=(BrokerException, DataFeedException)
+        retry_on_exceptions=(BrokerException, DataFeedException),
     )
     return retry(config)
 
@@ -272,10 +277,11 @@ def retry_on_api_error(max_attempts: int = 3, base_delay: float = 2.0):
 def retry_on_validation_error(max_attempts: int = 2, base_delay: float = 0.5):
     """Retry decorator for validation errors (usually don't retry much)."""
     from src.error_handling.exceptions import ValidationException
+
     config = RetryConfig(
         max_attempts=max_attempts,
         base_delay=base_delay,
         strategy=RetryStrategy.FIXED,
-        retry_on_exceptions=(ValidationException,)
+        retry_on_exceptions=(ValidationException,),
     )
     return retry(config)

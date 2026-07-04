@@ -8,15 +8,14 @@ This service orchestrates domain services and transforms data for web UI consump
 Follows proper architectural boundaries by only using domain services from src.data.db.services.
 """
 
-from typing import List, Dict, Any, Optional
-from pathlib import Path
 import sys
+from pathlib import Path
+from typing import Any, Dict, List
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.db.services.trading_service import trading_service
 from src.data.db.services.telegram_service import telegram_service
 from src.data.db.services.users_service import users_service
 from src.notification.logger import setup_logger
@@ -38,48 +37,48 @@ class TelegramAppService:
             users = users_service.list_telegram_users_dto()
 
             total_users = len(users)
-            verified_users = len([u for u in users if u.get('verified', False)])
-            approved_users = len([u for u in users if u.get('approved', False)])
-            pending_approvals = len([u for u in users if u.get('verified', False) and not u.get('approved', False)])
-            admin_users = len([u for u in users if u.get('is_admin', False)])
+            verified_users = len([u for u in users if u.get("verified", False)])
+            approved_users = len([u for u in users if u.get("approved", False)])
+            pending_approvals = len([u for u in users if u.get("verified", False) and not u.get("approved", False)])
+            admin_users = len([u for u in users if u.get("is_admin", False)])
 
             return {
                 "total_users": total_users,
                 "verified_users": verified_users,
                 "approved_users": approved_users,
                 "pending_approvals": pending_approvals,
-                "admin_users": admin_users
+                "admin_users": admin_users,
             }
         except Exception:
             _logger.exception("Error getting user stats:")
             raise
 
-    def get_users_list(self, filter_type: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_users_list(self, filter_type: str | None = None) -> List[Dict[str, Any]]:
         """Get filtered list of Telegram users."""
         try:
             users = users_service.list_telegram_users_dto()
 
             # Apply filtering
             if filter_type == "verified":
-                users = [u for u in users if u.get('verified', False)]
+                users = [u for u in users if u.get("verified", False)]
             elif filter_type == "approved":
-                users = [u for u in users if u.get('approved', False)]
+                users = [u for u in users if u.get("approved", False)]
             elif filter_type == "pending":
-                users = [u for u in users if u.get('verified', False) and not u.get('approved', False)]
+                users = [u for u in users if u.get("verified", False) and not u.get("approved", False)]
 
             # Transform to web UI format
             return [
                 {
-                    "telegram_user_id": str(user.get('telegram_user_id', '')),
-                    "email": user.get('email'),
-                    "verified": user.get('verified', False),
-                    "approved": user.get('approved', False),
-                    "language": str(user.get('language', 'en')) if user.get('language') is not None else 'en',
-                    "is_admin": user.get('is_admin', False),
-                    "max_alerts": user.get('max_alerts', 5),
-                    "max_schedules": user.get('max_schedules', 5),
-                    "created_at": user.get('created_at'),
-                    "updated_at": user.get('updated_at')
+                    "telegram_user_id": str(user.get("telegram_user_id", "")),
+                    "email": user.get("email"),
+                    "verified": user.get("verified", False),
+                    "approved": user.get("approved", False),
+                    "language": str(user.get("language", "en")) if user.get("language") is not None else "en",
+                    "is_admin": user.get("is_admin", False),
+                    "max_alerts": user.get("max_alerts", 5),
+                    "max_schedules": user.get("max_schedules", 5),
+                    "created_at": user.get("created_at"),
+                    "updated_at": user.get("updated_at"),
                 }
                 for user in users
             ]
@@ -105,7 +104,7 @@ class TelegramAppService:
             if not profile:
                 raise ValueError("User not found")
 
-            if not profile.get('verified', False):
+            if not profile.get("verified", False):
                 raise ValueError("User must be verified before approval")
 
             users_service.update_telegram_profile(telegram_user_id, approved=True)
@@ -119,11 +118,7 @@ class TelegramAppService:
         """Reset a Telegram user's email verification status."""
         try:
             # Reset verification and approval
-            users_service.update_telegram_profile(
-                telegram_user_id,
-                verified=False,
-                approved=False
-            )
+            users_service.update_telegram_profile(telegram_user_id, verified=False, approved=False)
             _logger.info("Reset email for Telegram user: %s", telegram_user_id)
             return {"message": f"Email reset for user {telegram_user_id} - user must re-verify"}
         except Exception:
@@ -141,15 +136,18 @@ class TelegramAppService:
                 "total_alerts": len(active_alerts),  # Simplified - only active alerts for now
                 "active_alerts": len(active_alerts),
                 "triggered_today": 0,  # Would need additional domain method
-                "rearm_cycles": 0      # Would need additional domain method
+                "rearm_cycles": 0,  # Would need additional domain method
             }
         except Exception:
             _logger.exception("Error getting alert stats:")
             raise
 
-    def get_alerts_list(self, filter_type: Optional[str] = None, page: int = 1, page_size: int = 50) -> List[Dict[str, Any]]:
+    def get_alerts_list(
+        self, filter_type: str | None = None, page: int = 1, page_size: int = 50
+    ) -> List[Dict[str, Any]]:
         """Get filtered and paginated list of alerts."""
         import json as _json
+
         try:
             alerts = telegram_service.get_active_alerts()
 
@@ -162,30 +160,34 @@ class TelegramAppService:
 
             result = []
             for alert in paginated_alerts:
-                task_params = getattr(alert, 'task_params', None) or {}
+                task_params = getattr(alert, "task_params", None) or {}
                 config_json_str = task_params.get("config_json", "{}")
                 try:
-                    config = _json.loads(config_json_str) if isinstance(config_json_str, str) else (config_json_str or {})
+                    config = (
+                        _json.loads(config_json_str) if isinstance(config_json_str, str) else (config_json_str or {})
+                    )
                 except (_json.JSONDecodeError, TypeError):
                     config = {}
-                result.append({
-                    "id": alert.id,
-                    "user_id": str(alert.user_id),
-                    "ticker": task_params.get("ticker", getattr(alert, 'target', '') or config.get("ticker", "")),
-                    "price": config.get("price"),
-                    "condition": config.get("condition", ""),
-                    "active": alert.enabled,
-                    "email": task_params.get("email", config.get("email", False)),
-                    "alert_type": config.get("alert_type"),
-                    "timeframe": config.get("timeframe"),
-                    "config_json": config_json_str,
-                    "alert_action": config.get("alert_action"),
-                    "re_arm_config": task_params.get("re_arm_config"),
-                    "is_armed": alert.enabled,
-                    "last_price": None,
-                    "last_triggered_at": None,
-                    "created": alert.created_at.isoformat() if getattr(alert, 'created_at', None) else None,
-                })
+                result.append(
+                    {
+                        "id": alert.id,
+                        "user_id": str(alert.user_id),
+                        "ticker": task_params.get("ticker", getattr(alert, "target", "") or config.get("ticker", "")),
+                        "price": config.get("price"),
+                        "condition": config.get("condition", ""),
+                        "active": alert.enabled,
+                        "email": task_params.get("email", config.get("email", False)),
+                        "alert_type": config.get("alert_type"),
+                        "timeframe": config.get("timeframe"),
+                        "config_json": config_json_str,
+                        "alert_action": config.get("alert_action"),
+                        "re_arm_config": task_params.get("re_arm_config"),
+                        "is_armed": alert.enabled,
+                        "last_price": None,
+                        "last_triggered_at": None,
+                        "created": alert.created_at.isoformat() if getattr(alert, "created_at", None) else None,
+                    }
+                )
             return result
         except Exception:
             _logger.exception("Error getting alerts list:")
@@ -198,7 +200,7 @@ class TelegramAppService:
             if not alert:
                 raise ValueError("Alert not found")
 
-            current_enabled = getattr(alert, 'enabled', True)
+            current_enabled = getattr(alert, "enabled", True)
             new_enabled = not current_enabled
             success = telegram_service.update_alert(alert_id, enabled=new_enabled)
 
@@ -232,11 +234,18 @@ class TelegramAppService:
             _logger.exception("Error deleting alert %d:", alert_id)
             raise
 
-    def create_alert(self, user_id: str, ticker: str, condition: str = "custom",
-                     config_json: Optional[str] = None, timeframe: Optional[str] = None,
-                     alert_type: Optional[str] = None) -> Dict[str, Any]:
+    def create_alert(
+        self,
+        user_id: str,
+        ticker: str,
+        condition: str = "custom",
+        config_json: str | None = None,
+        timeframe: str | None = None,
+        alert_type: str | None = None,
+    ) -> Dict[str, Any]:
         """Create a new alert from web UI."""
         import json as _json
+
         try:
             try:
                 raw_config = _json.loads(config_json) if config_json else {}
@@ -269,11 +278,18 @@ class TelegramAppService:
             _logger.exception("Error creating alert for user %s:", user_id)
             raise
 
-    def create_schedule(self, user_id: str, scheduled_time: str, ticker: str = "",
-                        config_json: Optional[str] = None, schedule_type: Optional[str] = None,
-                        list_type: Optional[str] = None) -> Dict[str, Any]:
+    def create_schedule(
+        self,
+        user_id: str,
+        scheduled_time: str,
+        ticker: str = "",
+        config_json: str | None = None,
+        schedule_type: str | None = None,
+        list_type: str | None = None,
+    ) -> Dict[str, Any]:
         """Create a new schedule from web UI."""
         import json as _json
+
         try:
             try:
                 raw_config = _json.loads(config_json) if config_json else {}
@@ -313,7 +329,7 @@ class TelegramAppService:
             if not schedule:
                 raise ValueError("Schedule not found")
 
-            current_enabled = schedule.get('active', True)
+            current_enabled = schedule.get("active", True)
             new_enabled = not current_enabled
             success = telegram_service.update_schedule(schedule_id, enabled=new_enabled)
             if not success:
@@ -355,14 +371,14 @@ class TelegramAppService:
             return {
                 "total_schedules": len(active_schedules),  # Only active schedules for now
                 "active_schedules": len(active_schedules),
-                "executed_today": 0,     # Would need additional domain method
-                "failed_executions": 0   # Would need additional domain method
+                "executed_today": 0,  # Would need additional domain method
+                "failed_executions": 0,  # Would need additional domain method
             }
         except Exception:
             _logger.exception("Error getting schedule stats:")
             raise
 
-    def get_schedules_list(self, filter_type: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_schedules_list(self, filter_type: str | None = None) -> List[Dict[str, Any]]:
         """Get filtered list of schedules."""
         try:
             # Get all active schedules from telegram_service
@@ -379,21 +395,21 @@ class TelegramAppService:
             # Transform to web UI format - schedules are now dictionaries from telegram_service
             return [
                 {
-                    "id": schedule.get('id'),
-                    "user_id": str(schedule.get('user_id', '')),
-                    "ticker": schedule.get('ticker', ''),
-                    "scheduled_time": schedule.get('scheduled_time', ''),
-                    "period": schedule.get('period'),
-                    "active": schedule.get('active', True),
-                    "email": schedule.get('email', False),
-                    "indicators": schedule.get('indicators'),
-                    "interval": schedule.get('interval'),
-                    "provider": schedule.get('provider'),
-                    "schedule_type": schedule.get('schedule_type'),
-                    "list_type": schedule.get('list_type'),
-                    "config_json": schedule.get('config_json'),
-                    "schedule_config": schedule.get('schedule_config'),
-                    "created": schedule.get('created')
+                    "id": schedule.get("id"),
+                    "user_id": str(schedule.get("user_id", "")),
+                    "ticker": schedule.get("ticker", ""),
+                    "scheduled_time": schedule.get("scheduled_time", ""),
+                    "period": schedule.get("period"),
+                    "active": schedule.get("active", True),
+                    "email": schedule.get("email", False),
+                    "indicators": schedule.get("indicators"),
+                    "interval": schedule.get("interval"),
+                    "provider": schedule.get("provider"),
+                    "schedule_type": schedule.get("schedule_type"),
+                    "list_type": schedule.get("list_type"),
+                    "config_json": schedule.get("config_json"),
+                    "schedule_config": schedule.get("schedule_config"),
+                    "created": schedule.get("created"),
                 }
                 for schedule in schedules
             ]
@@ -406,7 +422,7 @@ class TelegramAppService:
         try:
             # Get users for broadcast
             users = telegram_service.list_users()
-            approved_users = [u for u in users if u.get('approved', False)]
+            approved_users = [u for u in users if u.get("approved", False)]
 
             total_recipients = len(approved_users)
 
@@ -420,7 +436,7 @@ class TelegramAppService:
                 message=message,
                 sent_by="admin",  # TODO: Get actual user from context
                 success_count=successful_deliveries,
-                total_count=total_recipients
+                total_count=total_recipients,
             )
 
             _logger.info("Broadcast sent to %d users, logged with ID %d", total_recipients, broadcast_id)
@@ -430,7 +446,7 @@ class TelegramAppService:
                 "broadcast_id": str(broadcast_id),
                 "total_recipients": total_recipients,
                 "successful_deliveries": successful_deliveries,
-                "failed_deliveries": failed_deliveries
+                "failed_deliveries": failed_deliveries,
             }
         except Exception:
             _logger.exception("Error sending broadcast:")
@@ -456,17 +472,19 @@ class TelegramAppService:
             _logger.exception("Error getting broadcast stats:")
             raise
 
-    def get_audit_logs(self, limit: int = 100, offset: int = 0, user_id: Optional[str] = None,
-                      command: Optional[str] = None, success_only: Optional[bool] = None) -> List[Dict[str, Any]]:
+    def get_audit_logs(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        user_id: str | None = None,
+        command: str | None = None,
+        success_only: bool | None = None,
+    ) -> List[Dict[str, Any]]:
         """Get audit logs with filtering."""
         try:
             # Use telegram_service to get audit logs (already returns dictionaries)
             logs = telegram_service.get_all_command_audit(
-                limit=limit,
-                offset=offset,
-                user_id=user_id,
-                command=command,
-                success_only=success_only
+                limit=limit, offset=offset, user_id=user_id, command=command, success_only=success_only
             )
 
             # Data is already in dictionary format from telegram_service
@@ -491,16 +509,16 @@ class TelegramAppService:
             # Transform to web UI format (logs are already dictionaries from telegram_service)
             return [
                 {
-                    "id": log.get('id'),
-                    "telegram_user_id": log.get('telegram_user_id'),
-                    "command": log.get('command'),
-                    "full_message": log.get('full_message'),
-                    "is_registered_user": log.get('is_registered_user', False),
-                    "user_email": log.get('user_email'),
-                    "success": log.get('success', True),
-                    "error_message": log.get('error_message'),
-                    "response_time_ms": log.get('response_time_ms'),
-                    "created": log.get('created')  # Already in ISO format from telegram_service
+                    "id": log.get("id"),
+                    "telegram_user_id": log.get("telegram_user_id"),
+                    "command": log.get("command"),
+                    "full_message": log.get("full_message"),
+                    "is_registered_user": log.get("is_registered_user", False),
+                    "user_email": log.get("user_email"),
+                    "success": log.get("success", True),
+                    "error_message": log.get("error_message"),
+                    "response_time_ms": log.get("response_time_ms"),
+                    "created": log.get("created"),  # Already in ISO format from telegram_service
                 }
                 for log in logs
             ]

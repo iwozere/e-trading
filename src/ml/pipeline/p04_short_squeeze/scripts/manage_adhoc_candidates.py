@@ -48,19 +48,18 @@ Examples:
 """
 
 import argparse
-import sys
 import csv
-from pathlib import Path
+import sys
 from datetime import datetime
-from typing import Optional
+from pathlib import Path
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
-from src.ml.pipeline.p04_short_squeeze.data.adhoc_manager import AdHocManager
 from src.ml.pipeline.p04_short_squeeze.config.config_manager import ConfigManager
+from src.ml.pipeline.p04_short_squeeze.data.adhoc_manager import AdHocManager
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -75,10 +74,10 @@ class AdHocCandidateManager:
 
     def __init__(self):
         """Initialize the ad-hoc candidate manager."""
-        self.adhoc_manager: Optional[AdHocManager] = None
-        self.config_manager: Optional[ConfigManager] = None
+        self.adhoc_manager: AdHocManager | None = None
+        self.config_manager: ConfigManager | None = None
 
-    def setup_managers(self, config_path: Optional[str] = None) -> bool:
+    def setup_managers(self, config_path: str | None = None) -> bool:
         """
         Setup the ad-hoc manager and configuration.
 
@@ -103,7 +102,7 @@ class AdHocCandidateManager:
             _logger.exception("Failed to setup managers:")
             return False
 
-    def add_candidate(self, ticker: str, reason: str, ttl_days: Optional[int] = None) -> bool:
+    def add_candidate(self, ticker: str, reason: str, ttl_days: int | None = None) -> bool:
         """
         Add a new ad-hoc candidate.
 
@@ -206,7 +205,9 @@ class AdHocCandidateManager:
                     if candidate.expires_at:
                         days_left = (candidate.expires_at - datetime.now()).days
                         status = "⚠️ EXPIRING SOON" if days_left <= 3 else "✅ Active"
-                        print(f"    Expires: {candidate.expires_at.strftime('%Y-%m-%d %H:%M:%S')} ({days_left} days left) {status}")
+                        print(
+                            f"    Expires: {candidate.expires_at.strftime('%Y-%m-%d %H:%M:%S')} ({days_left} days left) {status}"
+                        )
 
                     if candidate.promoted_by_screener:
                         print("    🎯 Promoted by screener")
@@ -247,7 +248,9 @@ class AdHocCandidateManager:
             if candidate.expires_at:
                 days_left = (candidate.expires_at - datetime.now()).days
                 status_emoji = "⚠️" if days_left <= 3 else "✅"
-                print(f"Expires: {candidate.expires_at.strftime('%Y-%m-%d %H:%M:%S')} ({days_left} days left) {status_emoji}")
+                print(
+                    f"Expires: {candidate.expires_at.strftime('%Y-%m-%d %H:%M:%S')} ({days_left} days left) {status_emoji}"
+                )
 
             if candidate.promoted_by_screener:
                 print("🎯 Promoted by screener: Yes")
@@ -391,11 +394,11 @@ class AdHocCandidateManager:
             print(f"Loading candidates from CSV file: {csv_file}")
 
             candidates_data = []
-            with open(csv_path, 'r', encoding='utf-8') as f:
+            with open(csv_path, encoding="utf-8") as f:
                 reader = csv.DictReader(f)
 
                 # Validate required columns
-                required_columns = {'ticker', 'reason'}
+                required_columns = {"ticker", "reason"}
                 if not required_columns.issubset(reader.fieldnames):
                     print(f"❌ CSV file must contain columns: {required_columns}")
                     print(f"Found columns: {reader.fieldnames}")
@@ -404,9 +407,9 @@ class AdHocCandidateManager:
                 for row_num, row in enumerate(reader, 1):
                     try:
                         candidate_data = {
-                            'ticker': row['ticker'].strip(),
-                            'reason': row['reason'].strip(),
-                            'ttl_days': int(row.get('ttl_days', 0)) or None
+                            "ticker": row["ticker"].strip(),
+                            "reason": row["reason"].strip(),
+                            "ttl_days": int(row.get("ttl_days", 0)) or None,
                         }
 
                         # Validate data
@@ -467,7 +470,7 @@ class AdHocCandidateManager:
             print(f"Last Updated: {stats['last_updated'].strftime('%Y-%m-%d %H:%M:%S')}")
 
             # Show expiring candidates if any
-            if stats['expiring_within_3_days'] > 0:
+            if stats["expiring_within_3_days"] > 0:
                 print("\n⚠️ Candidates Expiring Soon:")
                 expiring = self.adhoc_manager.get_expiring_candidates(3)
                 for candidate in expiring:
@@ -501,13 +504,13 @@ class AdHocCandidateManager:
         """
         try:
             sample_data = [
-                {'ticker': 'AAPL', 'reason': 'High volume spike observed', 'ttl_days': 7},
-                {'ticker': 'TSLA', 'reason': 'Unusual options activity', 'ttl_days': 14},
-                {'ticker': 'GME', 'reason': 'Social media buzz increasing', 'ttl_days': 10},
+                {"ticker": "AAPL", "reason": "High volume spike observed", "ttl_days": 7},
+                {"ticker": "TSLA", "reason": "Unusual options activity", "ttl_days": 14},
+                {"ticker": "GME", "reason": "Social media buzz increasing", "ttl_days": 10},
             ]
 
-            with open(output_file, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=['ticker', 'reason', 'ttl_days'])
+            with open(output_file, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=["ticker", "reason", "ttl_days"])
                 writer.writeheader()
                 writer.writerows(sample_data)
 
@@ -525,71 +528,63 @@ def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Manage ad-hoc candidates for short squeeze detection",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__.split('Usage:')[1] if 'Usage:' in __doc__ else ""
+        epilog=__doc__.split("Usage:")[1] if "Usage:" in __doc__ else "",
     )
 
-    parser.add_argument(
-        '--config', '-c',
-        type=str,
-        help='Path to configuration file'
-    )
+    parser.add_argument("--config", "-c", type=str, help="Path to configuration file")
 
-    parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help='Enable verbose logging'
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
 
     # Create subparsers for commands
-    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Add command
-    add_parser = subparsers.add_parser('add', help='Add a new ad-hoc candidate')
-    add_parser.add_argument('ticker', help='Stock ticker symbol')
-    add_parser.add_argument('reason', help='Reason for adding the candidate')
-    add_parser.add_argument('--ttl', type=int, help='Time-to-live in days')
+    add_parser = subparsers.add_parser("add", help="Add a new ad-hoc candidate")
+    add_parser.add_argument("ticker", help="Stock ticker symbol")
+    add_parser.add_argument("reason", help="Reason for adding the candidate")
+    add_parser.add_argument("--ttl", type=int, help="Time-to-live in days")
 
     # Remove command
-    remove_parser = subparsers.add_parser('remove', help='Remove an ad-hoc candidate')
-    remove_parser.add_argument('ticker', help='Stock ticker symbol')
+    remove_parser = subparsers.add_parser("remove", help="Remove an ad-hoc candidate")
+    remove_parser.add_argument("ticker", help="Stock ticker symbol")
 
     # List command
-    list_parser = subparsers.add_parser('list', help='List active ad-hoc candidates')
-    list_parser.add_argument('--details', action='store_true', help='Show detailed information')
+    list_parser = subparsers.add_parser("list", help="List active ad-hoc candidates")
+    list_parser.add_argument("--details", action="store_true", help="Show detailed information")
 
     # Status command
-    status_parser = subparsers.add_parser('status', help='Show status of a specific candidate')
-    status_parser.add_argument('ticker', help='Stock ticker symbol')
+    status_parser = subparsers.add_parser("status", help="Show status of a specific candidate")
+    status_parser.add_argument("ticker", help="Stock ticker symbol")
 
     # Activate command
-    activate_parser = subparsers.add_parser('activate', help='Activate a candidate')
-    activate_parser.add_argument('ticker', help='Stock ticker symbol')
+    activate_parser = subparsers.add_parser("activate", help="Activate a candidate")
+    activate_parser.add_argument("ticker", help="Stock ticker symbol")
 
     # Deactivate command
-    deactivate_parser = subparsers.add_parser('deactivate', help='Deactivate a candidate')
-    deactivate_parser.add_argument('ticker', help='Stock ticker symbol')
+    deactivate_parser = subparsers.add_parser("deactivate", help="Deactivate a candidate")
+    deactivate_parser.add_argument("ticker", help="Stock ticker symbol")
 
     # Expire command
-    expire_parser = subparsers.add_parser('expire', help='Run expiration process')
+    expire_parser = subparsers.add_parser("expire", help="Run expiration process")
 
     # Extend command
-    extend_parser = subparsers.add_parser('extend', help='Extend TTL for a candidate')
-    extend_parser.add_argument('ticker', help='Stock ticker symbol')
-    extend_parser.add_argument('days', type=int, help='Additional days to extend')
+    extend_parser = subparsers.add_parser("extend", help="Extend TTL for a candidate")
+    extend_parser.add_argument("ticker", help="Stock ticker symbol")
+    extend_parser.add_argument("days", type=int, help="Additional days to extend")
 
     # Bulk-add command
-    bulk_add_parser = subparsers.add_parser('bulk-add', help='Add candidates from CSV file')
-    bulk_add_parser.add_argument('csv_file', help='Path to CSV file')
+    bulk_add_parser = subparsers.add_parser("bulk-add", help="Add candidates from CSV file")
+    bulk_add_parser.add_argument("csv_file", help="Path to CSV file")
 
     # Stats command
-    stats_parser = subparsers.add_parser('stats', help='Show statistics')
+    stats_parser = subparsers.add_parser("stats", help="Show statistics")
 
     # Cleanup command
-    cleanup_parser = subparsers.add_parser('cleanup', help='Clean up expired candidates')
+    cleanup_parser = subparsers.add_parser("cleanup", help="Clean up expired candidates")
 
     # Sample CSV command
-    sample_parser = subparsers.add_parser('sample-csv', help='Create sample CSV file')
-    sample_parser.add_argument('output_file', help='Output CSV file path')
+    sample_parser = subparsers.add_parser("sample-csv", help="Create sample CSV file")
+    sample_parser.add_argument("output_file", help="Output CSV file path")
 
     return parser
 
@@ -612,13 +607,14 @@ def main() -> int:
         # Setup logging
         if args.verbose:
             import logging
+
             logging.getLogger().setLevel(logging.DEBUG)
 
         # Initialize manager
         manager = AdHocCandidateManager()
 
         # Special case for sample-csv command (doesn't need database)
-        if args.command == 'sample-csv':
+        if args.command == "sample-csv":
             return 0 if manager.create_sample_csv(args.output_file) else 1
 
         # Setup managers for all other commands
@@ -628,37 +624,37 @@ def main() -> int:
         # Execute command
         success = False
 
-        if args.command == 'add':
+        if args.command == "add":
             success = manager.add_candidate(args.ticker, args.reason, args.ttl)
 
-        elif args.command == 'remove':
+        elif args.command == "remove":
             success = manager.remove_candidate(args.ticker)
 
-        elif args.command == 'list':
+        elif args.command == "list":
             success = manager.list_candidates(args.details)
 
-        elif args.command == 'status':
+        elif args.command == "status":
             success = manager.show_candidate_status(args.ticker)
 
-        elif args.command == 'activate':
+        elif args.command == "activate":
             success = manager.activate_candidate(args.ticker)
 
-        elif args.command == 'deactivate':
+        elif args.command == "deactivate":
             success = manager.deactivate_candidate(args.ticker)
 
-        elif args.command == 'expire':
+        elif args.command == "expire":
             success = manager.expire_candidates()
 
-        elif args.command == 'extend':
+        elif args.command == "extend":
             success = manager.extend_ttl(args.ticker, args.days)
 
-        elif args.command == 'bulk-add':
+        elif args.command == "bulk-add":
             success = manager.bulk_add_candidates(args.csv_file)
 
-        elif args.command == 'stats':
+        elif args.command == "stats":
             success = manager.show_statistics()
 
-        elif args.command == 'cleanup':
+        elif args.command == "cleanup":
             success = manager.cleanup_expired()
 
         else:

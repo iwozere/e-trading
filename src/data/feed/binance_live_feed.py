@@ -16,14 +16,14 @@ Classes:
 - BinanceLiveDataFeed: Live data feed for Binance
 """
 
-import time
-import json
 import asyncio
-import websockets
-from typing import Optional, Dict, Any
-from datetime import datetime, timedelta, timezone
+import json
+import time
+from datetime import UTC, datetime, timedelta
+from typing import Any, Dict
 
 import pandas as pd
+import websockets
 
 from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 from src.notification.logger import setup_logger
@@ -42,13 +42,15 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
     - Error handling and rate limiting
     """
 
-    def __init__(self,
-                 symbol: str,
-                 interval: str,
-                 api_key: Optional[str] = None,
-                 api_secret: Optional[str] = None,
-                 testnet: bool = False,
-                 **kwargs):
+    def __init__(
+        self,
+        symbol: str,
+        interval: str,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        testnet: bool = False,
+        **kwargs,
+    ):
         """
         Initialize Binance live data feed.
 
@@ -85,6 +87,7 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             try:
                 # Lazy import to avoid loading binance package at module import time
                 from binance.client import Client
+
                 self.client = Client(self.api_key, self.api_secret, testnet=self.testnet)
                 self._client_initialized = True
             except Exception as e:
@@ -104,20 +107,20 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
         """
         # Use string constants instead of Client constants to avoid early import
         interval_map = {
-            '1m': '1m',
-            '5m': '5m',
-            '15m': '15m',
-            '30m': '30m',
-            '1h': '1h',
-            '4h': '4h',
-            '1d': '1d',
+            "1m": "1m",
+            "5m": "5m",
+            "15m": "15m",
+            "30m": "30m",
+            "1h": "1h",
+            "4h": "4h",
+            "1d": "1d",
         }
-        return interval_map.get(interval, '1m')
+        return interval_map.get(interval, "1m")
 
     # Note: _load_historical_data() is now inherited from BaseLiveDataFeed
     # which uses DataManager for historical data loading. This ensures
     # consistent data access and caching across all live feeds.
-    def _load_historical_data_old(self) -> Optional[pd.DataFrame]:
+    def _load_historical_data_old(self) -> pd.DataFrame | None:
         """
         Load historical data from Binance REST API with proper pagination.
 
@@ -132,7 +135,7 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             interval_minutes = self._get_interval_minutes()
 
             # Use UTC time
-            end_dt = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+            end_dt = datetime.now(UTC).replace(tzinfo=UTC)
             start_dt = end_dt - timedelta(minutes=remaining * interval_minutes)
 
             all_rows = []
@@ -169,30 +172,43 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
                 return None
 
             # Convert to DataFrame
-            df = pd.DataFrame(all_rows, columns=[
-                'open_time','open','high','low','close','volume',
-                'close_time','quote_asset_volume','number_of_trades',
-                'taker_buy_base_asset_volume','taker_buy_quote_asset_volume','ignore'
-            ])
+            df = pd.DataFrame(
+                all_rows,
+                columns=[
+                    "open_time",
+                    "open",
+                    "high",
+                    "low",
+                    "close",
+                    "volume",
+                    "close_time",
+                    "quote_asset_volume",
+                    "number_of_trades",
+                    "taker_buy_base_asset_volume",
+                    "taker_buy_quote_asset_volume",
+                    "ignore",
+                ],
+            )
 
             # Use open_time for index (consistent with WS) OR switch to close_time consciously
-            df['datetime'] = pd.to_datetime(df['open_time'], unit='ms', utc=True)
-            df.set_index('datetime', inplace=True)
+            df["datetime"] = pd.to_datetime(df["open_time"], unit="ms", utc=True)
+            df.set_index("datetime", inplace=True)
 
             # Convert price columns to float
-            for col in ['open','high','low','close','volume']:
+            for col in ["open", "high", "low", "close", "volume"]:
                 df[col] = df[col].astype(float)
 
             # Select only required columns
-            df = df[['open','high','low','close','volume']]
+            df = df[["open", "high", "low", "close", "volume"]]
 
             # Validate data quality
-            from src.data.utils.validation import validate_ohlcv_data, get_data_quality_score
+            from src.data.utils.validation import get_data_quality_score, validate_ohlcv_data
+
             is_valid, errors = validate_ohlcv_data(df)
             if not is_valid:
                 _logger.warning("Historical data validation failed for %s: %s", self.symbol, errors)
                 quality_score = get_data_quality_score(df)
-                _logger.info("Historical data quality score: %.2f", quality_score['quality_score'])
+                _logger.info("Historical data quality score: %.2f", quality_score["quality_score"])
 
             _logger.info("Loaded %d historical bars for %s", len(df), self.symbol)
             return df
@@ -201,6 +217,7 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             # Check if it's a Binance API exception (lazy import)
             try:
                 from binance.exceptions import BinanceAPIException
+
                 if isinstance(e, BinanceAPIException):
                     _logger.exception("Binance API error loading historical data: %s", e)
                 else:
@@ -220,13 +237,13 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             Interval duration in minutes
         """
         interval_map = {
-            '1m': 1,
-            '5m': 5,
-            '15m': 15,
-            '30m': 30,
-            '1h': 60,
-            '4h': 240,
-            '1d': 1440,
+            "1m": 1,
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60,
+            "4h": 240,
+            "1d": 1440,
         }
         return interval_map.get(self.interval, 1)
 
@@ -244,11 +261,9 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
 
             # Start async event loop in a separate thread
             import threading
+
             self.loop = asyncio.new_event_loop()
-            self.ws_thread = threading.Thread(
-                target=self._run_websocket_loop,
-                daemon=True
-            )
+            self.ws_thread = threading.Thread(target=self._run_websocket_loop, daemon=True)
             self.ws_thread.start()
 
             # Wait briefly but also check repeatedly for connection
@@ -271,10 +286,7 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
         """Handle WebSocket connection and messages."""
         try:
             async with websockets.connect(
-                self.ws_url,
-                ping_interval=20,
-                ping_timeout=10,
-                close_timeout=10
+                self.ws_url, ping_interval=20, ping_timeout=10, close_timeout=10
             ) as websocket:
                 self.ws = websocket
                 self.is_connected = True
@@ -304,23 +316,29 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             data = json.loads(message)
 
             # Extract kline data
-            if 'k' in data:
-                kline = data['k']
+            if "k" in data:
+                kline = data["k"]
 
                 # Check if this is a completed kline
-                if kline['x']:  # kline is closed
+                if kline["x"]:  # kline is closed
                     # Use UTC time for consistency
-                    ts = pd.to_datetime(kline['t'], unit='ms', utc=True)
-                    new_data = pd.DataFrame([{
-                        'open': float(kline['o']),
-                        'high': float(kline['h']),
-                        'low': float(kline['l']),
-                        'close': float(kline['c']),
-                        'volume': float(kline['v'])
-                    }], index=[ts])
+                    ts = pd.to_datetime(kline["t"], unit="ms", utc=True)
+                    new_data = pd.DataFrame(
+                        [
+                            {
+                                "open": float(kline["o"]),
+                                "high": float(kline["h"]),
+                                "low": float(kline["l"]),
+                                "close": float(kline["c"]),
+                                "volume": float(kline["v"]),
+                            }
+                        ],
+                        index=[ts],
+                    )
 
                     # Validate new data before processing
                     from src.data.utils.validation import validate_ohlcv_data
+
                     is_valid, errors = validate_ohlcv_data(new_data)
                     if not is_valid:
                         _logger.warning("WebSocket data validation failed: %s", errors)
@@ -332,7 +350,7 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
         except Exception as e:
             _logger.exception("Error processing WebSocket message: %s", e)
 
-    def _get_latest_data(self) -> Optional[pd.DataFrame]:
+    def _get_latest_data(self) -> pd.DataFrame | None:
         """
         Get latest data from Binance.
         For WebSocket feeds, this is handled by the WebSocket callback.
@@ -351,11 +369,13 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             Dictionary with status information
         """
         status = super().get_status()
-        status.update({
-            'ws_connected': self.ws is not None and self.ws.sock is not None and self.ws.sock.connected,
-            'ws_url': self.ws_url,
-            'binance_interval': self.binance_interval,
-            'testnet': self.testnet,
-            'data_source': 'Binance'  # Override the base class data_source
-        })
+        status.update(
+            {
+                "ws_connected": self.ws is not None and self.ws.sock is not None and self.ws.sock.connected,
+                "ws_url": self.ws_url,
+                "binance_interval": self.binance_interval,
+                "testnet": self.testnet,
+                "data_source": "Binance",  # Override the base class data_source
+            }
+        )
         return status

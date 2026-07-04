@@ -5,18 +5,14 @@ SQLAlchemy models for the trading system.
 Includes BotInstance, Trade, Position, and PerformanceMetric models.
 """
 
-
 from __future__ import annotations
-from typing import Optional
-from sqlalchemy import (
-    Integer, String, DateTime, Text, Numeric, ForeignKey, func, Index,
-    event
-)
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Numeric, String, Text, event, func
 from sqlalchemy.exc import IntegrityError
-from src.data.db.core.json_types import JsonType
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.data.db.core.base import Base
+from src.data.db.core.json_types import JsonType
 
 
 class BotInstance(Base):
@@ -160,16 +156,16 @@ class PerformanceMetric(Base):
         return f"<PerformanceMetric(id={self.id}, bot_id={self.bot_id}, symbol='{self.symbol}')>"
 
 
-@event.listens_for(BotInstance, 'before_insert')
+@event.listens_for(BotInstance, "before_insert")
 def check_config_required(mapper, connection, instance):
-        """Ensure config is provided before insert.
+    """Ensure config is provided before insert.
 
-        Note:
-        - Do NOT call connection.rollback() inside event listeners. Doing so
-            will deassociate the surrounding Session transaction and cause
-            teardown warnings in tests (and can surprise callers elsewhere).
-            Raise an exception instead and let the Session manage rollback.
-        """
-        if not hasattr(instance, 'config') or instance.config is None:
-                # Let the Session handle rollback when this exception bubbles up.
-                raise IntegrityError("Config field is required", None, None)
+    Note:
+    - Do NOT call connection.rollback() inside event listeners. Doing so
+        will deassociate the surrounding Session transaction and cause
+        teardown warnings in tests (and can surprise callers elsewhere).
+        Raise an exception instead and let the Session manage rollback.
+    """
+    if not hasattr(instance, "config") or instance.config is None:
+        # Let the Session handle rollback when this exception bubbles up.
+        raise IntegrityError("Config field is required", None, None)

@@ -5,10 +5,10 @@ Consolidates analytics functionality for both notifications and trading data.
 Provides a unified interface for analytics across all system domains.
 """
 
-from typing import Dict, Any, List, Optional
-from datetime import datetime, timezone
-from pathlib import Path
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Dict, List
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -40,6 +40,7 @@ class UnifiedAnalyticsService:
         if self._notification_analytics is None:
             try:
                 from src.notification.service.analytics import notification_analytics
+
                 self._notification_analytics = notification_analytics
                 self._logger.info("Notification analytics initialized")
             except Exception:
@@ -60,10 +61,7 @@ class UnifiedAnalyticsService:
     # Notification Analytics Methods
 
     async def get_notification_delivery_rates(
-        self,
-        channel: Optional[str] = None,
-        user_id: Optional[str] = None,
-        days: int = 30
+        self, channel: str | None = None, user_id: str | None = None, days: int = 30
     ) -> Dict[str, Any]:
         """
         Get notification delivery rate analytics.
@@ -78,20 +76,12 @@ class UnifiedAnalyticsService:
         """
         try:
             analytics = self._get_notification_analytics()
-            return await analytics.get_delivery_rates(
-                channel=channel,
-                user_id=user_id,
-                days=days
-            )
+            return await analytics.get_delivery_rates(channel=channel, user_id=user_id, days=days)
         except Exception:
             self._logger.exception("Failed to get notification delivery rates:")
             raise
 
-    async def get_notification_response_times(
-        self,
-        channel: Optional[str] = None,
-        days: int = 30
-    ) -> Dict[str, Any]:
+    async def get_notification_response_times(self, channel: str | None = None, days: int = 30) -> Dict[str, Any]:
         """
         Get notification response time analytics.
 
@@ -104,19 +94,13 @@ class UnifiedAnalyticsService:
         """
         try:
             analytics = self._get_notification_analytics()
-            return await analytics.get_response_time_analysis(
-                channel=channel,
-                days=days
-            )
+            return await analytics.get_response_time_analysis(channel=channel, days=days)
         except Exception:
             self._logger.exception("Failed to get notification response times:")
             raise
 
     async def get_notification_trends(
-        self,
-        metric: str = "success_rate",
-        channel: Optional[str] = None,
-        days: int = 30
+        self, metric: str = "success_rate", channel: str | None = None, days: int = 30
     ) -> Dict[str, Any]:
         """
         Get notification trend analysis.
@@ -131,21 +115,14 @@ class UnifiedAnalyticsService:
         """
         try:
             analytics = self._get_notification_analytics()
-            trend_analysis = await analytics.get_trend_analysis(
-                metric=metric,
-                days=days,
-                channel=channel
-            )
+            trend_analysis = await analytics.get_trend_analysis(metric=metric, days=days, channel=channel)
             return trend_analysis.to_dict()
         except Exception:
             self._logger.exception("Failed to get notification trends:")
             raise
 
     async def get_notification_aggregated_stats(
-        self,
-        granularity: str = "daily",
-        channel: Optional[str] = None,
-        days: int = 30
+        self, granularity: str = "daily", channel: str | None = None, days: int = 30
     ) -> Dict[str, Any]:
         """
         Get aggregated notification statistics.
@@ -164,18 +141,12 @@ class UnifiedAnalyticsService:
             analytics = self._get_notification_analytics()
             granularity_enum = TimeGranularity(granularity)
 
-            return await analytics.get_aggregated_statistics(
-                granularity=granularity_enum,
-                days=days,
-                channel=channel
-            )
+            return await analytics.get_aggregated_statistics(granularity=granularity_enum, days=days, channel=channel)
         except Exception:
             self._logger.exception("Failed to get notification aggregated stats:")
             raise
 
-    async def get_notification_channel_comparison(
-        self, days: int = 30
-    ) -> Dict[str, Any]:
+    async def get_notification_channel_comparison(self, days: int = 30) -> Dict[str, Any]:
         """
         Get notification channel performance comparison.
 
@@ -195,10 +166,7 @@ class UnifiedAnalyticsService:
     # Trading Analytics Methods (Future Implementation)
 
     async def get_trading_performance_analytics(
-        self,
-        strategy_id: Optional[str] = None,
-        symbol: Optional[str] = None,
-        days: int = 30
+        self, strategy_id: str | None = None, symbol: str | None = None, days: int = 30
     ) -> Dict[str, Any]:
         """
         Get trading performance analytics (future implementation).
@@ -220,13 +188,11 @@ class UnifiedAnalyticsService:
                 "get_notification_response_times",
                 "get_notification_trends",
                 "get_notification_aggregated_stats",
-                "get_notification_channel_comparison"
-            ]
+                "get_notification_channel_comparison",
+            ],
         }
 
-    async def get_strategy_performance_comparison(
-        self, days: int = 30
-    ) -> Dict[str, Any]:
+    async def get_strategy_performance_comparison(self, days: int = 30) -> Dict[str, Any]:
         """
         Get strategy performance comparison (future implementation).
 
@@ -240,14 +206,12 @@ class UnifiedAnalyticsService:
         self._logger.warning("Strategy analytics not yet implemented")
         return {
             "message": "Strategy analytics not yet implemented",
-            "note": "This will be implemented as part of trading analytics consolidation"
+            "note": "This will be implemented as part of trading analytics consolidation",
         }
 
     # Cross-Domain Analytics Methods
 
-    async def get_unified_dashboard_data(
-        self, days: int = 30
-    ) -> Dict[str, Any]:
+    async def get_unified_dashboard_data(self, days: int = 30) -> Dict[str, Any]:
         """
         Get unified dashboard data combining notifications and trading analytics.
 
@@ -264,29 +228,23 @@ class UnifiedAnalyticsService:
                 notification_data = {
                     "delivery_rates": await self.get_notification_delivery_rates(days=days),
                     "channel_comparison": await self.get_notification_channel_comparison(days=days),
-                    "success_trend": await self.get_notification_trends(
-                        metric="success_rate", days=days
-                    )
+                    "success_trend": await self.get_notification_trends(metric="success_rate", days=days),
                 }
             except Exception as e:
                 self._logger.exception("Failed to get notification data for dashboard:")
                 notification_data = {"error": str(e)}
 
             # Get trading analytics (future)
-            trading_data = {
-                "message": "Trading analytics not yet implemented"
-            }
+            trading_data = {"message": "Trading analytics not yet implemented"}
 
             return {
                 "period_days": days,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "notifications": notification_data,
                 "trading": trading_data,
                 "cross_domain_insights": {
-                    "total_system_health": self._calculate_system_health_score(
-                        notification_data, trading_data
-                    )
-                }
+                    "total_system_health": self._calculate_system_health_score(notification_data, trading_data)
+                },
             }
 
         except Exception:
@@ -294,10 +252,7 @@ class UnifiedAnalyticsService:
             raise
 
     async def get_correlation_analysis(
-        self,
-        notification_metric: str = "success_rate",
-        trading_metric: str = "win_rate",
-        days: int = 30
+        self, notification_metric: str = "success_rate", trading_metric: str = "win_rate", days: int = 30
     ) -> Dict[str, Any]:
         """
         Analyze correlations between notification and trading metrics (future implementation).
@@ -317,8 +272,8 @@ class UnifiedAnalyticsService:
             "requested_analysis": {
                 "notification_metric": notification_metric,
                 "trading_metric": trading_metric,
-                "period_days": days
-            }
+                "period_days": days,
+            },
         }
 
     # Helper Methods
@@ -351,10 +306,7 @@ class UnifiedAnalyticsService:
             notification_weight = 0.4
             trading_weight = 0.6  # Trading is more critical for system health
 
-            overall_score = (
-                notification_score * notification_weight +
-                trading_score * trading_weight
-            )
+            overall_score = notification_score * notification_weight + trading_score * trading_weight
 
             # Determine health status
             if overall_score >= 0.8:
@@ -372,23 +324,16 @@ class UnifiedAnalyticsService:
                 "breakdown": {
                     "notification_score": notification_score,
                     "trading_score": trading_score,
-                    "weights": {
-                        "notifications": notification_weight,
-                        "trading": trading_weight
-                    }
+                    "weights": {"notifications": notification_weight, "trading": trading_weight},
                 },
                 "recommendations": self._generate_health_recommendations(
                     overall_score, notification_score, trading_score
-                )
+                ),
             }
 
         except Exception as e:
             self._logger.exception("Failed to calculate system health score:")
-            return {
-                "overall_score": 0.0,
-                "health_status": "unknown",
-                "error": str(e)
-            }
+            return {"overall_score": 0.0, "health_status": "unknown", "error": str(e)}
 
     def _generate_health_recommendations(
         self, overall_score: float, notification_score: float, trading_score: float
@@ -438,25 +383,19 @@ class UnifiedAnalyticsService:
                     "get_notification_response_times",
                     "get_notification_trends",
                     "get_notification_aggregated_stats",
-                    "get_notification_channel_comparison"
-                ]
+                    "get_notification_channel_comparison",
+                ],
             },
             "trading_analytics": {
                 "available": False,
-                "methods": [
-                    "get_trading_performance_analytics",
-                    "get_strategy_performance_comparison"
-                ],
-                "note": "Trading analytics will be implemented in future updates"
+                "methods": ["get_trading_performance_analytics", "get_strategy_performance_comparison"],
+                "note": "Trading analytics will be implemented in future updates",
             },
             "cross_domain_analytics": {
                 "available": "partial",
-                "methods": [
-                    "get_unified_dashboard_data",
-                    "get_correlation_analysis"
-                ],
-                "note": "Cross-domain analytics available for notifications only"
-            }
+                "methods": ["get_unified_dashboard_data", "get_correlation_analysis"],
+                "note": "Cross-domain analytics available for notifications only",
+            },
         }
 
 

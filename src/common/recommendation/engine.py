@@ -7,13 +7,11 @@ all recommendation logic for both technical and fundamental indicators.
 
 from typing import Dict, Tuple
 
-from .types import (
-    Recommendation, RecommendationType, IndicatorCategory,
-    IndicatorSet, CompositeRecommendation
-)
-from .technical_rules import TechnicalRecommendationRules
-from .fundamental_rules import FundamentalRecommendationRules
 from src.notification.logger import setup_logger
+
+from .fundamental_rules import FundamentalRecommendationRules
+from .technical_rules import TechnicalRecommendationRules
+from .types import CompositeRecommendation, IndicatorCategory, IndicatorSet, Recommendation, RecommendationType
 
 _logger = setup_logger(__name__)
 
@@ -41,8 +39,7 @@ class RecommendationEngine:
         """
         if abs(technical_weight + fundamental_weight - 1.0) > 1e-9:
             raise ValueError(
-                f"technical_weight ({technical_weight}) + fundamental_weight "
-                f"({fundamental_weight}) must equal 1.0"
+                f"technical_weight ({technical_weight}) + fundamental_weight ({fundamental_weight}) must equal 1.0"
             )
         self.technical_weight = technical_weight
         self.fundamental_weight = fundamental_weight
@@ -119,11 +116,7 @@ class RecommendationEngine:
                 category = IndicatorCategory.TECHNICAL
 
             return Recommendation(
-                recommendation=rec_type,
-                confidence=confidence,
-                reason=reason,
-                threshold_used=value,
-                context=context
+                recommendation=rec_type, confidence=confidence, reason=reason, threshold_used=value, context=context
             )
 
         except Exception as e:
@@ -133,7 +126,7 @@ class RecommendationEngine:
                 confidence=0.0,
                 reason=f"Error calculating recommendation: {str(e)}",
                 threshold_used=value,
-                context=context
+                context=context,
             )
 
     def get_legacy_recommendation(self, indicator: str, value: float, context: Dict = None) -> Tuple[str, str]:
@@ -171,7 +164,7 @@ class RecommendationEngine:
                     recommendation=RecommendationType.HOLD,
                     confidence=0.0,
                     reasoning="No indicators available",
-                    contributing_indicators=[]
+                    contributing_indicators=[],
                 )
 
             technical_scores = []
@@ -182,7 +175,10 @@ class RecommendationEngine:
                 if indicator.recommendation.recommendation in [RecommendationType.STRONG_BUY, RecommendationType.BUY]:
                     score = indicator.recommendation.confidence
                     contributing_indicators.append(name)
-                elif indicator.recommendation.recommendation in [RecommendationType.STRONG_SELL, RecommendationType.SELL]:
+                elif indicator.recommendation.recommendation in [
+                    RecommendationType.STRONG_SELL,
+                    RecommendationType.SELL,
+                ]:
                     score = -indicator.recommendation.confidence
                     contributing_indicators.append(name)
                 else:
@@ -195,10 +191,7 @@ class RecommendationEngine:
 
             technical_score = sum(technical_scores) / len(technical_scores) if technical_scores else 0
             fundamental_score = sum(fundamental_scores) / len(fundamental_scores) if fundamental_scores else 0
-            composite_score = (
-                technical_score * self.technical_weight
-                + fundamental_score * self.fundamental_weight
-            )
+            composite_score = technical_score * self.technical_weight + fundamental_score * self.fundamental_weight
 
             if composite_score >= 0.3:
                 recommendation = RecommendationType.STRONG_BUY
@@ -223,7 +216,7 @@ class RecommendationEngine:
                 contributing_indicators=contributing_indicators,
                 technical_score=technical_score,
                 fundamental_score=fundamental_score,
-                composite_score=composite_score
+                composite_score=composite_score,
             )
 
         except Exception as e:
@@ -232,51 +225,53 @@ class RecommendationEngine:
                 recommendation=RecommendationType.HOLD,
                 confidence=0.0,
                 reasoning=f"Error calculating composite recommendation: {str(e)}",
-                contributing_indicators=[]
+                contributing_indicators=[],
             )
 
-    def _get_bollinger_bands_recommendation(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+    def _get_bollinger_bands_recommendation(
+        self, value: float, context: Dict = None
+    ) -> Tuple[RecommendationType, float, str]:
         """Wrapper for Bollinger Bands recommendation."""
-        if context and 'current_price' in context and 'bb_upper' in context and 'bb_lower' in context:
+        if context and "current_price" in context and "bb_upper" in context and "bb_lower" in context:
             return self.technical_rules.get_bollinger_recommendation(
-                context['current_price'], context['bb_upper'], value, context['bb_lower']
+                context["current_price"], context["bb_upper"], value, context["bb_lower"]
             )
         else:
             return RecommendationType.HOLD, 0.5, "Insufficient context for Bollinger Bands"
 
     def _get_macd_recommendation(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
         """Wrapper for MACD recommendation."""
-        if context and 'macd_signal' in context and 'macd_histogram' in context:
+        if context and "macd_signal" in context and "macd_histogram" in context:
             return self.technical_rules.get_macd_recommendation(
-                value, context['macd_signal'], context['macd_histogram']
+                value, context["macd_signal"], context["macd_histogram"]
             )
-        elif context and 'macd_signal' in context and 'macd_hist' in context:
-            return self.technical_rules.get_macd_recommendation(
-                value, context['macd_signal'], context['macd_hist']
-            )
+        elif context and "macd_signal" in context and "macd_hist" in context:
+            return self.technical_rules.get_macd_recommendation(value, context["macd_signal"], context["macd_hist"])
         else:
             return RecommendationType.HOLD, 0.5, "Insufficient context for MACD"
 
-    def _get_stochastic_recommendation(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+    def _get_stochastic_recommendation(
+        self, value: float, context: Dict = None
+    ) -> Tuple[RecommendationType, float, str]:
         """Wrapper for Stochastic recommendation."""
-        if context and 'stoch_d' in context:
-            return self.technical_rules.get_stochastic_recommendation(value, context['stoch_d'])
+        if context and "stoch_d" in context:
+            return self.technical_rules.get_stochastic_recommendation(value, context["stoch_d"])
         else:
             return RecommendationType.HOLD, 0.5, "Insufficient context for Stochastic"
 
     def _get_adx_recommendation(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
         """Wrapper for ADX recommendation."""
-        if context and 'plus_di' in context and 'minus_di' in context:
-            return self.technical_rules.get_adx_recommendation(
-                value, context['plus_di'], context['minus_di']
-            )
+        if context and "plus_di" in context and "minus_di" in context:
+            return self.technical_rules.get_adx_recommendation(value, context["plus_di"], context["minus_di"])
         else:
             return RecommendationType.HOLD, 0.5, "Insufficient context for ADX"
 
-    def _get_sma_recommendation_wrapper(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+    def _get_sma_recommendation_wrapper(
+        self, value: float, context: Dict = None
+    ) -> Tuple[RecommendationType, float, str]:
         """Wrapper for SMA recommendation."""
-        if context and 'current_price' in context:
-            return self.technical_rules.get_sma_recommendation(context['current_price'], value, context)
+        if context and "current_price" in context:
+            return self.technical_rules.get_sma_recommendation(context["current_price"], value, context)
         else:
             return RecommendationType.HOLD, 0.5, "Insufficient context for SMA"
 
@@ -284,11 +279,15 @@ class RecommendationEngine:
         """Wrapper for RSI recommendation."""
         return TechnicalRecommendationRules.get_rsi_recommendation(value)
 
-    def _get_cci_recommendation_wrapper(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+    def _get_cci_recommendation_wrapper(
+        self, value: float, context: Dict = None
+    ) -> Tuple[RecommendationType, float, str]:
         """Wrapper for CCI recommendation."""
         return TechnicalRecommendationRules.get_cci_recommendation(value)
 
-    def _get_mfi_recommendation_wrapper(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+    def _get_mfi_recommendation_wrapper(
+        self, value: float, context: Dict = None
+    ) -> Tuple[RecommendationType, float, str]:
         """Wrapper for MFI recommendation."""
         return TechnicalRecommendationRules.get_mfi_recommendation(value)
 
@@ -304,7 +303,9 @@ class RecommendationEngine:
         """Get recommendation for Directional Indicators (PLUS_DI, MINUS_DI)."""
         return TechnicalRecommendationRules.get_di_recommendation(value)
 
-    def _get_williams_r_recommendation(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+    def _get_williams_r_recommendation(
+        self, value: float, context: Dict = None
+    ) -> Tuple[RecommendationType, float, str]:
         """Get recommendation for Williams %R."""
         return TechnicalRecommendationRules.get_williams_r_recommendation(value)
 

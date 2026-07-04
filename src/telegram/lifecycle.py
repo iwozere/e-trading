@@ -5,22 +5,22 @@ All mutable state is stored in `src.telegram.screener.business_logic` via
 set_service_instances / get_service_instances so that command handlers in
 every sub-module can reach the same live objects without circular imports.
 """
+
 import os
-from typing import Optional, Tuple
+from typing import Tuple
 
-from src.notification.service.client import NotificationServiceClient
-from src.notification.logger import setup_logger
 from src.indicators.service import IndicatorService
-
+from src.notification.logger import setup_logger
+from src.notification.service.client import NotificationServiceClient
 
 _logger = setup_logger("telegram_screener_bot")
 
 # ─── Notification client (lazy) ──────────────────────────────────────────────
 
-_notification_client: Optional[NotificationServiceClient] = None
+_notification_client: NotificationServiceClient | None = None
 
 
-async def get_notification_client() -> Optional[NotificationServiceClient]:
+async def get_notification_client() -> NotificationServiceClient | None:
     """Lazily initialise the notification service client."""
     global _notification_client
 
@@ -63,6 +63,7 @@ def get_service_instances() -> Tuple:
 
 # ─── Initialisation ──────────────────────────────────────────────────────────
 
+
 async def initialize_services() -> bool:
     """
     Create and wire all service dependencies into the business logic layer.
@@ -81,6 +82,7 @@ async def initialize_services() -> bool:
             from src.data.db.services.telegram_service import (
                 telegram_service as telegram_service_instance,
             )
+
             required_methods = ["get_user_status", "set_user_limit"]
             for method in required_methods:
                 if not hasattr(telegram_service_instance, method):
@@ -133,6 +135,7 @@ async def initialize_services() -> bool:
 
 # ─── Health checks ───────────────────────────────────────────────────────────
 
+
 async def perform_service_health_checks() -> bool:
     """Run all service health checks. Returns True only if all pass."""
     try:
@@ -180,6 +183,7 @@ async def check_indicator_service_health() -> bool:
                 _logger.error("IndicatorService missing adapter: %s", name)
                 return False
         from src.indicators.registry import INDICATOR_META
+
         if not INDICATOR_META:
             _logger.error("No indicator metadata available")
             return False

@@ -13,12 +13,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 import json
+
+from src.data.db.services.trading_service import get_bot_configuration_schema, trading_service
 from src.trading.services.bot_config_validator import (
     BotConfigValidator,
     validate_bot_config_json,
-    validate_database_bot_record
+    validate_database_bot_record,
 )
-from src.data.db.services.trading_service import trading_service, get_bot_configuration_schema
 
 
 class TestBotConfigValidator:
@@ -31,41 +32,18 @@ class TestBotConfigValidator:
             "name": "Test Bot",
             "enabled": True,
             "symbol": "BTCUSDT",
-            "broker": {
-                "type": "binance",
-                "trading_mode": "paper",
-                "name": "test_broker",
-                "cash": 1000.0
-            },
+            "broker": {"type": "binance", "trading_mode": "paper", "name": "test_broker", "cash": 1000.0},
             "strategy": {
                 "type": "CustomStrategy",
                 "parameters": {
-                    "entry_logic": {
-                        "name": "RSIEntryMixin",
-                        "params": {"rsi_period": 14, "rsi_oversold": 30}
-                    },
-                    "exit_logic": {
-                        "name": "ATRExitMixin",
-                        "params": {"atr_period": 14, "sl_multiplier": 1.5}
-                    },
-                    "position_size": 0.1
-                }
+                    "entry_logic": {"name": "RSIEntryMixin", "params": {"rsi_period": 14, "rsi_oversold": 30}},
+                    "exit_logic": {"name": "ATRExitMixin", "params": {"atr_period": 14, "sl_multiplier": 1.5}},
+                    "position_size": 0.1,
+                },
             },
-            "data": {
-                "data_source": "binance",
-                "interval": "1h",
-                "lookback_bars": 500
-            },
-            "risk_management": {
-                "stop_loss_pct": 3.0,
-                "take_profit_pct": 6.0,
-                "max_daily_trades": 5
-            },
-            "notifications": {
-                "position_opened": True,
-                "position_closed": True,
-                "telegram_enabled": True
-            }
+            "data": {"data_source": "binance", "interval": "1h", "lookback_bars": 500},
+            "risk_management": {"stop_loss_pct": 3.0, "take_profit_pct": 6.0, "max_daily_trades": 5},
+            "notifications": {"position_opened": True, "position_closed": True, "telegram_enabled": True},
         }
 
         validator = BotConfigValidator()
@@ -78,7 +56,7 @@ class TestBotConfigValidator:
         """Test validation with missing required fields."""
         config = {
             "name": "Test Bot",
-            "enabled": True
+            "enabled": True,
             # Missing: symbol, broker, strategy (id, name, enabled are database fields, not config fields)
         }
 
@@ -103,13 +81,10 @@ class TestBotConfigValidator:
             "symbol": "BTCUSDT",
             "broker": {
                 "type": "invalid_broker",
-                "trading_mode": "invalid_mode"
+                "trading_mode": "invalid_mode",
                 # Note: 'name' is optional in schema, not required
             },
-            "strategy": {
-                "type": "CustomStrategy",
-                "parameters": {}
-            }
+            "strategy": {"type": "CustomStrategy", "parameters": {}},
         }
 
         validator = BotConfigValidator()
@@ -126,19 +101,14 @@ class TestBotConfigValidator:
             "name": "Test Bot",
             "enabled": True,
             "symbol": "BTCUSDT",
-            "broker": {
-                "type": "binance",
-                "trading_mode": "paper",
-                "name": "test_broker",
-                "cash": 1000.0
-            },
+            "broker": {"type": "binance", "trading_mode": "paper", "name": "test_broker", "cash": 1000.0},
             "strategy": {
                 "type": "CustomStrategy",
                 "parameters": {
                     # Missing entry_logic and exit_logic (reported as warnings in semantic validation)
                     "position_size": 1.5  # Invalid: > 1 (reported as error)
-                }
-            }
+                },
+            },
         }
 
         validator = BotConfigValidator()
@@ -162,25 +132,14 @@ class TestBotConfigValidator:
             "name": "Test Bot",
             "enabled": True,
             "symbol": "BTCUSDT",
-            "broker": {
-                "type": "binance",
-                "trading_mode": "paper",
-                "name": "test_broker",
-                "cash": 1000.0
-            },
+            "broker": {"type": "binance", "trading_mode": "paper", "name": "test_broker", "cash": 1000.0},
             "strategy": {
                 "type": "CustomStrategy",
                 "parameters": {
-                    "entry_logic": {
-                        "name": "RSIEntryMixin",
-                        "params": {"rsi_period": 14}
-                    },
-                    "exit_logic": {
-                        "name": "ATRExitMixin",
-                        "params": {"atr_period": 14}
-                    }
-                }
-            }
+                    "entry_logic": {"name": "RSIEntryMixin", "params": {"rsi_period": 14}},
+                    "exit_logic": {"name": "ATRExitMixin", "params": {"atr_period": 14}},
+                },
+            },
         }
 
         config_json = json.dumps(config_dict)
@@ -200,25 +159,14 @@ class TestBotConfigValidator:
                 "name": "Test Bot",
                 "enabled": True,
                 "symbol": "BTCUSDT",
-                "broker": {
-                    "type": "binance",
-                    "trading_mode": "paper",
-                    "name": "test_broker",
-                    "cash": 1000.0
-                },
+                "broker": {"type": "binance", "trading_mode": "paper", "name": "test_broker", "cash": 1000.0},
                 "strategy": {
                     "type": "CustomStrategy",
                     "parameters": {
-                        "entry_logic": {
-                            "name": "RSIEntryMixin",
-                            "params": {"rsi_period": 14}
-                        },
-                        "exit_logic": {
-                            "name": "ATRExitMixin",
-                            "params": {"atr_period": 14}
-                        }
-                    }
-                }
+                        "entry_logic": {"name": "RSIEntryMixin", "params": {"rsi_period": 14}},
+                        "exit_logic": {"name": "ATRExitMixin", "params": {"atr_period": 14}},
+                    },
+                },
             },
             "description": "Test bot description",
             "started_at": None,
@@ -228,7 +176,7 @@ class TestBotConfigValidator:
             "total_pnl": None,
             "extra_metadata": None,
             "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": None
+            "updated_at": None,
         }
 
         is_valid, errors, warnings = validate_database_bot_record(bot_record)
@@ -242,7 +190,7 @@ class TestBotConfigValidator:
             "user_id": None,  # Invalid: required field is None
             "type": "invalid_type",  # Invalid: not 'paper' or 'live'
             "status": "unknown_status",  # Warning: unknown status
-            "config": "invalid_json"  # Invalid: not valid JSON
+            "config": "invalid_json",  # Invalid: not valid JSON
         }
 
         is_valid, errors, warnings = validate_database_bot_record(bot_record)
@@ -277,8 +225,8 @@ class TestTradingServiceIntegration:
     def test_configuration_validation_functions_exist(self):
         """Test that configuration validation functions are available."""
         # Test trading_service instance methods
-        assert hasattr(trading_service, 'validate_bot_configuration')
-        assert hasattr(trading_service, 'validate_all_bot_configurations')
+        assert hasattr(trading_service, "validate_bot_configuration")
+        assert hasattr(trading_service, "validate_all_bot_configurations")
         assert callable(trading_service.validate_bot_configuration)
         assert callable(trading_service.validate_all_bot_configurations)
 

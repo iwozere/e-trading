@@ -5,10 +5,10 @@ Detects abnormal trading volume in stocks that are already flagged for
 institutional distribution.  Uses the existing DataManager to fetch OHLCV data.
 """
 
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import List, Optional
 import sys
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
@@ -33,7 +33,7 @@ class VolumeAnomalyDetector:
 
     def __init__(
         self,
-        data_manager: Optional[DataManager] = None,
+        data_manager: DataManager | None = None,
         lookback_days: int = 20,
         spike_recent_days: int = 5,
         spike_multiplier: float = 3.5,
@@ -54,7 +54,7 @@ class VolumeAnomalyDetector:
     def detect(
         self,
         tickers: List[str],
-        as_of_date: Optional[datetime] = None,
+        as_of_date: datetime | None = None,
     ) -> pd.DataFrame:
         """
         Run volume anomaly detection on a list of tickers.
@@ -71,7 +71,7 @@ class VolumeAnomalyDetector:
         if not tickers:
             return pd.DataFrame()
 
-        end = as_of_date or (datetime.now(timezone.utc) - timedelta(days=1))
+        end = as_of_date or (datetime.now(UTC) - timedelta(days=1))
         start = end - timedelta(days=self._lookback + self._recent + 5)
 
         results = []
@@ -101,7 +101,9 @@ class VolumeAnomalyDetector:
         out.reset_index(drop=True, inplace=True)
         _logger.info(
             "Volume anomaly: %d/%d tickers flagged (threshold=%.1fx)",
-            len(out), len(tickers), self._threshold,
+            len(out),
+            len(tickers),
+            self._threshold,
         )
         return out
 
@@ -111,7 +113,7 @@ def _compute_spike(
     lookback: int,
     recent: int,
     threshold: float,
-) -> Optional[dict]:
+) -> dict | None:
     """Compute spike metrics for a single ticker's OHLCV DataFrame."""
     if "volume" not in df.columns or df.empty:
         return None
@@ -120,7 +122,7 @@ def _compute_spike(
     if len(vol) < lookback + recent:
         return None
 
-    baseline_avg = float(vol.iloc[-(lookback + recent): -recent].mean())
+    baseline_avg = float(vol.iloc[-(lookback + recent) : -recent].mean())
     recent_avg = float(vol.iloc[-recent:].mean())
 
     if baseline_avg == 0:

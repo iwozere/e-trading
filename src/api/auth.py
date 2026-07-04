@@ -6,16 +6,17 @@ JWT token management, password hashing, and role-based
 access control utilities.
 """
 
-from datetime import datetime, timedelta, timezone
-from threading import Lock
-from typing import Optional, Dict, Any
 import secrets
-import jwt
-from fastapi import HTTPException, status, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
-from pathlib import Path
 import sys
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from threading import Lock
+from typing import Any, Dict
+
+import jwt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -56,7 +57,7 @@ _deny_lock = Lock()
 
 def revoke_token(jti: str, expires_at: float) -> None:
     """Add a token JTI to the deny-list and prune already-expired entries."""
-    now = datetime.now(timezone.utc).timestamp()
+    now = datetime.now(UTC).timestamp()
     with _deny_lock:
         _deny_list[jti] = expires_at
         stale = [k for k, v in _deny_list.items() if v < now]
@@ -72,15 +73,17 @@ def is_token_revoked(jti: str) -> bool:
 
 class AuthenticationError(Exception):
     """Custom authentication error."""
+
     pass
 
 
 class AuthorizationError(Exception):
     """Custom authorization error."""
+
     pass
 
 
-def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: Dict[str, Any], expires_delta: timedelta | None = None) -> str:
     """
     Create JWT access token.
 
@@ -94,9 +97,9 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     to_encode = data.copy()
 
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(UTC) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
     to_encode.update({"exp": expire, "type": "access", "jti": secrets.token_hex(8)})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -115,7 +118,7 @@ def create_refresh_token(data: Dict[str, Any]) -> str:
         str: Encoded JWT refresh token
     """
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
     to_encode.update({"exp": expire, "type": "refresh", "jti": secrets.token_hex(8)})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -150,15 +153,17 @@ def verify_token(token: str) -> Dict[str, Any]:
         raise AuthenticationError("Invalid token")
 
 
-def get_user_by_email(db: Session, email: str) -> Optional[User]:
+def get_user_by_email(db: Session, email: str) -> User | None:
     """Get user by email."""
     return db.query(User).filter(User.email == email).first()
 
-def get_user_by_telegram_id(telegram_user_id: str) -> Optional[User]:
+
+def get_user_by_telegram_id(telegram_user_id: str) -> User | None:
     """Get user by telegram ID - wrapper for service call."""
     return users_service.get_user_by_telegram_id(telegram_user_id)
 
-def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
+
+def authenticate_user(db: Session, username: str, password: str) -> User | None:
     """
     Authenticate user with email or telegram_user_id and password.
 
@@ -192,15 +197,13 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Use
         return None
 
     # Update last login
-    user.last_login = datetime.now(timezone.utc)
+    user.last_login = datetime.now(UTC)
     db.commit()
 
     return user
 
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-) -> User:
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
     """
     Get current authenticated user from JWT token.
 
@@ -254,7 +257,7 @@ def get_current_user(
                 is_active=user.is_active,
                 created_at=user.created_at,
                 updated_at=user.updated_at,
-                last_login=user.last_login
+                last_login=user.last_login,
             )
 
             return detached_user
@@ -284,11 +287,12 @@ def require_role(required_roles: list[str]):
     Returns:
         Dependency function
     """
+
     def role_checker(current_user: User = Depends(get_current_user)) -> User:
         if current_user.role not in required_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied. Required roles: {', '.join(required_roles)}"
+                detail=f"Access denied. Required roles: {', '.join(required_roles)}",
             )
         return current_user
 
@@ -308,11 +312,11 @@ def require_trader_or_admin(current_user: User = Depends(get_current_user)) -> U
 def log_user_action(
     user: User,
     action: str,
-    resource_type: Optional[str] = None,
-    resource_id: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
-    ip_address: Optional[str] = None,
-    user_agent: Optional[str] = None
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    details: Dict[str, Any] | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
 ):
     """
     Log user action for audit purposes.
@@ -334,7 +338,7 @@ def log_user_action(
             resource_id=resource_id,
             details=details,
             ip_address=ip_address,
-            user_agent=user_agent
+            user_agent=user_agent,
         )
 
     except Exception:

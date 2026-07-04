@@ -5,11 +5,11 @@ Test Enhanced Fundamentals Implementation
 This test validates the enhanced DataManager fundamentals integration.
 """
 
-import unittest
-from unittest.mock import Mock, patch
-from datetime import datetime
 import sys
+import unittest
+from datetime import datetime
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[3]
@@ -68,8 +68,8 @@ class TestEnhancedFundamentals(unittest.TestCase):
         self.assertFalse(self.data_manager._validate_combined_fundamentals({}))
         self.assertFalse(self.data_manager._validate_combined_fundamentals(None))
 
-    @patch('src.data.data_manager.get_fundamentals_cache')
-    @patch('src.data.data_manager.get_fundamentals_combiner')
+    @patch("src.data.data_manager.get_fundamentals_cache")
+    @patch("src.data.data_manager.get_fundamentals_combiner")
     def test_get_fundamentals_with_cache_hit(self, mock_combiner, mock_cache):
         """Test get_fundamentals with cache hit."""
         # Setup mocks
@@ -78,9 +78,7 @@ class TestEnhancedFundamentals(unittest.TestCase):
 
         mock_cached_data = {"pe_ratio": 15.5, "market_cap": 1000000}
         mock_cache_instance.find_latest_json.return_value = Mock(
-            provider="yfinance",
-            timestamp=datetime.now(),
-            file_path="/path/to/cache"
+            provider="yfinance", timestamp=datetime.now(), file_path="/path/to/cache"
         )
         mock_cache_instance.read_json.return_value = mock_cached_data
 
@@ -94,8 +92,8 @@ class TestEnhancedFundamentals(unittest.TestCase):
         # Verify result
         self.assertEqual(result, mock_cached_data)
 
-    @patch('src.data.data_manager.get_fundamentals_cache')
-    @patch('src.data.data_manager.get_fundamentals_combiner')
+    @patch("src.data.data_manager.get_fundamentals_cache")
+    @patch("src.data.data_manager.get_fundamentals_combiner")
     def test_get_fundamentals_invalid_symbol(self, mock_combiner, mock_cache):
         """Test get_fundamentals with invalid symbol."""
         result = self.data_manager.get_fundamentals("")
@@ -110,29 +108,21 @@ class TestEnhancedFundamentals(unittest.TestCase):
         mock_combiner = Mock()
 
         # Mock provider selector with available downloaders
-        self.data_manager.provider_selector.downloaders = {
-            'yfinance': Mock(),
-            'fmp': Mock(),
-            'alpha_vantage': Mock()
-        }
+        self.data_manager.provider_selector.downloaders = {"yfinance": Mock(), "fmp": Mock(), "alpha_vantage": Mock()}
 
         # Add get_fundamentals method to mocks
         for downloader in self.data_manager.provider_selector.downloaders.values():
             downloader.get_fundamentals = Mock()
 
         # Test with valid requested providers
-        result = self.data_manager._select_fundamentals_providers(
-            "AAPL", ["yfinance", "fmp"], "ratios", mock_combiner
-        )
+        result = self.data_manager._select_fundamentals_providers("AAPL", ["yfinance", "fmp"], "ratios", mock_combiner)
         self.assertEqual(result, ["yfinance", "fmp"])
 
         # Test with invalid requested providers
-        result = self.data_manager._select_fundamentals_providers(
-            "AAPL", ["invalid_provider"], "ratios", mock_combiner
-        )
+        result = self.data_manager._select_fundamentals_providers("AAPL", ["invalid_provider"], "ratios", mock_combiner)
         # Should fall back to configuration-based selection
         mock_combiner.get_provider_sequence.assert_called_with("ratios")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

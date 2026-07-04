@@ -1,13 +1,13 @@
 from __future__ import annotations
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
-from src.data.db.repos.repo_webui import AuditRepo, SnapshotRepo, StrategyTemplateRepo, SystemConfigRepo
 from src.data.db.repos.repo_users import UsersRepo
+from src.data.db.repos.repo_webui import AuditRepo, SnapshotRepo, StrategyTemplateRepo, SystemConfigRepo
 
-
-UTC = timezone.utc
+UTC = UTC
 
 
 def test_webui_repos(db_session: Session):
@@ -28,12 +28,14 @@ def test_webui_repos(db_session: Session):
 
     # strategy templates
     st = StrategyTemplateRepo(db_session)
-    t = st.create({
-        "name": "basic",
-        "description": "desc",
-        "template_data": {"k": 1},
-        "created_by": u.id,
-    })
+    t = st.create(
+        {
+            "name": "basic",
+            "description": "desc",
+            "template_data": {"k": 1},
+            "created_by": u.id,
+        }
+    )
     assert t.id is not None
     mine = st.by_author(u.id)
     assert any(x.id == t.id for x in mine)

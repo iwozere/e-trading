@@ -4,21 +4,25 @@ Adapter manager with factory and registration system.
 This module provides centralized management of sentiment adapters including
 registration, health monitoring, and circuit breaker functionality.
 """
+
 import asyncio
-from typing import Dict, List, Optional, Type, Any
-from datetime import datetime, timedelta, timezone
-from dataclasses import dataclass
 import time
-from src.notification.logger import setup_logger
-from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter, AdapterStatus, AdapterHealthInfo
-from src.common.sentiments.rate_limiting.global_coordinator import GlobalRateLimitCoordinator, GlobalLimitConfig
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Any, Dict, List, Type
+
+from src.common.sentiments.adapters.base_adapter import AdapterHealthInfo, AdapterStatus, BaseSentimentAdapter
 from src.common.sentiments.rate_limiting.adaptive_limiter import AdaptiveConfig
+from src.common.sentiments.rate_limiting.global_coordinator import GlobalLimitConfig, GlobalRateLimitCoordinator
+from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
 
 
 @dataclass
 class CircuitBreakerConfig:
     """Configuration for circuit breaker functionality."""
+
     failure_threshold: int = 5
     recovery_timeout_seconds: int = 60
     half_open_max_calls: int = 3
@@ -51,7 +55,7 @@ class CircuitBreaker:
     def __init__(self, config: CircuitBreakerConfig):
         self.config = config
         self.failure_count = 0
-        self.last_failure_time: Optional[datetime] = None
+        self.last_failure_time: datetime | None = None
         self.state = AdapterStatus.HEALTHY
         self.half_open_calls = 0
 
@@ -70,8 +74,9 @@ class CircuitBreaker:
 
         if self.state == AdapterStatus.FAILED:
             # Check if we should transition to half-open (CIRCUIT_OPEN)
-            if (self.last_failure_time and
-                datetime.now(timezone.utc) - self.last_failure_time > timedelta(seconds=self.config.recovery_timeout_seconds)):
+            if self.last_failure_time and datetime.now(UTC) - self.last_failure_time > timedelta(
+                seconds=self.config.recovery_timeout_seconds
+            ):
                 self.state = AdapterStatus.CIRCUIT_OPEN
                 self.half_open_calls = 0
                 return True
@@ -100,7 +105,7 @@ class CircuitBreaker:
     def record_failure(self) -> None:
         """Record failed operation."""
         self.failure_count += 1
-        self.last_failure_time = datetime.now(timezone.utc)
+        self.last_failure_time = datetime.now(UTC)
 
         if self.state == AdapterStatus.CIRCUIT_OPEN:
             # Failed during half-open, go back to failed
@@ -116,8 +121,9 @@ class AdapterRegistry:
         self._adapter_types: Dict[str, Type[BaseSentimentAdapter]] = {}
         self._adapter_configs: Dict[str, Dict[str, Any]] = {}
 
-    def register_adapter(self, name: str, adapter_class: Type[BaseSentimentAdapter],
-                        default_config: Optional[Dict[str, Any]] = None) -> None:
+    def register_adapter(
+        self, name: str, adapter_class: Type[BaseSentimentAdapter], default_config: Dict[str, Any] | None = None
+    ) -> None:
         """
         Register an adapter type.
 
@@ -133,7 +139,7 @@ class AdapterRegistry:
         self._adapter_configs[name] = default_config or {}
         _logger.info("Registered adapter: %s", name)
 
-    def create_adapter(self, name: str, config: Optional[Dict[str, Any]] = None) -> BaseSentimentAdapter:
+    def create_adapter(self, name: str, config: Dict[str, Any] | None = None) -> BaseSentimentAdapter:
         """
         Create an adapter instance.
 
@@ -167,8 +173,9 @@ class AdapterManager:
     with fault tolerance and health monitoring capabilities.
     """
 
-    def __init__(self, circuit_breaker_config: Optional[CircuitBreakerConfig] = None,
-                 enable_global_rate_limiting: bool = True):
+    def __init__(
+        self, circuit_breaker_config: CircuitBreakerConfig | None = None, enable_global_rate_limiting: bool = True
+    ):
         """
         Initialize adapter manager.
 
@@ -181,33 +188,33 @@ class AdapterManager:
         self._circuit_breakers: Dict[str, CircuitBreaker] = {}
         self._circuit_config = circuit_breaker_config or CircuitBreakerConfig()
         self._health_check_interval = 300  # 5 minutes
-        self._last_health_check: Optional[datetime] = None
+        self._last_health_check: datetime | None = None
 
         # Initialize global rate limiting if enabled.
         # The monitoring coroutine is NOT started here because __init__ may be
         # called from synchronous code where there is no running event loop.
         # Call ``await manager.start()`` once inside an async context to launch
         # the background monitor.
-        self._global_coordinator: Optional[GlobalRateLimitCoordinator] = None
+        self._global_coordinator: GlobalRateLimitCoordinator | None = None
         if enable_global_rate_limiting:
             try:
                 from src.common.sentiments.rate_limiting.global_coordinator import initialize_global_coordinator
+
                 global_config = GlobalLimitConfig(
-                    max_global_requests_per_second=30.0,
-                    max_concurrent_requests=50,
-                    enable_adaptive_global_limit=True
+                    max_global_requests_per_second=30.0, max_concurrent_requests=50, enable_adaptive_global_limit=True
                 )
                 self._global_coordinator = initialize_global_coordinator(global_config)
                 _logger.info("Global rate limiting enabled (monitoring not yet started — call start())")
             except Exception as e:
                 _logger.warning("Failed to initialize global rate limiting: %s", e)
 
-    def register_adapter_type(self, name: str, adapter_class: Type[BaseSentimentAdapter],
-                             default_config: Optional[Dict[str, Any]] = None) -> None:
+    def register_adapter_type(
+        self, name: str, adapter_class: Type[BaseSentimentAdapter], default_config: Dict[str, Any] | None = None
+    ) -> None:
         """Register an adapter type with the manager."""
         self.registry.register_adapter(name, adapter_class, default_config)
 
-    def add_adapter(self, name: str, config: Optional[Dict[str, Any]] = None) -> None:
+    def add_adapter(self, name: str, config: Dict[str, Any] | None = None) -> None:
         """
         Add an adapter instance to the manager.
 
@@ -226,11 +233,11 @@ class AdapterManager:
         if self._global_coordinator:
             try:
                 adaptive_config = AdaptiveConfig(
-                    base_requests_per_second=config.get('rate_limit', 1.0) if config else 1.0,
+                    base_requests_per_second=config.get("rate_limit", 1.0) if config else 1.0,
                     min_requests_per_second=0.1,
-                    max_requests_per_second=5.0
+                    max_requests_per_second=5.0,
                 )
-                priority_weight = config.get('priority_weight', 1.0) if config else 1.0
+                priority_weight = config.get("priority_weight", 1.0) if config else 1.0
                 self._global_coordinator.register_adapter(name, adaptive_config, priority_weight)
             except Exception as e:
                 _logger.warning("Failed to register adapter %s with global coordinator: %s", name, e)
@@ -243,9 +250,7 @@ class AdapterManager:
 
         _logger.info("Added adapter: %s", name)
 
-    def _validate_adapter_credentials(
-        self, name: str, config: Optional[Dict[str, Any]]
-    ) -> None:
+    def _validate_adapter_credentials(self, name: str, config: Dict[str, Any] | None) -> None:
         """
         Warn if a known adapter type is missing its API credentials.
 
@@ -283,7 +288,7 @@ class AdapterManager:
         can be safely instantiated from synchronous code (e.g. at module level or
         in tests) without requiring a running event loop.
         """
-        if self._global_coordinator and hasattr(self._global_coordinator, 'start_monitoring'):
+        if self._global_coordinator and hasattr(self._global_coordinator, "start_monitoring"):
             asyncio.create_task(self._global_coordinator.start_monitoring())
             _logger.info("Global rate-limit monitoring task started")
 
@@ -380,9 +385,9 @@ class AdapterManager:
         self,
         adapter_name: str,
         ticker: str,
-        since_ts: Optional[int] = None,
+        since_ts: int | None = None,
         limit: int = 200,
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> List[Dict[str, Any]] | None:
         """
         Fetch messages from a specific adapter with circuit breaker protection.
 
@@ -399,16 +404,14 @@ class AdapterManager:
             _logger.warning("Adapter %s not found", adapter_name)
             return None
         adapter = self._adapters[adapter_name]
-        return await self._protected_fetch(
-            adapter_name, ticker, adapter.fetch_messages(ticker, since_ts, limit)
-        )
+        return await self._protected_fetch(adapter_name, ticker, adapter.fetch_messages(ticker, since_ts, limit))
 
     async def fetch_summary_from_adapter(
         self,
         adapter_name: str,
         ticker: str,
-        since_ts: Optional[int] = None,
-    ) -> Optional[Dict[str, Any]]:
+        since_ts: int | None = None,
+    ) -> Dict[str, Any] | None:
         """
         Fetch summary from a specific adapter with circuit breaker protection.
 
@@ -424,9 +427,7 @@ class AdapterManager:
             _logger.warning("Adapter %s not found", adapter_name)
             return None
         adapter = self._adapters[adapter_name]
-        return await self._protected_fetch(
-            adapter_name, ticker, adapter.fetch_summary(ticker, since_ts)
-        )
+        return await self._protected_fetch(adapter_name, ticker, adapter.fetch_summary(ticker, since_ts))
 
     async def get_health_status(self) -> Dict[str, AdapterHealthInfo]:
         """Get health status for all adapters."""
@@ -453,11 +454,11 @@ class AdapterManager:
 
     async def perform_health_checks(self) -> None:
         """Perform periodic health checks on all adapters."""
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
 
-        if (self._last_health_check is None or
-            current_time - self._last_health_check > timedelta(seconds=self._health_check_interval)):
-
+        if self._last_health_check is None or current_time - self._last_health_check > timedelta(
+            seconds=self._health_check_interval
+        ):
             _logger.debug("Performing health checks on %d adapters", len(self._adapters))
             health_status = await self.get_health_status()
 
@@ -477,7 +478,7 @@ class AdapterManager:
 
     async def close_all(self) -> None:
         """Close all adapters and clean up resources."""
-        if self._global_coordinator and hasattr(self._global_coordinator, 'stop_monitoring'):
+        if self._global_coordinator and hasattr(self._global_coordinator, "stop_monitoring"):
             await self._global_coordinator.stop_monitoring()
 
         _logger.info("Closing %d adapters", len(self._adapters))
@@ -501,7 +502,7 @@ class AdapterManager:
 
 
 # Global adapter manager instance
-_global_manager: Optional[AdapterManager] = None
+_global_manager: AdapterManager | None = None
 
 
 def get_adapter_manager() -> AdapterManager:
@@ -518,90 +519,74 @@ def register_default_adapters() -> None:
 
     try:
         from src.common.sentiments.adapters.async_stocktwits import AsyncStocktwitsAdapter
-        manager.register_adapter_type("stocktwits", AsyncStocktwitsAdapter, {
-            "concurrency": 5,
-            "rate_limit_delay": 0.5
-        })
+
+        manager.register_adapter_type("stocktwits", AsyncStocktwitsAdapter, {"concurrency": 5, "rate_limit_delay": 0.5})
     except ImportError as e:
         _logger.warning("Could not register StockTwits adapter: %s", e)
 
     try:
         from src.common.sentiments.adapters.async_pushshift import AsyncPushshiftAdapter
-        manager.register_adapter_type("reddit_pushshift", AsyncPushshiftAdapter, {
-            "concurrency": 5,
-            "rate_limit_delay": 0.5
-        })
+
+        manager.register_adapter_type(
+            "reddit_pushshift", AsyncPushshiftAdapter, {"concurrency": 5, "rate_limit_delay": 0.5}
+        )
     except ImportError as e:
         _logger.warning("Could not register Pushshift adapter: %s", e)
 
     try:
         from src.common.sentiments.adapters.async_reddit import AsyncRedditAdapter
-        manager.register_adapter_type("reddit", AsyncRedditAdapter, {
-            "concurrency": 5,
-            "rate_limit_delay": 1.0
-        })
+
+        manager.register_adapter_type("reddit", AsyncRedditAdapter, {"concurrency": 5, "rate_limit_delay": 1.0})
     except ImportError as e:
         _logger.warning("Could not register Reddit (direct) adapter: %s", e)
 
     try:
         from src.common.sentiments.adapters.async_hf_sentiment import AsyncHFSentiment
-        manager.register_adapter_type("huggingface", AsyncHFSentiment, {
-            "device": -1,
-            "max_workers": 1
-        })
+
+        manager.register_adapter_type("huggingface", AsyncHFSentiment, {"device": -1, "max_workers": 1})
     except ImportError as e:
         _logger.warning("Could not register HuggingFace adapter: %s", e)
 
     try:
         from src.common.sentiments.adapters.async_twitter import AsyncTwitterAdapter
-        manager.register_adapter_type("twitter", AsyncTwitterAdapter, {
-            "concurrency": 3,
-            "rate_limit_delay": 1.0
-        })
+
+        manager.register_adapter_type("twitter", AsyncTwitterAdapter, {"concurrency": 3, "rate_limit_delay": 1.0})
     except ImportError as e:
         _logger.warning("Could not register Twitter adapter: %s", e)
 
     try:
         from src.common.sentiments.adapters.async_discord import AsyncDiscordAdapter
-        manager.register_adapter_type("discord", AsyncDiscordAdapter, {
-            "concurrency": 2,
-            "rate_limit_delay": 1.0
-        })
+
+        manager.register_adapter_type("discord", AsyncDiscordAdapter, {"concurrency": 2, "rate_limit_delay": 1.0})
     except ImportError as e:
         _logger.warning("Could not register Discord adapter: %s", e)
 
     try:
         from src.common.sentiments.adapters.async_news import AsyncNewsAdapter
-        manager.register_adapter_type("news", AsyncNewsAdapter, {
-            "concurrency": 3,
-            "rate_limit_delay": 1.0
-        })
+
+        manager.register_adapter_type("news", AsyncNewsAdapter, {"concurrency": 3, "rate_limit_delay": 1.0})
     except ImportError as e:
         _logger.warning("Could not register News adapter: %s", e)
 
     try:
         from src.common.sentiments.adapters.async_trends import AsyncTrendsAdapter
-        manager.register_adapter_type("trends", AsyncTrendsAdapter, {
-            "concurrency": 1,
-            "rate_limit_delay": 2.0
-        })
+
+        manager.register_adapter_type("trends", AsyncTrendsAdapter, {"concurrency": 1, "rate_limit_delay": 2.0})
     except ImportError as e:
         _logger.warning("Could not register Google Trends adapter: %s", e)
 
     try:
         from src.common.sentiments.adapters.async_finnhub import AsyncFinnhubSentimentAdapter
-        manager.register_adapter_type("finnhub", AsyncFinnhubSentimentAdapter, {
-            "concurrency": 2,
-            "rate_limit_delay": 1.0
-        })
+
+        manager.register_adapter_type(
+            "finnhub", AsyncFinnhubSentimentAdapter, {"concurrency": 2, "rate_limit_delay": 1.0}
+        )
     except ImportError as e:
         _logger.warning("Could not register Finnhub sentiment adapter: %s", e)
 
     try:
         from src.common.sentiments.adapters.async_apewisdom import AsyncApeWisdomAdapter
-        manager.register_adapter_type("apewisdom", AsyncApeWisdomAdapter, {
-            "concurrency": 3,
-            "rate_limit_delay": 1.0
-        })
+
+        manager.register_adapter_type("apewisdom", AsyncApeWisdomAdapter, {"concurrency": 3, "rate_limit_delay": 1.0})
     except ImportError as e:
         _logger.warning("Could not register ApeWisdom sentiment adapter: %s", e)

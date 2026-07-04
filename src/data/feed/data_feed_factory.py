@@ -9,14 +9,14 @@ Classes:
 - DataFeedFactory: Factory for creating live data feeds
 """
 
-from typing import Dict, Any, Optional
+from typing import Any, Dict
 
 from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 from src.data.feed.binance_live_feed import BinanceLiveDataFeed
 from src.data.feed.coingecko_live_feed import CoinGeckoLiveDataFeed
+from src.data.feed.file_data_feed import FileDataFeed
 from src.data.feed.ibkr_live_feed import IBKRLiveDataFeed
 from src.data.feed.yahoo_live_feed import YahooLiveDataFeed
-from src.data.feed.file_data_feed import FileDataFeed
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -31,7 +31,7 @@ class DataFeedFactory:
     """
 
     @staticmethod
-    def create_data_feed(config: Dict[str, Any]) -> Optional[BaseLiveDataFeed]:
+    def create_data_feed(config: Dict[str, Any]) -> BaseLiveDataFeed | None:
         """
         Create a live data feed based on configuration.
 
@@ -109,7 +109,7 @@ class DataFeedFactory:
             on_new_bar=config.get("on_new_bar"),
             api_key=config.get("api_key"),
             api_secret=config.get("api_secret"),
-            testnet=config.get("testnet", False)
+            testnet=config.get("testnet", False),
         )
 
     @staticmethod
@@ -121,7 +121,7 @@ class DataFeedFactory:
             lookback_bars=config.get("lookback_bars", 1000),
             retry_interval=config.get("retry_interval", 60),
             on_new_bar=config.get("on_new_bar"),
-            polling_interval=config.get("polling_interval", 60)
+            polling_interval=config.get("polling_interval", 60),
         )
 
     @staticmethod
@@ -135,7 +135,7 @@ class DataFeedFactory:
             on_new_bar=config.get("on_new_bar"),
             host=config.get("host", "127.0.0.1"),
             port=config.get("port", 7497),
-            client_id=config.get("client_id", 1)
+            client_id=config.get("client_id", 1),
         )
 
     @staticmethod
@@ -147,7 +147,7 @@ class DataFeedFactory:
             lookback_bars=config.get("lookback_bars", 1000),
             retry_interval=config.get("retry_interval", 60),
             on_new_bar=config.get("on_new_bar"),
-            polling_interval=config.get("polling_interval", 60)
+            polling_interval=config.get("polling_interval", 60),
         )
 
     @staticmethod
@@ -162,7 +162,7 @@ class DataFeedFactory:
             low_col=config.get("low_col", "low"),
             close_col=config.get("close_col", "close"),
             volume_col=config.get("volume_col", "volume"),
-            simulate_realtime=config.get("simulate_realtime", False)
+            simulate_realtime=config.get("simulate_realtime", False),
         )
 
     @staticmethod
@@ -192,7 +192,7 @@ class DataFeedFactory:
                 "real_time": "WebSocket",
                 "requires_auth": False,  # For public data
                 "rate_limits": "High frequency",
-                "cost": "Free for public data"
+                "cost": "Free for public data",
             },
             "yahoo": {
                 "name": "Yahoo Finance",
@@ -202,7 +202,7 @@ class DataFeedFactory:
                 "real_time": "Polling",
                 "requires_auth": False,
                 "rate_limits": "Moderate",
-                "cost": "Free"
+                "cost": "Free",
             },
             "ibkr": {
                 "name": "Interactive Brokers",
@@ -212,7 +212,7 @@ class DataFeedFactory:
                 "real_time": "Native API",
                 "requires_auth": True,
                 "rate_limits": "High frequency",
-                "cost": "Market data subscriptions required"
+                "cost": "Market data subscriptions required",
             },
             "coingecko": {
                 "name": "CoinGecko",
@@ -222,7 +222,7 @@ class DataFeedFactory:
                 "real_time": "Polling",
                 "requires_auth": False,
                 "rate_limits": "50 calls/minute",
-                "cost": "Free"
+                "cost": "Free",
             },
             "file": {
                 "name": "File (CSV)",
@@ -232,6 +232,6 @@ class DataFeedFactory:
                 "real_time": "Optional simulation mode",
                 "requires_auth": False,
                 "rate_limits": "N/A",
-                "cost": "Free"
-            }
+                "cost": "Free",
+            },
         }

@@ -13,11 +13,11 @@ Coverage:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, Optional
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Dict
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
@@ -30,10 +30,10 @@ from src.api.auth import get_current_user
 from src.api.main import app
 from src.data.db.models.model_users import User
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_user(user_id: int = 1, role: str = "admin") -> User:
     return User(id=user_id, email="trader@test.com", role=role, is_active=True)
@@ -60,7 +60,7 @@ def _make_bot(
         "current_balance": None,
         "total_pnl": None,
         "extra_metadata": None,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "updated_at": None,
     }
 
@@ -77,7 +77,7 @@ def _make_live_state(bot_id: str = "42") -> Dict[str, Any]:
         "trading_mode": "paper",
         "symbol": "BTCUSDT",
         "strategy_type": "CustomStrategy",
-        "last_heartbeat": datetime.now(timezone.utc).isoformat(),
+        "last_heartbeat": datetime.now(UTC).isoformat(),
         "heartbeat_age_seconds": 5.0,
         "is_healthy": True,
     }
@@ -87,7 +87,7 @@ def _make_manager_mock(
     start_ok: bool = True,
     stop_ok: bool = True,
     restart_ok: bool = True,
-    live_state: Optional[Dict[str, Any]] = None,
+    live_state: Dict[str, Any] | None = None,
 ) -> MagicMock:
     mgr = MagicMock()
     mgr.strategy_instances = {}
@@ -103,6 +103,7 @@ def _make_manager_mock(
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def _clear_overrides():
@@ -130,6 +131,7 @@ def authed_client(client, admin_user):
 # ---------------------------------------------------------------------------
 # GET /api/trading/bots/{bot_id} — enriched response
 # ---------------------------------------------------------------------------
+
 
 class TestGetBotEnrichedResponse:
     def test_includes_live_state_when_manager_available(self, authed_client):
@@ -215,6 +217,7 @@ class TestGetBotEnrichedResponse:
 # PUT /api/trading/bots/{bot_id}/status — start
 # ---------------------------------------------------------------------------
 
+
 class TestStartBot:
     def test_start_calls_db_and_manager(self, authed_client):
         bot = _make_bot(bot_status="stopped")
@@ -288,6 +291,7 @@ class TestStartBot:
 # PUT /api/trading/bots/{bot_id}/status — stop
 # ---------------------------------------------------------------------------
 
+
 class TestStopBot:
     def test_stop_calls_db_and_manager(self, authed_client):
         bot = _make_bot(bot_status="running")
@@ -327,6 +331,7 @@ class TestStopBot:
 # ---------------------------------------------------------------------------
 # PUT /api/trading/bots/{bot_id}/status — restart
 # ---------------------------------------------------------------------------
+
 
 class TestRestartBot:
     def test_restart_calls_db_and_manager(self, authed_client):

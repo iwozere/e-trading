@@ -5,27 +5,34 @@ Includes:
 - Circuit breaker, error event, alert, recovery, and retry config dataclasses
 - Circuit state, error severity, recovery and retry strategy enums
 """
-from enum import Enum
-from typing import Any, Dict, List, Optional, Callable
+
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from enum import Enum
+from typing import Any, Callable, Dict, List
+
 
 class CircuitState(Enum):
     """Circuit breaker states."""
-    CLOSED = "CLOSED"      # Normal operation, calls pass through
-    OPEN = "OPEN"          # Calls fail fast, no external calls
+
+    CLOSED = "CLOSED"  # Normal operation, calls pass through
+    OPEN = "OPEN"  # Calls fail fast, no external calls
     HALF_OPEN = "HALF_OPEN"  # Limited calls allowed to test recovery
+
 
 class ErrorSeverity(Enum):
     """Error severity levels."""
+
     DEBUG = "DEBUG"
     INFO = "INFO"
     WARNING = "WARNING"
     ERROR = "ERROR"
     CRITICAL = "CRITICAL"
 
+
 class RecoveryStrategy(Enum):
     """Recovery strategy types."""
+
     RETRY = "retry"
     FALLBACK = "fallback"
     DEGRADE = "degrade"
@@ -33,12 +40,15 @@ class RecoveryStrategy(Enum):
     IGNORE = "ignore"
     ALERT = "alert"
 
+
 class RetryStrategy(Enum):
     """Retry strategies."""
+
     FIXED = "fixed"
     EXPONENTIAL = "exponential"
     LINEAR = "linear"
     FIBONACCI = "fibonacci"
+
 
 @dataclass
 class CircuitBreakerConfig:
@@ -46,7 +56,7 @@ class CircuitBreakerConfig:
 
     # Failure threshold
     failure_threshold: int = 5  # Number of failures before opening circuit
-    failure_window: int = 60    # Time window for failure counting (seconds)
+    failure_window: int = 60  # Time window for failure counting (seconds)
 
     # Recovery settings
     recovery_timeout: int = 60  # Time to wait before attempting recovery (seconds)
@@ -62,6 +72,7 @@ class CircuitBreakerConfig:
     log_state_changes: bool = True
     log_level: str = "WARNING"
 
+
 @dataclass
 class ErrorEvent:
     """Represents an error event."""
@@ -71,22 +82,22 @@ class ErrorEvent:
     severity: ErrorSeverity
     component: str
     context: Dict[str, Any] = field(default_factory=dict)
-    stack_trace: Optional[str] = None
-    user_id: Optional[str] = None
-    session_id: Optional[str] = None
+    stack_trace: str | None = None
+    user_id: str | None = None
+    session_id: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
-            'timestamp': self.timestamp.now(timezone.utc).isoformat(),
-            'error_type': type(self.error).__name__,
-            'error_message': str(self.error),
-            'severity': self.severity.value,
-            'component': self.component,
-            'context': self.context,
-            'stack_trace': self.stack_trace,
-            'user_id': self.user_id,
-            'session_id': self.session_id
+            "timestamp": self.timestamp.now(UTC).isoformat(),
+            "error_type": type(self.error).__name__,
+            "error_message": str(self.error),
+            "severity": self.severity.value,
+            "component": self.component,
+            "context": self.context,
+            "stack_trace": self.stack_trace,
+            "user_id": self.user_id,
+            "session_id": self.session_id,
         }
 
 
@@ -103,6 +114,7 @@ class AlertConfig:
     # Rate limiting
     alert_cooldown: int = 60  # seconds between alerts for same error type
 
+
 @dataclass
 class RecoveryConfig:
     """Configuration for recovery behavior."""
@@ -110,9 +122,9 @@ class RecoveryConfig:
     strategy: RecoveryStrategy
     max_attempts: int = 3
     timeout: float = 30.0  # seconds
-    fallback_function: Optional[Callable] = None
-    degrade_function: Optional[Callable] = None
-    alert_function: Optional[Callable] = None
+    fallback_function: Callable | None = None
+    degrade_function: Callable | None = None
+    alert_function: Callable | None = None
 
     # Strategy-specific settings
     retry_delay: float = 1.0
@@ -121,6 +133,7 @@ class RecoveryConfig:
     # Monitoring
     log_recovery: bool = True
     track_metrics: bool = True
+
 
 @dataclass
 class RetryConfig:
@@ -136,7 +149,7 @@ class RetryConfig:
 
     # Retry conditions
     retry_on_exceptions: tuple = (Exception,)
-    retry_on_result: Optional[Callable] = None  # Function to evaluate result
+    retry_on_result: Callable | None = None  # Function to evaluate result
 
     # Logging
     log_retries: bool = True

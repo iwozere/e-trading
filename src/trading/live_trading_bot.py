@@ -9,15 +9,16 @@ while unifying the execution engine.
 
 import asyncio
 import json
-import sys
 import signal
-from typing import Any, Dict, Optional
+import sys
+from typing import Any, Dict
 
-from src.trading.strategy_manager import StrategyManager
-from src.trading.constants import TRADING_CONFIG_DIR
 from src.notification.logger import setup_logger
+from src.trading.constants import TRADING_CONFIG_DIR
+from src.trading.strategy_manager import StrategyManager
 
 _logger = setup_logger(__name__)
+
 
 class LiveTradingBot:
     """
@@ -30,18 +31,17 @@ class LiveTradingBot:
         """
         self.config_file = config_file
         self.manager = StrategyManager()
-        
+
         # Load and hydrate configuration
         hydrated_config = self._load_and_hydrate_config()
-        
+
         # Register instance with manager
         self.instance_id = self.manager.add_instance(hydrated_config)
         # Event loop captured in _start_and_capture_loop() so stop() can safely
         # schedule the shutdown coroutine from a signal handler via
         # asyncio.run_coroutine_threadsafe().
-        self._event_loop: Optional[asyncio.AbstractEventLoop] = None
-        _logger.info("Registered bot %s with StrategyManager. Instance ID: %s",
-                     config_file, self.instance_id)
+        self._event_loop: asyncio.AbstractEventLoop | None = None
+        _logger.info("Registered bot %s with StrategyManager. Instance ID: %s", config_file, self.instance_id)
 
     def _load_and_hydrate_config(self) -> Dict[str, Any]:
         """Load, validate and hydrate the configuration manifest."""
@@ -49,15 +49,16 @@ class LiveTradingBot:
         if not config_path.exists():
             raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             raw_config = json.load(f)
 
         # Ensure bot_id is present
-        if 'bot_id' not in raw_config:
-            raw_config['bot_id'] = self.config_file.split('.')[0]
+        if "bot_id" not in raw_config:
+            raw_config["bot_id"] = self.config_file.split(".")[0]
 
         # Use Factory to resolve manifest integrations
         from src.config.configuration_factory import config_factory
+
         return config_factory.load_manifest(raw_config)
 
     def start(self):

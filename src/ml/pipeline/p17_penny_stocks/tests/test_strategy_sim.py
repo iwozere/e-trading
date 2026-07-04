@@ -1,7 +1,7 @@
 """Tests for the P17 strategy simulator core (pure functions)."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -23,6 +23,7 @@ def _ohlc(bars):
 
 
 # ── simulate_trade ──────────────────────────────────────────────────────────
+
 
 def test_initial_stop_hit():
     # buy 10, stop 20% -> 8.0; first bar trades down to 7.9
@@ -66,13 +67,15 @@ def test_stop_checked_before_activation_when_both_in_first_bar():
 
 # ── _resolve_frac (atr scaling + clamp) ─────────────────────────────────────
 
+
 def test_resolve_frac_pct_and_atr():
     assert ss._resolve_frac(0.20, "pct", atr=0.13) == 0.20
     assert abs(ss._resolve_frac(2.0, "atr", atr=0.13) - 0.26) < 1e-9
-    assert ss._resolve_frac(2.0, "atr", atr=0.80) == 0.90    # clamped to 90%
+    assert ss._resolve_frac(2.0, "atr", atr=0.80) == 0.90  # clamped to 90%
 
 
 # ── evaluate ────────────────────────────────────────────────────────────────
+
 
 def test_evaluate_aggregates_per_tier_and_total():
     records = [
@@ -100,12 +103,13 @@ def test_evaluate_aggregates_per_tier_and_total():
 
 def test_evaluate_skips_paths_without_holding_data():
     records = [{"ticker": "X", "tier": "B", "atr": 0.1, "detection_date": "2026-06-01", "buy_price": 10.0}]
-    paths = {"X": _ohlc([(10, 10, 10, 10)])}   # only detection day, no holding bars
+    paths = {"X": _ohlc([(10, 10, 10, 10)])}  # only detection day, no holding bars
     res = ss.evaluate(records, paths, StrategyParams(), {"B": 500.0}, entry="close")
     assert res["per_tier"]["TOTAL"]["n"] == 0
 
 
 # ── objective_value ─────────────────────────────────────────────────────────
+
 
 def test_objective_value_variants():
     result = {

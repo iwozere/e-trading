@@ -1,19 +1,21 @@
 import re
-import pandas as pd
-from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Tuple, Optional, Dict
 import sys
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict, Tuple
+
+import pandas as pd
 
 # Ensure project root is in sys.path for internal imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.data.downloader.data_downloader_factory import DataDownloaderFactory
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class P07DataLoader:
     """
@@ -44,12 +46,7 @@ class P07DataLoader:
             _logger.warning("Filename %s does not match expected schema.", filename)
             return "", "", "", ""
 
-        return (
-            match.group("ticker"),
-            match.group("timeframe"),
-            match.group("start"),
-            match.group("end")
-        )
+        return (match.group("ticker"), match.group("timeframe"), match.group("start"), match.group("end"))
 
     def load_ohlcv(self, filepath: Path) -> pd.DataFrame:
         """Load local ticker OHLCV data."""
@@ -87,7 +84,7 @@ class P07DataLoader:
                 start = datetime.now() - timedelta(days=364)
                 end = datetime.now()
                 # Check for specialized market cap method (merged coingecko)
-                if hasattr(loader, 'get_market_cap'):
+                if hasattr(loader, "get_market_cap"):
                     df = loader.get_market_cap("bitcoin", start, end)
                 else:
                     # Fallback for other providers (historical)
@@ -133,18 +130,18 @@ class P07DataLoader:
 
     # Maps execution timeframe → anchor timeframe for MTF context
     TF_MAPPING: Dict[str, str] = {
-        "5m":  "1h",
+        "5m": "1h",
         "15m": "4h",
         "30m": "4h",
-        "1h":  "1d",
-        "4h":  "1d",
+        "1h": "1d",
+        "4h": "1d",
     }
 
-    def get_anchor_tf(self, execution_tf: str) -> Optional[str]:
+    def get_anchor_tf(self, execution_tf: str) -> str | None:
         """Returns the mapped anchor timeframe for a given execution timeframe."""
         return self.TF_MAPPING.get(execution_tf)
 
-    def find_anchor_file(self, ticker: str, anchor_tf: str, start_date: str, end_date: str) -> Optional[Path]:
+    def find_anchor_file(self, ticker: str, anchor_tf: str, start_date: str, end_date: str) -> Path | None:
         """Finds a matching anchor data file in the data root."""
         path = self.data_root / f"{ticker}_{anchor_tf}_{start_date}_{end_date}.csv"
         if path.exists():
@@ -169,13 +166,7 @@ class P07DataLoader:
         # 1-bar shift ensures point-in-time validity (no look-ahead on anchor close)
         df_anchor_safe = df_anchor_renamed.shift(1)
 
-        merged = pd.merge_asof(
-            df_exec,
-            df_anchor_safe,
-            left_index=True,
-            right_index=True,
-            direction='backward'
-        )
+        merged = pd.merge_asof(df_exec, df_anchor_safe, left_index=True, right_index=True, direction="backward")
         return merged
 
     def get_mtf_dataset(self, exec_path: Path) -> pd.DataFrame:
@@ -199,9 +190,7 @@ class P07DataLoader:
                 df_anchor = self.load_ohlcv(anchor_file)
                 df_exec = self.merge_mtf(df_exec, df_anchor)
             else:
-                _logger.warning(
-                    "No anchor file found for %s %s. Proceeding without MTF features.", ticker, anchor_tf
-                )
+                _logger.warning("No anchor file found for %s %s. Proceeding without MTF features.", ticker, anchor_tf)
         else:
             _logger.info("No anchor TF mapped for %s. Skipping MTF join.", timeframe)
 

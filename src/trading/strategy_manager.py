@@ -17,34 +17,24 @@ Features:
 import asyncio
 import json
 import uuid
-import threading
-import time
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, Dict, List
 
-import backtrader as bt
-
-from src.trading.constants import PROJECT_ROOT, TRADING_CONFIG_DIR
-
-from src.trading.broker.broker_factory import get_broker
-from src.trading.broker.broker_manager import BrokerManager
-from src.trading.strategy_handler import strategy_handler
-from src.data.feed.data_feed_factory import DataFeedFactory
-from src.trading.base_trading_bot import BaseTradingBot
-from src.notification.logger import setup_logger
 from src.data.db.services.trading_service import trading_service
 from src.data.db.services.users_service import UsersService
-from src.notification.service.client import NotificationServiceClient, MessageType, MessagePriority
-
-from src.trading.strategy_instance import StrategyInstance
+from src.notification.logger import setup_logger
+from src.notification.service.client import NotificationServiceClient
+from src.trading.broker.broker_manager import BrokerManager
+from src.trading.constants import PROJECT_ROOT
 from src.trading.instance_service import InstanceService
+from src.trading.strategy_handler import strategy_handler
 
 _logger = setup_logger(__name__)
 _users_service = UsersService()
 
 
-def _coerce_db_bot_id(raw_id: Any) -> Optional[int]:
+def _coerce_db_bot_id(raw_id: Any) -> int | None:
     """Return BotInstance PK for ``trading_service`` calls, or None if not numeric (e.g. ephemeral UUID)."""
     if raw_id is None:
         return None
@@ -60,8 +50,8 @@ def _coerce_db_bot_id(raw_id: Any) -> Optional[int]:
 def _update_bot_status_db(
     raw_id: Any,
     status: str,
-    error_message: Optional[str] = None,
-    started_at: Optional[datetime] = None,
+    error_message: str | None = None,
+    started_at: datetime | None = None,
 ) -> None:
     """Persist bot status when ``raw_id`` maps to a database row; no-op for manifest-only UUID instances."""
     bid = _coerce_db_bot_id(raw_id)
@@ -69,9 +59,7 @@ def _update_bot_status_db(
         _logger.debug("Skipping update_bot_status (no DB id): %s", raw_id)
         return
     try:
-        trading_service.update_bot_status(
-            bid, status, error_message=error_message, started_at=started_at
-        )
+        trading_service.update_bot_status(bid, status, error_message=error_message, started_at=started_at)
     except Exception:
         _logger.debug("update_bot_status failed for bot_id=%s", bid, exc_info=True)
 
@@ -92,12 +80,16 @@ class StrategyManager:
     - DB polling for hot-reload
     """
 
-    def __init__(self, user_id: Optional[int] = None, notification_client: Optional[NotificationServiceClient] = None, 
-                 trade_repository: Any = None):
+    def __init__(
+        self,
+        user_id: int | None = None,
+        notification_client: NotificationServiceClient | None = None,
+        trade_repository: Any = None,
+    ):
         """Initialize the strategy manager."""
         self.user_id = user_id
         self.trade_repository = trade_repository
-        
+
         # Use database-only notification client by default if none provided
         self.notification_client = notification_client or NotificationServiceClient(service_url="database://")
         if not notification_client:
@@ -105,10 +97,9 @@ class StrategyManager:
 
         # Lifecycle management delegated to InstanceService
         self.instance_service = InstanceService(
-            notification_client=self.notification_client,
-            trade_repository=trade_repository
+            notification_client=self.notification_client, trade_repository=trade_repository
         )
-        
+
         self.broker_manager = BrokerManager()
 
         self.is_running = False
@@ -139,14 +130,13 @@ class StrategyManager:
     async def restart_instance(self, instance_id: str) -> bool:
         return await self.restart_strategy(instance_id)
 
-    def get_instance_status(self, instance_id: str) -> Optional[Dict[str, Any]]:
+    def get_instance_status(self, instance_id: str) -> Dict[str, Any] | None:
         return self.get_strategy_status(instance_id)
 
     @property
     def strategy_instances(self):
         """Maintain backward compatibility for components accessing instances directly."""
         return self.instance_service.instances
-
 
     async def load_strategies_from_config(self, config_file: str) -> bool:
         """Load strategy configurations from JSON file."""
@@ -158,10 +148,10 @@ class StrategyManager:
                 _logger.error("Configuration file not found: %s", config_path)
                 return False
 
-            with open(config_path, 'r') as f:
+            with open(config_path) as f:
                 config = json.load(f)
 
-            strategies = config.get('strategies', [])
+            strategies = config.get("strategies", [])
             if not strategies:
                 _logger.error("No strategies found in configuration")
                 return False
@@ -171,14 +161,14 @@ class StrategyManager:
             for strategy_config in strategies:
                 # Use Factory to Hydrate/Validate
                 try:
-                    if 'bot_id' not in strategy_config:
-                        strategy_config['bot_id'] = strategy_config.get('id') or str(uuid.uuid4())
+                    if "bot_id" not in strategy_config:
+                        strategy_config["bot_id"] = strategy_config.get("id") or str(uuid.uuid4())
                     strategy_config = config_factory.load_manifest(strategy_config)
                 except Exception as e:
                     _logger.error("Strategy factory hydration failed: %s", e)
                     continue
 
-                instance_id = strategy_config.get('id') or str(uuid.uuid4())
+                instance_id = strategy_config.get("id") or str(uuid.uuid4())
 
                 # Delegate creation to InstanceService
                 self.instance_service.create_instance(instance_id, strategy_config)
@@ -198,7 +188,7 @@ class StrategyManager:
         for instance_id in self.strategy_instances.keys():
             # Check if strategy is enabled
             instance = self.strategy_instances[instance_id]
-            if not instance.config.get('enabled', True):
+            if not instance.config.get("enabled", True):
                 _logger.info("Strategy %s is disabled, skipping", instance.name)
                 continue
 
@@ -236,7 +226,7 @@ class StrategyManager:
         """Get status of all strategy instances."""
         return [instance.get_status() for instance in self.strategy_instances.values()]
 
-    def get_strategy_status(self, instance_id: str) -> Optional[Dict[str, Any]]:
+    def get_strategy_status(self, instance_id: str) -> Dict[str, Any] | None:
         """Get status of a specific strategy instance."""
         if instance_id not in self.strategy_instances:
             return None
@@ -271,13 +261,13 @@ class StrategyManager:
         """Monitor strategy instances and handle auto-recovery."""
         while self.is_running:
             try:
-                current_time = datetime.now(timezone.utc)
+                current_time = datetime.now(UTC)
                 running_count = 0
                 unhealthy_count = 0
 
                 # Check health of all running strategies
                 for instance_id, instance in self.strategy_instances.items():
-                    if instance.status == 'running':
+                    if instance.status == "running":
                         running_count += 1
 
                         # Check heartbeat health
@@ -289,7 +279,9 @@ class StrategyManager:
                                 unhealthy_count += 1
                                 _logger.warning(
                                     "Bot %s heartbeat stale (%.1fs old, max %.1fs). Attempting recovery...",
-                                    instance.name, heartbeat_age, max_heartbeat_age
+                                    instance.name,
+                                    heartbeat_age,
+                                    max_heartbeat_age,
                                 )
                                 # Try to restart unhealthy bot
                                 if instance.error_count < 3:
@@ -297,25 +289,30 @@ class StrategyManager:
                                 else:
                                     _logger.error(
                                         "Bot %s exceeded max restart attempts (%d), marking as error",
-                                        instance.name, instance.error_count
+                                        instance.name,
+                                        instance.error_count,
                                     )
-                                    instance.status = 'error'
+                                    instance.status = "error"
                                     _update_bot_status_db(
                                         instance_id,
                                         "error",
                                         error_message=f"Exceeded max restart attempts ({instance.error_count})",
                                     )
 
-                    elif instance.status == 'error' and instance.error_count < 3:
+                    elif instance.status == "error" and instance.error_count < 3:
                         # Auto-recovery for failed strategies (max 3 attempts)
-                        _logger.warning("Attempting auto-recovery for %s (attempt %d/3)",
-                                      instance.name, instance.error_count + 1)
+                        _logger.warning(
+                            "Attempting auto-recovery for %s (attempt %d/3)", instance.name, instance.error_count + 1
+                        )
                         await instance.restart()
 
                 # Log periodic status with detailed metrics
                 _logger.info(
                     "Strategy Monitor: %d/%d running, %d unhealthy, %d total",
-                    running_count, len(self.strategy_instances), unhealthy_count, len(self.strategy_instances)
+                    running_count,
+                    len(self.strategy_instances),
+                    unhealthy_count,
+                    len(self.strategy_instances),
                 )
 
                 await asyncio.sleep(60)  # Monitor every minute
@@ -400,43 +397,37 @@ class StrategyManager:
             open_positions = trading_service.get_open_positions(bot_id=str(bot_id))
 
             if open_positions:
-                _logger.info(
-                    "Recovered %d open position(s) for bot %d",
-                    len(open_positions), bot_id
-                )
+                _logger.info("Recovered %d open position(s) for bot %d", len(open_positions), bot_id)
                 # Store positions in config for strategy to access
-                config['_recovered_positions'] = open_positions
+                config["_recovered_positions"] = open_positions
 
                 # Log position details
                 for pos in open_positions:
                     _logger.info(
                         "  Position: %s %s qty=%.8f avg_price=%.8f status=%s",
-                        pos.get('symbol'),
-                        pos.get('direction'),
-                        pos.get('qty_open', 0),
-                        pos.get('avg_price', 0),
-                        pos.get('status')
+                        pos.get("symbol"),
+                        pos.get("direction"),
+                        pos.get("qty_open", 0),
+                        pos.get("avg_price", 0),
+                        pos.get("status"),
                     )
 
             # Get open trades
             open_trades = trading_service.get_open_trades()
-            bot_trades = [t for t in open_trades if t['bot_id'] == bot_id]
+            bot_trades = [t for t in open_trades if t["bot_id"] == bot_id]
 
             if bot_trades:
-                _logger.info(
-                    "Recovered %d open trade(s) for bot %d",
-                    len(bot_trades), bot_id
-                )
-                config['_recovered_trades'] = bot_trades
+                _logger.info("Recovered %d open trade(s) for bot %d", len(bot_trades), bot_id)
+                config["_recovered_trades"] = bot_trades
 
                 # Log trade details
                 for trade in bot_trades:
                     _logger.info(
                         "  Trade: %s entry=%.8f @ %s status=%s",
-                        trade.get('symbol'),
-                        trade.get('entry_price', 0),
-                        trade.get('entry_time'),
-                        trade.get('status')
+                        trade.get("symbol"),
+                        trade.get("entry_price", 0),
+                        trade.get("entry_time"),
+                        trade.get("status"),
                     )
 
             return config
@@ -446,7 +437,7 @@ class StrategyManager:
             return config
 
     # -------------------- DB-backed loading and polling --------------------
-    async def load_strategies_from_db(self, user_id: Optional[int] = None, resume_mode: bool = True) -> bool:
+    async def load_strategies_from_db(self, user_id: int | None = None, resume_mode: bool = True) -> bool:
         """
         Load strategy configurations from the database - ONLY PLACE THIS HAPPENS.
 
@@ -495,8 +486,7 @@ class StrategyManager:
             self._mark_service_running()
 
             if not bots:
-                _logger.warning("No bots to load%s",
-                                f" for user_id={user_id}" if user_id else "")
+                _logger.warning("No bots to load%s", f" for user_id={user_id}" if user_id else "")
                 return False
 
             loaded = 0
@@ -523,12 +513,11 @@ class StrategyManager:
                 # Use Factory to Hydrate/Validate
                 try:
                     from src.config.configuration_factory import config_factory
+
                     si_config = config_factory.load_manifest(si_config)
                 except Exception as e:
                     _logger.error("Bot %s: Factory validation/hydration failed: %s", bot["id"], e)
-                    _update_bot_status_db(
-                        bot["id"], "error", error_message=f"Config Factory Error: {e}"
-                    )
+                    _update_bot_status_db(bot["id"], "error", error_message=f"Config Factory Error: {e}")
                     continue
 
                 # Recover state if this is a crash recovery
@@ -541,8 +530,7 @@ class StrategyManager:
                 strategy_config = si_config.get("strategy", {})
 
                 is_strategy_valid, strategy_errors, strategy_warnings = strategy_handler.validate_strategy_config(
-                    strategy_type,
-                    strategy_config
+                    strategy_type, strategy_config
                 )
 
                 if not is_strategy_valid:
@@ -599,10 +587,10 @@ class StrategyManager:
             "name": name,
             "enabled": enabled,
             "symbol": symbol or "BTCUSDT",
-            **cfg
+            **cfg,
         }
 
-    async def start_db_polling(self, user_id: Optional[int] = None, interval_seconds: int = 60):
+    async def start_db_polling(self, user_id: int | None = None, interval_seconds: int = 60):
         """Continuously poll DB and sync strategy processes.
 
         Actions on each poll:
@@ -696,7 +684,7 @@ class StrategyManager:
             # Stop all strategy instances and persist their status
             _logger.info("Stopping all strategy instances and persisting statuses...")
             for instance_id, instance in self.strategy_instances.items():
-                if instance.status == 'running':
+                if instance.status == "running":
                     _logger.info("Stopping bot %s (%s)", instance.name, instance_id)
 
                     # Stop the bot

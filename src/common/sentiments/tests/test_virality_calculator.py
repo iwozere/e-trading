@@ -9,18 +9,22 @@ Tests cover:
 - Influence scoring for high-impact accounts
 """
 
-import unittest
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
 import sys
+import unittest
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.common.sentiments.processing.virality_calculator import (
-    ViralityCalculator, ViralityResult, PostData, EngagementMetrics,
-    AuthorInfluence, Platform
+    AuthorInfluence,
+    EngagementMetrics,
+    Platform,
+    PostData,
+    ViralityCalculator,
+    ViralityResult,
 )
 
 
@@ -38,13 +42,7 @@ class TestViralityCalculator(unittest.TestCase):
             "engagement_weight": 0.4,
             "verification_bonus": 0.2,
             "account_age_weight": 0.1,
-            "virality_weights": {
-                "engagement": 0.3,
-                "velocity": 0.2,
-                "reach": 0.2,
-                "influence": 0.15,
-                "trending": 0.15
-            }
+            "virality_weights": {"engagement": 0.3, "velocity": 0.2, "reach": 0.2, "influence": 0.15, "trending": 0.15},
         }
         self.calculator = ViralityCalculator(self.config)
 
@@ -85,26 +83,20 @@ class TestViralityCalculator(unittest.TestCase):
             verified=False,
             account_age_days=365,
             total_posts=100,
-            avg_engagement=10.0
+            avg_engagement=10.0,
         )
 
-        engagement = EngagementMetrics(
-            likes=50,
-            replies=10,
-            retweets=5,
-            shares=2,
-            views=1000
-        )
+        engagement = EngagementMetrics(likes=50, replies=10, retweets=5, shares=2, views=1000)
 
         post = PostData(
             id="post_1",
             content="Great trading opportunity! #crypto #bitcoin",
             author=author,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             engagement=engagement,
             platform=Platform.TWITTER,
             hashtags=["crypto", "bitcoin"],
-            mentions=[]
+            mentions=[],
         )
 
         result = self.calculator.calculate_virality([post])
@@ -129,26 +121,22 @@ class TestViralityCalculator(unittest.TestCase):
                 verified=i == 0,  # First user is verified
                 account_age_days=365 - i * 30,
                 total_posts=100 + i * 50,
-                avg_engagement=10.0 + i * 5
+                avg_engagement=10.0 + i * 5,
             )
 
             engagement = EngagementMetrics(
-                likes=20 + i * 10,
-                replies=5 + i * 2,
-                retweets=2 + i,
-                shares=1,
-                views=500 + i * 200
+                likes=20 + i * 10, replies=5 + i * 2, retweets=2 + i, shares=1, views=500 + i * 200
             )
 
             post = PostData(
                 id=f"post_{i}",
                 content=f"Trading post {i} #crypto #trading",
                 author=author,
-                timestamp=datetime.now(timezone.utc) - timedelta(hours=i),
+                timestamp=datetime.now(UTC) - timedelta(hours=i),
                 engagement=engagement,
                 platform=Platform.TWITTER,
                 hashtags=["crypto", "trading"],
-                mentions=[]
+                mentions=[],
             )
             posts.append(post)
 
@@ -165,12 +153,7 @@ class TestViralityCalculator(unittest.TestCase):
 
     def test_platform_specific_weighting(self):
         """Test platform-specific engagement weighting."""
-        author = AuthorInfluence(
-            username="test_user",
-            followers_count=1000,
-            verified=False,
-            account_age_days=365
-        )
+        author = AuthorInfluence(username="test_user", followers_count=1000, verified=False, account_age_days=365)
 
         # Same engagement metrics on different platforms
         engagement = EngagementMetrics(likes=10, replies=5, retweets=3)
@@ -179,18 +162,18 @@ class TestViralityCalculator(unittest.TestCase):
             id="twitter_post",
             content="Test post",
             author=author,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             engagement=engagement,
-            platform=Platform.TWITTER
+            platform=Platform.TWITTER,
         )
 
         reddit_post = PostData(
             id="reddit_post",
             content="Test post",
             author=author,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             engagement=EngagementMetrics(upvotes=10, comments=5),
-            platform=Platform.REDDIT
+            platform=Platform.REDDIT,
         )
 
         twitter_result = self.calculator.calculate_virality([twitter_post])
@@ -204,39 +187,27 @@ class TestViralityCalculator(unittest.TestCase):
         author = AuthorInfluence(username="test_user", followers_count=1000)
 
         # High engagement post
-        high_engagement = EngagementMetrics(
-            likes=100,
-            replies=20,
-            retweets=15,
-            shares=5,
-            views=5000
-        )
+        high_engagement = EngagementMetrics(likes=100, replies=20, retweets=15, shares=5, views=5000)
 
         high_post = PostData(
             id="high_post",
             content="Viral post",
             author=author,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             engagement=high_engagement,
-            platform=Platform.TWITTER
+            platform=Platform.TWITTER,
         )
 
         # Low engagement post
-        low_engagement = EngagementMetrics(
-            likes=2,
-            replies=0,
-            retweets=0,
-            shares=0,
-            views=50
-        )
+        low_engagement = EngagementMetrics(likes=2, replies=0, retweets=0, shares=0, views=50)
 
         low_post = PostData(
             id="low_post",
             content="Low engagement post",
             author=author,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             engagement=low_engagement,
-            platform=Platform.TWITTER
+            platform=Platform.TWITTER,
         )
 
         high_result = self.calculator.calculate_virality([high_post])
@@ -250,13 +221,13 @@ class TestViralityCalculator(unittest.TestCase):
 
         # Create posts with increasing engagement over time
         posts = []
-        base_time = datetime.now(timezone.utc) - timedelta(hours=12)
+        base_time = datetime.now(UTC) - timedelta(hours=12)
 
         for i in range(6):
             engagement = EngagementMetrics(
                 likes=10 + i * 20,  # Increasing engagement
                 replies=2 + i * 4,
-                retweets=1 + i * 2
+                retweets=1 + i * 2,
             )
 
             post = PostData(
@@ -265,7 +236,7 @@ class TestViralityCalculator(unittest.TestCase):
                 author=author,
                 timestamp=base_time + timedelta(hours=i * 2),
                 engagement=engagement,
-                platform=Platform.TWITTER
+                platform=Platform.TWITTER,
             )
             posts.append(post)
 
@@ -278,36 +249,28 @@ class TestViralityCalculator(unittest.TestCase):
         """Test reach score calculation based on followers and engagement."""
         # High-reach scenario: verified user with many followers
         high_reach_author = AuthorInfluence(
-            username="influencer",
-            followers_count=100000,
-            verified=True,
-            account_age_days=1000
+            username="influencer", followers_count=100000, verified=True, account_age_days=1000
         )
 
         high_reach_post = PostData(
             id="high_reach",
             content="Influencer post",
             author=high_reach_author,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             engagement=EngagementMetrics(likes=1000, replies=100, retweets=200),
-            platform=Platform.TWITTER
+            platform=Platform.TWITTER,
         )
 
         # Low-reach scenario: new user with few followers
-        low_reach_author = AuthorInfluence(
-            username="newbie",
-            followers_count=50,
-            verified=False,
-            account_age_days=30
-        )
+        low_reach_author = AuthorInfluence(username="newbie", followers_count=50, verified=False, account_age_days=30)
 
         low_reach_post = PostData(
             id="low_reach",
             content="Newbie post",
             author=low_reach_author,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             engagement=EngagementMetrics(likes=5, replies=1, retweets=0),
-            platform=Platform.TWITTER
+            platform=Platform.TWITTER,
         )
 
         high_result = self.calculator.calculate_virality([high_reach_post])
@@ -325,7 +288,7 @@ class TestViralityCalculator(unittest.TestCase):
             verified=True,
             account_age_days=2000,
             total_posts=5000,
-            avg_engagement=100.0
+            avg_engagement=100.0,
         )
 
         # Low influence: new account, few followers
@@ -336,25 +299,25 @@ class TestViralityCalculator(unittest.TestCase):
             verified=False,
             account_age_days=10,
             total_posts=5,
-            avg_engagement=1.0
+            avg_engagement=1.0,
         )
 
         high_post = PostData(
             id="high_influence",
             content="Expert analysis",
             author=high_influence_author,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             engagement=EngagementMetrics(likes=200, replies=50, retweets=30),
-            platform=Platform.TWITTER
+            platform=Platform.TWITTER,
         )
 
         low_post = PostData(
             id="low_influence",
             content="Newbie question",
             author=low_influence_author,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             engagement=EngagementMetrics(likes=2, replies=1, retweets=0),
-            platform=Platform.TWITTER
+            platform=Platform.TWITTER,
         )
 
         high_result = self.calculator.calculate_virality([high_post])
@@ -373,11 +336,11 @@ class TestViralityCalculator(unittest.TestCase):
                 id=f"trending_post_{i}",
                 content=f"Post {i} #bitcoin #crypto #moon",
                 author=author,
-                timestamp=datetime.now(timezone.utc) - timedelta(hours=i),
+                timestamp=datetime.now(UTC) - timedelta(hours=i),
                 engagement=EngagementMetrics(likes=10, replies=2, retweets=1),
                 platform=Platform.TWITTER,
                 hashtags=["bitcoin", "crypto", "moon"],
-                mentions=["elonmusk"] if i % 3 == 0 else []
+                mentions=["elonmusk"] if i % 3 == 0 else [],
             )
             trending_posts.append(post)
 
@@ -388,11 +351,11 @@ class TestViralityCalculator(unittest.TestCase):
                 id=f"normal_post_{i}",
                 content=f"Normal post {i}",
                 author=author,
-                timestamp=datetime.now(timezone.utc) - timedelta(hours=i),
+                timestamp=datetime.now(UTC) - timedelta(hours=i),
                 engagement=EngagementMetrics(likes=10, replies=2, retweets=1),
                 platform=Platform.TWITTER,
                 hashtags=[],
-                mentions=[]
+                mentions=[],
             )
             non_trending_posts.append(post)
 
@@ -411,9 +374,9 @@ class TestViralityCalculator(unittest.TestCase):
             id="recent",
             content="Recent post",
             author=author,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             engagement=engagement,
-            platform=Platform.TWITTER
+            platform=Platform.TWITTER,
         )
 
         # Old post
@@ -421,9 +384,9 @@ class TestViralityCalculator(unittest.TestCase):
             id="old",
             content="Old post",
             author=author,
-            timestamp=datetime.now(timezone.utc) - timedelta(days=1),
+            timestamp=datetime.now(UTC) - timedelta(days=1),
             engagement=engagement,
-            platform=Platform.TWITTER
+            platform=Platform.TWITTER,
         )
 
         recent_result = self.calculator.calculate_virality([recent_post])
@@ -442,11 +405,11 @@ class TestViralityCalculator(unittest.TestCase):
                 id=f"post_{i}",
                 content=f"Post {i} #bitcoin #crypto",
                 author=author,
-                timestamp=datetime.now(timezone.utc) - timedelta(hours=i),
+                timestamp=datetime.now(UTC) - timedelta(hours=i),
                 engagement=EngagementMetrics(likes=10 + i, replies=2, retweets=1),
                 platform=Platform.TWITTER,
                 hashtags=["bitcoin", "crypto"] + (["moon"] if i < 3 else []),
-                mentions=["elonmusk"] if i < 5 else []
+                mentions=["elonmusk"] if i < 5 else [],
             )
             posts.append(post)
 
@@ -467,9 +430,9 @@ class TestViralityCalculator(unittest.TestCase):
             id="test_post",
             content="Test post",
             author=author,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             engagement=EngagementMetrics(likes=10, replies=2, retweets=1),
-            platform=Platform.TWITTER
+            platform=Platform.TWITTER,
         )
 
         self.calculator.calculate_virality([post])
@@ -490,9 +453,9 @@ class TestViralityCalculator(unittest.TestCase):
             id="test_post",
             content="Test post",
             author=author,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             engagement=EngagementMetrics(likes=10, replies=2, retweets=1),
-            platform=Platform.TWITTER
+            platform=Platform.TWITTER,
         )
 
         self.calculator.calculate_virality([post])
@@ -516,9 +479,9 @@ class TestViralityCalculator(unittest.TestCase):
             id="zero_post",
             content="Zero engagement post",
             author=author,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             engagement=EngagementMetrics(),  # All zeros
-            platform=Platform.TWITTER
+            platform=Platform.TWITTER,
         )
 
         result = self.calculator.calculate_virality([zero_engagement_post])
@@ -535,15 +498,7 @@ class TestEngagementMetrics(unittest.TestCase):
     def test_engagement_metrics_creation(self):
         """Test EngagementMetrics object creation."""
         engagement = EngagementMetrics(
-            likes=50,
-            replies=10,
-            retweets=5,
-            shares=3,
-            views=1000,
-            comments=8,
-            upvotes=25,
-            downvotes=2,
-            reactions=15
+            likes=50, replies=10, retweets=5, shares=3, views=1000, comments=8, upvotes=25, downvotes=2, reactions=15
         )
 
         self.assertEqual(engagement.likes, 50)
@@ -558,15 +513,7 @@ class TestEngagementMetrics(unittest.TestCase):
 
     def test_total_engagement_calculation(self):
         """Test total engagement calculation."""
-        engagement = EngagementMetrics(
-            likes=10,
-            replies=5,
-            retweets=3,
-            shares=2,
-            comments=4,
-            upvotes=8,
-            reactions=6
-        )
+        engagement = EngagementMetrics(likes=10, replies=5, retweets=3, shares=2, comments=4, upvotes=8, reactions=6)
 
         expected_total = 10 + 5 + 3 + 2 + 4 + 8 + 6
         self.assertEqual(engagement.total_engagement(), expected_total)
@@ -594,7 +541,7 @@ class TestAuthorInfluence(unittest.TestCase):
             account_age_days=1500,
             total_posts=2000,
             avg_engagement=75.5,
-            influence_score=0.85
+            influence_score=0.85,
         )
 
         self.assertEqual(author.username, "crypto_expert")
@@ -614,7 +561,7 @@ class TestPostData(unittest.TestCase):
         """Test PostData object creation."""
         author = AuthorInfluence(username="test_user", followers_count=1000)
         engagement = EngagementMetrics(likes=50, replies=10, retweets=5)
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
 
         post = PostData(
             id="test_post_123",
@@ -624,7 +571,7 @@ class TestPostData(unittest.TestCase):
             engagement=engagement,
             platform=Platform.TWITTER,
             hashtags=["crypto"],
-            mentions=["elonmusk"]
+            mentions=["elonmusk"],
         )
 
         self.assertEqual(post.id, "test_post_123")
@@ -645,9 +592,9 @@ class TestPostData(unittest.TestCase):
             id="test_post",
             content="Test post",
             author=author,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             engagement=engagement,
-            platform=Platform.TWITTER
+            platform=Platform.TWITTER,
         )
 
         self.assertEqual(post.hashtags, [])

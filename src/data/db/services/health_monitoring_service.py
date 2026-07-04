@@ -5,15 +5,15 @@ Service layer for monitoring notification system health across all channels.
 Provides queue metrics, channel ownership status, and health assessments.
 """
 
-from typing import Dict, Any, List
-from datetime import datetime, timezone
-from pathlib import Path
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
+from src.data.db.services.base_service import BaseDBService, handle_db_error, with_uow
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -58,14 +58,14 @@ class HealthMonitoringService(BaseDBService):
             "service": "telegram_bot",
             "status": status,
             "status_reason": status_reason,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "channels": {
                 "owned": ["telegram"],
                 "email_owned_by": "notification_service",
                 "sms_owned_by": "notification_service",
-                "telegram_status": "enabled"
+                "telegram_status": "enabled",
             },
-            "queue": queue_metrics
+            "queue": queue_metrics,
         }
 
     @with_uow
@@ -99,14 +99,14 @@ class HealthMonitoringService(BaseDBService):
             "service": "notification_service",
             "status": status,
             "status_reason": status_reason,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "channels": {
                 "owned": enabled_channels,
                 "telegram_owned_by": "telegram_bot",
                 "email_status": "enabled" if "email" in enabled_channels else "disabled",
-                "sms_status": "enabled" if "sms" in enabled_channels else "disabled"
+                "sms_status": "enabled" if "sms" in enabled_channels else "disabled",
             },
-            "queue": queue_metrics
+            "queue": queue_metrics,
         }
 
     @with_uow
@@ -128,29 +128,22 @@ class HealthMonitoringService(BaseDBService):
         telegram_health = self.get_telegram_health()
         notification_health = self.get_notification_service_health(notification_enabled_channels)
 
-        all_healthy = (
-            telegram_health["status"] == "healthy" and
-            notification_health["status"] == "healthy"
-        )
+        all_healthy = telegram_health["status"] == "healthy" and notification_health["status"] == "healthy"
 
         return {
             "status": "healthy" if all_healthy else "degraded",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "services": {
-                "telegram_bot": telegram_health,
-                "notification_service": notification_health
-            },
+            "timestamp": datetime.now(UTC).isoformat(),
+            "services": {"telegram_bot": telegram_health, "notification_service": notification_health},
             "summary": {
                 "all_services_healthy": all_healthy,
                 "total_pending_messages": (
-                    telegram_health["queue"]["pending"] +
-                    notification_health["queue"]["pending"]
+                    telegram_health["queue"]["pending"] + notification_health["queue"]["pending"]
                 ),
                 "channel_ownership": {
                     "telegram_bot": ["telegram"],
-                    "notification_service": notification_health["channels"]["owned"]
-                }
-            }
+                    "notification_service": notification_health["channels"]["owned"],
+                },
+            },
         }
 
     @with_uow
@@ -171,30 +164,24 @@ class HealthMonitoringService(BaseDBService):
             # Get message statistics by status
             total_messages = self.uow.s.query(Message).count()
 
-            pending_messages = self.uow.s.query(Message).filter(
-                Message.status == MessageStatus.PENDING.value
-            ).count()
+            pending_messages = self.uow.s.query(Message).filter(Message.status == MessageStatus.PENDING.value).count()
 
-            processing_messages = self.uow.s.query(Message).filter(
-                Message.status == MessageStatus.PROCESSING.value
-            ).count()
+            processing_messages = (
+                self.uow.s.query(Message).filter(Message.status == MessageStatus.PROCESSING.value).count()
+            )
 
-            delivered_messages = self.uow.s.query(Message).filter(
-                Message.status == MessageStatus.DELIVERED.value
-            ).count()
+            delivered_messages = (
+                self.uow.s.query(Message).filter(Message.status == MessageStatus.DELIVERED.value).count()
+            )
 
-            failed_messages = self.uow.s.query(Message).filter(
-                Message.status == MessageStatus.FAILED.value
-            ).count()
+            failed_messages = self.uow.s.query(Message).filter(Message.status == MessageStatus.FAILED.value).count()
 
             # Check for locked messages (currently being processed)
-            locked_messages = self.uow.s.query(Message).filter(
-                Message.locked_by.isnot(None)
-            ).count()
+            locked_messages = self.uow.s.query(Message).filter(Message.locked_by.isnot(None)).count()
 
             return {
                 "status": "healthy",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "database": {
                     "connection": "connected",
                     "total_messages": total_messages,
@@ -202,19 +189,16 @@ class HealthMonitoringService(BaseDBService):
                     "processing_messages": processing_messages,
                     "delivered_messages": delivered_messages,
                     "failed_messages": failed_messages,
-                    "locked_messages": locked_messages
-                }
+                    "locked_messages": locked_messages,
+                },
             }
 
         except Exception as e:
             _logger.exception("Error getting database health:")
             return {
                 "status": "error",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "database": {
-                    "connection": "error",
-                    "error": str(e)
-                }
+                "timestamp": datetime.now(UTC).isoformat(),
+                "database": {"connection": "error", "error": str(e)},
             }
 
     def _assess_health_status(self, queue_metrics: Dict[str, Any]) -> tuple[str, str]:

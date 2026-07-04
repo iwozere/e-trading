@@ -7,22 +7,23 @@ Ensures immediate processing for high-priority messages with SLA guarantees.
 
 import asyncio
 import heapq
-import time
-from typing import Dict, Any, List, Optional, Tuple, Set
-from datetime import datetime
-from dataclasses import dataclass
-from enum import Enum
 import threading
+import time
+from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Set, Tuple
 
 from src.data.db.models.model_notification import MessagePriority
-from src.notification.service.message_queue import QueuedMessage
 from src.notification.logger import setup_logger
+from src.notification.service.message_queue import QueuedMessage
 
 _logger = setup_logger(__name__)
 
 
 class PriorityLevel(Enum):
     """Priority levels with numeric values for ordering."""
+
     CRITICAL = 1
     HIGH = 2
     NORMAL = 3
@@ -36,7 +37,7 @@ class PriorityQueueItem:
     priority: int
     timestamp: float
     message: QueuedMessage
-    sla_deadline: Optional[float] = None
+    sla_deadline: float | None = None
 
     def __lt__(self, other):
         """Compare items for priority queue ordering."""
@@ -49,9 +50,11 @@ class PriorityQueueItem:
 
     def __eq__(self, other):
         """Check equality."""
-        return (self.priority == other.priority and
-                self.timestamp == other.timestamp and
-                self.message.id == other.message.id)
+        return (
+            self.priority == other.priority
+            and self.timestamp == other.timestamp
+            and self.message.id == other.message.id
+        )
 
     @property
     def is_sla_violated(self) -> bool:
@@ -61,7 +64,7 @@ class PriorityQueueItem:
         return time.time() > self.sla_deadline
 
     @property
-    def sla_remaining_seconds(self) -> Optional[float]:
+    def sla_remaining_seconds(self) -> float | None:
         """Get remaining seconds until SLA violation."""
         if self.sla_deadline is None:
             return None
@@ -95,9 +98,8 @@ class PriorityStats:
             self.avg_processing_time_ms = processing_time_ms
         else:
             self.avg_processing_time_ms = (
-                (self.avg_processing_time_ms * (self.total_processed - 1) + processing_time_ms) /
-                self.total_processed
-            )
+                self.avg_processing_time_ms * (self.total_processed - 1) + processing_time_ms
+            ) / self.total_processed
 
         # Update priority-specific stats
         if priority == MessagePriority.CRITICAL:
@@ -106,36 +108,32 @@ class PriorityStats:
                 self.critical_avg_time_ms = processing_time_ms
             else:
                 self.critical_avg_time_ms = (
-                    (self.critical_avg_time_ms * (self.critical_processed - 1) + processing_time_ms) /
-                    self.critical_processed
-                )
+                    self.critical_avg_time_ms * (self.critical_processed - 1) + processing_time_ms
+                ) / self.critical_processed
         elif priority == MessagePriority.HIGH:
             self.high_processed += 1
             if self.high_processed == 1:
                 self.high_avg_time_ms = processing_time_ms
             else:
                 self.high_avg_time_ms = (
-                    (self.high_avg_time_ms * (self.high_processed - 1) + processing_time_ms) /
-                    self.high_processed
-                )
+                    self.high_avg_time_ms * (self.high_processed - 1) + processing_time_ms
+                ) / self.high_processed
         elif priority == MessagePriority.NORMAL:
             self.normal_processed += 1
             if self.normal_processed == 1:
                 self.normal_avg_time_ms = processing_time_ms
             else:
                 self.normal_avg_time_ms = (
-                    (self.normal_avg_time_ms * (self.normal_processed - 1) + processing_time_ms) /
-                    self.normal_processed
-                )
+                    self.normal_avg_time_ms * (self.normal_processed - 1) + processing_time_ms
+                ) / self.normal_processed
         elif priority == MessagePriority.LOW:
             self.low_processed += 1
             if self.low_processed == 1:
                 self.low_avg_time_ms = processing_time_ms
             else:
                 self.low_avg_time_ms = (
-                    (self.low_avg_time_ms * (self.low_processed - 1) + processing_time_ms) /
-                    self.low_processed
-                )
+                    self.low_avg_time_ms * (self.low_processed - 1) + processing_time_ms
+                ) / self.low_processed
 
 
 class PriorityMessageHandler:
@@ -161,10 +159,10 @@ class PriorityMessageHandler:
 
         # SLA configuration (in seconds)
         self._sla_config = {
-            MessagePriority.CRITICAL: 5.0,   # 5 seconds for critical
-            MessagePriority.HIGH: 30.0,      # 30 seconds for high
-            MessagePriority.NORMAL: 300.0,   # 5 minutes for normal
-            MessagePriority.LOW: 1800.0      # 30 minutes for low
+            MessagePriority.CRITICAL: 5.0,  # 5 seconds for critical
+            MessagePriority.HIGH: 30.0,  # 30 seconds for high
+            MessagePriority.NORMAL: 300.0,  # 5 minutes for normal
+            MessagePriority.LOW: 1800.0,  # 30 minutes for low
         }
 
         # Priority mapping
@@ -172,7 +170,7 @@ class PriorityMessageHandler:
             MessagePriority.CRITICAL: PriorityLevel.CRITICAL.value,
             MessagePriority.HIGH: PriorityLevel.HIGH.value,
             MessagePriority.NORMAL: PriorityLevel.NORMAL.value,
-            MessagePriority.LOW: PriorityLevel.LOW.value
+            MessagePriority.LOW: PriorityLevel.LOW.value,
         }
 
         # Processing state
@@ -200,10 +198,7 @@ class PriorityMessageHandler:
 
             # Create priority queue item
             queue_item = PriorityQueueItem(
-                priority=priority_value,
-                timestamp=current_time,
-                message=message,
-                sla_deadline=sla_deadline
+                priority=priority_value, timestamp=current_time, message=message, sla_deadline=sla_deadline
             )
 
             with self._lock:
@@ -215,7 +210,9 @@ class PriorityMessageHandler:
 
             self._logger.debug(
                 "Enqueued message %s with priority %s (SLA: %.1fs)",
-                message.id, message.priority.value, sla_seconds or 0
+                message.id,
+                message.priority.value,
+                sla_seconds or 0,
             )
 
             return True
@@ -224,7 +221,7 @@ class PriorityMessageHandler:
             self._logger.error("Failed to enqueue message %s: %s", message.id, e)
             return False
 
-    async def dequeue_next_message(self, timeout: Optional[float] = None) -> Optional[QueuedMessage]:
+    async def dequeue_next_message(self, timeout: float | None = None) -> QueuedMessage | None:
         """
         Dequeue the next highest priority message.
 
@@ -249,7 +246,7 @@ class PriorityMessageHandler:
                             "SLA violation for message %s (priority: %s, overdue: %.1fs)",
                             queue_item.message.id,
                             queue_item.message.priority.value,
-                            time.time() - queue_item.sla_deadline
+                            time.time() - queue_item.sla_deadline,
                         )
 
                     return queue_item.message
@@ -263,11 +260,7 @@ class PriorityMessageHandler:
             # Wait a bit before checking again
             await asyncio.sleep(0.1)
 
-    async def dequeue_by_priority(
-        self,
-        priority: MessagePriority,
-        max_messages: int = 10
-    ) -> List[QueuedMessage]:
+    async def dequeue_by_priority(self, priority: MessagePriority, max_messages: int = 10) -> List[QueuedMessage]:
         """
         Dequeue messages of specific priority.
 
@@ -293,8 +286,7 @@ class PriorityMessageHandler:
                     if item.is_sla_violated:
                         self._stats.sla_violations += 1
                         self._logger.warning(
-                            "SLA violation for message %s (priority: %s)",
-                            item.message.id, item.message.priority.value
+                            "SLA violation for message %s (priority: %s)", item.message.id, item.message.priority.value
                         )
 
                     messages.append(item.message)
@@ -306,10 +298,7 @@ class PriorityMessageHandler:
                 heapq.heappush(self._priority_queue, item)
 
         if messages:
-            self._logger.debug(
-                "Dequeued %d messages with priority %s",
-                len(messages), priority.value
-            )
+            self._logger.debug("Dequeued %d messages with priority %s", len(messages), priority.value)
 
         return messages
 
@@ -343,12 +332,7 @@ class PriorityMessageHandler:
         """
         with self._lock:
             # Count messages by priority
-            priority_counts = {
-                "CRITICAL": 0,
-                "HIGH": 0,
-                "NORMAL": 0,
-                "LOW": 0
-            }
+            priority_counts = {"CRITICAL": 0, "HIGH": 0, "NORMAL": 0, "LOW": 0}
 
             sla_violations_pending = 0
 
@@ -379,12 +363,10 @@ class PriorityMessageHandler:
                     "CRITICAL": self._stats.critical_avg_time_ms,
                     "HIGH": self._stats.high_avg_time_ms,
                     "NORMAL": self._stats.normal_avg_time_ms,
-                    "LOW": self._stats.low_avg_time_ms
-                }
+                    "LOW": self._stats.low_avg_time_ms,
+                },
             },
-            "sla_config": {
-                priority.value: seconds for priority, seconds in self._sla_config.items()
-            }
+            "sla_config": {priority.value: seconds for priority, seconds in self._sla_config.items()},
         }
 
     def get_sla_violations(self) -> List[Dict[str, Any]]:
@@ -399,15 +381,17 @@ class PriorityMessageHandler:
         with self._lock:
             for item in self._priority_queue:
                 if item.is_sla_violated:
-                    violations.append({
-                        "message_id": item.message.id,
-                        "priority": item.message.priority.value,
-                        "enqueued_at": datetime.fromtimestamp(item.timestamp).isoformat(),
-                        "sla_deadline": datetime.fromtimestamp(item.sla_deadline).isoformat(),
-                        "overdue_seconds": time.time() - item.sla_deadline,
-                        "message_type": item.message.message_type,
-                        "channels": item.message.channels
-                    })
+                    violations.append(
+                        {
+                            "message_id": item.message.id,
+                            "priority": item.message.priority.value,
+                            "enqueued_at": datetime.fromtimestamp(item.timestamp).isoformat(),
+                            "sla_deadline": datetime.fromtimestamp(item.sla_deadline).isoformat(),
+                            "overdue_seconds": time.time() - item.sla_deadline,
+                            "message_type": item.message.message_type,
+                            "channels": item.message.channels,
+                        }
+                    )
 
         return violations
 
@@ -437,7 +421,9 @@ class PriorityMessageHandler:
         if sla_seconds and processing_time_ms > (sla_seconds * 1000):
             self._logger.warning(
                 "Processing time SLA violation for message %s: %.1fms > %.1fms",
-                message.id, processing_time_ms, sla_seconds * 1000
+                message.id,
+                processing_time_ms,
+                sla_seconds * 1000,
             )
 
     def set_sla_config(self, priority: MessagePriority, sla_seconds: float):
@@ -465,7 +451,7 @@ class PriorityMessageHandler:
         self._logger.warning("Cleared priority queue: %d messages removed", count)
         return count
 
-    def get_next_sla_deadline(self) -> Optional[Tuple[datetime, MessagePriority]]:
+    def get_next_sla_deadline(self) -> Tuple[datetime, MessagePriority] | None:
         """
         Get the next SLA deadline in the queue.
 
@@ -532,8 +518,7 @@ class PriorityMessageHandler:
                     critical_violations = [v for v in violations if v["priority"] == "CRITICAL"]
                     if critical_violations:
                         self._logger.error(
-                            "CRITICAL SLA violations detected: %d messages overdue",
-                            len(critical_violations)
+                            "CRITICAL SLA violations detected: %d messages overdue", len(critical_violations)
                         )
 
                 # Wait before next check

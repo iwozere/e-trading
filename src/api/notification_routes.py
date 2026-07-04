@@ -7,12 +7,13 @@ Provides endpoints for creating, tracking, and managing notifications
 through the notification service.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
-from datetime import datetime, timezone
-from pathlib import Path
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -28,51 +29,53 @@ _logger = setup_logger(__name__)
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
 # Direct database access for database-centric architecture
+from src.data.db.models.model_notification import Message, MessagePriority, MessageStatus
 from src.data.db.services.database_service import get_database_service
-from src.data.db.models.model_notification import (
-    Message, MessageStatus, MessagePriority
-)
 
 
 # Pydantic models for API
 class NotificationCreate(BaseModel):
     """Notification creation request model."""
+
     message_type: str = Field(..., description="Type of notification (alert, trade, system, etc.)")
     priority: str = Field(default="normal", description="Message priority (low, normal, high, urgent)")
     channels: List[str] = Field(..., description="Delivery channels (telegram, email, sms)")
     recipient_id: str = Field(..., description="Recipient user ID")
-    template_name: Optional[str] = Field(None, description="Template name for structured messages")
+    template_name: str | None = Field(None, description="Template name for structured messages")
     content: Dict[str, Any] = Field(..., description="Message content and variables")
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
-    scheduled_for: Optional[datetime] = Field(None, description="Schedule delivery for specific time")
+    metadata: Dict[str, Any] | None = Field(default_factory=dict, description="Additional metadata")
+    scheduled_for: datetime | None = Field(None, description="Schedule delivery for specific time")
 
 
 class NotificationResponse(BaseModel):
     """Notification response model."""
+
     message_id: int
     status: str
     channels: List[str]
     priority: str
     created_at: str
     scheduled_for: str
-    processed_at: Optional[str]
+    processed_at: str | None
     retry_count: int
-    last_error: Optional[str]
+    last_error: str | None
 
 
 class DeliveryStatusResponse(BaseModel):
     """Delivery status response model."""
+
     delivery_id: int
     channel: str
     status: str
-    delivered_at: Optional[str]
-    response_time_ms: Optional[int]
-    error_message: Optional[str]
-    external_id: Optional[str]
+    delivered_at: str | None
+    response_time_ms: int | None
+    error_message: str | None
+    external_id: str | None
 
 
 class NotificationStats(BaseModel):
     """Notification statistics model."""
+
     total_messages: int
     delivered_messages: int
     failed_messages: int
@@ -105,6 +108,7 @@ def _validate_channels(channels: List[str]) -> List[str]:
 
     return enabled_channels
 
+
 def _convert_priority(priority_str: str) -> MessagePriority:
     """
     Convert priority string to MessagePriority enum.
@@ -120,7 +124,7 @@ def _convert_priority(priority_str: str) -> MessagePriority:
         "normal": MessagePriority.NORMAL,
         "high": MessagePriority.HIGH,
         "critical": MessagePriority.CRITICAL,
-        "urgent": MessagePriority.CRITICAL  # Map urgent to critical
+        "urgent": MessagePriority.CRITICAL,  # Map urgent to critical
     }
 
     return priority_map.get(priority_str.lower(), MessagePriority.NORMAL)
@@ -128,6 +132,7 @@ def _convert_priority(priority_str: str) -> MessagePriority:
 
 # Health check endpoint (deprecated - moved to unified health_routes.py)
 # Kept for backward compatibility but redirects to new endpoint
+
 
 @router.get("/health")
 async def notification_routes_health():
@@ -150,25 +155,26 @@ async def notification_routes_health():
 
         return {
             "status": "healthy",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "database": "connected",
             "routes": "operational",
             "total_messages": message_count,
-            "note": "This endpoint is deprecated. Use /api/health/notification for service health or /api/health/channels for comprehensive monitoring."
+            "note": "This endpoint is deprecated. Use /api/health/notification for service health or /api/health/channels for comprehensive monitoring.",
         }
 
     except Exception as e:
         _logger.exception("Notification routes health check failed:")
         return {
             "status": "unhealthy",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "error": str(e),
             "routes": "operational",
-            "database": "unavailable"
+            "database": "unavailable",
         }
 
 
 # Channel endpoints
+
 
 @router.get("/channels/health")
 async def get_channels_health(current_user: User = Depends(get_current_user)):
@@ -195,8 +201,8 @@ async def get_channels_health(current_user: User = Depends(get_current_user)):
 
         return {
             "channels_health": channels_health,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "note": "This endpoint is deprecated. Use /api/health/channels for comprehensive channel ownership and queue monitoring (Telegram Bot + Notification Service)."
+            "timestamp": datetime.now(UTC).isoformat(),
+            "note": "This endpoint is deprecated. Use /api/health/channels for comprehensive channel ownership and queue monitoring (Telegram Bot + Notification Service).",
         }
 
     except Exception:
@@ -225,13 +231,15 @@ async def list_notification_channels(current_user: User = Depends(get_current_us
             # Convert to response format
             channels = []
             for channel_config in channel_configs:
-                channels.append({
-                    "channel": channel_config.channel,
-                    "enabled": channel_config.enabled,
-                    "rate_limit_per_minute": channel_config.rate_limit_per_minute,
-                    "max_retries": channel_config.max_retries,
-                    "timeout_seconds": channel_config.timeout_seconds
-                })
+                channels.append(
+                    {
+                        "channel": channel_config.channel,
+                        "enabled": channel_config.enabled,
+                        "rate_limit_per_minute": channel_config.rate_limit_per_minute,
+                        "max_retries": channel_config.max_retries,
+                        "timeout_seconds": channel_config.timeout_seconds,
+                    }
+                )
 
             # Add default channels if not in database
             default_channels = ["telegram", "email", "sms"]
@@ -239,13 +247,15 @@ async def list_notification_channels(current_user: User = Depends(get_current_us
 
             for channel_name in default_channels:
                 if channel_name not in existing_channels:
-                    channels.append({
-                        "channel": channel_name,
-                        "enabled": True,  # Default to enabled
-                        "rate_limit_per_minute": 60,
-                        "max_retries": 3,
-                        "timeout_seconds": 30
-                    })
+                    channels.append(
+                        {
+                            "channel": channel_name,
+                            "enabled": True,  # Default to enabled
+                            "rate_limit_per_minute": 60,
+                            "max_retries": 3,
+                            "timeout_seconds": 30,
+                        }
+                    )
 
             return {"channels": channels}
 
@@ -256,11 +266,10 @@ async def list_notification_channels(current_user: User = Depends(get_current_us
 
 # Statistics endpoints
 
+
 @router.get("/stats", response_model=NotificationStats)
 async def get_notification_statistics(
-    channel: Optional[str] = None,
-    days: int = 30,
-    current_user: User = Depends(get_current_user)
+    channel: str | None = None, days: int = 30, current_user: User = Depends(get_current_user)
 ):
     """
     Get notification delivery statistics.
@@ -278,9 +287,7 @@ async def get_notification_statistics(
 
         with db_service.uow() as uow:
             # Get delivery statistics
-            delivery_stats = uow.notifications.delivery_status.get_delivery_statistics(
-                channel=channel, days=days
-            )
+            delivery_stats = uow.notifications.delivery_status.get_delivery_statistics(channel=channel, days=days)
 
             # Get message statistics
             message_stats = {}
@@ -303,10 +310,7 @@ async def get_notification_statistics(
                 health_service = SystemHealthService()
                 channels_health_data = health_service.get_notification_channels_health()
 
-                channels_health = {
-                    ch["channel"]: ch["status"]
-                    for ch in channels_health_data
-                }
+                channels_health = {ch["channel"]: ch["status"] for ch in channels_health_data}
             except Exception as e:
                 _logger.warning("Could not get channel health: %s", e)
                 channels_health = {}
@@ -317,7 +321,7 @@ async def get_notification_statistics(
                 failed_messages=failed_messages,
                 pending_messages=pending_messages,
                 success_rate=success_rate,
-                channels_health=channels_health
+                channels_health=channels_health,
             )
 
     except Exception:
@@ -327,12 +331,13 @@ async def get_notification_statistics(
 
 # Analytics endpoints (consolidated from notification service)
 
+
 @router.get("/analytics/delivery-rates")
 async def get_delivery_rates_analytics(
-    channel: Optional[str] = None,
-    user_id: Optional[str] = None,
+    channel: str | None = None,
+    user_id: str | None = None,
     days: int = 30,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get comprehensive delivery rate analytics.
@@ -351,16 +356,9 @@ async def get_delivery_rates_analytics(
         from src.notification.service.analytics import notification_analytics
 
         # Get delivery rate analytics
-        analytics_result = await notification_analytics.get_delivery_rates(
-            channel=channel,
-            user_id=user_id,
-            days=days
-        )
+        analytics_result = await notification_analytics.get_delivery_rates(channel=channel, user_id=user_id, days=days)
 
-        return {
-            "analytics": analytics_result,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
+        return {"analytics": analytics_result, "timestamp": datetime.now(UTC).isoformat()}
 
     except Exception:
         _logger.exception("Error getting delivery rates analytics:")
@@ -369,9 +367,7 @@ async def get_delivery_rates_analytics(
 
 @router.get("/analytics/response-times")
 async def get_response_time_analytics(
-    channel: Optional[str] = None,
-    days: int = 30,
-    current_user: User = Depends(get_current_user)
+    channel: str | None = None, days: int = 30, current_user: User = Depends(get_current_user)
 ):
     """
     Get detailed response time analytics.
@@ -389,15 +385,9 @@ async def get_response_time_analytics(
         from src.notification.service.analytics import notification_analytics
 
         # Get response time analytics
-        analytics_result = await notification_analytics.get_response_time_analysis(
-            channel=channel,
-            days=days
-        )
+        analytics_result = await notification_analytics.get_response_time_analysis(channel=channel, days=days)
 
-        return {
-            "analytics": analytics_result,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
+        return {"analytics": analytics_result, "timestamp": datetime.now(UTC).isoformat()}
 
     except Exception:
         _logger.exception("Error getting response time analytics:")
@@ -407,9 +397,9 @@ async def get_response_time_analytics(
 @router.get("/analytics/trends")
 async def get_trend_analytics(
     metric: str = "success_rate",
-    channel: Optional[str] = None,
+    channel: str | None = None,
     days: int = 30,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get trend analysis for notification metrics.
@@ -427,25 +417,15 @@ async def get_trend_analytics(
         # Validate metric parameter
         valid_metrics = ["success_rate", "response_time", "message_count"]
         if metric not in valid_metrics:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid metric. Must be one of: {', '.join(valid_metrics)}"
-            )
+            raise HTTPException(status_code=400, detail=f"Invalid metric. Must be one of: {', '.join(valid_metrics)}")
 
         # Import analytics service
         from src.notification.service.analytics import notification_analytics
 
         # Get trend analysis
-        trend_analysis = await notification_analytics.get_trend_analysis(
-            metric=metric,
-            days=days,
-            channel=channel
-        )
+        trend_analysis = await notification_analytics.get_trend_analysis(metric=metric, days=days, channel=channel)
 
-        return {
-            "analytics": trend_analysis.to_dict(),
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
+        return {"analytics": trend_analysis.to_dict(), "timestamp": datetime.now(UTC).isoformat()}
 
     except HTTPException:
         raise
@@ -457,9 +437,9 @@ async def get_trend_analytics(
 @router.get("/analytics/aggregated")
 async def get_aggregated_analytics(
     granularity: str = "daily",
-    channel: Optional[str] = None,
+    channel: str | None = None,
     days: int = 30,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get time-aggregated notification statistics.
@@ -478,27 +458,21 @@ async def get_aggregated_analytics(
         valid_granularities = ["hourly", "daily", "weekly", "monthly"]
         if granularity not in valid_granularities:
             raise HTTPException(
-                status_code=400,
-                detail=f"Invalid granularity. Must be one of: {', '.join(valid_granularities)}"
+                status_code=400, detail=f"Invalid granularity. Must be one of: {', '.join(valid_granularities)}"
             )
 
         # Import analytics service
-        from src.notification.service.analytics import notification_analytics, TimeGranularity
+        from src.notification.service.analytics import TimeGranularity, notification_analytics
 
         # Convert string to enum
         granularity_enum = TimeGranularity(granularity)
 
         # Get aggregated analytics
         analytics_result = await notification_analytics.get_aggregated_statistics(
-            granularity=granularity_enum,
-            days=days,
-            channel=channel
+            granularity=granularity_enum, days=days, channel=channel
         )
 
-        return {
-            "analytics": analytics_result,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
+        return {"analytics": analytics_result, "timestamp": datetime.now(UTC).isoformat()}
 
     except HTTPException:
         raise
@@ -508,10 +482,7 @@ async def get_aggregated_analytics(
 
 
 @router.get("/analytics/channel-comparison")
-async def get_channel_performance_comparison(
-    days: int = 30,
-    current_user: User = Depends(get_current_user)
-):
+async def get_channel_performance_comparison(days: int = 30, current_user: User = Depends(get_current_user)):
     """
     Get performance comparison across all notification channels.
 
@@ -527,14 +498,9 @@ async def get_channel_performance_comparison(
         from src.notification.service.analytics import notification_analytics
 
         # Get channel performance comparison
-        analytics_result = await notification_analytics.get_channel_performance_comparison(
-            days=days
-        )
+        analytics_result = await notification_analytics.get_channel_performance_comparison(days=days)
 
-        return {
-            "analytics": analytics_result,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
+        return {"analytics": analytics_result, "timestamp": datetime.now(UTC).isoformat()}
 
     except Exception:
         _logger.exception("Error getting channel performance comparison:")
@@ -543,11 +509,9 @@ async def get_channel_performance_comparison(
 
 # Administrative endpoints
 
+
 @router.post("/admin/cleanup")
-async def cleanup_old_notifications(
-    days_to_keep: int = 30,
-    current_user: User = Depends(require_trader_or_admin)
-):
+async def cleanup_old_notifications(days_to_keep: int = 30, current_user: User = Depends(require_trader_or_admin)):
     """
     Clean up old delivered notifications.
 
@@ -573,14 +537,14 @@ async def cleanup_old_notifications(
             "Notification cleanup completed by user %s: %s messages deleted, days_to_keep=%s",
             current_user.username or current_user.email,
             deleted_count,
-            days_to_keep
+            days_to_keep,
         )
 
         return {
             "status": "completed",
             "deleted_count": deleted_count,
             "days_to_keep": days_to_keep,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     except HTTPException:
@@ -627,10 +591,10 @@ async def get_processor_statistics(current_user: User = Depends(require_trader_o
                     "delivered_messages": delivered_messages,
                     "failed_messages": failed_messages,
                     "locked_messages": locked_messages,
-                    "success_rate": success_rate
+                    "success_rate": success_rate,
                 },
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "note": "Statistics retrieved from database (database-centric architecture)"
+                "timestamp": datetime.now(UTC).isoformat(),
+                "note": "Statistics retrieved from database (database-centric architecture)",
             }
 
     except Exception:
@@ -641,31 +605,31 @@ async def get_processor_statistics(current_user: User = Depends(require_trader_o
 # Convenience endpoint models
 class AlertNotificationRequest(BaseModel):
     """Alert notification request model."""
+
     title: str
     message: str
     severity: str = "normal"
     channels: List[str] = ["telegram"]
-    recipient_id: Optional[str] = None
+    recipient_id: str | None = None
 
 
 class TradeNotificationRequest(BaseModel):
     """Trade notification request model."""
+
     action: str
     symbol: str
     quantity: float
     price: float
     strategy_name: str
     channels: List[str] = ["telegram"]
-    recipient_id: Optional[str] = None
+    recipient_id: str | None = None
 
 
 # Convenience endpoints for common notification types
 
+
 @router.post("/alert")
-async def send_alert_notification(
-    alert_data: AlertNotificationRequest,
-    current_user: User = Depends(get_current_user)
-):
+async def send_alert_notification(alert_data: AlertNotificationRequest, current_user: User = Depends(get_current_user)):
     """
     Send an alert notification (convenience endpoint).
 
@@ -682,15 +646,8 @@ async def send_alert_notification(
             priority=alert_data.severity,
             channels=alert_data.channels,
             recipient_id=alert_data.recipient_id or str(current_user.id),
-            content={
-                "title": alert_data.title,
-                "message": alert_data.message,
-                "severity": alert_data.severity
-            },
-            metadata={
-                "alert_type": "manual",
-                "source": "web_ui"
-            }
+            content={"title": alert_data.title, "message": alert_data.message, "severity": alert_data.severity},
+            metadata={"alert_type": "manual", "source": "web_ui"},
         )
 
         return await create_notification(notification, current_user)
@@ -701,10 +658,7 @@ async def send_alert_notification(
 
 
 @router.post("/trade")
-async def send_trade_notification(
-    trade_data: TradeNotificationRequest,
-    current_user: User = Depends(get_current_user)
-):
+async def send_trade_notification(trade_data: TradeNotificationRequest, current_user: User = Depends(get_current_user)):
     """
     Send a trade notification (convenience endpoint).
 
@@ -728,12 +682,9 @@ async def send_trade_notification(
                 "quantity": trade_data.quantity,
                 "price": trade_data.price,
                 "strategy_name": trade_data.strategy_name,
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(UTC).isoformat(),
             },
-            metadata={
-                "trade_type": trade_data.action,
-                "source": "web_ui"
-            }
+            metadata={"trade_type": trade_data.action, "source": "web_ui"},
         )
 
         return await create_notification(notification, current_user)
@@ -745,11 +696,9 @@ async def send_trade_notification(
 
 # Notification management endpoints (parameterized routes must come last)
 
+
 @router.post("/", response_model=Dict[str, Any])
-async def create_notification(
-    notification: NotificationCreate,
-    current_user: User = Depends(get_current_user)
-):
+async def create_notification(notification: NotificationCreate, current_user: User = Depends(get_current_user)):
     """
     Create and enqueue a new notification message.
 
@@ -780,10 +729,10 @@ async def create_notification(
             "message_metadata": {
                 **notification.metadata,
                 "created_by_user_id": current_user.id,
-                "created_by_username": current_user.username or current_user.email
+                "created_by_username": current_user.username or current_user.email,
             },
-            "scheduled_for": notification.scheduled_for or datetime.now(timezone.utc),
-            "status": MessageStatus.PENDING.value
+            "scheduled_for": notification.scheduled_for or datetime.now(UTC),
+            "status": MessageStatus.PENDING.value,
         }
 
         # Create message in database
@@ -798,7 +747,7 @@ async def create_notification(
             current_user.username or current_user.email,
             db_message.id,
             notification.message_type,
-            enabled_channels
+            enabled_channels,
         )
 
         return {
@@ -806,7 +755,7 @@ async def create_notification(
             "status": "enqueued",
             "channels": enabled_channels,
             "priority": db_message.priority,
-            "scheduled_for": db_message.scheduled_for.isoformat()
+            "scheduled_for": db_message.scheduled_for.isoformat(),
         }
 
     except HTTPException:
@@ -818,13 +767,13 @@ async def create_notification(
 
 @router.get("/", response_model=List[NotificationResponse])
 async def list_notifications(
-    status: Optional[str] = None,
-    priority: Optional[str] = None,
-    recipient_id: Optional[str] = None,
-    message_type: Optional[str] = None,
+    status: str | None = None,
+    priority: str | None = None,
+    recipient_id: str | None = None,
+    message_type: str | None = None,
     limit: int = 100,
     offset: int = 0,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     List notifications with optional filtering.
@@ -867,23 +816,25 @@ async def list_notifications(
                 recipient_id=recipient_id,
                 message_type=message_type,
                 limit=min(limit, 1000),  # Cap at 1000
-                offset=offset
+                offset=offset,
             )
 
             # Convert to response format
             notifications = []
             for msg in messages:
-                notifications.append(NotificationResponse(
-                    message_id=msg.id,
-                    status=msg.status,
-                    channels=msg.channels,
-                    priority=msg.priority,
-                    created_at=msg.created_at.isoformat(),
-                    scheduled_for=msg.scheduled_for.isoformat(),
-                    processed_at=msg.processed_at.isoformat() if msg.processed_at else None,
-                    retry_count=msg.retry_count,
-                    last_error=msg.last_error
-                ))
+                notifications.append(
+                    NotificationResponse(
+                        message_id=msg.id,
+                        status=msg.status,
+                        channels=msg.channels,
+                        priority=msg.priority,
+                        created_at=msg.created_at.isoformat(),
+                        scheduled_for=msg.scheduled_for.isoformat(),
+                        processed_at=msg.processed_at.isoformat() if msg.processed_at else None,
+                        retry_count=msg.retry_count,
+                        last_error=msg.last_error,
+                    )
+                )
 
             return notifications
 
@@ -896,16 +847,16 @@ async def list_notifications(
 
 @router.get("/messages/search")
 async def search_messages(
-    recipient_id: Optional[str] = None,
-    search: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    status: Optional[str] = None,
-    channel: Optional[str] = None,
+    recipient_id: str | None = None,
+    search: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    status: str | None = None,
+    channel: str | None = None,
     days: int = 30,
     limit: int = 100,
     offset: int = 0,
-    current_user: User = Depends(require_trader_or_admin)
+    current_user: User = Depends(require_trader_or_admin),
 ):
     """
     Search sent notification messages for the admin UI.
@@ -953,10 +904,7 @@ async def search_messages(
 
 
 @router.get("/{message_id}", response_model=NotificationResponse)
-async def get_notification_status(
-    message_id: int,
-    current_user: User = Depends(get_current_user)
-):
+async def get_notification_status(message_id: int, current_user: User = Depends(get_current_user)):
     """
     Get notification status and details.
 
@@ -985,7 +933,7 @@ async def get_notification_status(
                 scheduled_for=message.scheduled_for.isoformat(),
                 processed_at=message.processed_at.isoformat() if message.processed_at else None,
                 retry_count=message.retry_count,
-                last_error=message.last_error
+                last_error=message.last_error,
             )
 
     except HTTPException:
@@ -996,10 +944,7 @@ async def get_notification_status(
 
 
 @router.get("/{message_id}/delivery", response_model=List[DeliveryStatusResponse])
-async def get_notification_delivery_status(
-    message_id: int,
-    current_user: User = Depends(get_current_user)
-):
+async def get_notification_delivery_status(message_id: int, current_user: User = Depends(get_current_user)):
     """
     Get delivery status for all channels of a notification.
 
@@ -1025,15 +970,17 @@ async def get_notification_delivery_status(
             # Convert to response format
             responses = []
             for ds in delivery_statuses:
-                responses.append(DeliveryStatusResponse(
-                    delivery_id=ds.id,
-                    channel=ds.channel,
-                    status=ds.status,
-                    delivered_at=ds.delivered_at.isoformat() if ds.delivered_at else None,
-                    response_time_ms=ds.response_time_ms,
-                    error_message=ds.error_message,
-                    external_id=ds.external_id
-                ))
+                responses.append(
+                    DeliveryStatusResponse(
+                        delivery_id=ds.id,
+                        channel=ds.channel,
+                        status=ds.status,
+                        delivered_at=ds.delivered_at.isoformat() if ds.delivered_at else None,
+                        response_time_ms=ds.response_time_ms,
+                        error_message=ds.error_message,
+                        external_id=ds.external_id,
+                    )
+                )
 
             return responses
 

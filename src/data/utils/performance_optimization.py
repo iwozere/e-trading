@@ -9,26 +9,28 @@ This module provides advanced performance optimization features including:
 - Performance monitoring
 """
 
-import threading
+import gzip
+import logging
 import multiprocessing
-from typing import Any, Optional, Dict, List, Union, Callable, Iterator
+import pickle
+import threading
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-import logging
-import pickle
-import gzip
-from dataclasses import dataclass
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from typing import Any, Callable, Dict, Iterator, List, Union
 
 try:
-    import pandas as pd
     import numpy as np
+    import pandas as pd
+
     PANDAS_AVAILABLE = True
 except ImportError:
     PANDAS_AVAILABLE = False
 
 try:
     import zstandard as zstd
+
     ZSTD_AVAILABLE = True
 except ImportError:
     ZSTD_AVAILABLE = False
@@ -36,6 +38,7 @@ except ImportError:
 try:
     import pyarrow as pa
     import pyarrow.parquet as pq
+
     PARQUET_AVAILABLE = True
 except ImportError:
     PARQUET_AVAILABLE = False
@@ -46,9 +49,10 @@ _logger = logging.getLogger(__name__)
 @dataclass
 class PerformanceMetrics:
     """Performance metrics for data operations."""
+
     operation_name: str
     start_time: datetime
-    end_time: Optional[datetime] = None
+    end_time: datetime | None = None
     duration_ms: float = 0.0
     memory_usage_mb: float = 0.0
     data_size_mb: float = 0.0
@@ -118,12 +122,7 @@ class DataCompressor:
         """Calculate compression ratio."""
         return len(compressed) / len(original) if original else 1.0
 
-    def compress_dataframe(
-        self,
-        df: pd.DataFrame,
-        format: str = "parquet",
-        compression: str = "snappy"
-    ) -> bytes:
+    def compress_dataframe(self, df: pd.DataFrame, format: str = "parquet", compression: str = "snappy") -> bytes:
         """
         Compress DataFrame to bytes.
 
@@ -171,12 +170,7 @@ class DataCompressor:
 class LazyDataLoader:
     """Lazy loading for large datasets."""
 
-    def __init__(
-        self,
-        file_path: Union[str, Path],
-        chunk_size: int = 10000,
-        format: str = "auto"
-    ):
+    def __init__(self, file_path: Union[str, Path], chunk_size: int = 10000, format: str = "auto"):
         """
         Initialize lazy data loader.
 
@@ -191,7 +185,7 @@ class LazyDataLoader:
 
         # Determine format
         if format == "auto":
-            if self.file_path.suffix.lower() == '.parquet':
+            if self.file_path.suffix.lower() == ".parquet":
                 self.format = "parquet"
             else:
                 self.format = "csv"
@@ -211,7 +205,7 @@ class LazyDataLoader:
             self._total_rows = pq.read_metadata(self.file_path).num_rows
         else:
             # For CSV, we need to count lines (approximate)
-            with open(self.file_path, 'r') as f:
+            with open(self.file_path) as f:
                 self._total_rows = sum(1 for _ in f) - 1  # Subtract header
 
     def get_columns(self) -> List[str]:
@@ -222,9 +216,9 @@ class LazyDataLoader:
                 self._columns = [col.name for col in metadata.schema]
             else:
                 # Read first line of CSV
-                with open(self.file_path, 'r') as f:
+                with open(self.file_path) as f:
                     header = f.readline().strip()
-                    self._columns = header.split(',')
+                    self._columns = header.split(",")
 
         return self._columns
 
@@ -239,7 +233,7 @@ class LazyDataLoader:
             for chunk in pd.read_csv(self.file_path, chunksize=self.chunk_size):
                 yield chunk
 
-    def get_chunk(self, chunk_index: int) -> Optional[pd.DataFrame]:
+    def get_chunk(self, chunk_index: int) -> pd.DataFrame | None:
         """Get specific chunk by index."""
         if self.format == "parquet" and PARQUET_AVAILABLE:
             # Calculate row range for chunk
@@ -272,12 +266,7 @@ class LazyDataLoader:
 class ParallelProcessor:
     """Parallel data processing utilities."""
 
-    def __init__(
-        self,
-        max_workers: Optional[int] = None,
-        use_processes: bool = True,
-        chunk_size: int = 1000
-    ):
+    def __init__(self, max_workers: int | None = None, use_processes: bool = True, chunk_size: int = 1000):
         """
         Initialize parallel processor.
 
@@ -291,10 +280,7 @@ class ParallelProcessor:
         self.chunk_size = chunk_size
 
     def process_dataframe(
-        self,
-        df: pd.DataFrame,
-        process_func: Callable[[pd.DataFrame], pd.DataFrame],
-        **kwargs
+        self, df: pd.DataFrame, process_func: Callable[[pd.DataFrame], pd.DataFrame], **kwargs
     ) -> pd.DataFrame:
         """
         Process DataFrame in parallel.
@@ -308,17 +294,14 @@ class ParallelProcessor:
             Processed DataFrame
         """
         # Split DataFrame into chunks
-        chunks = [df[i:i + self.chunk_size] for i in range(0, len(df), self.chunk_size)]
+        chunks = [df[i : i + self.chunk_size] for i in range(0, len(df), self.chunk_size)]
 
         # Process chunks in parallel
         executor_class = ProcessPoolExecutor if self.use_processes else ThreadPoolExecutor
 
         with executor_class(max_workers=self.max_workers) as executor:
             # Submit tasks
-            future_to_chunk = {
-                executor.submit(process_func, chunk, **kwargs): i
-                for i, chunk in enumerate(chunks)
-            }
+            future_to_chunk = {executor.submit(process_func, chunk, **kwargs): i for i, chunk in enumerate(chunks)}
 
             # Collect results
             results = [None] * len(chunks)
@@ -334,10 +317,7 @@ class ParallelProcessor:
         return pd.concat(results, ignore_index=True)
 
     def process_lazy_loader(
-        self,
-        loader: LazyDataLoader,
-        process_func: Callable[[pd.DataFrame], pd.DataFrame],
-        **kwargs
+        self, loader: LazyDataLoader, process_func: Callable[[pd.DataFrame], pd.DataFrame], **kwargs
     ) -> Iterator[pd.DataFrame]:
         """
         Process lazy loader in parallel.
@@ -371,7 +351,7 @@ class ParallelProcessor:
         data: Union[pd.DataFrame, LazyDataLoader],
         map_func: Callable[[pd.DataFrame], Any],
         reduce_func: Callable[[List[Any]], Any],
-        **kwargs
+        **kwargs,
     ) -> Any:
         """
         Perform map-reduce operation on data.
@@ -387,7 +367,7 @@ class ParallelProcessor:
         """
         if isinstance(data, pd.DataFrame):
             # Process DataFrame
-            chunks = [data[i:i + self.chunk_size] for i in range(0, len(data), self.chunk_size)]
+            chunks = [data[i : i + self.chunk_size] for i in range(0, len(data), self.chunk_size)]
         else:
             # Process LazyDataLoader
             chunks = list(data.iter_chunks())
@@ -396,10 +376,7 @@ class ParallelProcessor:
         executor_class = ProcessPoolExecutor if self.use_processes else ThreadPoolExecutor
 
         with executor_class(max_workers=self.max_workers) as executor:
-            futures = [
-                executor.submit(map_func, chunk, **kwargs)
-                for chunk in chunks
-            ]
+            futures = [executor.submit(map_func, chunk, **kwargs) for chunk in chunks]
 
             # Collect results
             results = []
@@ -436,8 +413,8 @@ class MemoryOptimizer:
             col_type = optimized_df[col].dtype
 
             # Optimize numeric columns
-            if col_type in ['int64', 'float64']:
-                if col_type == 'int64':
+            if col_type in ["int64", "float64"]:
+                if col_type == "int64":
                     c_min = optimized_df[col].min()
                     c_max = optimized_df[col].max()
 
@@ -448,13 +425,13 @@ class MemoryOptimizer:
                     elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max:
                         optimized_df[col] = optimized_df[col].astype(np.int32)
 
-                elif col_type == 'float64':
+                elif col_type == "float64":
                     optimized_df[col] = optimized_df[col].astype(np.float32)
 
             # Optimize object columns
-            elif col_type == 'object':
+            elif col_type == "object":
                 if optimized_df[col].nunique() / len(optimized_df) < 0.5:
-                    optimized_df[col] = optimized_df[col].astype('category')
+                    optimized_df[col] = optimized_df[col].astype("category")
 
         return optimized_df
 
@@ -462,9 +439,9 @@ class MemoryOptimizer:
         """Get memory usage information for DataFrame."""
         memory_usage = df.memory_usage(deep=True)
         return {
-            'total_mb': memory_usage.sum() / 1024 / 1024,
-            'per_column': {col: usage / 1024 / 1024 for col, usage in memory_usage.items()},
-            'dtypes': df.dtypes.to_dict()
+            "total_mb": memory_usage.sum() / 1024 / 1024,
+            "per_column": {col: usage / 1024 / 1024 for col, usage in memory_usage.items()},
+            "dtypes": df.dtypes.to_dict(),
         }
 
     def estimate_memory_reduction(self, df: pd.DataFrame) -> Dict[str, float]:
@@ -473,14 +450,14 @@ class MemoryOptimizer:
         optimized_df = self.optimize_dataframe(df)
         optimized_usage = self.get_memory_usage(optimized_df)
 
-        reduction_mb = current_usage['total_mb'] - optimized_usage['total_mb']
-        reduction_percent = (reduction_mb / current_usage['total_mb']) * 100
+        reduction_mb = current_usage["total_mb"] - optimized_usage["total_mb"]
+        reduction_percent = (reduction_mb / current_usage["total_mb"]) * 100
 
         return {
-            'current_mb': current_usage['total_mb'],
-            'optimized_mb': optimized_usage['total_mb'],
-            'reduction_mb': reduction_mb,
-            'reduction_percent': reduction_percent
+            "current_mb": current_usage["total_mb"],
+            "optimized_mb": optimized_usage["total_mb"],
+            "reduction_mb": reduction_mb,
+            "reduction_percent": reduction_percent,
         }
 
 
@@ -494,10 +471,7 @@ class PerformanceMonitor:
 
     def start_operation(self, operation_name: str) -> PerformanceMetrics:
         """Start monitoring an operation."""
-        metrics = PerformanceMetrics(
-            operation_name=operation_name,
-            start_time=datetime.now()
-        )
+        metrics = PerformanceMetrics(operation_name=operation_name, start_time=datetime.now())
 
         with self._lock:
             self.metrics.append(metrics)
@@ -540,16 +514,18 @@ class PerformanceMonitor:
                 throughputs = [m.throughput_mbps for m in metrics_list if m.throughput_mbps > 0]
 
                 summary[operation] = {
-                    'count': len(metrics_list),
-                    'avg_duration_ms': np.mean(durations) if durations else 0,
-                    'min_duration_ms': np.min(durations) if durations else 0,
-                    'max_duration_ms': np.max(durations) if durations else 0,
-                    'avg_throughput_mbps': np.mean(throughputs) if throughputs else 0,
-                    'total_data_mb': sum(m.data_size_mb for m in metrics_list)
+                    "count": len(metrics_list),
+                    "avg_duration_ms": np.mean(durations) if durations else 0,
+                    "min_duration_ms": np.min(durations) if durations else 0,
+                    "max_duration_ms": np.max(durations) if durations else 0,
+                    "avg_throughput_mbps": np.mean(throughputs) if throughputs else 0,
+                    "total_data_mb": sum(m.data_size_mb for m in metrics_list),
                 }
 
             # Add backward-compatibility aggregate
-            summary['total_operations'] = sum(v['count'] for k, v in summary.items() if isinstance(v, dict) and 'count' in v)
+            summary["total_operations"] = sum(
+                v["count"] for k, v in summary.items() if isinstance(v, dict) and "count" in v
+            )
 
             return summary
 
@@ -596,17 +572,17 @@ def optimize_dataframe_performance(df: pd.DataFrame) -> pd.DataFrame:
     try:
         # Get initial memory usage
         initial_usage = optimizer.get_memory_usage(df)
-        metrics.data_size_mb = initial_usage['total_mb']
+        metrics.data_size_mb = initial_usage["total_mb"]
 
         # Optimize DataFrame
         optimized_df = optimizer.optimize_dataframe(df)
 
         # Get final memory usage
         final_usage = optimizer.get_memory_usage(optimized_df)
-        metrics.memory_usage_mb = final_usage['total_mb']
+        metrics.memory_usage_mb = final_usage["total_mb"]
 
         # Calculate compression ratio
-        metrics.compression_ratio = final_usage['total_mb'] / initial_usage['total_mb']
+        metrics.compression_ratio = final_usage["total_mb"] / initial_usage["total_mb"]
 
         return optimized_df
 
@@ -614,11 +590,7 @@ def optimize_dataframe_performance(df: pd.DataFrame) -> pd.DataFrame:
         monitor.end_operation(metrics)
 
 
-def compress_dataframe_efficiently(
-    df: pd.DataFrame,
-    format: str = "parquet",
-    compression: str = "snappy"
-) -> bytes:
+def compress_dataframe_efficiently(df: pd.DataFrame, format: str = "parquet", compression: str = "snappy") -> bytes:
     """Compress DataFrame efficiently."""
     monitor = get_performance_monitor()
     compressor = get_data_compressor()
@@ -629,13 +601,13 @@ def compress_dataframe_efficiently(
     try:
         # Get data size
         memory_usage = get_memory_optimizer().get_memory_usage(df)
-        metrics.data_size_mb = memory_usage['total_mb']
+        metrics.data_size_mb = memory_usage["total_mb"]
 
         # Compress data
         compressed_data = compressor.compress_dataframe(df, format, compression)
 
         # Calculate compression ratio
-        metrics.compression_ratio = len(compressed_data) / (memory_usage['total_mb'] * 1024 * 1024)
+        metrics.compression_ratio = len(compressed_data) / (memory_usage["total_mb"] * 1024 * 1024)
 
         return compressed_data
 

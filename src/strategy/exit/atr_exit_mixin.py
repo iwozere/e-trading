@@ -27,12 +27,11 @@ Exit Reasons:
 - "stop_loss": When price falls below the trailing stop loss
 """
 
-from typing import Any, Dict, Optional, List
 import math
+from typing import Any, Dict, List
 
-import backtrader as bt
-from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
+from src.strategy.exit.base_exit_mixin import BaseExitMixin
 
 logger = setup_logger(__name__)
 
@@ -43,7 +42,7 @@ class ATRExitMixin(BaseExitMixin):
     New Architecture only.
     """
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
         self.stop_loss = None
@@ -67,13 +66,7 @@ class ATRExitMixin(BaseExitMixin):
         """Define indicators required by this mixin."""
         # Support both new and legacy parameter names for the blueprint
         atr_period = params.get("atr_period") or params.get("x_atr_period", 14)
-        return [
-            {
-                "type": "ATR",
-                "params": {"timeperiod": atr_period},
-                "fields_mapping": {"atr": "exit_atr"}
-            }
-        ]
+        return [{"type": "ATR", "params": {"timeperiod": atr_period}, "fields_mapping": {"atr": "exit_atr"}}]
 
     def _init_indicators(self):
         """No-op for new architecture."""
@@ -81,11 +74,11 @@ class ATRExitMixin(BaseExitMixin):
 
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
-        return self._resolve_param('atr_period', 'x_atr_period', 14)
+        return self._resolve_param("atr_period", "x_atr_period", 14)
 
     def are_indicators_ready(self) -> bool:
         """Check if required indicators exist in the strategy registry."""
-        return 'exit_atr' in getattr(self.strategy, 'indicators', {})
+        return "exit_atr" in getattr(self.strategy, "indicators", {})
 
     def on_entry(self, entry_price: float, entry_time, position_size: float, direction: str):
         """Called when a position is entered"""
@@ -99,7 +92,7 @@ class ATRExitMixin(BaseExitMixin):
 
         # Lock ATR value at entry
         try:
-            self.entry_atr = self.get_indicator('exit_atr')
+            self.entry_atr = self.get_indicator("exit_atr")
             logger.debug("ATR locked at entry: %.2f", self.entry_atr)
         except Exception as e:
             logger.warning("Failed to lock ATR at entry: %s", e)
@@ -118,9 +111,9 @@ class ATRExitMixin(BaseExitMixin):
             if self.entry_atr is not None and self.entry_atr > 0:
                 atr_val = self.entry_atr
             else:
-                atr_val = self.get_indicator('exit_atr')
+                atr_val = self.get_indicator("exit_atr")
 
-            sl_multiplier = self._resolve_param('sl_multiplier', 'x_sl_multiplier', 2.0)
+            sl_multiplier = self._resolve_param("sl_multiplier", "x_sl_multiplier", 2.0)
 
             if atr_val is None or atr_val <= 0:
                 return False
@@ -158,4 +151,4 @@ class ATRExitMixin(BaseExitMixin):
 
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""
-        return getattr(self.strategy, 'current_exit_reason', 'atr_exit')
+        return getattr(self.strategy, "current_exit_reason", "atr_exit")

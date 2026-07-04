@@ -3,32 +3,33 @@
 Health Monitoring Integration Example
 Demonstrates how to integrate the health monitoring system with the notification service.
 """
+
 import asyncio
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.service.health_monitor import (
-    HealthMonitor, HealthStatus, HealthCheckType,
-    create_default_health_config, create_strict_health_config
-)
-from src.notification.service.delivery_tracker import MessageDeliveryStatus
 from src.data.db.models.model_notification import MessagePriority
 from src.notification.logger import setup_logger
+from src.notification.service.delivery_tracker import MessageDeliveryStatus
+from src.notification.service.health_monitor import (
+    HealthCheckType,
+    HealthMonitor,
+    HealthStatus,
+    create_default_health_config,
+    create_strict_health_config,
+)
 
 _logger = setup_logger(__name__)
 
 
 async def health_status_changed(channel: str, old_status: HealthStatus, new_status: HealthStatus):
     """Callback for health status changes."""
-    _logger.info(
-        "Channel %s health changed: %s -> %s",
-        channel, old_status.value, new_status.value
-    )
+    _logger.info("Channel %s health changed: %s -> %s", channel, old_status.value, new_status.value)
 
     # In a real implementation, you might:
     # - Send alerts to administrators
@@ -89,9 +90,11 @@ async def simulate_delivery_integration():
     for channel in channels.keys():
         status = monitor.get_channel_status(channel)
         if status:
-            print(f"  {channel}: {status.overall_status.value} "
-                  f"(Uptime: {status.uptime_percentage:.1f}%, "
-                  f"Avg Response: {status.average_response_time_ms:.1f}ms)")
+            print(
+                f"  {channel}: {status.overall_status.value} "
+                f"(Uptime: {status.uptime_percentage:.1f}%, "
+                f"Avg Response: {status.average_response_time_ms:.1f}ms)"
+            )
 
     # Simulate manual channel management
     print("\n--- Manual Channel Management ---")
@@ -134,7 +137,7 @@ async def simulate_delivery_integration():
         priority=MessagePriority.HIGH,
         channels=["telegram_channel", "email_channel"],
         recipient_id="user123",
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC),
     )
 
     print(f"Created delivery status for message {delivery_status.message_id}")
@@ -149,9 +152,11 @@ async def simulate_delivery_integration():
     healthy_channels = []
     for channel in delivery_status.channels:
         channel_status = monitor.get_channel_status(channel)
-        if channel_status and channel_status.is_enabled and channel_status.overall_status in [
-            HealthStatus.HEALTHY, HealthStatus.DEGRADED
-        ]:
+        if (
+            channel_status
+            and channel_status.is_enabled
+            and channel_status.overall_status in [HealthStatus.HEALTHY, HealthStatus.DEGRADED]
+        ):
             healthy_channels.append(channel)
         else:
             print(f"⚠️  Skipping {channel} - not healthy for delivery")
@@ -166,9 +171,11 @@ async def simulate_delivery_integration():
         # Show the current status and recent metrics
         status = monitor.get_channel_status(channel)
         recent_metrics = monitor.get_channel_metrics(channel)
-        print(f"{channel} status: {status.overall_status.value}, "
-              f"Response={status.average_response_time_ms:.1f}ms, "
-              f"Metrics collected={len(recent_metrics)}")
+        print(
+            f"{channel} status: {status.overall_status.value}, "
+            f"Response={status.average_response_time_ms:.1f}ms, "
+            f"Metrics collected={len(recent_metrics)}"
+        )
 
     print("\n--- Cleanup ---")
 

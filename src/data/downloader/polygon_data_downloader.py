@@ -1,10 +1,12 @@
-from typing import Optional, List, cast
 from datetime import datetime
+from typing import List, cast
+
 import pandas as pd
 import requests
-from src.notification.logger import setup_logger
-from src.model.schemas import OptionalFundamentals, Fundamentals
+
 from src.data.downloader.base_data_downloader import BaseDataDownloader
+from src.model.schemas import Fundamentals, OptionalFundamentals
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -32,6 +34,7 @@ API limits (free tier):
 Classes:
 - PolygonDataDownloader: Main class for interacting with Polygon.io and managing data downloads
 """
+
 
 class PolygonDataDownloader(BaseDataDownloader):
     """
@@ -75,16 +78,18 @@ class PolygonDataDownloader(BaseDataDownloader):
     >>> print(f"Market Cap: ${fundamentals.market_cap:,.0f}")
     """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         super().__init__()
         # Get API key from parameter or config
-        self.api_key = api_key or self._get_config_value('POLYGON_API_KEY', 'POLYGON_API_KEY')
+        self.api_key = api_key or self._get_config_value("POLYGON_API_KEY", "POLYGON_API_KEY")
         self.base_url = "https://api.polygon.io/v2/aggs/ticker"
 
         if not self.api_key:
             raise ValueError("Polygon API key is required. Get one at: https://polygon.io/")
 
-    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> Optional[pd.DataFrame]:
+    def get_ohlcv(
+        self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs
+    ) -> pd.DataFrame | None:
         """
         Download historical data for a given symbol from Polygon.io.
 
@@ -99,21 +104,17 @@ class PolygonDataDownloader(BaseDataDownloader):
         """
         try:
             # Validate interval and period
-            if not self.is_valid_period_interval('1d', interval):
+            if not self.is_valid_period_interval("1d", interval):
                 raise ValueError(f"Unsupported interval: {interval}")
             # Polygon supports 'minute' and 'day' granularity
-            if interval == '1d':
-                timespan = 'day'
+            if interval == "1d":
+                timespan = "day"
             else:
-                timespan = 'minute'
+                timespan = "minute"
             start_str = start_date.strftime("%Y-%m-%d")
             end_str = end_date.strftime("%Y-%m-%d")
             url = f"{self.base_url}/{symbol}/range/1/{timespan}/{start_str}/{end_str}"
-            params = {
-                'adjusted': 'true',
-                'sort': 'asc',
-                'apiKey': self.api_key
-            }
+            params = {"adjusted": "true", "sort": "asc", "apiKey": self.api_key}
             response = requests.get(url, params=params)
             if response.status_code == 429:
                 _logger.warning("Polygon.io rate limit hit for %s (free tier: 5 req/min)", symbol)
@@ -121,20 +122,38 @@ class PolygonDataDownloader(BaseDataDownloader):
             if response.status_code != 200:
                 raise RuntimeError(f"Polygon.io API error: {response.status_code} {response.text}")
             data = response.json()
-            if 'results' not in data:
+            if "results" not in data:
                 raise ValueError(f"No results in Polygon.io response: {data}")
-            df = pd.DataFrame(data['results'])
+            df = pd.DataFrame(data["results"])
             # Polygon returns: t (timestamp ms), o (open), h (high), l (low), c (close), v (volume)
-            df['timestamp'] = pd.to_datetime(df['t'], unit='ms')
-            df = df.rename(columns={'o': 'open', 'h': 'high', 'l': 'low', 'c': 'close', 'v': 'volume'})
-            df = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
+            df["timestamp"] = pd.to_datetime(df["t"], unit="ms")
+            df = df.rename(columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume"})
+            df = df[["timestamp", "open", "high", "low", "close", "volume"]]
             # Resample if needed
-            if interval == '5m':
-                df = df.set_index('timestamp').resample('5T').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna().reset_index()
-            elif interval == '15m':
-                df = df.set_index('timestamp').resample('15T').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna().reset_index()
-            elif interval == '1h':
-                df = df.set_index('timestamp').resample('1h').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna().reset_index()
+            if interval == "5m":
+                df = (
+                    df.set_index("timestamp")
+                    .resample("5T")
+                    .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+                    .dropna()
+                    .reset_index()
+                )
+            elif interval == "15m":
+                df = (
+                    df.set_index("timestamp")
+                    .resample("15T")
+                    .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+                    .dropna()
+                    .reset_index()
+                )
+            elif interval == "1h":
+                df = (
+                    df.set_index("timestamp")
+                    .resample("1h")
+                    .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+                    .dropna()
+                    .reset_index()
+                )
             # For '1m' and '1d', no resampling needed
             return cast(pd.DataFrame, df)
         except Exception as e:
@@ -142,10 +161,10 @@ class PolygonDataDownloader(BaseDataDownloader):
             raise
 
     def get_periods(self) -> list:
-        return ['1d', '7d', '1mo', '3mo', '6mo', '1y', '2y']
+        return ["1d", "7d", "1mo", "3mo", "6mo", "1y", "2y"]
 
     def get_intervals(self) -> list:
-        return ['1m', '5m', '15m', '1h', '1d']
+        return ["1m", "5m", "15m", "1h", "1d"]
 
     def is_valid_period_interval(self, period, interval) -> bool:
         return interval in self.get_intervals() and period in self.get_periods()
@@ -163,7 +182,7 @@ class PolygonDataDownloader(BaseDataDownloader):
         try:
             # Get ticker details
             ticker_url = f"https://api.polygon.io/v3/reference/tickers/{symbol}"
-            ticker_params = {'apiKey': self.api_key}
+            ticker_params = {"apiKey": self.api_key}
 
             ticker_response = requests.get(ticker_url, params=ticker_params)
             if ticker_response.status_code == 429:
@@ -173,7 +192,7 @@ class PolygonDataDownloader(BaseDataDownloader):
 
             ticker_data = ticker_response.json()
 
-            if not ticker_data or 'results' not in ticker_data:
+            if not ticker_data or "results" not in ticker_data:
                 _logger.error("No data returned from Polygon.io for ticker %s", symbol)
                 return Fundamentals(
                     ticker=symbol.upper(),
@@ -185,20 +204,20 @@ class PolygonDataDownloader(BaseDataDownloader):
                     dividend_yield=0.0,
                     earnings_per_share=0.0,
                     data_source="Polygon.io",
-                    last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 )
 
-            ticker_info = ticker_data['results']
+            ticker_info = ticker_data["results"]
 
             # Get current price
             quote_url = f"https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/{symbol}/quote"
-            quote_params = {'apiKey': self.api_key}
+            quote_params = {"apiKey": self.api_key}
 
             quote_response = requests.get(quote_url, params=quote_params)
             quote_data = quote_response.json() if quote_response.status_code == 200 else {}
-            current_price = quote_data.get('results', {}).get('p', 0.0) if quote_data else 0.0
+            current_price = quote_data.get("results", {}).get("p", 0.0) if quote_data else 0.0
 
-            _logger.debug("Retrieved fundamentals for %s: %s", symbol, ticker_info.get('name', 'Unknown'))
+            _logger.debug("Retrieved fundamentals for %s: %s", symbol, ticker_info.get("name", "Unknown"))
 
             return Fundamentals(
                 ticker=symbol.upper(),
@@ -229,7 +248,9 @@ class PolygonDataDownloader(BaseDataDownloader):
                 country=ticker_info.get("locale", None),
                 exchange=ticker_info.get("primary_exchange", None),
                 currency=ticker_info.get("currency_name", None),
-                shares_outstanding=float(ticker_info.get("share_class_shares_outstanding", 0)) if ticker_info.get("share_class_shares_outstanding") else None,
+                shares_outstanding=float(ticker_info.get("share_class_shares_outstanding", 0))
+                if ticker_info.get("share_class_shares_outstanding")
+                else None,
                 float_shares=None,
                 short_ratio=None,
                 payout_ratio=None,
@@ -238,7 +259,7 @@ class PolygonDataDownloader(BaseDataDownloader):
                 enterprise_value=None,
                 enterprise_value_to_ebitda=None,
                 data_source="Polygon.io",
-                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             )
 
         except Exception as e:
@@ -253,7 +274,7 @@ class PolygonDataDownloader(BaseDataDownloader):
                 dividend_yield=0.0,
                 earnings_per_share=0.0,
                 data_source="Polygon.io",
-                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             )
 
     def get_provider_name(self) -> str:
@@ -262,5 +283,4 @@ class PolygonDataDownloader(BaseDataDownloader):
 
     def get_supported_intervals(self) -> List[str]:
         """Return list of supported intervals for Polygon.io."""
-        return ['1m', '5m', '15m', '1h', '1d']
-
+        return ["1m", "5m", "15m", "1h", "1d"]

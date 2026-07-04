@@ -30,9 +30,18 @@ from src.data.db.models.model_kestrel import (
 def test_model_table_names():
     """All P20 models have k20_ prefix."""
     models = [
-        K20Universe, K20Signal, K20SentimentDaily, K20Catalyst,
-        K20Watchlist, K20Position, K20LLMRun, K20RequestBudget,
-        K20JobRun, K20AlertsLog, K20CompanyAlias, K20AliasBlocklist,
+        K20Universe,
+        K20Signal,
+        K20SentimentDaily,
+        K20Catalyst,
+        K20Watchlist,
+        K20Position,
+        K20LLMRun,
+        K20RequestBudget,
+        K20JobRun,
+        K20AlertsLog,
+        K20CompanyAlias,
+        K20AliasBlocklist,
     ]
     for model in models:
         assert model.__tablename__.startswith("k20_"), (

@@ -41,8 +41,12 @@ def test_crontab_weekday_to_apscheduler(field: str, expected: str) -> None:
 def _first_fire_dows(weekday_field: str, start: datetime, count: int) -> list[str]:
     """Return the weekday abbreviations of the next ``count`` fire times."""
     trigger = CronTrigger(
-        minute="0", hour="13", day="*", month="*",
-        day_of_week=crontab_weekday_to_apscheduler(weekday_field), timezone=UTC,
+        minute="0",
+        hour="13",
+        day="*",
+        month="*",
+        day_of_week=crontab_weekday_to_apscheduler(weekday_field),
+        timezone=UTC,
     )
     fires: list[str] = []
     cursor = start
@@ -64,7 +68,11 @@ def test_mon_fri_excludes_saturday() -> None:
     """Saturday must NOT be a valid fire day for a Mon-Fri schedule."""
     saturday = UTC.localize(datetime(2026, 7, 4, 0, 0, 0))  # Sat 2026-07-04
     next_fire = CronTrigger(
-        minute="0", hour="13", day="*", month="*",
-        day_of_week=crontab_weekday_to_apscheduler("1-5"), timezone=UTC,
+        minute="0",
+        hour="13",
+        day="*",
+        month="*",
+        day_of_week=crontab_weekday_to_apscheduler("1-5"),
+        timezone=UTC,
     ).get_next_fire_time(None, saturday)
     assert next_fire.strftime("%a") == "Mon"

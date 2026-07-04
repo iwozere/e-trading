@@ -1,7 +1,8 @@
 from __future__ import annotations
+
 from sqlalchemy.orm import Session
 
-from src.data.db.repos.repo_telegram import SettingsRepo, FeedbackRepo, BroadcastRepo, CommandAuditRepo
+from src.data.db.repos.repo_telegram import BroadcastRepo, CommandAuditRepo, FeedbackRepo, SettingsRepo
 from src.data.db.repos.repo_users import UsersRepo
 
 

@@ -55,10 +55,10 @@ Legacy Configuration (Backward Compatible):
     }
 """
 
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List
 
-from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 from src.notification.logger import setup_logger
+from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 
 logger = setup_logger(__name__)
 
@@ -68,7 +68,7 @@ class RSIOrBBEntryMixin(BaseEntryMixin):
     New Architecture only.
     """
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
         self.last_entry_bar = None
@@ -99,20 +99,16 @@ class RSIOrBBEntryMixin(BaseEntryMixin):
         bb_dev = params.get("bb_dev") or params.get("e_bb_dev", 2.0)
 
         return [
-            {
-                "type": "RSI",
-                "params": {"timeperiod": rsi_period},
-                "fields_mapping": {"rsi": "entry_rsi"}
-            },
+            {"type": "RSI", "params": {"timeperiod": rsi_period}, "fields_mapping": {"rsi": "entry_rsi"}},
             {
                 "type": "BBANDS",
                 "params": {"timeperiod": bb_period, "nbdevup": bb_dev, "nbdevdn": bb_dev},
                 "fields_mapping": {
                     "upperband": "entry_bb_upper",
                     "middleband": "entry_bb_middle",
-                    "lowerband": "entry_bb_lower"
-                }
-            }
+                    "lowerband": "entry_bb_lower",
+                },
+            },
         ]
 
     def _init_indicators(self):
@@ -122,14 +118,13 @@ class RSIOrBBEntryMixin(BaseEntryMixin):
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
         return max(
-            self._resolve_param("rsi_period", "e_rsi_period", 14),
-            self._resolve_param("bb_period", "e_bb_period", 20)
+            self._resolve_param("rsi_period", "e_rsi_period", 14), self._resolve_param("bb_period", "e_bb_period", 20)
         )
 
     def are_indicators_ready(self) -> bool:
         """Check if required indicators exist in the strategy registry."""
-        required = ['entry_rsi', 'entry_bb_lower', 'entry_bb_middle']
-        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
+        required = ["entry_rsi", "entry_bb_lower", "entry_bb_middle"]
+        return all(alias in getattr(self.strategy, "indicators", {}) for alias in required)
 
     def should_enter(self) -> bool:
         """Check if we should enter a position (RSI or BB condition)."""
@@ -141,8 +136,7 @@ class RSIOrBBEntryMixin(BaseEntryMixin):
             cooldown_bars = self._resolve_param("cooldown_bars", "e_cooldown_bars", 0)
             if cooldown_bars > 0:
                 current_bar = len(self.strategy.data)
-                if (self.last_entry_bar is not None and
-                    current_bar - self.last_entry_bar < cooldown_bars):
+                if self.last_entry_bar is not None and current_bar - self.last_entry_bar < cooldown_bars:
                     return False
 
             current_price = self.strategy.data.close[0]
@@ -154,13 +148,13 @@ class RSIOrBBEntryMixin(BaseEntryMixin):
             bb_reentry = self._resolve_param("bb_reentry", "e_bb_reentry", False)
 
             # Unified Indicator Access
-            rsi_value = self.get_indicator('entry_rsi')
-            rsi_prev = self.get_indicator_prev('entry_rsi', 1)
-            bb_lower = self.get_indicator('entry_bb_lower')
+            rsi_value = self.get_indicator("entry_rsi")
+            rsi_prev = self.get_indicator_prev("entry_rsi", 1)
+            bb_lower = self.get_indicator("entry_bb_lower")
 
             # RSI condition
             if rsi_cross:
-                rsi_condition = (rsi_prev <= oversold and rsi_value > oversold)
+                rsi_condition = rsi_prev <= oversold and rsi_value > oversold
             else:
                 rsi_condition = rsi_value <= oversold
 

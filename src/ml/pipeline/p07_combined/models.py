@@ -1,7 +1,9 @@
-import xgboost as xgb
+from typing import Any, Dict
+
 import numpy as np
 import pandas as pd
-from typing import Dict, Any
+import xgboost as xgb
+
 
 class P07XGBModel:
     """
@@ -11,11 +13,11 @@ class P07XGBModel:
 
     def __init__(self, params: Dict[str, Any] = None):
         default_params = {
-            'objective': 'multi:softprob',
-            'num_class': 3, # [-1, 0, 1] mapped to [0, 1, 2]
-            'tree_method': 'hist', # CPU optimized
-            'eval_metric': 'mlogloss',
-            'random_state': 42
+            "objective": "multi:softprob",
+            "num_class": 3,  # [-1, 0, 1] mapped to [0, 1, 2]
+            "tree_method": "hist",  # CPU optimized
+            "eval_metric": "mlogloss",
+            "random_state": 42,
         }
         if params:
             default_params.update(params)
@@ -32,7 +34,7 @@ class P07XGBModel:
 
         # xgb.train uses num_boost_round, not n_estimators in params dict
         params = self.params.copy()
-        n_estimators = params.pop('n_estimators', 100)
+        n_estimators = params.pop("n_estimators", 100)
 
         self.model = xgb.train(params, dtrain, num_boost_round=n_estimators)
 
@@ -47,8 +49,8 @@ class P07XGBModel:
         probs = self.predict_proba(X)
         # probs order: [0=Sell, 1=Hold, 2=Buy]
 
-        buy_threshold = thresholds.get('buy_prob_min', 0.5) if thresholds else 0.5
-        sell_threshold = thresholds.get('sell_prob_min', 0.5) if thresholds else 0.5
+        buy_threshold = thresholds.get("buy_prob_min", 0.5) if thresholds else 0.5
+        sell_threshold = thresholds.get("sell_prob_min", 0.5) if thresholds else 0.5
 
         signals = pd.Series(0, index=X.index)
 

@@ -9,8 +9,8 @@ Usage:
     python src/data/tests/run_tests.py [--integration] [--performance] [--all]
 """
 
-import sys
 import argparse
+import sys
 from pathlib import Path
 
 # Add project root to path
@@ -18,6 +18,7 @@ project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import pytest
+
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -30,13 +31,7 @@ def run_integration_tests():
 
     test_file = Path(__file__).parent / "integration" / "test_data_manager_integration.py"
 
-    pytest.main([
-        str(test_file),
-        "-v",
-        "--tb=short",
-        "--color=yes",
-        "--durations=10"
-    ])
+    pytest.main([str(test_file), "-v", "--tb=short", "--color=yes", "--durations=10"])
 
 
 def run_performance_tests():
@@ -46,13 +41,7 @@ def run_performance_tests():
 
     test_file = Path(__file__).parent / "performance" / "test_cache_performance.py"
 
-    pytest.main([
-        str(test_file),
-        "-v",
-        "--tb=short",
-        "--color=yes",
-        "--durations=10"
-    ])
+    pytest.main([str(test_file), "-v", "--tb=short", "--color=yes", "--durations=10"])
 
 
 def run_all_tests():
@@ -62,13 +51,7 @@ def run_all_tests():
 
     test_dir = Path(__file__).parent
 
-    pytest.main([
-        str(test_dir),
-        "-v",
-        "--tb=short",
-        "--color=yes",
-        "--durations=10"
-    ])
+    pytest.main([str(test_dir), "-v", "--tb=short", "--color=yes", "--durations=10"])
 
 
 def main():
@@ -86,26 +69,14 @@ Examples:
 
   # Run all tests
   python src/data/tests/run_tests.py --all
-        """
+        """,
     )
 
-    parser.add_argument(
-        '--integration',
-        action='store_true',
-        help='Run integration tests only'
-    )
+    parser.add_argument("--integration", action="store_true", help="Run integration tests only")
 
-    parser.add_argument(
-        '--performance',
-        action='store_true',
-        help='Run performance tests only'
-    )
+    parser.add_argument("--performance", action="store_true", help="Run performance tests only")
 
-    parser.add_argument(
-        '--all',
-        action='store_true',
-        help='Run all tests'
-    )
+    parser.add_argument("--all", action="store_true", help="Run all tests")
 
     args = parser.parse_args()
 

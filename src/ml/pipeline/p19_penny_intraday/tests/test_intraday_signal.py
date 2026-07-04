@@ -1,8 +1,8 @@
 """Tests for the P19 IntradaySignal model."""
 
-from datetime import datetime, timezone
-from pathlib import Path
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -11,7 +11,7 @@ from src.ml.pipeline.p19_penny_intraday.models.intraday_signal import IntradaySi
 
 
 def _sig(**kw) -> IntradaySignal:
-    base = dict(ticker="ILLR", ts=datetime(2026, 6, 24, 14, 30, tzinfo=timezone.utc), price=4.46)
+    base = dict(ticker="ILLR", ts=datetime(2026, 6, 24, 14, 30, tzinfo=UTC), price=4.46)
     base.update(kw)
     return IntradaySignal(**base)
 
@@ -22,9 +22,11 @@ def test_triggered_flag():
 
 
 def test_to_dict_flattens_lists_and_sentiment():
-    s = _sig(catalyst_signals=["catalyst_tier1_news_2026-06-24"],
-             sentiment={"mentions": 42.0, "finbert": 0.8},
-             trigger_reason="price_thrust+volume")
+    s = _sig(
+        catalyst_signals=["catalyst_tier1_news_2026-06-24"],
+        sentiment={"mentions": 42.0, "finbert": 0.8},
+        trigger_reason="price_thrust+volume",
+    )
     d = s.to_dict()
     assert d["ticker"] == "ILLR"
     assert d["catalyst_signals"] == "catalyst_tier1_news_2026-06-24"

@@ -9,6 +9,7 @@ and Bullish (green) regimes.
 
 import sys
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
@@ -18,6 +19,7 @@ sys.path.append(str(project_root))
 
 from src.ml.pipeline.p01_hmm_lstm.x_03_train_hmm import HMMTrainer
 
+
 def test_regime_labeling():
     """Test the regime labeling logic with different scenarios."""
 
@@ -26,25 +28,25 @@ def test_regime_labeling():
     # Test scenarios
     test_cases = [
         {
-            'name': 'Good Separation - All Positive',
-            'returns': [0.001, 0.002, 0.003],  # Good range, all positive
-            'expected': ['Bearish', 'Sideways', 'Bullish']
+            "name": "Good Separation - All Positive",
+            "returns": [0.001, 0.002, 0.003],  # Good range, all positive
+            "expected": ["Bearish", "Sideways", "Bullish"],
         },
         {
-            'name': 'Poor Separation - All Positive',
-            'returns': [0.0001, 0.0002, 0.0003],  # Small range, all positive
-            'expected': ['Sideways', 'Sideways', 'Bullish']
+            "name": "Poor Separation - All Positive",
+            "returns": [0.0001, 0.0002, 0.0003],  # Small range, all positive
+            "expected": ["Sideways", "Sideways", "Bullish"],
         },
         {
-            'name': 'Mixed Returns',
-            'returns': [-0.001, 0.0001, 0.002],  # Negative, near zero, positive
-            'expected': ['Bearish', 'Sideways', 'Bullish']
+            "name": "Mixed Returns",
+            "returns": [-0.001, 0.0001, 0.002],  # Negative, near zero, positive
+            "expected": ["Bearish", "Sideways", "Bullish"],
         },
         {
-            'name': 'All Negative',
-            'returns': [-0.003, -0.002, -0.001],  # All negative
-            'expected': ['Bearish', 'Sideways', 'Bullish']
-        }
+            "name": "All Negative",
+            "returns": [-0.003, -0.002, -0.001],  # All negative
+            "expected": ["Bearish", "Sideways", "Bullish"],
+        },
     ]
 
     print("Testing Regime Labeling Logic")
@@ -55,10 +57,12 @@ def test_regime_labeling():
         print(f"Returns: {test_case['returns']}")
 
         # Create mock data
-        df = pd.DataFrame({
-            'log_return': test_case['returns'] * 1000,  # Scale up for more realistic values
-            'close': [100 + i for i in range(len(test_case['returns']))]
-        })
+        df = pd.DataFrame(
+            {
+                "log_return": test_case["returns"] * 1000,  # Scale up for more realistic values
+                "close": [100 + i for i in range(len(test_case["returns"]))],
+            }
+        )
 
         # Create mock regimes (0, 1, 2)
         regimes = np.array([0, 1, 2])
@@ -74,15 +78,15 @@ def test_regime_labeling():
         used_colors = set()
 
         for i, label in enumerate(labels):
-            if 'bearish' in label.lower():
-                color_mapping[i] = 'red'
-                used_colors.add('red')
-            elif 'bullish' in label.lower():
-                color_mapping[i] = 'green'
-                used_colors.add('green')
-            elif 'sideways' in label.lower():
-                color_mapping[i] = 'blue'
-                used_colors.add('blue')
+            if "bearish" in label.lower():
+                color_mapping[i] = "red"
+                used_colors.add("red")
+            elif "bullish" in label.lower():
+                color_mapping[i] = "green"
+                used_colors.add("green")
+            elif "sideways" in label.lower():
+                color_mapping[i] = "blue"
+                used_colors.add("blue")
 
         print(f"Colors used: {used_colors}")
         print(f"Color mapping: {color_mapping}")
@@ -92,6 +96,7 @@ def test_regime_labeling():
             print("✅ All three colors present")
         else:
             print(f"⚠️  Missing colors: {set(['red', 'green', 'blue']) - used_colors}")
+
 
 def test_4h_scenario():
     """Test the specific 4h timeframe scenario."""
@@ -104,10 +109,7 @@ def test_4h_scenario():
     # 4h timeframes often have all positive returns with small differences
     returns_4h = [0.0001, 0.0002, 0.0003]  # Typical 4h scenario
 
-    df = pd.DataFrame({
-        'log_return': returns_4h * 1000,
-        'close': [100 + i for i in range(len(returns_4h))]
-    })
+    df = pd.DataFrame({"log_return": returns_4h * 1000, "close": [100 + i for i in range(len(returns_4h))]})
 
     regimes = np.array([0, 1, 2])
 
@@ -120,20 +122,21 @@ def test_4h_scenario():
     # Test color mapping
     color_mapping = {}
     for i, label in enumerate(labels):
-        if 'bearish' in label.lower():
-            color_mapping[i] = 'red'
-        elif 'bullish' in label.lower():
-            color_mapping[i] = 'green'
-        elif 'sideways' in label.lower():
-            color_mapping[i] = 'blue'
+        if "bearish" in label.lower():
+            color_mapping[i] = "red"
+        elif "bullish" in label.lower():
+            color_mapping[i] = "green"
+        elif "sideways" in label.lower():
+            color_mapping[i] = "blue"
 
     print(f"Color mapping: {color_mapping}")
 
     # Check for red color
-    if 'red' in color_mapping.values():
+    if "red" in color_mapping.values():
         print("✅ Red color present")
     else:
         print("❌ Red color missing")
+
 
 if __name__ == "__main__":
     test_regime_labeling()

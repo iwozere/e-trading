@@ -7,20 +7,19 @@ Tests the three EOM-based exit strategies:
 - EOMMAcdBreakdownExitMixin
 """
 
+import sys
 import unittest
 from pathlib import Path
-import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from unittest.mock import Mock, MagicMock
-import math
+from unittest.mock import Mock
 
-from src.strategy.exit.eom_breakdown_exit_mixin import EOMBreakdownExitMixin
-from src.strategy.exit.eom_rejection_exit_mixin import EOMRejectionExitMixin
-from src.strategy.exit.eom_macd_breakdown_exit_mixin import EOMMAcdBreakdownExitMixin
 from src.notification.logger import setup_logger
+from src.strategy.exit.eom_breakdown_exit_mixin import EOMBreakdownExitMixin
+from src.strategy.exit.eom_macd_breakdown_exit_mixin import EOMMAcdBreakdownExitMixin
+from src.strategy.exit.eom_rejection_exit_mixin import EOMRejectionExitMixin
 
 _logger = setup_logger(__name__)
 
@@ -52,17 +51,21 @@ class TestEOMBreakdownExitMixin(unittest.TestCase):
         self.mixin.strategy.data.close = [94.5]  # Below support
         self.mixin.strategy.data.volume = [15000000]  # High volume
 
-        self.mixin.get_indicator = Mock(side_effect=lambda x: {
-            'exit_support': 95.0,  # Support at 95
-            'exit_eom': -5.0,  # Negative EOM
-            'exit_volume_sma': 10000000,
-            'exit_atr': 3.0  # ATR rising
-        }[x])
+        self.mixin.get_indicator = Mock(
+            side_effect=lambda x: {
+                "exit_support": 95.0,  # Support at 95
+                "exit_eom": -5.0,  # Negative EOM
+                "exit_volume_sma": 10000000,
+                "exit_atr": 3.0,  # ATR rising
+            }[x]
+        )
 
-        self.mixin.get_indicator_prev = Mock(side_effect=lambda x, offset=1: {
-            'exit_eom': -3.0,  # EOM falling
-            'exit_atr': 2.5  # ATR was lower
-        }[x])
+        self.mixin.get_indicator_prev = Mock(
+            side_effect=lambda x, offset=1: {
+                "exit_eom": -3.0,  # EOM falling
+                "exit_atr": 2.5,  # ATR was lower
+            }[x]
+        )
 
         self.mixin.are_indicators_ready = Mock(return_value=True)
 
@@ -79,12 +82,14 @@ class TestEOMBreakdownExitMixin(unittest.TestCase):
         self.mixin.strategy.data.close = [96.0]  # Above support
         self.mixin.strategy.data.volume = [15000000]
 
-        self.mixin.get_indicator = Mock(side_effect=lambda x: {
-            'exit_support': 95.0,
-            'exit_eom': -5.0,
-            'exit_volume_sma': 10000000,
-            'exit_atr': 3.0
-        }[x])
+        self.mixin.get_indicator = Mock(
+            side_effect=lambda x: {
+                "exit_support": 95.0,
+                "exit_eom": -5.0,
+                "exit_volume_sma": 10000000,
+                "exit_atr": 3.0,
+            }[x]
+        )
 
         self.mixin.get_indicator_prev = Mock(return_value=-3.0)
         self.mixin.are_indicators_ready = Mock(return_value=True)
@@ -97,12 +102,14 @@ class TestEOMBreakdownExitMixin(unittest.TestCase):
         self.mixin.strategy.data.close = [94.5]
         self.mixin.strategy.data.volume = [15000000]
 
-        self.mixin.get_indicator = Mock(side_effect=lambda x: {
-            'exit_support': 95.0,
-            'exit_eom': 2.0,  # Positive EOM
-            'exit_volume_sma': 10000000,
-            'exit_atr': 3.0
-        }[x])
+        self.mixin.get_indicator = Mock(
+            side_effect=lambda x: {
+                "exit_support": 95.0,
+                "exit_eom": 2.0,  # Positive EOM
+                "exit_volume_sma": 10000000,
+                "exit_atr": 3.0,
+            }[x]
+        )
 
         self.mixin.get_indicator_prev = Mock(return_value=1.0)
         self.mixin.are_indicators_ready = Mock(return_value=True)
@@ -115,12 +122,14 @@ class TestEOMBreakdownExitMixin(unittest.TestCase):
         self.mixin.strategy.data.close = [94.5]
         self.mixin.strategy.data.volume = [5000000]  # Low volume
 
-        self.mixin.get_indicator = Mock(side_effect=lambda x: {
-            'exit_support': 95.0,
-            'exit_eom': -5.0,
-            'exit_volume_sma': 10000000,
-            'exit_atr': 3.0
-        }[x])
+        self.mixin.get_indicator = Mock(
+            side_effect=lambda x: {
+                "exit_support": 95.0,
+                "exit_eom": -5.0,
+                "exit_volume_sma": 10000000,
+                "exit_atr": 3.0,
+            }[x]
+        )
 
         self.mixin.get_indicator_prev = Mock(return_value=-3.0)
         self.mixin.are_indicators_ready = Mock(return_value=True)
@@ -161,16 +170,20 @@ class TestEOMRejectionExitMixin(unittest.TestCase):
         self.mixin.strategy.data.open = [100.2]  # Close < Open
         self.mixin.strategy.data.high = [100.5]  # Hit resistance
 
-        self.mixin.get_indicator = Mock(side_effect=lambda x: {
-            'exit_resistance': 100.0,  # Resistance at 100
-            'exit_eom': -0.5,  # EOM crosses below 0
-            'exit_rsi': 65  # Overbought
-        }[x])
+        self.mixin.get_indicator = Mock(
+            side_effect=lambda x: {
+                "exit_resistance": 100.0,  # Resistance at 100
+                "exit_eom": -0.5,  # EOM crosses below 0
+                "exit_rsi": 65,  # Overbought
+            }[x]
+        )
 
-        self.mixin.get_indicator_prev = Mock(side_effect=lambda x, offset=1: {
-            'exit_eom': 0.5,  # Was positive
-            'exit_rsi': 68  # RSI falling
-        }[x])
+        self.mixin.get_indicator_prev = Mock(
+            side_effect=lambda x, offset=1: {
+                "exit_eom": 0.5,  # Was positive
+                "exit_rsi": 68,  # RSI falling
+            }[x]
+        )
 
         self.mixin.are_indicators_ready = Mock(return_value=True)
 
@@ -187,11 +200,9 @@ class TestEOMRejectionExitMixin(unittest.TestCase):
         self.mixin.strategy.data.open = [98.5]
         self.mixin.strategy.data.high = [98.8]
 
-        self.mixin.get_indicator = Mock(side_effect=lambda x: {
-            'exit_resistance': 100.0,
-            'exit_eom': -0.5,
-            'exit_rsi': 65
-        }[x])
+        self.mixin.get_indicator = Mock(
+            side_effect=lambda x: {"exit_resistance": 100.0, "exit_eom": -0.5, "exit_rsi": 65}[x]
+        )
 
         self.mixin.get_indicator_prev = Mock(return_value=0.5)
         self.mixin.are_indicators_ready = Mock(return_value=True)
@@ -205,11 +216,13 @@ class TestEOMRejectionExitMixin(unittest.TestCase):
         self.mixin.strategy.data.open = [100.2]
         self.mixin.strategy.data.high = [100.5]
 
-        self.mixin.get_indicator = Mock(side_effect=lambda x: {
-            'exit_resistance': 100.0,
-            'exit_eom': 1.0,  # Still positive
-            'exit_rsi': 65
-        }[x])
+        self.mixin.get_indicator = Mock(
+            side_effect=lambda x: {
+                "exit_resistance": 100.0,
+                "exit_eom": 1.0,  # Still positive
+                "exit_rsi": 65,
+            }[x]
+        )
 
         self.mixin.get_indicator_prev = Mock(return_value=2.0)
         self.mixin.are_indicators_ready = Mock(return_value=True)
@@ -248,20 +261,24 @@ class TestEOMMAcdBreakdownExitMixin(unittest.TestCase):
         self.mixin.strategy.data.close = [94.5]  # Below support
         self.mixin.strategy.data.volume = [12000000]  # Good volume
 
-        self.mixin.get_indicator = Mock(side_effect=lambda x: {
-            'exit_support': 95.0,  # Support at 95
-            'exit_macd': -0.5,  # MACD below signal
-            'exit_macd_signal': -0.3,
-            'exit_macd_hist': -0.2,  # Negative histogram
-            'exit_eom': -2.0,  # Negative EOM
-            'exit_volume_sma': 10000000
-        }[x])
+        self.mixin.get_indicator = Mock(
+            side_effect=lambda x: {
+                "exit_support": 95.0,  # Support at 95
+                "exit_macd": -0.5,  # MACD below signal
+                "exit_macd_signal": -0.3,
+                "exit_macd_hist": -0.2,  # Negative histogram
+                "exit_eom": -2.0,  # Negative EOM
+                "exit_volume_sma": 10000000,
+            }[x]
+        )
 
-        self.mixin.get_indicator_prev = Mock(side_effect=lambda x, offset=1: {
-            'exit_macd': -0.2,  # Was above signal
-            'exit_macd_signal': -0.4,
-            'exit_macd_hist': -0.1  # Histogram falling
-        }[x])
+        self.mixin.get_indicator_prev = Mock(
+            side_effect=lambda x, offset=1: {
+                "exit_macd": -0.2,  # Was above signal
+                "exit_macd_signal": -0.4,
+                "exit_macd_hist": -0.1,  # Histogram falling
+            }[x]
+        )
 
         self.mixin.are_indicators_ready = Mock(return_value=True)
 
@@ -277,14 +294,16 @@ class TestEOMMAcdBreakdownExitMixin(unittest.TestCase):
         self.mixin.strategy.data.close = [96.0]  # Above support
         self.mixin.strategy.data.volume = [12000000]
 
-        self.mixin.get_indicator = Mock(side_effect=lambda x: {
-            'exit_support': 95.0,
-            'exit_macd': -0.5,
-            'exit_macd_signal': -0.3,
-            'exit_macd_hist': -0.2,
-            'exit_eom': -2.0,
-            'exit_volume_sma': 10000000
-        }[x])
+        self.mixin.get_indicator = Mock(
+            side_effect=lambda x: {
+                "exit_support": 95.0,
+                "exit_macd": -0.5,
+                "exit_macd_signal": -0.3,
+                "exit_macd_hist": -0.2,
+                "exit_eom": -2.0,
+                "exit_volume_sma": 10000000,
+            }[x]
+        )
 
         self.mixin.get_indicator_prev = Mock(return_value=-0.1)
         self.mixin.are_indicators_ready = Mock(return_value=True)
@@ -297,14 +316,16 @@ class TestEOMMAcdBreakdownExitMixin(unittest.TestCase):
         self.mixin.strategy.data.close = [94.5]
         self.mixin.strategy.data.volume = [12000000]
 
-        self.mixin.get_indicator = Mock(side_effect=lambda x: {
-            'exit_support': 95.0,
-            'exit_macd': -0.5,
-            'exit_macd_signal': -0.3,
-            'exit_macd_hist': -0.2,
-            'exit_eom': 1.0,  # Positive EOM
-            'exit_volume_sma': 10000000
-        }[x])
+        self.mixin.get_indicator = Mock(
+            side_effect=lambda x: {
+                "exit_support": 95.0,
+                "exit_macd": -0.5,
+                "exit_macd_signal": -0.3,
+                "exit_macd_hist": -0.2,
+                "exit_eom": 1.0,  # Positive EOM
+                "exit_volume_sma": 10000000,
+            }[x]
+        )
 
         self.mixin.get_indicator_prev = Mock(return_value=-0.1)
         self.mixin.are_indicators_ready = Mock(return_value=True)
@@ -317,14 +338,16 @@ class TestEOMMAcdBreakdownExitMixin(unittest.TestCase):
         self.mixin.strategy.data.close = [94.5]
         self.mixin.strategy.data.volume = [12000000]
 
-        self.mixin.get_indicator = Mock(side_effect=lambda x: {
-            'exit_support': 95.0,
-            'exit_macd': 0.5,  # MACD above signal
-            'exit_macd_signal': 0.3,
-            'exit_macd_hist': 0.2,
-            'exit_eom': -2.0,
-            'exit_volume_sma': 10000000
-        }[x])
+        self.mixin.get_indicator = Mock(
+            side_effect=lambda x: {
+                "exit_support": 95.0,
+                "exit_macd": 0.5,  # MACD above signal
+                "exit_macd_signal": 0.3,
+                "exit_macd_hist": 0.2,
+                "exit_eom": -2.0,
+                "exit_volume_sma": 10000000,
+            }[x]
+        )
 
         self.mixin.get_indicator_prev = Mock(return_value=0.1)
         self.mixin.are_indicators_ready = Mock(return_value=True)
@@ -342,5 +365,5 @@ class TestEOMMAcdBreakdownExitMixin(unittest.TestCase):
         return strategy
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

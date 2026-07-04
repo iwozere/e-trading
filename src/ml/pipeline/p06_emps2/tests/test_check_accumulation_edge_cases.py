@@ -14,7 +14,6 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
-import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 if str(PROJECT_ROOT) not in sys.path:
@@ -23,10 +22,10 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.ml.pipeline.p06_emps2.accumulation_analyzer import AccumulationAnalyzer
 from src.ml.pipeline.p06_emps2.config import EMPS2FilterConfig
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_config() -> EMPS2FilterConfig:
     cfg = EMPS2FilterConfig()
@@ -63,14 +62,16 @@ def _make_daily_df(n: int = 60, price: float = 50.0, last_volume_multiplier: flo
     volume = rng.integers(900_000, 1_100_000, size=n).astype(float)
     volume[-1] = volume[:-1].mean() * last_volume_multiplier
 
-    return pd.DataFrame({
-        "timestamp": dates,
-        "open":   close,
-        "high":   close * 1.005,   # price_range_1d ≈ 0.01 < 0.05 ✓
-        "low":    close * 0.995,
-        "close":  close,
-        "volume": volume,
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": dates,
+            "open": close,
+            "high": close * 1.005,  # price_range_1d ≈ 0.01 < 0.05 ✓
+            "low": close * 0.995,
+            "close": close,
+            "volume": volume,
+        }
+    )
 
 
 def _make_intraday_df(n: int = 40, price: float = 50.0, zero_at: int = -1) -> pd.DataFrame:
@@ -82,25 +83,28 @@ def _make_intraday_df(n: int = 40, price: float = 50.0, zero_at: int = -1) -> pd
     """
     dates = pd.date_range("2025-01-01 09:30", periods=n, freq="1h")
     rng = np.random.default_rng(1)
-    close = price + rng.normal(0, price * 0.001, size=n)   # ≈ 0.1% noise
+    close = price + rng.normal(0, price * 0.001, size=n)  # ≈ 0.1% noise
     close = np.clip(close, 0.001, None)
 
     if zero_at >= 0:
-        close[zero_at] = 0.0   # forces log(0/prev) = -inf → std = NaN
+        close[zero_at] = 0.0  # forces log(0/prev) = -inf → std = NaN
 
-    return pd.DataFrame({
-        "timestamp": dates,
-        "open":   close,
-        "high":   close * 1.001,
-        "low":    close * 0.999,
-        "close":  close,
-        "volume": np.ones(n) * 50_000.0,
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": dates,
+            "open": close,
+            "high": close * 1.001,
+            "low": close * 0.999,
+            "close": close,
+            "volume": np.ones(n) * 50_000.0,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
 # Test 1: NaN metrics must be rejected, not passed
 # ---------------------------------------------------------------------------
+
 
 def test_nan_metrics_are_rejected(tmp_path):
     """
@@ -109,7 +113,7 @@ def test_nan_metrics_are_rejected(tmp_path):
     and return (False, metrics, 'nan_metrics') instead of passing the ticker.
     """
     analyzer = _make_analyzer(tmp_path)
-    df_daily    = _make_daily_df(n=60, last_volume_multiplier=4.0)
+    df_daily = _make_daily_df(n=60, last_volume_multiplier=4.0)
     # zero_at=10 falls inside the rv_bars_target window (last 32 of 40 bars)
     df_intraday = _make_intraday_df(n=40, zero_at=10)
 
@@ -126,6 +130,7 @@ def test_nan_metrics_are_rejected(tmp_path):
 # Test 2: Negative vol_zscore must be rejected
 # ---------------------------------------------------------------------------
 
+
 def test_negative_vol_zscore_rejects(tmp_path):
     """
     When the last bar's volume is far below the 20-period mean, vol_zscore
@@ -134,18 +139,14 @@ def test_negative_vol_zscore_rejects(tmp_path):
     """
     analyzer = _make_analyzer(tmp_path)
     # 0.05× the mean → deeply negative zscore
-    df_daily    = _make_daily_df(n=60, last_volume_multiplier=0.05)
+    df_daily = _make_daily_df(n=60, last_volume_multiplier=0.05)
     df_intraday = _make_intraday_df(n=40)
 
     passed, metrics, reason = analyzer._check_accumulation("LOWVOL", df_intraday, df_daily)
 
     assert not passed, "Negative vol_zscore must not pass filters"
-    assert reason == "low_volume_zscore", (
-        f"Expected 'low_volume_zscore', got '{reason}'"
-    )
-    assert metrics["vol_zscore"] < 0, (
-        f"Expected negative vol_zscore in diagnostics, got {metrics['vol_zscore']}"
-    )
+    assert reason == "low_volume_zscore", f"Expected 'low_volume_zscore', got '{reason}'"
+    assert metrics["vol_zscore"] < 0, f"Expected negative vol_zscore in diagnostics, got {metrics['vol_zscore']}"
     assert metrics["absorption_ratio"] == 0.0, (
         "AR must be 0.0 when vol_zscore <= 0 (guard in accumulation_analyzer.py:261)"
     )
@@ -154,6 +155,7 @@ def test_negative_vol_zscore_rejects(tmp_path):
 # ---------------------------------------------------------------------------
 # Test 3: XRXDW regression — low-price warrant with NaN metrics is rejected
 # ---------------------------------------------------------------------------
+
 
 def test_low_price_warrant_nan_metrics_regression(tmp_path):
     """
@@ -166,25 +168,21 @@ def test_low_price_warrant_nan_metrics_regression(tmp_path):
     it with reason 'nan_metrics'.  This test must ALWAYS pass.
     """
     analyzer = _make_analyzer(tmp_path)
-    df_daily    = _make_daily_df(n=40, price=0.11, last_volume_multiplier=3.0)
+    df_daily = _make_daily_df(n=40, price=0.11, last_volume_multiplier=3.0)
     # rv window = close[-32:] (last 32 of 40 bars, indices 8-39).
     # zero_at must be >= 8 to fall inside the window and force NaN rv.
     df_intraday = _make_intraday_df(n=40, price=0.11, zero_at=15)
 
     passed, metrics, reason = analyzer._check_accumulation("XRXDW", df_intraday, df_daily)
 
-    assert not passed, (
-        "XRXDW-like warrant with NaN RV must be rejected — "
-        "regression for the silent-pass bug"
-    )
-    assert reason == "nan_metrics", (
-        f"Expected 'nan_metrics' (XRXDW regression), got '{reason}'"
-    )
+    assert not passed, "XRXDW-like warrant with NaN RV must be rejected — regression for the silent-pass bug"
+    assert reason == "nan_metrics", f"Expected 'nan_metrics' (XRXDW regression), got '{reason}'"
 
 
 # ---------------------------------------------------------------------------
 # Test 4: Well-formed candidate passes all gates via apply_filters()
 # ---------------------------------------------------------------------------
+
 
 @patch("src.ml.pipeline.p06_emps2.accumulation_analyzer.download_trf")
 def test_apply_filters_passes_good_candidate(mock_download_trf, tmp_path):
@@ -206,7 +204,7 @@ def test_apply_filters_passes_good_candidate(mock_download_trf, tmp_path):
     mock_trf_path.exists.return_value = False
     mock_download_trf.return_value = mock_trf_path
 
-    df_daily    = _make_daily_df(n=60, price=50.0, last_volume_multiplier=4.0)
+    df_daily = _make_daily_df(n=60, price=50.0, last_volume_multiplier=4.0)
     df_intraday = _make_intraday_df(n=40, price=50.0)
 
     mock_dm = MagicMock()
@@ -233,6 +231,4 @@ def test_apply_filters_passes_good_candidate(mock_download_trf, tmp_path):
         "Expected at least 1 PASSED candidate with the recalibrated thresholds. "
         "If this fails, a filter threshold may have regressed to its pre-fix value."
     )
-    assert "GOOD" in result["ticker"].values, (
-        "Ticker 'GOOD' should have passed all accumulation filters"
-    )
+    assert "GOOD" in result["ticker"].values, "Ticker 'GOOD' should have passed all accumulation filters"

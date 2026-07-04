@@ -17,7 +17,6 @@ Usage:
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 
@@ -39,14 +38,14 @@ def _find_all_phase2_alert_files() -> list[Path]:
     return sorted(set(files))
 
 
-def _parse_folder_date(path: Path) -> Optional[date]:
+def _parse_folder_date(path: Path) -> date | None:
     try:
         return datetime.strptime(path.parent.name, "%Y-%m-%d").date()
     except ValueError:
         return None
 
 
-def _price_on_date(ticker: str, date_str: str) -> Optional[float]:
+def _price_on_date(ticker: str, date_str: str) -> float | None:
     """Return closing price for ticker from the volatility filter CSV on the given date."""
     for root in _SEARCH_ROOTS:
         vol_file = root / date_str / "05_volatility_filtered.csv"
@@ -95,10 +94,7 @@ def load_first_phase2_alerts() -> pd.DataFrame:
     combined = combined.sort_values("alert_date")
 
     first_alerts = combined.groupby("ticker").first().reset_index()
-    _logger.info(
-        "Loaded %d unique ticker first-alerts from %d total records",
-        len(first_alerts), len(combined)
-    )
+    _logger.info("Loaded %d unique ticker first-alerts from %d total records", len(first_alerts), len(combined))
     return first_alerts
 
 
@@ -127,43 +123,45 @@ def compute_timing_metrics(alerts_df: pd.DataFrame) -> pd.DataFrame:
         first_seen: date = row["first_seen"]
         alert_date: date = row["alert_date"]
         # Look up price on the actual alert day from the volatility filter CSV
-        price_at_alert: Optional[float] = _price_on_date(ticker, str(alert_date))
+        price_at_alert: float | None = _price_on_date(ticker, str(alert_date))
 
         lag_days: int = (alert_date - first_seen).days
         price_at_first_seen = _price_on_date(ticker, str(first_seen))
 
-        pre_alert_gain_pct: Optional[float] = None
+        pre_alert_gain_pct: float | None = None
         if price_at_first_seen and price_at_alert and price_at_first_seen > 0:
             pre_alert_gain_pct = (price_at_alert / price_at_first_seen - 1.0) * 100.0
 
-        rows.append({
-            "ticker": ticker,
-            "first_seen": first_seen,
-            "alert_date": alert_date,
-            "lag_days": lag_days,
-            "price_at_first_seen": price_at_first_seen,
-            "price_at_alert": price_at_alert,
-            "pre_alert_gain_pct": pre_alert_gain_pct,
-            "appearance_count": row.get("appearance_count"),
-            "avg_vol_zscore": row.get("avg_vol_zscore"),
-            "max_vol_zscore": row.get("max_vol_zscore"),
-        })
+        rows.append(
+            {
+                "ticker": ticker,
+                "first_seen": first_seen,
+                "alert_date": alert_date,
+                "lag_days": lag_days,
+                "price_at_first_seen": price_at_first_seen,
+                "price_at_alert": price_at_alert,
+                "pre_alert_gain_pct": pre_alert_gain_pct,
+                "appearance_count": row.get("appearance_count"),
+                "avg_vol_zscore": row.get("avg_vol_zscore"),
+                "max_vol_zscore": row.get("max_vol_zscore"),
+            }
+        )
 
         _logger.debug(
             "%s | first_seen=%s alert=%s lag=%dd | $%.2f → $%.2f | pre-alert: %s%%",
-            ticker, first_seen, alert_date, lag_days,
+            ticker,
+            first_seen,
+            alert_date,
+            lag_days,
             price_at_first_seen or 0.0,
             price_at_alert or 0.0,
-            f"{pre_alert_gain_pct:+.1f}" if pre_alert_gain_pct is not None else "N/A"
+            f"{pre_alert_gain_pct:+.1f}" if pre_alert_gain_pct is not None else "N/A",
         )
 
     return pd.DataFrame(rows)
 
 
-def fetch_post_alert_returns(
-    metrics_df: pd.DataFrame,
-    days_forward: Optional[list[int]] = None
-) -> pd.DataFrame:
+def fetch_post_alert_returns(metrics_df: pd.DataFrame, days_forward: list[int] | None = None) -> pd.DataFrame:
     """
     Fetch post-alert forward returns via yfinance.
 
@@ -191,7 +189,7 @@ def fetch_post_alert_returns(
     for idx, row in metrics_df.iterrows():
         ticker = str(row["ticker"])
         alert_date: date = row["alert_date"]
-        price_at_alert: Optional[float] = row["price_at_alert"]
+        price_at_alert: float | None = row["price_at_alert"]
 
         if price_at_alert is None or price_at_alert <= 0:
             continue
@@ -199,13 +197,7 @@ def fetch_post_alert_returns(
         try:
             buffer_days = max(days_forward) + 35
             end_date = alert_date + timedelta(days=buffer_days)
-            hist = yf.download(
-                ticker,
-                start=str(alert_date),
-                end=str(end_date),
-                progress=False,
-                auto_adjust=True
-            )
+            hist = yf.download(ticker, start=str(alert_date), end=str(end_date), progress=False, auto_adjust=True)
             if hist is None or hist.empty:
                 continue
 
@@ -213,9 +205,7 @@ def fetch_post_alert_returns(
             for d in days_forward:
                 if len(closes) > d:
                     fwd_price = float(closes.iloc[d])
-                    metrics_df.at[idx, f"return_{d}d_pct"] = (
-                        fwd_price / price_at_alert - 1.0
-                    ) * 100.0
+                    metrics_df.at[idx, f"return_{d}d_pct"] = (fwd_price / price_at_alert - 1.0) * 100.0
         except Exception:
             _logger.warning("Could not fetch post-alert data for %s", ticker)
 
@@ -246,28 +236,37 @@ def print_summary(metrics_df: pd.DataFrame) -> None:
     _logger.info(
         "  Already >10%%: %d tickers (%.0f%%)",
         int((valid["pre_alert_gain_pct"] > 10).sum()),
-        float((valid["pre_alert_gain_pct"] > 10).mean()) * 100
+        float((valid["pre_alert_gain_pct"] > 10).mean()) * 100,
     )
     _logger.info(
         "  Already >20%%: %d tickers (%.0f%%)",
         int((valid["pre_alert_gain_pct"] > 20).sum()),
-        float((valid["pre_alert_gain_pct"] > 20).mean()) * 100
+        float((valid["pre_alert_gain_pct"] > 20).mean()) * 100,
     )
 
     _logger.info("")
     _logger.info("--- Top 10 'too-late' alerts (largest pre-alert gain) ---")
     worst = valid.nlargest(10, "pre_alert_gain_pct")[
-        ["ticker", "first_seen", "alert_date", "lag_days",
-         "price_at_first_seen", "price_at_alert", "pre_alert_gain_pct"]
+        [
+            "ticker",
+            "first_seen",
+            "alert_date",
+            "lag_days",
+            "price_at_first_seen",
+            "price_at_alert",
+            "pre_alert_gain_pct",
+        ]
     ]
     for _, r in worst.iterrows():
         _logger.info(
             "  %-6s  lag=%2dd  $%6.2f → $%6.2f  (%+.1f%%)  [%s → %s]",
-            r["ticker"], r["lag_days"],
+            r["ticker"],
+            r["lag_days"],
             float(r["price_at_first_seen"]) if r["price_at_first_seen"] else 0.0,
             float(r["price_at_alert"]) if r["price_at_alert"] else 0.0,
             float(r["pre_alert_gain_pct"]),
-            r["first_seen"], r["alert_date"]
+            r["first_seen"],
+            r["alert_date"],
         )
 
     for col, label in [("return_5d_pct", "5d"), ("return_10d_pct", "10d"), ("return_20d_pct", "20d")]:
@@ -275,14 +274,12 @@ def print_summary(metrics_df: pd.DataFrame) -> None:
             fwd = valid[col].dropna()
             if not fwd.empty:
                 _logger.info("")
-                _logger.info(
-                    "--- Post-alert %s returns (n=%d) ---",
-                    label, len(fwd)
-                )
+                _logger.info("--- Post-alert %s returns (n=%d) ---", label, len(fwd))
                 _logger.info(
                     "  Mean: %+.1f%%  Median: %+.1f%%  >0: %.0f%%",
-                    float(fwd.mean()), float(fwd.median()),
-                    float((fwd > 0).mean()) * 100
+                    float(fwd.mean()),
+                    float(fwd.median()),
+                    float((fwd > 0).mean()) * 100,
                 )
 
 

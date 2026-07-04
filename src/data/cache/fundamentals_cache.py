@@ -17,14 +17,11 @@ Features:
 """
 
 import json
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, Any, Optional, List
-from dataclasses import dataclass
-
 import sys
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
@@ -36,20 +33,22 @@ else:
 
 # Import cache directory setting
 from config.donotshare.donotshare import DATA_CACHE_DIR
-
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
 
 
 @dataclass
 class CacheMetadata:
     """Metadata for cached fundamentals data."""
+
     provider: str
     timestamp: datetime
     symbol: str
     data_quality_score: float
     file_path: str
     is_valid: bool = True
+
 
 class FundamentalsCache:
     """
@@ -74,8 +73,13 @@ class FundamentalsCache:
 
         _logger.info("Fundamentals cache initialized at %s", self.fundamentals_dir)
 
-    def find_latest_json(self, symbol: str, provider: Optional[str] = None,
-                        data_type: str = "general", max_age_days: Optional[int] = None) -> Optional[CacheMetadata]:
+    def find_latest_json(
+        self,
+        symbol: str,
+        provider: str | None = None,
+        data_type: str = "general",
+        max_age_days: int | None = None,
+    ) -> CacheMetadata | None:
         """
         Find the most recent cached fundamentals data for a symbol.
 
@@ -103,14 +107,14 @@ class FundamentalsCache:
                 # so we identify the timestamp by splitting from the right:
                 # the last two segments are always date and time.
                 filename = file_path.stem
-                if '_' not in filename:
+                if "_" not in filename:
                     continue
 
-                parts = filename.rsplit('_', 2)  # ['alpha_vantage', '20260318', '141731']
+                parts = filename.rsplit("_", 2)  # ['alpha_vantage', '20260318', '141731']
                 if len(parts) < 3:
                     continue
 
-                provider_name = parts[0]              # e.g. 'alpha_vantage'
+                provider_name = parts[0]  # e.g. 'alpha_vantage'
                 timestamp_str = f"{parts[1]}_{parts[2]}"  # e.g. '20260318_141731'
 
                 # Skip if looking for specific provider and this isn't it
@@ -134,8 +138,8 @@ class FundamentalsCache:
                     is_better = True
                 elif timestamp == latest_timestamp:
                     # Tie-break: prefer combined > individual provider
-                    current_is_combined = (latest_metadata and latest_metadata.provider == 'combined')
-                    candidate_is_combined = (provider_name == 'combined')
+                    current_is_combined = latest_metadata and latest_metadata.provider == "combined"
+                    candidate_is_combined = provider_name == "combined"
                     if candidate_is_combined and not current_is_combined:
                         is_better = True
 
@@ -146,7 +150,7 @@ class FundamentalsCache:
                         timestamp=timestamp,
                         symbol=symbol.upper(),
                         data_quality_score=1.0,  # Default score
-                        file_path=str(file_path)
+                        file_path=str(file_path),
                     )
 
             except (ValueError, IndexError) as e:
@@ -154,13 +158,13 @@ class FundamentalsCache:
                 continue
 
         if latest_metadata:
-            _logger.debug("Found latest cache for %s: %s from %s",
-                         symbol, latest_metadata.timestamp, latest_metadata.provider)
+            _logger.debug(
+                "Found latest cache for %s: %s from %s", symbol, latest_metadata.timestamp, latest_metadata.provider
+            )
 
         return latest_metadata
 
-    def write_json(self, symbol: str, provider: str, data: Dict[str, Any],
-                   timestamp: Optional[datetime] = None) -> str:
+    def write_json(self, symbol: str, provider: str, data: Dict[str, Any], timestamp: datetime | None = None) -> str:
         """
         Write fundamentals data to cache.
 
@@ -192,14 +196,14 @@ class FundamentalsCache:
                 "symbol": symbol.upper(),
                 "timestamp": timestamp.isoformat(),
                 "cache_version": "1.0",
-                "data_quality_score": self._calculate_quality_score(data)
+                "data_quality_score": self._calculate_quality_score(data),
             },
-            "fundamentals": data
+            "fundamentals": data,
         }
 
         # Write to file
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(cache_data, f, indent=2, ensure_ascii=False)
 
             _logger.info("Cached fundamentals for %s from %s", symbol, provider)
@@ -210,7 +214,7 @@ class FundamentalsCache:
             _logger.exception("Failed to write cache file %s:", file_path)
             raise
 
-    def read_json(self, file_path: str) -> Optional[Dict[str, Any]]:
+    def read_json(self, file_path: str) -> Dict[str, Any] | None:
         """
         Read fundamentals data from cache file.
 
@@ -221,7 +225,7 @@ class FundamentalsCache:
             Fundamentals data dictionary or None if read fails
         """
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, encoding="utf-8") as f:
                 cache_data = json.load(f)
 
             # Validate cache structure
@@ -235,8 +239,9 @@ class FundamentalsCache:
             _logger.exception("Failed to read cache file %s:", file_path)
             return None
 
-    def is_cache_valid(self, timestamp: datetime, max_age_days: Optional[int] = None,
-                      data_type: str = "general") -> bool:
+    def is_cache_valid(
+        self, timestamp: datetime, max_age_days: int | None = None, data_type: str = "general"
+    ) -> bool:
         """
         Check if cached data is still valid based on age and data type.
 
@@ -288,7 +293,7 @@ class FundamentalsCache:
             try:
                 # Parse timestamp from filename (provider name may contain underscores)
                 filename = file_path.stem
-                parts = filename.rsplit('_', 2)  # ['alpha_vantage', '20260318', '141731']
+                parts = filename.rsplit("_", 2)  # ['alpha_vantage', '20260318', '141731']
                 if len(parts) < 3:
                     continue
                 timestamp_str = f"{parts[1]}_{parts[2]}"
@@ -307,12 +312,11 @@ class FundamentalsCache:
         # Keep at least one backup copy (safety mechanism)
         remaining_files = list(symbol_dir.glob(f"{provider}_*.json"))
         if len(remaining_files) == 0 and removed_files:
-            _logger.warning("All cache files removed for %s %s, no backup available",
-                           symbol, provider)
+            _logger.warning("All cache files removed for %s %s, no backup available", symbol, provider)
 
         return removed_files
 
-    def get_cache_stats(self, symbol: Optional[str] = None) -> Dict[str, Any]:
+    def get_cache_stats(self, symbol: str | None = None) -> Dict[str, Any]:
         """
         Get cache statistics for a symbol or all symbols.
 
@@ -334,7 +338,7 @@ class FundamentalsCache:
                 "symbol": symbol.upper(),
                 "files": len(files),
                 "total_size": total_size,
-                "providers": list(set(f.stem.split('_')[0] for f in files))
+                "providers": list(set(f.stem.split("_")[0] for f in files)),
             }
         else:
             # Get stats for all symbols
@@ -353,7 +357,7 @@ class FundamentalsCache:
                 "total_symbols": len(symbols),
                 "total_files": total_files,
                 "total_size": total_size,
-                "symbols": sorted(symbols)
+                "symbols": sorted(symbols),
             }
 
     def _calculate_quality_score(self, data: Dict[str, Any]) -> float:
@@ -371,14 +375,14 @@ class FundamentalsCache:
 
         # Define important fields and their weights
         important_fields = {
-            'market_cap': 0.2,
-            'pe_ratio': 0.15,
-            'pb_ratio': 0.15,
-            'dividend_yield': 0.1,
-            'revenue': 0.1,
-            'net_income': 0.1,
-            'total_debt': 0.1,
-            'cash': 0.1
+            "market_cap": 0.2,
+            "pe_ratio": 0.15,
+            "pb_ratio": 0.15,
+            "dividend_yield": 0.1,
+            "revenue": 0.1,
+            "net_income": 0.1,
+            "total_debt": 0.1,
+            "cash": 0.1,
         }
 
         score = 0.0
@@ -388,8 +392,7 @@ class FundamentalsCache:
 
         return min(score, 1.0)
 
-    def cleanup_expired_data(self, max_age_days: Optional[int] = None,
-                           data_type: str = "general") -> Dict[str, int]:
+    def cleanup_expired_data(self, max_age_days: int | None = None, data_type: str = "general") -> Dict[str, int]:
         """
         Clean up all expired cache data.
 
@@ -418,10 +421,10 @@ class FundamentalsCache:
                 try:
                     # Parse timestamp from filename (provider name may contain underscores)
                     filename = file_path.stem
-                    if '_' not in filename:
+                    if "_" not in filename:
                         continue
 
-                    parts = filename.rsplit('_', 2)  # ['alpha_vantage', '20260318', '141731']
+                    parts = filename.rsplit("_", 2)  # ['alpha_vantage', '20260318', '141731']
                     if len(parts) < 3:
                         continue
                     timestamp_str = f"{parts[1]}_{parts[2]}"
@@ -442,14 +445,16 @@ class FundamentalsCache:
                 symbol_dir.rmdir()
                 stats["removed_symbols"] += 1
 
-        _logger.info("Cache cleanup completed: %d files, %d symbols removed",
-                    stats["removed_files"], stats["removed_symbols"])
+        _logger.info(
+            "Cache cleanup completed: %d files, %d symbols removed", stats["removed_files"], stats["removed_symbols"]
+        )
 
         return stats
 
 
 # Global cache instance
 _fundamentals_cache = None
+
 
 def get_fundamentals_cache(cache_dir: str = DATA_CACHE_DIR, combiner=None) -> FundamentalsCache:
     """

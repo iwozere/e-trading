@@ -6,11 +6,13 @@ Registry for tracking and organizing configurations by type, metadata,
 and relationships. Provides discovery and query capabilities.
 """
 
-from typing import Dict, List, Any, Optional
 from datetime import datetime
+from typing import Any, Dict, List
+
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class ConfigRegistry:
     """
@@ -37,8 +39,9 @@ class ConfigRegistry:
         # Configuration tags
         self._tags: Dict[str, List[str]] = {}
 
-    def register_config(self, config_id: str, config: Any, config_type: str,
-                       metadata: Dict[str, Any] = None, tags: List[str] = None):
+    def register_config(
+        self, config_id: str, config: Any, config_type: str, metadata: Dict[str, Any] = None, tags: List[str] = None
+    ):
         """
         Register a configuration in the registry.
 
@@ -60,8 +63,8 @@ class ConfigRegistry:
         self._metadata[config_id] = {
             "type": config_type,
             "registered_at": datetime.now().isoformat(),
-            "file_path": getattr(config, '_file_path', None),
-            "loaded_at": getattr(config, '_loaded_at', None)
+            "file_path": getattr(config, "_file_path", None),
+            "loaded_at": getattr(config, "_loaded_at", None),
         }
 
         if metadata:
@@ -98,7 +101,7 @@ class ConfigRegistry:
 
         _logger.debug("Unregistered config: %s", config_id)
 
-    def get_config(self, config_id: str) -> Optional[Any]:
+    def get_config(self, config_id: str) -> Any | None:
         """Get a configuration by ID"""
         for configs in self._configs_by_type.values():
             if config_id in configs:
@@ -113,7 +116,7 @@ class ConfigRegistry:
         """Get all configuration IDs of a specific type"""
         return list(self._configs_by_type.get(config_type, {}).keys())
 
-    def get_config_metadata(self, config_id: str) -> Optional[Dict[str, Any]]:
+    def get_config_metadata(self, config_id: str) -> Dict[str, Any] | None:
         """Get metadata for a configuration"""
         return self._metadata.get(config_id)
 
@@ -153,7 +156,7 @@ class ConfigRegistry:
 
         for config_id, metadata in self._metadata.items():
             # Filter by type if specified
-            if config_type and metadata.get('type') != config_type:
+            if config_type and metadata.get("type") != config_type:
                 continue
 
             # Search in config_id
@@ -163,7 +166,7 @@ class ConfigRegistry:
 
             # Search in description
             config = self.get_config(config_id)
-            if config and hasattr(config, 'description') and config.description:
+            if config and hasattr(config, "description") and config.description:
                 if query_lower in config.description.lower():
                     results.append(config_id)
                     continue
@@ -179,21 +182,15 @@ class ConfigRegistry:
 
     def list_configs(self) -> Dict[str, List[str]]:
         """List all configurations by type"""
-        return {
-            config_type: list(configs.keys())
-            for config_type, configs in self._configs_by_type.items()
-        }
+        return {config_type: list(configs.keys()) for config_type, configs in self._configs_by_type.items()}
 
     def get_config_stats(self) -> Dict[str, Any]:
         """Get statistics about registered configurations"""
         stats = {
             "total_configs": sum(len(configs) for configs in self._configs_by_type.values()),
-            "configs_by_type": {
-                config_type: len(configs)
-                for config_type, configs in self._configs_by_type.items()
-            },
+            "configs_by_type": {config_type: len(configs) for config_type, configs in self._configs_by_type.items()},
             "total_relationships": sum(len(rels) for rels in self._relationships.values()),
-            "total_tags": len(set(tag for tags in self._tags.values() for tag in tags))
+            "total_tags": len(set(tag for tags in self._tags.values() for tag in tags)),
         }
         return stats
 
@@ -205,13 +202,13 @@ class ConfigRegistry:
                     config_id: {
                         "metadata": self._metadata.get(config_id, {}),
                         "tags": self._tags.get(config_id, []),
-                        "relationships": self._relationships.get(config_id, [])
+                        "relationships": self._relationships.get(config_id, []),
                     }
                     for config_id in configs.keys()
                 }
                 for config_type, configs in self._configs_by_type.items()
             },
-            "stats": self.get_config_stats()
+            "stats": self.get_config_stats(),
         }
 
     def clear(self):

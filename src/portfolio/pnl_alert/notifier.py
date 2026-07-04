@@ -5,7 +5,7 @@ Formats the PnL alert digest and dispatches it via `NotificationServiceClient`
 to all configured channels (Telegram, Email).
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from html import escape
 from typing import List, Optional, Sequence
 
@@ -30,7 +30,7 @@ def _format_pct(value: float) -> str:
 def format_plain_text(
     rows: Sequence[AlertRow],
     threshold_pct: float,
-    as_of: Optional[datetime] = None,
+    as_of: datetime | None = None,
 ) -> str:
     """
     Build the plain-text body used for Telegram (and the email fallback).
@@ -43,7 +43,7 @@ def format_plain_text(
     Returns:
         Plain-text message.
     """
-    when = as_of or datetime.now(timezone.utc)
+    when = as_of or datetime.now(UTC)
     header = (
         f"Portfolio PnL Alert - {when.strftime('%Y-%m-%d')}\n"
         f"{len(rows)} position(s) above "
@@ -73,7 +73,7 @@ def format_plain_text(
 def format_html(
     rows: Sequence[AlertRow],
     threshold_pct: float,
-    as_of: Optional[datetime] = None,
+    as_of: datetime | None = None,
 ) -> str:
     """
     Build an HTML body for the email channel.
@@ -86,7 +86,7 @@ def format_html(
     Returns:
         HTML string suitable for the email body.
     """
-    when = as_of or datetime.now(timezone.utc)
+    when = as_of or datetime.now(UTC)
     header = (
         f"<h2>Portfolio PnL Alert &mdash; {escape(when.strftime('%Y-%m-%d'))}</h2>"
         f"<p>{len(rows)} position(s) above "
@@ -141,10 +141,10 @@ async def send_alert(
     rows: List[AlertRow],
     channels: Sequence[str],
     threshold_pct: float,
-    recipient_id: Optional[int] = None,
+    recipient_id: int | None = None,
     client: Optional["object"] = None,
     dry_run: bool = False,
-    as_of: Optional[datetime] = None,
+    as_of: datetime | None = None,
 ) -> bool:
     """
     Dispatch the alert to the configured channels.
@@ -177,6 +177,7 @@ async def send_alert(
 
     if client is None:
         from src.notification.service.client import NotificationServiceClient
+
         client = NotificationServiceClient()
 
     ok = await client.send_notification(

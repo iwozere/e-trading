@@ -1,12 +1,15 @@
 # src/ml/pipeline/p06_emps2/uoa_analyzer.py
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
+from typing import List
+
 import pandas as pd
-from typing import List, Optional
-from src.notification.logger import setup_logger
+
 from src.data.downloader.eodhd_downloader import EODHDDataDownloader
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class UOAAnalyzer:
     def __init__(self, results_dir: Path):
@@ -15,11 +18,11 @@ class UOAAnalyzer:
 
     def get_yesterday_str(self) -> str:
         """Get yesterday's date in YYYY-MM-DD format"""
-        return (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        return (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
 
     def get_todays_candidates(self) -> List[str]:
         """Get tickers from today's 06_rolling_candidates.csv"""
-        today = datetime.now().strftime('%Y-%m-%d')
+        today = datetime.now().strftime("%Y-%m-%d")
         candidates_file = self.results_dir / today / "06_rolling_candidates.csv"
 
         if not candidates_file.exists():
@@ -28,12 +31,12 @@ class UOAAnalyzer:
 
         try:
             df = pd.read_csv(candidates_file)
-            return df['ticker'].tolist()
+            return df["ticker"].tolist()
         except Exception as e:
             _logger.error(f"Error reading candidates file: {e}")
             return []
 
-    def analyze_uoa(self, tickers: List[str], target_date: Optional[str] = None) -> pd.DataFrame:
+    def analyze_uoa(self, tickers: List[str], target_date: str | None = None) -> pd.DataFrame:
         """Download and calculate UOA data for given tickers"""
         if not tickers:
             _logger.warning("No tickers provided for UOA analysis")
@@ -57,7 +60,7 @@ class UOAAnalyzer:
 
         return pd.concat(all_data, ignore_index=True)
 
-    def save_uoa_data(self, uoa_df: pd.DataFrame, target_date: Optional[str] = None) -> Path:
+    def save_uoa_data(self, uoa_df: pd.DataFrame, target_date: str | None = None) -> Path:
         """Save UOA data to the appropriate directory"""
         if uoa_df.empty:
             _logger.warning("No UOA data to save")
@@ -72,7 +75,7 @@ class UOAAnalyzer:
         _logger.info(f"Saved UOA data to {output_file}")
         return output_file
 
-    def run(self) -> Optional[Path]:
+    def run(self) -> Path | None:
         """Run the UOA analysis pipeline"""
         tickers = self.get_todays_candidates()
         if not tickers:

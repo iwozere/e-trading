@@ -22,11 +22,12 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parents[3]
 sys.path.append(str(project_root))
 
+from src.notification.logger import setup_logger
 from src.strategy.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
 from src.strategy.entry.hmm_lstm_entry_mixin import HMMLSTMEntryMixin
-from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 def register_hmm_lstm_mixin():
     """Register the HMM-LSTM entry mixin."""
@@ -38,13 +39,16 @@ def register_hmm_lstm_mixin():
         _logger.exception("Failed to register HMMLSTMEntryMixin")
         return False
 
+
 def check_registration():
     """Check if the mixin is properly registered."""
     return "HMMLSTMEntryMixin" in ENTRY_MIXIN_REGISTRY
 
+
 def list_registered_mixins():
     """List all registered entry mixins."""
     return list(ENTRY_MIXIN_REGISTRY.keys())
+
 
 # Auto-register when module is imported
 if __name__ == "__main__":

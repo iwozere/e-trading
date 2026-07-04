@@ -5,8 +5,8 @@ Identifies stocks that have been exited (or significantly reduced) by multiple
 institutions in the same quarter — the most actionable signal in the pipeline.
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
@@ -65,6 +65,8 @@ class ConsensusDetector:
 
         _logger.info(
             "Consensus detector: %d tickers with %d+ institution exits (from %d distinct tickers)",
-            len(result), self._min_institutions, len(agg),
+            len(result),
+            self._min_institutions,
+            len(agg),
         )
         return result

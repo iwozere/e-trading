@@ -14,9 +14,9 @@ Computes all technical indicators from daily OHLCV data:
 All indicators are computed using pure pandas/numpy — no TA-Lib dependency.
 """
 
-from pathlib import Path
 import sys
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -25,9 +25,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.ml.pipeline.p17_penny_stocks.config import P17TechnicalConfig
 from src.ml.pipeline.p17_penny_stocks.models.candidate import Candidate
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -197,12 +197,15 @@ class TechnicalAgent:
         Use only when the universe is too large to score fully.
         """
         return [
-            c for c in candidates
-            if c.breakout_20d or c.relative_volume >= self.config.rvol_strong_threshold
-            or c.bb_squeeze or c.accumulation_days >= 3
+            c
+            for c in candidates
+            if c.breakout_20d
+            or c.relative_volume >= self.config.rvol_strong_threshold
+            or c.bb_squeeze
+            or c.accumulation_days >= 3
         ]
 
-    def build_snapshot(self, candidates: List[Candidate]) -> Optional[pd.DataFrame]:
+    def build_snapshot(self, candidates: List[Candidate]) -> pd.DataFrame | None:
         """Return a DataFrame summary of technical features for logging / CSV."""
         if not candidates:
             return None

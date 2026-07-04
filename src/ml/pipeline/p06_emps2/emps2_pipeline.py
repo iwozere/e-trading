@@ -5,13 +5,12 @@ Main orchestration logic for the EMPS2 pipeline.
 Coordinates all stages: universe download, fundamental filtering, volatility filtering.
 """
 
-from pathlib import Path
-import sys
-from typing import Optional
-from datetime import datetime
 import json
 import logging
+import sys
+from datetime import datetime
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 import pandas as pd
 
@@ -20,19 +19,20 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.data_manager import DataManager
-from .config import EMPS2PipelineConfig
-from src.ml.pipeline.shared.analyzer_protocol import ScreenerAnalyzer
-from src.ml.pipeline.shared.universe_downloader import NasdaqUniverseDownloader
-from src.ml.pipeline.shared.fundamental_filter import FundamentalFilter
-from src.ml.pipeline.shared.volatility_filter import VolatilityFilter
-from src.ml.pipeline.shared.sentiment_filter import SentimentFilter
-from src.ml.pipeline.shared.trf_downloader import download_trf
-from src.ml.pipeline.p06_emps2.rolling_memory import RollingMemoryScanner
 from src.ml.pipeline.p06_emps2.accumulation_analyzer import AccumulationAnalyzer
 from src.ml.pipeline.p06_emps2.alerts import EMPS2AlertSender
+from src.ml.pipeline.p06_emps2.rolling_memory import RollingMemoryScanner
 from src.ml.pipeline.p06_emps2.uoa_analyzer import UOAAnalyzer
-
+from src.ml.pipeline.shared.analyzer_protocol import ScreenerAnalyzer
+from src.ml.pipeline.shared.fundamental_filter import FundamentalFilter
+from src.ml.pipeline.shared.sentiment_filter import SentimentFilter
+from src.ml.pipeline.shared.trf_downloader import download_trf
+from src.ml.pipeline.shared.universe_downloader import NasdaqUniverseDownloader
+from src.ml.pipeline.shared.volatility_filter import VolatilityFilter
 from src.notification.logger import setup_logger
+
+from .config import EMPS2PipelineConfig
+
 _logger = setup_logger(__name__)
 
 
@@ -52,8 +52,12 @@ class EMPS2Pipeline:
     All output saved to results/emps2/YYYY-MM-DD/
     """
 
-    def __init__(self, config: Optional[EMPS2PipelineConfig] = None, target_date: Optional[str] = None,
-                 results_base: Optional[Path] = None):
+    def __init__(
+        self,
+        config: EMPS2PipelineConfig | None = None,
+        target_date: str | None = None,
+        results_base: Path | None = None,
+    ):
         """
         Initialize EMPS2 pipeline.
 
@@ -69,8 +73,9 @@ class EMPS2Pipeline:
         # Target date defaults to yesterday (for end-of-day data)
         if target_date is None:
             from datetime import timedelta
+
             yesterday = datetime.now() - timedelta(days=1)
-            target_date = yesterday.strftime('%Y-%m-%d')
+            target_date = yesterday.strftime("%Y-%m-%d")
 
         self.target_date = target_date
 
@@ -83,10 +88,7 @@ class EMPS2Pipeline:
         self._setup_pipeline_logging()
 
         # Initialize components (pass target_date for consistent folder usage)
-        self.universe_downloader = NasdaqUniverseDownloader(
-            self.config.universe_config,
-            target_date=target_date
-        )
+        self.universe_downloader = NasdaqUniverseDownloader(self.config.universe_config, target_date=target_date)
 
         self.data_manager = DataManager()
         self.fundamental_filter = FundamentalFilter(
@@ -94,7 +96,7 @@ class EMPS2Pipeline:
             self.config.filter_config,
             results_dir=self._results_dir,
             checkpoint_enabled=self.config.checkpoint_enabled,
-            checkpoint_interval=self.config.checkpoint_interval
+            checkpoint_interval=self.config.checkpoint_interval,
         )
 
         self._stage3_analyzer: ScreenerAnalyzer = self._build_analyzer(target_date)
@@ -104,23 +106,24 @@ class EMPS2Pipeline:
             config=self.config.rolling_memory_config,
             results_base_path=self._results_base_path,
             target_date=target_date,
-            verbose=self.config.verbose_logging
+            verbose=self.config.verbose_logging,
         )
 
         # Alert sender
-        self.alert_sender = EMPS2AlertSender(user_id=self.config.user_id) if self.config.rolling_memory_config.send_alerts else None
+        self.alert_sender = (
+            EMPS2AlertSender(user_id=self.config.user_id) if self.config.rolling_memory_config.send_alerts else None
+        )
 
         # Sentiment filter
-        self.sentiment_filter = SentimentFilter(
-            self.config.sentiment_config,
-            results_dir=self._results_dir,
-            target_date=target_date
-        ) if self.config.sentiment_config.enabled else None
+        self.sentiment_filter = (
+            SentimentFilter(self.config.sentiment_config, results_dir=self._results_dir, target_date=target_date)
+            if self.config.sentiment_config.enabled
+            else None
+        )
 
         self._output_files = {}  # Initialize to avoid AttributeError in alerts stage
 
-        _logger.info("EMPS2 Pipeline initialized (target_date: %s, results: %s)",
-                    self.target_date, self._results_dir)
+        _logger.info("EMPS2 Pipeline initialized (target_date: %s, results: %s)", self.target_date, self._results_dir)
 
     def _setup_pipeline_logging(self) -> None:
         """
@@ -136,7 +139,7 @@ class EMPS2Pipeline:
             str(log_file),
             maxBytes=100 * 1024 * 1024,  # 100MB
             backupCount=3,
-            encoding="utf-8"
+            encoding="utf-8",
         )
         file_handler.setLevel(logging.DEBUG)
 
@@ -148,7 +151,7 @@ class EMPS2Pipeline:
 
         # Add handler to the pipeline's own logger instead of root
         # This prevents polluting other modules while still capturing pipeline activity
-        self._pipeline_logger = logging.getLogger("src.ml.pipeline") # Parent of p06 and p10
+        self._pipeline_logger = logging.getLogger("src.ml.pipeline")  # Parent of p06 and p10
         self._pipeline_logger.addHandler(file_handler)
         self._pipeline_logger.setLevel(logging.DEBUG)
 
@@ -164,7 +167,7 @@ class EMPS2Pipeline:
         Removes the pipeline log handler from the root logger to prevent
         logs from subsequent scans being written to this scan's log file.
         """
-        if hasattr(self, '_pipeline_log_handler'):
+        if hasattr(self, "_pipeline_log_handler"):
             self._pipeline_logger.removeHandler(self._pipeline_log_handler)
             self._pipeline_log_handler.close()
             _logger.debug("Per-scan logging handler cleaned up")
@@ -206,9 +209,9 @@ class EMPS2Pipeline:
         """
         try:
             start_time = datetime.now()
-            _logger.info("="*70)
+            _logger.info("=" * 70)
             _logger.info("EMPS2 Pipeline Starting")
-            _logger.info("="*70)
+            _logger.info("=" * 70)
 
             # Stage 1: Download universe
             universe_tickers = self._stage1_download_universe(force_refresh)
@@ -228,9 +231,7 @@ class EMPS2Pipeline:
             self._stage2b_download_trf_data()
 
             # Stage 3: Volatility filtering
-            volatility_df = self._stage3_volatility_filter(
-                fundamental_df['ticker'].tolist()
-            )
+            volatility_df = self._stage3_volatility_filter(fundamental_df["ticker"].tolist())
 
             if volatility_df.empty:
                 _logger.error("No tickers passed volatility filters")
@@ -244,12 +245,7 @@ class EMPS2Pipeline:
             self._stage5_uoa_analysis()
 
             # Stage 6: Create final results (before sentiment collection)
-            final_df = self._stage6_create_final_results(
-                fundamental_df,
-                volatility_df,
-                phase1_df,
-                phase2_df
-            )
+            final_df = self._stage6_create_final_results(fundamental_df, volatility_df, phase1_df, phase2_df)
 
             # Stage 7: Sentiment Data Collection (social momentum metrics)
             sentiment_df = self._stage7_sentiment_data_collection(phase2_df)
@@ -265,14 +261,14 @@ class EMPS2Pipeline:
                     len(volatility_df),
                     len(phase1_df) if not phase1_df.empty else 0,
                     len(phase2_df) if not phase2_df.empty else 0,
-                    start_time
+                    start_time,
                 )
 
             elapsed = (datetime.now() - start_time).total_seconds()
-            _logger.info("="*70)
+            _logger.info("=" * 70)
             _logger.info("EMPS2 Pipeline Completed in %.1f seconds", elapsed)
             _logger.info("Final universe size: %d tickers", len(final_df))
-            _logger.info("="*70)
+            _logger.info("=" * 70)
 
             return final_df
 
@@ -294,9 +290,9 @@ class EMPS2Pipeline:
         Returns:
             List of ticker symbols
         """
-        _logger.info("-"*70)
+        _logger.info("-" * 70)
         _logger.info("Stage 1: Downloading NASDAQ Universe")
-        _logger.info("-"*70)
+        _logger.info("-" * 70)
 
         tickers = self.universe_downloader.download_universe(force_refresh)
 
@@ -314,9 +310,9 @@ class EMPS2Pipeline:
         Returns:
             DataFrame with filtered tickers
         """
-        _logger.info("-"*70)
+        _logger.info("-" * 70)
         _logger.info("Stage 2: Applying Fundamental Filters")
-        _logger.info("-"*70)
+        _logger.info("-" * 70)
 
         df = self.fundamental_filter.apply_filters(tickers, force_refresh)
 
@@ -328,14 +324,14 @@ class EMPS2Pipeline:
         Stage 2b: Download TRF data for volume correction.
         Uses shared utility to maintain a central TRF data repository.
         """
-        _logger.info("-"*70)
+        _logger.info("-" * 70)
         _logger.info("Stage 2b: TRF Data Acquisition")
-        _logger.info("-"*70)
+        _logger.info("-" * 70)
 
         try:
             # Convert target_date string to datetime
-            target_dt = datetime.strptime(self.target_date, '%Y-%m-%d')
-            
+            target_dt = datetime.strptime(self.target_date, "%Y-%m-%d")
+
             # Use shared utility which handles pathing (results/trf_data/...)
             trf_file = download_trf(target_date=target_dt)
             _logger.info("TRF acquisition complete: %s", trf_file)
@@ -354,20 +350,17 @@ class EMPS2Pipeline:
         Returns:
             DataFrame with filtered tickers and diagnostic metrics
         """
-        _logger.info("-"*70)
+        _logger.info("-" * 70)
         analyzer_label = "AccumulationAnalyzer" if self.config.analyzer_type == "accumulation" else "VolatilityFilter"
         _logger.info("Stage 3: %s", analyzer_label)
-        _logger.info("-"*70)
+        _logger.info("-" * 70)
 
         filtered_df = self._stage3_analyzer.apply_filters(tickers)
 
         _logger.info("Stage 3 complete: %d tickers", len(filtered_df))
         return filtered_df
 
-    def _stage4_rolling_memory_analysis(
-        self,
-        volatility_df: pd.DataFrame
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    def _stage4_rolling_memory_analysis(self, volatility_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
         Stage 4: Rolling Memory Analysis and Phase Detection.
 
@@ -381,9 +374,9 @@ class EMPS2Pipeline:
         Returns:
             Tuple of (phase1_df, phase2_df)
         """
-        _logger.info("-"*70)
+        _logger.info("-" * 70)
         _logger.info("Stage 4: Rolling Memory Analysis")
-        _logger.info("-"*70)
+        _logger.info("-" * 70)
 
         if not self.config.rolling_memory_config.enabled:
             _logger.info("Rolling memory disabled, skipping phase detection")
@@ -408,30 +401,23 @@ class EMPS2Pipeline:
         _logger.info("Phase 1 detection: %d candidates", len(phase1_df))
 
         # Detect Phase 2 (early public signal)
-        phase2_df = self.rolling_memory.detect_phase2_candidates(
-            phase1_df=phase1_df,
-            current_scan_df=volatility_df
-        )
+        phase2_df = self.rolling_memory.detect_phase2_candidates(phase1_df=phase1_df, current_scan_df=volatility_df)
         _logger.info("Phase 2 detection: %d candidates", len(phase2_df))
 
         # Generate outputs
         self._output_files = self.rolling_memory.generate_outputs(
-            frequency_df=frequency_df,
-            phase1_df=phase1_df,
-            phase2_df=phase2_df,
-            output_dir=self._results_dir
+            frequency_df=frequency_df, phase1_df=phase1_df, phase2_df=phase2_df, output_dir=self._results_dir
         )
 
-        _logger.info("Stage 4 complete: Phase 1=%d, Phase 2=%d",
-                    len(phase1_df), len(phase2_df))
+        _logger.info("Stage 4 complete: Phase 1=%d, Phase 2=%d", len(phase1_df), len(phase2_df))
 
         return phase1_df, phase2_df
 
     def _stage5_uoa_analysis(self) -> None:
         """Stage 5: Perform UOA analysis on rolling candidates"""
-        _logger.info("-"*70)
+        _logger.info("-" * 70)
         _logger.info("Stage 5: UOA Analysis")
-        _logger.info("-"*70)
+        _logger.info("-" * 70)
 
         if not self.config.enable_uoa_analysis:
             _logger.info("UOA analysis is disabled in config")
@@ -446,7 +432,7 @@ class EMPS2Pipeline:
             else:
                 _logger.warning("No UOA data was generated")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("UOA analysis failed")
 
     def _stage6_create_final_results(
@@ -454,7 +440,7 @@ class EMPS2Pipeline:
         fundamental_df: pd.DataFrame,
         volatility_df: pd.DataFrame,
         phase1_df: pd.DataFrame,
-        phase2_df: pd.DataFrame
+        phase2_df: pd.DataFrame,
     ) -> pd.DataFrame:
         """
         Stage 6: Create final results DataFrame.
@@ -468,33 +454,31 @@ class EMPS2Pipeline:
         Returns:
             Final filtered DataFrame
         """
-        _logger.info("-"*70)
+        _logger.info("-" * 70)
         _logger.info("Stage 6: Creating Final Results")
-        _logger.info("-"*70)
+        _logger.info("-" * 70)
 
         # Use volatility_df as the final results (already has all metrics)
         final_df = volatility_df.copy()
 
         # Add phase information if available
         if not phase1_df.empty:
-            phase1_tickers = set(phase1_df['ticker'].tolist())
-            final_df['in_phase1'] = final_df['ticker'].isin(phase1_tickers)
+            phase1_tickers = set(phase1_df["ticker"].tolist())
+            final_df["in_phase1"] = final_df["ticker"].isin(phase1_tickers)
         else:
-            final_df['in_phase1'] = False
+            final_df["in_phase1"] = False
 
         if not phase2_df.empty:
-            phase2_tickers = set(phase2_df['ticker'].tolist())
-            final_df['in_phase2'] = final_df['ticker'].isin(phase2_tickers)
-            final_df['alert_priority'] = final_df['ticker'].apply(
-                lambda x: 'HIGH' if x in phase2_tickers else 'NORMAL'
-            )
+            phase2_tickers = set(phase2_df["ticker"].tolist())
+            final_df["in_phase2"] = final_df["ticker"].isin(phase2_tickers)
+            final_df["alert_priority"] = final_df["ticker"].apply(lambda x: "HIGH" if x in phase2_tickers else "NORMAL")
         else:
-            final_df['in_phase2'] = False
-            final_df['alert_priority'] = 'NORMAL'
+            final_df["in_phase2"] = False
+            final_df["alert_priority"] = "NORMAL"
 
         # Add scan metadata
-        final_df['scan_date'] = self.target_date
-        final_df['scan_timestamp'] = datetime.now().isoformat()  # When scan was run
+        final_df["scan_date"] = self.target_date
+        final_df["scan_timestamp"] = datetime.now().isoformat()  # When scan was run
 
         # Save final results
         output_path = self._results_dir / "09_final_universe.csv"
@@ -517,9 +501,9 @@ class EMPS2Pipeline:
         Returns:
             DataFrame with sentiment metrics for all tickers
         """
-        _logger.info("-"*70)
+        _logger.info("-" * 70)
         _logger.info("Stage 7: Sentiment Data Collection")
-        _logger.info("-"*70)
+        _logger.info("-" * 70)
 
         # Check if sentiment is enabled
         if not self.config.sentiment_config.enabled:
@@ -531,7 +515,7 @@ class EMPS2Pipeline:
             return pd.DataFrame()
 
         # Extract tickers from Phase 2
-        tickers = phase2_df['ticker'].tolist()
+        tickers = phase2_df["ticker"].tolist()
         _logger.info("Collecting sentiment data for %d Phase 2 candidates", len(tickers))
 
         try:
@@ -552,10 +536,9 @@ class EMPS2Pipeline:
 
             return sentiment_df
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error collecting sentiment data:")
             return pd.DataFrame()
-
 
     def _stage8_send_alerts(self, phase1_df: pd.DataFrame, phase2_df: pd.DataFrame) -> None:
         """
@@ -596,7 +579,7 @@ class EMPS2Pipeline:
         volatility_count: int,
         phase1_count: int,
         phase2_count: int,
-        start_time: datetime
+        start_time: datetime,
     ) -> None:
         """
         Generate and save pipeline summary.
@@ -613,66 +596,63 @@ class EMPS2Pipeline:
             elapsed = (datetime.now() - start_time).total_seconds()
 
             summary = {
-                'pipeline': 'EMPS2',
-                'version': '2.2',  # Updated version with target_date support
-                'target_date': self.target_date,  # Target trading day
-                'scan_timestamp': datetime.now().isoformat(),  # When scan was executed
-                'elapsed_seconds': elapsed,
-                'stages': {
-                    'stage1_universe': {
-                        'count': initial_count,
-                        'percentage': 100.0
+                "pipeline": "EMPS2",
+                "version": "2.2",  # Updated version with target_date support
+                "target_date": self.target_date,  # Target trading day
+                "scan_timestamp": datetime.now().isoformat(),  # When scan was executed
+                "elapsed_seconds": elapsed,
+                "stages": {
+                    "stage1_universe": {"count": initial_count, "percentage": 100.0},
+                    "stage2_fundamental": {
+                        "count": fundamental_count,
+                        "percentage": 100.0 * fundamental_count / initial_count if initial_count > 0 else 0,
+                        "removed": initial_count - fundamental_count,
                     },
-                    'stage2_fundamental': {
-                        'count': fundamental_count,
-                        'percentage': 100.0 * fundamental_count / initial_count if initial_count > 0 else 0,
-                        'removed': initial_count - fundamental_count
+                    "stage2b_trf": {
+                        "enabled": True,
+                        "trf_file_exists": (self._results_dir / "trf.csv").exists(),
+                        "description": "TRF volume corrections for dark pool activity",
                     },
-                    'stage2b_trf': {
-                        'enabled': True,
-                        'trf_file_exists': (self._results_dir / "trf.csv").exists(),
-                        'description': 'TRF volume corrections for dark pool activity'
+                    "stage3_volatility": {
+                        "count": volatility_count,
+                        "percentage": 100.0 * volatility_count / fundamental_count if fundamental_count > 0 else 0,
+                        "removed": fundamental_count - volatility_count,
+                        "uses_trf_corrections": (self._results_dir / "trf.csv").exists(),
                     },
-                    'stage3_volatility': {
-                        'count': volatility_count,
-                        'percentage': 100.0 * volatility_count / fundamental_count if fundamental_count > 0 else 0,
-                        'removed': fundamental_count - volatility_count,
-                        'uses_trf_corrections': (self._results_dir / "trf.csv").exists()
+                    "stage4_rolling_memory": {
+                        "enabled": self.config.rolling_memory_config.enabled,
+                        "phase1_count": phase1_count,
+                        "phase2_count": phase2_count,
+                        "lookback_days": self.config.rolling_memory_config.lookback_days,
                     },
-                    'stage4_rolling_memory': {
-                        'enabled': self.config.rolling_memory_config.enabled,
-                        'phase1_count': phase1_count,
-                        'phase2_count': phase2_count,
-                        'lookback_days': self.config.rolling_memory_config.lookback_days
-                    }
                 },
-                'final_universe': {
-                    'count': volatility_count,
-                    'percentage_of_initial': 100.0 * volatility_count / initial_count if initial_count > 0 else 0,
-                    'phase1_candidates': phase1_count,
-                    'phase2_alerts': phase2_count
+                "final_universe": {
+                    "count": volatility_count,
+                    "percentage_of_initial": 100.0 * volatility_count / initial_count if initial_count > 0 else 0,
+                    "phase1_candidates": phase1_count,
+                    "phase2_alerts": phase2_count,
                 },
-                'config': {
-                    'min_price': self.config.filter_config.min_price,
-                    'min_avg_volume': self.config.filter_config.min_avg_volume,
-                    'min_market_cap': self.config.filter_config.min_market_cap,
-                    'max_market_cap': self.config.filter_config.max_market_cap,
-                    'max_float': self.config.filter_config.max_float,
-                    'min_volatility_threshold': self.config.filter_config.min_volatility_threshold,
-                    'min_price_range': self.config.filter_config.min_price_range,
-                    'min_vol_zscore': self.config.filter_config.min_vol_zscore,
-                    'min_vol_rv_ratio': self.config.filter_config.min_vol_rv_ratio,
-                    'lookback_days': self.config.filter_config.lookback_days,
-                    'interval': self.config.filter_config.interval,
-                    'atr_period': self.config.filter_config.atr_period,
-                    'rolling_memory_enabled': self.config.rolling_memory_config.enabled,
-                    'phase1_min_appearances': self.config.rolling_memory_config.phase1_min_appearances
-                }
+                "config": {
+                    "min_price": self.config.filter_config.min_price,
+                    "min_avg_volume": self.config.filter_config.min_avg_volume,
+                    "min_market_cap": self.config.filter_config.min_market_cap,
+                    "max_market_cap": self.config.filter_config.max_market_cap,
+                    "max_float": self.config.filter_config.max_float,
+                    "min_volatility_threshold": self.config.filter_config.min_volatility_threshold,
+                    "min_price_range": self.config.filter_config.min_price_range,
+                    "min_vol_zscore": self.config.filter_config.min_vol_zscore,
+                    "min_vol_rv_ratio": self.config.filter_config.min_vol_rv_ratio,
+                    "lookback_days": self.config.filter_config.lookback_days,
+                    "interval": self.config.filter_config.interval,
+                    "atr_period": self.config.filter_config.atr_period,
+                    "rolling_memory_enabled": self.config.rolling_memory_config.enabled,
+                    "phase1_min_appearances": self.config.rolling_memory_config.phase1_min_appearances,
+                },
             }
 
             # Save summary as JSON
             summary_path = self._results_dir / "summary.json"
-            with open(summary_path, 'w') as f:
+            with open(summary_path, "w") as f:
                 json.dump(summary, f, indent=2)
 
             _logger.info("Saved pipeline summary to: %s", summary_path)
@@ -681,26 +661,31 @@ class EMPS2Pipeline:
             _logger.info("")
             _logger.info("Pipeline Summary:")
             _logger.info("  Initial universe: %d tickers", initial_count)
-            _logger.info("  After fundamental: %d tickers (%.1f%%)",
-                        fundamental_count,
-                        summary['stages']['stage2_fundamental']['percentage'])
-            _logger.info("  After volatility: %d tickers (%.1f%%)",
-                        volatility_count,
-                        summary['stages']['stage3_volatility']['percentage'])
+            _logger.info(
+                "  After fundamental: %d tickers (%.1f%%)",
+                fundamental_count,
+                summary["stages"]["stage2_fundamental"]["percentage"],
+            )
+            _logger.info(
+                "  After volatility: %d tickers (%.1f%%)",
+                volatility_count,
+                summary["stages"]["stage3_volatility"]["percentage"],
+            )
             if self.config.rolling_memory_config.enabled:
                 _logger.info("  Phase 1 candidates: %d tickers", phase1_count)
                 _logger.info("  Phase 2 alerts: %d tickers 🔥", phase2_count)
-            _logger.info("  Final universe: %d tickers (%.2f%% of initial)",
-                        volatility_count,
-                        summary['final_universe']['percentage_of_initial'])
+            _logger.info(
+                "  Final universe: %d tickers (%.2f%% of initial)",
+                volatility_count,
+                summary["final_universe"]["percentage_of_initial"],
+            )
             _logger.info("  Total time: %.1f seconds", elapsed)
 
         except Exception:
             _logger.exception("Error generating summary:")
 
 
-def create_pipeline(config: Optional[EMPS2PipelineConfig] = None,
-                   target_date: Optional[str] = None) -> EMPS2Pipeline:
+def create_pipeline(config: EMPS2PipelineConfig | None = None, target_date: str | None = None) -> EMPS2Pipeline:
     """
     Factory function to create EMPS2 pipeline.
 

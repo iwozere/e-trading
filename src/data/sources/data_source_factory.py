@@ -6,8 +6,9 @@ configuration-based initialization and lifecycle management.
 """
 
 import logging
-from typing import Dict, Type, Optional, List, Any
 from pathlib import Path
+from typing import Any, Dict, List, Type
+
 import yaml
 
 from src.data.sources.base_data_source import BaseDataSource
@@ -33,7 +34,7 @@ class DataSourceFactory:
     - Centralized configuration
     """
 
-    def __init__(self, config_path: Optional[Path] = None):
+    def __init__(self, config_path: Path | None = None):
         """
         Initialize data source factory.
 
@@ -46,12 +47,12 @@ class DataSourceFactory:
         self._config = self._load_config()
 
         # Configure global cache
-        if self._config.get('caching', {}).get('enabled', True):
-            cache_config = self._config['caching']
+        if self._config.get("caching", {}).get("enabled", True):
+            cache_config = self._config["caching"]
             configure_cache(
-                cache_dir=cache_config.get('directory', DATA_CACHE_DIR),
-                max_size_gb=cache_config.get('max_size_gb', 10.0),
-                retention_days=cache_config.get('retention_days', 30)
+                cache_dir=cache_config.get("directory", DATA_CACHE_DIR),
+                max_size_gb=cache_config.get("max_size_gb", 10.0),
+                retention_days=cache_config.get("retention_days", 30),
             )
 
         _logger.info("Data source factory initialized")
@@ -65,7 +66,7 @@ class DataSourceFactory:
         """
         try:
             if self.config_path.exists():
-                with open(self.config_path, 'r') as f:
+                with open(self.config_path) as f:
                     config = yaml.safe_load(f)
                 _logger.info("Loaded configuration from %s", self.config_path)
                 return config or {}
@@ -76,11 +77,7 @@ class DataSourceFactory:
             _logger.exception("Failed to load configuration:")
             return {}
 
-    def register_data_source(
-        self,
-        provider_name: str,
-        data_source_class: Type[BaseDataSource]
-    ) -> None:
+    def register_data_source(self, provider_name: str, data_source_class: Type[BaseDataSource]) -> None:
         """
         Register a data source class for a provider.
 
@@ -94,11 +91,7 @@ class DataSourceFactory:
         self._data_source_classes[provider_name] = data_source_class
         _logger.info("Registered data source class for %s", provider_name)
 
-    def create_data_source(
-        self,
-        provider_name: str,
-        **kwargs
-    ) -> Optional[BaseDataSource]:
+    def create_data_source(self, provider_name: str, **kwargs) -> BaseDataSource | None:
         """
         Create a data source instance.
 
@@ -122,10 +115,10 @@ class DataSourceFactory:
             config = {**provider_config, **kwargs}
 
             # Set defaults from global config
-            global_config = self._config.get('global', {})
-            config.setdefault('cache_enabled', global_config.get('cache_enabled', True))
-            config.setdefault('rate_limit_enabled', global_config.get('rate_limit_enabled', True))
-            config.setdefault('validation_enabled', global_config.get('validation_enabled', True))
+            global_config = self._config.get("global", {})
+            config.setdefault("cache_enabled", global_config.get("cache_enabled", True))
+            config.setdefault("rate_limit_enabled", global_config.get("rate_limit_enabled", True))
+            config.setdefault("validation_enabled", global_config.get("validation_enabled", True))
 
             # Create data source instance
             data_source_class = self._data_source_classes[provider_name]
@@ -141,7 +134,7 @@ class DataSourceFactory:
             _logger.exception("Failed to create data source for %s:", provider_name)
             return None
 
-    def get_data_source(self, provider_name: str) -> Optional[BaseDataSource]:
+    def get_data_source(self, provider_name: str) -> BaseDataSource | None:
         """
         Get existing data source instance.
 
@@ -153,11 +146,7 @@ class DataSourceFactory:
         """
         return self._data_sources.get(provider_name)
 
-    def get_or_create_data_source(
-        self,
-        provider_name: str,
-        **kwargs
-    ) -> Optional[BaseDataSource]:
+    def get_or_create_data_source(self, provider_name: str, **kwargs) -> BaseDataSource | None:
         """
         Get existing data source or create new one.
 
@@ -206,23 +195,16 @@ class DataSourceFactory:
         for provider_name, data_source in self._data_sources.items():
             try:
                 health_status[provider_name] = {
-                    'status': data_source.get_connection_status(),
-                    'is_healthy': data_source.is_healthy()
+                    "status": data_source.get_connection_status(),
+                    "is_healthy": data_source.is_healthy(),
                 }
             except Exception as e:
-                health_status[provider_name] = {
-                    'status': {'error': str(e)},
-                    'is_healthy': False
-                }
+                health_status[provider_name] = {"status": {"error": str(e)}, "is_healthy": False}
 
         return health_status
 
     def get_data_quality_reports(
-        self,
-        symbols: List[str],
-        interval: str,
-        start_date=None,
-        end_date=None
+        self, symbols: List[str], interval: str, start_date=None, end_date=None
     ) -> Dict[str, Dict[str, Any]]:
         """
         Get data quality reports for multiple symbols across all providers.
@@ -243,19 +225,17 @@ class DataSourceFactory:
                 provider_reports = {}
                 for symbol in symbols:
                     try:
-                        report = data_source.get_data_quality_report(
-                            symbol, interval, start_date, end_date
-                        )
+                        report = data_source.get_data_quality_report(symbol, interval, start_date, end_date)
                         provider_reports[symbol] = report
                     except Exception as e:
                         _logger.warning("Failed to get quality report for %s from %s: %s", symbol, provider_name, e)
-                        provider_reports[symbol] = {'error': str(e)}
+                        provider_reports[symbol] = {"error": str(e)}
 
                 quality_reports[provider_name] = provider_reports
 
             except Exception as e:
                 _logger.exception("Failed to get quality reports from %s:", provider_name)
-                quality_reports[provider_name] = {'error': str(e)}
+                quality_reports[provider_name] = {"error": str(e)}
 
         return quality_reports
 
@@ -286,11 +266,7 @@ class DataSourceFactory:
         """
         return self._config.get(provider_name, {})
 
-    def update_provider_config(
-        self,
-        provider_name: str,
-        config_updates: Dict[str, Any]
-    ) -> bool:
+    def update_provider_config(self, provider_name: str, config_updates: Dict[str, Any]) -> bool:
         """
         Update configuration for a specific provider.
 
@@ -308,7 +284,7 @@ class DataSourceFactory:
             self._config[provider_name].update(config_updates)
 
             # Save updated configuration
-            with open(self.config_path, 'w') as f:
+            with open(self.config_path, "w") as f:
                 yaml.dump(self._config, f, default_flow_style=False)
 
             _logger.info("Updated configuration for %s", provider_name)
@@ -328,10 +304,10 @@ class DataSourceFactory:
 
 
 # Global factory instance
-_factory_instance: Optional[DataSourceFactory] = None
+_factory_instance: DataSourceFactory | None = None
 
 
-def get_data_source_factory(config_path: Optional[Path] = None) -> DataSourceFactory:
+def get_data_source_factory(config_path: Path | None = None) -> DataSourceFactory:
     """
     Get or create global data source factory instance.
 
@@ -349,10 +325,7 @@ def get_data_source_factory(config_path: Optional[Path] = None) -> DataSourceFac
     return _factory_instance
 
 
-def register_data_source(
-    provider_name: str,
-    data_source_class: Type[BaseDataSource]
-) -> None:
+def register_data_source(provider_name: str, data_source_class: Type[BaseDataSource]) -> None:
     """
     Register a data source class with the global factory.
 
@@ -364,7 +337,7 @@ def register_data_source(
     factory.register_data_source(provider_name, data_source_class)
 
 
-def create_data_source(provider_name: str, **kwargs) -> Optional[BaseDataSource]:
+def create_data_source(provider_name: str, **kwargs) -> BaseDataSource | None:
     """
     Create a data source using the global factory.
 
@@ -379,7 +352,7 @@ def create_data_source(provider_name: str, **kwargs) -> Optional[BaseDataSource]
     return factory.create_data_source(provider_name, **kwargs)
 
 
-def get_data_source(provider_name: str) -> Optional[BaseDataSource]:
+def get_data_source(provider_name: str) -> BaseDataSource | None:
     """
     Get existing data source from the global factory.
 

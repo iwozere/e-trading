@@ -3,6 +3,7 @@ Tests for the common business logic module.
 
 Tests the fundamentals retrieval and normalization functionality.
 """
+
 import sys
 from pathlib import Path
 
@@ -10,7 +11,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from src.common.fundamentals import get_fundamentals, normalize_fundamentals
 from src.model.telegram_bot import Fundamentals
 
@@ -35,7 +37,7 @@ class TestCommonFundamentals(unittest.TestCase):
             "sector": "Technology",
             "industry": "Consumer Electronics",
             "data_source": "Yahoo Finance",
-            "last_updated": "2023-01-01 12:00:00"
+            "last_updated": "2023-01-01 12:00:00",
         }
         self.mock_av_data = {
             "Symbol": "AAPL",
@@ -50,7 +52,7 @@ class TestCommonFundamentals(unittest.TestCase):
             "Sector": "Technology",
             "Industry": "Consumer Electronics",
             "data_source": "Alpha Vantage",
-            "last_updated": "2023-01-01 12:00:00"
+            "last_updated": "2023-01-01 12:00:00",
         }
         self.mock_fh_data = {
             "ticker": "AAPL",
@@ -60,7 +62,7 @@ class TestCommonFundamentals(unittest.TestCase):
             "earnings_per_share": 6.0,
             "revenue": 400000000000,
             "data_source": "Finnhub",
-            "last_updated": "2023-01-01 12:00:00"
+            "last_updated": "2023-01-01 12:00:00",
         }
 
     def test_normalize_fundamentals_single_provider(self):
@@ -78,11 +80,7 @@ class TestCommonFundamentals(unittest.TestCase):
 
     def test_normalize_fundamentals_multiple_providers(self):
         """Test normalization with multiple providers, checking priority."""
-        sources = {
-            "av": self.mock_av_data,
-            "fh": self.mock_fh_data,
-            "yf": self.mock_yf_data
-        }
+        sources = {"av": self.mock_av_data, "fh": self.mock_fh_data, "yf": self.mock_yf_data}
         result = normalize_fundamentals(sources)
 
         # Should use yf data first (highest priority)
@@ -119,9 +117,7 @@ class TestCommonFundamentals(unittest.TestCase):
 
     def test_normalize_fundamentals_none_values(self):
         """Test normalization with None values."""
-        sources = {
-            "yf": {"ticker": None, "company_name": "", "current_price": 0.0}
-        }
+        sources = {"yf": {"ticker": None, "company_name": "", "current_price": 0.0}}
         result = normalize_fundamentals(sources)
 
         self.assertIsNone(result.ticker)
@@ -152,7 +148,7 @@ class TestCommonFundamentals(unittest.TestCase):
         self.assertEqual(result.sources["ticker"], "fh")
         self.assertEqual(result.sources["current_price"], "fh")
 
-    @patch('src.common.fundamentals.DataDownloaderFactory')
+    @patch("src.common.fundamentals.DataDownloaderFactory")
     def test_get_fundamentals_single_provider(self, mock_factory):
         """Test get_fundamentals with a single provider."""
         # Mock the downloader
@@ -167,7 +163,7 @@ class TestCommonFundamentals(unittest.TestCase):
         self.assertEqual(result.company_name, "Apple Inc.")
         mock_factory.create_downloader.assert_called_once_with("yf")
 
-    @patch('src.common.fundamentals.DataDownloaderFactory')
+    @patch("src.common.fundamentals.DataDownloaderFactory")
     def test_get_fundamentals_single_provider_fundamentals_object(self, mock_factory):
         """Test get_fundamentals when downloader returns Fundamentals object."""
         # Mock the downloader returning a Fundamentals object
@@ -179,7 +175,7 @@ class TestCommonFundamentals(unittest.TestCase):
             pe_ratio=25.0,
             forward_pe=24.0,
             dividend_yield=0.5,
-            earnings_per_share=6.0
+            earnings_per_share=6.0,
         )
 
         mock_downloader = MagicMock()
@@ -194,7 +190,7 @@ class TestCommonFundamentals(unittest.TestCase):
         # Should return the original object, not normalize it
         self.assertIs(result, mock_fundamentals)
 
-    @patch('src.common.fundamentals.DataDownloaderFactory')
+    @patch("src.common.fundamentals.DataDownloaderFactory")
     def test_get_fundamentals_unknown_provider(self, mock_factory):
         """Test get_fundamentals with unknown provider."""
         mock_factory.create_downloader.return_value = None
@@ -204,7 +200,7 @@ class TestCommonFundamentals(unittest.TestCase):
 
         self.assertIn("Unknown or unsupported provider", str(context.exception))
 
-    @patch('src.common.fundamentals.DataDownloaderFactory')
+    @patch("src.common.fundamentals.DataDownloaderFactory")
     def test_get_fundamentals_no_provider_try_all(self, mock_factory):
         """Test get_fundamentals without provider, trying all providers."""
         # Mock successful yf downloader
@@ -224,8 +220,8 @@ class TestCommonFundamentals(unittest.TestCase):
             mock_yf_downloader,  # yf
             mock_av_downloader,  # av (will fail)
             mock_fh_downloader,  # fh
-            None,               # td (no downloader)
-            None                # pg (no downloader)
+            None,  # td (no downloader)
+            None,  # pg (no downloader)
         ]
 
         result = get_fundamentals(self.test_symbol)
@@ -237,7 +233,7 @@ class TestCommonFundamentals(unittest.TestCase):
         self.assertEqual(result.sources["ticker"], "yf")
         self.assertEqual(result.sources["company_name"], "yf")
 
-    @patch('src.common.fundamentals.DataDownloaderFactory')
+    @patch("src.common.fundamentals.DataDownloaderFactory")
     def test_get_fundamentals_no_provider_all_fail(self, mock_factory):
         """Test get_fundamentals when all providers fail."""
         # Mock all downloaders to fail
@@ -259,7 +255,7 @@ class TestCommonFundamentals(unittest.TestCase):
         sources = {
             "fh": {"ticker": "AAPL_FH", "current_price": 155.0},
             "av": {"Symbol": "AAPL_AV", "Name": "Apple Inc. AV"},
-            "yf": {"ticker": "AAPL_YF", "company_name": "Apple Inc. YF"}
+            "yf": {"ticker": "AAPL_YF", "company_name": "Apple Inc. YF"},
         }
 
         result = normalize_fundamentals(sources)
@@ -278,7 +274,7 @@ class TestCommonFundamentals(unittest.TestCase):
                 "current_price": 150.0,
                 "market_cap": "2500000000000",  # string
                 "pe_ratio": 25.0,
-                "dividend_yield": "0.5"  # string
+                "dividend_yield": "0.5",  # string
             }
         }
 
@@ -330,7 +326,7 @@ class TestCommonFundamentals(unittest.TestCase):
                 "enterprise_value": 2600000000000,
                 "enterprise_value_to_ebitda": 20.0,
                 "data_source": "Yahoo Finance",
-                "last_updated": "2023-01-01 12:00:00"
+                "last_updated": "2023-01-01 12:00:00",
             }
         }
 
@@ -380,5 +376,5 @@ class TestCommonFundamentals(unittest.TestCase):
             self.assertEqual(result.sources[field_name], "yf")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -5,9 +5,9 @@ Configuration management for the scheduler service with environment variable sup
 """
 
 import os
-from typing import Dict, Any
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Dict
 
 from src.data.db.core.database import get_database_url
 from src.notification.logger import setup_logger
@@ -18,6 +18,7 @@ _logger = setup_logger(__name__)
 @dataclass
 class DatabaseConfig:
     """Database configuration."""
+
     url: str = field(default_factory=get_database_url)
     pool_size: int = 10
     max_overflow: int = 20
@@ -27,6 +28,7 @@ class DatabaseConfig:
 @dataclass
 class APSchedulerConfig:
     """APScheduler configuration."""
+
     max_workers: int = 10
     job_timeout: int = 300  # 5 minutes
     coalesce: bool = False
@@ -37,6 +39,7 @@ class APSchedulerConfig:
 @dataclass
 class DataConfig:
     """Data service configuration."""
+
     cache_enabled: bool = True
     cache_ttl: int = 300  # 5 minutes
     default_lookback: int = 200
@@ -47,6 +50,7 @@ class DataConfig:
 @dataclass
 class AlertConfig:
     """Alert evaluation configuration."""
+
     schema_dir: str = "src/common/alerts/schemas"
     default_lookback: int = 200
     max_evaluation_time: int = 120  # 2 minutes
@@ -56,6 +60,7 @@ class AlertConfig:
 @dataclass
 class ServiceConfig:
     """General service configuration."""
+
     name: str = "scheduler-service"
     version: str = "1.0.0"
     environment: str = "development"
@@ -66,6 +71,7 @@ class ServiceConfig:
 @dataclass
 class SchedulerServiceConfig:
     """Complete scheduler service configuration."""
+
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
     scheduler: APSchedulerConfig = field(default_factory=APSchedulerConfig)
     data: DataConfig = field(default_factory=DataConfig)
@@ -76,8 +82,7 @@ class SchedulerServiceConfig:
         """Load configuration from environment variables."""
         self._load_from_environment()
         self._validate_configuration()
-        _logger.info("Scheduler service configuration loaded for environment: %s",
-                    self.service.environment)
+        _logger.info("Scheduler service configuration loaded for environment: %s", self.service.environment)
 
     def _load_from_environment(self) -> None:
         """Load configuration values from environment variables."""
@@ -135,45 +140,44 @@ class SchedulerServiceConfig:
         # Validate environment
         valid_environments = ["development", "staging", "production"]
         if self.service.environment not in valid_environments:
-            _logger.warning("Unknown environment: %s. Valid options: %s",
-                          self.service.environment, valid_environments)
+            _logger.warning("Unknown environment: %s. Valid options: %s", self.service.environment, valid_environments)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary."""
         return {
             "database": {
-                "url": self.database.url.split('@')[1] if '@' in self.database.url else "local",
+                "url": self.database.url.split("@")[1] if "@" in self.database.url else "local",
                 "pool_size": self.database.pool_size,
                 "max_overflow": self.database.max_overflow,
-                "echo": self.database.echo
+                "echo": self.database.echo,
             },
             "scheduler": {
                 "max_workers": self.scheduler.max_workers,
                 "job_timeout": self.scheduler.job_timeout,
                 "coalesce": self.scheduler.coalesce,
                 "max_instances": self.scheduler.max_instances,
-                "timezone": self.scheduler.timezone
+                "timezone": self.scheduler.timezone,
             },
             "data": {
                 "cache_enabled": self.data.cache_enabled,
                 "cache_ttl": self.data.cache_ttl,
                 "default_lookback": self.data.default_lookback,
                 "max_retries": self.data.max_retries,
-                "timeout": self.data.timeout
+                "timeout": self.data.timeout,
             },
             "alert": {
                 "schema_dir": self.alert.schema_dir,
                 "default_lookback": self.alert.default_lookback,
                 "max_evaluation_time": self.alert.max_evaluation_time,
-                "enable_once_per_bar": self.alert.enable_once_per_bar
+                "enable_once_per_bar": self.alert.enable_once_per_bar,
             },
             "service": {
                 "name": self.service.name,
                 "version": self.service.version,
                 "environment": self.service.environment,
                 "log_level": self.service.log_level,
-                "health_check_interval": self.service.health_check_interval
-            }
+                "health_check_interval": self.service.health_check_interval,
+            },
         }
 
 

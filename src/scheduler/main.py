@@ -9,22 +9,21 @@ import asyncio
 import signal
 import sys
 from pathlib import Path
-from typing import Optional
 
 # Add project root to path if not already present
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.scheduler.scheduler_service import SchedulerService
-from src.scheduler.config import SchedulerServiceConfig, get_config
 from src.common.alerts.alert_evaluator import AlertEvaluator
 from src.common.alerts.schema_validator import AlertSchemaValidator
 from src.data.data_manager import DataManager
-from src.indicators.service import IndicatorService
 from src.data.db.services.jobs_service import JobsService
 from src.data.db.services.notification_service import NotificationService
+from src.indicators.service import IndicatorService
 from src.notification.logger import setup_logger
+from src.scheduler.config import SchedulerServiceConfig, get_config
+from src.scheduler.scheduler_service import SchedulerService
 
 _logger = setup_logger(__name__)
 
@@ -40,16 +39,16 @@ class SchedulerApplication:
             config: Scheduler configuration
         """
         self.config = config
-        self.scheduler_service: Optional[SchedulerService] = None
+        self.scheduler_service: SchedulerService | None = None
         self._shutdown_event = asyncio.Event()
 
         # Service dependencies
-        self.data_manager: Optional[DataManager] = None
-        self.indicator_service: Optional[IndicatorService] = None
-        self.jobs_service: Optional[JobsService] = None
-        self.alert_evaluator: Optional[AlertEvaluator] = None
-        self.notification_db_service: Optional[NotificationService] = None
-        self.schema_validator: Optional[AlertSchemaValidator] = None
+        self.data_manager: DataManager | None = None
+        self.indicator_service: IndicatorService | None = None
+        self.jobs_service: JobsService | None = None
+        self.alert_evaluator: AlertEvaluator | None = None
+        self.notification_db_service: NotificationService | None = None
+        self.schema_validator: AlertSchemaValidator | None = None
 
         _logger.info("Scheduler application initialized")
 
@@ -83,7 +82,7 @@ class SchedulerApplication:
                 data_manager=self.data_manager,
                 indicator_service=self.indicator_service,
                 jobs_service=self.jobs_service,
-                schema_validator=self.schema_validator
+                schema_validator=self.schema_validator,
             )
             _logger.debug("Alert evaluator initialized")
 
@@ -162,10 +161,10 @@ class SchedulerApplication:
             "service": self.config.service.name,
             "version": self.config.service.version,
             "environment": self.config.service.environment,
-            "database_url": self.config.database.url.split('@')[1] if '@' in self.config.database.url else "local",
+            "database_url": self.config.database.url.split("@")[1] if "@" in self.config.database.url else "local",
             "max_workers": self.config.scheduler.max_workers,
             "notification_method": "database",  # Direct database, not HTTP
-            "scheduler": None
+            "scheduler": None,
         }
 
         if self.scheduler_service:
@@ -175,7 +174,7 @@ class SchedulerApplication:
 
 
 # Global application instance
-app: Optional[SchedulerApplication] = None
+app: SchedulerApplication | None = None
 
 
 def setup_signal_handlers(loop: asyncio.AbstractEventLoop, application: SchedulerApplication) -> None:
@@ -184,6 +183,7 @@ def setup_signal_handlers(loop: asyncio.AbstractEventLoop, application: Schedule
     Uses loop.call_soon_threadsafe + asyncio.Event so the shutdown sequence
     runs safely inside the event loop, not from the OS signal context.
     """
+
     def signal_handler(signum, frame):
         _logger.info("Received signal %d, initiating graceful shutdown...", signum)
         # Safely set the shutdown event from the signal handler (sync context).
@@ -193,7 +193,7 @@ def setup_signal_handlers(loop: asyncio.AbstractEventLoop, application: Schedule
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    if hasattr(signal, 'SIGHUP'):
+    if hasattr(signal, "SIGHUP"):
         signal.signal(signal.SIGHUP, signal_handler)
 
 

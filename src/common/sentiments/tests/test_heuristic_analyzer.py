@@ -1,5 +1,5 @@
-import unittest
 import sys
+import unittest
 from pathlib import Path
 
 # Add project root to path for imports
@@ -7,6 +7,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
+
 
 class TestHeuristicSentimentAnalyzer(unittest.TestCase):
     def setUp(self):
@@ -33,20 +34,21 @@ class TestHeuristicSentimentAnalyzer(unittest.TestCase):
 
     def test_analyze_bias(self):
         res = self.analyzer.analyze_bias("This is a sponsored post about a must-see stock.")
-        self.assertTrue(res['promotional'])
-        self.assertTrue(res['emotional'])
-        self.assertFalse(res['speculative'])
+        self.assertTrue(res["promotional"])
+        self.assertTrue(res["emotional"])
+        self.assertFalse(res["speculative"])
 
     def test_analyze_trend_queries(self):
         queries = ["buy NVDA", "NVDA stock price target", "short sell TSLA", "market analysis"]
         counts = self.analyzer.analyze_trend_queries(queries)
-        self.assertEqual(counts['bullish'], 2)
-        self.assertEqual(counts['bearish'], 1)
-        self.assertEqual(counts['neutral'], 1)
+        self.assertEqual(counts["bullish"], 2)
+        self.assertEqual(counts["bearish"], 1)
+        self.assertEqual(counts["neutral"], 1)
 
     def test_get_credibility(self):
         self.assertEqual(self.analyzer.get_credibility("https://www.reuters.com/business"), 0.95)
         self.assertEqual(self.analyzer.get_credibility("https://unknown.com"), 0.50)
+
 
 if __name__ == "__main__":
     unittest.main()

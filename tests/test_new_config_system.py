@@ -7,15 +7,15 @@ This script tests the new simplified Pydantic-based configuration system
 to ensure it works correctly after the refactoring.
 """
 
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from src.model.config_models import TradingBotConfig, OptimizerConfig, DataConfig, BrokerType, DataSourceType
-from src.config.config_loader import load_config, save_config, validate_config_file, create_sample_config
+from src.config.config_loader import create_sample_config, load_config, save_config, validate_config_file
+from src.model.config_models import BrokerType, DataConfig, DataSourceType, OptimizerConfig, TradingBotConfig
 
 
 def test_trading_bot_config():
@@ -31,7 +31,7 @@ def test_trading_bot_config():
             broker_type=BrokerType.BINANCE_PAPER,
             data_source=DataSourceType.BINANCE,
             strategy_name="RSIStrategy",
-            description="Test configuration"
+            description="Test configuration",
         )
 
         print(f"✅ Created config: {config.bot_id}")
@@ -53,7 +53,7 @@ def test_trading_bot_config():
                 symbol="BTCUSDT",
                 broker_type=BrokerType.BINANCE_PAPER,
                 data_source=DataSourceType.BINANCE,
-                strategy_name="RSIStrategy"
+                strategy_name="RSIStrategy",
             )
             print("❌ Invalid config should have failed")
             return False
@@ -80,7 +80,7 @@ def test_config_loading_saving():
             broker_type=BrokerType.BINANCE_PAPER,
             data_source=DataSourceType.BINANCE,
             strategy_name="MACDStrategy",
-            description="Test save/load"
+            description="Test save/load",
         )
 
         # Save config
@@ -122,7 +122,7 @@ def test_config_validation():
             symbol="BTCUSDT",
             broker_type=BrokerType.BINANCE_PAPER,
             data_source=DataSourceType.BINANCE,
-            strategy_name="BollingerStrategy"
+            strategy_name="BollingerStrategy",
         )
 
         save_config(config, "test_validation.json")
@@ -160,7 +160,7 @@ def test_optimizer_config():
             param_ranges={"rsi_period": [14, 21], "overbought": [70, 80]},
             symbol="BTCUSDT",
             start_date="2023-01-01",
-            end_date="2023-12-31"
+            end_date="2023-12-31",
         )
 
         print(f"✅ Created optimizer config: {config.optimizer_type}")
@@ -184,7 +184,7 @@ def test_data_config():
             name="Test Data Config",
             data_source=DataSourceType.BINANCE,
             symbols=["BTCUSDT", "ETHUSDT"],
-            interval="1h"
+            interval="1h",
         )
 
         print(f"✅ Created data config: {config.data_source}")
@@ -246,7 +246,7 @@ def main():
         test_config_validation,
         test_optimizer_config,
         test_data_config,
-        test_sample_configs
+        test_sample_configs,
     ]
 
     passed = 0

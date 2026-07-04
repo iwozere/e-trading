@@ -1,16 +1,16 @@
 """P18 signal reader — loads today's P18 output CSVs for Stage 2 score boost."""
 
+import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, Optional
-import sys
+from typing import Any, Dict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
 
-from src.ml.pipeline.p05_ai_selector.config import P18_RESULTS_BASE, P18_HIGH_SCORE_THRESHOLD
+from src.ml.pipeline.p05_ai_selector.config import P18_HIGH_SCORE_THRESHOLD, P18_RESULTS_BASE
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -27,7 +27,7 @@ _EMPTY_RESULT: Dict[str, Any] = {
 class P18Reader:
     """Reads P18 Institutional Flow Tracker outputs for a given date."""
 
-    def __init__(self, results_base: Optional[Path] = None):
+    def __init__(self, results_base: Path | None = None):
         self._results_base = results_base or P18_RESULTS_BASE
 
     def get_high_score_tickers(self, as_of_date: date) -> Dict[str, Any]:
@@ -94,7 +94,7 @@ class P18Reader:
         )
         return result
 
-    def _find_most_recent_dir(self, as_of_date: date) -> Optional[Path]:
+    def _find_most_recent_dir(self, as_of_date: date) -> Path | None:
         """Find the most recent P18 results directory on or before as_of_date."""
         if not self._results_base.exists():
             return None

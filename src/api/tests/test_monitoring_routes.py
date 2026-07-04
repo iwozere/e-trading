@@ -19,12 +19,16 @@ def test_services_status_reports_ib_gateway_via_port(authenticated_client_viewer
     mock_monitor.check_service_status.return_value = (True, "active")
     mock_monitor.check_service_logs.return_value = []
 
-    with patch('src.api.monitoring_routes._port_open', side_effect=fake_port_open), \
-         patch('src.api.monitoring_routes.ServiceMonitor', return_value=mock_monitor), \
-         patch.object(monitoring_routes._telegram_health, 'get_health_status',
-                      return_value={"status": "healthy"}), \
-         patch.object(monitoring_routes._notification_health, 'get_health_status',
-                      return_value={"status": "healthy", "channels": {"owned": ["email"]}}):
+    with (
+        patch("src.api.monitoring_routes._port_open", side_effect=fake_port_open),
+        patch("src.api.monitoring_routes.ServiceMonitor", return_value=mock_monitor),
+        patch.object(monitoring_routes._telegram_health, "get_health_status", return_value={"status": "healthy"}),
+        patch.object(
+            monitoring_routes._notification_health,
+            "get_health_status",
+            return_value={"status": "healthy", "channels": {"owned": ["email"]}},
+        ),
+    ):
         response = client.get("/api/monitoring/services")
 
     assert response.status_code == 200

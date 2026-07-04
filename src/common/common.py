@@ -6,8 +6,11 @@ Usage:
     fundamentals = get_fundamentals('AAPL', provider='yf')
     df = get_ohlcv('AAPL', '1d', '2y', provider='yahoo')
 """
-from src.data.downloader.data_downloader_factory import DataDownloaderFactory
+
+from datetime import UTC
+
 from src.data.data_manager import ProviderSelector
+from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 
 PROVIDER_CODES = list(set(DataDownloaderFactory.PROVIDER_MAP.values()))
 
@@ -28,10 +31,10 @@ def determine_provider(ticker: str) -> str:
     """
     # Get the best provider canonical name for this ticker
     best_provider_name = _provider_selector.get_best_provider(ticker, "1d")
-    
+
     if best_provider_name:
         return best_provider_name
-        
+
     return "yahoo"  # Default fallback
 
 
@@ -73,8 +76,9 @@ def analyze_period_interval(period: str = "2y", interval: str = "1d"):
         ``d``  – days
         ``m``  – months           (alias for ``mo``)
     """
-    from datetime import datetime, timedelta, timezone
-    end_date = datetime.now(timezone.utc)
+    from datetime import datetime, timedelta
+
+    end_date = datetime.now(UTC)
 
     period = period.strip().lower()
 
@@ -97,11 +101,11 @@ def analyze_period_interval(period: str = "2y", interval: str = "1d"):
     return start_date, end_date
 
 
-
 _data_manager = None
 
 
 import threading as _threading
+
 _data_manager_lock = _threading.Lock()
 
 
@@ -111,14 +115,14 @@ def _get_data_manager():
     if _data_manager is None:
         with _data_manager_lock:
             if _data_manager is None:
-                from src.data.data_manager import DataManager
                 import tempfile
+
+                from src.data.data_manager import DataManager
+
                 try:
                     from config.donotshare.donotshare import DATA_CACHE_DIR
                 except ImportError:
-                    DATA_CACHE_DIR = str(
-                        ((__import__("pathlib").Path(tempfile.gettempdir())) / "e-trading-cache")
-                    )
+                    DATA_CACHE_DIR = str((__import__("pathlib").Path(tempfile.gettempdir())) / "e-trading-cache")
                 _data_manager = DataManager(cache_dir=DATA_CACHE_DIR)
     return _data_manager
 
@@ -159,4 +163,3 @@ def get_fundamentals(ticker: str, data_type: str = "general", **kwargs):
         dict: Fundamentals data, or None if unavailable
     """
     return _get_data_manager().get_fundamentals(ticker, data_type=data_type, **kwargs)
-

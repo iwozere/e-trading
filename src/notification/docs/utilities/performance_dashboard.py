@@ -5,12 +5,12 @@ This script provides a real-time performance dashboard for monitoring
 database query performance and system health.
 """
 
+import json
 import sys
 import time
-import json
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -18,11 +18,9 @@ sys.path.append(str(PROJECT_ROOT))
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
 from src.data.db.core.database import get_database_url
-from src.notification.docs.utilities.query_analyzer import (
-    DatabaseHealthChecker,
-    get_query_monitor
-)
+from src.notification.docs.utilities.query_analyzer import DatabaseHealthChecker, get_query_monitor
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -62,10 +60,10 @@ class PerformanceDashboard:
     def get_real_time_metrics(self) -> Dict[str, Any]:
         """Get real-time performance metrics."""
         metrics = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "query_performance": {},
             "database_health": {},
-            "system_stats": {}
+            "system_stats": {},
         }
 
         try:
@@ -98,14 +96,16 @@ class PerformanceDashboard:
 
         try:
             # Message queue depth
-            result = session.execute(text("""
+            result = session.execute(
+                text("""
                 SELECT
                     status,
                     COUNT(*) as count
                 FROM msg_messages
                 WHERE created_at >= NOW() - INTERVAL '1 hour'
                 GROUP BY status
-            """))
+            """)
+            )
 
             queue_stats = {}
             for row in result:
@@ -113,7 +113,8 @@ class PerformanceDashboard:
             stats["message_queue"] = queue_stats
 
             # Delivery rates
-            result = session.execute(text("""
+            result = session.execute(
+                text("""
                 SELECT
                     channel,
                     status,
@@ -123,7 +124,8 @@ class PerformanceDashboard:
                 WHERE created_at >= NOW() - INTERVAL '1 hour'
                 GROUP BY channel, status
                 ORDER BY channel, status
-            """))
+            """)
+            )
 
             delivery_stats = {}
             for row in result:
@@ -131,12 +133,13 @@ class PerformanceDashboard:
                     delivery_stats[row.channel] = {}
                 delivery_stats[row.channel][row.status] = {
                     "count": row.count,
-                    "avg_response_time": float(row.avg_response_time) if row.avg_response_time else None
+                    "avg_response_time": float(row.avg_response_time) if row.avg_response_time else None,
                 }
             stats["delivery_rates"] = delivery_stats
 
             # Rate limiting stats
-            result = session.execute(text("""
+            result = session.execute(
+                text("""
                 SELECT
                     channel,
                     COUNT(*) as users,
@@ -144,14 +147,15 @@ class PerformanceDashboard:
                     SUM(CASE WHEN tokens = 0 THEN 1 ELSE 0 END) as rate_limited_users
                 FROM msg_rate_limits
                 GROUP BY channel
-            """))
+            """)
+            )
 
             rate_limit_stats = {}
             for row in result:
                 rate_limit_stats[row.channel] = {
                     "total_users": row.users,
                     "avg_tokens": float(row.avg_tokens) if row.avg_tokens else 0,
-                    "rate_limited_users": row.rate_limited_users
+                    "rate_limited_users": row.rate_limited_users,
                 }
             stats["rate_limiting"] = rate_limit_stats
 
@@ -291,7 +295,7 @@ class PerformanceDashboard:
     def export_metrics(self, filename: str = None) -> str:
         """Export current metrics to JSON file."""
         if not filename:
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
             filename = f"performance_metrics_{timestamp}.json"
 
         try:
@@ -311,9 +315,9 @@ class PerformanceDashboard:
         """Generate performance report for the specified time period."""
         report = {
             "period_hours": hours,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "summary": {},
-            "recommendations": []
+            "recommendations": [],
         }
 
         try:
@@ -322,7 +326,8 @@ class PerformanceDashboard:
                 from sqlalchemy import text
 
                 # Message volume trends
-                result = session.execute(text(f"""
+                result = session.execute(
+                    text(f"""
                     SELECT
                         DATE_TRUNC('hour', created_at) as hour,
                         status,
@@ -331,20 +336,18 @@ class PerformanceDashboard:
                     WHERE created_at >= NOW() - INTERVAL '{hours} hours'
                     GROUP BY DATE_TRUNC('hour', created_at), status
                     ORDER BY hour DESC
-                """))
+                """)
+                )
 
                 message_trends = []
                 for row in result:
-                    message_trends.append({
-                        "hour": row.hour.isoformat(),
-                        "status": row.status,
-                        "count": row.count
-                    })
+                    message_trends.append({"hour": row.hour.isoformat(), "status": row.status, "count": row.count})
 
                 report["message_trends"] = message_trends
 
                 # Delivery performance
-                result = session.execute(text(f"""
+                result = session.execute(
+                    text(f"""
                     SELECT
                         channel,
                         COUNT(*) as total_attempts,
@@ -356,26 +359,27 @@ class PerformanceDashboard:
                     FROM msg_delivery_status
                     WHERE created_at >= NOW() - INTERVAL '{hours} hours'
                     GROUP BY channel
-                """))
+                """)
+                )
 
                 delivery_performance = []
                 for row in result:
                     success_rate = (row.successful / row.total_attempts) if row.total_attempts > 0 else 0
-                    delivery_performance.append({
-                        "channel": row.channel,
-                        "total_attempts": row.total_attempts,
-                        "successful": row.successful,
-                        "success_rate": success_rate,
-                        "avg_response_time": float(row.avg_response_time) if row.avg_response_time else None,
-                        "p95_response_time": float(row.p95_response_time) if row.p95_response_time else None
-                    })
+                    delivery_performance.append(
+                        {
+                            "channel": row.channel,
+                            "total_attempts": row.total_attempts,
+                            "successful": row.successful,
+                            "success_rate": success_rate,
+                            "avg_response_time": float(row.avg_response_time) if row.avg_response_time else None,
+                            "p95_response_time": float(row.p95_response_time) if row.p95_response_time else None,
+                        }
+                    )
 
                 report["delivery_performance"] = delivery_performance
 
                 # Generate recommendations
-                report["recommendations"] = self._generate_report_recommendations(
-                    message_trends, delivery_performance
-                )
+                report["recommendations"] = self._generate_report_recommendations(message_trends, delivery_performance)
 
         except Exception as e:
             _logger.exception("Failed to generate report:")
@@ -384,9 +388,7 @@ class PerformanceDashboard:
         return report
 
     def _generate_report_recommendations(
-        self,
-        message_trends: List[Dict],
-        delivery_performance: List[Dict]
+        self, message_trends: List[Dict], delivery_performance: List[Dict]
     ) -> List[str]:
         """Generate recommendations based on report data."""
         recommendations = []
@@ -457,7 +459,7 @@ def main():
             report = dashboard.generate_report(args.report)
 
             # Save report
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
             report_file = f"performance_report_{timestamp}.json"
 
             with open(report_file, "w") as f:

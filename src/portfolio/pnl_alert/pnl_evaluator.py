@@ -71,7 +71,8 @@ def evaluate(
         if holding.avg_price <= 0:
             _logger.warning(
                 "Ignoring holding %s with non-positive avg_price: %s",
-                holding.symbol, holding.avg_price,
+                holding.symbol,
+                holding.avg_price,
             )
             continue
 
@@ -98,11 +99,13 @@ def evaluate(
     if missing_prices:
         _logger.warning(
             "No current price for %d symbols (excluded from alert): %s",
-            len(missing_prices), missing_prices,
+            len(missing_prices),
+            missing_prices,
         )
 
     _logger.info(
         "Evaluated PnL: %d rows above %.2f%% threshold",
-        len(rows), threshold_pct * 100,
+        len(rows),
+        threshold_pct * 100,
     )
     return rows

@@ -17,9 +17,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.ml.pipeline.p18_institutional_flow_tracker.config import P18Config
 from src.ml.pipeline.p18_institutional_flow_tracker.pipeline import InstitutionalFlowPipeline
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 

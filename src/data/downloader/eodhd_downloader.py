@@ -7,17 +7,17 @@ It includes features for fetching option chains, computing UOA metrics, and hand
 Now refactored to inherit from BaseDataDownloader for consistency with other downloaders.
 """
 
-import os
 import time
-import requests
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional, Union
+from datetime import datetime
 from pathlib import Path
+from typing import Dict, List, Union
 
-from src.notification.logger import setup_logger
+import numpy as np
+import pandas as pd
+import requests
+
 from src.data.downloader.base_data_downloader import BaseDataDownloader
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -31,6 +31,7 @@ RATE_LIMIT_DELAY = 1  # seconds
 
 class EODHDApiError(Exception):
     """Custom exception for EODHD API errors."""
+
     pass
 
 
@@ -42,7 +43,7 @@ class EODHDDataDownloader(BaseDataDownloader):
     EODHD specializes in options data, not traditional OHLCV data.
     """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         """
         Initialize EODHD data downloader.
 
@@ -50,7 +51,7 @@ class EODHDDataDownloader(BaseDataDownloader):
             api_key: EODHD API key. If None, uses EODHD_API_KEY from config.
         """
         super().__init__()
-        self.api_key = api_key or self._get_config_value('EODHD_API_KEY', 'EODHD_API_KEY')
+        self.api_key = api_key or self._get_config_value("EODHD_API_KEY", "EODHD_API_KEY")
         if not self.api_key:
             _logger.warning("EODHD API key not provided. Some operations may fail.")
 
@@ -66,14 +67,7 @@ class EODHDDataDownloader(BaseDataDownloader):
         """
         return []  # EODHD doesn't provide interval-based OHLCV data
 
-    def get_ohlcv(
-        self,
-        symbol: str,
-        interval: str,
-        start_date: datetime,
-        end_date: datetime,
-        **kwargs
-    ) -> pd.DataFrame:
+    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> pd.DataFrame:
         """
         Download historical OHLCV data for a given symbol.
 
@@ -96,7 +90,7 @@ class EODHDDataDownloader(BaseDataDownloader):
         )
         return pd.DataFrame()
 
-    def _make_api_request(self, url: str, params: Optional[Dict] = None) -> Dict:
+    def _make_api_request(self, url: str, params: Dict | None = None) -> Dict:
         """
         Make an API request with retry logic and error handling.
 
@@ -110,24 +104,16 @@ class EODHDDataDownloader(BaseDataDownloader):
         Raises:
             EODHDApiError: If the request fails after retries
         """
-        headers = {
-            'User-Agent': 'e-trading/1.0',
-            'Accept': 'application/json'
-        }
+        headers = {"User-Agent": "e-trading/1.0", "Accept": "application/json"}
 
         for attempt in range(MAX_RETRIES):
             try:
-                response = requests.get(
-                    url,
-                    params=params,
-                    headers=headers,
-                    timeout=DEFAULT_TIMEOUT
-                )
+                response = requests.get(url, params=params, headers=headers, timeout=DEFAULT_TIMEOUT)
 
                 if response.status_code == 200:
                     return response.json()
                 elif response.status_code == 429:  # Rate limited
-                    retry_after = int(response.headers.get('Retry-After', RATE_LIMIT_DELAY))
+                    retry_after = int(response.headers.get("Retry-After", RATE_LIMIT_DELAY))
                     _logger.warning("Rate limited. Retrying after %s seconds...", retry_after)
                     time.sleep(retry_after)
                     continue
@@ -161,22 +147,18 @@ class EODHDDataDownloader(BaseDataDownloader):
         """
         try:
             if isinstance(date, datetime):
-                date_str = date.strftime('%Y-%m-%d')
+                date_str = date.strftime("%Y-%m-%d")
             else:
                 date_str = date
 
             _logger.info("Fetching option chain for %s on %s", ticker, date_str)
 
             url = f"{BASE_URL}/{ticker}.US"
-            params = {
-                'api_token': self.api_key,
-                'fmt': 'json',
-                'date': date_str
-            }
+            params = {"api_token": self.api_key, "fmt": "json", "date": date_str}
 
             data = self._make_api_request(url, params)
 
-            if not data or 'data' not in data:
+            if not data or "data" not in data:
                 _logger.warning("No data returned for %s on %s", ticker, date_str)
                 return pd.DataFrame()
 
@@ -187,17 +169,19 @@ class EODHDDataDownloader(BaseDataDownloader):
                 for opt_type in ["call", "put"]:
                     for opt in options.get(opt_type, []):
                         if isinstance(opt, dict):
-                            rows.append({
-                                "ticker": ticker,
-                                "date": date_str,
-                                "expiration": expiration,
-                                "type": opt_type,  # Use the type from the loop
-                                "strike": opt.get("strike"),
-                                "last": opt.get("last_trade_price"),
-                                "volume": opt.get("volume", 0),
-                                "open_interest": opt.get("open_interest", 0),
-                                "iv": opt.get("implied_volatility"),
-                            })
+                            rows.append(
+                                {
+                                    "ticker": ticker,
+                                    "date": date_str,
+                                    "expiration": expiration,
+                                    "type": opt_type,  # Use the type from the loop
+                                    "strike": opt.get("strike"),
+                                    "last": opt.get("last_trade_price"),
+                                    "volume": opt.get("volume", 0),
+                                    "open_interest": opt.get("open_interest", 0),
+                                    "iv": opt.get("implied_volatility"),
+                                }
+                            )
 
             if not rows:
                 _logger.warning("No options data found for %s on %s", ticker, date_str)
@@ -207,7 +191,7 @@ class EODHDDataDownloader(BaseDataDownloader):
 
         except EODHDApiError:
             raise  # Re-raise EODHDApiError
-        except Exception as e:
+        except Exception:
             _logger.exception("Error fetching option chain for %s:", ticker)
             return pd.DataFrame()
 
@@ -231,7 +215,7 @@ class EODHDDataDownloader(BaseDataDownloader):
             return pd.DataFrame()
 
         if isinstance(date, datetime):
-            date_str = date.strftime('%Y-%m-%d')
+            date_str = date.strftime("%Y-%m-%d")
         else:
             date_str = date
 
@@ -250,7 +234,7 @@ class EODHDDataDownloader(BaseDataDownloader):
 
         if frames:
             result = pd.concat(frames, ignore_index=True)
-            _logger.info("Successfully downloaded data for %d tickers", len(result['ticker'].unique()))
+            _logger.info("Successfully downloaded data for %d tickers", len(result["ticker"].unique()))
             return result
 
         _logger.warning("No data was downloaded for any ticker")
@@ -275,7 +259,7 @@ class EODHDDataDownloader(BaseDataDownloader):
                 _logger.warning("Empty DataFrame provided")
                 return pd.DataFrame()
 
-            required_columns = ['ticker', 'date', 'type', 'volume']
+            required_columns = ["ticker", "date", "type", "volume"]
             if not all(col in df.columns for col in required_columns):
                 _logger.error("Missing required columns. Expected: %s", required_columns)
                 return pd.DataFrame()
@@ -288,29 +272,20 @@ class EODHDDataDownloader(BaseDataDownloader):
 
             # Pivot call/put into columns
             pivot = daily.pivot_table(
-                index=["ticker", "date"],
-                columns="type",
-                values="volume",
-                fill_value=0
+                index=["ticker", "date"], columns="type", values="volume", fill_value=0
             ).reset_index()
 
             # Rename columns for clarity
-            pivot = pivot.rename(columns={
-                "call": "call_volume",
-                "put": "put_volume",
-                "index": "date"
-            })
+            pivot = pivot.rename(columns={"call": "call_volume", "put": "put_volume", "index": "date"})
 
             # Calculate 30-day rolling statistics
             for col in ["call_volume", "put_volume"]:
                 if col in pivot.columns:
-                    pivot[f"{col}_30d_avg"] = (
-                        pivot.groupby("ticker")[col]
-                        .transform(lambda x: x.rolling(30, min_periods=1).mean())
+                    pivot[f"{col}_30d_avg"] = pivot.groupby("ticker")[col].transform(
+                        lambda x: x.rolling(30, min_periods=1).mean()
                     )
-                    pivot[f"{col}_30d_std"] = (
-                        pivot.groupby("ticker")[col]
-                        .transform(lambda x: x.rolling(30, min_periods=1).std().fillna(0))
+                    pivot[f"{col}_30d_std"] = pivot.groupby("ticker")[col].transform(
+                        lambda x: x.rolling(30, min_periods=1).std().fillna(0)
                     )
 
             return pivot
@@ -342,7 +317,7 @@ class EODHDDataDownloader(BaseDataDownloader):
             if df.empty:
                 return pd.DataFrame()
 
-            required_columns = ['ticker', 'date', 'call_volume', 'put_volume']
+            required_columns = ["ticker", "date", "call_volume", "put_volume"]
             if not all(col in df.columns for col in required_columns):
                 _logger.error("Missing required columns: %s", required_columns)
                 return pd.DataFrame()
@@ -350,33 +325,32 @@ class EODHDDataDownloader(BaseDataDownloader):
             df = df.copy()
 
             # Calculate basic metrics with safe division
-            df['total_volume'] = df['call_volume'] + df['put_volume']
+            df["total_volume"] = df["call_volume"] + df["put_volume"]
 
             # Safe calculation of put/call ratio with explicit type conversion
-            df['put_call_ratio'] = 0.0  # Initialize as float64
-            mask = df['call_volume'] > 0
+            df["put_call_ratio"] = 0.0  # Initialize as float64
+            mask = df["call_volume"] > 0
             if mask.any():
                 # Convert to float64 before division to avoid type warnings
-                put_vol = df['put_volume'].astype('float64')
-                call_vol = df['call_volume'].astype('float64')
-                df.loc[mask, 'put_call_ratio'] = put_vol[mask] / call_vol[mask]
+                put_vol = df["put_volume"].astype("float64")
+                call_vol = df["call_volume"].astype("float64")
+                df.loc[mask, "put_call_ratio"] = put_vol[mask] / call_vol[mask]
 
             # Initialize UOA score with default value of 0
-            df['uoa_score'] = 0.0
+            df["uoa_score"] = 0.0
 
             # Calculate volume ratios if 30-day averages exist
-            if 'call_volume_30d_avg' in df.columns:
+            if "call_volume_30d_avg" in df.columns:
                 # Replace zeros to avoid division by zero
-                call_avg = df['call_volume_30d_avg'].replace(0, np.nan)
-                df['call_volume_ratio'] = (df['call_volume'] / call_avg).fillna(0)
+                call_avg = df["call_volume_30d_avg"].replace(0, np.nan)
+                df["call_volume_ratio"] = (df["call_volume"] / call_avg).fillna(0)
 
                 # Calculate UOA score based on call volume ratio
-                df['uoa_score'] = (df['call_volume_ratio'].clip(0, 5) * 20).clip(0, 100)
+                df["uoa_score"] = (df["call_volume_ratio"].clip(0, 5) * 20).clip(0, 100)
 
                 # Adjust score based on put/call ratio
-                df['uoa_score'] = df.apply(
-                    lambda x: x['uoa_score'] * (1 - min(x.get('put_call_ratio', 1), 1) * 0.5),
-                    axis=1
+                df["uoa_score"] = df.apply(
+                    lambda x: x["uoa_score"] * (1 - min(x.get("put_call_ratio", 1), 1) * 0.5), axis=1
                 )
 
             return df.round(2)
@@ -404,11 +378,11 @@ class EODHDDataDownloader(BaseDataDownloader):
             filepath = out_path / filename
             ext = filepath.suffix.lower()
 
-            if ext == '.csv':
+            if ext == ".csv":
                 df.to_csv(filepath, index=False)
-            elif ext in ['.pkl', '.pickle']:
+            elif ext in [".pkl", ".pickle"]:
                 df.to_pickle(filepath)
-            elif ext == '.parquet':
+            elif ext == ".parquet":
                 df.to_parquet(filepath, index=False)
             else:
                 raise ValueError(f"Unsupported file format: {ext}")
@@ -419,6 +393,6 @@ class EODHDDataDownloader(BaseDataDownloader):
         except ValueError as e:
             _logger.error("Error saving to file: %s", e)
             raise  # Re-raise ValueError for unsupported formats
-        except Exception as e:
+        except Exception:
             _logger.exception("Error saving to file:")
             return False

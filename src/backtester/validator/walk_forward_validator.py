@@ -20,23 +20,23 @@ sys.path.append(str(PROJECT_ROOT))
 import json
 from datetime import datetime as dt
 
-import backtrader as bt
 import pandas as pd
-from src.notification.logger import setup_logger
+
 from src.backtester.optimizer.custom_optimizer import CustomOptimizer
 
 # Import utilities from run_optimizer
 from src.backtester.optimizer.run_optimizer import (
-    prepare_data_frame,
-    prepare_data_feed,
     parse_data_file_name,
+    prepare_data_feed,
+    prepare_data_frame,
 )
 
 # Import walk-forward utilities
 from src.backtester.optimizer.walk_forward_optimizer import (
-    load_walk_forward_config,
     filter_data_files,
+    load_walk_forward_config,
 )
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -56,7 +56,7 @@ def load_optimization_results(optimization_dir: str) -> dict:
         return {}
 
     results = {}
-    json_files = [f for f in os.listdir(optimization_dir) if f.endswith('.json')]
+    json_files = [f for f in os.listdir(optimization_dir) if f.endswith(".json")]
 
     _logger.info("Loading optimization results from %s", optimization_dir)
     _logger.info("  Found %d result files", len(json_files))
@@ -64,14 +64,14 @@ def load_optimization_results(optimization_dir: str) -> dict:
     for json_file in json_files:
         try:
             file_path = os.path.join(optimization_dir, json_file)
-            with open(file_path, 'r') as f:
+            with open(file_path) as f:
                 result = json.load(f)
 
             # Extract strategy key components
-            symbol = result.get('symbol', '')
-            timeframe = result.get('timeframe', '')
-            entry_name = result.get('best_params', {}).get('entry_logic', {}).get('name', '')
-            exit_name = result.get('best_params', {}).get('exit_logic', {}).get('name', '')
+            symbol = result.get("symbol", "")
+            timeframe = result.get("timeframe", "")
+            entry_name = result.get("best_params", {}).get("entry_logic", {}).get("name", "")
+            exit_name = result.get("best_params", {}).get("exit_logic", {}).get("name", "")
 
             if not all([symbol, timeframe, entry_name, exit_name]):
                 _logger.warning("Skipping file %s: missing key fields", json_file)
@@ -100,15 +100,10 @@ def extract_best_params(result: dict) -> dict:
     Returns:
         dict: Best parameters including entry/exit logic and settings
     """
-    return result.get('best_params', {})
+    return result.get("best_params", {})
 
 
-def run_oos_backtest(
-    data_file: str,
-    best_params: dict,
-    optimizer_config: dict,
-    data_dir: str = "data"
-) -> dict:
+def run_oos_backtest(data_file: str, best_params: dict, optimizer_config: dict, data_dir: str = "data") -> dict:
     """
     Run backtest on OOS data with fixed parameters (no optimization).
 
@@ -133,20 +128,20 @@ def run_oos_backtest(
 
     # Create entry logic config with fixed params
     entry_logic_config = {
-        "name": best_params['entry_logic']['name'],
+        "name": best_params["entry_logic"]["name"],
         "params": {
             param_name: {"default": param_value, "type": "fixed"}
-            for param_name, param_value in best_params['entry_logic']['params'].items()
-        }
+            for param_name, param_value in best_params["entry_logic"]["params"].items()
+        },
     }
 
     # Create exit logic config with fixed params
     exit_logic_config = {
-        "name": best_params['exit_logic']['name'],
+        "name": best_params["exit_logic"]["name"],
         "params": {
             param_name: {"default": param_value, "type": "fixed"}
-            for param_name, param_value in best_params['exit_logic']['params'].items()
-        }
+            for param_name, param_value in best_params["exit_logic"]["params"].items()
+        },
     }
 
     # Create optimizer config
@@ -170,7 +165,7 @@ def save_validation_results(
     window_name: str,
     test_year: str,
     trained_on_year: str,
-    output_dir: str = "results/walk_forward_reports/validation"
+    output_dir: str = "results/walk_forward_reports/validation",
 ):
     """
     Save validation results to appropriate directory.
@@ -189,18 +184,18 @@ def save_validation_results(
     for strategy_key, result in results.items():
         try:
             # Generate filename
-            data_file = result.get('data_file', 'unknown.csv')
-            entry_name = result.get('best_params', {}).get('entry_logic', {}).get('name', '')
-            exit_name = result.get('best_params', {}).get('exit_logic', {}).get('name', '')
+            data_file = result.get("data_file", "unknown.csv")
+            entry_name = result.get("best_params", {}).get("entry_logic", {}).get("name", "")
+            exit_name = result.get("best_params", {}).get("exit_logic", {}).get("name", "")
 
             # Parse data file for filename components
             parts = parse_data_file_name(data_file)
             if len(parts) >= 4:
                 symbol, interval, start_date, end_date = parts
-                timestamp = dt.now().strftime('%Y%m%d_%H%M%S')
+                timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
                 filename = f"{symbol}_{interval}_{start_date}_{end_date}_{entry_name}_{exit_name}_OOS_{timestamp}"
             else:
-                timestamp = dt.now().strftime('%Y%m%d_%H%M%S')
+                timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
                 filename = f"{strategy_key}_OOS_{timestamp}"
 
             # Convert trades to serializable format
@@ -271,8 +266,8 @@ def save_validation_results(
                 "window_name": window_name,
                 "test_year": test_year,
                 "trained_on_year": trained_on_year,
-                "symbol": result.get('symbol', ''),
-                "timeframe": result.get('timeframe', ''),
+                "symbol": result.get("symbol", ""),
+                "timeframe": result.get("timeframe", ""),
                 "total_trades": len(trades),
                 "total_profit": float(result.get("total_profit", 0)),
                 "total_profit_with_commission": float(result.get("total_profit_with_commission", 0)),
@@ -306,14 +301,14 @@ def main():
     wf_config_path = os.path.join("config", "walk_forward", "walk_forward_config.json")
     wf_config = load_walk_forward_config(wf_config_path)
 
-    optimizer_config_path = wf_config['optimizer_config_path']
-    with open(optimizer_config_path, 'r') as f:
+    optimizer_config_path = wf_config["optimizer_config_path"]
+    with open(optimizer_config_path) as f:
         optimizer_config = json.load(f)
 
     # Statistics tracking
-    total_windows = len(wf_config['windows'])
-    total_symbols = len(wf_config['symbols'])
-    total_timeframes = len(wf_config['timeframes'])
+    total_windows = len(wf_config["windows"])
+    total_symbols = len(wf_config["symbols"])
+    total_timeframes = len(wf_config["timeframes"])
     processed_count = 0
     total_validations = 0
 
@@ -325,16 +320,16 @@ def main():
     _logger.info("=" * 80)
 
     # Process each window
-    for window_idx, window in enumerate(wf_config['windows'], 1):
+    for window_idx, window in enumerate(wf_config["windows"], 1):
         _logger.info("")
         _logger.info("=" * 80)
-        _logger.info("Processing Window %d/%d: %s", window_idx, total_windows, window['name'])
-        _logger.info("  Trained On: %s", window['train_year'])
-        _logger.info("  Testing On: %s", window['test_year'])
+        _logger.info("Processing Window %d/%d: %s", window_idx, total_windows, window["name"])
+        _logger.info("  Trained On: %s", window["train_year"])
+        _logger.info("  Testing On: %s", window["test_year"])
         _logger.info("=" * 80)
 
         # Load IS optimization results for this window
-        optimization_dir = os.path.join("results", "walk_forward_reports", window['train_year'])
+        optimization_dir = os.path.join("results", "walk_forward_reports", window["train_year"])
         is_results = load_optimization_results(optimization_dir)
 
         if not is_results:
@@ -342,25 +337,21 @@ def main():
             continue
 
         # Process each symbol/timeframe combination
-        for symbol in wf_config['symbols']:
-            for timeframe in wf_config['timeframes']:
+        for symbol in wf_config["symbols"]:
+            for timeframe in wf_config["timeframes"]:
                 processed_count += 1
 
                 _logger.info("")
                 _logger.info("-" * 80)
-                _logger.info(
-                    "Validating: %s | %s | %s",
-                    window['name'], symbol, timeframe
-                )
+                _logger.info("Validating: %s | %s | %s", window["name"], symbol, timeframe)
                 _logger.info("-" * 80)
 
                 # Filter test data files for this symbol/timeframe
-                test_files = filter_data_files(window['test'], symbol, timeframe)
+                test_files = filter_data_files(window["test"], symbol, timeframe)
 
                 if not test_files:
                     _logger.warning(
-                        "No test data files found for %s/%s in window %s",
-                        symbol, timeframe, window['name']
+                        "No test data files found for %s/%s in window %s", symbol, timeframe, window["name"]
                     )
                     continue
 
@@ -391,26 +382,22 @@ def main():
                         best_params = extract_best_params(is_result)
 
                         # Run OOS backtest with fixed params
-                        oos_result = run_oos_backtest(
-                            test_data_file,
-                            best_params,
-                            optimizer_config
-                        )
+                        oos_result = run_oos_backtest(test_data_file, best_params, optimizer_config)
 
                         # Add metadata
-                        oos_result['window_name'] = window['name']
-                        oos_result['test_year'] = window['test_year']
-                        oos_result['trained_on_year'] = window['train_year']
-                        oos_result['symbol'] = symbol
-                        oos_result['timeframe'] = timeframe
+                        oos_result["window_name"] = window["name"]
+                        oos_result["test_year"] = window["test_year"]
+                        oos_result["trained_on_year"] = window["train_year"]
+                        oos_result["symbol"] = symbol
+                        oos_result["timeframe"] = timeframe
 
                         oos_results[strategy_key] = oos_result
                         total_validations += 1
 
                         _logger.info(
                             "    OOS Result: Profit: %.2f | Trades: %d",
-                            oos_result['total_profit_with_commission'],
-                            oos_result.get('total_trades', 0)
+                            oos_result["total_profit_with_commission"],
+                            oos_result.get("total_trades", 0),
                         )
 
                     except Exception as e:
@@ -419,21 +406,10 @@ def main():
 
                 # Save OOS results
                 if oos_results:
-                    save_validation_results(
-                        oos_results,
-                        window['name'],
-                        window['test_year'],
-                        window['train_year']
-                    )
-                    _logger.info(
-                        "  Saved %d OOS results for %s/%s",
-                        len(oos_results), symbol, timeframe
-                    )
+                    save_validation_results(oos_results, window["name"], window["test_year"], window["train_year"])
+                    _logger.info("  Saved %d OOS results for %s/%s", len(oos_results), symbol, timeframe)
                 else:
-                    _logger.warning(
-                        "  No OOS results to save for %s/%s",
-                        symbol, timeframe
-                    )
+                    _logger.warning("  No OOS results to save for %s/%s", symbol, timeframe)
 
     # Summary
     end_time = dt.now()

@@ -5,8 +5,8 @@ Thin wrapper around `DataManager.get_ohlcv` that returns the most recent daily
 close for a set of symbols and is resilient to per-symbol failures.
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Iterable, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any, Dict, Iterable
 
 from src.notification.logger import setup_logger
 
@@ -19,12 +19,13 @@ def _build_data_manager() -> Any:
     whole data stack into unrelated tests.
     """
     from src.data.data_manager import DataManager
+
     return DataManager()
 
 
 def fetch_latest_closes(
     symbols: Iterable[str],
-    data_manager: Optional[Any] = None,
+    data_manager: Any | None = None,
     lookback_days: int = 7,
 ) -> Dict[str, float]:
     """
@@ -46,7 +47,7 @@ def fetch_latest_closes(
     """
     dm = data_manager if data_manager is not None else _build_data_manager()
 
-    end = datetime.now(timezone.utc)
+    end = datetime.now(UTC)
     start = end - timedelta(days=max(2, lookback_days))
 
     symbol_list = list(symbols)

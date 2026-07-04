@@ -5,16 +5,22 @@ Service layer for job scheduling and execution operations.
 Provides business logic for managing schedules and runs.
 """
 
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import Any, Dict, List
+
 import croniter
 
-from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
 from src.data.db.models.model_jobs import (
-    Schedule, ScheduleRun, RunStatus, JobType,
-    ScheduleCreate, ScheduleUpdate, ScheduleRunCreate, ScheduleRunUpdate,
-    ScheduleResponse, ScheduleRunResponse
+    JobType,
+    RunStatus,
+    ScheduleCreate,
+    ScheduleResponse,
+    ScheduleRunCreate,
+    ScheduleRunResponse,
+    ScheduleRunUpdate,
+    ScheduleUpdate,
 )
+from src.data.db.services.base_service import BaseDBService, handle_db_error, with_uow
 
 
 class SimpleScreenerConfig:
@@ -23,9 +29,9 @@ class SimpleScreenerConfig:
     def __init__(self):
         # Define some basic screener sets
         self.screener_sets = {
-            'sp500': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA'],  # Sample tickers
-            'tech': ['AAPL', 'MSFT', 'GOOGL', 'META', 'NFLX'],
-            'finance': ['JPM', 'BAC', 'WFC', 'C', 'GS'],
+            "sp500": ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"],  # Sample tickers
+            "tech": ["AAPL", "MSFT", "GOOGL", "META", "NFLX"],
+            "finance": ["JPM", "BAC", "WFC", "C", "GS"],
         }
 
     def validate_set_name(self, name: str) -> bool:
@@ -66,7 +72,7 @@ class JobsService(BaseDBService):
             "task_params": schedule_data.task_params,
             "cron": schedule_data.cron,
             "enabled": schedule_data.enabled,
-            "next_run_at": next_run_at
+            "next_run_at": next_run_at,
         }
 
         schedule = self.repos.jobs.create_schedule(schedule_dict)
@@ -74,7 +80,7 @@ class JobsService(BaseDBService):
         return ScheduleResponse.model_validate(schedule)
 
     @with_uow
-    def get_schedule(self, schedule_id: int) -> Optional[ScheduleResponse]:
+    def get_schedule(self, schedule_id: int) -> ScheduleResponse | None:
         """Get a schedule by ID."""
         schedule = self.repos.jobs.get_schedule(schedule_id)
         return ScheduleResponse.model_validate(schedule) if schedule else None
@@ -82,11 +88,11 @@ class JobsService(BaseDBService):
     @with_uow
     def list_schedules(
         self,
-        user_id: Optional[int] = None,
-        job_type: Optional[JobType] = None,
-        enabled: Optional[bool] = None,
+        user_id: int | None = None,
+        job_type: JobType | None = None,
+        enabled: bool | None = None,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
     ) -> List[ScheduleResponse]:
         """List schedules with optional filtering."""
         schedules = self.repos.jobs.list_schedules(user_id, job_type, enabled, limit, offset)
@@ -94,7 +100,7 @@ class JobsService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def update_schedule(self, schedule_id: int, update_data: ScheduleUpdate) -> Optional[ScheduleResponse]:
+    def update_schedule(self, schedule_id: int, update_data: ScheduleUpdate) -> ScheduleResponse | None:
         """Update a schedule."""
         # Prepare update dictionary (only include non-None values)
         update_dict = {}
@@ -126,7 +132,7 @@ class JobsService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def trigger_schedule(self, schedule_id: int) -> Optional[ScheduleRunResponse]:
+    def trigger_schedule(self, schedule_id: int) -> ScheduleRunResponse | None:
         """Manually trigger a schedule to create a run."""
         schedule = self.repos.jobs.get_schedule(schedule_id)
         if not schedule:
@@ -138,15 +144,15 @@ class JobsService(BaseDBService):
         # Create a run for immediate execution
         run_data = ScheduleRunCreate(
             job_type=JobType(schedule.job_type),
-            job_id=f"manual_{schedule_id}_{datetime.now(timezone.utc).timestamp()}",
-            scheduled_for=datetime.now(timezone.utc),
+            job_id=f"manual_{schedule_id}_{datetime.now(UTC).timestamp()}",
+            scheduled_for=datetime.now(UTC),
             job_snapshot={
                 "schedule_id": schedule_id,
                 "schedule_name": schedule.name,
                 "target": schedule.target,
                 "task_params": schedule.task_params,
-                "trigger_type": "manual"
-            }
+                "trigger_type": "manual",
+            },
         )
 
         return self.create_run(schedule.user_id, run_data)
@@ -155,7 +161,7 @@ class JobsService(BaseDBService):
     @handle_db_error
     def get_pending_schedules(self) -> List[ScheduleResponse]:
         """Get schedules that are due for execution."""
-        schedules = self.repos.jobs.get_pending_schedules(datetime.now(timezone.utc))
+        schedules = self.repos.jobs.get_pending_schedules(datetime.now(UTC))
         return [ScheduleResponse.model_validate(s) for s in schedules]
 
     @with_uow
@@ -178,7 +184,7 @@ class JobsService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_schedule_state(self, schedule_id: int) -> Optional[Dict[str, Any]]:
+    def get_schedule_state(self, schedule_id: int) -> Dict[str, Any] | None:
         """Get the persistent state for a schedule."""
         schedule = self.repos.jobs.get_schedule(schedule_id)
         return schedule.state_json if schedule else None
@@ -195,7 +201,7 @@ class JobsService(BaseDBService):
             "job_id": run_data.job_id,
             "user_id": user_id,
             "scheduled_for": run_data.scheduled_for,
-            "job_snapshot": run_data.job_snapshot
+            "job_snapshot": run_data.job_snapshot,
         }
 
         run = self.repos.jobs.create_run(run_dict)
@@ -204,7 +210,7 @@ class JobsService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_run(self, run_id: int) -> Optional[ScheduleRunResponse]:
+    def get_run(self, run_id: int) -> ScheduleRunResponse | None:
         """Get a run by ID."""
         run = self.repos.jobs.get_run(run_id)
         return ScheduleRunResponse.model_validate(run) if run else None
@@ -213,13 +219,13 @@ class JobsService(BaseDBService):
     @handle_db_error
     def list_runs(
         self,
-        user_id: Optional[int] = None,
-        job_type: Optional[JobType] = None,
-        status: Optional[RunStatus] = None,
+        user_id: int | None = None,
+        job_type: JobType | None = None,
+        status: RunStatus | None = None,
         limit: int = 100,
         offset: int = 0,
         order_by: str = "scheduled_for",
-        order_desc: bool = True
+        order_desc: bool = True,
     ) -> List[ScheduleRunResponse]:
         """List runs with optional filtering."""
         sruns = self.repos.jobs.list_runs(user_id, job_type, status, limit, offset, order_by, order_desc)
@@ -227,7 +233,7 @@ class JobsService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def update_run(self, run_id: int, update_data: ScheduleRunUpdate) -> Optional[ScheduleRunResponse]:
+    def update_run(self, run_id: int, update_data: ScheduleRunUpdate) -> ScheduleRunResponse | None:
         """Update a run."""
         # Prepare update dictionary (only include non-None values)
         update_dict = {}
@@ -247,7 +253,7 @@ class JobsService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def claim_run(self, run_id: int, worker_id: str) -> Optional[ScheduleRunResponse]:
+    def claim_run(self, run_id: int, worker_id: str) -> ScheduleRunResponse | None:
         """Atomically claim a run for execution by a worker."""
         run = self.repos.jobs.claim_run(run_id, worker_id)
         if run:
@@ -257,7 +263,7 @@ class JobsService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_pending_runs(self, job_type: Optional[JobType] = None, limit: int = 10) -> List[ScheduleRunResponse]:
+    def get_pending_runs(self, job_type: JobType | None = None, limit: int = 10) -> List[ScheduleRunResponse]:
         """Get pending runs that can be claimed by workers."""
         runs = self.repos.jobs.get_pending_runs(job_type, limit)
         return [ScheduleRunResponse.model_validate(r) for r in runs]
@@ -281,10 +287,7 @@ class JobsService(BaseDBService):
     @with_uow
     @handle_db_error
     def get_run_statistics(
-        self,
-        user_id: Optional[int] = None,
-        job_type: Optional[JobType] = None,
-        days: int = 30
+        self, user_id: int | None = None, job_type: JobType | None = None, days: int = 30
     ) -> Dict[str, Any]:
         """Get run statistics for a time period."""
         return self.repos.jobs.get_run_statistics(user_id, job_type, days)
@@ -325,12 +328,12 @@ class JobsService(BaseDBService):
             Next run datetime
         """
         try:
-            cron = croniter.croniter(cron_expression, datetime.now(timezone.utc))
+            cron = croniter.croniter(cron_expression, datetime.now(UTC))
             return cron.get_next(datetime)
         except Exception:
             self._logger.error("Failed to calculate next run time for cron '%s':", cron_expression)
             # Return a default time (1 hour from now) if calculation fails
-            return datetime.now(timezone.utc) + timedelta(hours=1)
+            return datetime.now(UTC) + timedelta(hours=1)
 
     def expand_screener_target(self, target: str) -> List[str]:
         """
@@ -350,8 +353,8 @@ class JobsService(BaseDBService):
             return self.screener_config.get_tickers(target)
 
         # Check if it's comma-separated tickers
-        if ',' in target:
-            tickers = [ticker.strip().upper() for ticker in target.split(',')]
+        if "," in target:
+            tickers = [ticker.strip().upper() for ticker in target.split(",")]
             if all(ticker for ticker in tickers):  # All tickers are non-empty
                 return tickers
 
@@ -366,11 +369,11 @@ class JobsService(BaseDBService):
     def create_screener_run(
         self,
         user_id: int,
-        screener_set: Optional[str] = None,
-        tickers: Optional[List[str]] = None,
-        filter_criteria: Optional[Dict[str, Any]] = None,
-        top_n: Optional[int] = None,
-        scheduled_for: Optional[datetime] = None
+        screener_set: str | None = None,
+        tickers: List[str] | None = None,
+        filter_criteria: Dict[str, Any] | None = None,
+        top_n: int | None = None,
+        scheduled_for: datetime | None = None,
     ) -> ScheduleRunResponse:
         """Create a screener run with proper job snapshot."""
         if not screener_set and not tickers:
@@ -391,18 +394,18 @@ class JobsService(BaseDBService):
             "tickers": expanded_tickers,
             "filter_criteria": filter_criteria or {},
             "top_n": top_n,
-            "ticker_count": len(expanded_tickers)
+            "ticker_count": len(expanded_tickers),
         }
 
         # Create job ID
-        job_id = f"screener_{screener_set or 'custom'}_{datetime.now(timezone.utc).timestamp()}"
+        job_id = f"screener_{screener_set or 'custom'}_{datetime.now(UTC).timestamp()}"
 
         # Create run
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
             job_id=job_id,
-            scheduled_for=scheduled_for or datetime.now(timezone.utc),
-            job_snapshot=job_snapshot
+            scheduled_for=scheduled_for or datetime.now(UTC),
+            job_snapshot=job_snapshot,
         )
 
         return self.create_run(user_id, run_data)
@@ -413,26 +416,22 @@ class JobsService(BaseDBService):
         self,
         user_id: int,
         report_type: str,
-        parameters: Optional[Dict[str, Any]] = None,
-        scheduled_for: Optional[datetime] = None
+        parameters: Dict[str, Any] | None = None,
+        scheduled_for: datetime | None = None,
     ) -> ScheduleRunResponse:
         """Create a report run with proper job snapshot."""
         # Create job snapshot
-        job_snapshot = {
-            "report_type": report_type,
-            "parameters": parameters or {}
-        }
+        job_snapshot = {"report_type": report_type, "parameters": parameters or {}}
 
         # Create job ID
-        job_id = f"report_{report_type}_{datetime.now(timezone.utc).timestamp()}"
+        job_id = f"report_{report_type}_{datetime.now(UTC).timestamp()}"
 
         # Create run
         run_data = ScheduleRunCreate(
             job_type=JobType.REPORT,
             job_id=job_id,
-            scheduled_for=scheduled_for or datetime.now(timezone.utc),
-            job_snapshot=job_snapshot
+            scheduled_for=scheduled_for or datetime.now(UTC),
+            job_snapshot=job_snapshot,
         )
 
         return self.create_run(user_id, run_data)
-

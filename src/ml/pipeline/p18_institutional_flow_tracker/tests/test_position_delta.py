@@ -1,7 +1,7 @@
 """Unit tests for PositionDeltaCalculator."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -24,7 +24,18 @@ def _make_holdings(rows: list) -> pd.DataFrame:
 
 
 def test_full_exit_detected(calc: PositionDeltaCalculator) -> None:
-    prev = _make_holdings([{"cik": "100", "institution_name": "Fund A", "ticker": "AAPL", "shares": 10000, "value_usd": 1_500_000, "pct_of_portfolio": 0.02}])
+    prev = _make_holdings(
+        [
+            {
+                "cik": "100",
+                "institution_name": "Fund A",
+                "ticker": "AAPL",
+                "shares": 10000,
+                "value_usd": 1_500_000,
+                "pct_of_portfolio": 0.02,
+            }
+        ]
+    )
     curr = _make_holdings([])  # AAPL fully exited
 
     result = calc.calculate(curr, prev)
@@ -36,8 +47,30 @@ def test_full_exit_detected(calc: PositionDeltaCalculator) -> None:
 
 
 def test_partial_exit_detected(calc: PositionDeltaCalculator) -> None:
-    prev = _make_holdings([{"cik": "100", "institution_name": "Fund A", "ticker": "MSFT", "shares": 10000, "value_usd": 3_000_000, "pct_of_portfolio": 0.03}])
-    curr = _make_holdings([{"cik": "100", "institution_name": "Fund A", "ticker": "MSFT", "shares": 5000, "value_usd": 1_500_000, "pct_of_portfolio": 0.015}])
+    prev = _make_holdings(
+        [
+            {
+                "cik": "100",
+                "institution_name": "Fund A",
+                "ticker": "MSFT",
+                "shares": 10000,
+                "value_usd": 3_000_000,
+                "pct_of_portfolio": 0.03,
+            }
+        ]
+    )
+    curr = _make_holdings(
+        [
+            {
+                "cik": "100",
+                "institution_name": "Fund A",
+                "ticker": "MSFT",
+                "shares": 5000,
+                "value_usd": 1_500_000,
+                "pct_of_portfolio": 0.015,
+            }
+        ]
+    )
 
     result = calc.calculate(curr, prev)
 
@@ -48,7 +81,18 @@ def test_partial_exit_detected(calc: PositionDeltaCalculator) -> None:
 
 def test_new_position_detected(calc: PositionDeltaCalculator) -> None:
     prev = _make_holdings([])
-    curr = _make_holdings([{"cik": "100", "institution_name": "Fund A", "ticker": "NVDA", "shares": 5000, "value_usd": 2_000_000, "pct_of_portfolio": 0.02}])
+    curr = _make_holdings(
+        [
+            {
+                "cik": "100",
+                "institution_name": "Fund A",
+                "ticker": "NVDA",
+                "shares": 5000,
+                "value_usd": 2_000_000,
+                "pct_of_portfolio": 0.02,
+            }
+        ]
+    )
 
     result = calc.calculate(curr, prev)
 
@@ -62,7 +106,18 @@ def test_empty_inputs_return_empty(calc: PositionDeltaCalculator) -> None:
 
 
 def test_unchanged_position(calc: PositionDeltaCalculator) -> None:
-    holdings = _make_holdings([{"cik": "100", "institution_name": "Fund A", "ticker": "GOOG", "shares": 1000, "value_usd": 1_000_000, "pct_of_portfolio": 0.01}])
+    holdings = _make_holdings(
+        [
+            {
+                "cik": "100",
+                "institution_name": "Fund A",
+                "ticker": "GOOG",
+                "shares": 1000,
+                "value_usd": 1_000_000,
+                "pct_of_portfolio": 0.01,
+            }
+        ]
+    )
     result = calc.calculate(holdings, holdings.copy())
 
     row = result[result["ticker"] == "GOOG"].iloc[0]

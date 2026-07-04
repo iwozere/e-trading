@@ -1,8 +1,8 @@
-import os
 import json
-import pandas as pd
 from pathlib import Path
-import re
+
+import pandas as pd
+
 
 def aggregate_results(results_root: str = "results/p07_combined"):
     """
@@ -34,7 +34,7 @@ def aggregate_results(results_root: str = "results/p07_combined"):
             if "_" in period:
                 start_date, end_date = period.split("_", 1)
 
-            with open(metrics_file, 'r') as f:
+            with open(metrics_file) as f:
                 data = json.load(f)
 
             # --- Formatting Logic ---
@@ -42,12 +42,12 @@ def aggregate_results(results_root: str = "results/p07_combined"):
             for key in ["Start", "End"]:
                 if key in data and isinstance(data[key], (int, float)):
                     # Convert ms to datetime
-                    dt = pd.to_datetime(data[key], unit='ms')
-                    data[key] = dt.strftime('%Y-%m-%d %H:%M:%S')
+                    dt = pd.to_datetime(data[key], unit="ms")
+                    data[key] = dt.strftime("%Y-%m-%d %H:%M:%S")
 
             # 2. Period (from milliseconds to duration string)
             if "Period" in data and isinstance(data["Period"], (int, float)):
-                duration = pd.to_timedelta(data["Period"], unit='ms')
+                duration = pd.to_timedelta(data["Period"], unit="ms")
                 # Format: "X days HH:MM:SS"
                 days = duration.days
                 hours, remainder = divmod(duration.seconds, 3600)
@@ -57,8 +57,10 @@ def aggregate_results(results_root: str = "results/p07_combined"):
             # 3. Handle ticker/timeframe/dates
             # file_start/file_end come from the folder name (e.g. 20200101_20250101)
             f_start, f_end = start_date, end_date
-            if len(f_start) == 8: f_start = f"{f_start[:4]}-{f_start[4:6]}-{f_start[6:8]}"
-            if len(f_end) == 8: f_end = f"{f_end[:4]}-{f_end[4:6]}-{f_end[6:8]}"
+            if len(f_start) == 8:
+                f_start = f"{f_start[:4]}-{f_start[4:6]}-{f_start[6:8]}"
+            if len(f_end) == 8:
+                f_end = f"{f_end[:4]}-{f_end[4:6]}-{f_end[6:8]}"
 
             # test_start/test_end come from the JSON (high precision)
             t_start = data.get("Start", f_start)
@@ -72,7 +74,7 @@ def aggregate_results(results_root: str = "results/p07_combined"):
                 "file_end": f_end,
                 "test_start": t_start,
                 "test_end": t_end,
-                **{k: v for k, v in data.items() if k not in ["Start", "End"]}
+                **{k: v for k, v in data.items() if k not in ["Start", "End"]},
             }
             all_metrics.append(entry)
 
@@ -95,11 +97,13 @@ def aggregate_results(results_root: str = "results/p07_combined"):
         # --- New: Select candidates for robustness ---
         try:
             from src.ml.pipeline.p07_combined.select_candidates import select_top_candidates
+
             select_top_candidates(results_root=results_root)
         except Exception as e:
             print(f"Failed to select candidates: {e}")
     else:
         print("No metrics found to aggregate.")
+
 
 def aggregate_robustness(results_root: str = "results/p07_combined"):
     """
@@ -114,45 +118,52 @@ def aggregate_robustness(results_root: str = "results/p07_combined"):
         try:
             # parts mapping: .../ticker/timeframe/robustness/robustness_summary.json
             parts = rob_file.parts
-            if len(parts) < 4: continue
+            if len(parts) < 4:
+                continue
 
             ticker = parts[-4]
             timeframe = parts[-3]
 
-            with open(rob_file, 'r') as f:
+            with open(rob_file) as f:
                 data = json.load(f)
 
             # 1. Summary
-            summary_data.append({
-                "ticker": ticker,
-                "timeframe": timeframe,
-                "avg_oos_sharpe": data.get("wfa", {}).get("avg_oos_sharpe"),
-                "mc_positivity_rate": data.get("monte_carlo", {}).get("positivity_rate")
-            })
+            summary_data.append(
+                {
+                    "ticker": ticker,
+                    "timeframe": timeframe,
+                    "avg_oos_sharpe": data.get("wfa", {}).get("avg_oos_sharpe"),
+                    "mc_positivity_rate": data.get("monte_carlo", {}).get("positivity_rate"),
+                }
+            )
 
             # 2. Sensitivity
             for res in data.get("sensitivity", {}).get("sensitivity_results", []):
-                sensitivity_data.append({
-                    "ticker": ticker,
-                    "timeframe": timeframe,
-                    "perturbation": res.get("perturbation"),
-                    "sharpe": res.get("sharpe"),
-                    "total_return": res.get("return")
-                })
+                sensitivity_data.append(
+                    {
+                        "ticker": ticker,
+                        "timeframe": timeframe,
+                        "perturbation": res.get("perturbation"),
+                        "sharpe": res.get("sharpe"),
+                        "total_return": res.get("return"),
+                    }
+                )
 
             # 3. WFA (if available in summary or from nested artifacts)
             # The summary.json might only have avg, but we want detail.
             # If wfa results were saved individually or nested in the summary:
             # Note: Current robustness.py saves oos_results in a way that needs coordination.
             # Assuming we can find details or they are in the JSON.
-            for res in data.get("wfa_details", []): # I will update robustness.py to include this
-                wfa_data.append({
-                    "ticker": ticker,
-                    "timeframe": timeframe,
-                    "window": res.get("window"),
-                    "sharpe": res.get("sharpe"),
-                    "total_return": res.get("return")
-                })
+            for res in data.get("wfa_details", []):  # I will update robustness.py to include this
+                wfa_data.append(
+                    {
+                        "ticker": ticker,
+                        "timeframe": timeframe,
+                        "window": res.get("window"),
+                        "sharpe": res.get("sharpe"),
+                        "total_return": res.get("return"),
+                    }
+                )
 
         except Exception as e:
             print(f"Error processing robustness {rob_file}: {e}")
@@ -170,6 +181,7 @@ def aggregate_robustness(results_root: str = "results/p07_combined"):
     if wfa_data:
         pd.DataFrame(wfa_data).to_csv(root / f"{prefix}_robustness_wfa.csv", index=False)
         print(f"Saved {root / f'{prefix}_robustness_wfa.csv'}")
+
 
 if __name__ == "__main__":
     aggregate_results()

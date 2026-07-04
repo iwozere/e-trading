@@ -6,21 +6,24 @@ This stage performs comprehensive validation of both CNN-LSTM and XGBoost models
 comparing their performance and generating final evaluation reports.
 """
 
-import sys
-import yaml
-import numpy as np
 import json
-import pandas as pd
-from sklearn.metrics import mean_squared_error, mean_absolute_error
-from sklearn.model_selection import TimeSeriesSplit
+import sys
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
+import numpy as np
+import pandas as pd
+import yaml
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.model_selection import TimeSeriesSplit
 
 # Add src to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
+
 
 class ModelValidator:
     """Comprehensive model validator for CNN-LSTM-XGBoost pipeline."""
@@ -42,7 +45,7 @@ class ModelValidator:
     def _load_config(self) -> dict:
         """Load configuration from YAML file."""
         try:
-            with open(self.config_path, 'r') as file:
+            with open(self.config_path) as file:
                 return yaml.safe_load(file)
         except Exception as e:
             raise Exception(f"Failed to load config from {self.config_path}: {e}")
@@ -55,18 +58,16 @@ class ModelValidator:
         cnn_lstm_pred_path = self.predictions_dir / "cnn_lstm_predictions.npz"
         if cnn_lstm_pred_path.exists():
             cnn_lstm_data = np.load(cnn_lstm_pred_path)
-            predictions['cnn_lstm'] = {
-                'test': {'actual': cnn_lstm_data['test_actual'],
-                        'predicted': cnn_lstm_data['test_predicted']}
+            predictions["cnn_lstm"] = {
+                "test": {"actual": cnn_lstm_data["test_actual"], "predicted": cnn_lstm_data["test_predicted"]}
             }
 
         # Load XGBoost predictions
         xgboost_pred_path = self.predictions_dir / "xgboost_predictions.npz"
         if xgboost_pred_path.exists():
             xgboost_data = np.load(xgboost_pred_path)
-            predictions['xgboost'] = {
-                'test': {'actual': xgboost_data['test_actual'],
-                        'predicted': xgboost_data['test_predicted']}
+            predictions["xgboost"] = {
+                "test": {"actual": xgboost_data["test_actual"], "predicted": xgboost_data["test_predicted"]}
             }
 
         return predictions
@@ -88,55 +89,53 @@ class ModelValidator:
         r_squared = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
 
         return {
-            'mse': mse,
-            'mae': mae,
-            'rmse': rmse,
-            'directional_accuracy': directional_accuracy,
-            'r_squared': r_squared
+            "mse": mse,
+            "mae": mae,
+            "rmse": rmse,
+            "directional_accuracy": directional_accuracy,
+            "r_squared": r_squared,
         }
 
     def _generate_report(self, predictions: dict) -> dict:
         """Generate validation report."""
         report = {
-            'pipeline_info': {
-                'name': 'CNN-LSTM-XGBoost Pipeline',
-                'version': '2.0'
-            },
-            'models': {},
-            'comparison': {},
-            'recommendations': []
+            "pipeline_info": {"name": "CNN-LSTM-XGBoost Pipeline", "version": "2.0"},
+            "models": {},
+            "comparison": {},
+            "recommendations": [],
         }
 
         # Calculate metrics for each model
         for model_name, model_predictions in predictions.items():
-            report['models'][model_name] = {}
+            report["models"][model_name] = {}
 
             for dataset_name, dataset_data in model_predictions.items():
-                metrics = self._calculate_metrics(dataset_data['actual'], dataset_data['predicted'])
-                report['models'][model_name][dataset_name] = metrics
+                metrics = self._calculate_metrics(dataset_data["actual"], dataset_data["predicted"])
+                report["models"][model_name][dataset_name] = metrics
 
         # Model comparison
-        if 'cnn_lstm' in predictions and 'xgboost' in predictions:
-            cnn_lstm_test = report['models']['cnn_lstm']['test']
-            xgboost_test = report['models']['xgboost']['test']
+        if "cnn_lstm" in predictions and "xgboost" in predictions:
+            cnn_lstm_test = report["models"]["cnn_lstm"]["test"]
+            xgboost_test = report["models"]["xgboost"]["test"]
 
-            report['comparison'] = {
-                'best_mse': 'cnn_lstm' if cnn_lstm_test['mse'] < xgboost_test['mse'] else 'xgboost',
-                'best_directional_accuracy': 'cnn_lstm' if cnn_lstm_test['directional_accuracy'] > xgboost_test['directional_accuracy'] else 'xgboost'
+            report["comparison"] = {
+                "best_mse": "cnn_lstm" if cnn_lstm_test["mse"] < xgboost_test["mse"] else "xgboost",
+                "best_directional_accuracy": "cnn_lstm"
+                if cnn_lstm_test["directional_accuracy"] > xgboost_test["directional_accuracy"]
+                else "xgboost",
             }
 
             # Generate recommendations
-            if cnn_lstm_test['mse'] < xgboost_test['mse'] * 0.95:
-                report['recommendations'].append("CNN-LSTM shows better MSE performance")
-            elif xgboost_test['mse'] < cnn_lstm_test['mse'] * 0.95:
-                report['recommendations'].append("XGBoost shows better MSE performance")
+            if cnn_lstm_test["mse"] < xgboost_test["mse"] * 0.95:
+                report["recommendations"].append("CNN-LSTM shows better MSE performance")
+            elif xgboost_test["mse"] < cnn_lstm_test["mse"] * 0.95:
+                report["recommendations"].append("XGBoost shows better MSE performance")
             else:
-                report['recommendations'].append("Both models show similar MSE performance")
+                report["recommendations"].append("Both models show similar MSE performance")
 
         return report
 
-    def walk_forward_validate(self, y_true: np.ndarray, y_pred: np.ndarray,
-                               n_splits: int = 5) -> Dict[str, Any]:
+    def walk_forward_validate(self, y_true: np.ndarray, y_pred: np.ndarray, n_splits: int = 5) -> Dict[str, Any]:
         """
         Walk-forward (time-series cross-validation) evaluation of predictions.
         Merged from P03's ModelValidator to avoid in-sample evaluation bias.
@@ -163,35 +162,36 @@ class ModelValidator:
             mae = mean_absolute_error(yt, yp)
             yt_diff = np.diff(yt)
             yp_diff = np.diff(yp)
-            dir_acc = float(np.mean((yt_diff > 0) == (yp_diff > 0))) if len(yt_diff) > 0 else float('nan')
+            dir_acc = float(np.mean((yt_diff > 0) == (yp_diff > 0))) if len(yt_diff) > 0 else float("nan")
 
-            fold_metrics.append({
-                'fold': fold_idx,
-                'mse': float(mse),
-                'mae': float(mae),
-                'directional_accuracy': dir_acc,
-                'n_samples': len(yt),
-            })
+            fold_metrics.append(
+                {
+                    "fold": fold_idx,
+                    "mse": float(mse),
+                    "mae": float(mae),
+                    "directional_accuracy": dir_acc,
+                    "n_samples": len(yt),
+                }
+            )
             _logger.debug("WFA fold %d: mse=%.6f, dir_acc=%.4f", fold_idx, mse, dir_acc)
 
         if not fold_metrics:
-            return {'fold_metrics': [], 'avg_mse': float('nan'),
-                    'avg_mae': float('nan'), 'avg_sharpe': float('nan')}
+            return {"fold_metrics": [], "avg_mse": float("nan"), "avg_mae": float("nan"), "avg_sharpe": float("nan")}
 
-        avg_mse = float(np.mean([f['mse'] for f in fold_metrics]))
-        avg_mae = float(np.mean([f['mae'] for f in fold_metrics]))
-        avg_dir = float(np.mean([f['directional_accuracy'] for f in fold_metrics
-                                  if not np.isnan(f['directional_accuracy'])]))
+        avg_mse = float(np.mean([f["mse"] for f in fold_metrics]))
+        avg_mae = float(np.mean([f["mae"] for f in fold_metrics]))
+        avg_dir = float(
+            np.mean([f["directional_accuracy"] for f in fold_metrics if not np.isnan(f["directional_accuracy"])])
+        )
 
         result = {
-            'fold_metrics': fold_metrics,
-            'avg_mse': avg_mse,
-            'avg_mae': avg_mae,
-            'avg_directional_accuracy': avg_dir,
-            'n_folds': len(fold_metrics),
+            "fold_metrics": fold_metrics,
+            "avg_mse": avg_mse,
+            "avg_mae": avg_mae,
+            "avg_directional_accuracy": avg_dir,
+            "n_folds": len(fold_metrics),
         }
-        _logger.info("Walk-forward: avg_mse=%.6f, avg_dir_acc=%.4f over %d folds",
-                     avg_mse, avg_dir, len(fold_metrics))
+        _logger.info("Walk-forward: avg_mse=%.6f, avg_dir_acc=%.4f over %d folds", avg_mse, avg_dir, len(fold_metrics))
         return result
 
     def validate(self) -> dict:
@@ -209,22 +209,24 @@ class ModelValidator:
 
         # Save report
         report_path = self.reports_dir / "validation_report.json"
-        with open(report_path, 'w') as f:
+        with open(report_path, "w") as f:
             json.dump(report, f, indent=2)
 
         # Create summary table
         summary_data = []
-        for model_name, model_results in report['models'].items():
+        for model_name, model_results in report["models"].items():
             for dataset_name, metrics in model_results.items():
-                summary_data.append({
-                    'Model': model_name,
-                    'Dataset': dataset_name,
-                    'MSE': f"{metrics['mse']:.6f}",
-                    'MAE': f"{metrics['mae']:.6f}",
-                    'RMSE': f"{metrics['rmse']:.6f}",
-                    'Directional Accuracy': f"{metrics['directional_accuracy']:.4f}",
-                    'R-squared': f"{metrics['r_squared']:.4f}"
-                })
+                summary_data.append(
+                    {
+                        "Model": model_name,
+                        "Dataset": dataset_name,
+                        "MSE": f"{metrics['mse']:.6f}",
+                        "MAE": f"{metrics['mae']:.6f}",
+                        "RMSE": f"{metrics['rmse']:.6f}",
+                        "Directional Accuracy": f"{metrics['directional_accuracy']:.4f}",
+                        "R-squared": f"{metrics['r_squared']:.4f}",
+                    }
+                )
 
         summary_df = pd.DataFrame(summary_data)
         summary_path = self.reports_dir / "validation_summary.csv"
@@ -234,36 +236,36 @@ class ModelValidator:
         _logger.info("Model validation completed")
 
         # Print summary
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("MODEL VALIDATION SUMMARY")
-        print("="*60)
+        print("=" * 60)
         print(summary_df.to_string(index=False))
 
-        if 'comparison' in report and report['comparison']:
-            print("\n" + "="*40)
+        if "comparison" in report and report["comparison"]:
+            print("\n" + "=" * 40)
             print("MODEL COMPARISON")
-            print("="*40)
-            for metric, best_model in report['comparison'].items():
+            print("=" * 40)
+            for metric, best_model in report["comparison"].items():
                 print(f"Best {metric}: {best_model}")
 
-        if report['recommendations']:
-            print("\n" + "="*40)
+        if report["recommendations"]:
+            print("\n" + "=" * 40)
             print("RECOMMENDATIONS")
-            print("="*40)
-            for i, rec in enumerate(report['recommendations'], 1):
+            print("=" * 40)
+            for i, rec in enumerate(report["recommendations"], 1):
                 print(f"{i}. {rec}")
 
-        print("="*60)
+        print("=" * 60)
 
         return report
+
 
 def main():
     """Main function to run model validation."""
     import argparse
 
     parser = argparse.ArgumentParser(description="Model Validation")
-    parser.add_argument("--config", default="config/pipeline/x02.yaml",
-                       help="Path to configuration file")
+    parser.add_argument("--config", default="config/pipeline/x02.yaml", help="Path to configuration file")
 
     args = parser.parse_args()
 
@@ -274,6 +276,7 @@ def main():
     except Exception as e:
         print(f"Error during model validation: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

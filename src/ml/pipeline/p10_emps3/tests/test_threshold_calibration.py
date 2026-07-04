@@ -34,10 +34,10 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.ml.pipeline.p06_emps2.accumulation_analyzer import AccumulationAnalyzer
 from src.ml.pipeline.p06_emps2.config import EMPS2FilterConfig
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_config(**overrides) -> EMPS2FilterConfig:
     """Return the current (post-recalibration) EMPS2FilterConfig with optional overrides."""
@@ -108,14 +108,16 @@ def _make_daily(
     volume = np.full(n, 1_000_000.0)
     volume[-1] = 1_000_000.0 * vol_mult
 
-    return pd.DataFrame({
-        "timestamp": dates,
-        "open":   closes,
-        "high":   highs,
-        "low":    lows,
-        "close":  closes,
-        "volume": volume,
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": dates,
+            "open": closes,
+            "high": highs,
+            "low": lows,
+            "close": closes,
+            "volume": volume,
+        }
+    )
 
 
 def _make_intraday(
@@ -136,14 +138,16 @@ def _make_intraday(
     close = np.clip(close, 0.001, None)
     if zero_at >= 0:
         close[zero_at] = 0.0
-    return pd.DataFrame({
-        "timestamp": dates,
-        "open":   close,
-        "high":   close * 1.001,
-        "low":    close * 0.999,
-        "close":  close,
-        "volume": np.full(n, 50_000.0),
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": dates,
+            "open": close,
+            "high": close * 1.001,
+            "low": close * 0.999,
+            "close": close,
+            "volume": np.full(n, 50_000.0),
+        }
+    )
 
 
 def _check(
@@ -162,8 +166,8 @@ def _check(
 # Group A — degenerate / invalid data (5 scenarios)
 # ---------------------------------------------------------------------------
 
-class TestGroupA_DegenerateData:
 
+class TestGroupA_DegenerateData:
     def test_a1_nan_rv_from_zero_intraday_close(self, tmp_path):
         """Zero close price in intraday bars produces NaN log-return → rv=NaN → rejected."""
         daily = _make_daily(vol_mult=4.0, last_spread=0.01, hist_spread=0.01)
@@ -215,8 +219,8 @@ class TestGroupA_DegenerateData:
 # Group B — vol_zscore gate (4 scenarios)
 # ---------------------------------------------------------------------------
 
-class TestGroupB_VolZscoreGate:
 
+class TestGroupB_VolZscoreGate:
     def test_b1_vol_clearly_below_average(self, tmp_path):
         """vol_mult=0.10 → large negative zscore → rejected as low_volume_zscore."""
         daily = _make_daily(vol_mult=0.10)
@@ -253,8 +257,8 @@ class TestGroupB_VolZscoreGate:
 # Group C — price_range_1d gate (3 scenarios)
 # ---------------------------------------------------------------------------
 
-class TestGroupC_PriceRangeGate:
 
+class TestGroupC_PriceRangeGate:
     def test_c1_wide_last_bar_12_pct_range(self, tmp_path):
         """Last bar H-L spread 12% → price_range_1d ≈ 0.12 >> 0.05 → poor_price_compression."""
         # hist_spread=0.01 keeps atr_ratio ≈ 0.02 (< 0.04) so only price_range fires
@@ -286,8 +290,8 @@ class TestGroupC_PriceRangeGate:
 # Group D — atr_ratio gate (3 scenarios)
 # ---------------------------------------------------------------------------
 
-class TestGroupD_AtrRatioGate:
 
+class TestGroupD_AtrRatioGate:
     def test_d1_high_atr_spread_10_pct(self, tmp_path):
         """
         hist_spread=0.05 → ATR ≈ 0.10*price → atr_ratio ≈ 0.10 > 0.04.
@@ -324,8 +328,8 @@ class TestGroupD_AtrRatioGate:
 # Group E — absorption ratio gate (4 scenarios)
 # ---------------------------------------------------------------------------
 
-class TestGroupE_AbsorptionRatioGate:
 
+class TestGroupE_AbsorptionRatioGate:
     def test_e1_high_intraday_noise_lowers_ar(self, tmp_path):
         """
         noise_pct=0.12 → rv ≈ 0.12*40.5 ≈ 4.86 → ar = zscore/rv ≈ 4.36/4.86 ≈ 0.90 < 1.5.
@@ -368,12 +372,11 @@ class TestGroupE_AbsorptionRatioGate:
 # Group F — price_change_1d gate (4 scenarios)
 # ---------------------------------------------------------------------------
 
-class TestGroupF_PriceChangeGate:
 
+class TestGroupF_PriceChangeGate:
     def test_f1_large_gap_5_pct(self, tmp_path):
         """5% gap between yesterday's close and today's → price_change_too_high."""
-        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01,
-                            price_change_pct=0.05)
+        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01, price_change_pct=0.05)
         intra = _make_intraday()
         passed, metrics, reason = _check(tmp_path, daily, intra)
         assert not passed
@@ -382,8 +385,7 @@ class TestGroupF_PriceChangeGate:
 
     def test_f2_borderline_gap_4_pct(self, tmp_path):
         """4% gap → price_change_1d=0.04 > 0.035 → price_change_too_high."""
-        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01,
-                            price_change_pct=0.04)
+        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01, price_change_pct=0.04)
         intra = _make_intraday()
         passed, metrics, reason = _check(tmp_path, daily, intra)
         assert not passed
@@ -392,16 +394,14 @@ class TestGroupF_PriceChangeGate:
 
     def test_f3_small_gap_2_pct_passes(self, tmp_path):
         """2% gap → price_change_1d=0.02 < 0.035 → passes price_change gate."""
-        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01,
-                            price_change_pct=0.02)
+        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01, price_change_pct=0.02)
         intra = _make_intraday()
         _, metrics, _ = _check(tmp_path, daily, intra)
         assert metrics["price_change_1d"] < 0.035
 
     def test_f4_no_gap_passes(self, tmp_path):
         """Flat close (price_change_pct=0) → price_change_1d=0 → passes gate."""
-        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01,
-                            price_change_pct=0.0)
+        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01, price_change_pct=0.0)
         intra = _make_intraday()
         _, metrics, _ = _check(tmp_path, daily, intra)
         assert metrics["price_change_1d"] == pytest.approx(0.0)
@@ -410,6 +410,7 @@ class TestGroupF_PriceChangeGate:
 # ---------------------------------------------------------------------------
 # Group G — SMA20 distance gate (4 scenarios)
 # ---------------------------------------------------------------------------
+
 
 class TestGroupG_SMA20DistanceGate:
     """
@@ -431,8 +432,7 @@ class TestGroupG_SMA20DistanceGate:
     def test_g1_rising_trend_far_above_sma20(self, tmp_path):
         """price_slope=0.019 → dist_sma_20 ≈ 0.19 >> 0.10 → too_far_from_sma20."""
         slope = 0.019
-        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01,
-                            price_slope=slope)
+        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01, price_slope=slope)
         # Intraday price must match the daily last-close so atr_ratio = ATR/intraday_close
         # uses the same scale.  last_price in _check_accumulation comes from df_intra.
         intra = _make_intraday(price=50.0 * (1.0 + slope) ** 59)
@@ -444,8 +444,7 @@ class TestGroupG_SMA20DistanceGate:
     def test_g2_moderate_trend_still_too_far(self, tmp_path):
         """price_slope=0.012 → dist_sma_20 ≈ 0.12 > 0.10 → too_far_from_sma20."""
         slope = 0.012
-        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01,
-                            price_slope=slope)
+        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01, price_slope=slope)
         intra = _make_intraday(price=50.0 * (1.0 + slope) ** 59)
         passed, metrics, reason = _check(tmp_path, daily, intra)
         assert not passed
@@ -455,16 +454,14 @@ class TestGroupG_SMA20DistanceGate:
     def test_g3_gentle_trend_within_sma20_band(self, tmp_path):
         """price_slope=0.008 → dist_sma_20 ≈ 0.078 < 0.10 → passes SMA20 gate."""
         slope = 0.008
-        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01,
-                            price_slope=slope)
+        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01, price_slope=slope)
         intra = _make_intraday(price=50.0 * (1.0 + slope) ** 59)
         _, metrics, _ = _check(tmp_path, daily, intra)
         assert metrics["dist_sma_20"] < 0.10
 
     def test_g4_flat_price_zero_sma20_distance(self, tmp_path):
         """price_slope=0 → price == SMA20 → dist_sma_20=0 → passes gate."""
-        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01,
-                            price_slope=0.0)
+        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01, price_slope=0.0)
         intra = _make_intraday()
         _, metrics, _ = _check(tmp_path, daily, intra)
         assert metrics["dist_sma_20"] == pytest.approx(0.0, abs=1e-6)
@@ -473,6 +470,7 @@ class TestGroupG_SMA20DistanceGate:
 # ---------------------------------------------------------------------------
 # Group H — resistance (local high) gate (4 scenarios)
 # ---------------------------------------------------------------------------
+
 
 class TestGroupH_ResistanceGate:
     """
@@ -487,8 +485,7 @@ class TestGroupH_ResistanceGate:
 
     def test_h1_very_far_from_local_high(self, tmp_path):
         """local_high_boost=0.30 → dist_local_high ≈ 0.23 > 0.15 → too_far_from_local_high."""
-        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01,
-                            local_high_boost=0.30)
+        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01, local_high_boost=0.30)
         intra = _make_intraday()
         passed, metrics, reason = _check(tmp_path, daily, intra)
         assert not passed
@@ -497,8 +494,7 @@ class TestGroupH_ResistanceGate:
 
     def test_h2_moderately_far_from_local_high(self, tmp_path):
         """local_high_boost=0.20 → dist_local_high ≈ 0.167 > 0.15 → too_far_from_local_high."""
-        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01,
-                            local_high_boost=0.20)
+        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01, local_high_boost=0.20)
         intra = _make_intraday()
         passed, metrics, reason = _check(tmp_path, daily, intra)
         assert not passed
@@ -507,16 +503,14 @@ class TestGroupH_ResistanceGate:
 
     def test_h3_near_local_high_passes_gate(self, tmp_path):
         """local_high_boost=0.10 → dist_local_high ≈ 0.091 < 0.15 → passes gate."""
-        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01,
-                            local_high_boost=0.10)
+        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01, local_high_boost=0.10)
         intra = _make_intraday()
         _, metrics, _ = _check(tmp_path, daily, intra)
         assert metrics["dist_local_high"] < 0.15
 
     def test_h4_at_local_high_passes_gate(self, tmp_path):
         """No high boost → dist_local_high ≈ hist_spread (tiny) → passes gate."""
-        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01,
-                            local_high_boost=0.0)
+        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01, local_high_boost=0.0)
         intra = _make_intraday()
         _, metrics, _ = _check(tmp_path, daily, intra)
         assert metrics["dist_local_high"] < 0.15
@@ -525,6 +519,7 @@ class TestGroupH_ResistanceGate:
 # ---------------------------------------------------------------------------
 # Group I — threshold grid sweep (6 scenarios)
 # ---------------------------------------------------------------------------
+
 
 class TestGroupI_ThresholdGridSweep:
     """
@@ -595,19 +590,16 @@ class TestGroupI_ThresholdGridSweep:
         With new gate at 0.15 (20-day high), a stock 10% below local high is accepted.
         """
         # local_high_boost=0.10 → dist ≈ 0.091
-        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01,
-                            local_high_boost=0.10)
+        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01, local_high_boost=0.10)
         intra = _make_intraday()
 
         # Old tight gate: dist 0.091 > 0.05 → rejected
-        passed_old, _, reason_old = _check(tmp_path, daily, intra,
-                                           max_distance_from_resistance=0.05)
+        passed_old, _, reason_old = _check(tmp_path, daily, intra, max_distance_from_resistance=0.05)
         assert not passed_old
         assert reason_old == "too_far_from_local_high"
 
         # New gate 0.15: dist 0.091 < 0.15 → accepted
-        _, metrics_new, _ = _check(tmp_path, daily, intra,
-                                   max_distance_from_resistance=0.15)
+        _, metrics_new, _ = _check(tmp_path, daily, intra, max_distance_from_resistance=0.15)
         assert metrics_new["dist_local_high"] < 0.15
 
     def test_i5_relaxed_resistance_020_accepts_stock_17_pct_below_high(self, tmp_path):
@@ -616,19 +608,16 @@ class TestGroupI_ThresholdGridSweep:
         Default gate 0.15 rejects; relaxed gate 0.20 accepts.
         Signal-analysis.md: if gate relaxed beyond 0.20 signal quality degrades.
         """
-        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01,
-                            local_high_boost=0.20)
+        daily = _make_daily(vol_mult=4.0, hist_spread=0.01, last_spread=0.01, local_high_boost=0.20)
         intra = _make_intraday()
 
         # Default 0.15: rejected
-        passed_default, _, reason_default = _check(tmp_path, daily, intra,
-                                                   max_distance_from_resistance=0.15)
+        passed_default, _, reason_default = _check(tmp_path, daily, intra, max_distance_from_resistance=0.15)
         assert not passed_default
         assert reason_default == "too_far_from_local_high"
 
         # Relaxed 0.20: accepted at resistance gate
-        _, metrics_relaxed, _ = _check(tmp_path, daily, intra,
-                                       max_distance_from_resistance=0.20)
+        _, metrics_relaxed, _ = _check(tmp_path, daily, intra, max_distance_from_resistance=0.20)
         assert metrics_relaxed["dist_local_high"] < 0.20
 
     def test_i6_tight_vol_zscore_500_rejects_typical_signal(self, tmp_path):

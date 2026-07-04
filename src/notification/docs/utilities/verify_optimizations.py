@@ -6,25 +6,21 @@ work correctly without requiring a full database setup.
 """
 
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.service.database_optimization import (
-    OptimizedMessageRepository,
-    OptimizedDeliveryStatusRepository,
-    OptimizedRateLimitRepository
-)
-from src.notification.docs.utilities.query_analyzer import (
-    QueryPerformanceMonitor,
-    QueryMetrics,
-    query_timer
-)
 from src.notification.docs.utilities.database_migrations import NotificationServiceMigrations
+from src.notification.docs.utilities.query_analyzer import QueryMetrics, QueryPerformanceMonitor, query_timer
 from src.notification.logger import setup_logger
+from src.notification.service.database_optimization import (
+    OptimizedDeliveryStatusRepository,
+    OptimizedMessageRepository,
+    OptimizedRateLimitRepository,
+)
 
 _logger = setup_logger(__name__)
 
@@ -82,10 +78,7 @@ def test_query_metrics():
     """Test query metrics data structure."""
     print("📊 Testing Query Metrics...")
 
-    metrics = QueryMetrics(
-        query_hash="test_hash",
-        query_text="SELECT * FROM test_table"
-    )
+    metrics = QueryMetrics(query_hash="test_hash", query_text="SELECT * FROM test_table")
 
     # Add some execution times
     metrics.add_execution(0.1)
@@ -168,7 +161,7 @@ def test_optimization_components():
         print("   ✓ OptimizedRateLimitRepository instantiated")
 
         # Test that methods exist and can be called (with mock data)
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
 
         # These should not fail even with mock session
         pending = message_repo.get_pending_messages_optimized(current_time, limit=10)
@@ -216,9 +209,9 @@ def test_migration_components():
         print("   ✓ NotificationServiceMigrations instantiated")
 
         # Test that methods exist
-        assert hasattr(migrations, 'apply_all_optimizations')
-        assert hasattr(migrations, 'create_monitoring_views')
-        assert hasattr(migrations, 'analyze_current_performance')
+        assert hasattr(migrations, "apply_all_optimizations")
+        assert hasattr(migrations, "create_monitoring_views")
+        assert hasattr(migrations, "analyze_current_performance")
 
         print("   ✓ Migration methods available")
         print("   ✅ Migration Components tests passed!")
@@ -235,24 +228,14 @@ def test_index_definitions():
 
     try:
         from sqlalchemy import Index
-        from src.data.db.models.model_notification import (
-            Message, MessageDeliveryStatus, RateLimit
-        )
+
+        from src.data.db.models.model_notification import Message, MessageDeliveryStatus, RateLimit
 
         # Test that we can create index definitions
         test_indexes = [
-            Index(
-                'test_idx_messages_status_scheduled',
-                Message.status, Message.scheduled_for
-            ),
-            Index(
-                'test_idx_delivery_channel_created',
-                MessageDeliveryStatus.channel, MessageDeliveryStatus.created_at
-            ),
-            Index(
-                'test_idx_rate_limits_user_channel',
-                RateLimit.user_id, RateLimit.channel
-            )
+            Index("test_idx_messages_status_scheduled", Message.status, Message.scheduled_for),
+            Index("test_idx_delivery_channel_created", MessageDeliveryStatus.channel, MessageDeliveryStatus.created_at),
+            Index("test_idx_rate_limits_user_channel", RateLimit.user_id, RateLimit.channel),
         ]
 
         print(f"   ✓ Created {len(test_indexes)} test index definitions")
@@ -282,7 +265,7 @@ def main():
         ("Query Metrics", test_query_metrics),
         ("Optimization Components", test_optimization_components),
         ("Migration Components", test_migration_components),
-        ("Index Definitions", test_index_definitions)
+        ("Index Definitions", test_index_definitions),
     ]
 
     passed = 0

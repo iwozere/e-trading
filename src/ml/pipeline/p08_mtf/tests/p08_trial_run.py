@@ -1,5 +1,5 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
@@ -10,6 +10,7 @@ from src.ml.pipeline.p08_mtf.pipeline import P08Pipeline
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 def run_p08_trial():
     print("\n--- Starting P08 MTF Trial Run (ETHUSDT 30m) ---")
@@ -29,7 +30,7 @@ def run_p08_trial():
         # Need anchor files too (4h)
         data_dir / "ETHUSDT_4h_20200101_20201231.csv",
         data_dir / "ETHUSDT_4h_20210101_20211231.csv",
-        data_dir / "ETHUSDT_4h_20220101_20221231.csv"
+        data_dir / "ETHUSDT_4h_20220101_20221231.csv",
     ]
 
     # Filter to only execution files
@@ -43,6 +44,7 @@ def run_p08_trial():
     p.run_batch(exec_files)
 
     print("\n✅ Trial run completed. Check results/p08_mtf/ETHUSDT/30m/ for artifacts.")
+
 
 if __name__ == "__main__":
     run_p08_trial()

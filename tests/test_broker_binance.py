@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import pytest
 from binance.exceptions import BinanceAPIException
+
 from src.trading.broker.binance_broker import BinanceBroker
 
 
@@ -25,9 +26,7 @@ def test_place_market_order(mock_client_class, broker):
 def test_place_limit_order(mock_client_class, broker):
     mock_client = mock_client_class.return_value
     mock_client.create_order.return_value = {"orderId": 456}
-    result = broker.place_order(
-        "BTCUSDT", "SELL", 0.01, order_type="LIMIT", price=30000
-    )
+    result = broker.place_order("BTCUSDT", "SELL", 0.01, order_type="LIMIT", price=30000)
     assert result["orderId"] == 456
     mock_client.create_order.assert_called_once()
 
@@ -44,9 +43,7 @@ def test_cancel_order(mock_client_class, broker):
 @patch("src.trading.binance_broker.Client")
 def test_get_balance(mock_client_class, broker):
     mock_client = mock_client_class.return_value
-    mock_client.get_account.return_value = {
-        "balances": [{"asset": "BTC", "free": "1.0", "locked": "0.0"}]
-    }
+    mock_client.get_account.return_value = {"balances": [{"asset": "BTC", "free": "1.0", "locked": "0.0"}]}
     result = broker.get_balance("BTC")
     assert result["asset"] == "BTC"
 

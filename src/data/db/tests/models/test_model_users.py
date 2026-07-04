@@ -1,7 +1,6 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-
-from src.data.db.models.model_users import User, AuthIdentity, VerificationCode
+from src.data.db.models.model_users import AuthIdentity, User, VerificationCode
 
 
 def test_user_properties_and_methods():
@@ -10,7 +9,7 @@ def test_user_properties_and_methods():
     u.email = "alice@example.com"
     u.role = "trader"
     u.is_active = True
-    u.created_at = datetime.now(timezone.utc)
+    u.created_at = datetime.now(UTC)
 
     assert u.username == "alice"
     assert u.verify_password("alice") is True

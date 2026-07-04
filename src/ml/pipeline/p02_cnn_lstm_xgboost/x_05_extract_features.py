@@ -4,27 +4,31 @@ Feature Extraction Module for CNN-LSTM-XGBoost Pipeline
 This module extracts features from the trained CNN-LSTM model for use with XGBoost.
 """
 
-import torch
+import json
+import sys
+import warnings
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict
+
 import numpy as np
 import pandas as pd
+import torch
 import yaml
-import json
-from pathlib import Path
-import sys
-from typing import Dict, Any
-from datetime import datetime
-import warnings
-warnings.filterwarnings('ignore')
+
+warnings.filterwarnings("ignore")
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
 
 # Import the HybridCNNLSTM model from the optimization module
 from x_03_optuna_cnn_lstm import HybridCNNLSTM
+
 
 class FeatureExtractor:
     def __init__(self, config_path: str = "config/pipeline/x02.yaml"):
@@ -38,16 +42,16 @@ class FeatureExtractor:
         self.config = self._load_config()
 
         # Directory setup
-        self.labeled_data_dir = Path(self.config['paths']['data_labeled'])
-        self.models_dir = Path(self.config['paths']['models_cnn_lstm'])
+        self.labeled_data_dir = Path(self.config["paths"]["data_labeled"])
+        self.models_dir = Path(self.config["paths"]["models_cnn_lstm"])
         self.checkpoints_dir = self.models_dir / "checkpoints"
-        self.results_dir = Path(self.config['paths']['results'])
+        self.results_dir = Path(self.config["paths"]["results"])
         self.predictions_dir = self.results_dir / "predictions"
         self.predictions_dir.mkdir(parents=True, exist_ok=True)
 
         # Configuration
-        self.cnn_lstm_config = self.config.get('cnn_lstm', {})
-        self.hardware_config = self.config.get('hardware', {})
+        self.cnn_lstm_config = self.config.get("cnn_lstm", {})
+        self.hardware_config = self.config.get("hardware", {})
 
         # Device setup
         self.device = self._setup_device()
@@ -61,7 +65,7 @@ class FeatureExtractor:
         if not self.config_path.exists():
             raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
 
-        with open(self.config_path, 'r') as f:
+        with open(self.config_path) as f:
             config = yaml.safe_load(f)
 
         _logger.info("Loaded configuration from %s", self.config_path)
@@ -69,14 +73,14 @@ class FeatureExtractor:
 
     def _setup_device(self) -> torch.device:
         """Setup device for inference."""
-        device_setting = self.hardware_config.get('device', 'auto')
+        device_setting = self.hardware_config.get("device", "auto")
 
-        if device_setting == 'auto':
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        elif device_setting == 'cuda':
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if device_setting == "auto":
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        elif device_setting == "cuda":
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
-            device = torch.device('cpu')
+            device = torch.device("cpu")
 
         _logger.info("Using device: %s", device)
         return device
@@ -98,13 +102,13 @@ class FeatureExtractor:
         data = np.load(data_file)
 
         return {
-            'X_train': data['X_train'],
-            'X_val': data['X_val'],
-            'X_test': data['X_test'],
-            'y_train': data['y_train'],
-            'y_val': data['y_val'],
-            'y_test': data['y_test'],
-            'feature_names': data['feature_names'].tolist() if 'feature_names' in data else []
+            "X_train": data["X_train"],
+            "X_val": data["X_val"],
+            "X_test": data["X_test"],
+            "y_train": data["y_train"],
+            "y_val": data["y_val"],
+            "y_test": data["y_test"],
+            "feature_names": data["feature_names"].tolist() if "feature_names" in data else [],
         }
 
     def _load_trained_model(self) -> HybridCNNLSTM:
@@ -124,20 +128,20 @@ class FeatureExtractor:
         checkpoint = torch.load(latest_model_file, map_location=self.device)
 
         # Create model with saved configuration
-        model_config = checkpoint['model_config']
+        model_config = checkpoint["model_config"]
         model = HybridCNNLSTM(
-            time_steps=model_config['time_steps'],
-            features=model_config['features'],
-            conv_filters=model_config['conv_filters'],
-            lstm_units=model_config['lstm_units'],
-            dense_units=model_config['dense_units'],
-            attention_heads=model_config['attention_heads'],
-            dropout=model_config['dropout'],
-            kernel_size=model_config['kernel_size']
+            time_steps=model_config["time_steps"],
+            features=model_config["features"],
+            conv_filters=model_config["conv_filters"],
+            lstm_units=model_config["lstm_units"],
+            dense_units=model_config["dense_units"],
+            attention_heads=model_config["attention_heads"],
+            dropout=model_config["dropout"],
+            kernel_size=model_config["kernel_size"],
         )
 
         # Load model weights
-        model.load_state_dict(checkpoint['model_state_dict'])
+        model.load_state_dict(checkpoint["model_state_dict"])
         model.to(self.device)
         model.eval()
 
@@ -223,12 +227,12 @@ class FeatureExtractor:
         last_timestep = X[:, -1, :]
 
         # Create feature names mapping
-        feature_names = self.data['feature_names']
+        feature_names = self.data["feature_names"]
 
         # Select technical indicator features (exclude OHLCV)
         technical_features = []
         for i, name in enumerate(feature_names):
-            if name not in ['open', 'high', 'low', 'close', 'volume']:
+            if name not in ["open", "high", "low", "close", "volume"]:
                 technical_features.append(last_timestep[:, i])
 
         if technical_features:
@@ -270,10 +274,10 @@ class FeatureExtractor:
 
         features = {}
 
-        for split_name in ['train', 'val', 'test']:
+        for split_name in ["train", "val", "test"]:
             _logger.info("Processing %s split...", split_name)
 
-            X = self.data[f'X_{split_name}']
+            X = self.data[f"X_{split_name}"]
 
             # Extract CNN-LSTM features
             cnn_lstm_features = self.extract_cnn_lstm_features(X)
@@ -302,7 +306,7 @@ class FeatureExtractor:
         """
         _logger.info("Saving extracted features...")
 
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         saved_files = {}
 
         for split_name, split_features in features.items():
@@ -311,37 +315,34 @@ class FeatureExtractor:
             np.savez_compressed(
                 npz_path,
                 features=split_features,
-                targets=self.data[f'y_{split_name}'],
-                feature_names=self.data['feature_names']
+                targets=self.data[f"y_{split_name}"],
+                feature_names=self.data["feature_names"],
             )
-            saved_files[f'{split_name}_npz'] = str(npz_path)
+            saved_files[f"{split_name}_npz"] = str(npz_path)
 
             # Save as CSV for easier inspection
             csv_path = self.predictions_dir / f"xgboost_features_{split_name}_{timestamp}.csv"
-            feature_df = pd.DataFrame(
-                split_features,
-                columns=[f'feature_{i}' for i in range(split_features.shape[1])]
-            )
-            feature_df['target'] = self.data[f'y_{split_name}']
+            feature_df = pd.DataFrame(split_features, columns=[f"feature_{i}" for i in range(split_features.shape[1])])
+            feature_df["target"] = self.data[f"y_{split_name}"]
             feature_df.to_csv(csv_path, index=False)
-            saved_files[f'{split_name}_csv'] = str(csv_path)
+            saved_files[f"{split_name}_csv"] = str(csv_path)
 
         # Save feature info
         info_path = self.predictions_dir / f"xgboost_features_info_{timestamp}.json"
         feature_info = {
-            'timestamp': timestamp,
-            'feature_shapes': {split: features[split].shape for split in features.keys()},
-            'feature_names': self.data['feature_names'],
-            'cnn_lstm_features_count': features['train'].shape[1] - len(self.data['feature_names']),
-            'technical_indicators_count': len(self.data['feature_names']),
-            'total_features': features['train'].shape[1],
-            'saved_files': saved_files
+            "timestamp": timestamp,
+            "feature_shapes": {split: features[split].shape for split in features.keys()},
+            "feature_names": self.data["feature_names"],
+            "cnn_lstm_features_count": features["train"].shape[1] - len(self.data["feature_names"]),
+            "technical_indicators_count": len(self.data["feature_names"]),
+            "total_features": features["train"].shape[1],
+            "saved_files": saved_files,
         }
 
-        with open(info_path, 'w') as f:
+        with open(info_path, "w") as f:
             json.dump(feature_info, f, indent=2)
 
-        saved_files['info'] = str(info_path)
+        saved_files["info"] = str(info_path)
 
         _logger.info("Features saved successfully")
         return saved_files
@@ -364,38 +365,31 @@ class FeatureExtractor:
 
             # Create summary
             summary = {
-                'train_samples': features['train'].shape[0],
-                'val_samples': features['val'].shape[0],
-                'test_samples': features['test'].shape[0],
-                'feature_count': features['train'].shape[1],
-                'cnn_lstm_features': features['train'].shape[1] - len(self.data['feature_names']),
-                'technical_indicators': len(self.data['feature_names'])
+                "train_samples": features["train"].shape[0],
+                "val_samples": features["val"].shape[0],
+                "test_samples": features["test"].shape[0],
+                "feature_count": features["train"].shape[1],
+                "cnn_lstm_features": features["train"].shape[1] - len(self.data["feature_names"]),
+                "technical_indicators": len(self.data["feature_names"]),
             }
 
             _logger.info("Feature extraction completed successfully!")
             _logger.info("Summary: %s", summary)
 
-            return {
-                'success': True,
-                'features': features,
-                'saved_files': saved_files,
-                'summary': summary
-            }
+            return {"success": True, "features": features, "saved_files": saved_files, "summary": summary}
 
         except Exception as e:
             _logger.exception("Feature extraction failed:")
-            return {
-                'success': False,
-                'error': str(e)
-            }
+            return {"success": False, "error": str(e)}
+
 
 def main():
     """Main entry point for feature extraction."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Feature extraction for XGBoost')
-    parser.add_argument('--config', default='config/pipeline/x02.yaml', help='Configuration file path')
-    parser.add_argument('--output-dir', help='Output directory for features')
+    parser = argparse.ArgumentParser(description="Feature extraction for XGBoost")
+    parser.add_argument("--config", default="config/pipeline/x02.yaml", help="Configuration file path")
+    parser.add_argument("--output-dir", help="Output directory for features")
 
     args = parser.parse_args()
 
@@ -409,7 +403,7 @@ def main():
 
         results = extractor.run()
 
-        if results['success']:
+        if results["success"]:
             print("Feature extraction completed successfully!")
             print(f"Summary: {results['summary']}")
             print(f"Features saved to: {results['saved_files']}")
@@ -420,6 +414,7 @@ def main():
     except Exception as e:
         _logger.error("Feature extraction failed: %s", str(e))
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

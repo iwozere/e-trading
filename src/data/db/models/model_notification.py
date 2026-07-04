@@ -6,25 +6,38 @@ Includes Message, DeliveryStatus, ChannelHealth, RateLimit, and ChannelConfig mo
 """
 
 from __future__ import annotations
+
 import datetime
 from datetime import datetime as dt
 from enum import Enum
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import (
-    Integer, String, Boolean, DateTime, Text, BigInteger, CheckConstraint, UniqueConstraint, ForeignKey, func
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.orm import relationship, Mapped, mapped_column
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.data.db.core.base import Base
 from src.data.db.core.json_types import JsonType
 from src.data.db.models.model_system_health import SystemHealthStatus
+
 # Logger will be set up by importing modules as needed
 
 
 class MessagePriority(str, Enum):
     """Message priority enumeration."""
+
     LOW = "LOW"
     NORMAL = "NORMAL"
     HIGH = "HIGH"
@@ -33,6 +46,7 @@ class MessagePriority(str, Enum):
 
 class MessageStatus(str, Enum):
     """Message status enumeration."""
+
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
     DELIVERED = "DELIVERED"
@@ -42,6 +56,7 @@ class MessageStatus(str, Enum):
 
 class DeliveryStatus(str, Enum):
     """Delivery status enumeration."""
+
     PENDING = "PENDING"
     SENT = "SENT"
     DELIVERED = "DELIVERED"
@@ -80,13 +95,17 @@ class Message(Base):
     # Constraints
     __table_args__ = (
         CheckConstraint("priority IN ('LOW', 'NORMAL', 'HIGH', 'CRITICAL')", name="check_message_priority"),
-        CheckConstraint("status IN ('PENDING', 'PROCESSING', 'DELIVERED', 'FAILED', 'CANCELLED')", name="check_message_status"),
+        CheckConstraint(
+            "status IN ('PENDING', 'PROCESSING', 'DELIVERED', 'FAILED', 'CANCELLED')", name="check_message_status"
+        ),
         CheckConstraint("retry_count >= 0", name="check_retry_count_positive"),
         CheckConstraint("max_retries >= 0", name="check_max_retries_positive"),
     )
 
     def __repr__(self):
-        return f"<Message(id={self.id}, type='{self.message_type}', priority='{self.priority}', status='{self.status}')>"
+        return (
+            f"<Message(id={self.id}, type='{self.message_type}', priority='{self.priority}', status='{self.status}')>"
+        )
 
     @property
     def is_high_priority(self) -> bool:
@@ -119,7 +138,9 @@ class MessageDeliveryStatus(Base):
 
     # Constraints
     __table_args__ = (
-        CheckConstraint("status IN ('PENDING', 'SENT', 'DELIVERED', 'FAILED', 'BOUNCED')", name="check_delivery_status"),
+        CheckConstraint(
+            "status IN ('PENDING', 'SENT', 'DELIVERED', 'FAILED', 'BOUNCED')", name="check_delivery_status"
+        ),
         CheckConstraint("response_time_ms >= 0", name="check_response_time_positive"),
     )
 
@@ -208,99 +229,107 @@ class ChannelConfig(Base):
 # Pydantic models for API validation
 class MessageCreate(BaseModel):
     """Pydantic model for creating a message."""
+
     message_type: str = Field(..., min_length=1, max_length=50)
     priority: MessagePriority = Field(default=MessagePriority.NORMAL)
     channels: List[str] = Field(..., min_length=1)
-    recipient_id: Optional[str] = Field(None, max_length=100)
-    template_name: Optional[str] = Field(None, max_length=100)
+    recipient_id: str | None = Field(None, max_length=100)
+    template_name: str | None = Field(None, max_length=100)
     content: Dict[str, Any] = Field(...)
-    message_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    scheduled_for: Optional[dt] = None
+    message_metadata: Dict[str, Any] | None = Field(default_factory=dict)
+    scheduled_for: dt | None = None
     max_retries: int = Field(default=3, ge=0)
 
-    @field_validator('channels')
+    @field_validator("channels")
     def validate_channels(cls, v):
         """Validate channels list."""
         if not v:
-            raise ValueError('At least one channel must be specified')
+            raise ValueError("At least one channel must be specified")
         return v
 
 
 class MessageUpdate(BaseModel):
     """Pydantic model for updating a message."""
-    status: Optional[MessageStatus] = None
-    retry_count: Optional[int] = Field(None, ge=0)
-    last_error: Optional[str] = None
-    processed_at: Optional[dt] = None
+
+    status: MessageStatus | None = None
+    retry_count: int | None = Field(None, ge=0)
+    last_error: str | None = None
+    processed_at: dt | None = None
 
 
 class MessageResponse(BaseModel):
     """Pydantic model for message API responses."""
+
     id: int
     message_type: str
     priority: MessagePriority
     channels: List[str]
-    recipient_id: Optional[str]
-    template_name: Optional[str]
+    recipient_id: str | None
+    template_name: str | None
     content: Dict[str, Any]
-    message_metadata: Optional[Dict[str, Any]]
+    message_metadata: Dict[str, Any] | None
     created_at: dt
     scheduled_for: dt
     status: MessageStatus
     retry_count: int
     max_retries: int
-    last_error: Optional[str]
-    processed_at: Optional[dt]
+    last_error: str | None
+    processed_at: dt | None
     model_config = ConfigDict(from_attributes=True)
 
 
 class DeliveryStatusCreate(BaseModel):
     """Pydantic model for creating delivery status."""
+
     message_id: int
     channel: str = Field(..., min_length=1, max_length=50)
     status: DeliveryStatus = Field(default=DeliveryStatus.PENDING)
-    external_id: Optional[str] = Field(None, max_length=255)
+    external_id: str | None = Field(None, max_length=255)
 
 
 class DeliveryStatusUpdate(BaseModel):
     """Pydantic model for updating delivery status."""
-    status: Optional[DeliveryStatus] = None
-    delivered_at: Optional[dt] = None
-    response_time_ms: Optional[int] = Field(None, ge=0)
-    error_message: Optional[str] = None
-    external_id: Optional[str] = Field(None, max_length=255)
+
+    status: DeliveryStatus | None = None
+    delivered_at: dt | None = None
+    response_time_ms: int | None = Field(None, ge=0)
+    error_message: str | None = None
+    external_id: str | None = Field(None, max_length=255)
 
 
 class DeliveryStatusResponse(BaseModel):
     """Pydantic model for delivery status API responses."""
+
     id: int
     message_id: int
     channel: str
     status: DeliveryStatus
-    delivered_at: Optional[dt]
-    response_time_ms: Optional[int]
-    error_message: Optional[str]
-    external_id: Optional[str]
+    delivered_at: dt | None
+    response_time_ms: int | None
+    error_message: str | None
+    external_id: str | None
     created_at: dt
     model_config = ConfigDict(from_attributes=True)
 
 
 class ChannelHealthResponse(BaseModel):
     """Pydantic model for channel health API responses."""
+
     id: int
     channel: str
     status: SystemHealthStatus
-    last_success: Optional[dt]
-    last_failure: Optional[dt]
+    last_success: dt | None
+    last_failure: dt | None
     failure_count: int
-    avg_response_time_ms: Optional[int]
-    error_message: Optional[str]
+    avg_response_time_ms: int | None
+    error_message: str | None
     checked_at: dt
     model_config = ConfigDict(from_attributes=True)
 
 
 class RateLimitResponse(BaseModel):
     """Pydantic model for rate limit API responses."""
+
     id: int
     user_id: str
     channel: str
@@ -314,6 +343,7 @@ class RateLimitResponse(BaseModel):
 
 class ChannelConfigCreate(BaseModel):
     """Pydantic model for creating channel config."""
+
     channel: str = Field(..., min_length=1, max_length=50)
     enabled: bool = Field(default=True)
     config: Dict[str, Any] = Field(...)
@@ -324,15 +354,17 @@ class ChannelConfigCreate(BaseModel):
 
 class ChannelConfigUpdate(BaseModel):
     """Pydantic model for updating channel config."""
-    enabled: Optional[bool] = None
-    config: Optional[Dict[str, Any]] = None
-    rate_limit_per_minute: Optional[int] = Field(None, gt=0)
-    max_retries: Optional[int] = Field(None, ge=0)
-    timeout_seconds: Optional[int] = Field(None, gt=0)
+
+    enabled: bool | None = None
+    config: Dict[str, Any] | None = None
+    rate_limit_per_minute: int | None = Field(None, gt=0)
+    max_retries: int | None = Field(None, ge=0)
+    timeout_seconds: int | None = Field(None, gt=0)
 
 
 class ChannelConfigResponse(BaseModel):
     """Pydantic model for channel config API responses."""
+
     id: int
     channel: str
     enabled: bool

@@ -11,35 +11,44 @@ Notes:
 - Pushshift endpoint: https://api.pushshift.io/reddit/search/submission (and /comment)
 - Keep requests small and respect rate limits.
 """
+
 import asyncio
-import aiohttp
-from typing import List, Dict, Optional, Any
-from pathlib import Path
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Dict, List
+
+import aiohttp
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
 from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 BASE = "https://api.pushshift.io/reddit/search"
 
+
 class AsyncPushshiftAdapter(BaseSentimentAdapter):
-    def __init__(self, name: str = "reddit", session: Optional[aiohttp.ClientSession] = None,
-                 concurrency: int = 5, rate_limit_delay: float = 0.5, max_retries: int = 3):
+    def __init__(
+        self,
+        name: str = "reddit",
+        session: aiohttp.ClientSession | None = None,
+        concurrency: int = 5,
+        rate_limit_delay: float = 0.5,
+        max_retries: int = 3,
+    ):
         super().__init__(name, concurrency, rate_limit_delay)
         self._provided_session = session is not None
         self._session = session
         self.max_retries = max_retries
         self._consecutive_failures = 0
         self._analyzer = HeuristicSentimentAnalyzer()
-        self.enabled = False # Force disabled due to API restrictions
+        self.enabled = False  # Force disabled due to API restrictions
 
     async def _get_with_retry(self, endpoint: str, params: Dict, timeout: int = 15) -> List[Dict]:
         """Make HTTP request with exponential backoff retry logic."""
@@ -62,9 +71,13 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
 
                         if resp.status == 429:
                             # Rate limited - use exponential backoff
-                            backoff_delay = self.rate_limit_delay * (2 ** attempt)
-                            _logger.warning("Pushshift 429 rate limit (attempt %d/%d) - sleeping %.2fs",
-                                          attempt + 1, self.max_retries + 1, backoff_delay)
+                            backoff_delay = self.rate_limit_delay * (2**attempt)
+                            _logger.warning(
+                                "Pushshift 429 rate limit (attempt %d/%d) - sleeping %.2fs",
+                                attempt + 1,
+                                self.max_retries + 1,
+                                backoff_delay,
+                            )
                             await asyncio.sleep(backoff_delay)
 
                             if attempt < self.max_retries:
@@ -74,15 +87,20 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
                                     request_info=resp.request_info,
                                     history=resp.history,
                                     status=resp.status,
-                                    message="Rate limit exceeded after retries"
+                                    message="Rate limit exceeded after retries",
                                 )
 
                         if resp.status >= 500:
                             # Server error - retry with backoff
                             if attempt < self.max_retries:
-                                backoff_delay = self.rate_limit_delay * (2 ** attempt)
-                                _logger.warning("Pushshift server error %d (attempt %d/%d) - retrying in %.2fs",
-                                              resp.status, attempt + 1, self.max_retries + 1, backoff_delay)
+                                backoff_delay = self.rate_limit_delay * (2**attempt)
+                                _logger.warning(
+                                    "Pushshift server error %d (attempt %d/%d) - retrying in %.2fs",
+                                    resp.status,
+                                    attempt + 1,
+                                    self.max_retries + 1,
+                                    backoff_delay,
+                                )
                                 await asyncio.sleep(backoff_delay)
                                 continue
 
@@ -95,23 +113,34 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
 
                         return data.get("data", [])
 
-                except asyncio.TimeoutError as e:
+                except TimeoutError as e:
                     last_exception = e
                     if attempt < self.max_retries:
-                        backoff_delay = self.rate_limit_delay * (2 ** attempt)
-                        _logger.warning("Pushshift timeout (attempt %d/%d) - retrying in %.2fs",
-                                      attempt + 1, self.max_retries + 1, backoff_delay)
+                        backoff_delay = self.rate_limit_delay * (2**attempt)
+                        _logger.warning(
+                            "Pushshift timeout (attempt %d/%d) - retrying in %.2fs",
+                            attempt + 1,
+                            self.max_retries + 1,
+                            backoff_delay,
+                        )
                         await asyncio.sleep(backoff_delay)
                         continue
 
                 except (aiohttp.ClientError, aiohttp.ClientResponseError) as e:
                     last_exception = e
-                    if attempt < self.max_retries and not isinstance(e, aiohttp.ClientResponseError) or (
-                        isinstance(e, aiohttp.ClientResponseError) and e.status >= 500
+                    if (
+                        attempt < self.max_retries
+                        and not isinstance(e, aiohttp.ClientResponseError)
+                        or (isinstance(e, aiohttp.ClientResponseError) and e.status >= 500)
                     ):
-                        backoff_delay = self.rate_limit_delay * (2 ** attempt)
-                        _logger.warning("Pushshift client error (attempt %d/%d) - retrying in %.2fs: %s",
-                                      attempt + 1, self.max_retries + 1, backoff_delay, e)
+                        backoff_delay = self.rate_limit_delay * (2**attempt)
+                        _logger.warning(
+                            "Pushshift client error (attempt %d/%d) - retrying in %.2fs: %s",
+                            attempt + 1,
+                            self.max_retries + 1,
+                            backoff_delay,
+                            e,
+                        )
                         await asyncio.sleep(backoff_delay)
                         continue
                     else:
@@ -120,10 +149,11 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
 
                 except Exception as e:
                     last_exception = e
-                    _logger.debug("Pushshift unexpected error (attempt %d/%d): %s",
-                                attempt + 1, self.max_retries + 1, e)
+                    _logger.debug(
+                        "Pushshift unexpected error (attempt %d/%d): %s", attempt + 1, self.max_retries + 1, e
+                    )
                     if attempt < self.max_retries:
-                        backoff_delay = self.rate_limit_delay * (2 ** attempt)
+                        backoff_delay = self.rate_limit_delay * (2**attempt)
                         await asyncio.sleep(backoff_delay)
                         continue
                     break
@@ -132,12 +162,14 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
         self._consecutive_failures += 1
         if last_exception:
             self._update_health_failure(last_exception)
-            _logger.error("Pushshift request failed after %d attempts: %s %s",
-                         self.max_retries + 1, url, last_exception)
+            _logger.error(
+                "Pushshift request failed after %d attempts: %s %s", self.max_retries + 1, url, last_exception
+            )
 
         return []
 
-        if not self.enabled: return []
+        if not self.enabled:
+            return []
 
         if not ticker or not ticker.strip():
             raise ValueError("Ticker cannot be empty")
@@ -159,9 +191,10 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
             self._update_health_failure(e)
             raise
 
-    async def fetch_comments(self, ticker: str, since_ts: Optional[int], limit: int = 100) -> List[Dict]:
+    async def fetch_comments(self, ticker: str, since_ts: int | None, limit: int = 100) -> List[Dict]:
         """Fetch Reddit comments mentioning the ticker."""
-        if not self.enabled: return []
+        if not self.enabled:
+            return []
         if not ticker or not ticker.strip():
             raise ValueError("Ticker cannot be empty")
 
@@ -182,9 +215,10 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
             self._update_health_failure(e)
             raise
 
-    async def fetch_mentions_summary(self, ticker: str, since_ts: Optional[int]) -> Dict[str, Any]:
+    async def fetch_mentions_summary(self, ticker: str, since_ts: int | None) -> Dict[str, Any]:
         """Fetch aggregated sentiment summary for a ticker from Reddit."""
-        if not self.enabled: return {"mentions": 0, "sentiment_score": 0.0, "provider": "reddit"}
+        if not self.enabled:
+            return {"mentions": 0, "sentiment_score": 0.0, "provider": "reddit"}
         if not ticker or not ticker.strip():
             raise ValueError("Ticker cannot be empty")
 
@@ -240,11 +274,13 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
                     continue
 
             # Calculate unique authors
-            unique_authors = len({
-                (m.get("author") or m.get("author_fullname") or "unknown")
-                for m in (subs + comms)
-                if (m.get("author") or m.get("author_fullname"))
-            })
+            unique_authors = len(
+                {
+                    (m.get("author") or m.get("author_fullname") or "unknown")
+                    for m in (subs + comms)
+                    if (m.get("author") or m.get("author_fullname"))
+                }
+            )
 
             # Calculate sentiment score (-1 to 1)
             if mentions > 0:
@@ -263,11 +299,16 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
                 "sentiment_score": float(score),
                 "unique_authors": unique_authors,
                 "provider": "reddit",
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
-            _logger.debug("Generated summary for ticker %s: %d mentions, %d unique authors, score %.3f",
-                         ticker, mentions, unique_authors, score)
+            _logger.debug(
+                "Generated summary for ticker %s: %d mentions, %d unique authors, score %.3f",
+                ticker,
+                mentions,
+                unique_authors,
+                score,
+            )
             return summary
 
         except Exception as e:
@@ -275,7 +316,9 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
             self._update_health_failure(e)
             raise
 
-    async def fetch_messages(self, ticker: str, since_ts: Optional[int] = None, limit: int = 200) -> List[Dict[str, Any]]:
+    async def fetch_messages(
+        self, ticker: str, since_ts: int | None = None, limit: int = 200
+    ) -> List[Dict[str, Any]]:
         """
         Fetch individual messages for a ticker from Reddit (submissions + comments).
 
@@ -316,7 +359,7 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
                         "replies": int(s.get("num_comments", 0)),
                         "retweets": 0,  # Not applicable to Reddit
                         "provider": "reddit",
-                        "type": "submission"
+                        "type": "submission",
                     }
                     messages.append(msg)
                 except (ValueError, TypeError) as e:
@@ -339,7 +382,7 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
                         "replies": 0,  # Not easily available in Pushshift
                         "retweets": 0,  # Not applicable to Reddit
                         "provider": "reddit",
-                        "type": "comment"
+                        "type": "comment",
                     }
                     messages.append(msg)
                 except (ValueError, TypeError) as e:
@@ -357,7 +400,7 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
             self._update_health_failure(e)
             raise
 
-    async def fetch_summary(self, ticker: str, since_ts: Optional[int] = None) -> Dict[str, Any]:
+    async def fetch_summary(self, ticker: str, since_ts: int | None = None) -> Dict[str, Any]:
         """
         Fetch aggregated sentiment summary for a ticker from Reddit.
 

@@ -9,14 +9,14 @@ This module provides sophisticated bot detection with:
 - Configurable detection rules and thresholds
 """
 
-import re
 import hashlib
-from typing import Dict, List, Optional, Tuple, Any
+import re
+import sys
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
-from collections import defaultdict, Counter
 from pathlib import Path
-import sys
+from typing import Any, Dict, List, Tuple
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -26,9 +26,11 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
+
 @dataclass
 class BotDetectionResult:
     """Result of bot detection analysis."""
+
     is_bot: bool
     confidence: float  # 0.0 to 1.0
     bot_score: float  # 0.0 to 1.0, higher = more bot-like
@@ -37,28 +39,33 @@ class BotDetectionResult:
     content_analysis: Dict[str, Any]
     pattern_analysis: Dict[str, Any]
 
+
 @dataclass
 class UserProfile:
     """User profile for bot detection analysis."""
+
     username: str
-    account_age_days: Optional[int]
-    total_posts: Optional[int]
-    followers_count: Optional[int]
-    following_count: Optional[int]
+    account_age_days: int | None
+    total_posts: int | None
+    followers_count: int | None
+    following_count: int | None
     verified: bool
     profile_image_default: bool
     bio_length: int
-    creation_date: Optional[datetime]
+    creation_date: datetime | None
+
 
 @dataclass
 class PostMetrics:
     """Post metrics for pattern analysis."""
+
     timestamp: datetime
     content: str
     likes: int
     replies: int
     retweets: int
     content_hash: str
+
 
 class BotDetector:
     """
@@ -72,7 +79,7 @@ class BotDetector:
     - Configurable detection rules
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Dict | None = None):
         """
         Initialize the bot detector.
 
@@ -109,14 +116,14 @@ class BotDetector:
         """Load bot detection patterns and rules."""
         # Username patterns that indicate bots
         self.bot_username_patterns = [
-            r'^[a-zA-Z]+\d{4,}$',  # Letters followed by 4+ digits
-            r'^[a-zA-Z]+_\d{4,}$',  # Letters, underscore, 4+ digits
-            r'^\w+bot\w*$',  # Contains "bot"
-            r'^\w+auto\w*$',  # Contains "auto"
-            r'^user\d+$',  # "user" + digits
-            r'^[a-zA-Z]{1,3}\d{6,}$',  # 1-3 letters + 6+ digits
-            r'^\w*crypto\w*\d+$',  # Contains "crypto" + digits
-            r'^\w*trade\w*\d+$',  # Contains "trade" + digits
+            r"^[a-zA-Z]+\d{4,}$",  # Letters followed by 4+ digits
+            r"^[a-zA-Z]+_\d{4,}$",  # Letters, underscore, 4+ digits
+            r"^\w+bot\w*$",  # Contains "bot"
+            r"^\w+auto\w*$",  # Contains "auto"
+            r"^user\d+$",  # "user" + digits
+            r"^[a-zA-Z]{1,3}\d{6,}$",  # 1-3 letters + 6+ digits
+            r"^\w*crypto\w*\d+$",  # Contains "crypto" + digits
+            r"^\w*trade\w*\d+$",  # Contains "trade" + digits
         ]
 
         # Compile regex patterns
@@ -124,30 +131,30 @@ class BotDetector:
 
         # Bio patterns that indicate bots
         self.bot_bio_patterns = [
-            r'crypto.*signals?',
-            r'trading.*bot',
-            r'automated.*trading',
-            r'follow.*for.*signals?',
-            r'dm.*for.*premium',
-            r'link.*in.*bio',
-            r'check.*my.*link',
-            r'investment.*advice',
-            r'guaranteed.*profits?',
+            r"crypto.*signals?",
+            r"trading.*bot",
+            r"automated.*trading",
+            r"follow.*for.*signals?",
+            r"dm.*for.*premium",
+            r"link.*in.*bio",
+            r"check.*my.*link",
+            r"investment.*advice",
+            r"guaranteed.*profits?",
         ]
 
         self.bot_bio_regex = [re.compile(pattern, re.IGNORECASE) for pattern in self.bot_bio_patterns]
 
         # Content patterns that indicate bot behavior
         self.spam_content_patterns = [
-            r'follow.*for.*more',
-            r'dm.*me.*for',
-            r'check.*my.*profile',
-            r'link.*in.*bio',
-            r'guaranteed.*returns?',
-            r'risk.*free.*trading',
-            r'100%.*accurate',
-            r'join.*my.*group',
-            r'premium.*signals?',
+            r"follow.*for.*more",
+            r"dm.*me.*for",
+            r"check.*my.*profile",
+            r"link.*in.*bio",
+            r"guaranteed.*returns?",
+            r"risk.*free.*trading",
+            r"100%.*accurate",
+            r"join.*my.*group",
+            r"premium.*signals?",
         ]
 
         self.spam_content_regex = [re.compile(pattern, re.IGNORECASE) for pattern in self.spam_content_patterns]
@@ -197,7 +204,7 @@ class BotDetector:
             detection_reasons=detection_reasons,
             account_analysis=account_analysis,
             content_analysis=content_analysis,
-            pattern_analysis=pattern_analysis
+            pattern_analysis=pattern_analysis,
         )
 
         # Cache result
@@ -233,9 +240,7 @@ class BotDetector:
 
         # Follower ratio analysis
         ratio_score = 0.0
-        if (profile.followers_count is not None and profile.following_count is not None and
-            profile.following_count > 0):
-
+        if profile.followers_count is not None and profile.following_count is not None and profile.following_count > 0:
             follower_ratio = profile.followers_count / profile.following_count
             if follower_ratio < self.min_followers_ratio:
                 ratio_score = 0.15
@@ -255,7 +260,7 @@ class BotDetector:
             reasons.append("Very short or empty bio")
 
         # Check bio content for bot patterns
-        if hasattr(profile, 'bio') and profile.bio:
+        if hasattr(profile, "bio") and profile.bio:
             for pattern in self.bot_bio_regex:
                 if pattern.search(profile.bio):
                     profile_score += 0.15
@@ -316,8 +321,8 @@ class BotDetector:
         content_hashes = []
         for post in posts:
             # Normalize content for comparison
-            normalized = re.sub(r'[^\w\s]', '', post.content.lower())
-            normalized = re.sub(r'\s+', ' ', normalized).strip()
+            normalized = re.sub(r"[^\w\s]", "", post.content.lower())
+            normalized = re.sub(r"\s+", " ", normalized).strip()
 
             if len(normalized) > 10:  # Only consider substantial content
                 content_hash = hashlib.md5(normalized.encode()).hexdigest()
@@ -390,8 +395,8 @@ class BotDetector:
 
         for post in posts:
             content = post.content
-            hashtags = len(re.findall(r'#\w+', content))
-            mentions = len(re.findall(r'@\w+', content))
+            hashtags = len(re.findall(r"#\w+", content))
+            mentions = len(re.findall(r"@\w+", content))
             words = len(content.split())
 
             total_hashtags += hashtags
@@ -466,7 +471,7 @@ class BotDetector:
         # Check for burst posting (many posts in short time)
         intervals = []
         for i in range(1, len(sorted_posts)):
-            interval = (sorted_posts[i].timestamp - sorted_posts[i-1].timestamp).total_seconds()
+            interval = (sorted_posts[i].timestamp - sorted_posts[i - 1].timestamp).total_seconds()
             intervals.append(interval)
 
         if intervals:
@@ -547,7 +552,7 @@ class BotDetector:
             return 0.0
 
         variance = sum((e - mean_engagement) ** 2 for e in engagements) / len(engagements)
-        normalized_variance = variance / (mean_engagement ** 2)
+        normalized_variance = variance / (mean_engagement**2)
 
         return min(1.0, normalized_variance)
 
@@ -570,15 +575,17 @@ class BotDetector:
             except Exception as e:
                 _logger.error("Error analyzing user %s: %s", user_profile.username, e)
                 # Return neutral result for failed analysis
-                results.append(BotDetectionResult(
-                    is_bot=False,
-                    confidence=0.0,
-                    bot_score=0.0,
-                    detection_reasons=["Analysis failed"],
-                    account_analysis={},
-                    content_analysis={},
-                    pattern_analysis={}
-                ))
+                results.append(
+                    BotDetectionResult(
+                        is_bot=False,
+                        confidence=0.0,
+                        bot_score=0.0,
+                        detection_reasons=["Analysis failed"],
+                        account_analysis={},
+                        content_analysis={},
+                        pattern_analysis={},
+                    )
+                )
 
         return results
 
@@ -595,7 +602,7 @@ class BotDetector:
             "bot_count": bot_count,
             "bot_percentage": (bot_count / total_analyzed) * 100,
             "cache_size": len(self._user_cache),
-            "content_hashes": len(self._content_hashes)
+            "content_hashes": len(self._content_hashes),
         }
 
     def clear_cache(self) -> None:

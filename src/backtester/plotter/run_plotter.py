@@ -20,8 +20,8 @@ import glob
 import json
 import os
 import sys
-from typing import Dict, List, Tuple
 from pathlib import Path
+from typing import Dict, List, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
@@ -29,6 +29,7 @@ sys.path.append(str(PROJECT_ROOT))
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import pandas as pd
+
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -51,7 +52,7 @@ class ResultPlotter:
     def _load_config(self, config_path: str) -> Dict:
         """Load optimizer configuration"""
         try:
-            with open(config_path, "r") as f:
+            with open(config_path) as f:
                 return json.load(f)
         except Exception:
             _logger.exception("Error loading config from %s: %s")
@@ -60,7 +61,7 @@ class ResultPlotter:
     def _load_mixin_config(self) -> Dict:
         """Load mixin indicators configuration from unified config"""
         try:
-            with open("config/indicators.json", "r") as f:
+            with open("config/indicators.json") as f:
                 config = json.load(f)
                 plotter_config = config.get("plotter_config", {})
                 return plotter_config
@@ -78,7 +79,7 @@ class ResultPlotter:
     def load_result_data(self, json_file: str) -> Dict:
         """Load data from JSON result file"""
         try:
-            with open(json_file, "r") as f:
+            with open(json_file) as f:
                 data = json.load(f)
             _logger.debug("Loaded result data from %s", json_file)
             return data
@@ -128,16 +129,12 @@ class ResultPlotter:
 
         # Add indicators from entry mixin
         if entry_mixin_name in self.mixin_config.get("entry_mixins", {}):
-            entry_indicators = self.mixin_config["entry_mixins"][entry_mixin_name].get(
-                "indicators", []
-            )
+            entry_indicators = self.mixin_config["entry_mixins"][entry_mixin_name].get("indicators", [])
             indicators.update(entry_indicators)
 
         # Add indicators from exit mixin
         if exit_mixin_name in self.mixin_config.get("exit_mixins", {}):
-            exit_indicators = self.mixin_config["exit_mixins"][exit_mixin_name].get(
-                "indicators", []
-            )
+            exit_indicators = self.mixin_config["exit_mixins"][exit_mixin_name].get("indicators", [])
             indicators.update(exit_indicators)
 
         _logger.debug("Strategy uses indicators: %s", list(indicators))
@@ -156,9 +153,7 @@ class ResultPlotter:
 
         return layout
 
-    def calculate_indicators(
-        self, df: pd.DataFrame, indicators: List[str], strategy_params: Dict
-    ) -> Dict:
+    def calculate_indicators(self, df: pd.DataFrame, indicators: List[str], strategy_params: Dict) -> Dict:
         """Calculate indicators based on strategy parameters"""
         calculated_indicators = {}
 
@@ -166,9 +161,7 @@ class ResultPlotter:
             try:
                 if indicator == "rsi":
                     period = self._get_param_value(strategy_params, "rsi_period", 14)
-                    calculated_indicators["rsi"] = self._calculate_rsi(
-                        df["close"], period
-                    )
+                    calculated_indicators["rsi"] = self._calculate_rsi(df["close"], period)
 
                 elif indicator in ("bollinger_bands", "bbands"):
                     period = self._get_param_value(strategy_params, "bb_period", 20)
@@ -179,29 +172,17 @@ class ResultPlotter:
                     calculated_indicators["bbands"] = bb_data
 
                 elif indicator == "ichimoku":
-                    tenkan_period = self._get_param_value(
-                        strategy_params, "tenkan_period", 9
-                    )
-                    kijun_period = self._get_param_value(
-                        strategy_params, "kijun_period", 26
-                    )
-                    senkou_span_b_period = self._get_param_value(
-                        strategy_params, "senkou_span_b_period", 52
-                    )
+                    tenkan_period = self._get_param_value(strategy_params, "tenkan_period", 9)
+                    kijun_period = self._get_param_value(strategy_params, "kijun_period", 26)
+                    senkou_span_b_period = self._get_param_value(strategy_params, "senkou_span_b_period", 52)
                     calculated_indicators["ichimoku"] = self._calculate_ichimoku(
                         df, tenkan_period, kijun_period, senkou_span_b_period
                     )
 
                 elif indicator == "supertrend":
-                    period = self._get_param_value(
-                        strategy_params, "supertrend_period", 10
-                    )
-                    multiplier = self._get_param_value(
-                        strategy_params, "supertrend_multiplier", 3
-                    )
-                    calculated_indicators["supertrend"] = self._calculate_supertrend(
-                        df, period, multiplier
-                    )
+                    period = self._get_param_value(strategy_params, "supertrend_period", 10)
+                    multiplier = self._get_param_value(strategy_params, "supertrend_multiplier", 3)
+                    calculated_indicators["supertrend"] = self._calculate_supertrend(df, period, multiplier)
 
                 elif indicator == "volume":
                     calculated_indicators["volume"] = df["volume"]
@@ -215,9 +196,7 @@ class ResultPlotter:
 
         return calculated_indicators
 
-    def _get_param_value(
-        self, strategy_params: Dict, param_name: str, default: float
-    ) -> float:
+    def _get_param_value(self, strategy_params: Dict, param_name: str, default: float) -> float:
         """Get parameter value from strategy parameters"""
         # Check entry logic params
         entry_params = strategy_params.get("entry_logic", {}).get("params", {})
@@ -240,9 +219,7 @@ class ResultPlotter:
         rsi = 100 - (100 / (1 + rs))
         return rsi
 
-    def _calculate_bollinger_bands(
-        self, prices: pd.Series, period: int, std_dev: float
-    ) -> Dict:
+    def _calculate_bollinger_bands(self, prices: pd.Series, period: int, std_dev: float) -> Dict:
         """Calculate Bollinger Bands"""
         sma = prices.rolling(window=period).mean()
         std = prices.rolling(window=period).std()
@@ -261,21 +238,11 @@ class ResultPlotter:
         high = df["high"]
         low = df["low"]
 
-        tenkan = (
-            high.rolling(window=tenkan_period).max()
-            + low.rolling(window=tenkan_period).min()
-        ) / 2
-        kijun = (
-            high.rolling(window=kijun_period).max()
-            + low.rolling(window=kijun_period).min()
-        ) / 2
+        tenkan = (high.rolling(window=tenkan_period).max() + low.rolling(window=tenkan_period).min()) / 2
+        kijun = (high.rolling(window=kijun_period).max() + low.rolling(window=kijun_period).min()) / 2
         senkou_span_a = ((tenkan + kijun) / 2).shift(kijun_period)
         senkou_span_b = (
-            (
-                high.rolling(window=senkou_span_b_period).max()
-                + low.rolling(window=senkou_span_b_period).min()
-            )
-            / 2
+            (high.rolling(window=senkou_span_b_period).max() + low.rolling(window=senkou_span_b_period).min()) / 2
         ).shift(kijun_period)
 
         return {
@@ -285,9 +252,7 @@ class ResultPlotter:
             "senkou_span_b": senkou_span_b,
         }
 
-    def _calculate_supertrend(
-        self, df: pd.DataFrame, period: int, multiplier: float
-    ) -> pd.Series:
+    def _calculate_supertrend(self, df: pd.DataFrame, period: int, multiplier: float) -> pd.Series:
         """Calculate SuperTrend indicator"""
         high = df["high"]
         low = df["low"]
@@ -353,9 +318,7 @@ class ResultPlotter:
         sorted_trades = sorted(trades, key=lambda x: x.get("exit_time", ""))
 
         equity_values = [initial_capital]
-        equity_times = [
-            pd.Timestamp(sorted_trades[0].get("entry_time", "")) - pd.Timedelta(days=1)
-        ]
+        equity_times = [pd.Timestamp(sorted_trades[0].get("entry_time", "")) - pd.Timedelta(days=1)]
 
         current_equity = initial_capital
 
@@ -365,9 +328,7 @@ class ResultPlotter:
                 equity_values.append(current_equity)
                 equity_times.append(pd.Timestamp(trade["exit_time"]))
 
-        return pd.Series(equity_values, index=equity_times), pd.Series(
-            equity_values, index=equity_times
-        )
+        return pd.Series(equity_values, index=equity_times), pd.Series(equity_values, index=equity_times)
 
     def create_plot(
         self,
@@ -412,9 +373,7 @@ class ResultPlotter:
 
         # Plot price and overlay indicators
         ax_price = axes[0]
-        ax_price.plot(
-            df.index, df["close"], label="Close Price", linewidth=1, color="black"
-        )
+        ax_price.plot(df.index, df["close"], label="Close Price", linewidth=1, color="black")
 
         # Plot overlay indicators on price chart
         for indicator_name, indicator_data in indicators.items():
@@ -442,12 +401,8 @@ class ResultPlotter:
                         alpha=0.7,
                     )
                 elif indicator_name == "ichimoku":
-                    ax_price.plot(
-                        df.index, indicator_data["tenkan"], label="Tenkan", alpha=0.7
-                    )
-                    ax_price.plot(
-                        df.index, indicator_data["kijun"], label="Kijun", alpha=0.7
-                    )
+                    ax_price.plot(df.index, indicator_data["tenkan"], label="Tenkan", alpha=0.7)
+                    ax_price.plot(df.index, indicator_data["kijun"], label="Kijun", alpha=0.7)
                     ax_price.plot(
                         df.index,
                         indicator_data["senkou_span_a"],
@@ -461,9 +416,7 @@ class ResultPlotter:
                         alpha=0.7,
                     )
                 elif indicator_name == "supertrend":
-                    ax_price.plot(
-                        df.index, indicator_data, label="SuperTrend", alpha=0.7
-                    )
+                    ax_price.plot(df.index, indicator_data, label="SuperTrend", alpha=0.7)
 
         # Plot trades
         self._plot_trades(ax_price, trades)
@@ -529,9 +482,7 @@ class ResultPlotter:
         # Save plot
         output_format = self.vis_settings.get("plot_format", "png")
         output_file = json_file.replace(".json", f".{output_format}")
-        plt.savefig(
-            output_file, dpi=self.vis_settings.get("plot_dpi", 300), bbox_inches="tight"
-        )
+        plt.savefig(output_file, dpi=self.vis_settings.get("plot_dpi", 300), bbox_inches="tight")
         plt.close()
 
         _logger.info("Plot saved: %s", output_file)
@@ -596,23 +547,17 @@ class ResultPlotter:
             indicators_to_calculate = self.get_indicators_for_strategy(result_data)
 
             # Calculate indicators
-            indicators = self.calculate_indicators(
-                df, indicators_to_calculate, strategy_params
-            )
+            indicators = self.calculate_indicators(df, indicators_to_calculate, strategy_params)
 
             # Get trades
             trades = result_data.get("trades", [])
 
             # Calculate equity curve
-            initial_capital = self.config.get("optimizer_settings", {}).get(
-                "initial_capital", 1000.0
-            )
+            initial_capital = self.config.get("optimizer_settings", {}).get("initial_capital", 1000.0)
             equity_curve, _ = self.calculate_equity_curve(trades, initial_capital)
 
             # Create plot
-            self.create_plot(
-                df, indicators, trades, equity_curve, json_file, result_data
-            )
+            self.create_plot(df, indicators, trades, equity_curve, json_file, result_data)
 
         except Exception:
             _logger.exception("Error processing %s: %s")

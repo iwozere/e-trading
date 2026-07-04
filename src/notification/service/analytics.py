@@ -5,11 +5,11 @@ Comprehensive analytics system for tracking delivery performance, success rates,
 response times, and trends across channels, users, and time periods.
 """
 
-from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta, timezone
-from dataclasses import dataclass, field
-from enum import Enum
 import threading
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any, Dict, List
 
 from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
@@ -19,6 +19,7 @@ _logger = setup_logger(__name__)
 
 class TimeGranularity(Enum):
     """Time granularity for statistics aggregation."""
+
     HOURLY = "hourly"
     DAILY = "daily"
     WEEKLY = "weekly"
@@ -40,8 +41,8 @@ class ChannelStats:
     failed_attempts: int = 0
 
     avg_response_time_ms: float = 0.0
-    min_response_time_ms: Optional[int] = None
-    max_response_time_ms: Optional[int] = None
+    min_response_time_ms: int | None = None
+    max_response_time_ms: int | None = None
 
     # Rate calculations
     success_rate: float = 0.0
@@ -49,20 +50,14 @@ class ChannelStats:
 
     # Time-based metrics
     messages_per_hour: float = 0.0
-    peak_hour: Optional[int] = None
+    peak_hour: int | None = None
     peak_messages: int = 0
 
     def calculate_rates(self):
         """Calculate success rates."""
-        self.success_rate = (
-            self.successful_deliveries / self.total_messages
-            if self.total_messages > 0 else 0.0
-        )
+        self.success_rate = self.successful_deliveries / self.total_messages if self.total_messages > 0 else 0.0
 
-        self.attempt_success_rate = (
-            self.successful_attempts / self.total_attempts
-            if self.total_attempts > 0 else 0.0
-        )
+        self.attempt_success_rate = self.successful_attempts / self.total_attempts if self.total_attempts > 0 else 0.0
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -82,7 +77,7 @@ class ChannelStats:
             "attempt_success_rate": self.attempt_success_rate,
             "messages_per_hour": self.messages_per_hour,
             "peak_hour": self.peak_hour,
-            "peak_messages": self.peak_messages
+            "peak_messages": self.peak_messages,
         }
 
 
@@ -109,7 +104,7 @@ class UserStats:
     # Time-based metrics
     avg_response_time_ms: float = 0.0
     messages_per_day: float = 0.0
-    most_active_hour: Optional[int] = None
+    most_active_hour: int | None = None
 
     def calculate_rates(self):
         """Calculate success rates."""
@@ -124,16 +119,13 @@ class UserStats:
             "successful_deliveries": self.successful_deliveries,
             "failed_deliveries": self.failed_deliveries,
             "partial_deliveries": self.partial_deliveries,
-            "channel_stats": {
-                channel: stats.to_dict()
-                for channel, stats in self.channel_stats.items()
-            },
+            "channel_stats": {channel: stats.to_dict() for channel, stats in self.channel_stats.items()},
             "priority_stats": self.priority_stats,
             "rate_limit_violations": self.rate_limit_violations,
             "bypassed_rate_limits": self.bypassed_rate_limits,
             "avg_response_time_ms": self.avg_response_time_ms,
             "messages_per_day": self.messages_per_day,
-            "most_active_hour": self.most_active_hour
+            "most_active_hour": self.most_active_hour,
         }
 
 
@@ -147,11 +139,7 @@ class TimeSeriesPoint:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
-        return {
-            "timestamp": self.timestamp.isoformat(),
-            "value": self.value,
-            "metadata": self.metadata
-        }
+        return {"timestamp": self.timestamp.isoformat(), "value": self.value, "metadata": self.metadata}
 
 
 @dataclass
@@ -184,8 +172,8 @@ class TrendAnalysis:
                 "median": self.median,
                 "std_deviation": self.std_deviation,
                 "min_value": self.min_value,
-                "max_value": self.max_value
-            }
+                "max_value": self.max_value,
+            },
         }
 
 
@@ -211,17 +199,14 @@ class NotificationAnalytics:
         self._channel_stats_cache: Dict[str, ChannelStats] = {}
         self._user_stats_cache: Dict[str, UserStats] = {}
         self._cache_expiry = timedelta(minutes=15)
-        self._last_cache_update = datetime.now(timezone.utc)
+        self._last_cache_update = datetime.now(UTC)
 
         # Configuration
         self._max_trend_points = 100
         self._default_trend_days = 30
 
     async def get_delivery_rates(
-        self,
-        channel: Optional[str] = None,
-        user_id: Optional[str] = None,
-        days: int = 30
+        self, channel: str | None = None, user_id: str | None = None, days: int = 30
     ) -> Dict[str, Any]:
         """
         Get delivery rate calculations per channel and user.
@@ -234,42 +219,31 @@ class NotificationAnalytics:
         Returns:
             Dictionary with delivery rate statistics
         """
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
         try:
             db_service = get_database_service()
             with db_service.uow() as r:
                 # Get delivery statistics from database
-                delivery_stats = r.notifications.delivery_status.get_delivery_statistics(
-                    channel=channel, days=days
-                )
+                delivery_stats = r.notifications.delivery_status.get_delivery_statistics(channel=channel, days=days)
 
                 # Get message statistics
-                message_stats = self._get_message_statistics(
-                    repo, channel, user_id, cutoff_date
-                )
+                message_stats = self._get_message_statistics(repo, channel, user_id, cutoff_date)
 
                 # Calculate rates
                 total_messages = message_stats.get("total_messages", 0)
                 successful_deliveries = delivery_stats.get("status_counts", {}).get("DELIVERED", 0)
                 failed_deliveries = delivery_stats.get("status_counts", {}).get("FAILED", 0)
 
-                overall_success_rate = (
-                    successful_deliveries / total_messages
-                    if total_messages > 0 else 0.0
-                )
+                overall_success_rate = successful_deliveries / total_messages if total_messages > 0 else 0.0
 
                 # Get channel-specific rates
-                channel_rates = self._calculate_channel_rates(
-                    repo, channel, cutoff_date
-                )
+                channel_rates = self._calculate_channel_rates(repo, channel, cutoff_date)
 
                 # Get user-specific rates if requested
                 user_rates = {}
                 if user_id:
-                    user_rates = self._calculate_user_rates(
-                        repo, user_id, cutoff_date
-                    )
+                    user_rates = self._calculate_user_rates(repo, user_id, cutoff_date)
 
                 return {
                     "period_days": days,
@@ -279,25 +253,18 @@ class NotificationAnalytics:
                         "successful_deliveries": successful_deliveries,
                         "failed_deliveries": failed_deliveries,
                         "success_rate": overall_success_rate,
-                        "average_response_time_ms": delivery_stats.get("average_response_time_ms")
+                        "average_response_time_ms": delivery_stats.get("average_response_time_ms"),
                     },
                     "channel_rates": channel_rates,
                     "user_rates": user_rates,
-                    "filters": {
-                        "channel": channel,
-                        "user_id": user_id
-                    }
+                    "filters": {"channel": channel, "user_id": user_id},
                 }
 
         except Exception:
             self._logger.exception("Failed to get delivery rates:")
             raise
 
-    async def get_response_time_analysis(
-        self,
-        channel: Optional[str] = None,
-        days: int = 30
-    ) -> Dict[str, Any]:
+    async def get_response_time_analysis(self, channel: str | None = None, days: int = 30) -> Dict[str, Any]:
         """
         Get detailed response time analysis.
 
@@ -308,15 +275,13 @@ class NotificationAnalytics:
         Returns:
             Dictionary with response time statistics
         """
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
         try:
             db_service = get_database_service()
             with db_service.uow() as r:
                 # Get response time data from database
-                response_times = self._get_response_time_data(
-                    repo, channel, cutoff_date
-                )
+                response_times = self._get_response_time_data(repo, channel, cutoff_date)
 
                 if not response_times:
                     return {
@@ -328,10 +293,10 @@ class NotificationAnalytics:
                             "median_ms": None,
                             "min_ms": None,
                             "max_ms": None,
-                            "std_deviation_ms": None
+                            "std_deviation_ms": None,
                         },
                         "percentiles": {},
-                        "channel_breakdown": {}
+                        "channel_breakdown": {},
                     }
 
                 # Calculate statistics
@@ -344,7 +309,7 @@ class NotificationAnalytics:
 
                 # Calculate standard deviation
                 variance = sum((x - average) ** 2 for x in response_times) / count
-                std_deviation = variance ** 0.5
+                std_deviation = variance**0.5
 
                 # Calculate percentiles
                 percentiles = {}
@@ -355,9 +320,7 @@ class NotificationAnalytics:
                     percentiles[f"p{p}"] = response_times[index]
 
                 # Get channel breakdown
-                channel_breakdown = self._get_channel_response_breakdown(
-                    repo, cutoff_date
-                )
+                channel_breakdown = self._get_channel_response_breakdown(repo, cutoff_date)
 
                 return {
                     "period_days": days,
@@ -368,10 +331,10 @@ class NotificationAnalytics:
                         "median_ms": median,
                         "min_ms": minimum,
                         "max_ms": maximum,
-                        "std_deviation_ms": std_deviation
+                        "std_deviation_ms": std_deviation,
                     },
                     "percentiles": percentiles,
-                    "channel_breakdown": channel_breakdown
+                    "channel_breakdown": channel_breakdown,
                 }
 
         except Exception:
@@ -379,10 +342,7 @@ class NotificationAnalytics:
             raise
 
     async def get_aggregated_statistics(
-        self,
-        granularity: TimeGranularity = TimeGranularity.DAILY,
-        days: int = 30,
-        channel: Optional[str] = None
+        self, granularity: TimeGranularity = TimeGranularity.DAILY, days: int = 30, channel: str | None = None
     ) -> Dict[str, Any]:
         """
         Get aggregated statistics by time period.
@@ -395,15 +355,13 @@ class NotificationAnalytics:
         Returns:
             Dictionary with time-aggregated statistics
         """
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
         try:
             db_service = get_database_service()
             with db_service.uow() as r:
                 # Get time-series data
-                time_series = self._get_time_series_data(
-                    repo, granularity, cutoff_date, channel
-                )
+                time_series = self._get_time_series_data(repo, granularity, cutoff_date, channel)
 
                 # Calculate aggregated metrics
                 aggregated_stats = self._calculate_aggregated_metrics(time_series)
@@ -418,8 +376,8 @@ class NotificationAnalytics:
                         "total_periods": len(time_series),
                         "avg_messages_per_period": aggregated_stats.get("avg_messages", 0),
                         "peak_period": aggregated_stats.get("peak_period"),
-                        "lowest_period": aggregated_stats.get("lowest_period")
-                    }
+                        "lowest_period": aggregated_stats.get("lowest_period"),
+                    },
                 }
 
         except Exception:
@@ -427,10 +385,7 @@ class NotificationAnalytics:
             raise
 
     async def get_trend_analysis(
-        self,
-        metric: str = "success_rate",
-        days: int = 30,
-        channel: Optional[str] = None
+        self, metric: str = "success_rate", days: int = 30, channel: str | None = None
     ) -> TrendAnalysis:
         """
         Perform trend analysis on a specific metric.
@@ -443,15 +398,13 @@ class NotificationAnalytics:
         Returns:
             TrendAnalysis object with trend information
         """
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
         try:
             db_service = get_database_service()
             with db_service.uow() as r:
                 # Get time series data for the metric
-                time_series_data = self._get_metric_time_series(
-                    repo, metric, cutoff_date, channel
-                )
+                time_series_data = self._get_metric_time_series(repo, metric, cutoff_date, channel)
 
                 if len(time_series_data) < 2:
                     # Not enough data for trend analysis
@@ -465,7 +418,7 @@ class NotificationAnalytics:
                         median=0.0,
                         std_deviation=0.0,
                         min_value=0.0,
-                        max_value=0.0
+                        max_value=0.0,
                     )
 
                 # Calculate trend
@@ -481,12 +434,11 @@ class NotificationAnalytics:
 
                 # Calculate standard deviation
                 variance = sum((x - mean_value) ** 2 for x in values) / len(values)
-                std_deviation = variance ** 0.5
+                std_deviation = variance**0.5
 
                 # Calculate change percentage
                 if len(values) >= 2:
-                    change_percentage = ((values[-1] - values[0]) / values[0] * 100
-                                       if values[0] != 0 else 0.0)
+                    change_percentage = (values[-1] - values[0]) / values[0] * 100 if values[0] != 0 else 0.0
                 else:
                     change_percentage = 0.0
 
@@ -500,16 +452,14 @@ class NotificationAnalytics:
                     median=median_value,
                     std_deviation=std_deviation,
                     min_value=min_value,
-                    max_value=max_value
+                    max_value=max_value,
                 )
 
         except Exception:
             self._logger.exception("Failed to perform trend analysis:")
             raise
 
-    async def get_channel_performance_comparison(
-        self, days: int = 30
-    ) -> Dict[str, Any]:
+    async def get_channel_performance_comparison(self, days: int = 30) -> Dict[str, Any]:
         """
         Compare performance across all channels.
 
@@ -519,7 +469,7 @@ class NotificationAnalytics:
         Returns:
             Dictionary with channel performance comparison
         """
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
         try:
             # Get all channels first
@@ -533,22 +483,12 @@ class NotificationAnalytics:
             for channel in channels:
                 # Get channel statistics
                 with db_service.uow() as r:
-                    channel_stats = self._get_channel_statistics(
-                        r, channel, cutoff_date
-                    )
+                    channel_stats = self._get_channel_statistics(r, channel, cutoff_date)
 
                 # Get trend analysis for this channel
-                success_trend = await self.get_trend_analysis(
-                    metric="success_rate",
-                    days=days,
-                    channel=channel
-                )
+                success_trend = await self.get_trend_analysis(metric="success_rate", days=days, channel=channel)
 
-                response_trend = await self.get_trend_analysis(
-                    metric="response_time",
-                    days=days,
-                    channel=channel
-                )
+                response_trend = await self.get_trend_analysis(metric="response_time", days=days, channel=channel)
 
                 channel_comparisons[channel] = {
                     "statistics": channel_stats,
@@ -556,14 +496,12 @@ class NotificationAnalytics:
                     "response_time_trend": response_trend.to_dict(),
                     "performance_score": self._calculate_performance_score(
                         channel_stats, success_trend, response_trend
-                    )
+                    ),
                 }
 
                 # Rank channels by performance
                 ranked_channels = sorted(
-                    channel_comparisons.items(),
-                    key=lambda x: x[1]["performance_score"],
-                    reverse=True
+                    channel_comparisons.items(), key=lambda x: x[1]["performance_score"], reverse=True
                 )
 
                 return {
@@ -575,16 +513,21 @@ class NotificationAnalytics:
                             for channel, data in ranked_channels
                         ],
                         "by_success_rate": sorted(
-                            [(ch, data["statistics"].get("success_rate", 0))
-                             for ch, data in channel_comparisons.items()],
-                            key=lambda x: x[1], reverse=True
+                            [
+                                (ch, data["statistics"].get("success_rate", 0))
+                                for ch, data in channel_comparisons.items()
+                            ],
+                            key=lambda x: x[1],
+                            reverse=True,
                         ),
                         "by_response_time": sorted(
-                            [(ch, data["statistics"].get("avg_response_time_ms", float('inf')))
-                             for ch, data in channel_comparisons.items()],
-                            key=lambda x: x[1]
-                        )
-                    }
+                            [
+                                (ch, data["statistics"].get("avg_response_time_ms", float("inf")))
+                                for ch, data in channel_comparisons.items()
+                            ],
+                            key=lambda x: x[1],
+                        ),
+                    },
                 }
 
         except Exception:
@@ -594,37 +537,30 @@ class NotificationAnalytics:
     # Helper methods
 
     def _get_message_statistics(
-        self, repo, channel: Optional[str], user_id: Optional[str], cutoff_date: datetime
+        self, repo, channel: str | None, user_id: str | None, cutoff_date: datetime
     ) -> Dict[str, Any]:
         """Get message statistics from database."""
         try:
             # Get basic delivery statistics
             delivery_stats = repo.delivery_status.get_delivery_statistics(
-                channel=channel,
-                days=(datetime.now(timezone.utc) - cutoff_date).days
+                channel=channel, days=(datetime.now(UTC) - cutoff_date).days
             )
 
             return {
                 "total_messages": delivery_stats.get("total_deliveries", 0),
-                "by_status": delivery_stats.get("status_counts", {})
+                "by_status": delivery_stats.get("status_counts", {}),
             }
         except Exception:
             self._logger.exception("Failed to get message statistics:")
             # Return default values on error
-            return {
-                "total_messages": 0,
-                "by_status": {}
-            }
+            return {"total_messages": 0, "by_status": {}}
 
     def _calculate_channel_rates(
-        self, repo, channel: Optional[str], cutoff_date: datetime
+        self, repo, channel: str | None, cutoff_date: datetime
     ) -> Dict[str, Dict[str, Any]]:
         """Calculate delivery rates per channel."""
         try:
-            channel_rates = repo.delivery_status.get_channel_delivery_rates(
-                cutoff_date=cutoff_date,
-                channel=channel
-            )
+            channel_rates = repo.delivery_status.get_channel_delivery_rates(cutoff_date=cutoff_date, channel=channel)
 
             # Convert to ChannelStats format
             result = {}
@@ -635,7 +571,7 @@ class NotificationAnalytics:
                     successful_attempts=stats["successful_attempts"],
                     failed_attempts=stats["failed_attempts"],
                     avg_response_time_ms=stats["avg_response_time_ms"] or 0.0,
-                    success_rate=stats["success_rate"]
+                    success_rate=stats["success_rate"],
                 )
                 result[ch] = channel_stats.to_dict()
 
@@ -645,15 +581,10 @@ class NotificationAnalytics:
             self._logger.exception("Failed to calculate channel rates:")
             return {}
 
-    def _calculate_user_rates(
-        self, repo, user_id: str, cutoff_date: datetime
-    ) -> Dict[str, Any]:
+    def _calculate_user_rates(self, repo, user_id: str, cutoff_date: datetime) -> Dict[str, Any]:
         """Calculate delivery rates for a specific user."""
         try:
-            user_rates = repo.delivery_status.get_user_delivery_rates(
-                user_id=user_id,
-                cutoff_date=cutoff_date
-            )
+            user_rates = repo.delivery_status.get_user_delivery_rates(user_id=user_id, cutoff_date=cutoff_date)
             return user_rates
 
         except Exception:
@@ -664,67 +595,48 @@ class NotificationAnalytics:
                 "successful_deliveries": 0,
                 "failed_deliveries": 0,
                 "success_rate": 0.0,
-                "avg_response_time_ms": None
+                "avg_response_time_ms": None,
             }
 
-    def _get_response_time_data(
-        self, repo, channel: Optional[str], cutoff_date: datetime
-    ) -> List[int]:
+    def _get_response_time_data(self, repo, channel: str | None, cutoff_date: datetime) -> List[int]:
         """Get response time data from database."""
         try:
-            response_times = repo.delivery_status.get_response_time_data(
-                cutoff_date=cutoff_date,
-                channel=channel
-            )
+            response_times = repo.delivery_status.get_response_time_data(cutoff_date=cutoff_date, channel=channel)
             return response_times
 
         except Exception:
             self._logger.exception("Failed to get response time data:")
             return []
 
-    def _get_channel_response_breakdown(
-        self, repo, cutoff_date: datetime
-    ) -> Dict[str, Dict[str, Any]]:
+    def _get_channel_response_breakdown(self, repo, cutoff_date: datetime) -> Dict[str, Dict[str, Any]]:
         """Get response time breakdown by channel."""
         # This would query and group response times by channel
         # For now, return mock data
         return {
-            "telegram": {
-                "count": 50,
-                "average_ms": 1200.0,
-                "median_ms": 1100.0,
-                "min_ms": 800,
-                "max_ms": 2000
-            },
-            "email": {
-                "count": 30,
-                "average_ms": 2500.0,
-                "median_ms": 2400.0,
-                "min_ms": 1800,
-                "max_ms": 3200
-            }
+            "telegram": {"count": 50, "average_ms": 1200.0, "median_ms": 1100.0, "min_ms": 800, "max_ms": 2000},
+            "email": {"count": 30, "average_ms": 2500.0, "median_ms": 2400.0, "min_ms": 1800, "max_ms": 3200},
         }
 
     def _get_time_series_data(
-        self, repo, granularity: TimeGranularity, cutoff_date: datetime, channel: Optional[str]
+        self, repo, granularity: TimeGranularity, cutoff_date: datetime, channel: str | None
     ) -> List[Dict[str, Any]]:
         """Get time series data for aggregation."""
         try:
             time_series = repo.delivery_status.get_time_series_data(
-                cutoff_date=cutoff_date,
-                granularity=granularity.value,
-                channel=channel
+                cutoff_date=cutoff_date, granularity=granularity.value, channel=channel
             )
 
             # Convert to expected format
             result = []
             for point in time_series:
-                result.append({
-                    "timestamp": point["timestamp"],
-                    "message_count": point["total_attempts"],
-                    "success_count": point["successful_attempts"],
-                    "avg_response_time_ms": point["avg_response_time_ms"]
-                })
+                result.append(
+                    {
+                        "timestamp": point["timestamp"],
+                        "message_count": point["total_attempts"],
+                        "success_count": point["successful_attempts"],
+                        "avg_response_time_ms": point["avg_response_time_ms"],
+                    }
+                )
 
             return result
 
@@ -751,18 +663,18 @@ class NotificationAnalytics:
             "avg_messages": avg_messages,
             "overall_success_rate": total_success / total_messages if total_messages > 0 else 0,
             "peak_period": peak_period,
-            "lowest_period": lowest_period
+            "lowest_period": lowest_period,
         }
 
     def _get_metric_time_series(
-        self, repo, metric: str, cutoff_date: datetime, channel: Optional[str]
+        self, repo, metric: str, cutoff_date: datetime, channel: str | None
     ) -> List[TimeSeriesPoint]:
         """Get time series data for a specific metric."""
         # This would query metric data over time
         # For now, return mock data
         time_series = []
         current_date = cutoff_date
-        end_date = datetime.now(timezone.utc)
+        end_date = datetime.now(UTC)
 
         while current_date < end_date:
             if metric == "success_rate":
@@ -772,11 +684,9 @@ class NotificationAnalytics:
             else:  # message_count
                 value = 10 + (hash(current_date.isoformat()) % 20)
 
-            time_series.append(TimeSeriesPoint(
-                timestamp=current_date,
-                value=value,
-                metadata={"channel": channel} if channel else {}
-            ))
+            time_series.append(
+                TimeSeriesPoint(timestamp=current_date, value=value, metadata={"channel": channel} if channel else {})
+            )
 
             current_date += timedelta(days=1)
 
@@ -826,9 +736,7 @@ class NotificationAnalytics:
             self._logger.exception("Failed to get active channels:")
             return []
 
-    def _get_channel_statistics(
-        self, repo, channel: str, cutoff_date: datetime
-    ) -> Dict[str, Any]:
+    def _get_channel_statistics(self, repo, channel: str, cutoff_date: datetime) -> Dict[str, Any]:
         """Get statistics for a specific channel."""
         # This would query channel-specific statistics
         # For now, return mock data
@@ -837,7 +745,7 @@ class NotificationAnalytics:
             "successful_deliveries": 45,
             "failed_deliveries": 5,
             "success_rate": 0.9,
-            "avg_response_time_ms": 1200.0
+            "avg_response_time_ms": 1200.0,
         }
 
     def _calculate_performance_score(
@@ -870,9 +778,7 @@ class NotificationAnalytics:
 
         # Calculate weighted score
         performance_score = (
-            success_rate * success_rate_weight +
-            response_time_score * response_time_weight +
-            trend_score * trend_weight
+            success_rate * success_rate_weight + response_time_score * response_time_weight + trend_score * trend_weight
         )
 
         return max(0, min(1, performance_score))  # Clamp to 0-1

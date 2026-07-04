@@ -10,15 +10,15 @@ from __future__ import annotations
 import random
 import sys
 import time
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.ml.pipeline.p20_kestrel.config import TRENDS_ANCHOR_TERM
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+from src.ml.pipeline.p20_kestrel.config import TRENDS_ANCHOR_TERM
 
 _kestrel = _KestrelService()
 finish_job_run = _kestrel.finish_job_run
@@ -41,9 +41,7 @@ def _build_query_term(ticker: str) -> str:
     return f"{ticker} stock"
 
 
-def _fetch_trends_batch(
-    terms: List[str], anchor: str, timeframe: str = "today 12-m"
-) -> Optional[Dict[str, float]]:
+def _fetch_trends_batch(terms: List[str], anchor: str, timeframe: str = "today 12-m") -> Dict[str, float] | None:
     """
     Fetch Google Trends for a batch of terms plus the anchor.
 
@@ -57,6 +55,7 @@ def _fetch_trends_batch(
     """
     try:
         from pytrends.request import TrendReq
+
         pytrends = TrendReq(hl="en-US", tz=0, timeout=(10, 25))
         kw_list = [anchor] + terms[:_BATCH_SIZE]
         pytrends.build_payload(kw_list, timeframe=timeframe, geo="US")
@@ -83,7 +82,7 @@ def _fetch_trends_batch(
         return None
 
 
-def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
+def run(as_of_date: date | None = None) -> Dict[str, Any]:
     """
     Weekly Trends poll for all watchlist tickers.
 
@@ -110,19 +109,21 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
         consecutive_429 = 0
 
         for i in range(0, len(terms), _BATCH_SIZE):
-            batch = terms[i: i + _BATCH_SIZE]
+            batch = terms[i : i + _BATCH_SIZE]
             try:
                 result = _fetch_trends_batch(batch, anchor=TRENDS_ANCHOR_TERM)
                 if result:
                     for term, norm_val in result.items():
                         ticker = ticker_by_term.get(term)
                         if ticker:
-                            all_rows.append({
-                                "ticker": ticker,
-                                "date": target_date,
-                                "source": "trends",
-                                "mentions": norm_val,
-                            })
+                            all_rows.append(
+                                {
+                                    "ticker": ticker,
+                                    "date": target_date,
+                                    "source": "trends",
+                                    "mentions": norm_val,
+                                }
+                            )
                 consecutive_429 = 0
             except RuntimeError as exc:
                 if "429" in str(exc):

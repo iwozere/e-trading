@@ -12,16 +12,17 @@ The strategy focuses on:
 - Strategy-specific entry/exit logic
 """
 
+import json
+import pickle
+import sys
+from collections import deque
+from pathlib import Path
+from typing import Dict, Tuple
+
 import numpy as np
+import talib
 import torch
 import torch.nn as nn
-import pickle
-import json
-import talib
-from pathlib import Path
-from collections import deque
-from typing import Dict, Tuple
-import sys
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[2]
@@ -36,9 +37,16 @@ _logger = setup_logger(__name__)
 class LSTMModel(nn.Module):
     """Enhanced LSTM model architecture matching the pipeline implementation."""
 
-    def __init__(self, input_size: int, hidden_size: int, num_layers: int,
-                 dropout: float = 0.2, output_size: int = 1, n_regimes: int = 3):
-        super(LSTMModel, self).__init__()
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        num_layers: int,
+        dropout: float = 0.2,
+        output_size: int = 1,
+        n_regimes: int = 3,
+    ):
+        super().__init__()
 
         self.hidden_size = hidden_size
         self.num_layers = num_layers
@@ -51,7 +59,7 @@ class LSTMModel(nn.Module):
             num_layers=num_layers,
             dropout=dropout if num_layers > 1 else 0,
             batch_first=True,
-            bidirectional=False
+            bidirectional=False,
         )
 
         # Additional dense layers for better feature extraction
@@ -121,15 +129,17 @@ class HMMLSTMStrategy(BaseStrategy):
     Can be used for both backtesting (with pre-loaded models) and live trading (loading from files).
     """
 
-    def __init__(self,
-                 hmm_model=None,
-                 hmm_scaler=None,
-                 hmm_features=None,
-                 lstm_model=None,
-                 lstm_scalers=None,
-                 lstm_features=None,
-                 sequence_length=None,
-                 **kwargs):
+    def __init__(
+        self,
+        hmm_model=None,
+        hmm_scaler=None,
+        hmm_features=None,
+        lstm_model=None,
+        lstm_scalers=None,
+        lstm_features=None,
+        sequence_length=None,
+        **kwargs,
+    ):
         """
         Initialize the HMM-LSTM strategy.
 
@@ -175,16 +185,16 @@ class HMMLSTMStrategy(BaseStrategy):
             self.feature_buffer = deque(maxlen=100)
 
             # Trading parameters (configured for log return predictions)
-            self.prediction_threshold = self.config.get('prediction_threshold', 0.001)  # 0.1% log return
-            self.regime_confidence_threshold = self.config.get('regime_confidence_threshold', 0.4)  # 40% confidence
+            self.prediction_threshold = self.config.get("prediction_threshold", 0.001)  # 0.1% log return
+            self.regime_confidence_threshold = self.config.get("regime_confidence_threshold", 0.4)  # 40% confidence
 
             # Exit parameters (configured for log return scale)
-            self.profit_target = self.config.get('profit_target', 0.01)  # 1% profit target
-            self.stop_loss = self.config.get('stop_loss', 0.005)  # 0.5% stop loss
-            self.trailing_stop = self.config.get('trailing_stop', 0.005)  # 0.5% trailing stop
+            self.profit_target = self.config.get("profit_target", 0.01)  # 1% profit target
+            self.stop_loss = self.config.get("stop_loss", 0.005)  # 0.5% stop loss
+            self.trailing_stop = self.config.get("trailing_stop", 0.005)  # 0.5% trailing stop
 
             # Check if models are passed as parameters (for backtesting)
-            if hasattr(self, 'hmm_model_param') and self.hmm_model_param is not None:
+            if hasattr(self, "hmm_model_param") and self.hmm_model_param is not None:
                 # Use pre-loaded models from backtesting
                 self.hmm_model = self.hmm_model_param
                 self.hmm_scaler = self.hmm_scaler_param
@@ -211,48 +221,48 @@ class HMMLSTMStrategy(BaseStrategy):
     def _load_models(self):
         """Load trained HMM and LSTM models with their parameters."""
         try:
-            models_dir = Path(self.config.get('models_dir', 'src/ml/pipeline/p01_hmm_lstm/models'))
-            results_dir = Path(self.config.get('results_dir', 'results'))
+            models_dir = Path(self.config.get("models_dir", "src/ml/pipeline/p01_hmm_lstm/models"))
+            results_dir = Path(self.config.get("results_dir", "results"))
 
             # Load HMM model
             hmm_pattern = f"hmm_{self.symbol}_{self.timeframe}_*.pkl"
-            hmm_files = list((models_dir / 'hmm').glob(hmm_pattern))
+            hmm_files = list((models_dir / "hmm").glob(hmm_pattern))
 
             if hmm_files:
                 hmm_file = sorted(hmm_files)[-1]  # Latest model
-                with open(hmm_file, 'rb') as f:
+                with open(hmm_file, "rb") as f:
                     hmm_package = pickle.load(f)
 
-                self.hmm_model = hmm_package['model']
-                self.hmm_scaler = hmm_package['scaler']
-                self.hmm_features = hmm_package['features']
+                self.hmm_model = hmm_package["model"]
+                self.hmm_scaler = hmm_package["scaler"]
+                self.hmm_features = hmm_package["features"]
                 self._logger.info("Loaded HMM model from %s", hmm_file)
             else:
                 self._logger.warning("No HMM model found for %s %s", self.symbol, self.timeframe)
 
             # Load LSTM model
             lstm_pattern = f"lstm_{self.symbol}_{self.timeframe}_*.pkl"
-            lstm_files = list((models_dir / 'lstm').glob(lstm_pattern))
+            lstm_files = list((models_dir / "lstm").glob(lstm_pattern))
 
             if lstm_files:
                 lstm_file = sorted(lstm_files)[-1]  # Latest model
-                with open(lstm_file, 'rb') as f:
+                with open(lstm_file, "rb") as f:
                     lstm_package = pickle.load(f)
 
                 # Recreate LSTM model
-                arch = lstm_package['model_architecture']
+                arch = lstm_package["model_architecture"]
                 self.lstm_model = LSTMModel(
-                    input_size=arch['input_size'],
-                    hidden_size=arch['hidden_size'],
-                    num_layers=arch['num_layers'],
-                    n_regimes=arch['n_regimes']
+                    input_size=arch["input_size"],
+                    hidden_size=arch["hidden_size"],
+                    num_layers=arch["num_layers"],
+                    n_regimes=arch["n_regimes"],
                 )
-                self.lstm_model.load_state_dict(lstm_package['model_state_dict'])
+                self.lstm_model.load_state_dict(lstm_package["model_state_dict"])
                 self.lstm_model.eval()
 
-                self.lstm_scalers = lstm_package['scalers']
-                self.lstm_features = lstm_package['features']
-                self.sequence_length = lstm_package['hyperparameters']['sequence_length']
+                self.lstm_scalers = lstm_package["scalers"]
+                self.lstm_features = lstm_package["features"]
+                self.sequence_length = lstm_package["hyperparameters"]["sequence_length"]
 
                 self._logger.info("Loaded LSTM model from %s", lstm_file)
             else:
@@ -264,10 +274,10 @@ class HMMLSTMStrategy(BaseStrategy):
 
             if indicator_files:
                 indicator_file = sorted(indicator_files)[-1]  # Latest optimization
-                with open(indicator_file, 'r') as f:
+                with open(indicator_file) as f:
                     indicator_results = json.load(f)
 
-                self.optimized_indicators = indicator_results['best_params']
+                self.optimized_indicators = indicator_results["best_params"]
                 self._logger.info("Loaded optimized indicators from %s", indicator_file)
             else:
                 self._logger.warning("No optimized indicators found for %s %s", self.symbol, self.timeframe)
@@ -286,38 +296,38 @@ class HMMLSTMStrategy(BaseStrategy):
             # Set default parameters if optimized_indicators is None
             if not params:
                 params = {
-                    'rsi_period': 14,
-                    'bb_period': 20,
-                    'bb_std': 2.0,
-                    'macd_fast': 12,
-                    'macd_slow': 26,
-                    'macd_signal': 9,
-                    'ema_fast': 12,
-                    'ema_slow': 26,
-                    'atr_period': 14,
-                    'stoch_k': 14,
-                    'stoch_d': 3
+                    "rsi_period": 14,
+                    "bb_period": 20,
+                    "bb_std": 2.0,
+                    "macd_fast": 12,
+                    "macd_slow": 26,
+                    "macd_signal": 9,
+                    "ema_fast": 12,
+                    "ema_slow": 26,
+                    "atr_period": 14,
+                    "stoch_k": 14,
+                    "stoch_d": 3,
                 }
                 self.optimized_indicators = params
 
             # RSI
-            rsi_period = params.get('rsi_period', 14)
+            rsi_period = params.get("rsi_period", 14)
 
             # Bollinger Bands
-            bb_period = params.get('bb_period', 20)
-            bb_std = params.get('bb_std', 2.0)
+            bb_period = params.get("bb_period", 20)
+            bb_std = params.get("bb_std", 2.0)
 
             # MACD
-            macd_fast = params.get('macd_fast', 12)
-            macd_slow = params.get('macd_slow', 26)
-            macd_signal = params.get('macd_signal', 9)
+            macd_fast = params.get("macd_fast", 12)
+            macd_slow = params.get("macd_slow", 26)
+            macd_signal = params.get("macd_signal", 9)
 
             # EMA
-            ema_fast = params.get('ema_fast', 12)
-            ema_slow = params.get('ema_slow', 26)
+            ema_fast = params.get("ema_fast", 12)
+            ema_slow = params.get("ema_slow", 26)
 
             # ATR
-            atr_period = params.get('atr_period', 14)
+            atr_period = params.get("atr_period", 14)
 
             self._logger.info("Initialized indicators with optimized parameters: %s", params)
 
@@ -344,74 +354,75 @@ class HMMLSTMStrategy(BaseStrategy):
             params = self.optimized_indicators
 
             # RSI
-            rsi_period = params.get('rsi_period', 14)
+            rsi_period = params.get("rsi_period", 14)
             rsi = talib.RSI(close, timeperiod=rsi_period)
-            indicators['rsi_optimized'] = rsi[-1] if not np.isnan(rsi[-1]) else 50.0
+            indicators["rsi_optimized"] = rsi[-1] if not np.isnan(rsi[-1]) else 50.0
 
             # Bollinger Bands
-            bb_period = params.get('bb_period', 20)
-            bb_std = params.get('bb_std', 2.0)
-            bb_upper, bb_middle, bb_lower = talib.BBANDS(close, timeperiod=bb_period,
-                                                        nbdevup=bb_std, nbdevdn=bb_std)
+            bb_period = params.get("bb_period", 20)
+            bb_std = params.get("bb_std", 2.0)
+            bb_upper, bb_middle, bb_lower = talib.BBANDS(close, timeperiod=bb_period, nbdevup=bb_std, nbdevdn=bb_std)
 
             if not np.isnan(bb_upper[-1]):
-                indicators['bb_upper_opt'] = bb_upper[-1]
-                indicators['bb_middle_opt'] = bb_middle[-1]
-                indicators['bb_lower_opt'] = bb_lower[-1]
-                indicators['bb_position_opt'] = (close[-1] - bb_lower[-1]) / (bb_upper[-1] - bb_lower[-1])
-                indicators['bb_width_opt'] = (bb_upper[-1] - bb_lower[-1]) / bb_middle[-1]
+                indicators["bb_upper_opt"] = bb_upper[-1]
+                indicators["bb_middle_opt"] = bb_middle[-1]
+                indicators["bb_lower_opt"] = bb_lower[-1]
+                indicators["bb_position_opt"] = (close[-1] - bb_lower[-1]) / (bb_upper[-1] - bb_lower[-1])
+                indicators["bb_width_opt"] = (bb_upper[-1] - bb_lower[-1]) / bb_middle[-1]
 
             # MACD
-            macd_fast = params.get('macd_fast', 12)
-            macd_slow = params.get('macd_slow', 26)
-            macd_signal = params.get('macd_signal', 9)
+            macd_fast = params.get("macd_fast", 12)
+            macd_slow = params.get("macd_slow", 26)
+            macd_signal = params.get("macd_signal", 9)
 
-            macd, macd_signal_line, macd_hist = talib.MACD(close, fastperiod=macd_fast,
-                                                          slowperiod=macd_slow, signalperiod=macd_signal)
+            macd, macd_signal_line, macd_hist = talib.MACD(
+                close, fastperiod=macd_fast, slowperiod=macd_slow, signalperiod=macd_signal
+            )
 
             if not np.isnan(macd[-1]):
-                indicators['macd_opt'] = macd[-1]
-                indicators['macd_signal_opt'] = macd_signal_line[-1]
-                indicators['macd_histogram_opt'] = macd_hist[-1]
+                indicators["macd_opt"] = macd[-1]
+                indicators["macd_signal_opt"] = macd_signal_line[-1]
+                indicators["macd_histogram_opt"] = macd_hist[-1]
 
             # EMA
-            ema_fast_period = params.get('ema_fast', 12)
-            ema_slow_period = params.get('ema_slow', 26)
+            ema_fast_period = params.get("ema_fast", 12)
+            ema_slow_period = params.get("ema_slow", 26)
 
             ema_fast = talib.EMA(close, timeperiod=ema_fast_period)
             ema_slow = talib.EMA(close, timeperiod=ema_slow_period)
 
             if not np.isnan(ema_fast[-1]) and not np.isnan(ema_slow[-1]):
-                indicators['ema_fast_opt'] = ema_fast[-1]
-                indicators['ema_slow_opt'] = ema_slow[-1]
-                indicators['ema_spread_opt'] = (ema_fast[-1] - ema_slow[-1]) / close[-1]
+                indicators["ema_fast_opt"] = ema_fast[-1]
+                indicators["ema_slow_opt"] = ema_slow[-1]
+                indicators["ema_spread_opt"] = (ema_fast[-1] - ema_slow[-1]) / close[-1]
 
             # ATR
-            atr_period = params.get('atr_period', 14)
+            atr_period = params.get("atr_period", 14)
             atr = talib.ATR(high, low, close, timeperiod=atr_period)
             if not np.isnan(atr[-1]):
-                indicators['atr_opt'] = atr[-1]
+                indicators["atr_opt"] = atr[-1]
 
             # Additional indicators
-            stoch_k_period = params.get('stoch_k', 14)
-            stoch_d_period = params.get('stoch_d', 3)
+            stoch_k_period = params.get("stoch_k", 14)
+            stoch_d_period = params.get("stoch_d", 3)
 
-            stoch_k, stoch_d = talib.STOCH(high, low, close, fastk_period=stoch_k_period,
-                                          slowk_period=stoch_d_period, slowd_period=stoch_d_period)
+            stoch_k, stoch_d = talib.STOCH(
+                high, low, close, fastk_period=stoch_k_period, slowk_period=stoch_d_period, slowd_period=stoch_d_period
+            )
 
             if not np.isnan(stoch_k[-1]):
-                indicators['stoch_k_opt'] = stoch_k[-1]
-                indicators['stoch_d_opt'] = stoch_d[-1]
+                indicators["stoch_k_opt"] = stoch_k[-1]
+                indicators["stoch_d_opt"] = stoch_d[-1]
 
-            williams_period = params.get('williams_period', 14)
+            williams_period = params.get("williams_period", 14)
             williams_r = talib.WILLR(high, low, close, timeperiod=williams_period)
             if not np.isnan(williams_r[-1]):
-                indicators['williams_r_opt'] = williams_r[-1]
+                indicators["williams_r_opt"] = williams_r[-1]
 
-            mfi_period = params.get('mfi_period', 14)
+            mfi_period = params.get("mfi_period", 14)
             mfi = talib.MFI(high, low, close, volume, timeperiod=mfi_period)
             if not np.isnan(mfi[-1]):
-                indicators['mfi_opt'] = mfi[-1]
+                indicators["mfi_opt"] = mfi[-1]
 
             return indicators
 
@@ -453,8 +464,12 @@ class HMMLSTMStrategy(BaseStrategy):
 
                 # Debug: Log regime prediction details occasionally
                 if len(self.data) % 100 == 0:  # Log every 100 bars
-                    self._logger.debug("HMM Regime Debug - Regime: %d, Posteriors: %s, Max Confidence: %.3f",
-                                     int(regime[0]), posteriors[0].tolist(), confidence)
+                    self._logger.debug(
+                        "HMM Regime Debug - Regime: %d, Posteriors: %s, Max Confidence: %.3f",
+                        int(regime[0]),
+                        posteriors[0].tolist(),
+                        confidence,
+                    )
 
             except Exception as e:
                 self._logger.warning("Error getting HMM posteriors: %s", e)
@@ -486,7 +501,7 @@ class HMMLSTMStrategy(BaseStrategy):
 
             # For this example, we'll use a simplified approach
             # In a real implementation, you'd maintain a proper sequence buffer
-            if not hasattr(self, 'lstm_sequence_buffer'):
+            if not hasattr(self, "lstm_sequence_buffer"):
                 self.lstm_sequence_buffer = deque(maxlen=self.sequence_length)
 
             self.lstm_sequence_buffer.append(feature_values)
@@ -496,9 +511,11 @@ class HMMLSTMStrategy(BaseStrategy):
 
             # Scale features
             sequence_data = np.array(list(self.lstm_sequence_buffer))
-            sequence_scaled = self.lstm_scalers['feature_scaler'].transform(
-                sequence_data.reshape(-1, len(self.lstm_features))
-            ).reshape(1, self.sequence_length, len(self.lstm_features))
+            sequence_scaled = (
+                self.lstm_scalers["feature_scaler"]
+                .transform(sequence_data.reshape(-1, len(self.lstm_features)))
+                .reshape(1, self.sequence_length, len(self.lstm_features))
+            )
 
             # Create regime one-hot encoding
             regime_onehot = np.zeros((1, 3))  # Assuming 3 regimes
@@ -513,9 +530,7 @@ class HMMLSTMStrategy(BaseStrategy):
                 prediction_scaled = self.lstm_model(sequence_tensor, regime_tensor).item()
 
                 # Inverse transform to get actual prediction
-                prediction = self.lstm_scalers['target_scaler'].inverse_transform(
-                    [[prediction_scaled]]
-                )[0][0]
+                prediction = self.lstm_scalers["target_scaler"].inverse_transform([[prediction_scaled]])[0][0]
 
             return float(prediction)
 
@@ -531,12 +546,12 @@ class HMMLSTMStrategy(BaseStrategy):
 
             # Calculate current features
             current_features = {
-                'open': self.data.open[0],
-                'high': self.data.high[0],
-                'low': self.data.low[0],
-                'close': self.data.close[0],
-                'volume': self.data.volume[0],
-                'log_return': np.log(self.data.close[0] / self.data.close[-1]) if self.data.close[-1] > 0 else 0.0
+                "open": self.data.open[0],
+                "high": self.data.high[0],
+                "low": self.data.low[0],
+                "close": self.data.close[0],
+                "volume": self.data.volume[0],
+                "log_return": np.log(self.data.close[0] / self.data.close[-1]) if self.data.close[-1] > 0 else 0.0,
             }
 
             # Add technical indicators
@@ -550,12 +565,14 @@ class HMMLSTMStrategy(BaseStrategy):
             prediction = self._predict_price(current_features, regime, regime_confidence)
 
             # Store predictions for analysis
-            self.prediction_buffer.append({
-                'regime': regime,
-                'confidence': regime_confidence,
-                'prediction': prediction,
-                'price': self.data.close[0]
-            })
+            self.prediction_buffer.append(
+                {
+                    "regime": regime,
+                    "confidence": regime_confidence,
+                    "prediction": prediction,
+                    "price": self.data.close[0],
+                }
+            )
 
             # Update current state
             self.current_regime = regime
@@ -563,8 +580,14 @@ class HMMLSTMStrategy(BaseStrategy):
 
             # Convert log return to percentage for logging
             percentage_change = self._log_return_to_percentage(prediction)
-            self._logger.debug("Regime: %d (conf: %.3f), Log Return: %.6f (%.4f%%), Price: %.4f",
-                             regime, regime_confidence, prediction, percentage_change * 100, self.data.close[0])
+            self._logger.debug(
+                "Regime: %d (conf: %.3f), Log Return: %.6f (%.4f%%), Price: %.4f",
+                regime,
+                regime_confidence,
+                prediction,
+                percentage_change * 100,
+                self.data.close[0],
+            )
 
             # Trading logic
             current_position = self.position.size
@@ -593,21 +616,30 @@ class HMMLSTMStrategy(BaseStrategy):
         try:
             # Debug: Log signal check details occasionally
             if len(self.data) % 50 == 0:  # Log every 50 bars
-                self._logger.debug("Signal Check - Prediction: %.6f, Threshold: %.6f, Regime Conf: %.3f, Threshold: %.3f",
-                                 prediction, self.prediction_threshold, regime_confidence, self.regime_confidence_threshold)
+                self._logger.debug(
+                    "Signal Check - Prediction: %.6f, Threshold: %.6f, Regime Conf: %.3f, Threshold: %.3f",
+                    prediction,
+                    self.prediction_threshold,
+                    regime_confidence,
+                    self.regime_confidence_threshold,
+                )
 
             # Only trade if we have sufficient confidence in regime prediction
             if regime_confidence < self.regime_confidence_threshold:
                 if len(self.data) % 50 == 0:  # Log occasionally
-                    self._logger.debug("No trade: Regime confidence %.3f < threshold %.3f",
-                                     regime_confidence, self.regime_confidence_threshold)
+                    self._logger.debug(
+                        "No trade: Regime confidence %.3f < threshold %.3f",
+                        regime_confidence,
+                        self.regime_confidence_threshold,
+                    )
                 return
 
             # Only trade if prediction is strong enough (prediction is log return)
             if abs(prediction) < self.prediction_threshold:
                 if len(self.data) % 50 == 0:  # Log occasionally
-                    self._logger.debug("No trade: Prediction %.6f < threshold %.6f",
-                                     abs(prediction), self.prediction_threshold)
+                    self._logger.debug(
+                        "No trade: Prediction %.6f < threshold %.6f", abs(prediction), self.prediction_threshold
+                    )
                 return
 
             # Convert log return prediction to percentage change for signal strength calculation
@@ -620,26 +652,36 @@ class HMMLSTMStrategy(BaseStrategy):
 
             # Long signal (positive log return = price increase)
             if prediction > self.prediction_threshold:
-                self._logger.info("LONG signal - Log Return: %.6f (%.4f%%), Regime: %d, Confidence: %.3f",
-                               prediction, percentage_change * 100, regime, regime_confidence)
+                self._logger.info(
+                    "LONG signal - Log Return: %.6f (%.4f%%), Regime: %d, Confidence: %.3f",
+                    prediction,
+                    percentage_change * 100,
+                    regime,
+                    regime_confidence,
+                )
 
                 self._enter_position(
-                    direction='long',
+                    direction="long",
                     confidence=confidence,
                     risk_multiplier=risk_multiplier,
-                    reason=f"HMM-LSTM log return prediction: {prediction:.6f} ({percentage_change*100:.4f}%)"
+                    reason=f"HMM-LSTM log return prediction: {prediction:.6f} ({percentage_change * 100:.4f}%)",
                 )
 
             # Short signal (negative log return = price decrease)
-            elif prediction < -self.prediction_threshold and self.config.get('allow_short', False):
-                self._logger.info("SHORT signal - Log Return: %.6f (%.4f%%), Regime: %d, Confidence: %.3f",
-                               prediction, percentage_change * 100, regime, regime_confidence)
+            elif prediction < -self.prediction_threshold and self.config.get("allow_short", False):
+                self._logger.info(
+                    "SHORT signal - Log Return: %.6f (%.4f%%), Regime: %d, Confidence: %.3f",
+                    prediction,
+                    percentage_change * 100,
+                    regime,
+                    regime_confidence,
+                )
 
                 self._enter_position(
-                    direction='short',
+                    direction="short",
                     confidence=confidence,
                     risk_multiplier=risk_multiplier,
-                    reason=f"HMM-LSTM prediction: {prediction:.6f}"
+                    reason=f"HMM-LSTM prediction: {prediction:.6f}",
                 )
 
         except Exception:
@@ -703,8 +745,13 @@ class HMMLSTMStrategy(BaseStrategy):
 
             # Execute exit
             if exit_signal:
-                self._logger.info("EXIT signal (%s) - PnL: %.4f, Prediction: %.6f, Regime: %d",
-                               exit_reason, pnl_pct, prediction, regime)
+                self._logger.info(
+                    "EXIT signal (%s) - PnL: %.4f, Prediction: %.6f, Regime: %d",
+                    exit_reason,
+                    pnl_pct,
+                    prediction,
+                    regime,
+                )
 
                 self._exit_position(reason=exit_reason)
 
@@ -718,10 +765,10 @@ class HMMLSTMStrategy(BaseStrategy):
         """Called when strategy stops."""
         try:
             # Log performance summary
-            if hasattr(self, 'prediction_buffer') and self.prediction_buffer:
-                predictions = [p['prediction'] for p in self.prediction_buffer]
-                regimes = [p['regime'] for p in self.prediction_buffer]
-                confidences = [p['confidence'] for p in self.prediction_buffer]
+            if hasattr(self, "prediction_buffer") and self.prediction_buffer:
+                predictions = [p["prediction"] for p in self.prediction_buffer]
+                regimes = [p["regime"] for p in self.prediction_buffer]
+                confidences = [p["confidence"] for p in self.prediction_buffer]
 
                 self._logger.info("HMM-LSTM Performance Summary:")
                 self._logger.info("  Total predictions: %s", len(predictions))

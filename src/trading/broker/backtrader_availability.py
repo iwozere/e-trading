@@ -8,6 +8,7 @@ Core broker code should not ``import backtrader`` directly; import
 
 try:
     import backtrader  # noqa: F401
+
     BACKTRADER_AVAILABLE = True
 except ImportError:
     BACKTRADER_AVAILABLE = False

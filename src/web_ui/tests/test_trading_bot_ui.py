@@ -7,23 +7,23 @@ Simple test script to verify the trading bot UI implementation works correctly.
 Tests the API endpoints and configuration validation.
 """
 
+import json
 import sys
 from pathlib import Path
-import json
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.trading.services.bot_config_validator import BotConfigValidator
 from src.web_ui.config.trading_bot_config import (
+    BROKER_TYPES,
+    SYMBOLS,
     get_available_entry_mixins,
     get_available_exit_mixins,
     get_entry_mixin_parameters,
     parameter_definition_to_dict,
-    BROKER_TYPES,
-    SYMBOLS
 )
-from src.trading.services.bot_config_validator import BotConfigValidator
 
 
 def test_mixin_configurations():
@@ -45,7 +45,7 @@ def test_mixin_configurations():
 
     # Test parameter definitions
     if entry_mixins:
-        first_entry = entry_mixins[0]['value']
+        first_entry = entry_mixins[0]["value"]
         params = get_entry_mixin_parameters(first_entry)
         print(f"✅ {first_entry} has {len(params)} parameters:")
         for param in params[:2]:  # Show first 2
@@ -83,12 +83,7 @@ def test_bot_configuration_validation():
         "enabled": True,
         "symbol": "BTCUSDT",
         "description": "Test bot for UI validation",
-        "broker": {
-            "type": "mock",
-            "trading_mode": "paper",
-            "name": "test_broker",
-            "cash": 10000.0
-        },
+        "broker": {"type": "mock", "trading_mode": "paper", "name": "test_broker", "cash": 10000.0},
         "strategy": {
             "type": "CustomStrategy",
             "parameters": {
@@ -101,42 +96,29 @@ def test_bot_configuration_validation():
                         "e_bb_dev": 2.0,
                         "e_vol_ma_period": 20,
                         "e_min_volume_ratio": 1.1,
-                        "e_use_bb_touch": True
-                    }
+                        "e_use_bb_touch": True,
+                    },
                 },
-                "exit_logic": {
-                    "name": "ATRExitMixin",
-                    "params": {
-                        "x_atr_period": 14,
-                        "x_sl_multiplier": 1.5
-                    }
-                },
-                "position_size": 0.1
-            }
+                "exit_logic": {"name": "ATRExitMixin", "params": {"x_atr_period": 14, "x_sl_multiplier": 1.5}},
+                "position_size": 0.1,
+            },
         },
-        "data": {
-            "data_source": "binance",
-            "interval": "1h",
-            "lookback_bars": 500
-        },
-        "trading": {
-            "position_size": 0.1,
-            "max_positions": 1
-        },
+        "data": {"data_source": "binance", "interval": "1h", "lookback_bars": 500},
+        "trading": {"position_size": 0.1, "max_positions": 1},
         "risk_management": {
             "max_position_size": 1000.0,
             "stop_loss_pct": 3.0,
             "take_profit_pct": 6.0,
             "max_daily_loss": 200.0,
-            "max_daily_trades": 5
+            "max_daily_trades": 5,
         },
         "notifications": {
             "position_opened": True,
             "position_closed": True,
             "email_enabled": False,
             "telegram_enabled": True,
-            "error_notifications": True
-        }
+            "error_notifications": True,
+        },
     }
 
     validator = BotConfigValidator()
@@ -159,7 +141,7 @@ def test_bot_configuration_validation():
         "symbol": "",  # Empty symbol
         "broker": {
             "type": "unknown_broker",
-            "trading_mode": "invalid_mode"
+            "trading_mode": "invalid_mode",
             # Missing required fields
         },
         "strategy": {
@@ -167,8 +149,8 @@ def test_bot_configuration_validation():
             "parameters": {
                 # Missing entry_logic and exit_logic
                 "position_size": 1.5  # Invalid: > 1
-            }
-        }
+            },
+        },
     }
 
     is_valid, errors, warnings = validator.validate_bot_config(invalid_config)
@@ -194,7 +176,7 @@ def test_json_serialization():
     # Test parameter definition serialization
     entry_mixins = get_available_entry_mixins()
     if entry_mixins:
-        first_mixin = entry_mixins[0]['value']
+        first_mixin = entry_mixins[0]["value"]
         params = get_entry_mixin_parameters(first_mixin)
 
         if params:
@@ -207,10 +189,10 @@ def test_json_serialization():
 
     # Test full configuration serialization
     config_options = {
-        'broker_types': BROKER_TYPES,
-        'symbols': SYMBOLS[:5],  # Limit for test
-        'entry_mixins': entry_mixins[:3],  # Limit for test
-        'exit_mixins': get_available_exit_mixins()[:3]  # Limit for test
+        "broker_types": BROKER_TYPES,
+        "symbols": SYMBOLS[:5],  # Limit for test
+        "entry_mixins": entry_mixins[:3],  # Limit for test
+        "exit_mixins": get_available_exit_mixins()[:3],  # Limit for test
     }
 
     json_str = json.dumps(config_options, indent=2)
@@ -251,6 +233,7 @@ def main():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
 
 

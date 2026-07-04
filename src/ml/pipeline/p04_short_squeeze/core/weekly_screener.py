@@ -5,23 +5,24 @@ This module performs weekly structural analysis to identify short squeeze candid
 based on short interest, days to cover, and other structural metrics.
 """
 
-from pathlib import Path
 import sys
-from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
+from src.data.db.services.short_squeeze_service import ShortSqueezeService
+from src.data.downloader.finra_data_downloader import create_finra_downloader
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.ml.pipeline.p04_short_squeeze.config.data_classes import ScreenerConfig
-from src.ml.pipeline.p04_short_squeeze.core.models import StructuralMetrics, Candidate, CandidateSource
+from src.ml.pipeline.p04_short_squeeze.core.models import Candidate, CandidateSource, StructuralMetrics
 from src.ml.pipeline.p04_short_squeeze.core.volume_squeeze_detector import create_volume_squeeze_detector
-from src.data.downloader.finra_data_downloader import create_finra_downloader
-from src.data.db.services.short_squeeze_service import ShortSqueezeService
+from src.notification.logger import setup_logger
+
 # FINRA service functionality is now part of ShortSqueezeService
 
 _logger = setup_logger(__name__)
@@ -30,6 +31,7 @@ _logger = setup_logger(__name__)
 @dataclass
 class ScreenerResults:
     """Results from weekly screener run."""
+
     run_id: str
     run_date: datetime
     total_universe: int
@@ -84,12 +86,12 @@ class WeeklyScreener:
 
             # Initialize metrics tracking
             data_quality_metrics = {
-                'total_tickers': len(universe),
-                'successful_fetches': 0,
-                'failed_fetches': 0,
-                'valid_short_interest': 0,
-                'valid_float_data': 0,
-                'api_calls_made': 0
+                "total_tickers": len(universe),
+                "successful_fetches": 0,
+                "failed_fetches": 0,
+                "valid_short_interest": 0,
+                "valid_float_data": 0,
+                "api_calls_made": 0,
             }
 
             # Update FINRA data first
@@ -105,13 +107,13 @@ class WeeklyScreener:
             # Calculate runtime metrics
             end_time = datetime.now()
             runtime_metrics = {
-                'start_time': start_time.isoformat(),
-                'end_time': end_time.isoformat(),
-                'duration_seconds': (end_time - start_time).total_seconds(),
-                'tickers_per_second': len(universe) / max((end_time - start_time).total_seconds(), 1),
-                'candidates_found': len(candidates),
-                'candidates_after_filter': len(filtered_candidates),
-                'top_candidates_selected': len(top_candidates)
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat(),
+                "duration_seconds": (end_time - start_time).total_seconds(),
+                "tickers_per_second": len(universe) / max((end_time - start_time).total_seconds(), 1),
+                "candidates_found": len(candidates),
+                "candidates_after_filter": len(filtered_candidates),
+                "top_candidates_selected": len(top_candidates),
             }
 
             # Store results in database
@@ -124,11 +126,14 @@ class WeeklyScreener:
                 candidates_found=len(candidates),
                 top_candidates=top_candidates,
                 data_quality_metrics=data_quality_metrics,
-                runtime_metrics=runtime_metrics
+                runtime_metrics=runtime_metrics,
             )
 
-            _logger.info("Weekly screener completed: %d candidates found, %d top candidates selected",
-                        len(candidates), len(top_candidates))
+            _logger.info(
+                "Weekly screener completed: %d candidates found, %d top candidates selected",
+                len(candidates),
+                len(top_candidates),
+            )
 
             return results
 
@@ -155,23 +160,25 @@ class WeeklyScreener:
                 # Convert DataFrame to list of dictionaries for the service
                 finra_data_list = []
                 for _, row in finra_df.iterrows():
-                    finra_data_list.append({
-                        'ticker': row.get('Symbol', '').strip().upper(),
-                        'settlement_date': row.get('report_date'),
-                        'short_interest_shares': int(row.get('ShortVolume', 0)),
-                        'raw_data': row.to_dict()
-                    })
+                    finra_data_list.append(
+                        {
+                            "ticker": row.get("Symbol", "").strip().upper(),
+                            "settlement_date": row.get("report_date"),
+                            "short_interest_shares": int(row.get("ShortVolume", 0)),
+                            "raw_data": row.to_dict(),
+                        }
+                    )
                 records_stored = service.store_finra_data(finra_data_list)
 
-                metrics['finra_records_stored'] = records_stored
+                metrics["finra_records_stored"] = records_stored
                 _logger.info("Updated FINRA data: %d records stored", records_stored)
             else:
                 _logger.warning("No FINRA data available for update")
-                metrics['finra_records_stored'] = 0
+                metrics["finra_records_stored"] = 0
 
         except Exception:
             _logger.exception("Error updating FINRA data:")
-            metrics['finra_records_stored'] = 0
+            metrics["finra_records_stored"] = 0
 
     def _screen_universe_hybrid(self, universe: List[str], metrics: Dict[str, Any]) -> List[Candidate]:
         """
@@ -220,7 +227,8 @@ class WeeklyScreener:
 
             # Use volume detector to screen universe
             volume_results = self.volume_detector.screen_universe(
-                universe, min_score=0.3  # Minimum volume score threshold
+                universe,
+                min_score=0.3,  # Minimum volume score threshold
             )
 
             # Convert to candidates list
@@ -231,16 +239,16 @@ class WeeklyScreener:
                 candidates.append(candidate)
 
             # Update metrics
-            metrics['volume_screening_processed'] = len(universe)
-            metrics['volume_candidates_found'] = len(candidates)
+            metrics["volume_screening_processed"] = len(universe)
+            metrics["volume_candidates_found"] = len(candidates)
 
             _logger.info("Volume screening found %d candidates", len(candidates))
             return candidates
 
         except Exception:
             _logger.exception("Error in volume screening:")
-            metrics['volume_screening_processed'] = 0
-            metrics['volume_candidates_found'] = 0
+            metrics["volume_screening_processed"] = 0
+            metrics["volume_candidates_found"] = 0
             return []
 
     def _enhance_with_finra_data(self, candidates: List[Candidate], metrics: Dict[str, Any]) -> List[Candidate]:
@@ -287,7 +295,7 @@ class WeeklyScreener:
                                 screener_score=candidate.screener_score,
                                 structural_metrics=enhanced_metrics,
                                 last_updated=datetime.now(),
-                                source=CandidateSource.HYBRID_SCREENER
+                                source=CandidateSource.HYBRID_SCREENER,
                             )
                             enhanced_candidates.append(enhanced_candidate)
                             finra_enhanced_count += 1
@@ -303,11 +311,10 @@ class WeeklyScreener:
                     enhanced_candidates.append(candidate)
 
             # Update metrics
-            metrics['finra_enhanced_candidates'] = finra_enhanced_count
-            metrics['finra_data_availability'] = len(finra_data)
+            metrics["finra_enhanced_candidates"] = finra_enhanced_count
+            metrics["finra_data_availability"] = len(finra_data)
 
-            _logger.info("Enhanced %d/%d candidates with FINRA data",
-                        finra_enhanced_count, len(candidates))
+            _logger.info("Enhanced %d/%d candidates with FINRA data", finra_enhanced_count, len(candidates))
 
             return enhanced_candidates
 
@@ -315,8 +322,9 @@ class WeeklyScreener:
             _logger.exception("Error enhancing with FINRA data:")
             return candidates
 
-    def _update_structural_metrics_with_finra(self, original_metrics: StructuralMetrics,
-                                            finra_info: Dict[str, Any]) -> Optional[StructuralMetrics]:
+    def _update_structural_metrics_with_finra(
+        self, original_metrics: StructuralMetrics, finra_info: Dict[str, Any]
+    ) -> StructuralMetrics | None:
         """
         Update structural metrics with FINRA short interest data.
 
@@ -329,8 +337,8 @@ class WeeklyScreener:
         """
         try:
             # Extract FINRA data
-            short_interest_pct = finra_info.get('estimated_short_interest_pct', 0)
-            short_volume = finra_info.get('short_volume', 0)
+            short_interest_pct = finra_info.get("estimated_short_interest_pct", 0)
+            short_volume = finra_info.get("short_volume", 0)
 
             # Calculate days to cover using average volume
             avg_volume = original_metrics.avg_volume_14d
@@ -342,7 +350,7 @@ class WeeklyScreener:
                 days_to_cover=days_to_cover,
                 float_shares=original_metrics.float_shares,
                 avg_volume_14d=original_metrics.avg_volume_14d,
-                market_cap=original_metrics.market_cap
+                market_cap=original_metrics.market_cap,
             )
 
             return updated_metrics
@@ -385,7 +393,7 @@ class WeeklyScreener:
                         dtc_normalized = min(candidate.structural_metrics.days_to_cover / 20.0, 1.0)
 
                         # Combined FINRA score
-                        finra_score = (si_normalized * 0.6 + dtc_normalized * 0.4)
+                        finra_score = si_normalized * 0.6 + dtc_normalized * 0.4
 
                     # Weighted combination (60% volume, 40% FINRA when available)
                     if finra_score > 0:
@@ -401,7 +409,7 @@ class WeeklyScreener:
                         screener_score=combined_score,
                         structural_metrics=candidate.structural_metrics,
                         last_updated=datetime.now(),
-                        source=source
+                        source=source,
                     )
 
                     rescored_candidates.append(rescored_candidate)
@@ -438,7 +446,7 @@ class WeeklyScreener:
             batch_data = self.fmp_downloader.get_short_squeeze_batch_data(universe)
 
             # Update API call metrics
-            metrics['api_calls_made'] += len(universe) * 3  # Approximate API calls made
+            metrics["api_calls_made"] += len(universe) * 3  # Approximate API calls made
 
             candidates = []
 
@@ -450,15 +458,14 @@ class WeeklyScreener:
 
                 except Exception as e:
                     _logger.warning("Error processing ticker %s: %s", ticker, e)
-                    metrics['failed_fetches'] += 1
+                    metrics["failed_fetches"] += 1
                     continue
 
             # Update metrics for tickers that had no data
             missing_tickers = set(universe) - set(batch_data.keys())
-            metrics['failed_fetches'] += len(missing_tickers)
+            metrics["failed_fetches"] += len(missing_tickers)
 
-            _logger.info("Batch screening completed: %d candidates from %d tickers",
-                        len(candidates), len(batch_data))
+            _logger.info("Batch screening completed: %d candidates from %d tickers", len(candidates), len(batch_data))
 
             return candidates
 
@@ -467,8 +474,9 @@ class WeeklyScreener:
             # Fallback to individual screening
             return self._screen_universe_individual(universe, metrics)
 
-    def _process_ticker_data(self, ticker: str, ticker_data: Dict[str, Any],
-                           metrics: Dict[str, Any]) -> Optional[Candidate]:
+    def _process_ticker_data(
+        self, ticker: str, ticker_data: Dict[str, Any], metrics: Dict[str, Any]
+    ) -> Candidate | None:
         """
         Process batch ticker data to create candidate.
 
@@ -481,26 +489,24 @@ class WeeklyScreener:
             Candidate if ticker meets criteria, None otherwise
         """
         try:
-            profile = ticker_data.get('profile')
-            short_interest_data = ticker_data.get('shortInterest')
+            profile = ticker_data.get("profile")
+            short_interest_data = ticker_data.get("shortInterest")
 
             if not profile or not short_interest_data:
                 return None
 
             # Extract structural metrics from batch data
-            structural_metrics = self._extract_structural_metrics_from_batch(
-                ticker, profile, short_interest_data
-            )
+            structural_metrics = self._extract_structural_metrics_from_batch(ticker, profile, short_interest_data)
 
             if not structural_metrics:
                 return None
 
             # Update quality metrics
-            metrics['successful_fetches'] += 1
+            metrics["successful_fetches"] += 1
             if structural_metrics.short_interest_pct > 0:
-                metrics['valid_short_interest'] += 1
+                metrics["valid_short_interest"] += 1
             if structural_metrics.float_shares > 0:
-                metrics['valid_float_data'] += 1
+                metrics["valid_float_data"] += 1
 
             # Check if ticker meets minimum criteria
             if not self._meets_minimum_criteria(structural_metrics):
@@ -515,12 +521,16 @@ class WeeklyScreener:
                 screener_score=screener_score,
                 structural_metrics=structural_metrics,
                 last_updated=datetime.now(),
-                source=CandidateSource.SCREENER
+                source=CandidateSource.SCREENER,
             )
 
-            _logger.debug("Processed %s: score=%.3f, SI=%.1f%%, DTC=%.1f",
-                         ticker, screener_score, structural_metrics.short_interest_pct * 100,
-                         structural_metrics.days_to_cover)
+            _logger.debug(
+                "Processed %s: score=%.3f, SI=%.1f%%, DTC=%.1f",
+                ticker,
+                screener_score,
+                structural_metrics.short_interest_pct * 100,
+                structural_metrics.days_to_cover,
+            )
 
             return candidate
 
@@ -528,8 +538,9 @@ class WeeklyScreener:
             _logger.warning("Error processing ticker data for %s: %s", ticker, e)
             return None
 
-    def _extract_structural_metrics_from_batch(self, ticker: str, profile: Dict[str, Any],
-                                             short_data: Dict[str, Any]) -> Optional[StructuralMetrics]:
+    def _extract_structural_metrics_from_batch(
+        self, ticker: str, profile: Dict[str, Any], short_data: Dict[str, Any]
+    ) -> StructuralMetrics | None:
         """
         Extract structural metrics from batch API data.
 
@@ -543,8 +554,8 @@ class WeeklyScreener:
         """
         try:
             # Extract short interest
-            short_interest = short_data.get('shortInterest', 0)
-            shares_outstanding = profile.get('sharesOutstanding', 0)
+            short_interest = short_data.get("shortInterest", 0)
+            shares_outstanding = profile.get("sharesOutstanding", 0)
 
             if not shares_outstanding or shares_outstanding <= 0:
                 return None
@@ -552,17 +563,17 @@ class WeeklyScreener:
             short_interest_pct = short_interest / shares_outstanding
 
             # Extract float shares
-            float_shares = profile.get('floatShares', shares_outstanding)
+            float_shares = profile.get("floatShares", shares_outstanding)
             if float_shares <= 0:
                 float_shares = shares_outstanding
 
             # Extract market cap
-            market_cap = profile.get('mktCap', 0)
+            market_cap = profile.get("mktCap", 0)
             if market_cap <= 0:
                 return None
 
             # Extract volume data from profile (use average volume if available)
-            avg_volume_14d = profile.get('volAvg', profile.get('avgVolume', 0))
+            avg_volume_14d = profile.get("volAvg", profile.get("avgVolume", 0))
             if avg_volume_14d <= 0:
                 return None
 
@@ -575,7 +586,7 @@ class WeeklyScreener:
                 days_to_cover=days_to_cover,
                 float_shares=int(float_shares),
                 avg_volume_14d=int(avg_volume_14d),
-                market_cap=int(market_cap)
+                market_cap=int(market_cap),
             )
 
             return structural_metrics
@@ -606,17 +617,16 @@ class WeeklyScreener:
 
                 # Log progress every 100 tickers
                 if i % 100 == 0:
-                    _logger.info("Screened %d/%d tickers, found %d candidates",
-                               i, len(universe), len(candidates))
+                    _logger.info("Screened %d/%d tickers, found %d candidates", i, len(universe), len(candidates))
 
             except Exception as e:
                 _logger.warning("Error screening ticker %s: %s", ticker, e)
-                metrics['failed_fetches'] += 1
+                metrics["failed_fetches"] += 1
                 continue
 
         return candidates
 
-    def _screen_ticker_individual(self, ticker: str, metrics: Dict[str, Any]) -> Optional[Candidate]:
+    def _screen_ticker_individual(self, ticker: str, metrics: Dict[str, Any]) -> Candidate | None:
         """
         Screen a single ticker for short squeeze potential.
 
@@ -630,39 +640,37 @@ class WeeklyScreener:
         try:
             # Get short interest data
             short_data = self.fmp_downloader.get_short_interest_data(ticker)
-            metrics['api_calls_made'] += 1
+            metrics["api_calls_made"] += 1
 
             if not short_data:
                 return None
 
             # Get float shares data
             float_data = self.fmp_downloader.get_float_shares_data(ticker)
-            metrics['api_calls_made'] += 1
+            metrics["api_calls_made"] += 1
 
             if not float_data:
                 return None
 
             # Get recent volume data for average calculation
             volume_data = self._get_average_volume(ticker)
-            metrics['api_calls_made'] += 1
+            metrics["api_calls_made"] += 1
 
             if not volume_data:
                 return None
 
             # Extract and validate metrics
-            structural_metrics = self._extract_structural_metrics(
-                ticker, short_data, float_data, volume_data
-            )
+            structural_metrics = self._extract_structural_metrics(ticker, short_data, float_data, volume_data)
 
             if not structural_metrics:
                 return None
 
             # Update quality metrics
-            metrics['successful_fetches'] += 1
+            metrics["successful_fetches"] += 1
             if structural_metrics.short_interest_pct > 0:
-                metrics['valid_short_interest'] += 1
+                metrics["valid_short_interest"] += 1
             if structural_metrics.float_shares > 0:
-                metrics['valid_float_data'] += 1
+                metrics["valid_float_data"] += 1
 
             # Check if ticker meets minimum criteria
             if not self._meets_minimum_criteria(structural_metrics):
@@ -677,12 +685,16 @@ class WeeklyScreener:
                 screener_score=screener_score,
                 structural_metrics=structural_metrics,
                 last_updated=datetime.now(),
-                source=CandidateSource.SCREENER
+                source=CandidateSource.SCREENER,
             )
 
-            _logger.debug("Screened %s: score=%.3f, SI=%.1f%%, DTC=%.1f",
-                         ticker, screener_score, structural_metrics.short_interest_pct * 100,
-                         structural_metrics.days_to_cover)
+            _logger.debug(
+                "Screened %s: score=%.3f, SI=%.1f%%, DTC=%.1f",
+                ticker,
+                screener_score,
+                structural_metrics.short_interest_pct * 100,
+                structural_metrics.days_to_cover,
+            )
 
             return candidate
 
@@ -690,8 +702,9 @@ class WeeklyScreener:
             _logger.warning("Error screening ticker %s: %s", ticker, e)
             return None
 
-    def _extract_structural_metrics(self, ticker: str, short_data: Dict[str, Any],
-                                   float_data: Dict[str, Any], volume_data: Dict[str, Any]) -> Optional[StructuralMetrics]:
+    def _extract_structural_metrics(
+        self, ticker: str, short_data: Dict[str, Any], float_data: Dict[str, Any], volume_data: Dict[str, Any]
+    ) -> StructuralMetrics | None:
         """
         Extract structural metrics from API data.
 
@@ -706,8 +719,8 @@ class WeeklyScreener:
         """
         try:
             # Extract short interest
-            short_interest = short_data.get('shortInterest', 0)
-            shares_outstanding = float_data.get('sharesOutstanding', 0)
+            short_interest = short_data.get("shortInterest", 0)
+            shares_outstanding = float_data.get("sharesOutstanding", 0)
 
             if not shares_outstanding or shares_outstanding <= 0:
                 return None
@@ -715,17 +728,17 @@ class WeeklyScreener:
             short_interest_pct = short_interest / shares_outstanding
 
             # Extract float shares
-            float_shares = float_data.get('floatShares', shares_outstanding)
+            float_shares = float_data.get("floatShares", shares_outstanding)
             if float_shares <= 0:
                 float_shares = shares_outstanding
 
             # Extract market cap
-            market_cap = float_data.get('marketCap', 0)
+            market_cap = float_data.get("marketCap", 0)
             if market_cap <= 0:
                 return None
 
             # Extract volume data
-            avg_volume_14d = volume_data.get('avg_volume', 0)
+            avg_volume_14d = volume_data.get("avg_volume", 0)
             if avg_volume_14d <= 0:
                 return None
 
@@ -738,7 +751,7 @@ class WeeklyScreener:
                 days_to_cover=days_to_cover,
                 float_shares=int(float_shares),
                 avg_volume_14d=int(avg_volume_14d),
-                market_cap=int(market_cap)
+                market_cap=int(market_cap),
             )
 
             return structural_metrics
@@ -747,7 +760,7 @@ class WeeklyScreener:
             _logger.warning("Error extracting structural metrics for %s: %s", ticker, e)
             return None
 
-    def _get_average_volume(self, ticker: str) -> Optional[Dict[str, Any]]:
+    def _get_average_volume(self, ticker: str) -> Dict[str, Any] | None:
         """
         Get 14-day average volume for a ticker.
 
@@ -762,22 +775,19 @@ class WeeklyScreener:
             end_date = datetime.now()
             start_date = end_date - timedelta(days=20)  # Get extra days to ensure 14 trading days
 
-            df = self.fmp_downloader.get_ohlcv(ticker, '1d', start_date, end_date)
+            df = self.fmp_downloader.get_ohlcv(ticker, "1d", start_date, end_date)
 
             if df is None or df.empty:
                 return None
 
             # Calculate average volume over the last 14 trading days
-            recent_volumes = df['volume'].tail(14)
+            recent_volumes = df["volume"].tail(14)
             if len(recent_volumes) < 7:  # Need at least 7 days of data
                 return None
 
             avg_volume = recent_volumes.mean()
 
-            return {
-                'avg_volume': avg_volume,
-                'days_of_data': len(recent_volumes)
-            }
+            return {"avg_volume": avg_volume, "days_of_data": len(recent_volumes)}
 
         except Exception as e:
             _logger.warning("Error getting average volume for %s: %s", ticker, e)
@@ -828,10 +838,10 @@ class WeeklyScreener:
 
             # Apply weights
             weighted_score = (
-                normalized_metrics['short_interest_pct'] * self.config.scoring.short_interest_pct +
-                normalized_metrics['days_to_cover'] * self.config.scoring.days_to_cover +
-                normalized_metrics['float_ratio'] * self.config.scoring.float_ratio +
-                normalized_metrics['volume_consistency'] * self.config.scoring.volume_consistency
+                normalized_metrics["short_interest_pct"] * self.config.scoring.short_interest_pct
+                + normalized_metrics["days_to_cover"] * self.config.scoring.days_to_cover
+                + normalized_metrics["float_ratio"] * self.config.scoring.float_ratio
+                + normalized_metrics["volume_consistency"] * self.config.scoring.volume_consistency
             )
 
             # Ensure score is between 0 and 1
@@ -870,26 +880,18 @@ class WeeklyScreener:
             # against market averages or use more sophisticated metrics
             min_volume = 100_000
             max_volume = 10_000_000
-            volume_normalized = min(
-                max(0.0, (metrics.avg_volume_14d - min_volume) / (max_volume - min_volume)),
-                1.0
-            )
+            volume_normalized = min(max(0.0, (metrics.avg_volume_14d - min_volume) / (max_volume - min_volume)), 1.0)
 
             return {
-                'short_interest_pct': si_normalized,
-                'days_to_cover': dtc_normalized,
-                'float_ratio': float_ratio,
-                'volume_consistency': volume_normalized
+                "short_interest_pct": si_normalized,
+                "days_to_cover": dtc_normalized,
+                "float_ratio": float_ratio,
+                "volume_consistency": volume_normalized,
             }
 
         except Exception as e:
             _logger.warning("Error normalizing metrics: %s", e)
-            return {
-                'short_interest_pct': 0.0,
-                'days_to_cover': 0.0,
-                'float_ratio': 0.0,
-                'volume_consistency': 0.0
-            }
+            return {"short_interest_pct": 0.0, "days_to_cover": 0.0, "float_ratio": 0.0, "volume_consistency": 0.0}
 
     def _filter_candidates(self, candidates: List[Candidate]) -> List[Candidate]:
         """
@@ -942,17 +944,17 @@ class WeeklyScreener:
             top_k = self.config.filters.top_k_candidates
             top_candidates = sorted_candidates[:top_k]
 
-            _logger.info("Selected top %d candidates from %d filtered candidates",
-                        len(top_candidates), len(candidates))
+            _logger.info("Selected top %d candidates from %d filtered candidates", len(top_candidates), len(candidates))
 
             return top_candidates
 
         except Exception:
             _logger.exception("Error selecting top candidates:")
-            return candidates[:self.config.filters.top_k_candidates]
+            return candidates[: self.config.filters.top_k_candidates]
 
-    def _store_results(self, candidates: List[Candidate], data_quality_metrics: Dict[str, Any],
-                      runtime_metrics: Dict[str, Any]) -> None:
+    def _store_results(
+        self, candidates: List[Candidate], data_quality_metrics: Dict[str, Any], runtime_metrics: Dict[str, Any]
+    ) -> None:
         """
         Store screener results in database.
 
@@ -967,16 +969,19 @@ class WeeklyScreener:
             # Convert candidates to dict format
             results = []
             for candidate in candidates:
-                results.append({
-                    'ticker': candidate.ticker,
-                    'screener_score': candidate.screener_score,
-                    'short_interest_pct': candidate.structural_metrics.short_interest_pct,
-                    'days_to_cover': candidate.structural_metrics.days_to_cover,
-                    'market_cap': candidate.structural_metrics.market_cap,
-                    'float_shares': candidate.structural_metrics.float_shares,
-                    'avg_volume_14d': candidate.structural_metrics.avg_volume_14d,
-                    'data_quality': data_quality_metrics.get('successful_fetches', 0) / max(data_quality_metrics.get('total_tickers', 1), 1)
-                })
+                results.append(
+                    {
+                        "ticker": candidate.ticker,
+                        "screener_score": candidate.screener_score,
+                        "short_interest_pct": candidate.structural_metrics.short_interest_pct,
+                        "days_to_cover": candidate.structural_metrics.days_to_cover,
+                        "market_cap": candidate.structural_metrics.market_cap,
+                        "float_shares": candidate.structural_metrics.float_shares,
+                        "avg_volume_14d": candidate.structural_metrics.avg_volume_14d,
+                        "data_quality": data_quality_metrics.get("successful_fetches", 0)
+                        / max(data_quality_metrics.get("total_tickers", 1), 1),
+                    }
+                )
 
             # Store screener snapshot
             service.save_screener_results(results=results, run_date=datetime.now().date())
@@ -988,8 +993,7 @@ class WeeklyScreener:
             raise
 
 
-def create_weekly_screener(fmp_downloader: FMPDataDownloader,
-                          config: ScreenerConfig) -> WeeklyScreener:
+def create_weekly_screener(fmp_downloader: FMPDataDownloader, config: ScreenerConfig) -> WeeklyScreener:
     """
     Factory function to create Weekly Screener.
 
@@ -1042,9 +1046,11 @@ if __name__ == "__main__":
 
             # Show top candidates
             for i, candidate in enumerate(results.top_candidates[:5], 1):
-                print(f"  {i}. {candidate.ticker}: score={candidate.screener_score:.3f}, "
-                      f"SI={candidate.structural_metrics.short_interest_pct*100:.1f}%, "
-                      f"DTC={candidate.structural_metrics.days_to_cover:.1f}")
+                print(
+                    f"  {i}. {candidate.ticker}: score={candidate.screener_score:.3f}, "
+                    f"SI={candidate.structural_metrics.short_interest_pct * 100:.1f}%, "
+                    f"DTC={candidate.structural_metrics.days_to_cover:.1f}"
+                )
         else:
             print("❌ Failed to load universe")
     else:

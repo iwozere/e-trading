@@ -1,16 +1,14 @@
-import pandas as pd
-import numpy as np
-import vectorbt as vbt
-from typing import Dict, Any, Tuple, List, Optional
-from pathlib import Path
+from typing import Any, Dict, Tuple
 
-from src.ml.pipeline.p08_mtf.features import P08FeatureEngine
-from src.ml.pipeline.p07_combined.labeling import get_triple_barrier_labels
-from src.ml.pipeline.p07_combined.models import P07XGBModel
+import pandas as pd
+
 from src.ml.pipeline.p07_combined.evaluator import P07Evaluator
+from src.ml.pipeline.p07_combined.labeling import get_triple_barrier_labels
+from src.ml.pipeline.p08_mtf.features import P08FeatureEngine
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class P08Evaluator(P07Evaluator):
     """
@@ -34,10 +32,10 @@ class P08Evaluator(P07Evaluator):
                 X_seg = P08FeatureEngine.build_features(segment, params)
                 y_seg = get_triple_barrier_labels(
                     segment,
-                    pt_mult=params.get('pt_mult', 2.0),
-                    sl_mult=params.get('sl_mult', 1.0),
-                    tpl_bars=params.get('tpl_bars', 12),
-                    atr_period=params.get('atr_period', 14)
+                    pt_mult=params.get("pt_mult", 2.0),
+                    sl_mult=params.get("sl_mult", 1.0),
+                    tpl_bars=params.get("tpl_bars", 12),
+                    atr_period=params.get("atr_period", 14),
                 )
                 common_idx = X_seg.index.intersection(y_seg.index)
                 all_X.append(X_seg.loc[common_idx])
@@ -48,18 +46,17 @@ class P08Evaluator(P07Evaluator):
 
             X_f = pd.concat(all_X).sort_index()
             y_f = pd.concat(all_y).sort_index()
-            X_f = X_f.loc[~X_f.index.duplicated(keep='last')]
-            y_f = y_f.loc[~y_f.index.duplicated(keep='last')]
+            X_f = X_f.loc[~X_f.index.duplicated(keep="last")]
+            y_f = y_f.loc[~y_f.index.duplicated(keep="last")]
             return X_f, y_f
         else:
             X_f = P08FeatureEngine.build_features(ohlcv, params)
             y_seg = get_triple_barrier_labels(
                 ohlcv,
-                pt_mult=params.get('pt_mult', 2.0),
-                sl_mult=params.get('sl_mult', 1.0),
-                tpl_bars=params.get('tpl_bars', 12),
-                atr_period=params.get('atr_period', 14)
+                pt_mult=params.get("pt_mult", 2.0),
+                sl_mult=params.get("sl_mult", 1.0),
+                tpl_bars=params.get("tpl_bars", 12),
+                atr_period=params.get("atr_period", 14),
             )
             common_idx = X_f.index.intersection(y_seg.index)
             return X_f.loc[common_idx], y_seg.loc[common_idx]
-

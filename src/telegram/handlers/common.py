@@ -5,7 +5,9 @@ Contains:
 - audit_command_wrapper: wraps command execution with timing, logging, DB audit.
 - HELP_TEXT / ADMIN_HELP_TEXT: canonical help strings.
 """
+
 import time
+
 from aiogram.types import Message
 
 from src.notification.logger import setup_logger
@@ -26,7 +28,6 @@ HELP_TEXT = (
     "/verify CODE - Verify your email with the code sent\n"
     "/request_approval - Request admin approval after email verification (required for restricted features)\n"
     "/language LANG - Update language preference (en, ru)\n\n"
-
     "Report Commands:\n"
     "/report TICKER1 TICKER2 ... [flags] - Get a report for specified tickers\n"
     "Flags:\n"
@@ -36,27 +37,22 @@ HELP_TEXT = (
     "  -interval=1d,15m,1h: Data interval (default: 1d)\n"
     "  -provider=yf,bnc: Data provider (yf=Yahoo, bnc=Binance)\n"
     "  -config=JSON_STRING: Use JSON configuration for advanced options\n\n"
-
     "Screener Commands:\n"
     "/screener JSON_CONFIG [-email] - Run enhanced screener immediately\n"
     "Flags:\n"
     "  -email: Send results to your registered email\n\n"
-
     "Alert Commands:\n"
     "/alerts - List all your active price alerts\n"
     "/alerts add TICKER PRICE above/below [flags] - Add price alert\n"
     "/alerts delete ALERT_ID - Delete alert by ID\n"
     "/alerts evaluate - Check your alerts now\n\n"
-
     "Schedule Commands:\n"
     "/schedules - List all your scheduled reports\n"
     "/schedules add TICKER TIME [flags] - Schedule daily report\n"
     "/schedules delete SCHEDULE_ID - Delete schedule\n\n"
-
     "Feedback Commands:\n"
     "/feedback MESSAGE - Send feedback or bug report\n"
     "/feature MESSAGE - Suggest a new feature\n\n"
-
     "Note: Some commands require admin approval. Use /request_approval after email verification."
 )
 
@@ -123,7 +119,10 @@ async def audit_command_wrapper(message: Message, command_func, *args, **kwargs)
         try:
             _logger.info(
                 "Command OK: user=%s command=%s time=%dms registered=%s",
-                telegram_user_id, command, response_time_ms, is_registered_user,
+                telegram_user_id,
+                command,
+                response_time_ms,
+                is_registered_user,
             )
             telegram_svc.log_command_audit(
                 telegram_user_id=telegram_user_id,
@@ -145,7 +144,11 @@ async def audit_command_wrapper(message: Message, command_func, *args, **kwargs)
         try:
             _logger.error(
                 "Command FAILED: user=%s command=%s time=%dms registered=%s error=%s",
-                telegram_user_id, command, response_time_ms, is_registered_user, exc,
+                telegram_user_id,
+                command,
+                response_time_ms,
+                is_registered_user,
+                exc,
             )
             telegram_svc.log_command_audit(
                 telegram_user_id=telegram_user_id,

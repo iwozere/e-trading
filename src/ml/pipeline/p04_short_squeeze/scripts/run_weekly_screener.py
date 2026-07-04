@@ -28,19 +28,19 @@ Examples:
 
 import argparse
 import sys
+from datetime import date, datetime
 from pathlib import Path
-from datetime import datetime, date
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
-from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.data.db.services.short_squeeze_service import ShortSqueezeService
+from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.ml.pipeline.p04_short_squeeze.config.config_manager import ConfigManager
 from src.ml.pipeline.p04_short_squeeze.core.universe_loader import create_universe_loader
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -56,10 +56,10 @@ class WeeklyUniverseLoader:
 
     def __init__(self):
         """Initialize the weekly screener runner."""
-        self.config_manager: Optional[ConfigManager] = None
-        self.fmp_downloader: Optional[FMPDataDownloader] = None
-        self.start_time: Optional[datetime] = None
-        self.run_id: Optional[str] = None
+        self.config_manager: ConfigManager | None = None
+        self.fmp_downloader: FMPDataDownloader | None = None
+        self.start_time: datetime | None = None
+        self.run_id: str | None = None
 
     def parse_arguments(self) -> argparse.Namespace:
         """
@@ -71,50 +71,26 @@ class WeeklyUniverseLoader:
         parser = argparse.ArgumentParser(
             description="Load weekly stock universe for short squeeze detection",
             formatter_class=argparse.RawDescriptionHelpFormatter,
-            epilog=__doc__.split('Usage:')[1] if 'Usage:' in __doc__ else ""
+            epilog=__doc__.split("Usage:")[1] if "Usage:" in __doc__ else "",
         )
 
         parser.add_argument(
-            '--config', '-c',
-            type=str,
-            help='Path to configuration file (default: uses default config location)'
+            "--config", "-c", type=str, help="Path to configuration file (default: uses default config location)"
         )
 
         parser.add_argument(
-            '--max-universe',
-            type=int,
-            help='Maximum number of stocks in universe (for testing/debugging)'
+            "--max-universe", type=int, help="Maximum number of stocks in universe (for testing/debugging)"
         )
 
-        parser.add_argument(
-            '--dry-run',
-            action='store_true',
-            help='Run without writing results to database'
-        )
+        parser.add_argument("--dry-run", action="store_true", help="Run without writing results to database")
 
-        parser.add_argument(
-            '--verbose', '-v',
-            action='store_true',
-            help='Enable verbose logging'
-        )
+        parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
 
-        parser.add_argument(
-            '--test-connection',
-            action='store_true',
-            help='Test API connections and exit'
-        )
+        parser.add_argument("--test-connection", action="store_true", help="Test API connections and exit")
 
-        parser.add_argument(
-            '--run-id',
-            type=str,
-            help='Custom run ID (default: auto-generated timestamp)'
-        )
+        parser.add_argument("--run-id", type=str, help="Custom run ID (default: auto-generated timestamp)")
 
-        parser.add_argument(
-            '--output-dir',
-            type=str,
-            help='Directory to save output reports (optional)'
-        )
+        parser.add_argument("--output-dir", type=str, help="Directory to save output reports (optional)")
 
         return parser.parse_args()
 
@@ -127,10 +103,11 @@ class WeeklyUniverseLoader:
         """
         if verbose:
             import logging
+
             logging.getLogger().setLevel(logging.DEBUG)
             _logger.info("Verbose logging enabled")
 
-    def load_configuration(self, config_path: Optional[str]) -> bool:
+    def load_configuration(self, config_path: str | None) -> bool:
         """
         Load and validate configuration.
 
@@ -149,12 +126,14 @@ class WeeklyUniverseLoader:
             _logger.info("Run ID: %s", config.run_id)
 
             # Get universe configuration
-            universe_config = getattr(config.screener, 'universe', None)
+            universe_config = getattr(config.screener, "universe", None)
             if universe_config:
-                _logger.info("Universe filters: min_market_cap=$%.0fM, min_volume=%d, exchanges=%s",
-                           universe_config.min_market_cap / 1_000_000,
-                           universe_config.min_avg_volume,
-                           universe_config.exchanges)
+                _logger.info(
+                    "Universe filters: min_market_cap=$%.0fM, min_volume=%d, exchanges=%s",
+                    universe_config.min_market_cap / 1_000_000,
+                    universe_config.min_avg_volume,
+                    universe_config.exchanges,
+                )
 
             return True
 
@@ -187,7 +166,7 @@ class WeeklyUniverseLoader:
             _logger.exception("Failed to initialize data providers:")
             return False
 
-    def load_universe(self, max_universe: Optional[int] = None) -> Optional[List[str]]:
+    def load_universe(self, max_universe: int | None = None) -> List[str] | None:
         """
         Load the stock universe from FMP with market cap and volume filtering.
 
@@ -202,11 +181,12 @@ class WeeklyUniverseLoader:
 
             # Get universe configuration
             config = self.config_manager.load_config()
-            universe_config = getattr(config.screener, 'universe', None)
+            universe_config = getattr(config.screener, "universe", None)
 
             if not universe_config:
                 _logger.warning("No screener.universe config found, using default settings")
                 from src.ml.pipeline.p04_short_squeeze.config.data_classes import UniverseConfig
+
                 universe_config = UniverseConfig()
 
             universe_loader = create_universe_loader(self.fmp_downloader, universe_config)
@@ -218,8 +198,7 @@ class WeeklyUniverseLoader:
 
             # Apply max universe limit if specified
             if max_universe and len(universe) > max_universe:
-                _logger.info("Limiting universe from %d to %d stocks for testing",
-                           len(universe), max_universe)
+                _logger.info("Limiting universe from %d to %d stocks for testing", len(universe), max_universe)
                 universe = universe[:max_universe]
 
             _logger.info("Successfully loaded universe of %d stocks", len(universe))
@@ -229,7 +208,7 @@ class WeeklyUniverseLoader:
             _logger.exception("Failed to load universe:")
             return None
 
-    def store_universe(self, universe: List[str], dry_run: bool = False) -> Optional[Dict[str, Any]]:
+    def store_universe(self, universe: List[str], dry_run: bool = False) -> Dict[str, Any] | None:
         """
         Store the universe in the database for use by other pipeline components.
 
@@ -249,11 +228,11 @@ class WeeklyUniverseLoader:
             if dry_run:
                 _logger.info("DRY RUN MODE: Universe would be stored in database")
                 stored_count = len(universe)
-                strategy_breakdown = {'mid_cap': 500, 'small_cap': 300, 'known_candidates': len(universe) - 800}
+                strategy_breakdown = {"mid_cap": 500, "small_cap": 300, "known_candidates": len(universe) - 800}
             else:
                 # Get universe loader to categorize tickers by strategy
                 config = self.config_manager.load_config()
-                universe_config = getattr(config.screener, 'universe', None)
+                universe_config = getattr(config.screener, "universe", None)
                 universe_loader = create_universe_loader(self.fmp_downloader, universe_config)
 
                 # Get strategy breakdown from universe loader
@@ -266,19 +245,21 @@ class WeeklyUniverseLoader:
                     # Determine which strategy this ticker came from
                     strategy = self._determine_ticker_strategy(ticker, strategy_breakdown)
 
-                    universe_data.append({
-                        'ticker': ticker.upper(),
-                        'run_date': current_date,
-                        'screener_score': 0.0,  # No scoring in universe loading
-                        'raw_payload': {
-                            'universe_load': True,
-                            'ticker': ticker,
-                            'source': 'universe_loader',
-                            'strategy': strategy,
-                            'load_timestamp': datetime.now().isoformat()
-                        },
-                        'data_quality': 1.0  # High quality since it's from market cap filtering
-                    })
+                    universe_data.append(
+                        {
+                            "ticker": ticker.upper(),
+                            "run_date": current_date,
+                            "screener_score": 0.0,  # No scoring in universe loading
+                            "raw_payload": {
+                                "universe_load": True,
+                                "ticker": ticker,
+                                "source": "universe_loader",
+                                "strategy": strategy,
+                                "load_timestamp": datetime.now().isoformat(),
+                            },
+                            "data_quality": 1.0,  # High quality since it's from market cap filtering
+                        }
+                    )
 
                 _logger.info("Preparing to store %d universe entries in ss_snapshot table", len(universe_data))
 
@@ -289,13 +270,13 @@ class WeeklyUniverseLoader:
 
             # Prepare results
             results_dict = {
-                'run_id': self.run_id,
-                'load_date': date.today().isoformat(),
-                'universe_size': len(universe),
-                'stored_count': stored_count,
-                'universe_sample': universe[:10],  # First 10 tickers as sample
-                'storage_success': stored_count > 0,
-                'strategy_breakdown': strategy_breakdown
+                "run_id": self.run_id,
+                "load_date": date.today().isoformat(),
+                "universe_size": len(universe),
+                "stored_count": stored_count,
+                "universe_sample": universe[:10],  # First 10 tickers as sample
+                "storage_success": stored_count > 0,
+                "strategy_breakdown": strategy_breakdown,
             }
 
             _logger.info("Universe storage completed: %d/%d stocks stored", stored_count, len(universe))
@@ -324,9 +305,9 @@ class WeeklyUniverseLoader:
 
             # Estimate strategy breakdown (this is approximate since we don't track exact source)
             config = self.config_manager.load_config()
-            universe_config = getattr(config.screener, 'universe', None)
+            universe_config = getattr(config.screener, "universe", None)
 
-            max_universe = getattr(universe_config, 'max_universe_size', 1000)
+            max_universe = getattr(universe_config, "max_universe_size", 1000)
             strategy_1_limit = min(500, max_universe // 2)
             strategy_2_limit = min(300, max_universe // 3)
 
@@ -337,16 +318,16 @@ class WeeklyUniverseLoader:
             other_count = max(0, len(universe) - mid_cap_count - small_cap_count)
 
             return {
-                'mid_cap_strategy': mid_cap_count,
-                'small_cap_strategy': small_cap_count,
-                'known_candidates': known_candidates_count,
-                'other': other_count,
-                'total': len(universe)
+                "mid_cap_strategy": mid_cap_count,
+                "small_cap_strategy": small_cap_count,
+                "known_candidates": known_candidates_count,
+                "other": other_count,
+                "total": len(universe),
             }
 
         except Exception as e:
             _logger.warning("Error getting strategy breakdown: %s", e)
-            return {'total': len(universe), 'unknown': len(universe)}
+            return {"total": len(universe), "unknown": len(universe)}
 
     def _determine_ticker_strategy(self, ticker: str, strategy_breakdown: Dict[str, int]) -> str:
         """
@@ -361,7 +342,7 @@ class WeeklyUniverseLoader:
         """
         # This is a simplified approach - in practice you'd need to track this during loading
         # For now, just return 'multi_strategy' since we combine all strategies
-        return 'multi_strategy'
+        return "multi_strategy"
 
     def generate_performance_report(self, results: Dict[str, Any]) -> None:
         """
@@ -372,32 +353,32 @@ class WeeklyUniverseLoader:
         """
         try:
             _logger.info("=== WEEKLY UNIVERSE LOADER PERFORMANCE REPORT ===")
-            _logger.info("Run ID: %s", results.get('run_id'))
-            _logger.info("Load Date: %s", results.get('load_date'))
+            _logger.info("Run ID: %s", results.get("run_id"))
+            _logger.info("Load Date: %s", results.get("load_date"))
 
             # Universe loading results
-            _logger.info("Universe Size: %d", results.get('universe_size', 0))
-            _logger.info("Stored Count: %d", results.get('stored_count', 0))
-            _logger.info("Storage Success: %s", "✅" if results.get('storage_success') else "❌")
+            _logger.info("Universe Size: %d", results.get("universe_size", 0))
+            _logger.info("Stored Count: %d", results.get("stored_count", 0))
+            _logger.info("Storage Success: %s", "✅" if results.get("storage_success") else "❌")
 
             # Strategy breakdown
-            strategy_breakdown = results.get('strategy_breakdown', {})
+            strategy_breakdown = results.get("strategy_breakdown", {})
             if strategy_breakdown:
                 _logger.info("Strategy Breakdown:")
                 for strategy, count in strategy_breakdown.items():
                     _logger.info("  %s: %d tickers", strategy, count)
 
             # Sample of loaded universe
-            universe_sample = results.get('universe_sample', [])
+            universe_sample = results.get("universe_sample", [])
             if universe_sample:
-                _logger.info("Universe Sample (first 10): %s", ', '.join(universe_sample))
+                _logger.info("Universe Sample (first 10): %s", ", ".join(universe_sample))
 
             _logger.info("=== END PERFORMANCE REPORT ===")
 
         except Exception as e:
             _logger.warning("Failed to generate performance report: %s", e)
 
-    def save_output_report(self, results: Dict[str, Any], output_dir: Optional[str]) -> None:
+    def save_output_report(self, results: Dict[str, Any], output_dir: str | None) -> None:
         """
         Save output report to file if output directory is specified.
 
@@ -416,10 +397,10 @@ class WeeklyUniverseLoader:
             output_path.mkdir(parents=True, exist_ok=True)
 
             # Save JSON report
-            run_id = results.get('run_id', 'unknown')
+            run_id = results.get("run_id", "unknown")
             json_file = output_path / f"weekly_universe_{run_id}.json"
 
-            with open(json_file, 'w', encoding='utf-8') as f:
+            with open(json_file, "w", encoding="utf-8") as f:
                 json.dump(results, f, indent=2, default=str)
 
             _logger.info("Output report saved to: %s", json_file)

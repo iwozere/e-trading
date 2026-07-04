@@ -24,21 +24,22 @@ Some call sites reset_index locally or use ``coerce_ohlcv_timestamp_column`` whe
 
 import os
 import re
-import yaml
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Dict, Any, Optional, List
+from datetime import UTC, datetime, timedelta
+from typing import Any, Dict, List
 
 import pandas as pd
 
 from src.data.cache.fundamentals_cache import get_fundamentals_cache
 from src.data.cache.fundamentals_combiner import get_fundamentals_combiner
+from src.error_handling.exceptions import NetworkException, RateLimitException
 
 
-from src.error_handling.exceptions import RateLimitException, NetworkException
 class TimeoutException(Exception):
     """Exception raised when requests timeout."""
+
     pass
+
+
 from src.notification.logger import setup_logger
 
 # Initialize logger
@@ -47,60 +48,45 @@ _logger = setup_logger(__name__)
 # Import API keys from donotshare configuration
 try:
     from config.donotshare.donotshare import (
-        ALPHA_VANTAGE_API_KEY,
-        FMP_API_KEY,
-        POLYGON_API_KEY,
-        TWELVE_DATA_API_KEY,
-        FINNHUB_API_KEY,
-        TIINGO_API_KEY,
         ALPACA_API_KEY,
         ALPACA_SECRET_KEY,
-        DATA_CACHE_DIR
+        ALPHA_VANTAGE_API_KEY,
+        DATA_CACHE_DIR,
+        FINNHUB_API_KEY,
+        FMP_API_KEY,
+        POLYGON_API_KEY,
+        TIINGO_API_KEY,
+        TWELVE_DATA_API_KEY,
     )
 except ImportError:
     # Fallback to environment variables if donotshare is not available
-    ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
-    FMP_API_KEY = os.getenv('FMP_API_KEY')
-    POLYGON_API_KEY = os.getenv('POLYGON_API_KEY')
-    TWELVE_DATA_API_KEY = os.getenv('TWELVE_DATA_API_KEY')
-    FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
-    TIINGO_API_KEY = os.getenv('TIINGO_API_KEY')
-    ALPACA_API_KEY = os.getenv('ALPACA_API_KEY')
-    ALPACA_SECRET_KEY = os.getenv('ALPACA_SECRET_KEY')
-    DATA_CACHE_DIR = os.getenv('DATA_CACHE_DIR', 'c:/data-cache')  # Fallback if import fails
+    ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
+    FMP_API_KEY = os.getenv("FMP_API_KEY")
+    POLYGON_API_KEY = os.getenv("POLYGON_API_KEY")
+    TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY")
+    FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
+    TIINGO_API_KEY = os.getenv("TIINGO_API_KEY")
+    ALPACA_API_KEY = os.getenv("ALPACA_API_KEY")
+    ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
+    DATA_CACHE_DIR = os.getenv("DATA_CACHE_DIR", "c:/data-cache")  # Fallback if import fails
 
 # Import cache and utilities
 from src.data.cache.unified_cache import UnifiedCache
-from src.data.utils.rate_limiting import RateLimiter
-from src.data.utils.retry import retry_on_exception
-from src.data.utils.validation import validate_ohlcv_data
 
 # Import downloaders
-from src.data.downloader.base_data_downloader import BaseDataDownloader
-from src.data.downloader.binance_data_downloader import BinanceDataDownloader
-from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
-from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
-from src.data.downloader.fmp_data_downloader import FMPDataDownloader
-from src.data.downloader.tiingo_data_downloader import TiingoDataDownloader
-from src.data.downloader.polygon_data_downloader import PolygonDataDownloader
-from src.data.downloader.twelvedata_data_downloader import TwelveDataDataDownloader
-from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
-from src.data.downloader.coingecko_data_downloader import CoinGeckoDataDownloader
-from src.data.downloader.alpaca_data_downloader import AlpacaDataDownloader
-from src.data.downloader.data_downloader_factory import DataDownloaderFactory
-
-
-
 # Import live feeds
 from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 from src.data.feed.binance_live_feed import BinanceLiveDataFeed
-from src.data.feed.yahoo_live_feed import YahooLiveDataFeed
 from src.data.feed.coingecko_live_feed import CoinGeckoLiveDataFeed
+from src.data.feed.yahoo_live_feed import YahooLiveDataFeed
+from src.data.utils.rate_limiting import RateLimiter
+from src.data.utils.retry import retry_on_exception
 
 _logger = setup_logger(__name__)
 
 
 from src.data.provider_selector import ProviderSelector  # noqa: F401
+
 
 class DataManager:
     """
@@ -114,7 +100,7 @@ class DataManager:
     - Centralized error handling and retry logic
     """
 
-    def __init__(self, cache_dir: str = DATA_CACHE_DIR, config_path: Optional[str] = None):
+    def __init__(self, cache_dir: str = DATA_CACHE_DIR, config_path: str | None = None):
         """
         Initialize DataManager.
 
@@ -126,8 +112,7 @@ class DataManager:
         self.provider_selector = ProviderSelector(config_path, cache_dir)
         self.rate_limiters = {}
         self._rate_limited_providers = set()  # Session-level blacklist (legacy)
-        self._provider_cooldowns = {}         # Temporary cooldowns: {provider_name: expiration_time}
-
+        self._provider_cooldowns = {}  # Temporary cooldowns: {provider_name: expiration_time}
 
         # Initialize rate limiters for each provider
         self._initialize_rate_limiters()
@@ -136,28 +121,30 @@ class DataManager:
 
     # Conservative default rate limit applied to any provider not listed below.
     # Prevents accidental API bans when new providers are added without an explicit limit.
-    _DEFAULT_RATE_LIMIT = {'requests_per_minute': 10}
+    _DEFAULT_RATE_LIMIT = {"requests_per_minute": 10}
 
     # Override via PROVIDER_RATE_LIMITS env var (JSON) for runtime tuning without code changes.
     # Yahoo Finance (yfinance) is an unofficial API — very aggressive throttling is required.
     # burst_size=1 disables burst, requests_per_second=1 enforces ≤1 req/s per process.
     _BUILTIN_RATE_LIMITS = {
-        'binance': {'requests_per_minute': 1200},
-        'yahoo': {'requests_per_minute': 60, 'requests_per_second': 1, 'burst_size': 1},
-        'alpha_vantage': {'requests_per_minute': 5},
-        'fmp': {'requests_per_minute': 3000},
-        'tiingo': {'requests_per_minute': 100},
-        'polygon': {'requests_per_minute': 5},
-        'coingecko': {'requests_per_minute': 50},
-        'alpaca': {'requests_per_minute': 200},
-        'eodhd': {'requests_per_minute': 100},
-        'twelvedata': {'requests_per_minute': 55},
-        'finnhub': {'requests_per_minute': 60},
+        "binance": {"requests_per_minute": 1200},
+        "yahoo": {"requests_per_minute": 60, "requests_per_second": 1, "burst_size": 1},
+        "alpha_vantage": {"requests_per_minute": 5},
+        "fmp": {"requests_per_minute": 3000},
+        "tiingo": {"requests_per_minute": 100},
+        "polygon": {"requests_per_minute": 5},
+        "coingecko": {"requests_per_minute": 50},
+        "alpaca": {"requests_per_minute": 200},
+        "eodhd": {"requests_per_minute": 100},
+        "twelvedata": {"requests_per_minute": 55},
+        "finnhub": {"requests_per_minute": 60},
     }
 
     def _initialize_rate_limiters(self):
         """Initialize rate limiters for each provider with config-driven overrides."""
-        import json, os
+        import json
+        import os
+
         rate_limits = dict(self._BUILTIN_RATE_LIMITS)
 
         env_overrides = os.getenv("PROVIDER_RATE_LIMITS")
@@ -172,9 +159,9 @@ class DataManager:
             self.rate_limiters[provider] = RateLimiter(**limits)
 
     @retry_on_exception(max_attempts=3, base_delay=1.0)
-    def get_ohlcv(self, symbol: str, timeframe: str,
-                  start_date: datetime, end_date: datetime,
-                  force_refresh: bool = False) -> pd.DataFrame:
+    def get_ohlcv(
+        self, symbol: str, timeframe: str, start_date: datetime, end_date: datetime, force_refresh: bool = False
+    ) -> pd.DataFrame:
         """
         Retrieve historical OHLCV data with caching, gap detection, and provider selection.
 
@@ -226,19 +213,19 @@ class DataManager:
             # re-fetches just because end_date extends past the last trading bar.
             # 1d=8 covers weekends (3d) plus known extended closures (Sandy=5d, 9/11=7d).
             # 1h=18 bars (~overnight+buffer), sub-hour scaled.
-            _TOLERANCE = {'1d': 8.0, '1h': 18.0, '30m': 36.0, '15m': 72.0, '5m': 216.0}
+            _TOLERANCE = {"1d": 8.0, "1h": 18.0, "30m": 36.0, "15m": 72.0, "5m": 216.0}
             tolerance_factor = _TOLERANCE.get(timeframe, 4.0)
 
             cache_start = cached_data.index[0]
             cache_end = cached_data.index[-1]
 
             # Make timezone-aware for comparison
-            safe_start = start_date.replace(tzinfo=timezone.utc) if start_date.tzinfo is None else start_date
-            safe_end = end_date.replace(tzinfo=timezone.utc) if end_date.tzinfo is None else end_date
+            safe_start = start_date.replace(tzinfo=UTC) if start_date.tzinfo is None else start_date
+            safe_end = end_date.replace(tzinfo=UTC) if end_date.tzinfo is None else end_date
             if cache_start.tzinfo is None:
-                cache_start = cache_start.replace(tzinfo=timezone.utc)
+                cache_start = cache_start.replace(tzinfo=UTC)
             if cache_end.tzinfo is None:
-                cache_end = cache_end.replace(tzinfo=timezone.utc)
+                cache_end = cache_end.replace(tzinfo=UTC)
 
             # Prefix gap
             if (cache_start - safe_start) > (bar_duration * tolerance_factor):
@@ -283,7 +270,7 @@ class DataManager:
                     else:
                         # Default-deny: apply a conservative limiter for unknown providers
                         # to prevent accidental API bans until an explicit limit is configured.
-                        if not hasattr(self, '_default_rate_limiter'):
+                        if not hasattr(self, "_default_rate_limiter"):
                             self._default_rate_limiter = RateLimiter(**self._DEFAULT_RATE_LIMIT)
                         self._default_rate_limiter.wait_if_needed()
                         _logger.debug("Applying default rate limit (10 rpm) for unconfigured provider: %s", provider)
@@ -297,8 +284,14 @@ class DataManager:
                         self._cache_data(data_copy, symbol, timeframe, seg_start, seg_end, provider)
                         fetched_frames.append(data_copy)
                         segment_fetched = True
-                        _logger.info("Filled gap for %s from %s (%s to %s, %d rows)",
-                                     symbol, provider, seg_start, seg_end, len(data_copy))
+                        _logger.info(
+                            "Filled gap for %s from %s (%s to %s, %d rows)",
+                            symbol,
+                            provider,
+                            seg_start,
+                            seg_end,
+                            len(data_copy),
+                        )
                         break
                     else:
                         _logger.warning("Provider %s returned empty data for gap %s-%s", provider, seg_start, seg_end)
@@ -319,16 +312,16 @@ class DataManager:
             raise RuntimeError(f"All providers failed for {symbol} {timeframe} and no cache available.")
 
         result = pd.concat(all_frames)
-        result = result[~result.index.duplicated(keep='last')].sort_index()
+        result = result[~result.index.duplicated(keep="last")].sort_index()
         _logger.info("Returning %d rows for %s %s (gaps filled)", len(result), symbol, timeframe)
         return result
 
-    def get_ohlcv_batch(self, symbols: List[str], timeframe: str,
-                        start_date: datetime, end_date: datetime,
-                        force_refresh: bool = False) -> Dict[str, pd.DataFrame]:
+    def get_ohlcv_batch(
+        self, symbols: List[str], timeframe: str, start_date: datetime, end_date: datetime, force_refresh: bool = False
+    ) -> Dict[str, pd.DataFrame]:
         """
         Retrieve historical OHLCV data for multiple symbols, utilizing cache where possible.
-        
+
         This method optimizes for batch retrieval (like daily pipeline runs). It checks the
         UnifiedCache for each symbol. If a symbol is missing data, it calculates the required
         delta date range, groups all missing symbols, and downloads them in a single batch
@@ -357,40 +350,40 @@ class DataManager:
             # Step A: Load whatever we have in cache for the full requested range
             # Note: UnifiedCache.get already handles multiple years
             cached_df = self.cache.get(sym, timeframe, start_date, end_date)
-            
+
             if force_refresh or cached_df is None or cached_df.empty:
                 missing_ranges.setdefault(sym, []).append((start_date, end_date))
                 results[sym] = pd.DataFrame()
                 continue
-            
+
             results[sym] = cached_df
-            
+
             # Step B: Identify Prefix Gap (missing data at start)
             cache_start = cached_df.index[0]
             if cache_start.tzinfo is None:
-                cache_start = cache_start.replace(tzinfo=timezone.utc)
-            
-            safe_start = start_date.replace(tzinfo=timezone.utc) if start_date.tzinfo is None else start_date
-            
+                cache_start = cache_start.replace(tzinfo=UTC)
+
+            safe_start = start_date.replace(tzinfo=UTC) if start_date.tzinfo is None else start_date
+
             # Tolerance: covers overnight/weekend gaps (same table as get_ohlcv).
             # 1d=8 covers weekends (3d) plus known extended closures (Sandy=5d, 9/11=7d).
             bar_duration = self._get_bar_duration(timeframe)
-            _TOLERANCE = {'1d': 8.0, '1h': 18.0, '30m': 36.0, '15m': 72.0, '5m': 216.0}
+            _TOLERANCE = {"1d": 8.0, "1h": 18.0, "30m": 36.0, "15m": 72.0, "5m": 216.0}
             tolerance_factor = _TOLERANCE.get(timeframe, 4.0)
-            
+
             if (cache_start - safe_start) > (bar_duration * tolerance_factor):
                 missing_ranges.setdefault(sym, []).append((safe_start, cache_start - bar_duration))
-            
+
             # Step C: Identify Suffix Gap (missing data at end)
             cache_end = cached_df.index[-1]
             if cache_end.tzinfo is None:
-                cache_end = cache_end.replace(tzinfo=timezone.utc)
-            
-            safe_end = end_date.replace(tzinfo=timezone.utc) if end_date.tzinfo is None else end_date
-            
+                cache_end = cache_end.replace(tzinfo=UTC)
+
+            safe_end = end_date.replace(tzinfo=UTC) if end_date.tzinfo is None else end_date
+
             if (safe_end - cache_end) > (bar_duration * tolerance_factor):
                 missing_ranges.setdefault(sym, []).append((cache_end + bar_duration, safe_end))
-                
+
             # Step D: Identify Intermediate Gaps (gaps in the middle)
             # Use diff() to find gaps > tolerance_factor * bar_duration
             diffs = cached_df.index.to_series().diff().dropna()
@@ -398,7 +391,9 @@ class DataManager:
             for gap_end_ts, duration in large_gaps.items():
                 gap_start_ts = gap_end_ts - duration + bar_duration
                 # Groups these for later batch download
-                missing_ranges.setdefault(sym, []).append((gap_start_ts.to_pydatetime(), gap_end_ts.to_pydatetime() - bar_duration))
+                missing_ranges.setdefault(sym, []).append(
+                    (gap_start_ts.to_pydatetime(), gap_end_ts.to_pydatetime() - bar_duration)
+                )
 
         if not missing_ranges:
             _logger.info("All %d symbols loaded from cache. No batch download required.", len(symbols))
@@ -408,68 +403,72 @@ class DataManager:
         ranges_to_symbols = {}
         for sym, segments in missing_ranges.items():
             for m_start, m_end in segments:
-                date_key = (m_start.strftime('%Y-%m-%d'), m_end.strftime('%Y-%m-%d'))
+                date_key = (m_start.strftime("%Y-%m-%d"), m_end.strftime("%Y-%m-%d"))
                 ranges_to_symbols.setdefault(date_key, []).append(sym)
 
         # 3. Download and cache deltas
-        _logger.info("Fetching missing data for %d symbols across %d date ranges...", len(missing_ranges), len(ranges_to_symbols))
-        
+        _logger.info(
+            "Fetching missing data for %d symbols across %d date ranges...", len(missing_ranges), len(ranges_to_symbols)
+        )
+
         # We explicitly use YahooDataDownloader for batching as it supports yf.download
         yahoo_dl = self.provider_selector._initialize_downloader("yahoo")
 
         for (start_str, end_str), batch_symbols in ranges_to_symbols.items():
-            b_start = datetime.strptime(start_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-            b_end = datetime.strptime(end_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-            
+            b_start = datetime.strptime(start_str, "%Y-%m-%d").replace(tzinfo=UTC)
+            b_end = datetime.strptime(end_str, "%Y-%m-%d").replace(tzinfo=UTC)
+
             try:
                 # Download batch via Yahoo
                 _logger.info("Batch downloading %d symbols from %s to %s", len(batch_symbols), b_start, b_end)
                 batch_df = yahoo_dl.get_ohlcv_batch(batch_symbols, timeframe, b_start, b_end)
-                
+
                 # Yahoo returns MultiIndex if > 1 symbol, or single index if 1 symbol, but get_ohlcv_batch normalizes
                 # it internally and returns a joined dataframe with 'ticker' column, OR a dict depending on implementation.
-                # NOTE: We know YahooDataDownloader.get_ohlcv_batch currently returns a combined flat DataFrame 
+                # NOTE: We know YahooDataDownloader.get_ohlcv_batch currently returns a combined flat DataFrame
                 # if group_by='ticker' wasn't unpacked. Let's unpack it correctly.
-                
+
                 if isinstance(batch_df, dict):
                     raw_dict = batch_df
                 else:
                     # If it's a flat df with a generic multi-index
-                    raise NotImplementedError("Expected YahooDataDownloader.get_ohlcv_batch to return a dict, need to adapt if returns DataFrame")
+                    raise NotImplementedError(
+                        "Expected YahooDataDownloader.get_ohlcv_batch to return a dict, need to adapt if returns DataFrame"
+                    )
 
                 for sym, df_data in raw_dict.items():
                     if df_data is None or df_data.empty:
                         continue
-                        
+
                     # Normalize columns using shared helper
                     df_copy = self._normalize_ohlcv(df_data)
 
                     # Cache the new delta segment
-                    self._cache_data(df_copy, sym, timeframe, b_start, b_end, 'yahoo')
-                    
+                    self._cache_data(df_copy, sym, timeframe, b_start, b_end, "yahoo")
+
                     # Merge with existing cache if we had a partial hit
                     if sym in results and not results[sym].empty:
                         # Append and deduplicate
                         merged = pd.concat([results[sym], df_copy])
-                        merged = merged[~merged.index.duplicated(keep='last')].sort_index()
+                        merged = merged[~merged.index.duplicated(keep="last")].sort_index()
                         results[sym] = merged
                     else:
                         results[sym] = df_copy
-            
+
             except Exception as e:
                 _logger.error("Failed batch download for a group: %s", e)
 
         return results
 
-    def get_funding_rate(self, symbol: str,
-                         start_date: datetime, end_date: datetime,
-                         force_refresh: bool = False) -> pd.DataFrame:
+    def get_funding_rate(
+        self, symbol: str, start_date: datetime, end_date: datetime, force_refresh: bool = False
+    ) -> pd.DataFrame:
         """
         Retrieve historical funding rate data with caching.
         """
-        data_type = 'funding_rate'
-        timeframe = '8h'  # Funding rates are typically every 8 hours on Binance
-        
+        data_type = "funding_rate"
+        timeframe = "8h"  # Funding rates are typically every 8 hours on Binance
+
         # Check cache
         if not force_refresh:
             cached_data = self.cache.get(symbol, timeframe, start_date, end_date, data_type=data_type)
@@ -479,33 +478,33 @@ class DataManager:
 
         # Fetch from Binance
         _logger.info("Cache miss for %s %s (%s), fetching from Binance", symbol, timeframe, data_type)
-        downloader = self.provider_selector._initialize_downloader('binance')
+        downloader = self.provider_selector._initialize_downloader("binance")
         if not downloader:
-             raise RuntimeError("Binance downloader not available")
+            raise RuntimeError("Binance downloader not available")
 
         # Download
         data = downloader.get_funding_rate_history(symbol, start_date, end_date)
-        
+
         if data is not None and not data.empty:
             # Normalize index
-            if not isinstance(data.index, pd.DatetimeIndex) and 'timestamp' in data.columns:
-                data['timestamp'] = pd.to_datetime(data['timestamp'])
-                data = data.set_index('timestamp')
-            
+            if not isinstance(data.index, pd.DatetimeIndex) and "timestamp" in data.columns:
+                data["timestamp"] = pd.to_datetime(data["timestamp"])
+                data = data.set_index("timestamp")
+
             # Cache
-            self.cache.put(data, symbol, timeframe, start_date, end_date, 'binance', data_type=data_type)
+            self.cache.put(data, symbol, timeframe, start_date, end_date, "binance", data_type=data_type)
             return data
-            
+
         return pd.DataFrame()
 
-    def get_open_interest(self, symbol: str, period: str,
-                          start_date: datetime, end_date: datetime,
-                          force_refresh: bool = False) -> pd.DataFrame:
+    def get_open_interest(
+        self, symbol: str, period: str, start_date: datetime, end_date: datetime, force_refresh: bool = False
+    ) -> pd.DataFrame:
         """
         Retrieve historical open interest data with caching.
         """
-        data_type = 'open_interest'
-        
+        data_type = "open_interest"
+
         # Check cache
         if not force_refresh:
             cached_data = self.cache.get(symbol, period, start_date, end_date, data_type=data_type)
@@ -515,33 +514,33 @@ class DataManager:
 
         # Fetch from Binance
         _logger.info("Cache miss for %s %s (%s), fetching from Binance", symbol, period, data_type)
-        downloader = self.provider_selector._initialize_downloader('binance')
+        downloader = self.provider_selector._initialize_downloader("binance")
         if not downloader:
-             raise RuntimeError("Binance downloader not available")
+            raise RuntimeError("Binance downloader not available")
 
         # Download
         data = downloader.get_open_interest_history(symbol, period, start_date, end_date)
-        
+
         if data is not None and not data.empty:
             # Normalize index
-            if not isinstance(data.index, pd.DatetimeIndex) and 'timestamp' in data.columns:
-                data['timestamp'] = pd.to_datetime(data['timestamp'])
-                data = data.set_index('timestamp')
-            
+            if not isinstance(data.index, pd.DatetimeIndex) and "timestamp" in data.columns:
+                data["timestamp"] = pd.to_datetime(data["timestamp"])
+                data = data.set_index("timestamp")
+
             # Cache
-            self.cache.put(data, symbol, period, start_date, end_date, 'binance', data_type=data_type)
+            self.cache.put(data, symbol, period, start_date, end_date, "binance", data_type=data_type)
             return data
-            
+
         return pd.DataFrame()
 
-    def get_long_short_ratio(self, symbol: str, period: str,
-                             start_date: datetime, end_date: datetime,
-                             force_refresh: bool = False) -> pd.DataFrame:
+    def get_long_short_ratio(
+        self, symbol: str, period: str, start_date: datetime, end_date: datetime, force_refresh: bool = False
+    ) -> pd.DataFrame:
         """
         Retrieve historical long/short ratio data with caching.
         """
-        data_type = 'long_short_ratio'
-        
+        data_type = "long_short_ratio"
+
         # Check cache
         if not force_refresh:
             cached_data = self.cache.get(symbol, period, start_date, end_date, data_type=data_type)
@@ -551,42 +550,43 @@ class DataManager:
 
         # Fetch from Binance
         _logger.info("Cache miss for %s %s (%s), fetching from Binance", symbol, period, data_type)
-        downloader = self.provider_selector._initialize_downloader('binance')
+        downloader = self.provider_selector._initialize_downloader("binance")
         if not downloader:
-             raise RuntimeError("Binance downloader not available")
+            raise RuntimeError("Binance downloader not available")
 
         # Download
         data = downloader.get_long_short_ratio(symbol, period, start_date, end_date)
-        
+
         if data is not None and not data.empty:
             # Normalize index
-            if not isinstance(data.index, pd.DatetimeIndex) and 'timestamp' in data.columns:
-                data['timestamp'] = pd.to_datetime(data['timestamp'])
-                data = data.set_index('timestamp')
-            
+            if not isinstance(data.index, pd.DatetimeIndex) and "timestamp" in data.columns:
+                data["timestamp"] = pd.to_datetime(data["timestamp"])
+                data = data.set_index("timestamp")
+
             # Cache
-            self.cache.put(data, symbol, period, start_date, end_date, 'binance', data_type=data_type)
+            self.cache.put(data, symbol, period, start_date, end_date, "binance", data_type=data_type)
             return data
-            
+
         return pd.DataFrame()
 
     def _get_bar_duration(self, timeframe: str) -> timedelta:
         """Helper to get expected duration of one bar."""
         bar_durations = {
-            '1m': timedelta(minutes=1),
-            '5m': timedelta(minutes=5),
-            '15m': timedelta(minutes=15),
-            '30m': timedelta(minutes=30),
-            '1h': timedelta(hours=1),
-            '4h': timedelta(hours=4),
-            '1d': timedelta(days=1),
-            '1w': timedelta(days=7),
-            '1M': timedelta(days=30),
+            "1m": timedelta(minutes=1),
+            "5m": timedelta(minutes=5),
+            "15m": timedelta(minutes=15),
+            "30m": timedelta(minutes=30),
+            "1h": timedelta(hours=1),
+            "4h": timedelta(hours=4),
+            "1d": timedelta(days=1),
+            "1w": timedelta(days=7),
+            "1M": timedelta(days=30),
         }
         return bar_durations.get(timeframe, timedelta(hours=24))
 
-    def _get_cached_data(self, symbol: str, timeframe: str,
-                        start_date: datetime, end_date: datetime) -> Optional[pd.DataFrame]:
+    def _get_cached_data(
+        self, symbol: str, timeframe: str, start_date: datetime, end_date: datetime
+    ) -> pd.DataFrame | None:
         """
         Get data from cache for the specified date range with staleness check.
 
@@ -600,26 +600,26 @@ class DataManager:
             if cached_df is not None and not cached_df.empty:
                 # Check if cached data is stale
                 latest_cached_date = cached_df.index[-1]
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
 
                 # Make latest_cached_date timezone-aware if it isn't
                 if latest_cached_date.tzinfo is None:
-                    latest_cached_date = latest_cached_date.replace(tzinfo=timezone.utc)
+                    latest_cached_date = latest_cached_date.replace(tzinfo=UTC)
 
                 # Calculate age of the latest data point
                 data_age = now - latest_cached_date
 
                 # Define staleness thresholds based on timeframe
                 staleness_thresholds = {
-                    '1m': timedelta(minutes=5),
-                    '5m': timedelta(minutes=15),
-                    '15m': timedelta(hours=1),
-                    '30m': timedelta(hours=2),
-                    '1h': timedelta(hours=4),
-                    '4h': timedelta(hours=12),
-                    '1d': timedelta(hours=24),
-                    '1w': timedelta(days=7),
-                    '1M': timedelta(days=30),
+                    "1m": timedelta(minutes=5),
+                    "5m": timedelta(minutes=15),
+                    "15m": timedelta(hours=1),
+                    "30m": timedelta(hours=2),
+                    "1h": timedelta(hours=4),
+                    "4h": timedelta(hours=12),
+                    "1d": timedelta(hours=24),
+                    "1w": timedelta(days=7),
+                    "1M": timedelta(days=30),
                 }
 
                 # Get threshold for this timeframe (default to 24 hours)
@@ -633,7 +633,10 @@ class DataManager:
                 if data_age > threshold and is_requesting_recent_data:
                     _logger.info(
                         "Cache data for %s %s is stale (age: %s, threshold: %s), fetching fresh data",
-                        symbol, timeframe, data_age, threshold
+                        symbol,
+                        timeframe,
+                        data_age,
+                        threshold,
                     )
                     return None
 
@@ -643,13 +646,13 @@ class DataManager:
 
                 # Heuristic for bar duration
                 bar_durations = {
-                    '1m': timedelta(minutes=1),
-                    '5m': timedelta(minutes=5),
-                    '15m': timedelta(minutes=15),
-                    '30m': timedelta(minutes=30),
-                    '1h': timedelta(hours=1),
-                    '4h': timedelta(hours=4),
-                    '1d': timedelta(days=1),
+                    "1m": timedelta(minutes=1),
+                    "5m": timedelta(minutes=5),
+                    "15m": timedelta(minutes=15),
+                    "30m": timedelta(minutes=30),
+                    "1h": timedelta(hours=1),
+                    "4h": timedelta(hours=4),
+                    "1d": timedelta(days=1),
                 }
                 tolerance = bar_durations.get(timeframe, timedelta(hours=1))
 
@@ -661,7 +664,10 @@ class DataManager:
                     if not is_requesting_recent_data:
                         _logger.info(
                             "Cache for %s %s is incomplete (last bar: %s, requested: %s). Forcing fetch.",
-                            symbol, timeframe, latest_cached_date, expected_end
+                            symbol,
+                            timeframe,
+                            latest_cached_date,
+                            expected_end,
                         )
                         return None
 
@@ -697,33 +703,34 @@ class DataManager:
         data_copy = data.copy()
 
         # If index is datetime and no 'timestamp' column, create it from index
-        if 'timestamp' not in data_copy.columns and isinstance(data_copy.index, pd.DatetimeIndex):
+        if "timestamp" not in data_copy.columns and isinstance(data_copy.index, pd.DatetimeIndex):
             ts_index = data_copy.index
             if ts_index.tz is not None:
                 ts_index = ts_index.tz_localize(None)
-            data_copy.insert(0, 'timestamp', ts_index)
+            data_copy.insert(0, "timestamp", ts_index)
 
         # Lowercase all columns
         rename_map = {c: c.lower() for c in data_copy.columns}
         data_copy = data_copy.rename(columns=rename_map)
 
         # Ensure required columns exist
-        required_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+        required_cols = ["timestamp", "open", "high", "low", "close", "volume"]
         missing = [c for c in required_cols if c not in data_copy.columns]
         if missing:
             _logger.warning("Missing required columns after normalization: %s", missing)
 
         # Make timestamp tz-naive and set as index
-        if 'timestamp' in data_copy.columns:
-            data_copy['timestamp'] = pd.to_datetime(data_copy['timestamp'], errors='coerce')
-            if data_copy['timestamp'].dt.tz is not None:
-                data_copy['timestamp'] = data_copy['timestamp'].dt.tz_localize(None)
-            data_copy = data_copy.set_index('timestamp')
+        if "timestamp" in data_copy.columns:
+            data_copy["timestamp"] = pd.to_datetime(data_copy["timestamp"], errors="coerce")
+            if data_copy["timestamp"].dt.tz is not None:
+                data_copy["timestamp"] = data_copy["timestamp"].dt.tz_localize(None)
+            data_copy = data_copy.set_index("timestamp")
 
         return data_copy
 
-    def _cache_data(self, data: pd.DataFrame, symbol: str, timeframe: str,
-                   start_date: datetime, end_date: datetime, provider: str):
+    def _cache_data(
+        self, data: pd.DataFrame, symbol: str, timeframe: str, start_date: datetime, end_date: datetime, provider: str
+    ):
         """Cache data using UnifiedCache."""
         try:
             # Use UnifiedCache put method with the full data and date range
@@ -734,8 +741,9 @@ class DataManager:
         except Exception:
             _logger.exception("Error caching data:")
 
-    def get_live_feed(self, symbol: str, timeframe: str,
-                     lookback_bars: int = 1000, **kwargs) -> Optional[BaseLiveDataFeed]:
+    def get_live_feed(
+        self, symbol: str, timeframe: str, lookback_bars: int = 1000, **kwargs
+    ) -> BaseLiveDataFeed | None:
         """
         Create and return a live data feed instance.
 
@@ -757,9 +765,9 @@ class DataManager:
 
             # Map provider to live feed class
             feed_classes = {
-                'binance': BinanceLiveDataFeed,
-                'yahoo': YahooLiveDataFeed,
-                'coingecko': CoinGeckoLiveDataFeed,
+                "binance": BinanceLiveDataFeed,
+                "yahoo": YahooLiveDataFeed,
+                "coingecko": CoinGeckoLiveDataFeed,
             }
 
             if provider not in feed_classes:
@@ -770,11 +778,11 @@ class DataManager:
 
             # Create feed configuration
             config = {
-                'symbol': symbol,
-                'interval': timeframe,
-                'lookback_bars': lookback_bars,
-                'data_manager': self,  # Pass self for historical data backfilling
-                **kwargs
+                "symbol": symbol,
+                "interval": timeframe,
+                "lookback_bars": lookback_bars,
+                "data_manager": self,  # Pass self for historical data backfilling
+                **kwargs,
             }
 
             # Create and return feed instance
@@ -786,9 +794,15 @@ class DataManager:
             _logger.exception("Failed to create live feed for %s %s:", symbol, timeframe)
             return None
 
-    def get_fundamentals(self, symbol: str, providers: Optional[List[str]] = None,
-                        force_refresh: bool = False, combination_strategy: str = "priority_based",
-                        data_type: str = "general", max_age_days: Optional[int] = None) -> Dict[str, Any]:
+    def get_fundamentals(
+        self,
+        symbol: str,
+        providers: List[str] | None = None,
+        force_refresh: bool = False,
+        combination_strategy: str = "priority_based",
+        data_type: str = "general",
+        max_age_days: int | None = None,
+    ) -> Dict[str, Any]:
         """
         Retrieve fundamentals data with caching and multi-provider combination.
 
@@ -823,7 +837,9 @@ class DataManager:
 
             # 2. Cache validation with data-type specific TTL (or override)
             if not force_refresh:
-                cached_data = self._get_cached_fundamentals(normalized_symbol, data_type, fundamentals_cache, max_age_days=max_age_days)
+                cached_data = self._get_cached_fundamentals(
+                    normalized_symbol, data_type, fundamentals_cache, max_age_days=max_age_days
+                )
                 if cached_data:
                     return self._enrich_combined_fundamentals_output(
                         cached_data,
@@ -849,14 +865,18 @@ class DataManager:
                 # Try to return cached data as fallback
                 # Try to return cached data as fallback (ignore TTL if we are in fallback mode?)
                 # Actually let's use the provided max_age_days if any
-                cached_fallback = fundamentals_cache.find_latest_json(normalized_symbol, data_type=data_type, max_age_days=max_age_days)
+                cached_fallback = fundamentals_cache.find_latest_json(
+                    normalized_symbol, data_type=data_type, max_age_days=max_age_days
+                )
                 if cached_fallback:
                     _logger.info("Returning stale cached data as fallback for %s", normalized_symbol)
                     return fundamentals_cache.read_json(cached_fallback.file_path) or {}
                 return {}
 
             # 5. Data combination and validation
-            combined_data = self._combine_and_validate_fundamentals(provider_data, combination_strategy, data_type, combiner)
+            combined_data = self._combine_and_validate_fundamentals(
+                provider_data, combination_strategy, data_type, combiner
+            )
 
             if not combined_data:
                 _logger.error("Failed to combine fundamentals data for %s", normalized_symbol)
@@ -873,8 +893,11 @@ class DataManager:
             # 6. Cache management and cleanup
             self._cache_fundamentals_data(normalized_symbol, provider_data, combined_data, fundamentals_cache)
 
-            _logger.info("Successfully retrieved and combined fundamentals for %s from %d providers",
-                        normalized_symbol, len(provider_data))
+            _logger.info(
+                "Successfully retrieved and combined fundamentals for %s from %d providers",
+                normalized_symbol,
+                len(provider_data),
+            )
 
             return combined_data
 
@@ -899,19 +922,18 @@ class DataManager:
         normalized = symbol.strip().upper()
 
         # Basic validation - symbol should contain only alphanumeric characters, dots, and hyphens
-        if not re.match(r'^[A-Z0-9.\-]+$', normalized):
+        if not re.match(r"^[A-Z0-9.\-]+$", normalized):
             _logger.warning("Symbol contains invalid characters: %s", symbol)
             return ""
 
         # Handle common symbol mappings
-        symbol_mappings = {
-            'BRK.B': 'BRK-B',
-            'BRK.A': 'BRK-A'
-        }
+        symbol_mappings = {"BRK.B": "BRK-B", "BRK.A": "BRK-A"}
 
         return symbol_mappings.get(normalized, normalized)
 
-    def _get_cached_fundamentals(self, symbol: str, data_type: str, fundamentals_cache, max_age_days: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    def _get_cached_fundamentals(
+        self, symbol: str, data_type: str, fundamentals_cache, max_age_days: int | None = None
+    ) -> Dict[str, Any] | None:
         """
         Get cached fundamentals data with data-type specific TTL validation.
 
@@ -924,7 +946,9 @@ class DataManager:
             Cached data if valid, None otherwise
         """
         try:
-            cached_metadata = fundamentals_cache.find_latest_json(symbol, data_type=data_type, max_age_days=max_age_days)
+            cached_metadata = fundamentals_cache.find_latest_json(
+                symbol, data_type=data_type, max_age_days=max_age_days
+            )
             if not cached_metadata:
                 _logger.debug("No cached data found for %s %s (max_age=%s)", symbol, data_type, max_age_days)
                 return None
@@ -935,17 +959,21 @@ class DataManager:
                 _logger.warning("Failed to read cached data for %s", symbol)
                 return None
 
-            _logger.info("Using cached fundamentals for %s from %s (age: %s)",
-                        symbol, cached_metadata.provider,
-                        datetime.now() - cached_metadata.timestamp)
+            _logger.info(
+                "Using cached fundamentals for %s from %s (age: %s)",
+                symbol,
+                cached_metadata.provider,
+                datetime.now() - cached_metadata.timestamp,
+            )
             return cached_data
 
         except Exception:
             _logger.exception("Error accessing cached fundamentals for %s:", symbol)
             return None
 
-    def _select_fundamentals_providers(self, symbol: str, requested_providers: Optional[List[str]],
-                                     data_type: str, combiner) -> List[str]:
+    def _select_fundamentals_providers(
+        self, symbol: str, requested_providers: List[str] | None, data_type: str, combiner
+    ) -> List[str]:
         """
         Select optimal providers for fundamentals data retrieval with enhanced logic.
 
@@ -970,15 +998,13 @@ class DataManager:
             symbol_classification = self.provider_selector.classify_symbol_for_fundamentals(symbol)
 
             # Check if symbol supports fundamentals at all
-            if symbol_classification['fundamentals_support'] == 'none':
+            if symbol_classification["fundamentals_support"] == "none":
                 _logger.debug("Symbol %s does not support fundamentals data", symbol)
                 return []
 
             if requested_providers:
                 # Validate and filter requested providers
-                valid_providers = self._validate_requested_providers(
-                    requested_providers, symbol_classification
-                )
+                valid_providers = self._validate_requested_providers(requested_providers, symbol_classification)
                 if valid_providers:
                     _logger.debug("Using validated requested providers for %s: %s", symbol, valid_providers)
                     return valid_providers
@@ -988,27 +1014,22 @@ class DataManager:
             _logger.debug("Provider sequence for %s data type: %s", data_type, provider_sequence)
 
             # Filter providers by symbol compatibility and availability
-            compatible_providers = self._filter_compatible_providers(
-                provider_sequence, symbol_classification
-            )
+            compatible_providers = self._filter_compatible_providers(provider_sequence, symbol_classification)
 
             if compatible_providers:
-                _logger.debug("Using compatible providers for %s %s: %s",
-                            symbol, data_type, compatible_providers)
+                _logger.debug("Using compatible providers for %s %s: %s", symbol, data_type, compatible_providers)
                 return compatible_providers
 
             # Fallback: try general provider sequence if data-type specific failed
-            if data_type != 'general':
-                general_sequence = self._load_data_type_provider_sequence('general', combiner)
-                general_compatible = self._filter_compatible_providers(
-                    general_sequence, symbol_classification
-                )
+            if data_type != "general":
+                general_sequence = self._load_data_type_provider_sequence("general", combiner)
+                general_compatible = self._filter_compatible_providers(general_sequence, symbol_classification)
                 if general_compatible:
                     _logger.warning("Using general provider sequence for %s: %s", symbol, general_compatible)
                     return general_compatible
 
             # Enhanced fallback: try international-optimized sequence for international symbols
-            if symbol_classification.get('international', False):
+            if symbol_classification.get("international", False):
                 intl_providers = self._get_international_optimized_providers(symbol_classification)
                 if intl_providers:
                     _logger.warning("Using international-optimized providers for %s: %s", symbol, intl_providers)
@@ -1047,45 +1068,45 @@ class DataManager:
         try:
             # Enhanced data type mapping for better provider selection
             data_type_mappings = {
-                'general': 'profile',
-                'company': 'profile',
-                'overview': 'profile',
-                'financial_statements': 'statements',
-                'income_statement': 'statements',
-                'balance_sheet': 'statements',
-                'cash_flow': 'statements',
-                'financial_ratios': 'ratios',
-                'valuation_ratios': 'ratios',
-                'profitability_ratios': 'ratios',
-                'liquidity_ratios': 'ratios',
-                'efficiency_ratios': 'ratios',
-                'leverage_ratios': 'ratios',
-                'growth_ratios': 'ratios',
-                'ttm_metrics': 'ratios',
-                'earnings': 'calendar',
-                'earnings_calendar': 'calendar',
-                'dividend_history': 'dividends',
-                'dividend_calendar': 'dividends',
-                'stock_splits': 'splits',
-                'insider_transactions': 'insider_trading',
-                'analyst_recommendations': 'analyst_estimates',
-                'price_targets': 'analyst_estimates'
+                "general": "profile",
+                "company": "profile",
+                "overview": "profile",
+                "financial_statements": "statements",
+                "income_statement": "statements",
+                "balance_sheet": "statements",
+                "cash_flow": "statements",
+                "financial_ratios": "ratios",
+                "valuation_ratios": "ratios",
+                "profitability_ratios": "ratios",
+                "liquidity_ratios": "ratios",
+                "efficiency_ratios": "ratios",
+                "leverage_ratios": "ratios",
+                "growth_ratios": "ratios",
+                "ttm_metrics": "ratios",
+                "earnings": "calendar",
+                "earnings_calendar": "calendar",
+                "dividend_history": "dividends",
+                "dividend_calendar": "dividends",
+                "stock_splits": "splits",
+                "insider_transactions": "insider_trading",
+                "analyst_recommendations": "analyst_estimates",
+                "price_targets": "analyst_estimates",
             }
 
             # Provider name mappings to handle configuration vs implementation differences
             provider_name_mappings = {
-                'alphavantage': 'alpha_vantage',
-                'alpha_vantage': 'alpha_vantage',
-                'yfinance': 'yahoo',  # yfinance uses yahoo downloader
-                'yahoo': 'yahoo',
-                'fmp': 'fmp',
-                'twelvedata': 'twelvedata',
-                'tiingo': 'tiingo',
-                'polygon': 'polygon',
-                'finnhub': 'finnhub',
-                'alpaca': 'alpaca',
-                'binance': 'binance',
-                'coingecko': 'coingecko'
+                "alphavantage": "alpha_vantage",
+                "alpha_vantage": "alpha_vantage",
+                "yfinance": "yahoo",  # yfinance uses yahoo downloader
+                "yahoo": "yahoo",
+                "fmp": "fmp",
+                "twelvedata": "twelvedata",
+                "tiingo": "tiingo",
+                "polygon": "polygon",
+                "finnhub": "finnhub",
+                "alpaca": "alpaca",
+                "binance": "binance",
+                "coingecko": "coingecko",
             }
 
             # Map data type to configuration key
@@ -1101,12 +1122,12 @@ class DataManager:
                 # Validate provider availability
                 available_providers = self._validate_provider_availability(normalized_sequence)
                 if available_providers:
-                    _logger.debug("Loaded provider sequence for %s (%s): %s",
-                                data_type, config_key, available_providers)
+                    _logger.debug(
+                        "Loaded provider sequence for %s (%s): %s", data_type, config_key, available_providers
+                    )
                     return available_providers
                 else:
-                    _logger.warning("No providers available for %s sequence: %s",
-                                  config_key, normalized_sequence)
+                    _logger.warning("No providers available for %s sequence: %s", config_key, normalized_sequence)
 
             # Enhanced fallback logic with data-type specific preferences
             fallback_sequence = self._get_data_type_fallback_sequence(data_type, combiner)
@@ -1115,7 +1136,7 @@ class DataManager:
                 return fallback_sequence
 
             # Final fallback to general sequence
-            general_sequence = combiner.get_provider_sequence('profile')
+            general_sequence = combiner.get_provider_sequence("profile")
             if general_sequence:
                 normalized_general = self._normalize_provider_names(general_sequence, provider_name_mappings)
                 available_general = self._validate_provider_availability(normalized_general)
@@ -1124,7 +1145,7 @@ class DataManager:
                     return available_general
 
             # Last resort: hardcoded default sequence (using implementation names)
-            default_sequence = ['yahoo', 'fmp', 'alpha_vantage']
+            default_sequence = ["yahoo", "fmp", "alpha_vantage"]
             available_default = self._validate_provider_availability(default_sequence)
             if available_default:
                 _logger.warning("Using default provider sequence for %s: %s", data_type, available_default)
@@ -1137,7 +1158,7 @@ class DataManager:
         except Exception:
             _logger.exception("Error loading provider sequence for %s:", data_type)
             # Return safe default with availability check (using implementation names)
-            safe_default = ['yahoo', 'fmp', 'alpha_vantage']
+            safe_default = ["yahoo", "fmp", "alpha_vantage"]
             return self._validate_provider_availability(safe_default)
 
     def _validate_provider_availability(self, provider_sequence: List[str]) -> List[str]:
@@ -1175,7 +1196,7 @@ class DataManager:
             downloader = self.provider_selector.downloaders[provider_name]
 
             # Check if provider supports fundamentals
-            if not hasattr(downloader, 'get_fundamentals'):
+            if not hasattr(downloader, "get_fundamentals"):
                 _logger.debug("Provider %s not available (no fundamentals support)", provider_name)
                 continue
 
@@ -1196,40 +1217,46 @@ class DataManager:
             List of fallback provider names
         """
         # Data type categories for intelligent fallbacks
-        statement_types = ['statements', 'financial_statements', 'income_statement',
-                          'balance_sheet', 'cash_flow']
-        ratio_types = ['ratios', 'financial_ratios', 'valuation_ratios', 'profitability_ratios',
-                      'liquidity_ratios', 'efficiency_ratios', 'leverage_ratios', 'growth_ratios',
-                      'ttm_metrics']
-        profile_types = ['profile', 'company', 'overview', 'general']
-        calendar_types = ['calendar', 'earnings', 'earnings_calendar']
-        dividend_types = ['dividends', 'dividend_history', 'dividend_calendar']
+        statement_types = ["statements", "financial_statements", "income_statement", "balance_sheet", "cash_flow"]
+        ratio_types = [
+            "ratios",
+            "financial_ratios",
+            "valuation_ratios",
+            "profitability_ratios",
+            "liquidity_ratios",
+            "efficiency_ratios",
+            "leverage_ratios",
+            "growth_ratios",
+            "ttm_metrics",
+        ]
+        profile_types = ["profile", "company", "overview", "general"]
+        calendar_types = ["calendar", "earnings", "earnings_calendar"]
+        dividend_types = ["dividends", "dividend_history", "dividend_calendar"]
 
         # Select fallback based on data type category (using implementation names)
         if data_type in statement_types:
             # For statements, prefer Alpha Vantage and Yahoo
-            fallback_candidates = ['alpha_vantage', 'yahoo', 'twelvedata', 'fmp']
+            fallback_candidates = ["alpha_vantage", "yahoo", "twelvedata", "fmp"]
         elif data_type in ratio_types:
             # For ratios, prefer Yahoo Finance and Alpha Vantage
-            fallback_candidates = ['yahoo', 'alpha_vantage', 'twelvedata', 'fmp']
+            fallback_candidates = ["yahoo", "alpha_vantage", "twelvedata", "fmp"]
         elif data_type in profile_types:
             # For profiles, prefer Yahoo Finance and Finnhub
-            fallback_candidates = ['yahoo', 'finnhub', 'alpha_vantage', 'twelvedata', 'fmp']
+            fallback_candidates = ["yahoo", "finnhub", "alpha_vantage", "twelvedata", "fmp"]
         elif data_type in calendar_types:
             # For calendar events, prefer Yahoo Finance
-            fallback_candidates = ['yahoo', 'finnhub', 'fmp', 'alpha_vantage']
+            fallback_candidates = ["yahoo", "finnhub", "fmp", "alpha_vantage"]
         elif data_type in dividend_types:
             # For dividends, prefer Yahoo Finance
-            fallback_candidates = ['yahoo', 'finnhub', 'fmp', 'alpha_vantage']
+            fallback_candidates = ["yahoo", "finnhub", "fmp", "alpha_vantage"]
         else:
             # Default fallback for unknown data types
-            fallback_candidates = ['yahoo', 'finnhub', 'alpha_vantage', 'twelvedata', 'fmp']
+            fallback_candidates = ["yahoo", "finnhub", "alpha_vantage", "twelvedata", "fmp"]
 
         # Validate availability of fallback candidates
         return self._validate_provider_availability(fallback_candidates)
 
-    def _normalize_provider_names(self, provider_sequence: List[str],
-                                 provider_mappings: Dict[str, str]) -> List[str]:
+    def _normalize_provider_names(self, provider_sequence: List[str], provider_mappings: Dict[str, str]) -> List[str]:
         """
         Normalize provider names from configuration to match implementation names.
 
@@ -1263,19 +1290,21 @@ class DataManager:
             List of provider names optimized for international coverage
         """
         # Providers with good international coverage, in priority order (using implementation names)
-        international_providers = ['yahoo', 'twelvedata', 'alpha_vantage', 'fmp']
+        international_providers = ["yahoo", "twelvedata", "alpha_vantage", "fmp"]
 
         # Filter by availability and compatibility
         available_providers = []
         for provider in international_providers:
-            if (provider in self.provider_selector.downloaders and
-                self._is_provider_compatible_with_symbol(provider, symbol_classification)):
+            if provider in self.provider_selector.downloaders and self._is_provider_compatible_with_symbol(
+                provider, symbol_classification
+            ):
                 available_providers.append(provider)
 
         return available_providers
 
-    def _validate_requested_providers(self, requested_providers: List[str],
-                                    symbol_classification: Dict[str, Any]) -> List[str]:
+    def _validate_requested_providers(
+        self, requested_providers: List[str], symbol_classification: Dict[str, Any]
+    ) -> List[str]:
         """
         Validate user-requested providers for symbol compatibility.
 
@@ -1297,7 +1326,7 @@ class DataManager:
             downloader = self.provider_selector.downloaders[provider]
 
             # Check if provider supports fundamentals
-            if not hasattr(downloader, 'get_fundamentals'):
+            if not hasattr(downloader, "get_fundamentals"):
                 _logger.warning("Provider %s does not support fundamentals", provider)
                 continue
 
@@ -1305,8 +1334,7 @@ class DataManager:
             if self._is_provider_compatible_with_symbol(provider, symbol_classification):
                 valid_providers.append(provider)
             else:
-                _logger.warning("Provider %s not compatible with symbol %s",
-                              provider, symbol_classification['symbol'])
+                _logger.warning("Provider %s not compatible with symbol %s", provider, symbol_classification["symbol"])
 
         return valid_providers
 
@@ -1337,8 +1365,9 @@ class DataManager:
 
         return False
 
-    def _filter_compatible_providers(self, provider_sequence: List[str],
-                                   symbol_classification: Dict[str, Any]) -> List[str]:
+    def _filter_compatible_providers(
+        self, provider_sequence: List[str], symbol_classification: Dict[str, Any]
+    ) -> List[str]:
         """
         Filter provider sequence by symbol compatibility and availability with enhanced logic.
 
@@ -1363,7 +1392,6 @@ class DataManager:
             if self._is_provider_on_cooldown(provider):
                 continue
 
-
             # Check availability and initialize if needed
             if not self.provider_selector._initialize_downloader(provider):
                 _logger.debug("Provider %s not available, skipping", provider)
@@ -1372,45 +1400,54 @@ class DataManager:
             downloader = self.provider_selector.downloaders[provider]
 
             # Check fundamentals support
-            if not hasattr(downloader, 'get_fundamentals'):
+            if not hasattr(downloader, "get_fundamentals"):
                 _logger.debug("Provider %s does not support fundamentals, skipping", provider)
                 continue
 
             # Enhanced symbol compatibility check
             compatibility_result = self._check_provider_symbol_compatibility(provider, symbol_classification)
-            if compatibility_result['compatible']:
+            if compatibility_result["compatible"]:
                 # Add provider with compatibility metadata
                 provider_info = {
-                    'provider': provider,
-                    'quality_score': compatibility_result.get('quality_score', 3),
-                    'strengths': compatibility_result.get('strengths', []),
-                    'limitations': compatibility_result.get('limitations', []),
-                    'reason': compatibility_result.get('reason', 'Compatible')
+                    "provider": provider,
+                    "quality_score": compatibility_result.get("quality_score", 3),
+                    "strengths": compatibility_result.get("strengths", []),
+                    "limitations": compatibility_result.get("limitations", []),
+                    "reason": compatibility_result.get("reason", "Compatible"),
                 }
                 compatible_providers.append(provider_info)
-                _logger.debug("Provider %s compatible with %s: %s",
-                            provider, symbol_classification['symbol'], compatibility_result['reason'])
+                _logger.debug(
+                    "Provider %s compatible with %s: %s",
+                    provider,
+                    symbol_classification["symbol"],
+                    compatibility_result["reason"],
+                )
             else:
-                _logger.info("Provider %s not compatible with %s: %s",
-                            provider, symbol_classification['symbol'], compatibility_result['reason'])
-
+                _logger.info(
+                    "Provider %s not compatible with %s: %s",
+                    provider,
+                    symbol_classification["symbol"],
+                    compatibility_result["reason"],
+                )
 
         # Sort providers by suitability for this symbol
         if compatible_providers:
             sorted_providers = self._sort_providers_by_suitability(compatible_providers, symbol_classification)
-            provider_names = [p['provider'] for p in sorted_providers]
+            provider_names = [p["provider"] for p in sorted_providers]
 
             # Log the final selection with reasoning
             if len(provider_names) > 1:
-                _logger.debug("Sorted providers for %s by suitability: %s",
-                            symbol_classification['symbol'], provider_names)
+                _logger.debug(
+                    "Sorted providers for %s by suitability: %s", symbol_classification["symbol"], provider_names
+                )
 
             return provider_names
 
         return []
 
-    def _sort_providers_by_suitability(self, compatible_providers: List[Dict[str, Any]],
-                                     symbol_classification: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _sort_providers_by_suitability(
+        self, compatible_providers: List[Dict[str, Any]], symbol_classification: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """
         Sort compatible providers by suitability for the specific symbol.
 
@@ -1421,57 +1458,66 @@ class DataManager:
         Returns:
             Sorted list of provider info dictionaries
         """
+
         def calculate_suitability_score(provider_info: Dict[str, Any]) -> float:
             """Calculate suitability score for provider."""
-            base_score = provider_info.get('quality_score', 3)
+            base_score = provider_info.get("quality_score", 3)
 
             # Boost score based on symbol characteristics
-            international = symbol_classification.get('international', False)
-            market = symbol_classification.get('market', 'unknown')
-            symbol_type = symbol_classification.get('symbol_type', 'unknown')
+            international = symbol_classification.get("international", False)
+            market = symbol_classification.get("market", "unknown")
+            symbol_type = symbol_classification.get("symbol_type", "unknown")
 
             # International symbol adjustments
             if international:
-                if provider_info['provider'] in ['yahoo', 'twelvedata', 'alpha_vantage', 'finnhub']:
+                if provider_info["provider"] in ["yahoo", "twelvedata", "alpha_vantage", "finnhub"]:
                     base_score += 1.0  # Boost for international-friendly providers
-                elif provider_info['provider'] in ['fmp', 'alpaca', 'tiingo']:
+                elif provider_info["provider"] in ["fmp", "alpaca", "tiingo"]:
                     base_score -= 0.5  # Penalty for US-only providers
             else:
                 # US symbol adjustments
-                if provider_info['provider'] in ['fmp', 'alpaca', 'tiingo', 'yahoo', 'finnhub', 'alpha_vantage', 'twelvedata']:
+                if provider_info["provider"] in [
+                    "fmp",
+                    "alpaca",
+                    "tiingo",
+                    "yahoo",
+                    "finnhub",
+                    "alpha_vantage",
+                    "twelvedata",
+                ]:
                     base_score += 0.5  # Boost for US-optimized providers
 
             # Symbol type adjustments
-            if symbol_type == 'etf':
-                if provider_info['provider'] in ['yahoo', 'fmp']:
+            if symbol_type == "etf":
+                if provider_info["provider"] in ["yahoo", "fmp"]:
                     base_score += 0.3  # ETFs work well with these providers
-            elif symbol_type == 'reit':
-                if provider_info['provider'] in ['yahoo', 'fmp']:
+            elif symbol_type == "reit":
+                if provider_info["provider"] in ["yahoo", "fmp"]:
                     base_score += 0.3  # REITs work well with these providers
 
             # Market-specific adjustments
-            if market == 'EU':
-                if provider_info['provider'] in ['yahoo', 'twelvedata']:
+            if market == "EU":
+                if provider_info["provider"] in ["yahoo", "twelvedata"]:
                     base_score += 0.5  # Better EU coverage
-            elif market == 'UK':
-                if provider_info['provider'] in ['yahoo', 'alpha_vantage']:
+            elif market == "UK":
+                if provider_info["provider"] in ["yahoo", "alpha_vantage"]:
                     base_score += 0.5  # Better UK coverage
-            elif market == 'ASIA':
-                if provider_info['provider'] == 'yahoo':
+            elif market == "ASIA":
+                if provider_info["provider"] == "yahoo":
                     base_score += 0.5  # Yahoo has good Asian coverage
 
             return base_score
 
         # Calculate suitability scores and sort
         for provider_info in compatible_providers:
-            provider_info['suitability_score'] = calculate_suitability_score(provider_info)
+            provider_info["suitability_score"] = calculate_suitability_score(provider_info)
 
         # Sort by suitability score (descending), then by original order (ascending)
-        return sorted(compatible_providers,
-                     key=lambda p: (-p['suitability_score'], compatible_providers.index(p)))
+        return sorted(compatible_providers, key=lambda p: (-p["suitability_score"], compatible_providers.index(p)))
 
-    def _check_provider_symbol_compatibility(self, provider: str,
-                                           symbol_classification: Dict[str, Any]) -> Dict[str, Any]:
+    def _check_provider_symbol_compatibility(
+        self, provider: str, symbol_classification: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Enhanced provider compatibility checking with detailed reasoning.
 
@@ -1482,142 +1528,133 @@ class DataManager:
         Returns:
             Dictionary with compatibility result and reasoning
         """
-        symbol_type = symbol_classification.get('symbol_type', 'unknown')
-        country = symbol_classification.get('country', 'unknown')
-        market = symbol_classification.get('market', 'unknown')
-        international = symbol_classification.get('international', False)
-        exchange = symbol_classification.get('exchange', 'unknown')
+        symbol_type = symbol_classification.get("symbol_type", "unknown")
+        country = symbol_classification.get("country", "unknown")
+        market = symbol_classification.get("market", "unknown")
+        international = symbol_classification.get("international", False)
+        exchange = symbol_classification.get("exchange", "unknown")
 
         # Crypto symbols don't use fundamentals
-        if symbol_type == 'crypto':
-            return {
-                'compatible': False,
-                'reason': 'Crypto symbols do not support fundamentals data'
-            }
+        if symbol_type == "crypto":
+            return {"compatible": False, "reason": "Crypto symbols do not support fundamentals data"}
 
         # Enhanced provider-specific compatibility rules
         provider_compatibility = {
-            'yahoo': {
-                'symbol_types': ['stock', 'etf', 'reit'],
-                'markets': ['US', 'UK', 'EU', 'CANADA', 'ASIA', 'OCEANIA'],
-                'exchanges': ['NYSE', 'NASDAQ', 'LSE', 'TSX', 'AMS', 'EPA', 'XETRA', 'HKEX', 'TSE'],
-                'international_support': True,
-                'strengths': ['international_coverage', 'calculated_ratios', 'ttm_metrics'],
-                'limitations': ['scraping_based', 'occasional_outages'],
-                'quality_score': 5
+            "yahoo": {
+                "symbol_types": ["stock", "etf", "reit"],
+                "markets": ["US", "UK", "EU", "CANADA", "ASIA", "OCEANIA"],
+                "exchanges": ["NYSE", "NASDAQ", "LSE", "TSX", "AMS", "EPA", "XETRA", "HKEX", "TSE"],
+                "international_support": True,
+                "strengths": ["international_coverage", "calculated_ratios", "ttm_metrics"],
+                "limitations": ["scraping_based", "occasional_outages"],
+                "quality_score": 5,
             },
-            'fmp': {
-                'symbol_types': ['stock', 'etf', 'reit'],
-                'markets': ['US'],
-                'exchanges': ['NYSE', 'NASDAQ', 'AMEX'],
-                'international_support': False,
-                'strengths': ['structured_statements', 'comprehensive_ratios', 'historical_data'],
-                'limitations': ['us_only', 'api_limits'],
-                'quality_score': 5
+            "fmp": {
+                "symbol_types": ["stock", "etf", "reit"],
+                "markets": ["US"],
+                "exchanges": ["NYSE", "NASDAQ", "AMEX"],
+                "international_support": False,
+                "strengths": ["structured_statements", "comprehensive_ratios", "historical_data"],
+                "limitations": ["us_only", "api_limits"],
+                "quality_score": 5,
             },
-            'alpha_vantage': {
-                'symbol_types': ['stock', 'etf'],
-                'markets': ['US', 'UK', 'EU'],
-                'exchanges': ['NYSE', 'NASDAQ', 'LSE', 'XETRA', 'EPA'],
-                'international_support': True,
-                'strengths': ['consistent_json', 'reliable_overview'],
-                'limitations': ['strict_rate_limits', 'limited_international'],
-                'quality_score': 5
+            "alpha_vantage": {
+                "symbol_types": ["stock", "etf"],
+                "markets": ["US", "UK", "EU"],
+                "exchanges": ["NYSE", "NASDAQ", "LSE", "XETRA", "EPA"],
+                "international_support": True,
+                "strengths": ["consistent_json", "reliable_overview"],
+                "limitations": ["strict_rate_limits", "limited_international"],
+                "quality_score": 5,
             },
-            'alpaca': {
-                'symbol_types': ['stock', 'etf'],
-                'markets': ['US'],
-                'exchanges': ['NYSE', 'NASDAQ'],
-                'international_support': False,
-                'strengths': ['real_time_data', 'trading_integration'],
-                'limitations': ['us_only', 'limited_fundamentals'],
-                'quality_score': 3
+            "alpaca": {
+                "symbol_types": ["stock", "etf"],
+                "markets": ["US"],
+                "exchanges": ["NYSE", "NASDAQ"],
+                "international_support": False,
+                "strengths": ["real_time_data", "trading_integration"],
+                "limitations": ["us_only", "limited_fundamentals"],
+                "quality_score": 3,
             },
-            'tiingo': {
-                'symbol_types': ['stock', 'etf'],
-                'markets': ['US'],
-                'exchanges': ['NYSE', 'NASDAQ'],
-                'international_support': False,
-                'strengths': ['historical_data', 'data_quality'],
-                'limitations': ['us_only', 'limited_fundamentals'],
-                'quality_score': 4
+            "tiingo": {
+                "symbol_types": ["stock", "etf"],
+                "markets": ["US"],
+                "exchanges": ["NYSE", "NASDAQ"],
+                "international_support": False,
+                "strengths": ["historical_data", "data_quality"],
+                "limitations": ["us_only", "limited_fundamentals"],
+                "quality_score": 4,
             },
-            'polygon': {
-                'symbol_types': ['stock', 'etf'],
-                'markets': ['US'],
-                'exchanges': ['NYSE', 'NASDAQ'],
-                'international_support': False,
-                'strengths': ['real_time_data', 'comprehensive_market_data'],
-                'limitations': ['us_only', 'expensive'],
-                'quality_score': 4
+            "polygon": {
+                "symbol_types": ["stock", "etf"],
+                "markets": ["US"],
+                "exchanges": ["NYSE", "NASDAQ"],
+                "international_support": False,
+                "strengths": ["real_time_data", "comprehensive_market_data"],
+                "limitations": ["us_only", "expensive"],
+                "quality_score": 4,
             },
-            'twelvedata': {
-                'symbol_types': ['stock', 'etf'],
-                'markets': ['US', 'UK', 'EU', 'ASIA'],
-                'exchanges': ['NYSE', 'NASDAQ', 'LSE', 'XETRA', 'EPA', 'AMS', 'HKEX'],
-                'international_support': True,
-                'strengths': ['good_api_design', 'international_coverage'],
-                'limitations': ['limited_free_fundamentals', 'paid_features'],
-                'quality_score': 5
+            "twelvedata": {
+                "symbol_types": ["stock", "etf"],
+                "markets": ["US", "UK", "EU", "ASIA"],
+                "exchanges": ["NYSE", "NASDAQ", "LSE", "XETRA", "EPA", "AMS", "HKEX"],
+                "international_support": True,
+                "strengths": ["good_api_design", "international_coverage"],
+                "limitations": ["limited_free_fundamentals", "paid_features"],
+                "quality_score": 5,
             },
-            'finnhub': {
-                'symbol_types': ['stock', 'etf'],
-                'markets': ['US', 'UK', 'EU'],
-                'exchanges': ['NYSE', 'NASDAQ', 'LSE', 'XETRA'],
-                'international_support': True,
-                'strengths': ['real_time_data', 'news_integration'],
-                'limitations': ['limited_fundamentals', 'rate_limits'],
-                'quality_score': 5
-            }
+            "finnhub": {
+                "symbol_types": ["stock", "etf"],
+                "markets": ["US", "UK", "EU"],
+                "exchanges": ["NYSE", "NASDAQ", "LSE", "XETRA"],
+                "international_support": True,
+                "strengths": ["real_time_data", "news_integration"],
+                "limitations": ["limited_fundamentals", "rate_limits"],
+                "quality_score": 5,
+            },
         }
 
         # Get provider compatibility info
-        compat_info = provider_compatibility.get(provider, {
-            'symbol_types': ['stock', 'etf'],
-            'markets': ['US'],
-            'exchanges': ['NYSE', 'NASDAQ'],
-            'international_support': False,
-            'strengths': [],
-            'limitations': ['unknown_provider'],
-            'quality_score': 2
-        })
+        compat_info = provider_compatibility.get(
+            provider,
+            {
+                "symbol_types": ["stock", "etf"],
+                "markets": ["US"],
+                "exchanges": ["NYSE", "NASDAQ"],
+                "international_support": False,
+                "strengths": [],
+                "limitations": ["unknown_provider"],
+                "quality_score": 2,
+            },
+        )
 
         # Check symbol type compatibility
-        if symbol_type not in compat_info['symbol_types']:
-            return {
-                'compatible': False,
-                'reason': f'Provider {provider} does not support {symbol_type} symbols'
-            }
+        if symbol_type not in compat_info["symbol_types"]:
+            return {"compatible": False, "reason": f"Provider {provider} does not support {symbol_type} symbols"}
 
         # Check market compatibility
-        if market not in compat_info['markets']:
-            if international and not compat_info['international_support']:
+        if market not in compat_info["markets"]:
+            if international and not compat_info["international_support"]:
                 return {
-                    'compatible': False,
-                    'reason': f'Provider {provider} does not support international markets ({market})'
+                    "compatible": False,
+                    "reason": f"Provider {provider} does not support international markets ({market})",
                 }
 
         # Check exchange compatibility (if exchange is known)
-        if (exchange != 'unknown' and
-            'exchanges' in compat_info and
-            exchange not in compat_info['exchanges']):
-            return {
-                'compatible': False,
-                'reason': f'Provider {provider} does not support exchange {exchange}'
-            }
+        if exchange != "unknown" and "exchanges" in compat_info and exchange not in compat_info["exchanges"]:
+            return {"compatible": False, "reason": f"Provider {provider} does not support exchange {exchange}"}
 
         # Provider is compatible
-        strengths = ', '.join(compat_info.get('strengths', []))
+        strengths = ", ".join(compat_info.get("strengths", []))
         return {
-            'compatible': True,
-            'reason': f'Compatible - strengths: {strengths}',
-            'quality_score': compat_info.get('quality_score', 3),
-            'strengths': compat_info.get('strengths', []),
-            'limitations': compat_info.get('limitations', [])
+            "compatible": True,
+            "reason": f"Compatible - strengths: {strengths}",
+            "quality_score": compat_info.get("quality_score", 3),
+            "strengths": compat_info.get("strengths", []),
+            "limitations": compat_info.get("limitations", []),
         }
 
-    def _is_provider_compatible_with_symbol(self, provider: str,
-                                          symbol_classification: Dict[str, Any]) -> bool:
+    def _is_provider_compatible_with_symbol(self, provider: str, symbol_classification: Dict[str, Any]) -> bool:
         """
         Legacy compatibility method for backward compatibility.
 
@@ -1629,7 +1666,7 @@ class DataManager:
             True if provider is compatible with symbol
         """
         result = self._check_provider_symbol_compatibility(provider, symbol_classification)
-        return result['compatible']
+        return result["compatible"]
 
     def _get_fallback_providers(self, symbol_classification: Dict[str, Any]) -> List[str]:
         """
@@ -1651,34 +1688,34 @@ class DataManager:
 
         # Evaluate all available providers
         for provider_name, downloader in self.provider_selector.downloaders.items():
-            if hasattr(downloader, 'get_fundamentals'):
-                compatibility_result = self._check_provider_symbol_compatibility(
-                    provider_name, symbol_classification
-                )
-                if compatibility_result['compatible']:
-                    fallback_candidates.append({
-                        'provider': provider_name,
-                        'quality_score': compatibility_result.get('quality_score', 3),
-                        'strengths': compatibility_result.get('strengths', []),
-                        'limitations': compatibility_result.get('limitations', [])
-                    })
+            if hasattr(downloader, "get_fundamentals"):
+                compatibility_result = self._check_provider_symbol_compatibility(provider_name, symbol_classification)
+                if compatibility_result["compatible"]:
+                    fallback_candidates.append(
+                        {
+                            "provider": provider_name,
+                            "quality_score": compatibility_result.get("quality_score", 3),
+                            "strengths": compatibility_result.get("strengths", []),
+                            "limitations": compatibility_result.get("limitations", []),
+                        }
+                    )
 
         if not fallback_candidates:
             return []
 
         # Sort by quality score and international support preference
-        international = symbol_classification.get('international', False)
+        international = symbol_classification.get("international", False)
 
         def sort_key(candidate):
-            provider = candidate['provider']
-            quality = candidate['quality_score']
+            provider = candidate["provider"]
+            quality = candidate["quality_score"]
 
             # Boost score for international-friendly providers if needed
-            if international and provider in ['yfinance', 'twelvedata', 'alpha_vantage']:
+            if international and provider in ["yfinance", "twelvedata", "alpha_vantage"]:
                 quality += 1
 
             # Boost score for US-optimized providers for US symbols
-            if not international and provider in ['fmp', 'alpaca', 'tiingo']:
+            if not international and provider in ["fmp", "alpaca", "tiingo"]:
                 quality += 0.5
 
             return quality
@@ -1687,10 +1724,9 @@ class DataManager:
         sorted_candidates = sorted(fallback_candidates, key=sort_key, reverse=True)
 
         # Extract provider names and limit to 3
-        fallback_providers = [candidate['provider'] for candidate in sorted_candidates[:3]]
+        fallback_providers = [candidate["provider"] for candidate in sorted_candidates[:3]]
 
-        _logger.debug("Selected fallback providers for %s: %s",
-                     symbol_classification['symbol'], fallback_providers)
+        _logger.debug("Selected fallback providers for %s: %s", symbol_classification["symbol"], fallback_providers)
 
         return fallback_providers
 
@@ -1715,11 +1751,11 @@ class DataManager:
 
         # Configuration for retry logic
         retry_config = {
-            'max_retries': 3,
-            'base_delay': 1.0,  # Base delay in seconds
-            'max_delay': 30.0,  # Maximum delay in seconds
-            'exponential_base': 2.0,  # Exponential backoff base
-            'jitter': True  # Add random jitter to prevent thundering herd
+            "max_retries": 3,
+            "base_delay": 1.0,  # Base delay in seconds
+            "max_delay": 30.0,  # Maximum delay in seconds
+            "exponential_base": 2.0,  # Exponential backoff base
+            "jitter": True,  # Add random jitter to prevent thundering herd
         }
 
         for provider_name in providers:
@@ -1737,10 +1773,15 @@ class DataManager:
             if not self._validate_single_provider_availability(provider_name):
                 continue
 
-            for attempt in range(retry_config['max_retries']):
+            for attempt in range(retry_config["max_retries"]):
                 try:
-                    _logger.debug("Fetching fundamentals for %s from %s (attempt %d/%d)",
-                                symbol, provider_name, attempt + 1, retry_config['max_retries'])
+                    _logger.debug(
+                        "Fetching fundamentals for %s from %s (attempt %d/%d)",
+                        symbol,
+                        provider_name,
+                        attempt + 1,
+                        retry_config["max_retries"],
+                    )
 
                     # Get downloader with timeout handling
                     downloader = self.provider_selector.downloaders[provider_name]
@@ -1753,8 +1794,7 @@ class DataManager:
                         fundamentals_dict = self._normalize_fundamentals_data(fundamentals)
                         if fundamentals_dict and self._validate_fundamentals_data(fundamentals_dict):
                             provider_data[provider_name] = fundamentals_dict
-                            _logger.debug("Successfully fetched fundamentals for %s from %s",
-                                        symbol, provider_name)
+                            _logger.debug("Successfully fetched fundamentals for %s from %s", symbol, provider_name)
                             success = True
                             break
                         else:
@@ -1762,60 +1802,74 @@ class DataManager:
                     else:
                         _logger.warning("No fundamentals data returned from %s for %s", provider_name, symbol)
 
-                except RateLimitException as e:
+                except RateLimitException:
                     # Break immediately — no point retrying the same ticker while
                     # Yahoo's IP block is active.  The caller's retry pass will
                     # re-attempt failed tickers after a global cooldown.
-                    _logger.warning("Rate limit hit for %s %s — skipping to retry pass",
-                                  provider_name, symbol)
+                    _logger.warning("Rate limit hit for %s %s — skipping to retry pass", provider_name, symbol)
                     break
 
                 except TimeoutException as e:
                     # Handle timeouts with exponential backoff
                     delay = self._calculate_exponential_backoff(attempt, retry_config)
-                    _logger.warning("Timeout for %s %s (attempt %d), waiting %.2f seconds: %s",
-                                  provider_name, symbol, attempt + 1, delay, e)
-                    if attempt < retry_config['max_retries'] - 1:
-                        self._sleep_with_jitter(delay, retry_config['jitter'])
+                    _logger.warning(
+                        "Timeout for %s %s (attempt %d), waiting %.2f seconds: %s",
+                        provider_name,
+                        symbol,
+                        attempt + 1,
+                        delay,
+                        e,
+                    )
+                    if attempt < retry_config["max_retries"] - 1:
+                        self._sleep_with_jitter(delay, retry_config["jitter"])
                     continue
 
                 except NetworkException as e:
                     # Handle network errors with exponential backoff
                     delay = self._calculate_exponential_backoff(attempt, retry_config)
-                    _logger.warning("Network error for %s %s (attempt %d), waiting %.2f seconds: %s",
-                                  provider_name, symbol, attempt + 1, delay, e)
-                    if attempt < retry_config['max_retries'] - 1:
-                        self._sleep_with_jitter(delay, retry_config['jitter'])
+                    _logger.warning(
+                        "Network error for %s %s (attempt %d), waiting %.2f seconds: %s",
+                        provider_name,
+                        symbol,
+                        attempt + 1,
+                        delay,
+                        e,
+                    )
+                    if attempt < retry_config["max_retries"] - 1:
+                        self._sleep_with_jitter(delay, retry_config["jitter"])
                     continue
 
                 except Exception as e:
                     # Handle other errors with classification
                     error_type = self._classify_error(e)
 
-                    if error_type == 'rate_limit':
+                    if error_type == "rate_limit":
                         # Break immediately — same reasoning as RateLimitException above.
-                        _logger.warning("Error (%s) for %s %s (attempt %d): %s",
-                                      error_type, provider_name, symbol, attempt + 1, e)
+                        _logger.warning(
+                            "Error (%s) for %s %s (attempt %d): %s", error_type, provider_name, symbol, attempt + 1, e
+                        )
                         _logger.warning("Rate limit detected — skipping to retry pass")
                         break
 
                     delay = self._calculate_exponential_backoff(attempt, retry_config)
 
-                    _logger.warning("Error (%s) for %s %s (attempt %d): %s",
-                                  error_type, provider_name, symbol, attempt + 1, e)
+                    _logger.warning(
+                        "Error (%s) for %s %s (attempt %d): %s", error_type, provider_name, symbol, attempt + 1, e
+                    )
 
                     # Don't retry for certain error types
-                    if error_type in ['authentication', 'invalid_symbol', 'not_supported']:
+                    if error_type in ["authentication", "invalid_symbol", "not_supported"]:
                         _logger.error("Non-retryable error for %s %s: %s", provider_name, symbol, e)
                         break
 
-                    if attempt < retry_config['max_retries'] - 1:
-                        self._sleep_with_jitter(delay, retry_config['jitter'])
+                    if attempt < retry_config["max_retries"] - 1:
+                        self._sleep_with_jitter(delay, retry_config["jitter"])
                     continue
 
             if not success:
-                _logger.error("All attempts failed for %s %s after %d retries",
-                            provider_name, symbol, retry_config['max_retries'])
+                _logger.error(
+                    "All attempts failed for %s %s after %d retries", provider_name, symbol, retry_config["max_retries"]
+                )
 
         return provider_data
 
@@ -1829,9 +1883,9 @@ class DataManager:
         """
         expiration = datetime.now() + timedelta(seconds=seconds)
         self._provider_cooldowns[provider] = expiration
-        _logger.info("Provider %s put on cooldown for %d seconds (until %s)",
-                    provider, seconds, expiration.strftime("%H:%M:%S"))
-
+        _logger.info(
+            "Provider %s put on cooldown for %d seconds (until %s)", provider, seconds, expiration.strftime("%H:%M:%S")
+        )
 
     def _validate_single_provider_availability(self, provider_name: str) -> bool:
         """
@@ -1849,7 +1903,7 @@ class DataManager:
             return False
 
         downloader = self.provider_selector.downloaders[provider_name]
-        if not hasattr(downloader, 'get_fundamentals'):
+        if not hasattr(downloader, "get_fundamentals"):
             _logger.warning("Provider %s does not support fundamentals", provider_name)
             return False
 
@@ -1872,15 +1926,15 @@ class DataManager:
             TimeoutException: If request times out
         """
         import signal
-        import time
         import threading
+        import time
 
         def timeout_handler(signum, frame):
             raise TimeoutException(f"Request timed out after {timeout} seconds")
 
         # Set up timeout handling (Unix-like systems, main thread only)
         sigalrm_set = False
-        if hasattr(signal, 'SIGALRM') and threading.current_thread() is threading.main_thread():
+        if hasattr(signal, "SIGALRM") and threading.current_thread() is threading.main_thread():
             try:
                 old_handler = signal.signal(signal.SIGALRM, timeout_handler)
                 signal.alarm(int(timeout))
@@ -1893,8 +1947,7 @@ class DataManager:
             fundamentals = downloader.get_fundamentals(symbol)
             elapsed_time = time.time() - start_time
 
-            _logger.debug("Fetched fundamentals for %s from %s in %.2f seconds",
-                        symbol, provider_name, elapsed_time)
+            _logger.debug("Fetched fundamentals for %s from %s in %.2f seconds", symbol, provider_name, elapsed_time)
             return fundamentals
 
         finally:
@@ -1917,8 +1970,8 @@ class DataManager:
         Returns:
             Delay in seconds
         """
-        delay = config['base_delay'] * (config['exponential_base'] ** attempt)
-        return min(delay, config['max_delay'])
+        delay = config["base_delay"] * (config["exponential_base"] ** attempt)
+        return min(delay, config["max_delay"])
 
     def _calculate_rate_limit_delay(self, exception: Exception, attempt: int) -> float:
         """
@@ -1932,12 +1985,12 @@ class DataManager:
             Delay in seconds
         """
         # Try to extract retry-after header if available
-        if hasattr(exception, 'retry_after') and exception.retry_after is not None:
+        if hasattr(exception, "retry_after") and exception.retry_after is not None:
             return float(exception.retry_after)
 
         # Default rate limit backoff (longer than normal exponential backoff)
         base_delay = 60.0  # 1 minute base delay for rate limits
-        return base_delay * (2 ** attempt)
+        return base_delay * (2**attempt)
 
     def _sleep_with_jitter(self, delay: float, use_jitter: bool = True) -> None:
         """
@@ -1947,8 +2000,8 @@ class DataManager:
             delay: Base delay in seconds
             use_jitter: Whether to add random jitter
         """
-        import time
         import random
+        import time
 
         if use_jitter:
             # Add up to 25% jitter
@@ -1972,32 +2025,33 @@ class DataManager:
         error_message = str(exception).lower()
 
         # Authentication errors
-        if any(term in error_message for term in ['unauthorized', 'api key', 'authentication', 'forbidden']):
-            return 'authentication'
+        if any(term in error_message for term in ["unauthorized", "api key", "authentication", "forbidden"]):
+            return "authentication"
 
         # Invalid symbol errors
-        if any(term in error_message for term in ['invalid symbol', 'symbol not found', 'not found']):
-            return 'invalid_symbol'
+        if any(term in error_message for term in ["invalid symbol", "symbol not found", "not found"]):
+            return "invalid_symbol"
 
         # Not supported errors
-        if any(term in error_message for term in ['not supported', 'not available', 'not implemented']):
-            return 'not_supported'
+        if any(term in error_message for term in ["not supported", "not available", "not implemented"]):
+            return "not_supported"
 
         # Rate limit errors — include Yahoo's specific exception class name
-        if any(term in error_message for term in [
-            'rate limit', 'too many requests', 'quota exceeded', 'yfratelimiterror', 'ratelimit'
-        ]):
-            return 'rate_limit'
+        if any(
+            term in error_message
+            for term in ["rate limit", "too many requests", "quota exceeded", "yfratelimiterror", "ratelimit"]
+        ):
+            return "rate_limit"
 
         # Network errors
-        if any(term in error_message for term in ['connection', 'network', 'timeout', 'dns']):
-            return 'network'
+        if any(term in error_message for term in ["connection", "network", "timeout", "dns"]):
+            return "network"
 
         # Server errors
-        if any(term in error_message for term in ['server error', '500', '502', '503', '504']):
-            return 'server'
+        if any(term in error_message for term in ["server error", "500", "502", "503", "504"]):
+            return "server"
 
-        return 'unknown'
+        return "unknown"
 
     def _validate_fundamentals_data(self, data: Dict[str, Any]) -> bool:
         """
@@ -2013,22 +2067,19 @@ class DataManager:
             return False
 
         # Check for minimum required fields
-        required_fields = ['symbol']  # At minimum, should have symbol
+        required_fields = ["symbol"]  # At minimum, should have symbol
         for field in required_fields:
             if field not in data:
                 return False
 
         # Check for reasonable data (not all None/empty)
-        non_empty_fields = sum(1 for value in data.values() if value is not None and value != '')
+        non_empty_fields = sum(1 for value in data.values() if value is not None and value != "")
         if non_empty_fields < 2:  # Should have at least symbol + one other field
             return False
 
         return True
 
-
-
-
-    def _normalize_fundamentals_data(self, fundamentals) -> Optional[Dict[str, Any]]:
+    def _normalize_fundamentals_data(self, fundamentals) -> Dict[str, Any] | None:
         """
         Normalize fundamentals data to dictionary format.
 
@@ -2041,19 +2092,20 @@ class DataManager:
         try:
             if isinstance(fundamentals, dict):
                 return fundamentals
-            elif hasattr(fundamentals, '__dict__'):
+            elif hasattr(fundamentals, "__dict__"):
                 return fundamentals.__dict__
-            elif hasattr(fundamentals, '_asdict'):  # namedtuple
+            elif hasattr(fundamentals, "_asdict"):  # namedtuple
                 return fundamentals._asdict()
             else:
                 # Try to convert using vars()
-                return vars(fundamentals) if hasattr(fundamentals, '__dict__') else None
+                return vars(fundamentals) if hasattr(fundamentals, "__dict__") else None
         except Exception:
             _logger.exception("Failed to normalize fundamentals data:")
             return None
 
-    def _combine_and_validate_fundamentals(self, provider_data: Dict[str, Dict[str, Any]],
-                                         combination_strategy: str, data_type: str, combiner) -> Dict[str, Any]:
+    def _combine_and_validate_fundamentals(
+        self, provider_data: Dict[str, Dict[str, Any]], combination_strategy: str, data_type: str, combiner
+    ) -> Dict[str, Any]:
         """
         Combine and validate fundamentals data from multiple providers.
 
@@ -2095,7 +2147,7 @@ class DataManager:
         except (TypeError, ValueError):
             return False
 
-    def _market_cap_from_fundamentals_payload(self, payload: Dict[str, Any]) -> Optional[float]:
+    def _market_cap_from_fundamentals_payload(self, payload: Dict[str, Any]) -> float | None:
         """Resolve market cap from flat or FMP-style nested fundamentals dict."""
         if not isinstance(payload, dict):
             return None
@@ -2116,7 +2168,7 @@ class DataManager:
                 return float(v)
         return None
 
-    def _avg_volume_from_fundamentals_payload(self, payload: Dict[str, Any]) -> Optional[float]:
+    def _avg_volume_from_fundamentals_payload(self, payload: Dict[str, Any]) -> float | None:
         """Resolve average daily volume from flat or nested profile/metrics."""
         if not isinstance(payload, dict):
             return None
@@ -2141,10 +2193,10 @@ class DataManager:
     def _enrich_combined_fundamentals_output(
         self,
         combined: Dict[str, Any],
-        provider_data: Optional[Dict[str, Dict[str, Any]]] = None,
-        symbol: Optional[str] = None,
+        provider_data: Dict[str, Dict[str, Any]] | None = None,
+        symbol: str | None = None,
         fundamentals_cache=None,
-        max_age_days: Optional[int] = None,
+        max_age_days: int | None = None,
     ) -> Dict[str, Any]:
         """
         Fill missing/invalid market_cap or avg_volume after combine or on cache read.
@@ -2160,7 +2212,7 @@ class DataManager:
         sources = meta.setdefault("field_sources", {})
 
         if not self._is_positive_fundamental_scalar(combined.get("market_cap")):
-            cap_val: Optional[float] = None
+            cap_val: float | None = None
             cap_src = None
             if provider_data:
                 for pname, pdata in provider_data.items():
@@ -2187,7 +2239,7 @@ class DataManager:
                 sources["market_cap"] = cap_src or "enrichment"
 
         if combined.get("avg_volume") is None or not self._is_positive_fundamental_scalar(combined.get("avg_volume")):
-            vol_val: Optional[float] = None
+            vol_val: float | None = None
             vol_src = None
             if provider_data:
                 for pname, pdata in provider_data.items():
@@ -2238,8 +2290,9 @@ class DataManager:
             _logger.exception("Error validating fundamentals data:")
             return False
 
-    def _cache_fundamentals_data(self, symbol: str, provider_data: Dict[str, Dict[str, Any]],
-                               combined_data: Dict[str, Any], fundamentals_cache) -> None:
+    def _cache_fundamentals_data(
+        self, symbol: str, provider_data: Dict[str, Dict[str, Any]], combined_data: Dict[str, Any], fundamentals_cache
+    ) -> None:
         """
         Cache fundamentals data with enhanced management.
 
@@ -2281,7 +2334,7 @@ class DataManager:
         """Get cache statistics."""
         return self.cache.get_stats()
 
-    def clear_cache(self, symbol: Optional[str] = None, timeframe: Optional[str] = None):
+    def clear_cache(self, symbol: str | None = None, timeframe: str | None = None):
         """
         Clear cache data.
 
@@ -2296,14 +2349,15 @@ class DataManager:
         else:
             self.cache.clear_all()
 
-        _logger.info("Cache cleared for %s %s", symbol or 'all', timeframe or 'all timeframes')
+        _logger.info("Cache cleared for %s %s", symbol or "all", timeframe or "all timeframes")
 
 
 # Convenience functions for easy access
 _provider_selector_cache = None
 _data_manager_cache = None
 
-def get_provider_selector(config_path: Optional[str] = None, cache_dir: Optional[str] = None) -> ProviderSelector:
+
+def get_provider_selector(config_path: str | None = None, cache_dir: str | None = None) -> ProviderSelector:
     """
     Get a cached ProviderSelector instance.
 
@@ -2320,7 +2374,7 @@ def get_provider_selector(config_path: Optional[str] = None, cache_dir: Optional
     return _provider_selector_cache
 
 
-def get_data_manager(cache_dir: str = DATA_CACHE_DIR, config_path: Optional[str] = None) -> DataManager:
+def get_data_manager(cache_dir: str = DATA_CACHE_DIR, config_path: str | None = None) -> DataManager:
     """
     Get a DataManager instance.
 

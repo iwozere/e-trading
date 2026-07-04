@@ -7,10 +7,10 @@ The strategy exits a position when:
 2. Price reaches the stop loss level (entry price * (1 - stop_loss_ratio))
 """
 
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List
 
-from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
+from src.strategy.exit.base_exit_mixin import BaseExitMixin
 
 logger = setup_logger(__name__)
 
@@ -20,7 +20,7 @@ class FixedRatioExitMixin(BaseExitMixin):
     New Architecture only.
     """
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
 
@@ -59,8 +59,8 @@ class FixedRatioExitMixin(BaseExitMixin):
         profit_ratio = (current_price - entry_price) / entry_price
 
         # Standardized parameter retrieval
-        tp_ratio = self._resolve_param('take_profit', 'x_take_profit', 0.1)
-        sl_ratio = self._resolve_param('stop_loss', 'x_stop_loss', 0.05)
+        tp_ratio = self._resolve_param("take_profit", "x_take_profit", 0.1)
+        sl_ratio = self._resolve_param("stop_loss", "x_stop_loss", 0.05)
 
         return_value = False
         if profit_ratio >= tp_ratio:
@@ -73,10 +73,10 @@ class FixedRatioExitMixin(BaseExitMixin):
         if return_value:
             logger.debug(
                 f"FIXED RATIO EXIT - Price: {current_price:.2f}, Entry: {entry_price:.2f}, "
-                f"Profit %: {profit_ratio*100:.2f}%, Reason: {self.strategy.current_exit_reason}"
+                f"Profit %: {profit_ratio * 100:.2f}%, Reason: {self.strategy.current_exit_reason}"
             )
         return return_value
 
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""
-        return getattr(self.strategy, 'current_exit_reason', 'fixed_ratio')
+        return getattr(self.strategy, "current_exit_reason", "fixed_ratio")

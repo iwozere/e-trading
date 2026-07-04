@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
 
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
+
 
 class BaseIndicatorPlotter(ABC):
     def __init__(self, data, indicators, vis_settings):

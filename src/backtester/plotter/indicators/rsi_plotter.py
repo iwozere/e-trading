@@ -1,7 +1,8 @@
 from src.backtester.plotter.indicators.base_indicator_plotter import BaseIndicatorPlotter
-
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
+
 
 class RSIPlotter(BaseIndicatorPlotter):
     def plot(self, ax):
@@ -69,7 +70,7 @@ class RSIPlotter(BaseIndicatorPlotter):
             self._apply_style(ax)
         except Exception:
             _logger.exception("Error plotting RSI: ")
-            _logger.error("Indicator data: %s", self.indicators.get('rsi', 'Not found'))
+            _logger.error("Indicator data: %s", self.indicators.get("rsi", "Not found"))
             _logger.error("Data feed length: %d", len(self.data))
 
     @property

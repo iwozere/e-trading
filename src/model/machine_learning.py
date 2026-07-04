@@ -5,21 +5,26 @@ Includes:
 - Feature types, training triggers, and model types enums
 - Feature, model metadata, training config, and performance metrics dataclasses
 """
-from enum import Enum
-from typing import Any, Dict, List
+
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List
+
 
 class FeatureType(Enum):
     """Types of features that can be generated."""
+
     TECHNICAL_INDICATOR = "technical_indicator"
     MARKET_MICROSTRUCTURE = "market_microstructure"
     STATISTICAL = "statistical"
     TIME_BASED = "time_based"
     CROSS_ASSET = "cross_asset"
 
+
 class TrainingTrigger(Enum):
     """Types of training triggers."""
+
     SCHEDULED = "scheduled"
     PERFORMANCE_DEGRADATION = "performance_degradation"
     DATA_DRIFT = "data_drift"
@@ -28,15 +33,18 @@ class TrainingTrigger(Enum):
 
 class ModelType(Enum):
     """Supported model types."""
+
     RANDOM_FOREST = "random_forest"
     GRADIENT_BOOSTING = "gradient_boosting"
     XGBOOST = "xgboost"
     LIGHTGBM = "lightgbm"
     LINEAR_REGRESSION = "linear_regression"
 
+
 @dataclass
 class FeatureConfig:
     """Configuration for feature generation."""
+
     name: str
     feature_type: FeatureType
     parameters: Dict[str, Any]
@@ -47,6 +55,7 @@ class FeatureConfig:
 @dataclass
 class ModelMetadata:
     """Metadata for model tracking and registry."""
+
     model_name: str
     version: str
     model_type: str  # 'sklearn', 'pytorch', 'tensorflow', 'xgboost', 'lightgbm'
@@ -66,6 +75,7 @@ class ModelMetadata:
 @dataclass
 class TrainingConfig:
     """Configuration for model training."""
+
     model_type: ModelType
     hyperparameters: Dict[str, Any]
     training_schedule: str  # Cron expression
@@ -82,6 +92,7 @@ class TrainingConfig:
 @dataclass
 class PerformanceMetrics:
     """Performance metrics for model evaluation."""
+
     mse: float
     mae: float
     r2: float

@@ -5,20 +5,21 @@ Tests adapters with real market data, cross-adapter consistency,
 error handling, and fallback mechanisms.
 """
 
-import pytest
-import pandas as pd
-import numpy as np
-from datetime import datetime
-from unittest.mock import patch, Mock
 import sys
+from datetime import datetime
 from pathlib import Path
+from unittest.mock import Mock, patch
+
+import numpy as np
+import pandas as pd
+import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.indicators.adapters.ta_lib_adapter import TaLibAdapter
-from src.indicators.adapters.pandas_ta_adapter import PandasTaAdapter
 from src.indicators.adapters.fundamentals_adapter import FundamentalsAdapter
+from src.indicators.adapters.pandas_ta_adapter import PandasTaAdapter
+from src.indicators.adapters.ta_lib_adapter import TaLibAdapter
 
 
 class TestAdapterIntegration:
@@ -28,7 +29,7 @@ class TestAdapterIntegration:
     def realistic_market_data(self):
         """Create realistic market data for integration testing."""
         # Generate 252 trading days (1 year) of realistic price data
-        dates = pd.date_range(start='2023-01-01', periods=252, freq='B', tz='UTC')
+        dates = pd.date_range(start="2023-01-01", periods=252, freq="B", tz="UTC")
         np.random.seed(42)
 
         # Simulate realistic price movements with trends and volatility
@@ -43,17 +44,20 @@ class TestAdapterIntegration:
         # Generate OHLC data with realistic relationships
         daily_ranges = np.abs(np.random.randn(252)) * 0.01 + 0.005
 
-        df = pd.DataFrame({
-            'open': close_prices * (1 + np.random.randn(252) * 0.002),
-            'high': close_prices * (1 + daily_ranges),
-            'low': close_prices * (1 - daily_ranges),
-            'close': close_prices,
-            'volume': np.random.lognormal(15, 0.5, 252).astype(int)
-        }, index=dates)
+        df = pd.DataFrame(
+            {
+                "open": close_prices * (1 + np.random.randn(252) * 0.002),
+                "high": close_prices * (1 + daily_ranges),
+                "low": close_prices * (1 - daily_ranges),
+                "close": close_prices,
+                "volume": np.random.lognormal(15, 0.5, 252).astype(int),
+            },
+            index=dates,
+        )
 
         # Ensure OHLC relationships
-        df['high'] = df[['high', 'close', 'open']].max(axis=1)
-        df['low'] = df[['low', 'close', 'open']].min(axis=1)
+        df["high"] = df[["high", "close", "open"]].max(axis=1)
+        df["low"] = df[["low", "close", "open"]].min(axis=1)
 
         return df
 
@@ -61,11 +65,11 @@ class TestAdapterIntegration:
     def input_series(self, realistic_market_data):
         """Create input series from market data."""
         return {
-            'close': realistic_market_data['close'],
-            'open': realistic_market_data['open'],
-            'high': realistic_market_data['high'],
-            'low': realistic_market_data['low'],
-            'volume': realistic_market_data['volume']
+            "close": realistic_market_data["close"],
+            "open": realistic_market_data["open"],
+            "high": realistic_market_data["high"],
+            "low": realistic_market_data["low"],
+            "volume": realistic_market_data["volume"],
         }
 
     def test_ta_lib_adapter_with_real_data(self, realistic_market_data, input_series):
@@ -74,13 +78,13 @@ class TestAdapterIntegration:
 
         # Test multiple indicators
         indicators_to_test = [
-            ('rsi', {'timeperiod': 14}),
-            ('ema', {'timeperiod': 20}),
-            ('macd', {'fastperiod': 12, 'slowperiod': 26, 'signalperiod': 9}),
-            ('bbands', {'timeperiod': 20, 'nbdevup': 2, 'nbdevdn': 2}),
-            ('atr', {'timeperiod': 14}),
-            ('adx', {'timeperiod': 14}),
-            ('stoch', {'fastk_period': 14, 'slowk_period': 3, 'slowd_period': 3})
+            ("rsi", {"timeperiod": 14}),
+            ("ema", {"timeperiod": 20}),
+            ("macd", {"fastperiod": 12, "slowperiod": 26, "signalperiod": 9}),
+            ("bbands", {"timeperiod": 20, "nbdevup": 2, "nbdevdn": 2}),
+            ("atr", {"timeperiod": 14}),
+            ("adx", {"timeperiod": 14}),
+            ("stoch", {"fastk_period": 14, "slowk_period": 3, "slowd_period": 3}),
         ]
 
         for indicator_name, params in indicators_to_test:
@@ -103,11 +107,11 @@ class TestAdapterIntegration:
         adapter = PandasTaAdapter()
 
         indicators_to_test = [
-            ('rsi', {'length': 14}),
-            ('ema', {'length': 20}),
-            ('sma', {'length': 20}),
-            ('bbands', {'length': 20}),
-            ('stoch', {'k': 14, 'd': 3})
+            ("rsi", {"length": 14}),
+            ("ema", {"length": 20}),
+            ("sma", {"length": 20}),
+            ("bbands", {"length": 20}),
+            ("stoch", {"k": 14, "d": 3}),
         ]
 
         for indicator_name, params in indicators_to_test:
@@ -130,9 +134,9 @@ class TestAdapterIntegration:
 
         # Test indicators available in both adapters
         common_indicators = [
-            ('rsi', {'timeperiod': 14}, {'length': 14}),
-            ('ema', {'timeperiod': 20}, {'length': 20}),
-            ('sma', {'timeperiod': 20}, {'length': 20})
+            ("rsi", {"timeperiod": 14}, {"length": 14}),
+            ("ema", {"timeperiod": 20}, {"length": 20}),
+            ("sma", {"timeperiod": 20}, {"length": 20}),
         ]
 
         for indicator_name, ta_params, pta_params in common_indicators:
@@ -142,8 +146,8 @@ class TestAdapterIntegration:
                     pta_result = pandas_ta.compute(indicator_name, realistic_market_data, input_series, pta_params)
 
                     # Compare primary output values
-                    ta_values = ta_result.get('value', list(ta_result.values())[0])
-                    pta_values = pta_result.get('value', list(pta_result.values())[0])
+                    ta_values = ta_result.get("value", list(ta_result.values())[0])
+                    pta_values = pta_result.get("value", list(pta_result.values())[0])
 
                     if isinstance(ta_values, np.ndarray):
                         ta_values = pd.Series(ta_values, index=realistic_market_data.index)
@@ -156,7 +160,9 @@ class TestAdapterIntegration:
 
                         # Allow reasonable tolerance for numerical differences
                         tolerance = max(ta_values[valid_mask].std() * 0.01, 0.1)
-                        assert max_diff < tolerance, f"{indicator_name}: Max difference {max_diff} exceeds tolerance {tolerance}"
+                        assert max_diff < tolerance, (
+                            f"{indicator_name}: Max difference {max_diff} exceeds tolerance {tolerance}"
+                        )
 
     def test_fundamentals_adapter_integration(self):
         """Test fundamentals adapter with mock data."""
@@ -173,22 +179,17 @@ class TestAdapterIntegration:
         adapter = FundamentalsAdapter(fundamentals_getter=mock_getter)
 
         # Test multiple fundamental indicators
-        fundamental_indicators = ['pe', 'forward_pe', 'pb', 'roe', 'de_ratio']
+        fundamental_indicators = ["pe", "forward_pe", "pb", "roe", "de_ratio"]
 
         for indicator in fundamental_indicators:
             with pytest.subTest(indicator=indicator):
                 if adapter.supports(indicator):
-                    result = adapter.compute(
-                        indicator,
-                        pd.DataFrame(),
-                        {},
-                        {'ticker': 'AAPL', 'provider': None}
-                    )
+                    result = adapter.compute(indicator, pd.DataFrame(), {}, {"ticker": "AAPL", "provider": None})
 
-                    assert 'value' in result
-                    assert isinstance(result['value'], pd.Series)
-                    assert len(result['value']) == 1
-                    assert not pd.isna(result['value'].iloc[0])
+                    assert "value" in result
+                    assert isinstance(result["value"], pd.Series)
+                    assert len(result["value"]) == 1
+                    assert not pd.isna(result["value"].iloc[0])
 
     def test_adapter_error_handling(self, realistic_market_data, input_series):
         """Test adapter error handling and recovery."""
@@ -199,10 +200,10 @@ class TestAdapterIntegration:
         small_inputs = {k: v.head(5) for k, v in input_series.items()}
 
         try:
-            result = adapter.compute('rsi', small_data, small_inputs, {'timeperiod': 14})
+            result = adapter.compute("rsi", small_data, small_inputs, {"timeperiod": 14})
             # Should either succeed with mostly NaN or raise appropriate error
-            if 'value' in result:
-                values = result['value']
+            if "value" in result:
+                values = result["value"]
                 if isinstance(values, np.ndarray):
                     assert np.isnan(values).sum() >= 3  # Most values should be NaN
                 else:
@@ -212,10 +213,10 @@ class TestAdapterIntegration:
             pass
 
         # Test with missing required inputs
-        incomplete_inputs = {k: v for k, v in input_series.items() if k != 'high'}
+        incomplete_inputs = {k: v for k, v in input_series.items() if k != "high"}
 
         with pytest.raises(KeyError):
-            adapter.compute('atr', realistic_market_data, incomplete_inputs, {'timeperiod': 14})
+            adapter.compute("atr", realistic_market_data, incomplete_inputs, {"timeperiod": 14})
 
     def test_adapter_fallback_mechanisms(self, realistic_market_data, input_series):
         """Test adapter fallback when primary computation fails."""
@@ -227,10 +228,10 @@ class TestAdapterIntegration:
         def failing_compute(*args, **kwargs):
             raise Exception("Computation failed")
 
-        with patch.object(adapter, '_compute_indicator', side_effect=failing_compute):
+        with patch.object(adapter, "_compute_indicator", side_effect=failing_compute):
             # Should handle the failure gracefully
             try:
-                result = adapter.compute('rsi', realistic_market_data, input_series, {'timeperiod': 14})
+                result = adapter.compute("rsi", realistic_market_data, input_series, {"timeperiod": 14})
                 # If fallback succeeds, should get valid result
                 assert isinstance(result, dict)
             except Exception as e:
@@ -242,9 +243,9 @@ class TestAdapterIntegration:
         adapters = [TaLibAdapter(), PandasTaAdapter()]
 
         multi_output_indicators = [
-            ('macd', {'fastperiod': 12, 'slowperiod': 26, 'signalperiod': 9}),
-            ('bbands', {'timeperiod': 20}),
-            ('stoch', {'fastk_period': 14, 'slowk_period': 3, 'slowd_period': 3})
+            ("macd", {"fastperiod": 12, "slowperiod": 26, "signalperiod": 9}),
+            ("bbands", {"timeperiod": 20}),
+            ("stoch", {"fastk_period": 14, "slowk_period": 3, "slowd_period": 3}),
         ]
 
         for adapter in adapters:
@@ -279,7 +280,7 @@ class TestAdapterIntegration:
                 test_inputs = {k: v.head(size) for k, v in input_series.items()}
 
                 start_time = datetime.now()
-                result = adapter.compute('rsi', test_data, test_inputs, {'timeperiod': 14})
+                result = adapter.compute("rsi", test_data, test_inputs, {"timeperiod": 14})
                 end_time = datetime.now()
 
                 computation_time = (end_time - start_time).total_seconds()
@@ -288,8 +289,8 @@ class TestAdapterIntegration:
                 assert computation_time < 1.0, f"Computation took too long: {computation_time}s"
 
                 # Should produce valid results
-                assert 'value' in result
-                values = result['value']
+                assert "value" in result
+                values = result["value"]
                 if isinstance(values, np.ndarray):
                     valid_count = np.sum(~np.isnan(values))
                 else:
@@ -305,26 +306,18 @@ class TestAdapterIntegration:
 
         # Create larger dataset
         large_data = pd.concat([realistic_market_data] * 5, ignore_index=True)
-        large_data.index = pd.date_range(
-            start='2020-01-01',
-            periods=len(large_data),
-            freq='B',
-            tz='UTC'
-        )
+        large_data.index = pd.date_range(start="2020-01-01", periods=len(large_data), freq="B", tz="UTC")
 
-        large_inputs = {
-            k: pd.concat([v] * 5, ignore_index=True)
-            for k, v in input_series.items()
-        }
+        large_inputs = {k: pd.concat([v] * 5, ignore_index=True) for k, v in input_series.items()}
         for k, v in large_inputs.items():
             v.index = large_data.index
 
         # Should handle large dataset without memory issues
-        result = adapter.compute('rsi', large_data, large_inputs, {'timeperiod': 14})
+        result = adapter.compute("rsi", large_data, large_inputs, {"timeperiod": 14})
 
-        assert 'value' in result
-        assert len(result['value']) == len(large_data)
+        assert "value" in result
+        assert len(result["value"]) == len(large_data)
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

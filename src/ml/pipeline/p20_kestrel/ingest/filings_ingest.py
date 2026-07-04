@@ -12,16 +12,16 @@ import json
 import sys
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 from src.data.downloader.edgar_downloader import EdgarDownloader
 from src.ml.pipeline.p20_kestrel.config import ACTIVISTS_JSON, DATA_CACHE_PATH
-from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 
 _kestrel = _KestrelService()
 finish_job_run = _kestrel.finish_job_run
@@ -70,9 +70,7 @@ def _build_cik_to_ticker() -> Dict[str, str]:
         return {}
 
 
-def _read_p15_8k_index(
-    as_of_date: date, cik_map: Optional[Dict[str, str]] = None
-) -> List[Dict[str, Any]]:
+def _read_p15_8k_index(as_of_date: date, cik_map: Dict[str, str] | None = None) -> List[Dict[str, Any]]:
     """
     Read the 8-K filing index written by P15 for the given date.
 
@@ -99,16 +97,18 @@ def _read_p15_8k_index(
         for _, row in df.iterrows():
             cik = str(row.get("cik", "") or "").lstrip("0")
             ticker = cik_map.get(cik, "")
-            records.append({
-                "ticker": ticker,
-                "cik": row.get("cik", ""),
-                "company": row.get("company", ""),
-                "accession_number": row.get("accession_number", ""),
-                "items": row.get("items", ""),
-                "description": row.get("description", ""),
-                "filed_date": row.get("filed_date", str(as_of_date)),
-                "primary_document": row.get("primary_document", ""),
-            })
+            records.append(
+                {
+                    "ticker": ticker,
+                    "cik": row.get("cik", ""),
+                    "company": row.get("company", ""),
+                    "accession_number": row.get("accession_number", ""),
+                    "items": row.get("items", ""),
+                    "description": row.get("description", ""),
+                    "filed_date": row.get("filed_date", str(as_of_date)),
+                    "primary_document": row.get("primary_document", ""),
+                }
+            )
         return records
     except Exception:
         _logger.exception("Failed to read P15 8-K index %s", index_file)
@@ -171,22 +171,21 @@ def _process_form4(as_of_date: date, target_tickers: Set[str]) -> int:
 
         target_list = list(target_tickers)
         buy_codes_list = list(_FORM4_BUY_CODES)
-        df_buys = df[
-            df["transaction_code"].isin(buy_codes_list) &
-            df["ticker"].str.upper().isin(target_list)
-        ]
+        df_buys = df[df["transaction_code"].isin(buy_codes_list) & df["ticker"].str.upper().isin(target_list)]
         if df_buys.empty:
             return 0
 
         agg = df_buys.groupby("ticker")["total_value_usd"].sum().reset_index()
         signal_rows = []
         for _, row in agg.iterrows():
-            signal_rows.append({
-                "ticker": str(row["ticker"]).upper(),
-                "date": as_of_date,
-                "signal_type": "insider_buy_value_90d",
-                "value": float(row["total_value_usd"]),
-            })
+            signal_rows.append(
+                {
+                    "ticker": str(row["ticker"]).upper(),
+                    "date": as_of_date,
+                    "signal_type": "insider_buy_value_90d",
+                    "value": float(row["total_value_usd"]),
+                }
+            )
 
         if signal_rows:
             upsert_signals(signal_rows)
@@ -208,11 +207,7 @@ def _load_activist_aliases() -> List[str]:
     try:
         with open(ACTIVISTS_JSON, encoding="utf-8") as f:
             raw = json.load(f)
-        return [
-            alias.lower()
-            for entry in raw.get("activists", [])
-            for alias in entry.get("aliases", [])
-        ]
+        return [alias.lower() for entry in raw.get("activists", []) for alias in entry.get("aliases", [])]
     except Exception:
         _logger.warning("Could not load activists list from %s", ACTIVISTS_JSON)
         return []
@@ -274,11 +269,7 @@ def _process_13dg_activist(
         if not subject_ticker:
             continue
 
-        is_known_activist = any(
-            alias in name.lower()
-            for name in filer_names
-            for alias in activist_aliases
-        )
+        is_known_activist = any(alias in name.lower() for name in filer_names for alias in activist_aliases)
 
         if subject_ticker not in target_tickers and not is_known_activist:
             continue
@@ -287,16 +278,21 @@ def _process_13dg_activist(
         is_13d = "13D" in form_type.upper()
         signal_type = "activist_13d" if is_13d else "activist_13g"
         try:
-            upsert_signals([{
-                "ticker": subject_ticker,
-                "date": as_of_date,
-                "signal_type": signal_type,
-                "value": 1.0,
-            }])
+            upsert_signals(
+                [
+                    {
+                        "ticker": subject_ticker,
+                        "date": as_of_date,
+                        "signal_type": signal_type,
+                        "value": 1.0,
+                    }
+                ]
+            )
             matched += 1
             _logger.info(
                 "13D/G matched: %s %s (filer: %s%s)",
-                subject_ticker, form_type,
+                subject_ticker,
+                form_type,
                 filer_names[0] if filer_names else "unknown",
                 ", known activist" if is_known_activist else "",
             )
@@ -306,7 +302,7 @@ def _process_13dg_activist(
     return matched
 
 
-def run(as_of_date: Optional[date] = None, lookback_days: int = 1) -> Dict[str, Any]:
+def run(as_of_date: date | None = None, lookback_days: int = 1) -> Dict[str, Any]:
     """
     Discover and ingest filings for the watchlist + positions universe.
 
@@ -329,9 +325,7 @@ def run(as_of_date: Optional[date] = None, lookback_days: int = 1) -> Dict[str, 
         activist_matches = 0
         llm_queue: List[Dict[str, Any]] = []
 
-        dates_to_check = [
-            target_date - timedelta(days=i) for i in range(lookback_days)
-        ]
+        dates_to_check = [target_date - timedelta(days=i) for i in range(lookback_days)]
 
         cik_map = _build_cik_to_ticker()
 
@@ -345,9 +339,7 @@ def run(as_of_date: Optional[date] = None, lookback_days: int = 1) -> Dict[str, 
 
             # 13D/G activist signals from P15 cache
             filings_13dg = _read_p15_13dg(check_date)
-            activist_matches += _process_13dg_activist(
-                filings_13dg, target_tickers, cik_map, check_date
-            )
+            activist_matches += _process_13dg_activist(filings_13dg, target_tickers, cik_map, check_date)
 
             # Form 4 insider buying from P15 cache
             form4_buys += _process_form4(check_date, target_tickers)

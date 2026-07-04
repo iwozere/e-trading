@@ -4,7 +4,6 @@ Trading Constants
 Centralized constants for paths and configuration.
 """
 
-import os
 from pathlib import Path
 
 # Project root (assumes this file is at src/trading/constants.py)

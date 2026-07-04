@@ -20,7 +20,7 @@ import re
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
@@ -84,9 +84,7 @@ def _parse_add(text: str) -> Dict[str, Any]:
     """
     m = _ADD_RE.match(text.strip())
     if not m:
-        raise PosCommandError(
-            "Usage: /pos add TICKER SLEEVE ENTRY_PX SIZE_PCT [stop=PX] [t1=PX] [t2=PX] [trail=PCT]"
-        )
+        raise PosCommandError("Usage: /pos add TICKER SLEEVE ENTRY_PX SIZE_PCT [stop=PX] [t1=PX] [t2=PX] [trail=PCT]")
 
     ticker = m.group("ticker").upper()
     sleeve = m.group("sleeve").upper()
@@ -152,16 +150,20 @@ def confirm_add(pending_pos: Dict[str, Any]) -> Dict[str, Any]:
     confirmed["id"] = pos_id
 
     # Transition watchlist state
-    upsert_watchlist({
-        "ticker": confirmed["ticker"],
-        "sleeve": confirmed["sleeve"],
-        "state": "active_position",
-    })
-    _logger.info("Position opened: %s Sleeve %s @ $%.4f", confirmed["ticker"], confirmed["sleeve"], confirmed["entry_px"])
+    upsert_watchlist(
+        {
+            "ticker": confirmed["ticker"],
+            "sleeve": confirmed["sleeve"],
+            "state": "active_position",
+        }
+    )
+    _logger.info(
+        "Position opened: %s Sleeve %s @ $%.4f", confirmed["ticker"], confirmed["sleeve"], confirmed["entry_px"]
+    )
     return confirmed
 
 
-def handle_command(text: str) -> Tuple[str, Optional[Dict[str, Any]]]:
+def handle_command(text: str) -> Tuple[str, Dict[str, Any] | None]:
     """
     Dispatch a /pos command.
 
@@ -185,10 +187,7 @@ def handle_command(text: str) -> Tuple[str, Optional[Dict[str, Any]]]:
         for p in positions:
             entry = p.get("entry_px") or 0
             stop = p.get("stop_px") or 0
-            lines.append(
-                f"  {p['ticker']} (Sleeve {p.get('sleeve','?')}): "
-                f"entry ${entry:.4f} | stop ${stop:.4f}"
-            )
+            lines.append(f"  {p['ticker']} (Sleeve {p.get('sleeve', '?')}): entry ${entry:.4f} | stop ${stop:.4f}")
         return "\n".join(lines), None
 
     if text.lower().startswith("/pos add"):
@@ -205,10 +204,13 @@ def handle_command(text: str) -> Tuple[str, Optional[Dict[str, Any]]]:
             raise PosCommandError(f"No open position for {ticker}")
         pos = positions[0]
         realized_thirds = int(pos.get("realized_thirds") or 0) + 1
-        update_position(pos["id"], {
-            "realized_thirds": realized_thirds,
-            "notes": f"Scaled 1/3 #{third} @ ${px:.4f}",
-        })
+        update_position(
+            pos["id"],
+            {
+                "realized_thirds": realized_thirds,
+                "notes": f"Scaled 1/3 #{third} @ ${px:.4f}",
+            },
+        )
         # Move stop to breakeven after first third
         if third == 1 and pos.get("entry_px"):
             update_position(pos["id"], {"stop_px": float(pos["entry_px"])})
@@ -235,17 +237,20 @@ def handle_command(text: str) -> Tuple[str, Optional[Dict[str, Any]]]:
         pos = positions[0]
         entry_px = float(pos.get("entry_px") or px)
         pnl_pct = (px - entry_px) / entry_px
-        update_position(pos["id"], {
-            "status": "closed",
-            "notes": f"Closed @ ${px:.4f} ({pnl_pct:+.1%}) — {reason}",
-        })
-        upsert_watchlist({
-            "ticker": ticker,
-            "sleeve": pos.get("sleeve", "?"),
-            "state": "expired",
-        })
+        update_position(
+            pos["id"],
+            {
+                "status": "closed",
+                "notes": f"Closed @ ${px:.4f} ({pnl_pct:+.1%}) — {reason}",
+            },
+        )
+        upsert_watchlist(
+            {
+                "ticker": ticker,
+                "sleeve": pos.get("sleeve", "?"),
+                "state": "expired",
+            }
+        )
         return f"Position {ticker} closed @ ${px:.4f} ({pnl_pct:+.1%}). Reason: {reason}.", None
 
-    raise PosCommandError(
-        "Unknown /pos command. Use: add | scale | stop | close | list"
-    )
+    raise PosCommandError("Unknown /pos command. Use: add | scale | stop | close | list")

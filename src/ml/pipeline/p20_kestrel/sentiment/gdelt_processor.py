@@ -13,16 +13,17 @@ import re
 import sys
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-import pandas as pd
 from difflib import SequenceMatcher
 
-from src.ml.pipeline.p20_kestrel.config import DATA_CACHE_PATH
+import pandas as pd
+
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+from src.ml.pipeline.p20_kestrel.config import DATA_CACHE_PATH
 
 _kestrel = _KestrelService()
 finish_job_run = _kestrel.finish_job_run
@@ -61,7 +62,7 @@ def _fuzzy_score(a: str, b: str) -> float:
     return SequenceMatcher(None, a, b).ratio()
 
 
-def _parse_v2tone(tone_str: str) -> Optional[Tuple[float, float, float]]:
+def _parse_v2tone(tone_str: str) -> Tuple[float, float, float] | None:
     """
     Parse GDELT V2Tone CSV field.
 
@@ -99,10 +100,11 @@ class GdeltProcessor:
         self._blocklist = {str(r["alias"]): str(r["match_policy"]) for r in blocklist_rows}
         _logger.info(
             "Alias table loaded: %d normalized keys, %d blocklist entries",
-            len(self._aliases), len(self._blocklist),
+            len(self._aliases),
+            len(self._blocklist),
         )
 
-    def _match_org(self, org: str, v2themes: str) -> Optional[str]:
+    def _match_org(self, org: str, v2themes: str) -> str | None:
         """
         Attempt to match a GDELT organization mention to a ticker.
 
@@ -131,7 +133,7 @@ class GdeltProcessor:
 
         # Fuzzy second pass
         best_score = 0.0
-        best_ticker: Optional[str] = None
+        best_ticker: str | None = None
         for key, alias_rows in self._aliases.items():
             if abs(len(key) - len(norm)) > 5:
                 continue
@@ -184,14 +186,16 @@ class GdeltProcessor:
                         ticker = self._match_org(org, v2themes)
                         if ticker and ticker not in seen_tickers:
                             seen_tickers.add(ticker)
-                            records.append({
-                                "ticker": ticker,
-                                "date": row_date,
-                                "avg_tone": avg_tone,
-                                "pos_score": pos_score,
-                                "neg_score": neg_score,
-                                "source_domain": source.split(",")[0].strip(),
-                            })
+                            records.append(
+                                {
+                                    "ticker": ticker,
+                                    "date": row_date,
+                                    "avg_tone": avg_tone,
+                                    "pos_score": pos_score,
+                                    "neg_score": neg_score,
+                                    "source_domain": source.split(",")[0].strip(),
+                                }
+                            )
         except Exception:
             _logger.exception("Error processing GKG file %s", gkg_path)
         return records
@@ -215,20 +219,20 @@ def _aggregate_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
     for key, grp in df.groupby(["ticker", "date"]):
         ticker, row_date = key  # type: ignore[misc]
-        top_domains = (
-            grp["source_domain"].value_counts().head(5).to_dict()
+        top_domains = grp["source_domain"].value_counts().head(5).to_dict()
+        out.append(
+            {
+                "ticker": str(ticker),
+                "date": row_date,
+                "source": "gdelt",
+                "mentions": len(grp),
+                "avg_tone": float(grp["avg_tone"].mean()),
+                "tone_std": float(grp["avg_tone"].std()) if len(grp) > 1 else 0.0,
+                "pos_score": float(grp["pos_score"].mean()),
+                "neg_score": float(grp["neg_score"].mean()),
+                "top_domains": top_domains,
+            }
         )
-        out.append({
-            "ticker": str(ticker),
-            "date": row_date,
-            "source": "gdelt",
-            "mentions": len(grp),
-            "avg_tone": float(grp["avg_tone"].mean()),
-            "tone_std": float(grp["avg_tone"].std()) if len(grp) > 1 else 0.0,
-            "pos_score": float(grp["pos_score"].mean()),
-            "neg_score": float(grp["neg_score"].mean()),
-            "top_domains": top_domains,
-        })
 
     return out
 
@@ -274,19 +278,13 @@ def _compute_zscores(
         tone_mean = float(hist_df["avg_tone"].mean())
         tone_std_hist = float(hist_df["avg_tone"].std())
 
-        row["mention_z20"] = (
-            float((row["mentions"] - mention_mean) / mention_std)
-            if mention_std > 0 else None
-        )
-        row["tone_z20"] = (
-            float((row["avg_tone"] - tone_mean) / tone_std_hist)
-            if tone_std_hist > 0 else None
-        )
+        row["mention_z20"] = float((row["mentions"] - mention_mean) / mention_std) if mention_std > 0 else None
+        row["tone_z20"] = float((row["avg_tone"] - tone_mean) / tone_std_hist) if tone_std_hist > 0 else None
 
     return agg_rows
 
 
-def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
+def run(as_of_date: date | None = None) -> Dict[str, Any]:
     """
     Process all available GKG files for as_of_date and upsert sentiment.
 
@@ -322,7 +320,9 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
 
         _logger.info(
             "GDELT done: %d files, %d matches, %d tickers upserted",
-            files_processed, articles_matched, rows_upserted,
+            files_processed,
+            articles_matched,
+            rows_upserted,
         )
         finish_job_run(_JOB_NAME, target_date, status="ok", rows_out=rows_upserted)
         return {
@@ -339,7 +339,7 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
 
 def run_backfill(
     start_date: date,
-    end_date: Optional[date] = None,
+    end_date: date | None = None,
 ) -> Dict[str, Any]:
     """
     Process GKG files for a date range (backfill mode).
@@ -380,7 +380,10 @@ def run_backfill(
     total_rows = sum(r.get("rows_upserted", 0) for r in per_date)
     _logger.info(
         "GDELT backfill done: %d processed, %d skipped, %d files, %d rows",
-        dates_processed, dates_skipped, total_files, total_rows,
+        dates_processed,
+        dates_skipped,
+        total_files,
+        total_rows,
     )
     return {
         "dates_processed": dates_processed,

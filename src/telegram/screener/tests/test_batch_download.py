@@ -6,8 +6,8 @@ This script demonstrates how to use batch operations for better performance.
 
 import sys
 import time
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -66,7 +66,7 @@ def test_batch_ohlcv_download():
         print("\n📈 Performance Comparison:")
         print(f"  Individual: {individual_time:.2f} seconds")
         print(f"  Batch:      {batch_time:.2f} seconds")
-        print(f"  Speedup:    {individual_time/batch_time:.1f}x faster")
+        print(f"  Speedup:    {individual_time / batch_time:.1f}x faster")
 
         # Verify data consistency
         print("\n🔍 Data Verification:")
@@ -128,7 +128,7 @@ def test_batch_fundamentals_download():
         print("\n📈 Performance Comparison:")
         print(f"  Individual: {individual_time:.2f} seconds")
         print(f"  Batch:      {batch_time:.2f} seconds")
-        print(f"  Speedup:    {individual_time/batch_time:.1f}x faster")
+        print(f"  Speedup:    {individual_time / batch_time:.1f}x faster")
 
         # Verify data consistency
         print("\n🔍 Data Verification:")
@@ -160,29 +160,21 @@ def test_enhanced_screener_batch():
     test_config = {
         "screener_type": "hybrid",
         "list_type": "us_medium_cap",
-        "fundamental_criteria": [
-            {
-                "indicator": "PE",
-                "operator": "max",
-                "value": 25,
-                "weight": 1.0,
-                "required": True
-            }
-        ],
+        "fundamental_criteria": [{"indicator": "PE", "operator": "max", "value": 25, "weight": 1.0, "required": True}],
         "technical_criteria": [
             {
                 "indicator": "RSI",
                 "parameters": {"period": 14},
                 "condition": {"operator": "range", "min": 20, "max": 80},
                 "weight": 0.6,
-                "required": False
+                "required": False,
             }
         ],
         "period": "3mo",
         "interval": "1d",
         "max_results": 5,
         "min_score": 5.0,
-        "email": False
+        "email": False,
     }
 
     try:
@@ -239,9 +231,36 @@ def test_large_batch():
 
     # Larger test set
     large_tickers = [
-        "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "NFLX", "JPM", "JNJ",
-        "V", "PG", "UNH", "HD", "MA", "DIS", "PYPL", "BAC", "ADBE", "CRM",
-        "NKE", "CMCSA", "XOM", "VZ", "ABT", "KO", "PEP", "TMO", "COST", "AVGO"
+        "AAPL",
+        "MSFT",
+        "GOOGL",
+        "AMZN",
+        "TSLA",
+        "META",
+        "NVDA",
+        "NFLX",
+        "JPM",
+        "JNJ",
+        "V",
+        "PG",
+        "UNH",
+        "HD",
+        "MA",
+        "DIS",
+        "PYPL",
+        "BAC",
+        "ADBE",
+        "CRM",
+        "NKE",
+        "CMCSA",
+        "XOM",
+        "VZ",
+        "ABT",
+        "KO",
+        "PEP",
+        "TMO",
+        "COST",
+        "AVGO",
     ]
 
     downloader = YahooDataDownloader()
@@ -261,7 +280,9 @@ def test_large_batch():
         ohlcv_time = time.time() - start_time
         successful_ohlcv = len([df for df in ohlcv_results.values() if not df.empty])
         print(f"  Completed in {ohlcv_time:.2f} seconds")
-        print(f"  Success rate: {successful_ohlcv}/{len(large_tickers)} ({successful_ohlcv/len(large_tickers)*100:.1f}%)")
+        print(
+            f"  Success rate: {successful_ohlcv}/{len(large_tickers)} ({successful_ohlcv / len(large_tickers) * 100:.1f}%)"
+        )
 
     except Exception as e:
         print(f"  ❌ Failed: {e}")
@@ -276,7 +297,9 @@ def test_large_batch():
         fundamentals_time = time.time() - start_time
         successful_fundamentals = len([f for f in fundamentals_results.values() if f.company_name != "Unknown"])
         print(f"  Completed in {fundamentals_time:.2f} seconds")
-        print(f"  Success rate: {successful_fundamentals}/{len(large_tickers)} ({successful_fundamentals/len(large_tickers)*100:.1f}%)")
+        print(
+            f"  Success rate: {successful_fundamentals}/{len(large_tickers)} ({successful_fundamentals / len(large_tickers) * 100:.1f}%)"
+        )
 
     except Exception as e:
         print(f"  ❌ Failed: {e}")

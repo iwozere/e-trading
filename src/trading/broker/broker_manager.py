@@ -21,22 +21,23 @@ Classes:
 """
 
 import asyncio
-import time
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Callable
-from dataclasses import dataclass, field
-from enum import Enum
 import threading
-
-from src.trading.broker.broker_factory import get_broker
-from src.trading.broker.base_broker import BaseBroker
+import time
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import Enum
+from typing import Any, Callable, Dict, List
 
 from src.notification.logger import setup_logger
+from src.trading.broker.base_broker import BaseBroker
+from src.trading.broker.broker_factory import get_broker
+
 _logger = setup_logger(__name__)
 
 
 class BrokerStatus(Enum):
     """Broker status enumeration."""
+
     STOPPED = "stopped"
     STARTING = "starting"
     RUNNING = "running"
@@ -48,6 +49,7 @@ class BrokerStatus(Enum):
 @dataclass
 class BrokerHealthMetrics:
     """Broker health metrics."""
+
     broker_id: str
     broker_type: str
     trading_mode: str
@@ -60,26 +62,26 @@ class BrokerHealthMetrics:
     orders_processed: int = 0
     positions_count: int = 0
     portfolio_value: float = 0.0
-    last_error: Optional[str] = None
+    last_error: str | None = None
     performance_metrics: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
-            'broker_id': self.broker_id,
-            'broker_type': self.broker_type,
-            'trading_mode': self.trading_mode,
-            'status': self.status.value,
-            'uptime_seconds': self.uptime_seconds,
-            'connection_status': self.connection_status,
-            'last_heartbeat': self.last_heartbeat.isoformat(),
-            'error_count': self.error_count,
-            'reconnect_count': self.reconnect_count,
-            'orders_processed': self.orders_processed,
-            'positions_count': self.positions_count,
-            'portfolio_value': self.portfolio_value,
-            'last_error': self.last_error,
-            'performance_metrics': self.performance_metrics
+            "broker_id": self.broker_id,
+            "broker_type": self.broker_type,
+            "trading_mode": self.trading_mode,
+            "status": self.status.value,
+            "uptime_seconds": self.uptime_seconds,
+            "connection_status": self.connection_status,
+            "last_heartbeat": self.last_heartbeat.isoformat(),
+            "error_count": self.error_count,
+            "reconnect_count": self.reconnect_count,
+            "orders_processed": self.orders_processed,
+            "positions_count": self.positions_count,
+            "portfolio_value": self.portfolio_value,
+            "last_error": self.last_error,
+            "performance_metrics": self.performance_metrics,
         }
 
 
@@ -90,19 +92,19 @@ class BrokerHealthMonitor:
         self.check_interval = check_interval
         self.health_metrics: Dict[str, BrokerHealthMetrics] = {}
         self.monitoring_active = False
-        self.monitor_thread: Optional[threading.Thread] = None
+        self.monitor_thread: threading.Thread | None = None
         self.health_callbacks: List[Callable[[str, BrokerHealthMetrics], None]] = []
 
     def add_broker(self, broker_id: str, broker: BaseBroker):
         """Add a broker to health monitoring."""
         self.health_metrics[broker_id] = BrokerHealthMetrics(
             broker_id=broker_id,
-            broker_type=broker.config.get('type', 'unknown'),
+            broker_type=broker.config.get("type", "unknown"),
             trading_mode=broker.trading_mode.value,
             status=BrokerStatus.STOPPED,
             uptime_seconds=0.0,
             connection_status=False,
-            last_heartbeat=datetime.now(timezone.utc)
+            last_heartbeat=datetime.now(UTC),
         )
         _logger.info("Added broker %s to health monitoring", broker_id)
 
@@ -112,13 +114,12 @@ class BrokerHealthMonitor:
             del self.health_metrics[broker_id]
             _logger.info("Removed broker %s from health monitoring", broker_id)
 
-    def update_broker_status(self, broker_id: str, status: BrokerStatus,
-                           error_message: Optional[str] = None):
+    def update_broker_status(self, broker_id: str, status: BrokerStatus, error_message: str | None = None):
         """Update broker status."""
         if broker_id in self.health_metrics:
             metrics = self.health_metrics[broker_id]
             metrics.status = status
-            metrics.last_heartbeat = datetime.now(timezone.utc)
+            metrics.last_heartbeat = datetime.now(UTC)
 
             if error_message:
                 metrics.last_error = error_message
@@ -158,13 +159,14 @@ class BrokerHealthMonitor:
             try:
                 for broker_id, metrics in self.health_metrics.items():
                     # Check if broker is responsive
-                    time_since_heartbeat = (datetime.now(timezone.utc) - metrics.last_heartbeat).total_seconds()
+                    time_since_heartbeat = (datetime.now(UTC) - metrics.last_heartbeat).total_seconds()
 
                     if time_since_heartbeat > self.check_interval * 2:
                         # Broker appears unresponsive
                         if metrics.status == BrokerStatus.RUNNING:
-                            self.update_broker_status(broker_id, BrokerStatus.ERROR,
-                                                    "Broker unresponsive - no heartbeat")
+                            self.update_broker_status(
+                                broker_id, BrokerStatus.ERROR, "Broker unresponsive - no heartbeat"
+                            )
 
                 time.sleep(self.check_interval)
 
@@ -179,12 +181,12 @@ class BrokerHealthMonitor:
         error_brokers = sum(1 for m in self.health_metrics.values() if m.status == BrokerStatus.ERROR)
 
         return {
-            'total_brokers': total_brokers,
-            'running_brokers': running_brokers,
-            'error_brokers': error_brokers,
-            'health_percentage': (running_brokers / max(total_brokers, 1)) * 100,
-            'last_updated': datetime.now(timezone.utc).isoformat(),
-            'broker_details': {broker_id: metrics.to_dict() for broker_id, metrics in self.health_metrics.items()}
+            "total_brokers": total_brokers,
+            "running_brokers": running_brokers,
+            "error_brokers": error_brokers,
+            "health_percentage": (running_brokers / max(total_brokers, 1)) * 100,
+            "last_updated": datetime.now(UTC).isoformat(),
+            "broker_details": {broker_id: metrics.to_dict() for broker_id, metrics in self.health_metrics.items()},
         }
 
 
@@ -199,8 +201,8 @@ class BrokerConnectionPool:
 
     def get_connection(self, broker_config: Dict[str, Any]) -> BaseBroker:
         """Get a broker connection from the pool or create a new one."""
-        broker_type = broker_config.get('type', 'unknown')
-        trading_mode = broker_config.get('trading_mode', 'paper')
+        broker_type = broker_config.get("type", "unknown")
+        trading_mode = broker_config.get("trading_mode", "paper")
         pool_key = f"{broker_type}_{trading_mode}"
 
         with self.pool_lock:
@@ -224,7 +226,7 @@ class BrokerConnectionPool:
 
     def return_connection(self, broker: BaseBroker):
         """Return a broker connection to the pool."""
-        broker_type = broker.config.get('type', 'unknown')
+        broker_type = broker.config.get("type", "unknown")
         trading_mode = broker.trading_mode.value
         pool_key = f"{broker_type}_{trading_mode}"
 
@@ -260,10 +262,10 @@ class BrokerConnectionPool:
         """Get connection pool statistics."""
         with self.pool_lock:
             return {
-                'pool_sizes': {key: len(brokers) for key, brokers in self.connections.items()},
-                'connection_usage': self.connection_usage.copy(),
-                'max_connections_per_type': self.max_connections_per_type,
-                'total_active_connections': sum(len(brokers) for brokers in self.connections.values())
+                "pool_sizes": {key: len(brokers) for key, brokers in self.connections.items()},
+                "connection_usage": self.connection_usage.copy(),
+                "max_connections_per_type": self.max_connections_per_type,
+                "total_active_connections": sum(len(brokers) for brokers in self.connections.values()),
             }
 
 
@@ -287,16 +289,14 @@ class BrokerManager:
         self.broker_start_times: Dict[str, datetime] = {}
 
         # Initialize components
-        self.health_monitor = BrokerHealthMonitor(
-            check_interval=self.config.get('health_check_interval', 30)
-        )
+        self.health_monitor = BrokerHealthMonitor(check_interval=self.config.get("health_check_interval", 30))
         self.connection_pool = BrokerConnectionPool(
-            max_connections_per_type=self.config.get('max_connections_per_type', 5)
+            max_connections_per_type=self.config.get("max_connections_per_type", 5)
         )
 
         # Management state
         self.manager_active = False
-        self.auto_restart_enabled = self.config.get('auto_restart_enabled', True)
+        self.auto_restart_enabled = self.config.get("auto_restart_enabled", True)
 
         # Setup health monitoring callback
         self.health_monitor.add_health_callback(self._on_broker_health_change)
@@ -317,6 +317,7 @@ class BrokerManager:
         try:
             # Validate configuration
             from src.trading.broker.config_validator import validate_and_create_broker_config
+
             validated_config = validate_and_create_broker_config(broker_config)
 
             # Create broker
@@ -325,12 +326,12 @@ class BrokerManager:
             # Store broker and config
             self.brokers[broker_id] = broker
             self.broker_configs[broker_id] = validated_config
-            self.broker_start_times[broker_id] = datetime.now(timezone.utc)
+            self.broker_start_times[broker_id] = datetime.now(UTC)
 
             # Add to health monitoring
             self.health_monitor.add_broker(broker_id, broker)
 
-            _logger.info("Added broker %s (%s)", broker_id, broker_config.get('type', 'unknown'))
+            _logger.info("Added broker %s (%s)", broker_id, broker_config.get("type", "unknown"))
             return True
 
         except Exception:
@@ -468,8 +469,7 @@ class BrokerManager:
                 _logger.info("Stopped broker %s", broker_id)
                 return True
             else:
-                self.health_monitor.update_broker_status(broker_id, BrokerStatus.ERROR,
-                                                       "Failed to disconnect")
+                self.health_monitor.update_broker_status(broker_id, BrokerStatus.ERROR, "Failed to disconnect")
                 return False
 
         except Exception as e:
@@ -529,7 +529,7 @@ class BrokerManager:
 
         return results
 
-    def get_broker(self, broker_id: str) -> Optional[BaseBroker]:
+    def get_broker(self, broker_id: str) -> BaseBroker | None:
         """Get a managed broker by ID."""
         return self.brokers.get(broker_id)
 
@@ -542,13 +542,13 @@ class BrokerManager:
             metrics = self.health_monitor.health_metrics.get(broker_id)
 
             broker_info = {
-                'broker_id': broker_id,
-                'broker_type': config.get('type', 'unknown'),
-                'trading_mode': config.get('trading_mode', 'unknown'),
-                'status': metrics.status.value if metrics else 'unknown',
-                'uptime_seconds': metrics.uptime_seconds if metrics else 0,
-                'connection_status': metrics.connection_status if metrics else False,
-                'error_count': metrics.error_count if metrics else 0
+                "broker_id": broker_id,
+                "broker_type": config.get("type", "unknown"),
+                "trading_mode": config.get("trading_mode", "unknown"),
+                "status": metrics.status.value if metrics else "unknown",
+                "uptime_seconds": metrics.uptime_seconds if metrics else 0,
+                "connection_status": metrics.connection_status if metrics else False,
+                "error_count": metrics.error_count if metrics else 0,
             }
 
             brokers.append(broker_info)
@@ -602,10 +602,12 @@ class BrokerManager:
         pool_stats = self.connection_pool.get_pool_stats()
 
         return {
-            'manager_active': self.manager_active,
-            'auto_restart_enabled': self.auto_restart_enabled,
-            'total_managed_brokers': len(self.brokers),
-            'health_summary': health_summary,
-            'connection_pool_stats': pool_stats,
-            'uptime': (datetime.now(timezone.utc) - min(self.broker_start_times.values())).total_seconds() if self.broker_start_times else 0
+            "manager_active": self.manager_active,
+            "auto_restart_enabled": self.auto_restart_enabled,
+            "total_managed_brokers": len(self.brokers),
+            "health_summary": health_summary,
+            "connection_pool_stats": pool_stats,
+            "uptime": (datetime.now(UTC) - min(self.broker_start_times.values())).total_seconds()
+            if self.broker_start_times
+            else 0,
         }

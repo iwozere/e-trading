@@ -37,9 +37,9 @@ import logging.handlers
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import pandas as pd
 import requests
@@ -53,14 +53,15 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-_WORKER_COUNT = 3                    # parallel threads — tune with care
+_WORKER_COUNT = 3  # parallel threads — tune with care
 _NASDAQ_URL = "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt"
-_NASDAQ_REQUEST_TIMEOUT = 20         # seconds
+_NASDAQ_REQUEST_TIMEOUT = 20  # seconds
 
 
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
+
 
 def _setup_file_logging() -> None:
     """Attach a daily-rotating file handler to the root logger."""
@@ -75,16 +76,19 @@ def _setup_file_logging() -> None:
         encoding="utf-8",
     )
     handler.suffix = "%Y-%m-%d"
-    handler.setFormatter(logging.Formatter(
-        "%(asctime)s %(levelname)-8s %(name)-40s %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    ))
+    handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s %(levelname)-8s %(name)-40s %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
     logging.getLogger().addHandler(handler)
 
 
 # ---------------------------------------------------------------------------
 # NASDAQ ticker list
 # ---------------------------------------------------------------------------
+
 
 def _load_nasdaq_tickers(date_str: str) -> List[str]:
     """
@@ -110,8 +114,8 @@ def _load_nasdaq_tickers(date_str: str) -> List[str]:
     Returns:
         Sorted list of clean NASDAQ ticker symbols.
     """
-    nasdaq_dir  = Path(_cache_root) / "nasdaq"
-    cache_path  = nasdaq_dir / f"{date_str}.csv.gz"
+    nasdaq_dir = Path(_cache_root) / "nasdaq"
+    cache_path = nasdaq_dir / f"{date_str}.csv.gz"
 
     if cache_path.exists():
         _logger.info("NASDAQ list: loading from cache %s", cache_path)
@@ -129,8 +133,7 @@ def _load_nasdaq_tickers(date_str: str) -> List[str]:
 
     df = pd.DataFrame(
         [l.split("|") for l in data_lines],
-        columns=["Symbol", "Name", "MarketCat", "TestIssue",
-                 "FinStatus", "RoundLot", "ETF", "NextShares"],
+        columns=["Symbol", "Name", "MarketCat", "TestIssue", "FinStatus", "RoundLot", "ETF", "NextShares"],
     )
 
     df = df[df["TestIssue"] != "Y"]
@@ -140,9 +143,7 @@ def _load_nasdaq_tickers(date_str: str) -> List[str]:
 
     nasdaq_dir.mkdir(parents=True, exist_ok=True)
     df.to_csv(cache_path, index=False, compression="gzip")
-    _logger.info(
-        "NASDAQ list: %d symbols saved to %s", len(df), cache_path
-    )
+    _logger.info("NASDAQ list: %d symbols saved to %s", len(df), cache_path)
 
     return sorted(df["Symbol"].str.strip().tolist())
 
@@ -150,6 +151,7 @@ def _load_nasdaq_tickers(date_str: str) -> List[str]:
 # ---------------------------------------------------------------------------
 # Cache helpers
 # ---------------------------------------------------------------------------
+
 
 def _options_append_summary(
     putcall_dir: Path,
@@ -174,9 +176,7 @@ def _options_append_summary(
 
     if path.exists():
         try:
-            existing = pd.read_csv(
-                path, index_col=0, parse_dates=True, compression="gzip"
-            )
+            existing = pd.read_csv(path, index_col=0, parse_dates=True, compression="gzip")
             combined = pd.concat([existing, new_row])
             combined = combined[~combined.index.duplicated(keep="last")].sort_index()
         except Exception:
@@ -191,6 +191,7 @@ def _options_append_summary(
 # ---------------------------------------------------------------------------
 # Per-ticker worker (runs in thread pool)
 # ---------------------------------------------------------------------------
+
 
 def _process_ticker(
     ticker: str,
@@ -245,7 +246,7 @@ def _process_ticker(
             "ticker": ticker,
             "status": "ok",
             "pc_vol": summary.get("pc_volume_ratio"),
-            "n_exp":  summary.get("n_expirations", 0),
+            "n_exp": summary.get("n_expirations", 0),
         }
 
     except Exception:
@@ -257,6 +258,7 @@ def _process_ticker(
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     """
     Run the NASDAQ options snapshot job and emit a structured scheduler result.
@@ -266,13 +268,13 @@ def main() -> None:
     """
     _setup_file_logging()
 
-    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).date()
-    date_str  = yesterday.strftime("%Y-%m-%d")
+    yesterday = (datetime.now(UTC) - timedelta(days=1)).date()
+    date_str = yesterday.strftime("%Y-%m-%d")
     _logger.info("=== P15 Options Daily  date=%s  workers=%d ===", date_str, _WORKER_COUNT)
     t0 = time.monotonic()
 
     options_dir = Path(_cache_root) / "options"
-    chains_dir  = options_dir / "chains"
+    chains_dir = options_dir / "chains"
     putcall_dir = options_dir / "putcall"
     putcall_dir.mkdir(parents=True, exist_ok=True)
 
@@ -287,8 +289,7 @@ def main() -> None:
 
     with ThreadPoolExecutor(max_workers=_WORKER_COUNT) as pool:
         futures = {
-            pool.submit(_process_ticker, ticker, date_str, chains_dir, putcall_dir): ticker
-            for ticker in tickers
+            pool.submit(_process_ticker, ticker, date_str, chains_dir, putcall_dir): ticker for ticker in tickers
         }
         done = 0
         total = len(futures)
@@ -306,30 +307,37 @@ def main() -> None:
                 elapsed_so_far = round(time.monotonic() - t0, 0)
                 _logger.info(
                     "Progress: %d/%d  ok=%d skipped=%d empty=%d error=%d  %.0fs",
-                    done, total,
-                    counters["ok"], counters["skipped"],
-                    counters["empty"], counters["error"],
+                    done,
+                    total,
+                    counters["ok"],
+                    counters["skipped"],
+                    counters["empty"],
+                    counters["error"],
                     elapsed_so_far,
                 )
 
     elapsed = round(time.monotonic() - t0, 1)
     _logger.info(
         "=== P15 Options Daily done: ok=%d skipped=%d empty=%d error=%d / %d  %.1fs ===",
-        counters["ok"], counters["skipped"], counters["empty"],
-        counters["error"], len(tickers), elapsed,
+        counters["ok"],
+        counters["skipped"],
+        counters["empty"],
+        counters["error"],
+        len(tickers),
+        elapsed,
     )
 
     result = {
-        "success":           counters["error"] == 0,
-        "bundle":            "p15_options_daily",
-        "date":              date_str,
+        "success": counters["error"] == 0,
+        "bundle": "p15_options_daily",
+        "date": date_str,
         "tickers_attempted": len(tickers),
-        "ok":                counters["ok"],
-        "skipped":           counters["skipped"],
-        "empty":             counters["empty"],
-        "error":             counters["error"],
-        "elapsed_s":         elapsed,
-        "run_at":            datetime.now(timezone.utc).isoformat(),
+        "ok": counters["ok"],
+        "skipped": counters["skipped"],
+        "empty": counters["empty"],
+        "error": counters["error"],
+        "elapsed_s": elapsed,
+        "run_at": datetime.now(UTC).isoformat(),
     }
     print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")
 

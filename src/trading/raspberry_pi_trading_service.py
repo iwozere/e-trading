@@ -22,22 +22,22 @@ Service Installation:
     sudo systemctl enable trading-service
 """
 
-import asyncio
 import argparse
+import asyncio
 import json
+import os
 import signal
 import sys
-import os
-import psutil
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
-from typing import Optional
+
+import psutil
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.append(str(PROJECT_ROOT))
 
-from src.trading.strategy_manager import StrategyManager
 from src.notification.logger import setup_logger
+from src.trading.strategy_manager import StrategyManager
 
 _logger = setup_logger(__name__)
 
@@ -45,10 +45,13 @@ _logger = setup_logger(__name__)
 class RaspberryPiTradingService:
     """Main trading service for Raspberry Pi."""
 
-    def __init__(self, config_file: Optional[str] = None,
-                 use_db: bool = False,
-                 db_user_id: Optional[int] = None,
-                 db_poll_interval: int = 60):
+    def __init__(
+        self,
+        config_file: str | None = None,
+        use_db: bool = False,
+        db_user_id: int | None = None,
+        db_poll_interval: int = 60,
+    ):
         """Initialize the service."""
         self.config_file = config_file or "config/enhanced_trading/raspberry_pi_multi_strategy.json"
         self.config = None
@@ -69,11 +72,11 @@ class RaspberryPiTradingService:
                 _logger.error("Configuration file not found: %s", config_path)
                 return False
 
-            with open(config_path, 'r') as f:
+            with open(config_path) as f:
                 self.config = json.load(f)
 
             _logger.info("Loaded service configuration: %s", config_path)
-            _logger.info("Service: %s v%s", self.config['system']['name'], self.config['system']['version'])
+            _logger.info("Service: %s v%s", self.config["system"]["name"], self.config["system"]["version"])
 
             return True
 
@@ -93,8 +96,11 @@ class RaspberryPiTradingService:
 
             # Load strategies either from DB or config file
             if self.use_db:
-                _logger.info("Using database-backed strategy loading and polling (user_id=%s, interval=%ss)",
-                             self.db_user_id, self.db_poll_interval)
+                _logger.info(
+                    "Using database-backed strategy loading and polling (user_id=%s, interval=%ss)",
+                    self.db_user_id,
+                    self.db_poll_interval,
+                )
                 ok = await self.strategy_manager.load_strategies_from_db(self.db_user_id)
                 if not ok:
                     _logger.warning("Initial DB load returned no strategies or failed; will continue and poll")
@@ -104,7 +110,7 @@ class RaspberryPiTradingService:
 
             # Set service as running
             self.is_running = True
-            self.start_time = datetime.now(timezone.utc)
+            self.start_time = datetime.now(UTC)
 
             # Start system monitoring
             self.system_monitor_task = asyncio.create_task(self._monitor_system())
@@ -114,8 +120,9 @@ class RaspberryPiTradingService:
 
             # Start strategies based on mode
             if self.use_db:
-                await self.strategy_manager.start_db_polling(user_id=self.db_user_id,
-                                                            interval_seconds=self.db_poll_interval)
+                await self.strategy_manager.start_db_polling(
+                    user_id=self.db_user_id, interval_seconds=self.db_poll_interval
+                )
                 # In DB mode, strategies will be started by the poller; report current count
                 started_count = sum(1 for s in self.strategy_manager.get_all_status() if s["status"] == "running")
             else:
@@ -165,43 +172,43 @@ class RaspberryPiTradingService:
         """Get comprehensive service status."""
         uptime = 0
         if self.start_time:
-            uptime = (datetime.now(timezone.utc) - self.start_time).total_seconds()
+            uptime = (datetime.now(UTC) - self.start_time).total_seconds()
 
         # Get system info
         cpu_percent = psutil.cpu_percent(interval=1)
         memory = psutil.virtual_memory()
-        disk = psutil.disk_usage('/')
+        disk = psutil.disk_usage("/")
 
         # Get temperature (Raspberry Pi specific)
         temperature = self._get_cpu_temperature()
 
         # Get strategy status
         strategy_status = self.strategy_manager.get_all_status()
-        running_strategies = sum(1 for s in strategy_status if s['status'] == 'running')
+        running_strategies = sum(1 for s in strategy_status if s["status"] == "running")
 
         return {
-            'service': {
-                'name': self.config['system']['name'] if self.config else 'Unknown',
-                'version': self.config['system']['version'] if self.config else 'Unknown',
-                'status': 'running' if self.is_running else 'stopped',
-                'uptime_seconds': uptime,
-                'start_time': self.start_time.isoformat() if self.start_time else None
+            "service": {
+                "name": self.config["system"]["name"] if self.config else "Unknown",
+                "version": self.config["system"]["version"] if self.config else "Unknown",
+                "status": "running" if self.is_running else "stopped",
+                "uptime_seconds": uptime,
+                "start_time": self.start_time.isoformat() if self.start_time else None,
             },
-            'system': {
-                'cpu_percent': cpu_percent,
-                'memory_percent': memory.percent,
-                'memory_available_gb': memory.available / (1024**3),
-                'disk_percent': disk.percent,
-                'disk_free_gb': disk.free / (1024**3),
-                'temperature_c': temperature,
-                'load_average': os.getloadavg() if hasattr(os, 'getloadavg') else None
+            "system": {
+                "cpu_percent": cpu_percent,
+                "memory_percent": memory.percent,
+                "memory_available_gb": memory.available / (1024**3),
+                "disk_percent": disk.percent,
+                "disk_free_gb": disk.free / (1024**3),
+                "temperature_c": temperature,
+                "load_average": os.getloadavg() if hasattr(os, "getloadavg") else None,
             },
-            'strategies': {
-                'total': len(strategy_status),
-                'running': running_strategies,
-                'stopped': len(strategy_status) - running_strategies,
-                'instances': strategy_status
-            }
+            "strategies": {
+                "total": len(strategy_status),
+                "running": running_strategies,
+                "stopped": len(strategy_status) - running_strategies,
+                "instances": strategy_status,
+            },
         }
 
     async def _monitor_system(self):
@@ -209,27 +216,29 @@ class RaspberryPiTradingService:
         while self.is_running:
             try:
                 status = self.get_service_status()
-                system = status['system']
+                system = status["system"]
 
                 # Log system status periodically
-                _logger.info("📊 System Status: CPU %.1f%% | Memory %.1f%% | Temp %.1f°C | Strategies %s/%s",
-                           system['cpu_percent'],
-                           system['memory_percent'],
-                           system['temperature_c'],
-                           status['strategies']['running'],
-                           status['strategies']['total'])
+                _logger.info(
+                    "📊 System Status: CPU %.1f%% | Memory %.1f%% | Temp %.1f°C | Strategies %s/%s",
+                    system["cpu_percent"],
+                    system["memory_percent"],
+                    system["temperature_c"],
+                    status["strategies"]["running"],
+                    status["strategies"]["total"],
+                )
 
                 # Check for alerts
-                alerts = self.config.get('global_settings', {}).get('monitoring', {}).get('alert_thresholds', {})
+                alerts = self.config.get("global_settings", {}).get("monitoring", {}).get("alert_thresholds", {})
 
-                if system['cpu_percent'] > alerts.get('cpu_usage', 80):
+                if system["cpu_percent"] > alerts.get("cpu_usage", 80):
                     _logger.warning("⚠️  High CPU usage: %.1f%%", system["cpu_percent"])
 
-                if system['memory_percent'] > alerts.get('memory_usage', 85):
-                    _logger.warning("⚠️  High memory usage: %.1f%%", system['memory_percent'])
+                if system["memory_percent"] > alerts.get("memory_usage", 85):
+                    _logger.warning("⚠️  High memory usage: %.1f%%", system["memory_percent"])
 
-                if system['temperature_c'] > alerts.get('temperature', 70):
-                    _logger.warning("⚠️  High temperature: %.1f%%", system['temperature_c'])
+                if system["temperature_c"] > alerts.get("temperature", 70):
+                    _logger.warning("⚠️  High temperature: %.1f%%", system["temperature_c"])
 
                 await asyncio.sleep(300)  # Monitor every 5 minutes
 
@@ -241,16 +250,16 @@ class RaspberryPiTradingService:
         """Get CPU temperature (Raspberry Pi specific)."""
         try:
             # Try Raspberry Pi thermal zone
-            with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
+            with open("/sys/class/thermal/thermal_zone0/temp") as f:
                 temp = int(f.read().strip()) / 1000.0
                 return temp
-        except:
+        except Exception:
             try:
                 # Try alternative method
-                result = os.popen('vcgencmd measure_temp').readline()
+                result = os.popen("vcgencmd measure_temp").readline()
                 temp = float(result.replace("temp=", "").replace("'C\n", ""))
                 return temp
-            except:
+            except Exception:
                 return 0.0
 
     async def run_forever(self):
@@ -275,6 +284,7 @@ class RaspberryPiTradingService:
 
 def setup_signal_handlers(service):
     """Setup signal handlers for graceful shutdown."""
+
     def signal_handler(signum, frame):
         _logger.info("Received signal %s, initiating shutdown...", signum)
         asyncio.create_task(service.stop_service())
@@ -320,7 +330,7 @@ WantedBy=multi-user.target
     service_file = Path("/etc/systemd/system/trading-service.service")
 
     try:
-        with open(service_file, 'w') as f:
+        with open(service_file, "w") as f:
             f.write(service_content)
 
         print(f"✅ Created systemd service file: {service_file}")
@@ -344,21 +354,19 @@ WantedBy=multi-user.target
 
 async def main():
     """Main function."""
-    parser = argparse.ArgumentParser(description='Raspberry Pi Multi-Strategy Trading Service')
-    parser.add_argument('config', nargs='?',
-                       default='config/enhanced_trading/raspberry_pi_multi_strategy.json',
-                       help='Configuration file path')
-    parser.add_argument('--install-service', action='store_true',
-                       help='Install as systemd service')
-    parser.add_argument('--status', action='store_true',
-                       help='Show service status')
+    parser = argparse.ArgumentParser(description="Raspberry Pi Multi-Strategy Trading Service")
+    parser.add_argument(
+        "config",
+        nargs="?",
+        default="config/enhanced_trading/raspberry_pi_multi_strategy.json",
+        help="Configuration file path",
+    )
+    parser.add_argument("--install-service", action="store_true", help="Install as systemd service")
+    parser.add_argument("--status", action="store_true", help="Show service status")
     # DB-backed mode
-    parser.add_argument('--use-db', action='store_true',
-                       help='Load bots from DB (trading_bots) and poll for changes')
-    parser.add_argument('--db-user-id', type=int, default=None,
-                       help='Optional user_id to filter bots in DB mode')
-    parser.add_argument('--db-poll-interval', type=int, default=60,
-                       help='DB polling interval in seconds (default: 60)')
+    parser.add_argument("--use-db", action="store_true", help="Load bots from DB (trading_bots) and poll for changes")
+    parser.add_argument("--db-user-id", type=int, default=None, help="Optional user_id to filter bots in DB mode")
+    parser.add_argument("--db-poll-interval", type=int, default=60, help="DB polling interval in seconds (default: 60)")
 
     args = parser.parse_args()
 

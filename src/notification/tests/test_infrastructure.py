@@ -6,19 +6,20 @@ Tests the FastAPI application, message queue, and processor functionality.
 """
 
 import asyncio
+import json
 import sys
 from pathlib import Path
-import json
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.service.config import config
 from src.data.db.services.database_service import get_database_service
-from src.notification.service.message_queue import message_queue, MessagePriority
-from src.notification.service.processor import message_processor
 from src.notification.logger import setup_logger
+from src.notification.service.config import config
+from src.notification.service.message_queue import MessagePriority, message_queue
+from src.notification.service.processor import message_processor
+
 _logger = setup_logger(__name__)
 
 
@@ -35,15 +36,16 @@ async def test_database_connection():
         with db_service.uow() as r:
             # Test basic query using SQLAlchemy text
             from sqlalchemy import text
+
             r.s.execute(text("SELECT 1"))
             print("✓ Database connection successful")
 
             # Test message creation
             message_data = {
-                'message_type': 'test_message',
-                'channels': ['telegram'],
-                'content': {'text': 'Test message'},
-                'priority': MessagePriority.NORMAL.value
+                "message_type": "test_message",
+                "channels": ["telegram"],
+                "content": {"text": "Test message"},
+                "priority": MessagePriority.NORMAL.value,
             }
 
             message = repo.messages.create_message(message_data)
@@ -70,10 +72,10 @@ async def test_message_queue():
     try:
         # Test message enqueueing
         message_data = {
-            'message_type': 'queue_test',
-            'channels': ['telegram', 'email'],
-            'content': {'text': 'Queue test message'},
-            'recipient_id': 'test_user'
+            "message_type": "queue_test",
+            "channels": ["telegram", "email"],
+            "content": {"text": "Queue test message"},
+            "recipient_id": "test_user",
         }
 
         message_id = message_queue.enqueue(message_data, MessagePriority.HIGH)
@@ -124,10 +126,10 @@ async def test_message_processor():
 
         # Enqueue a test message for processing
         message_data = {
-            'message_type': 'processor_test',
-            'channels': ['telegram'],
-            'content': {'text': 'Processor test message'},
-            'recipient_id': 'test_user'
+            "message_type": "processor_test",
+            "channels": ["telegram"],
+            "content": {"text": "Processor test message"},
+            "recipient_id": "test_user",
         }
 
         message_id = message_queue.enqueue(message_data, MessagePriority.CRITICAL)
@@ -165,10 +167,7 @@ async def test_configuration():
         print(f"✓ Batch size: {config.processing.batch_size}")
 
         # Test channel configuration
-        enabled_channels = [
-            name for name in ["telegram", "email", "sms"]
-            if config.is_channel_enabled(name)
-        ]
+        enabled_channels = [name for name in ["telegram", "email", "sms"] if config.is_channel_enabled(name)]
         print(f"✓ Enabled channels: {enabled_channels}")
 
         # Test rate limits

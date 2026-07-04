@@ -18,17 +18,15 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.ml.pipeline.p17_penny_stocks.config import P17PipelineConfig
 from src.ml.pipeline.p17_penny_stocks.p17_pipeline import P17Pipeline
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="P17 Explosive Penny Stock Screener"
-    )
+    parser = argparse.ArgumentParser(description="P17 Explosive Penny Stock Screener")
     parser.add_argument(
         "--target-date",
         type=str,
@@ -70,9 +68,7 @@ def main() -> int:
         pipeline = P17Pipeline(config=config, target_date=args.target_date)
         result = pipeline.run(force_refresh=args.force_refresh, tickers=tickers)
 
-        results_dir = (
-            PROJECT_ROOT / "results" / "p17_penny_stocks" / pipeline.target_date
-        )
+        results_dir = PROJECT_ROOT / "results" / "p17_penny_stocks" / pipeline.target_date
 
         print(
             f"P17 complete. "

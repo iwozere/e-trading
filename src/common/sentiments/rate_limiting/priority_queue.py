@@ -7,14 +7,14 @@ are processed before normal requests while maintaining fairness.
 
 import asyncio
 import heapq
+import sys
 import time
-from typing import Any, Dict, List, Optional
+import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import IntEnum
 from pathlib import Path
-import sys
-import uuid
+from typing import Any, Dict, List
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -27,24 +27,26 @@ _logger = setup_logger(__name__)
 
 class RequestPriority(IntEnum):
     """Priority levels for requests (lower values = higher priority)."""
-    CRITICAL = 1    # Critical/urgent requests
-    HIGH = 2        # High priority requests
-    NORMAL = 3      # Normal priority requests
-    LOW = 4         # Low priority/background requests
+
+    CRITICAL = 1  # Critical/urgent requests
+    HIGH = 2  # High priority requests
+    NORMAL = 3  # Normal priority requests
+    LOW = 4  # Low priority/background requests
 
 
 @dataclass
 class QueuedRequest:
     """Represents a queued request with priority and metadata."""
+
     priority: RequestPriority
     request_id: str
     adapter_name: str
     ticker: str
     created_at: datetime
-    timeout_at: Optional[datetime] = None
+    timeout_at: datetime | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-    def __lt__(self, other: 'QueuedRequest') -> bool:
+    def __lt__(self, other: "QueuedRequest") -> bool:
         """Compare requests for priority queue ordering."""
         # First by priority (lower = higher priority)
         if self.priority != other.priority:
@@ -56,7 +58,7 @@ class QueuedRequest:
         """Check if request has expired."""
         if self.timeout_at is None:
             return False
-        return datetime.now(timezone.utc) > self.timeout_at
+        return datetime.now(UTC) > self.timeout_at
 
 
 class PriorityRequestQueue:
@@ -67,10 +69,7 @@ class PriorityRequestQueue:
     are processed first while preventing starvation of lower priority requests.
     """
 
-    def __init__(self,
-                 max_queue_size: int = 1000,
-                 default_timeout_seconds: int = 300,
-                 fairness_window_size: int = 10):
+    def __init__(self, max_queue_size: int = 1000, default_timeout_seconds: int = 300, fairness_window_size: int = 10):
         """
         Initialize priority request queue.
 
@@ -89,9 +88,7 @@ class PriorityRequestQueue:
 
         # Request tracking
         self._pending_requests: Dict[str, QueuedRequest] = {}
-        self._processed_count_by_priority: Dict[RequestPriority, int] = {
-            priority: 0 for priority in RequestPriority
-        }
+        self._processed_count_by_priority: Dict[RequestPriority, int] = {priority: 0 for priority in RequestPriority}
 
         # Fairness tracking
         self._recent_processed: List[RequestPriority] = []
@@ -102,14 +99,16 @@ class PriorityRequestQueue:
         self.total_processed = 0
         self.total_expired = 0
         self.total_rejected = 0
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
 
-    async def enqueue(self,
-                     adapter_name: str,
-                     ticker: str,
-                     priority: RequestPriority = RequestPriority.NORMAL,
-                     timeout_seconds: Optional[int] = None,
-                     metadata: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    async def enqueue(
+        self,
+        adapter_name: str,
+        ticker: str,
+        priority: RequestPriority = RequestPriority.NORMAL,
+        timeout_seconds: int | None = None,
+        metadata: Dict[str, Any] | None = None,
+    ) -> str | None:
         """
         Enqueue a request with specified priority.
 
@@ -127,23 +126,22 @@ class PriorityRequestQueue:
             # Check queue capacity
             if len(self._queue) >= self.max_queue_size:
                 self.total_rejected += 1
-                _logger.warning("Request queue full, rejecting request for %s:%s",
-                               adapter_name, ticker)
+                _logger.warning("Request queue full, rejecting request for %s:%s", adapter_name, ticker)
                 return None
 
             # Create request
             request_id = str(uuid.uuid4())
             timeout = timeout_seconds or self.default_timeout_seconds
-            timeout_at = datetime.now(timezone.utc) + timedelta(seconds=timeout)
+            timeout_at = datetime.now(UTC) + timedelta(seconds=timeout)
 
             request = QueuedRequest(
                 priority=priority,
                 request_id=request_id,
                 adapter_name=adapter_name,
                 ticker=ticker,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 timeout_at=timeout_at,
-                metadata=metadata or {}
+                metadata=metadata or {},
             )
 
             # Add to queue and tracking
@@ -151,12 +149,18 @@ class PriorityRequestQueue:
             self._pending_requests[request_id] = request
             self.total_queued += 1
 
-            _logger.debug("Queued request %s for %s:%s (priority: %s, queue size: %d)",
-                         request_id[:8], adapter_name, ticker, priority.name, len(self._queue))
+            _logger.debug(
+                "Queued request %s for %s:%s (priority: %s, queue size: %d)",
+                request_id[:8],
+                adapter_name,
+                ticker,
+                priority.name,
+                len(self._queue),
+            )
 
             return request_id
 
-    async def dequeue(self, timeout_seconds: Optional[float] = None) -> Optional[QueuedRequest]:
+    async def dequeue(self, timeout_seconds: float | None = None) -> QueuedRequest | None:
         """
         Dequeue the highest priority request.
 
@@ -217,12 +221,14 @@ class PriorityRequestQueue:
                 if len(self._recent_processed) > self.fairness_window_size:
                     self._recent_processed.pop(0)
 
-                _logger.debug("Dequeued request %s for %s:%s (priority: %s, wait time: %.2fs)",
-                             next_request.request_id[:8],
-                             next_request.adapter_name,
-                             next_request.ticker,
-                             next_request.priority.name,
-                             (datetime.now(timezone.utc) - next_request.created_at).total_seconds())
+                _logger.debug(
+                    "Dequeued request %s for %s:%s (priority: %s, wait time: %.2fs)",
+                    next_request.request_id[:8],
+                    next_request.adapter_name,
+                    next_request.ticker,
+                    next_request.priority.name,
+                    (datetime.now(UTC) - next_request.created_at).total_seconds(),
+                )
 
                 return next_request
 
@@ -243,10 +249,9 @@ class PriorityRequestQueue:
                     del self._pending_requests[expired.request_id]
                 self.total_expired += 1
 
-                _logger.debug("Expired request %s for %s:%s",
-                             expired.request_id[:8],
-                             expired.adapter_name,
-                             expired.ticker)
+                _logger.debug(
+                    "Expired request %s for %s:%s", expired.request_id[:8], expired.adapter_name, expired.ticker
+                )
             except ValueError:
                 # Request already removed
                 pass
@@ -263,8 +268,7 @@ class PriorityRequestQueue:
 
             # Count high priority requests in recent window
             high_priority_count = sum(
-                1 for p in self._recent_processed
-                if p in [RequestPriority.CRITICAL, RequestPriority.HIGH]
+                1 for p in self._recent_processed if p in [RequestPriority.CRITICAL, RequestPriority.HIGH]
             )
 
             high_priority_ratio = high_priority_count / len(self._recent_processed)
@@ -272,7 +276,7 @@ class PriorityRequestQueue:
 
         return False
 
-    def _find_lower_priority_request(self) -> Optional[QueuedRequest]:
+    def _find_lower_priority_request(self) -> QueuedRequest | None:
         """Find a lower priority request for fairness processing."""
         for request in self._queue:
             if request.priority in [RequestPriority.NORMAL, RequestPriority.LOW]:
@@ -300,8 +304,7 @@ class PriorityRequestQueue:
                 heapq.heapify(self._queue)
                 del self._pending_requests[request_id]
 
-                _logger.debug("Cancelled request %s for %s:%s",
-                             request_id[:8], request.adapter_name, request.ticker)
+                _logger.debug("Cancelled request %s for %s:%s", request_id[:8], request.adapter_name, request.ticker)
                 return True
             except ValueError:
                 # Request not in queue (maybe already processed)
@@ -319,7 +322,7 @@ class PriorityRequestQueue:
 
             # Calculate average wait time
             if self._queue:
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 wait_times = [(now - req.created_at).total_seconds() for req in self._queue]
                 avg_wait_time = sum(wait_times) / len(wait_times)
                 max_wait_time = max(wait_times)
@@ -327,27 +330,27 @@ class PriorityRequestQueue:
                 avg_wait_time = 0.0
                 max_wait_time = 0.0
 
-            uptime = (datetime.now(timezone.utc) - self.created_at).total_seconds()
+            uptime = (datetime.now(UTC) - self.created_at).total_seconds()
 
             return {
-                'queue_size': len(self._queue),
-                'max_queue_size': self.max_queue_size,
-                'utilization': len(self._queue) / self.max_queue_size,
-                'priority_distribution': priority_counts,
-                'statistics': {
-                    'total_queued': self.total_queued,
-                    'total_processed': self.total_processed,
-                    'total_expired': self.total_expired,
-                    'total_rejected': self.total_rejected,
-                    'processing_rate': self.total_processed / max(1, uptime),
-                    'expiration_rate': self.total_expired / max(1, self.total_queued),
-                    'rejection_rate': self.total_rejected / max(1, self.total_queued + self.total_rejected)
+                "queue_size": len(self._queue),
+                "max_queue_size": self.max_queue_size,
+                "utilization": len(self._queue) / self.max_queue_size,
+                "priority_distribution": priority_counts,
+                "statistics": {
+                    "total_queued": self.total_queued,
+                    "total_processed": self.total_processed,
+                    "total_expired": self.total_expired,
+                    "total_rejected": self.total_rejected,
+                    "processing_rate": self.total_processed / max(1, uptime),
+                    "expiration_rate": self.total_expired / max(1, self.total_queued),
+                    "rejection_rate": self.total_rejected / max(1, self.total_queued + self.total_rejected),
                 },
-                'performance': {
-                    'avg_wait_time_seconds': avg_wait_time,
-                    'max_wait_time_seconds': max_wait_time,
-                    'fairness_ratio': self._calculate_fairness_ratio()
-                }
+                "performance": {
+                    "avg_wait_time_seconds": avg_wait_time,
+                    "max_wait_time_seconds": max_wait_time,
+                    "fairness_ratio": self._calculate_fairness_ratio(),
+                },
             }
 
     def _calculate_fairness_ratio(self) -> float:
@@ -361,8 +364,7 @@ class PriorityRequestQueue:
 
         total = len(self._recent_processed)
         high_priority_ratio = (
-            priority_counts[RequestPriority.CRITICAL] +
-            priority_counts[RequestPriority.HIGH]
+            priority_counts[RequestPriority.CRITICAL] + priority_counts[RequestPriority.HIGH]
         ) / total
 
         return high_priority_ratio
@@ -382,8 +384,7 @@ class PriorityRequestQueue:
             _logger.info("Cleared %d requests from priority queue", cleared_count)
             return cleared_count
 
-    async def get_pending_requests(self,
-                                 adapter_name: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_pending_requests(self, adapter_name: str | None = None) -> List[Dict[str, Any]]:
         """
         Get list of pending requests.
 
@@ -400,20 +401,22 @@ class PriorityRequestQueue:
                 if adapter_name and request.adapter_name != adapter_name:
                     continue
 
-                wait_time = (datetime.now(timezone.utc) - request.created_at).total_seconds()
+                wait_time = (datetime.now(UTC) - request.created_at).total_seconds()
                 time_to_expire = None
                 if request.timeout_at:
-                    time_to_expire = (request.timeout_at - datetime.now(timezone.utc)).total_seconds()
+                    time_to_expire = (request.timeout_at - datetime.now(UTC)).total_seconds()
 
-                requests.append({
-                    'request_id': request.request_id,
-                    'adapter_name': request.adapter_name,
-                    'ticker': request.ticker,
-                    'priority': request.priority.name,
-                    'wait_time_seconds': wait_time,
-                    'time_to_expire_seconds': time_to_expire,
-                    'metadata': request.metadata
-                })
+                requests.append(
+                    {
+                        "request_id": request.request_id,
+                        "adapter_name": request.adapter_name,
+                        "ticker": request.ticker,
+                        "priority": request.priority.name,
+                        "wait_time_seconds": wait_time,
+                        "time_to_expire_seconds": time_to_expire,
+                        "metadata": request.metadata,
+                    }
+                )
 
             return requests
 
@@ -425,16 +428,16 @@ class PriorityRequestQueue:
         for priority in RequestPriority:
             count = self._processed_count_by_priority[priority]
             stats[priority.name] = {
-                'processed_count': count,
-                'percentage': (count / max(1, total_processed)) * 100,
-                'current_queued': sum(1 for req in self._queue if req.priority == priority)
+                "processed_count": count,
+                "percentage": (count / max(1, total_processed)) * 100,
+                "current_queued": sum(1 for req in self._queue if req.priority == priority),
             }
 
         return stats
 
 
 # Global priority queue instance
-_global_priority_queue: Optional[PriorityRequestQueue] = None
+_global_priority_queue: PriorityRequestQueue | None = None
 
 
 def get_priority_queue() -> PriorityRequestQueue:

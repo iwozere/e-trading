@@ -4,9 +4,10 @@ and that the default skip_stages is empty (all stages run).
 """
 
 import sys
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
+import pytest
 
 # Ensure project root is on path
 project_root = Path(__file__).resolve().parents[5]
@@ -52,8 +53,7 @@ def test_no_input_call_in_noninteractive_mode(mock_config):
         "error": "simulated failure",
     }
 
-    with patch.object(runner, "run_stage", side_effect=failing_result), \
-         patch("builtins.input") as mock_input:
+    with patch.object(runner, "run_stage", side_effect=failing_result), patch("builtins.input") as mock_input:
         runner.run_pipeline(fail_fast=False, continue_on_optional_failures=False)
 
     mock_input.assert_not_called(), "input() was called in non-interactive mode!"
@@ -77,8 +77,10 @@ def test_input_called_in_interactive_mode_on_optional_failure(mock_config):
             "error": "simulated" if not success else None,
         }
 
-    with patch.object(runner, "run_stage", side_effect=side_effect), \
-         patch("builtins.input", return_value="n") as mock_input:
+    with (
+        patch.object(runner, "run_stage", side_effect=side_effect),
+        patch("builtins.input", return_value="n") as mock_input,
+    ):
         runner.run_pipeline(fail_fast=True, continue_on_optional_failures=False)
 
     mock_input.assert_called_once()
@@ -87,12 +89,11 @@ def test_input_called_in_interactive_mode_on_optional_failure(mock_config):
 def test_default_skip_stages_is_empty(mock_config):
     """Default skip_stages passed to run_pipeline must be empty."""
     runner = PipelineRunner(mock_config, interactive=False)
-    with patch.object(runner, "run_stage", return_value={"stage": 1, "name": "x",
-                                                          "success": True,
-                                                          "execution_time": 0.0,
-                                                          "result": None}):
+    with patch.object(
+        runner,
+        "run_stage",
+        return_value={"stage": 1, "name": "x", "success": True, "execution_time": 0.0, "result": None},
+    ):
         results = runner.run_pipeline()
 
-    assert results["stages_skipped"] == [], (
-        "Default skip_stages should be [] — all stages must run by default"
-    )
+    assert results["stages_skipped"] == [], "Default skip_stages should be [] — all stages must run by default"

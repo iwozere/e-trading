@@ -4,9 +4,9 @@ Cron expression parser with support for 5-field and 6-field formats.
 This module provides timezone-aware cron parsing and validation using croniter.
 """
 
-from datetime import datetime
-from typing import Optional
 from dataclasses import dataclass
+from datetime import datetime
+
 import pytz
 from croniter import croniter
 
@@ -18,6 +18,7 @@ _logger = setup_logger(__name__)
 @dataclass
 class CronExpression:
     """Represents a parsed cron expression with metadata."""
+
     expression: str
     fields: list[str]
     is_six_field: bool
@@ -33,7 +34,7 @@ class CronParser:
     """
 
     @staticmethod
-    def parse_cron(expression: str, timezone: Optional[str] = None) -> CronExpression:
+    def parse_cron(expression: str, timezone: str | None = None) -> CronExpression:
         """
         Parse a cron expression and return a CronExpression object.
 
@@ -68,12 +69,7 @@ class CronParser:
 
             _logger.debug("Parsed cron expression: %s (6-field: %s)", expression, is_six_field)
 
-            return CronExpression(
-                expression=expression,
-                fields=fields,
-                is_six_field=is_six_field,
-                next_run=next_run
-            )
+            return CronExpression(expression=expression, fields=fields, is_six_field=is_six_field, next_run=next_run)
 
         except Exception as e:
             _logger.exception("Failed to parse cron expression '%s':", expression)
@@ -97,8 +93,9 @@ class CronParser:
             return False
 
     @staticmethod
-    def calculate_next_run(expression: str, from_time: Optional[datetime] = None,
-                          timezone: Optional[str] = None) -> datetime:
+    def calculate_next_run(
+        expression: str, from_time: datetime | None = None, timezone: str | None = None
+    ) -> datetime:
         """
         Calculate the next run time for a cron expression.
 
@@ -161,8 +158,9 @@ class CronParser:
             raise ValueError(f"Invalid cron expression: must have 5 or 6 fields, got {len(fields)}")
 
     @staticmethod
-    def get_next_n_runs(expression: str, count: int, from_time: Optional[datetime] = None,
-                       timezone: Optional[str] = None) -> list[datetime]:
+    def get_next_n_runs(
+        expression: str, count: int, from_time: datetime | None = None, timezone: str | None = None
+    ) -> list[datetime]:
         """
         Get the next N run times for a cron expression.
 

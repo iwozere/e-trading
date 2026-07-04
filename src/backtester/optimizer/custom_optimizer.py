@@ -35,15 +35,22 @@ else:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import backtrader as bt
-from src.backtester.analyzer.bt_analyzers import (CAGR, CalmarRatio,
-                                       ConsecutiveWinsLosses,
-                                       PortfolioVolatility, ProfitFactor,
-                                       SortinoRatio, WinRate)
-from src.strategy.custom_strategy import CustomStrategy
+
+from src.backtester.analyzer.bt_analyzers import (
+    CAGR,
+    CalmarRatio,
+    ConsecutiveWinsLosses,
+    PortfolioVolatility,
+    ProfitFactor,
+    SortinoRatio,
+    WinRate,
+)
 from src.notification.logger import setup_logger
+from src.strategy.custom_strategy import CustomStrategy
 
 # Use multiprocessing-safe logging for optimizer (runs in worker processes)
 _logger = setup_logger(__name__, use_multiprocessing=True)
+
 
 class CustomOptimizer:
     def __init__(self, config: dict):
@@ -102,7 +109,7 @@ class CustomOptimizer:
         else:
             cerebro = bt.Cerebro(optdatas=True, optreturn=True)
 
-                # 1. Suggest parameters first so we know if we need resampling
+            # 1. Suggest parameters first so we know if we need resampling
         entry_logic_params = {}
         for param_name, param_config in self.entry_logic["params"].items():
             if trial:
@@ -115,9 +122,7 @@ class CustomOptimizer:
                         param_name, param_config["low"], param_config["high"]
                     )
                 elif param_config["type"] == "categorical":
-                    entry_logic_params[param_name] = trial.suggest_categorical(
-                        param_name, param_config["choices"]
-                    )
+                    entry_logic_params[param_name] = trial.suggest_categorical(param_name, param_config["choices"])
             else:
                 entry_logic_params[param_name] = param_config["default"]
 
@@ -133,9 +138,7 @@ class CustomOptimizer:
                         param_name, param_config["low"], param_config["high"]
                     )
                 elif param_config["type"] == "categorical":
-                    exit_logic_params[param_name] = trial.suggest_categorical(
-                        param_name, param_config["choices"]
-                    )
+                    exit_logic_params[param_name] = trial.suggest_categorical(param_name, param_config["choices"])
             else:
                 exit_logic_params[param_name] = param_config["default"]
 
@@ -147,12 +150,12 @@ class CustomOptimizer:
             "entry_logic": {
                 "name": self.entry_logic["name"],
                 "params": entry_logic_params,
-                "indicators": self.entry_logic.get("indicators", [])
+                "indicators": self.entry_logic.get("indicators", []),
             },
             "exit_logic": {
                 "name": self.exit_logic["name"],
                 "params": exit_logic_params,
-                "indicators": self.exit_logic.get("indicators", [])
+                "indicators": self.exit_logic.get("indicators", []),
             },
             "use_talib": self.use_talib,
             "position_size": self.optimizer_settings.get("position_size", 0.10),
@@ -162,10 +165,7 @@ class CustomOptimizer:
 
         # Add strategy with parameters
         cerebro.addstrategy(
-            CustomStrategy,
-            strategy_config=strategy_params,
-            symbol=self.symbol,
-            timeframe=self.timeframe
+            CustomStrategy, strategy_config=strategy_params, symbol=self.symbol, timeframe=self.timeframe
         )
 
         # Set broker parameters

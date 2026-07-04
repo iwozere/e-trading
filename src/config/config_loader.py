@@ -8,11 +8,12 @@ using Pydantic models. Provides error handling and validation feedback.
 
 import json
 from pathlib import Path
-from typing import Union, Dict, Any
+from typing import Any, Dict, Union
+
 import yaml
 from pydantic import ValidationError
 
-from src.model.config_models import TradingBotConfig, OptimizerConfig, DataConfig
+from src.model.config_models import DataConfig, OptimizerConfig, TradingBotConfig
 
 
 def load_config(config_path: Union[str, Path]) -> TradingBotConfig:
@@ -110,11 +111,11 @@ def _load_raw_config(config_path: Path) -> Dict[str, Any]:
     suffix = config_path.suffix.lower()
 
     try:
-        if suffix in ['.yaml', '.yml']:
-            with open(config_path, 'r', encoding='utf-8') as f:
+        if suffix in [".yaml", ".yml"]:
+            with open(config_path, encoding="utf-8") as f:
                 return yaml.safe_load(f)
-        elif suffix == '.json':
-            with open(config_path, 'r', encoding='utf-8') as f:
+        elif suffix == ".json":
+            with open(config_path, encoding="utf-8") as f:
                 return json.load(f)
         else:
             raise ValueError(f"Unsupported file format: {suffix}. Use .json, .yaml, or .yml")
@@ -122,8 +123,7 @@ def _load_raw_config(config_path: Path) -> Dict[str, Any]:
         raise ValueError(f"Error parsing configuration file {config_path}: {e}")
 
 
-def save_config(config: Union[TradingBotConfig, OptimizerConfig, DataConfig],
-                output_path: Union[str, Path]) -> None:
+def save_config(config: Union[TradingBotConfig, OptimizerConfig, DataConfig], output_path: Union[str, Path]) -> None:
     """
     Save a configuration to file.
 
@@ -142,11 +142,11 @@ def save_config(config: Union[TradingBotConfig, OptimizerConfig, DataConfig],
     # Save based on file extension
     suffix = output_path.suffix.lower()
 
-    if suffix in ['.yaml', '.yml']:
-        with open(output_path, 'w', encoding='utf-8') as f:
+    if suffix in [".yaml", ".yml"]:
+        with open(output_path, "w", encoding="utf-8") as f:
             yaml.dump(config_dict, f, default_flow_style=False, indent=2)
-    elif suffix == '.json':
-        with open(output_path, 'w', encoding='utf-8') as f:
+    elif suffix == ".json":
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(config_dict, f, indent=2, ensure_ascii=False)
     else:
         raise ValueError(f"Unsupported output format: {suffix}. Use .json, .yaml, or .yml")
@@ -200,19 +200,12 @@ def create_sample_config(output_path: Union[str, Path], config_type: str = "trad
             symbol="BTCUSDT",
             broker_type="binance_paper",
             data_source="binance",
-            description="Sample trading bot configuration"
+            description="Sample trading bot configuration",
         )
     elif config_type == "optimizer":
-        sample_config = OptimizerConfig(
-            optimizer_type="optuna",
-            initial_capital=10000.0,
-            n_trials=100
-        )
+        sample_config = OptimizerConfig(optimizer_type="optuna", initial_capital=10000.0, n_trials=100)
     elif config_type == "data":
-        sample_config = DataConfig(
-            data_source="binance",
-            symbol="BTCUSDT"
-        )
+        sample_config = DataConfig(data_source="binance", symbol="BTCUSDT")
     else:
         raise ValueError(f"Unknown config type: {config_type}")
 
@@ -220,8 +213,7 @@ def create_sample_config(output_path: Union[str, Path], config_type: str = "trad
     print(f"Sample {config_type} configuration created: {output_path}")
 
 
-def convert_old_config(old_config_path: Union[str, Path],
-                      new_config_path: Union[str, Path]) -> None:
+def convert_old_config(old_config_path: Union[str, Path], new_config_path: Union[str, Path]) -> None:
     """
     Convert old configuration format to new simplified format.
 
@@ -262,7 +254,7 @@ def _convert_old_to_new_format(old_config: Dict[str, Any]) -> TradingBotConfig:
         symbol=symbol,
         broker_type=broker_type,
         data_source=data_source,
-        description=f"Converted from old format: {bot_id}"
+        description=f"Converted from old format: {bot_id}",
     )
 
     # Copy over other values if they exist

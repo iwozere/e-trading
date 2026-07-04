@@ -7,30 +7,30 @@ and technical analysis based on JSON configuration.
 """
 
 import sys
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-import yfinance as yf
 import pandas as pd
-from src.model.telegram_bot import Fundamentals, ScreenerResult, DCFResult, ScreenerReport
-from src.util.tickers_list import (
-    get_us_small_cap_tickers,
-    get_us_medium_cap_tickers,
-    get_us_large_cap_tickers,
-    get_six_tickers
-)
+import yfinance as yf
 
 # Use optimized batch fundamentals download for maximum performance
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
-from src.indicators.service import IndicatorService
 from src.indicators.models import TickerIndicatorsRequest
-from src.telegram.screener.screener_config_parser import (ScreenerConfig, FundamentalCriteria, TechnicalCriteria)
+from src.indicators.service import IndicatorService
+from src.model.telegram_bot import DCFResult, Fundamentals, ScreenerReport, ScreenerResult
 from src.notification.logger import setup_logger
+from src.telegram.screener.screener_config_parser import FundamentalCriteria, ScreenerConfig, TechnicalCriteria
+from src.util.tickers_list import (
+    get_six_tickers,
+    get_us_large_cap_tickers,
+    get_us_medium_cap_tickers,
+    get_us_small_cap_tickers,
+)
 
 _logger = setup_logger(__name__)
 
@@ -49,15 +49,15 @@ class EnhancedScreener:
     def load_ticker_list(self, list_type: str) -> List[str]:
         """Load ticker list based on the specified type."""
         try:
-            if list_type == 'us_small_cap':
+            if list_type == "us_small_cap":
                 return get_us_small_cap_tickers()
-            elif list_type == 'us_medium_cap':
+            elif list_type == "us_medium_cap":
                 return get_us_medium_cap_tickers()
-            elif list_type == 'us_large_cap':
+            elif list_type == "us_large_cap":
                 return get_us_large_cap_tickers()
-            elif list_type == 'swiss_shares':
+            elif list_type == "swiss_shares":
                 return get_six_tickers()
-            elif list_type == 'custom_list':
+            elif list_type == "custom_list":
                 # For custom lists, we'll need to implement storage/retrieval
                 # For now, return an empty list
                 _logger.warning("Custom list support not yet implemented")
@@ -96,7 +96,7 @@ class EnhancedScreener:
                     total_tickers_processed=0,
                     total_tickers_with_data=0,
                     top_results=[],
-                    error="No tickers found for screening"
+                    error="No tickers found for screening",
                 )
 
             # Stage 2: Enhanced Analysis (Only for FMP-filtered tickers)
@@ -114,15 +114,16 @@ class EnhancedScreener:
                 technical_data = {}
 
             # Stage 3: Apply screening criteria and generate results
-            results = self.apply_enhanced_screening_criteria(
-                config, fundamentals_data, technical_data
-            )
+            results = self.apply_enhanced_screening_criteria(config, fundamentals_data, technical_data)
 
             # Stage 4: Generate comprehensive report
             report = self.generate_enhanced_report(config, results, len(tickers), fmp_results)
 
-            _logger.info("Enhanced screener completed successfully. Found %d stocks from %d FMP-filtered tickers",
-                        len(results), len(tickers))
+            _logger.info(
+                "Enhanced screener completed successfully. Found %d stocks from %d FMP-filtered tickers",
+                len(results),
+                len(tickers),
+            )
 
             return report
 
@@ -133,7 +134,7 @@ class EnhancedScreener:
                 total_tickers_processed=0,
                 total_tickers_with_data=0,
                 top_results=[],
-                error=f"Error running enhanced screener: {e}"
+                error=f"Error running enhanced screener: {e}",
             )
 
     def _run_fmp_screening(self, config: ScreenerConfig) -> Tuple[List[str], Dict[str, Any]]:
@@ -145,8 +146,8 @@ class EnhancedScreener:
             screener_config = {
                 "screener_type": config.screener_type,
                 "list_type": config.list_type,
-                "fmp_criteria": getattr(config, 'fmp_criteria', None),
-                "fmp_strategy": getattr(config, 'fmp_strategy', None)
+                "fmp_criteria": getattr(config, "fmp_criteria", None),
+                "fmp_strategy": getattr(config, "fmp_strategy", None),
             }
 
             # Run FMP screening
@@ -168,6 +169,7 @@ class EnhancedScreener:
         try:
             # Use DataManager for cached fundamentals retrieval
             from src.data.data_manager import get_data_manager
+
             dm = get_data_manager()
 
             valid_fundamentals = {}
@@ -191,8 +193,11 @@ class EnhancedScreener:
                     _logger.warning("Failed to get fundamentals for %s: %s", ticker, e)
                     continue
 
-            _logger.info("Fundamental data collection completed. %d/%d tickers processed successfully",
-                        len(valid_fundamentals), len(tickers))
+            _logger.info(
+                "Fundamental data collection completed. %d/%d tickers processed successfully",
+                len(valid_fundamentals),
+                len(tickers),
+            )
             return valid_fundamentals
 
         except Exception as e:
@@ -239,7 +244,7 @@ class EnhancedScreener:
             enterprise_value=data_dict.get("enterprise_value"),
             enterprise_value_to_ebitda=data_dict.get("enterprise_value_to_ebitda"),
             data_source=data_dict.get("data_source", "DataManager"),
-            last_updated=data_dict.get("last_updated")
+            last_updated=data_dict.get("last_updated"),
         )
 
     def _collect_fundamentals_fallback(self, tickers: List[str]) -> Dict[str, Fundamentals]:
@@ -262,7 +267,9 @@ class EnhancedScreener:
             _logger.error("Fallback fundamental collection also failed: %s", str(e))
             return {}
 
-    async def collect_technical_data(self, tickers: List[str], period: str, interval: str, provider: str) -> Dict[str, Dict[str, Any]]:
+    async def collect_technical_data(
+        self, tickers: List[str], period: str, interval: str, provider: str
+    ) -> Dict[str, Dict[str, Any]]:
         """Collect technical data for a list of tickers using IndicatorService."""
         if not tickers:
             return {}
@@ -279,11 +286,7 @@ class EnhancedScreener:
 
                 # Create request for IndicatorService
                 request = TickerIndicatorsRequest(
-                    ticker=ticker,
-                    timeframe=interval,
-                    period=period,
-                    provider=provider,
-                    indicators=indicators
+                    ticker=ticker, timeframe=interval, period=period, provider=provider, indicators=indicators
                 )
 
                 # Get indicators from service with error handling
@@ -309,8 +312,11 @@ class EnhancedScreener:
                 _logger.error("Error calculating technical indicators for %s: %s", ticker, e)
                 continue
 
-        _logger.info("Technical data collection completed. %d/%d tickers processed successfully",
-                    len(technical_data), len(tickers))
+        _logger.info(
+            "Technical data collection completed. %d/%d tickers processed successfully",
+            len(technical_data),
+            len(tickers),
+        )
         return technical_data
 
     def _convert_indicator_result_to_technicals(self, result_set) -> Dict[str, Any]:
@@ -326,46 +332,46 @@ class EnhancedScreener:
 
             # Map indicator names to expected format
             if name == "rsi":
-                technical_values['rsi'] = value
+                technical_values["rsi"] = value
             elif name == "macd":
-                technical_values['macd'] = value
+                technical_values["macd"] = value
             elif name == "sma":
-                technical_values['sma'] = value
+                technical_values["sma"] = value
             elif name == "bbands_upper":
-                technical_values['bb_upper'] = value
+                technical_values["bb_upper"] = value
             elif name == "bbands_middle":
-                technical_values['bb_middle'] = value
+                technical_values["bb_middle"] = value
             elif name == "bbands_lower":
-                technical_values['bb_lower'] = value
+                technical_values["bb_lower"] = value
             elif name == "stoch_k":
-                technical_values['stoch_k'] = value
+                technical_values["stoch_k"] = value
             elif name == "stoch_d":
-                technical_values['stoch_d'] = value
+                technical_values["stoch_d"] = value
             elif name == "adx":
-                technical_values['adx'] = value
+                technical_values["adx"] = value
             elif name == "obv":
-                technical_values['obv'] = value
+                technical_values["obv"] = value
 
         # Create Technicals object with default values
         technicals = Technicals(
-            rsi=technical_values.get('rsi'),
-            sma_fast=technical_values.get('sma'),
-            sma_slow=technical_values.get('sma'),
-            macd=technical_values.get('macd'),
+            rsi=technical_values.get("rsi"),
+            sma_fast=technical_values.get("sma"),
+            sma_slow=technical_values.get("sma"),
+            macd=technical_values.get("macd"),
             macd_signal=None,
             macd_histogram=None,
-            stoch_k=technical_values.get('stoch_k'),
-            stoch_d=technical_values.get('stoch_d'),
-            adx=technical_values.get('adx'),
+            stoch_k=technical_values.get("stoch_k"),
+            stoch_d=technical_values.get("stoch_d"),
+            adx=technical_values.get("adx"),
             plus_di=None,
             minus_di=None,
-            obv=technical_values.get('obv'),
+            obv=technical_values.get("obv"),
             adr=None,
             avg_adr=None,
-            trend='NEUTRAL',
-            bb_upper=technical_values.get('bb_upper'),
-            bb_middle=technical_values.get('bb_middle'),
-            bb_lower=technical_values.get('bb_lower'),
+            trend="NEUTRAL",
+            bb_upper=technical_values.get("bb_upper"),
+            bb_middle=technical_values.get("bb_middle"),
+            bb_lower=technical_values.get("bb_lower"),
             bb_width=None,
             ema_fast=None,
             ema_slow=None,
@@ -374,12 +380,12 @@ class EnhancedScreener:
             mfi=None,
             williams_r=None,
             atr=None,
-            recommendations={}
+            recommendations={},
         )
 
         return technicals
 
-    def _get_ticker_fundamentals(self, ticker: str) -> Optional[Fundamentals]:
+    def _get_ticker_fundamentals(self, ticker: str) -> Fundamentals | None:
         """Get fundamental data for a single ticker using yfinance."""
         try:
             stock = yf.Ticker(ticker)
@@ -395,31 +401,31 @@ class EnhancedScreener:
             # Extract key metrics
             fundamentals = Fundamentals(
                 ticker=ticker,
-                company_name=info.get('longName', ticker),
-                current_price=info.get('regularMarketPrice'),
-                pe_ratio=info.get('trailingPE'),
-                forward_pe=info.get('forwardPE'),
-                price_to_book=info.get('priceToBook'),
-                price_to_sales=info.get('priceToSalesTrailing12Months'),
-                peg_ratio=info.get('pegRatio'),
-                debt_to_equity=info.get('debtToEquity'),
-                current_ratio=info.get('currentRatio'),
-                quick_ratio=info.get('quickRatio'),
-                return_on_equity=info.get('returnOnEquity'),
-                return_on_assets=info.get('returnOnAssets'),
-                operating_margin=info.get('operatingMargins'),
-                profit_margin=info.get('profitMargins'),
-                revenue_growth=info.get('revenueGrowth'),
-                net_income_growth=info.get('earningsGrowth'),
-                free_cash_flow=info.get('freeCashflow'),
-                dividend_yield=info.get('dividendYield'),
-                payout_ratio=info.get('payoutRatio'),
-                market_cap=info.get('marketCap'),
-                enterprise_value=info.get('enterpriseValue'),
-                sector=info.get('sector'),
-                industry=info.get('industry'),
-                country=info.get('country'),
-                description=info.get('longBusinessSummary')
+                company_name=info.get("longName", ticker),
+                current_price=info.get("regularMarketPrice"),
+                pe_ratio=info.get("trailingPE"),
+                forward_pe=info.get("forwardPE"),
+                price_to_book=info.get("priceToBook"),
+                price_to_sales=info.get("priceToSalesTrailing12Months"),
+                peg_ratio=info.get("pegRatio"),
+                debt_to_equity=info.get("debtToEquity"),
+                current_ratio=info.get("currentRatio"),
+                quick_ratio=info.get("quickRatio"),
+                return_on_equity=info.get("returnOnEquity"),
+                return_on_assets=info.get("returnOnAssets"),
+                operating_margin=info.get("operatingMargins"),
+                profit_margin=info.get("profitMargins"),
+                revenue_growth=info.get("revenueGrowth"),
+                net_income_growth=info.get("earningsGrowth"),
+                free_cash_flow=info.get("freeCashflow"),
+                dividend_yield=info.get("dividendYield"),
+                payout_ratio=info.get("payoutRatio"),
+                market_cap=info.get("marketCap"),
+                enterprise_value=info.get("enterpriseValue"),
+                sector=info.get("sector"),
+                industry=info.get("industry"),
+                country=info.get("country"),
+                description=info.get("longBusinessSummary"),
             )
 
             return fundamentals
@@ -435,14 +441,17 @@ class EnhancedScreener:
             fundamentals.pe_ratio,
             fundamentals.price_to_book,
             fundamentals.return_on_equity,
-            fundamentals.market_cap
+            fundamentals.market_cap,
         ]
 
         return any(metric is not None and not pd.isna(metric) for metric in key_metrics)
 
-    def apply_enhanced_screening_criteria(self, config: ScreenerConfig,
-                                        fundamentals_data: Dict[str, Fundamentals],
-                                        technical_data: Dict[str, Dict[str, Any]]) -> List[ScreenerResult]:
+    def apply_enhanced_screening_criteria(
+        self,
+        config: ScreenerConfig,
+        fundamentals_data: Dict[str, Fundamentals],
+        technical_data: Dict[str, Dict[str, Any]],
+    ) -> List[ScreenerResult]:
         """Apply enhanced screening criteria combining fundamental and technical analysis."""
         results = []
 
@@ -484,11 +493,10 @@ class EnhancedScreener:
                     _logger.debug("Ticker %s - Technical score: %.2f", ticker, technical_score)
 
                 # Calculate composite score
-                composite_score = self._calculate_composite_score(
-                    config, fundamental_score, technical_score
+                composite_score = self._calculate_composite_score(config, fundamental_score, technical_score)
+                _logger.debug(
+                    "Ticker %s - Composite score: %.2f (min required: %.2f)", ticker, composite_score, config.min_score
                 )
-                _logger.debug("Ticker %s - Composite score: %.2f (min required: %.2f)",
-                            ticker, composite_score, config.min_score)
 
                 # Check if meets minimum score requirement
                 if composite_score >= config.min_score:
@@ -502,7 +510,7 @@ class EnhancedScreener:
                         # Try to get price from yfinance
                         try:
                             stock = yf.Ticker(ticker)
-                            current_price = stock.info.get('regularMarketPrice')
+                            current_price = stock.info.get("regularMarketPrice")
                         except:
                             pass
 
@@ -513,13 +521,12 @@ class EnhancedScreener:
                         technicals=technical_data.get(ticker) if ticker in technical_data else None,
                         composite_score=composite_score,
                         dcf_valuation=self._calculate_dcf_valuation(fundamentals_data.get(ticker)),
-                        recommendation=self._get_recommendation(composite_score)
+                        recommendation=self._get_recommendation(composite_score),
                     )
 
                     results.append(result)
                 else:
-                    _logger.debug("Ticker %s FAILED - Score: %.2f < %.2f",
-                                ticker, composite_score, config.min_score)
+                    _logger.debug("Ticker %s FAILED - Score: %.2f < %.2f", ticker, composite_score, config.min_score)
 
             except Exception as e:
                 _logger.error("Error processing ticker %s: %s", ticker, e)
@@ -528,10 +535,11 @@ class EnhancedScreener:
         # Sort by composite score (descending) and limit results
         results.sort(key=lambda x: x.composite_score, reverse=True)
         _logger.info("Final results: %d stocks passed criteria", len(results))
-        return results[:config.max_results]
+        return results[: config.max_results]
 
-    def _calculate_fundamental_score(self, criteria: List[FundamentalCriteria],
-                                   fundamentals: Fundamentals) -> Tuple[float, Dict[str, Any]]:
+    def _calculate_fundamental_score(
+        self, criteria: List[FundamentalCriteria], fundamentals: Fundamentals
+    ) -> Tuple[float, Dict[str, Any]]:
         """Calculate fundamental score based on criteria."""
         if not criteria:
             return 0.0, {}
@@ -543,8 +551,7 @@ class EnhancedScreener:
         for criterion in criteria:
             indicator_value = self._get_fundamental_value(fundamentals, criterion.indicator)
 
-            _logger.debug("Evaluating %s: value=%s, criterion=%s",
-                         criterion.indicator, indicator_value, criterion)
+            _logger.debug("Evaluating %s: value=%s, criterion=%s", criterion.indicator, indicator_value, criterion)
 
             if indicator_value is not None and not pd.isna(indicator_value):
                 score = self._evaluate_fundamental_criterion(criterion, indicator_value)
@@ -554,14 +561,19 @@ class EnhancedScreener:
                 total_weight += criterion.weight
 
                 analysis[criterion.indicator] = {
-                    'value': indicator_value,
-                    'score': score,
-                    'weighted_score': weighted_score,
-                    'criterion': criterion
+                    "value": indicator_value,
+                    "score": score,
+                    "weighted_score": weighted_score,
+                    "criterion": criterion,
                 }
 
-                _logger.debug("  %s: value=%s, score=%.2f, weighted=%.2f",
-                             criterion.indicator, indicator_value, score, weighted_score)
+                _logger.debug(
+                    "  %s: value=%s, score=%.2f, weighted=%.2f",
+                    criterion.indicator,
+                    indicator_value,
+                    score,
+                    weighted_score,
+                )
             elif criterion.required:
                 # If required criterion is missing, return 0 score
                 _logger.debug("  %s: MISSING REQUIRED VALUE - returning 0 score", criterion.indicator)
@@ -571,30 +583,29 @@ class EnhancedScreener:
 
         # Normalize score to 0-10 scale
         final_score = (total_score / total_weight * 10) if total_weight > 0 else 0.0
-        _logger.debug("Final fundamental score: %.2f (total=%.2f, weight=%.2f)",
-                     final_score, total_score, total_weight)
+        _logger.debug("Final fundamental score: %.2f (total=%.2f, weight=%.2f)", final_score, total_score, total_weight)
         return final_score, analysis
 
-    def _get_fundamental_value(self, fundamentals: Fundamentals, indicator: str) -> Optional[float]:
+    def _get_fundamental_value(self, fundamentals: Fundamentals, indicator: str) -> float | None:
         """Get fundamental value for a specific indicator."""
         indicator_mapping = {
-            'PE': fundamentals.pe_ratio,
-            'Forward_PE': fundamentals.forward_pe,
-            'PB': fundamentals.price_to_book,
-            'PS': fundamentals.price_to_sales,
-            'PEG': fundamentals.peg_ratio,
-            'Debt_Equity': fundamentals.debt_to_equity,
-            'Current_Ratio': fundamentals.current_ratio,
-            'Quick_Ratio': fundamentals.quick_ratio,
-            'ROE': fundamentals.return_on_equity,
-            'ROA': fundamentals.return_on_assets,
-            'Operating_Margin': fundamentals.operating_margin,
-            'Profit_Margin': fundamentals.profit_margin,
-            'Revenue_Growth': fundamentals.revenue_growth,
-            'Net_Income_Growth': fundamentals.net_income_growth,
-            'Free_Cash_Flow': fundamentals.free_cash_flow,
-            'Dividend_Yield': fundamentals.dividend_yield,
-            'Payout_Ratio': fundamentals.payout_ratio
+            "PE": fundamentals.pe_ratio,
+            "Forward_PE": fundamentals.forward_pe,
+            "PB": fundamentals.price_to_book,
+            "PS": fundamentals.price_to_sales,
+            "PEG": fundamentals.peg_ratio,
+            "Debt_Equity": fundamentals.debt_to_equity,
+            "Current_Ratio": fundamentals.current_ratio,
+            "Quick_Ratio": fundamentals.quick_ratio,
+            "ROE": fundamentals.return_on_equity,
+            "ROA": fundamentals.return_on_assets,
+            "Operating_Margin": fundamentals.operating_margin,
+            "Profit_Margin": fundamentals.profit_margin,
+            "Revenue_Growth": fundamentals.revenue_growth,
+            "Net_Income_Growth": fundamentals.net_income_growth,
+            "Free_Cash_Flow": fundamentals.free_cash_flow,
+            "Dividend_Yield": fundamentals.dividend_yield,
+            "Payout_Ratio": fundamentals.payout_ratio,
         }
 
         return indicator_mapping.get(indicator)
@@ -635,8 +646,9 @@ class EnhancedScreener:
 
         return 0.0
 
-    def _calculate_technical_score(self, criteria: List[TechnicalCriteria],
-                                 technical_data: Dict[str, Any]) -> Tuple[float, Dict[str, Any]]:
+    def _calculate_technical_score(
+        self, criteria: List[TechnicalCriteria], technical_data: Dict[str, Any]
+    ) -> Tuple[float, Dict[str, Any]]:
         """Calculate technical score based on criteria."""
         if not criteria:
             return 0.0, {}
@@ -652,18 +664,13 @@ class EnhancedScreener:
             total_score += weighted_score
             total_weight += criterion.weight
 
-            analysis[criterion.indicator] = {
-                'score': score,
-                'weighted_score': weighted_score,
-                'criterion': criterion
-            }
+            analysis[criterion.indicator] = {"score": score, "weighted_score": weighted_score, "criterion": criterion}
 
         # Normalize score to 0-10 scale
         final_score = (total_score / total_weight * 10) if total_weight > 0 else 0.0
         return final_score, analysis
 
-    def _evaluate_technical_criterion(self, criterion: TechnicalCriteria,
-                                    technical_data: Dict[str, Any]) -> float:
+    def _evaluate_technical_criterion(self, criterion: TechnicalCriteria, technical_data: Dict[str, Any]) -> float:
         """Evaluate a technical criterion and return a score (0-1)."""
         try:
             # technical_data is a Technicals object, not a dictionary
@@ -738,9 +745,9 @@ class EnhancedScreener:
 
         return 0.0
 
-    def _calculate_composite_score(self, config: ScreenerConfig,
-                                 fundamental_score: float,
-                                 technical_score: float) -> float:
+    def _calculate_composite_score(
+        self, config: ScreenerConfig, fundamental_score: float, technical_score: float
+    ) -> float:
         """Calculate composite score based on screener type."""
         if config.screener_type == "fundamental":
             return fundamental_score
@@ -757,8 +764,7 @@ class EnhancedScreener:
                 fundamental_weight /= total_weight
                 technical_weight /= total_weight
 
-            return (fundamental_score * fundamental_weight +
-                   technical_score * technical_weight)
+            return fundamental_score * fundamental_weight + technical_score * technical_weight
         else:
             return 0.0
 
@@ -775,7 +781,7 @@ class EnhancedScreener:
         else:
             return "SELL"
 
-    def _calculate_dcf_valuation(self, fundamentals: Optional[Fundamentals]) -> Optional[DCFResult]:
+    def _calculate_dcf_valuation(self, fundamentals: Fundamentals | None) -> DCFResult | None:
         """Calculate DCF valuation if fundamental data is available."""
         if not fundamentals:
             _logger.debug("DCF: No fundamentals data available")
@@ -785,8 +791,9 @@ class EnhancedScreener:
             # Simple DCF calculation (can be enhanced)
             free_cash_flow = fundamentals.free_cash_flow
             if free_cash_flow is None or free_cash_flow <= 0:
-                _logger.debug("DCF for %s: Free cash flow missing or <= 0 (value: %s)",
-                            fundamentals.ticker, free_cash_flow)
+                _logger.debug(
+                    "DCF for %s: Free cash flow missing or <= 0 (value: %s)", fundamentals.ticker, free_cash_flow
+                )
                 return None
 
             # Assume 5% growth rate and 10% discount rate
@@ -810,23 +817,31 @@ class EnhancedScreener:
 
             shares_outstanding = fundamentals.market_cap / fundamentals.current_price
             if shares_outstanding <= 0:
-                _logger.debug("DCF for %s: Invalid shares outstanding calculation (market_cap: %s, current_price: %s)",
-                            fundamentals.ticker, fundamentals.market_cap, fundamentals.current_price)
+                _logger.debug(
+                    "DCF for %s: Invalid shares outstanding calculation (market_cap: %s, current_price: %s)",
+                    fundamentals.ticker,
+                    fundamentals.market_cap,
+                    fundamentals.current_price,
+                )
                 return None
 
             fair_value_per_share = present_value / shares_outstanding
 
-            _logger.debug("DCF for %s: Successfully calculated (FCF: %s, Fair Value: %s)",
-                        fundamentals.ticker, free_cash_flow, fair_value_per_share)
+            _logger.debug(
+                "DCF for %s: Successfully calculated (FCF: %s, Fair Value: %s)",
+                fundamentals.ticker,
+                free_cash_flow,
+                fair_value_per_share,
+            )
 
             return DCFResult(
                 ticker=fundamentals.ticker,
                 fair_value=fair_value_per_share,
                 assumptions={
-                    'growth_rate': growth_rate,
-                    'discount_rate': discount_rate,
-                    'free_cash_flow': free_cash_flow
-                }
+                    "growth_rate": growth_rate,
+                    "discount_rate": discount_rate,
+                    "free_cash_flow": free_cash_flow,
+                },
             )
 
         except Exception as e:
@@ -834,10 +849,13 @@ class EnhancedScreener:
 
         return None
 
-    def generate_enhanced_report(self, config: ScreenerConfig,
-                               results: List[ScreenerResult],
-                               total_tickers: int,
-                               fmp_results: Dict[str, Any] = None) -> ScreenerReport:
+    def generate_enhanced_report(
+        self,
+        config: ScreenerConfig,
+        results: List[ScreenerResult],
+        total_tickers: int,
+        fmp_results: Dict[str, Any] = None,
+    ) -> ScreenerReport:
         """Generate enhanced screener report with optional FMP information."""
         # Add FMP information to the report if available
         report = ScreenerReport(
@@ -845,7 +863,7 @@ class EnhancedScreener:
             total_tickers_processed=total_tickers,
             total_tickers_with_data=len(results),
             top_results=results,
-            error=None
+            error=None,
         )
 
         # Store FMP results in the report for later use
@@ -867,9 +885,9 @@ class EnhancedScreener:
         message += f"📈 **Screener Type**: {config.screener_type.title()}\n"
 
         # Add FMP information if available
-        if hasattr(report, 'fmp_results') and report.fmp_results:
-            fmp_criteria = report.fmp_results.get('fmp_criteria', {})
-            fmp_results = report.fmp_results.get('fmp_results', [])
+        if hasattr(report, "fmp_results") and report.fmp_results:
+            fmp_criteria = report.fmp_results.get("fmp_criteria", {})
+            fmp_results = report.fmp_results.get("fmp_results", [])
             message += f"🚀 **FMP Pre-filtered**: {len(fmp_results)} stocks\n"
             if fmp_criteria:
                 message += f"🎯 **FMP Criteria**: {', '.join(fmp_criteria.keys())}\n"
@@ -903,15 +921,28 @@ class EnhancedScreener:
             message += f"({result.recommendation.replace('_', ' ')})"
 
             # Add fundamental score if available
-            if config.screener_type in ["fundamental", "hybrid"] and hasattr(result, 'fundamental_score') and result.fundamental_score > 0:
+            if (
+                config.screener_type in ["fundamental", "hybrid"]
+                and hasattr(result, "fundamental_score")
+                and result.fundamental_score > 0
+            ):
                 message += f"\n   📊 Fundamental: {result.fundamental_score:.1f}/10"
 
             # Add technical score if available
-            if config.screener_type in ["technical", "hybrid"] and hasattr(result, 'technical_score') and result.technical_score > 0:
+            if (
+                config.screener_type in ["technical", "hybrid"]
+                and hasattr(result, "technical_score")
+                and result.technical_score > 0
+            ):
                 message += f"\n   📈 Technical: {result.technical_score:.1f}/10"
 
             # Add DCF valuation if available
-            if result.dcf_valuation and result.dcf_valuation.fair_value and result.fundamentals and result.fundamentals.current_price:
+            if (
+                result.dcf_valuation
+                and result.dcf_valuation.fair_value
+                and result.fundamentals
+                and result.fundamentals.current_price
+            ):
                 current_price = result.fundamentals.current_price
                 fair_value = result.dcf_valuation.fair_value
                 upside = ((fair_value - current_price) / current_price) * 100
@@ -939,7 +970,7 @@ class EnhancedScreener:
 
         for stock in fmp_results:
             try:
-                ticker = stock.get('symbol', '').upper()
+                ticker = stock.get("symbol", "").upper()
                 if not ticker:
                     continue
 
@@ -947,16 +978,18 @@ class EnhancedScreener:
                 # We'll use this for initial filtering but need YFinance for detailed analysis
                 fundamentals = Fundamentals(
                     ticker=ticker,
-                    company_name=stock.get('companyName', 'Unknown'),
-                    current_price=stock.get('price', 0.0),
-                    market_cap=stock.get('marketCap', 0.0),
-                    beta=stock.get('beta', 0.0),
-                    sector=stock.get('sector', 'Unknown'),
-                    industry=stock.get('industry', 'Unknown'),
-                    country=stock.get('country', 'Unknown'),
-                    exchange=stock.get('exchange', 'Unknown'),
+                    company_name=stock.get("companyName", "Unknown"),
+                    current_price=stock.get("price", 0.0),
+                    market_cap=stock.get("marketCap", 0.0),
+                    beta=stock.get("beta", 0.0),
+                    sector=stock.get("sector", "Unknown"),
+                    industry=stock.get("industry", "Unknown"),
+                    country=stock.get("country", "Unknown"),
+                    exchange=stock.get("exchange", "Unknown"),
                     # Calculate dividend yield from lastAnnualDividend and price
-                    dividend_yield=(stock.get('lastAnnualDividend', 0.0) / stock.get('price', 1.0)) if stock.get('price', 0) > 0 else 0.0,
+                    dividend_yield=(stock.get("lastAnnualDividend", 0.0) / stock.get("price", 1.0))
+                    if stock.get("price", 0) > 0
+                    else 0.0,
                     # Set other fields to None as FMP doesn't provide them
                     pe_ratio=None,
                     forward_pe=None,
@@ -974,7 +1007,7 @@ class EnhancedScreener:
                     free_cash_flow=None,
                     operating_margin=None,
                     profit_margin=None,
-                    currency='USD',
+                    currency="USD",
                     shares_outstanding=None,
                     float_shares=None,
                     short_ratio=None,
@@ -984,35 +1017,38 @@ class EnhancedScreener:
                     enterprise_value=None,
                     enterprise_value_to_ebitda=None,
                     data_source="Financial Modeling Prep (Basic)",
-                    last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 )
 
                 fundamentals_data[ticker] = fundamentals
                 _logger.debug("Converted basic FMP data for %s", ticker)
 
             except Exception as e:
-                _logger.exception("Error converting FMP data for %s: %s", stock.get('symbol', 'Unknown'), e)
+                _logger.exception("Error converting FMP data for %s: %s", stock.get("symbol", "Unknown"), e)
                 continue
 
-        _logger.info("Converted basic FMP data for %d/%d stocks (detailed fundamentals will be fetched from YFinance)",
-                    len(fundamentals_data), len(fmp_results))
+        _logger.info(
+            "Converted basic FMP data for %d/%d stocks (detailed fundamentals will be fetched from YFinance)",
+            len(fundamentals_data),
+            len(fmp_results),
+        )
         return fundamentals_data
 
     def _load_ticker_list(self, list_type: str) -> List[str]:
         """Load ticker list based on the specified type."""
         try:
-            if list_type == 'us_small_cap':
+            if list_type == "us_small_cap":
                 return get_us_small_cap_tickers()
-            elif list_type == 'us_medium_cap':
+            elif list_type == "us_medium_cap":
                 return get_us_medium_cap_tickers()
-            elif list_type == 'us_large_cap':
+            elif list_type == "us_large_cap":
                 return get_us_large_cap_tickers()
-            elif list_type == 'swiss_shares':
+            elif list_type == "swiss_shares":
                 # For Swiss shares, we should use FMP with exchange=SIX
                 # This is a fallback in case FMP is not available
                 _logger.warning("Swiss shares should be handled via FMP with exchange=SIX. Using CSV fallback.")
                 return get_six_tickers()
-            elif list_type == 'custom_list':
+            elif list_type == "custom_list":
                 # For custom lists, we'll need to implement storage/retrieval
                 # For now, return an empty list
                 _logger.warning("Custom list support not yet implemented")
@@ -1024,7 +1060,7 @@ class EnhancedScreener:
             _logger.exception("Error loading ticker list %s: %s", list_type, e)
             return []
 
-    def _normalize_dividend_yield(self, dividend_yield_value) -> Optional[float]:
+    def _normalize_dividend_yield(self, dividend_yield_value) -> float | None:
         """
         Normalize dividend yield value to percentage format.
 

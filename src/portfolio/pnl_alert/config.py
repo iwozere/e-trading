@@ -6,7 +6,7 @@ Dataclasses and YAML loader for the daily PnL alert pipeline.
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import yaml
 
@@ -47,7 +47,7 @@ class PnLAlertConfig:
     ibkr_xml_path: str = ""
     include_ibkr: bool = True
     ibkr_stk_only: bool = True
-    recipient_id: Optional[int] = None
+    recipient_id: int | None = None
 
     def validate(self) -> None:
         """
@@ -66,19 +66,14 @@ class PnLAlertConfig:
         allowed_channels = {"telegram", "email"}
         unknown = set(self.channels) - allowed_channels
         if unknown:
-            raise ValueError(
-                f"Unsupported channels: {sorted(unknown)}. "
-                f"Supported: {sorted(allowed_channels)}"
-            )
+            raise ValueError(f"Unsupported channels: {sorted(unknown)}. Supported: {sorted(allowed_channels)}")
 
         cron_parts = self.cron.strip().split()
         if len(cron_parts) != 5:
-            raise ValueError(
-                f"cron must have exactly 5 fields, got {len(cron_parts)}: {self.cron!r}"
-            )
+            raise ValueError(f"cron must have exactly 5 fields, got {len(cron_parts)}: {self.cron!r}")
 
 
-def load_config(path: Optional[str] = None) -> PnLAlertConfig:
+def load_config(path: str | None = None) -> PnLAlertConfig:
     """
     Load PnL alert configuration from a YAML file.
 

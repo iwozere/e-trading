@@ -5,11 +5,11 @@ Tests JSON schema validation for alert and schedule configurations
 with various valid and invalid configurations.
 """
 
-import unittest
 import json
-import tempfile
-from pathlib import Path
 import sys
+import tempfile
+import unittest
+from pathlib import Path
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -34,6 +34,7 @@ class TestAlertSchemaValidator(unittest.TestCase):
     def tearDown(self):
         """Clean up temporary files."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def _create_test_schemas(self):
@@ -43,47 +44,29 @@ class TestAlertSchemaValidator(unittest.TestCase):
             "type": "object",
             "required": ["ticker", "timeframe", "rule"],
             "properties": {
-                "ticker": {
-                    "type": "string",
-                    "pattern": "^[A-Z0-9]+$"
-                },
-                "timeframe": {
-                    "type": "string",
-                    "enum": ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
-                },
+                "ticker": {"type": "string", "pattern": "^[A-Z0-9]+$"},
+                "timeframe": {"type": "string", "enum": ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]},
                 "rule": {
                     "type": "object",
                     "required": ["indicator", "comparison", "value"],
                     "properties": {
                         "indicator": {"type": "string"},
-                        "comparison": {
-                            "type": "string",
-                            "enum": ["gt", "gte", "lt", "lte", "eq", "ne"]
-                        },
-                        "value": {"type": "number"}
-                    }
+                        "comparison": {"type": "string", "enum": ["gt", "gte", "lt", "lte", "eq", "ne"]},
+                        "value": {"type": "number"},
+                    },
                 },
                 "rearm": {
                     "type": "object",
                     "properties": {
-                        "type": {
-                            "type": "string",
-                            "enum": ["hysteresis", "cooldown", "persistence"]
-                        },
-                        "value": {"type": "number"}
-                    }
+                        "type": {"type": "string", "enum": ["hysteresis", "cooldown", "persistence"]},
+                        "value": {"type": "number"},
+                    },
                 },
                 "options": {
                     "type": "object",
-                    "properties": {
-                        "lookback": {
-                            "type": "integer",
-                            "minimum": 1,
-                            "maximum": 1000
-                        }
-                    }
-                }
-            }
+                    "properties": {"lookback": {"type": "integer", "minimum": 1, "maximum": 1000}},
+                },
+            },
         }
 
         schedule_schema = {
@@ -91,77 +74,42 @@ class TestAlertSchemaValidator(unittest.TestCase):
             "type": "object",
             "required": ["action"],
             "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": ["data_sync", "cleanup", "backup", "report"]
-                },
+                "action": {"type": "string", "enum": ["data_sync", "cleanup", "backup", "report"]},
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "symbols": {
-                            "type": "array",
-                            "items": {"type": "string"}
-                        },
-                        "days_back": {
-                            "type": "integer",
-                            "minimum": 1,
-                            "maximum": 365
-                        }
-                    }
+                        "symbols": {"type": "array", "items": {"type": "string"}},
+                        "days_back": {"type": "integer", "minimum": 1, "maximum": 365},
+                    },
                 },
                 "options": {
                     "type": "object",
                     "properties": {
-                        "timeout": {
-                            "type": "integer",
-                            "minimum": 60,
-                            "maximum": 3600
-                        },
-                        "retry_count": {
-                            "type": "integer",
-                            "minimum": 0,
-                            "maximum": 5
-                        }
-                    }
-                }
-            }
+                        "timeout": {"type": "integer", "minimum": 60, "maximum": 3600},
+                        "retry_count": {"type": "integer", "minimum": 0, "maximum": 5},
+                    },
+                },
+            },
         }
 
         # Write schemas to files
-        with open(self.schema_dir / "alert.json", 'w') as f:
+        with open(self.schema_dir / "alert.json", "w") as f:
             json.dump(alert_schema, f, indent=2)
 
-        with open(self.schema_dir / "schedule.json", 'w') as f:
+        with open(self.schema_dir / "schedule.json", "w") as f:
             json.dump(schedule_schema, f, indent=2)
 
     def test_validate_valid_alert_config(self):
         """Test validation of valid alert configurations."""
         valid_configs = [
-            {
-                "ticker": "BTCUSDT",
-                "timeframe": "1h",
-                "rule": {
-                    "indicator": "rsi",
-                    "comparison": "gt",
-                    "value": 70
-                }
-            },
+            {"ticker": "BTCUSDT", "timeframe": "1h", "rule": {"indicator": "rsi", "comparison": "gt", "value": 70}},
             {
                 "ticker": "ETHUSDT",
                 "timeframe": "15m",
-                "rule": {
-                    "indicator": "sma",
-                    "comparison": "lt",
-                    "value": 50000
-                },
-                "rearm": {
-                    "type": "hysteresis",
-                    "value": 5
-                },
-                "options": {
-                    "lookback": 100
-                }
-            }
+                "rule": {"indicator": "sma", "comparison": "lt", "value": 50000},
+                "rearm": {"type": "hysteresis", "value": 5},
+                "options": {"lookback": 100},
+            },
         ]
 
         for config in valid_configs:
@@ -178,28 +126,20 @@ class TestAlertSchemaValidator(unittest.TestCase):
             # Missing required fields
             {
                 "ticker": "BTCUSDT",
-                "timeframe": "1h"
+                "timeframe": "1h",
                 # Missing rule
             },
             # Invalid ticker format
             {
                 "ticker": "btc-usdt",  # Should be uppercase, no hyphens
                 "timeframe": "1h",
-                "rule": {
-                    "indicator": "rsi",
-                    "comparison": "gt",
-                    "value": 70
-                }
+                "rule": {"indicator": "rsi", "comparison": "gt", "value": 70},
             },
             # Invalid timeframe
             {
                 "ticker": "BTCUSDT",
                 "timeframe": "2h",  # Not in enum
-                "rule": {
-                    "indicator": "rsi",
-                    "comparison": "gt",
-                    "value": 70
-                }
+                "rule": {"indicator": "rsi", "comparison": "gt", "value": 70},
             },
             # Invalid comparison operator
             {
@@ -208,22 +148,18 @@ class TestAlertSchemaValidator(unittest.TestCase):
                 "rule": {
                     "indicator": "rsi",
                     "comparison": "greater_than",  # Should be "gt"
-                    "value": 70
-                }
+                    "value": 70,
+                },
             },
             # Invalid lookback value
             {
                 "ticker": "BTCUSDT",
                 "timeframe": "1h",
-                "rule": {
-                    "indicator": "rsi",
-                    "comparison": "gt",
-                    "value": 70
-                },
+                "rule": {"indicator": "rsi", "comparison": "gt", "value": 70},
                 "options": {
                     "lookback": 2000  # Exceeds maximum
-                }
-            }
+                },
+            },
         ]
 
         for config in invalid_configs:
@@ -237,20 +173,12 @@ class TestAlertSchemaValidator(unittest.TestCase):
     def test_validate_valid_schedule_config(self):
         """Test validation of valid schedule configurations."""
         valid_configs = [
-            {
-                "action": "data_sync"
-            },
+            {"action": "data_sync"},
             {
                 "action": "cleanup",
-                "parameters": {
-                    "symbols": ["BTCUSDT", "ETHUSDT"],
-                    "days_back": 30
-                },
-                "options": {
-                    "timeout": 300,
-                    "retry_count": 2
-                }
-            }
+                "parameters": {"symbols": ["BTCUSDT", "ETHUSDT"], "days_back": 30},
+                "options": {"timeout": 300, "retry_count": 2},
+            },
         ]
 
         for config in valid_configs:
@@ -265,29 +193,23 @@ class TestAlertSchemaValidator(unittest.TestCase):
         """Test validation of invalid schedule configurations."""
         invalid_configs = [
             # Missing required action
-            {
-                "parameters": {
-                    "symbols": ["BTCUSDT"]
-                }
-            },
+            {"parameters": {"symbols": ["BTCUSDT"]}},
             # Invalid action
-            {
-                "action": "invalid_action"
-            },
+            {"action": "invalid_action"},
             # Invalid days_back value
             {
                 "action": "cleanup",
                 "parameters": {
                     "days_back": 500  # Exceeds maximum
-                }
+                },
             },
             # Invalid timeout value
             {
                 "action": "data_sync",
                 "options": {
                     "timeout": 30  # Below minimum
-                }
-            }
+                },
+            },
         ]
 
         for config in invalid_configs:
@@ -303,16 +225,10 @@ class TestAlertSchemaValidator(unittest.TestCase):
         alert_config = {
             "ticker": "BTCUSDT",
             "timeframe": "1h",
-            "rule": {
-                "indicator": "rsi",
-                "comparison": "gt",
-                "value": 70
-            }
+            "rule": {"indicator": "rsi", "comparison": "gt", "value": 70},
         }
 
-        schedule_config = {
-            "action": "data_sync"
-        }
+        schedule_config = {"action": "data_sync"}
 
         # Test alert validation
         result = self.validator.validate_config(alert_config, "alert")
@@ -373,9 +289,9 @@ class TestAlertSchemaValidator(unittest.TestCase):
             "timeframe": "invalid",  # Invalid enum value
             "rule": {
                 "indicator": "rsi",
-                "comparison": "gt"
+                "comparison": "gt",
                 # Missing required 'value' field
-            }
+            },
         }
 
         result = self.validator.validate_alert_config(invalid_config)
@@ -395,11 +311,7 @@ class TestAlertSchemaValidator(unittest.TestCase):
         config_no_rearm = {
             "ticker": "BTCUSDT",
             "timeframe": "1h",
-            "rule": {
-                "indicator": "rsi",
-                "comparison": "gt",
-                "value": 70
-            }
+            "rule": {"indicator": "rsi", "comparison": "gt", "value": 70},
         }
 
         result = self.validator.validate_alert_config(config_no_rearm)
@@ -411,14 +323,10 @@ class TestAlertSchemaValidator(unittest.TestCase):
         config_large_lookback = {
             "ticker": "BTCUSDT",
             "timeframe": "1h",
-            "rule": {
-                "indicator": "rsi",
-                "comparison": "gt",
-                "value": 70
-            },
+            "rule": {"indicator": "rsi", "comparison": "gt", "value": 70},
             "options": {
                 "lookback": 800  # Large but valid value
-            }
+            },
         }
 
         result = self.validator.validate_alert_config(config_large_lookback)
@@ -433,15 +341,9 @@ class TestAlertSchemaValidator(unittest.TestCase):
         invalid_validator = AlertSchemaValidator("/nonexistent/path")
 
         # Should handle gracefully
-        result = invalid_validator.validate_alert_config({
-            "ticker": "BTCUSDT",
-            "timeframe": "1h",
-            "rule": {
-                "indicator": "rsi",
-                "comparison": "gt",
-                "value": 70
-            }
-        })
+        result = invalid_validator.validate_alert_config(
+            {"ticker": "BTCUSDT", "timeframe": "1h", "rule": {"indicator": "rsi", "comparison": "gt", "value": 70}}
+        )
 
         self.assertFalse(result.is_valid)
         self.assertGreater(len(result.errors), 0)
@@ -450,7 +352,7 @@ class TestAlertSchemaValidator(unittest.TestCase):
         """Test behavior with malformed schema files."""
         # Create a malformed JSON file
         malformed_path = self.schema_dir / "malformed.json"
-        with open(malformed_path, 'w') as f:
+        with open(malformed_path, "w") as f:
             f.write("{ invalid json }")
 
         # Should handle gracefully
@@ -458,5 +360,5 @@ class TestAlertSchemaValidator(unittest.TestCase):
         self.assertIsNone(schema)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

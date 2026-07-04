@@ -1,13 +1,17 @@
-import pytest
-import backtrader as bt
 from unittest.mock import MagicMock
+
+import backtrader as bt
+import pytest
+
 from src.strategy.entry.rsi_ichimoku_entry_mixin import RSIIchimokuEntryMixin
-from src.strategy.indicator_factory import IndicatorFactory
+
 
 class MockStrategy(bt.Strategy):
     """Minimal strategy for testing mixins."""
+
     def __init__(self):
         self.indicators = {}
+
 
 def test_rsi_ichimoku_new_architecture():
     """
@@ -27,10 +31,10 @@ def test_rsi_ichimoku_new_architecture():
     # 2. Setup Ichimoku indicators manually (as the Factory would)
     # In a real scenario, IndicatorFactory would create these
     strategy.indicators = {
-        'entry_rsi': [50.0] * 100,
-        'entry_ichimoku_tenkan': [100.0] * 100,
-        'entry_ichimoku_senkou_a': [101.0] * 100,
-        'entry_ichimoku_senkou_b': [102.0] * 100
+        "entry_rsi": [50.0] * 100,
+        "entry_ichimoku_tenkan": [100.0] * 100,
+        "entry_ichimoku_senkou_a": [101.0] * 100,
+        "entry_ichimoku_senkou_b": [102.0] * 100,
     }
 
     # 3. Initialize Mixin
@@ -48,10 +52,11 @@ def test_rsi_ichimoku_new_architecture():
     except KeyError as e:
         pytest.fail(f"should_enter raised KeyError: {e}")
 
+
 def test_rsi_ichimoku_missing_indicators():
     """Test that indicators_ready returns False if indicators are missing."""
     strategy = MockStrategy()
-    strategy.indicators = {} # Missing indicators
+    strategy.indicators = {}  # Missing indicators
 
     mixin = RSIIchimokuEntryMixin()
     mixin.strategy = strategy

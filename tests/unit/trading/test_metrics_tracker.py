@@ -1,10 +1,10 @@
-import pytest
 import json
-from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock, patch
-from pathlib import Path
+from unittest.mock import patch
 
-from src.trading.metrics_tracker import PerformanceMetrics, MetricsRegistry
+import pytest
+
+from src.trading.metrics_tracker import MetricsRegistry, PerformanceMetrics
+
 
 class TestPerformanceMetrics:
     def test_initial_metrics(self):
@@ -39,26 +39,27 @@ class TestPerformanceMetrics:
 
     def test_drawdown_calculation(self):
         metrics = PerformanceMetrics(bot_id="bot_1", symbol="BTCUSDT", current_balance=10000.0, peak_balance=10000.0)
-        
+
         # Drawdown to 9000
         metrics.update(-1000.0, -10.0, 9000.0)
         assert metrics.max_drawdown == 10.0
-        
+
         # Recovery to 9500 (peak still 10000)
         metrics.update(500.0, 5.0, 9500.0)
         assert metrics.max_drawdown == 10.0
-        
+
         # New Peak 11000
         metrics.update(1500.0, 15.0, 11000.0)
         assert metrics.peak_balance == 11000.0
         assert metrics.max_drawdown == 10.0
+
 
 class TestMetricsRegistry:
     @pytest.fixture
     def temp_registry(self, tmp_path):
         """Fixture to create a MetricsRegistry with a temporary file."""
         metrics_file = tmp_path / "metrics.json"
-        
+
         # We need to bypass the singleton for testing OR reset it
         # Since MetricsRegistry might have been initialized already, we patch its file path
         with patch("src.trading.metrics_tracker.DATA_DIR", tmp_path):
@@ -77,14 +78,14 @@ class TestMetricsRegistry:
 
     def test_record_trade_updates_and_saves(self, temp_registry):
         temp_registry.record_trade("bot_123", "BTCUSDT", 200.0, 2.0, 10200.0)
-        
+
         metrics = temp_registry.get_metrics("bot_123", "BTCUSDT", 10200.0)
         assert metrics.total_trades == 1
         assert metrics.total_pnl == 200.0
-        
+
         # Verify file was created/updated
         assert temp_registry.metrics_file.exists()
-        with open(temp_registry.metrics_file, 'r') as f:
+        with open(temp_registry.metrics_file) as f:
             data = json.load(f)
             assert "bot_123" in data
             assert data["bot_123"]["total_pnl"] == 200.0

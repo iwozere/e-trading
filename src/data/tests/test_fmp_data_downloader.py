@@ -6,8 +6,8 @@ This script tests the Financial Modeling Prep API integration.
 
 import os
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 
 # Add project root to path
@@ -38,7 +38,7 @@ def test_fmp_initialization():
 
     # Test with environment variable
     try:
-        os.environ['FMP_API_KEY'] = "env_test_key"
+        os.environ["FMP_API_KEY"] = "env_test_key"
         downloader = FMPDataDownloader()
         print(f"✅ FMP downloader initialized with env API key: {downloader.api_key[:10]}...")
         assert downloader.api_key == "env_test_key"
@@ -48,8 +48,8 @@ def test_fmp_initialization():
 
     # Test without API key
     try:
-        if 'FMP_API_KEY' in os.environ:
-            del os.environ['FMP_API_KEY']
+        if "FMP_API_KEY" in os.environ:
+            del os.environ["FMP_API_KEY"]
         downloader = FMPDataDownloader()
         print("❌ Should have raised error for missing API key")
     except ValueError as e:
@@ -71,7 +71,7 @@ def test_screener_criteria_validation():
         "priceToBookRatioLessThan": 1.5,
         "debtToEquityLessThan": 0.5,
         "returnOnEquityMoreThan": 0.12,
-        "limit": 50
+        "limit": 50,
     }
 
     try:
@@ -81,11 +81,7 @@ def test_screener_criteria_validation():
         print(f"❌ Valid criteria validation failed: {e}")
 
     # Test invalid criteria
-    invalid_criteria = {
-        "marketCapMoreThan": 1000000000,
-        "invalidCriterion": "value",
-        "anotherInvalid": 123
-    }
+    invalid_criteria = {"marketCapMoreThan": 1000000000, "invalidCriterion": "value", "anotherInvalid": 123}
 
     try:
         downloader._validate_screener_criteria(invalid_criteria)
@@ -120,7 +116,7 @@ def test_stock_screener_mock():
             "dividendYield": 0.5,
             "sector": "Technology",
             "industry": "Consumer Electronics",
-            "exchange": "NASDAQ"
+            "exchange": "NASDAQ",
         },
         {
             "symbol": "MSFT",
@@ -138,18 +134,13 @@ def test_stock_screener_mock():
             "dividendYield": 0.8,
             "sector": "Technology",
             "industry": "Software",
-            "exchange": "NASDAQ"
-        }
+            "exchange": "NASDAQ",
+        },
     ]
 
-    criteria = {
-        "marketCapMoreThan": 1000000000,
-        "peRatioLessThan": 35,
-        "returnOnEquityMoreThan": 0.10,
-        "limit": 10
-    }
+    criteria = {"marketCapMoreThan": 1000000000, "peRatioLessThan": 35, "returnOnEquityMoreThan": 0.10, "limit": 10}
 
-    with patch('requests.get') as mock_get:
+    with patch("requests.get") as mock_get:
         mock_get.return_value.json.return_value = mock_response
         mock_get.return_value.raise_for_status.return_value = None
         try:
@@ -177,52 +168,53 @@ def test_fundamentals_retrieval_mock():
     downloader = FMPDataDownloader(api_key=api_key)
 
     # Mock profile response
-    mock_profile = [{
-        "companyName": "Apple Inc.",
-        "price": 150.0,
-        "mktCap": 2500000000000,
-        "revenue": 400000000000,
-        "netIncome": 100000000000,
-        "freeCashFlow": 80000000000,
-        "sharesOutstanding": 16000000000,
-        "sharesFloat": 15000000000,
-        "sharesShort": 100000000,
-        "sector": "Technology",
-        "industry": "Consumer Electronics",
-        "country": "US",
-        "exchange": "NASDAQ",
-        "currency": "USD",
-        "enterpriseValue": 2600000000000,
-        "lastDiv": 0.75,
-        "beta": 1.2
-    }]
+    mock_profile = [
+        {
+            "companyName": "Apple Inc.",
+            "price": 150.0,
+            "mktCap": 2500000000000,
+            "revenue": 400000000000,
+            "netIncome": 100000000000,
+            "freeCashFlow": 80000000000,
+            "sharesOutstanding": 16000000000,
+            "sharesFloat": 15000000000,
+            "sharesShort": 100000000,
+            "sector": "Technology",
+            "industry": "Consumer Electronics",
+            "country": "US",
+            "exchange": "NASDAQ",
+            "currency": "USD",
+            "enterpriseValue": 2600000000000,
+            "lastDiv": 0.75,
+            "beta": 1.2,
+        }
+    ]
 
     # Mock ratios response
-    mock_ratios = [{
-        "peRatio": 25.0,
-        "forwardPeRatio": 24.0,
-        "eps": 6.0,
-        "priceToBookRatio": 15.0,
-        "returnOnEquity": 0.15,
-        "returnOnAssets": 0.10,
-        "debtEquityRatio": 0.3,
-        "currentRatio": 1.5,
-        "quickRatio": 1.2,
-        "operatingMargin": 0.25,
-        "netProfitMargin": 0.20,
-        "dividendPayoutRatio": 0.25,
-        "pegRatio": 1.5,
-        "priceToSalesRatio": 5.0,
-        "enterpriseValueMultiple": 20.0
-    }]
+    mock_ratios = [
+        {
+            "peRatio": 25.0,
+            "forwardPeRatio": 24.0,
+            "eps": 6.0,
+            "priceToBookRatio": 15.0,
+            "returnOnEquity": 0.15,
+            "returnOnAssets": 0.10,
+            "debtEquityRatio": 0.3,
+            "currentRatio": 1.5,
+            "quickRatio": 1.2,
+            "operatingMargin": 0.25,
+            "netProfitMargin": 0.20,
+            "dividendPayoutRatio": 0.25,
+            "pegRatio": 1.5,
+            "priceToSalesRatio": 5.0,
+            "enterpriseValueMultiple": 20.0,
+        }
+    ]
 
     # Mock metrics response
-    mock_metrics = [{
-        "revenueGrowth": 0.08,
-        "netIncomeGrowth": 0.12
-    }]
+    mock_metrics = [{"revenueGrowth": 0.08, "netIncomeGrowth": 0.12}]
 
-    with patch('requests.get') as mock_get:
+    with patch("requests.get") as mock_get:
         # Set up the mock to return different responses for different calls
         mock_responses = [mock_profile, mock_metrics, mock_ratios]
         mock_get.return_value.raise_for_status.return_value = None
@@ -266,7 +258,7 @@ def test_ohlcv_retrieval_mock():
                 "low": 149.0,
                 "close": 151.0,
                 "adjClose": 151.0,
-                "volume": 50000000
+                "volume": 50000000,
             },
             {
                 "date": "2024-01-16",
@@ -275,15 +267,15 @@ def test_ohlcv_retrieval_mock():
                 "low": 150.0,
                 "close": 152.0,
                 "adjClose": 152.0,
-                "volume": 48000000
-            }
-        ]
+                "volume": 48000000,
+            },
+        ],
     }
 
     start_date = datetime(2024, 1, 15)
     end_date = datetime(2024, 1, 16)
 
-    with patch('requests.get') as mock_get:
+    with patch("requests.get") as mock_get:
         mock_get.return_value.json.return_value = mock_ohlcv
         mock_get.return_value.raise_for_status.return_value = None
         try:
@@ -315,7 +307,7 @@ def test_interval_conversion():
         ("1h", "1hour"),
         ("4h", "4hour"),
         ("1d", "1day"),
-        ("invalid", "1day")  # Default fallback
+        ("invalid", "1day"),  # Default fallback
     ]
 
     for input_interval, expected_output in test_cases:
@@ -333,12 +325,7 @@ def test_period_interval_validation():
     downloader = FMPDataDownloader(api_key=api_key)
 
     # Test valid combinations
-    valid_combinations = [
-        ("1d", "1d"),
-        ("1mo", "1d"),
-        ("6mo", "1d"),
-        ("1y", "1d")
-    ]
+    valid_combinations = [("1d", "1d"), ("1mo", "1d"), ("6mo", "1d"), ("1y", "1d")]
 
     for period, interval in valid_combinations:
         is_valid = downloader.is_valid_period_interval(period, interval)
@@ -346,11 +333,7 @@ def test_period_interval_validation():
         print(f"{status} {period} + {interval} = {is_valid}")
 
     # Test invalid combinations
-    invalid_combinations = [
-        ("invalid", "1d"),
-        ("1d", "invalid"),
-        ("invalid", "invalid")
-    ]
+    invalid_combinations = [("invalid", "1d"), ("1d", "invalid"), ("invalid", "invalid")]
 
     for period, interval in invalid_combinations:
         is_valid = downloader.is_valid_period_interval(period, interval)

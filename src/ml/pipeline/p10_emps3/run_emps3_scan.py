@@ -4,20 +4,21 @@ Pipeline execution script for Accumulation Phase Detection.
 """
 
 import argparse
-import sys
-from pathlib import Path
-from datetime import datetime
-import pandas as pd
 import json
+import sys
+from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
 
 # Add project root
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.ml.pipeline.p10_emps3.config import EMPS3PipelineConfig
 from src.ml.pipeline.p10_emps3.emps3_pipeline import EMPS3Pipeline
 from src.ml.pipeline.shared.pipeline_summary_generator import PipelineSummaryGenerator
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -34,15 +35,16 @@ def _csv_row_count(path: Path) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="EMPS3 Precursor phase scanner.")
-    parser.add_argument('--force-refresh', action='store_true', help='Force refresh caches.')
-    parser.add_argument('--tickers', type=str, help='Comma-separated list of tickers to scan.')
+    parser.add_argument("--force-refresh", action="store_true", help="Force refresh caches.")
+    parser.add_argument("--tickers", type=str, help="Comma-separated list of tickers to scan.")
     # Scheduler (_execute_data_processing_job) always appends this when job_schedules.user_id is set.
     parser.add_argument(
-        '--user-id',
+        "--user-id",
         type=str,
-        help='User ID for alerts (same contract as p06 run_emps2_scan)',
+        help="User ID for alerts (same contract as p06 run_emps2_scan)",
     )
     return parser.parse_args()
+
 
 def main() -> int:
     args = parse_args()
@@ -54,11 +56,11 @@ def main() -> int:
 
     try:
         pipeline = EMPS3Pipeline(config)
-        
+
         tickers = None
         if args.tickers:
-            tickers = [t.strip().upper() for t in args.tickers.split(',')]
-            
+            tickers = [t.strip().upper() for t in args.tickers.split(",")]
+
         final_df = pipeline.run(force_refresh=force_refresh, tickers=tickers)
 
         # results_dir is now p10_emps3/<target_date> (EMPS3 passes results_base to EMPS2).
@@ -71,7 +73,7 @@ def main() -> int:
 
         # Generate/Update historical performance summary
         try:
-            print("\n" + "="*70 + "\n Historical Summary \n" + "="*70)
+            print("\n" + "=" * 70 + "\n Historical Summary \n" + "=" * 70)
             summary_gen = PipelineSummaryGenerator()
             summary_gen.generate_historical_summary(results_dir.parent)
         except Exception as e:
@@ -97,14 +99,12 @@ def main() -> int:
     except Exception as e:
         _logger.exception("Error running pipeline: %s", e)
         print("\n[ERROR] Pipeline failed.\n")
-        
-        result = {
-            "success": False,
-            "error": "Pipeline execution failed"
-        }
+
+        result = {"success": False, "error": "Pipeline execution failed"}
         print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")
 
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

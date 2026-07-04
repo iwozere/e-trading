@@ -17,13 +17,13 @@ needs the IBKR Gateway and degrades to an empty list when it is unreachable.
 import glob
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
-from src.notification.logger import setup_logger
 from src.ml.pipeline.p19_penny_intraday.config import P19Config
 from src.ml.pipeline.p19_penny_intraday.models.watchlist_entry import WatchlistEntry
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -36,7 +36,7 @@ _P17_TIERS = {"A", "B", "C"}
 def _f(value: Any, default: float = 0.0) -> float:
     try:
         f = float(value)
-        return f if f == f else default   # guard NaN
+        return f if f == f else default  # guard NaN
     except (TypeError, ValueError):
         return default
 
@@ -71,12 +71,9 @@ class WatchlistBuilder:
         """Build, write, and return a summary dict."""
         entries = self.build()
         path = self.write(entries)
-        sources = {s: sum(1 for e in entries if e.source == s)
-                   for s in ("p17", "gapper", "manual")}
-        _logger.info("Watchlist %s: %d names %s → %s",
-                     self.target_date, len(entries), sources, path)
-        return {"date": self.target_date, "count": len(entries),
-                "sources": sources, "path": str(path)}
+        sources = {s: sum(1 for e in entries if e.source == s) for s in ("p17", "gapper", "manual")}
+        _logger.info("Watchlist %s: %d names %s → %s", self.target_date, len(entries), sources, path)
+        return {"date": self.target_date, "count": len(entries), "sources": sources, "path": str(path)}
 
     def build(self) -> List[WatchlistEntry]:
         """Merge sources → filter → rank → cap."""
@@ -94,7 +91,7 @@ class WatchlistBuilder:
         kept.sort(key=lambda e: e.priority, reverse=True)
         cap = max(1, self.cfg.feed_config.watchlist_cap)
         kept = kept[:cap]
-        self._enrich_baseline(kept)   # only the capped set, to limit fetches
+        self._enrich_baseline(kept)  # only the capped set, to limit fetches
         return kept
 
     # ── Baseline enrichment (gappers/manual lack P17 context) ──────────────
@@ -106,8 +103,7 @@ class WatchlistBuilder:
         gappers/manual get them from 30 days of daily bars (DataManager-cached).
         Best-effort: a failed fetch leaves the fields at 0 (RVOL stays 0 for it).
         """
-        need = [e for e in entries
-                if e.source != "p17" and (e.avg_volume_30d <= 0 or e.prior_close <= 0)]
+        need = [e for e in entries if e.source != "p17" and (e.avg_volume_30d <= 0 or e.prior_close <= 0)]
         if not need:
             return
         fetcher = self._baseline_fetcher or self._default_baseline_fetcher
@@ -131,6 +127,7 @@ class WatchlistBuilder:
         """
         if self._data_manager is None:
             from src.data.data_manager import DataManager
+
             self._data_manager = DataManager()
         return self._data_manager
 
@@ -138,13 +135,12 @@ class WatchlistBuilder:
         """30-day avg volume + last close via DataManager (cached in DATA_CACHE_DIR)."""
         try:
             from datetime import datetime, timedelta
+
             end = datetime.now()
-            df = self._get_data_manager().get_ohlcv(
-                ticker, "1d", end - timedelta(days=45), end)
+            df = self._get_data_manager().get_ohlcv(ticker, "1d", end - timedelta(days=45), end)
             if df is None or df.empty or "volume" not in df.columns:
                 return None
-            return {"avg_volume_30d": float(df["volume"].tail(30).mean()),
-                    "prior_close": float(df["close"].iloc[-1])}
+            return {"avg_volume_30d": float(df["volume"].tail(30).mean()), "prior_close": float(df["close"].iloc[-1])}
         except Exception:
             _logger.debug("Baseline fetch failed for %s", ticker)
             return None
@@ -158,6 +154,7 @@ class WatchlistBuilder:
             _logger.warning("No P17 candidates CSV found under %s", self.p17_results_dir)
             return []
         import pandas as pd
+
         try:
             df = pd.read_csv(csv)
         except Exception:
@@ -175,28 +172,34 @@ class WatchlistBuilder:
                 continue
             catalyst = str(getattr(r, "catalyst_signals", "") or "")
             signals = [s for s in catalyst.split("|") if s]
-            out.append(WatchlistEntry(
-                ticker=ticker, source="p17", tier=tier, explosive=explosive,
-                company_name=str(getattr(r, "company_name", "") or ""),
-                prior_close=_f(getattr(r, "price", 0.0)),
-                avg_volume_30d=_f(getattr(r, "avg_volume_30d", 0.0)),
-                float_shares=_f(getattr(r, "float_shares", 0.0)),
-                market_cap=_f(getattr(r, "market_cap", 0.0)),
-                dilution_penalty=_f(getattr(r, "dilution_penalty", 0.0)),
-                short_interest_pct_float=(
-                    _f(getattr(r, "short_interest_pct_float", None))
-                    if getattr(r, "short_interest_pct_float", None) is not None else None),
-                has_catalyst=bool(signals) or _f(getattr(r, "catalyst_score", 0.0)) > 0,
-                catalyst_signals=signals,
-            ))
+            out.append(
+                WatchlistEntry(
+                    ticker=ticker,
+                    source="p17",
+                    tier=tier,
+                    explosive=explosive,
+                    company_name=str(getattr(r, "company_name", "") or ""),
+                    prior_close=_f(getattr(r, "price", 0.0)),
+                    avg_volume_30d=_f(getattr(r, "avg_volume_30d", 0.0)),
+                    float_shares=_f(getattr(r, "float_shares", 0.0)),
+                    market_cap=_f(getattr(r, "market_cap", 0.0)),
+                    dilution_penalty=_f(getattr(r, "dilution_penalty", 0.0)),
+                    short_interest_pct_float=(
+                        _f(getattr(r, "short_interest_pct_float", None))
+                        if getattr(r, "short_interest_pct_float", None) is not None
+                        else None
+                    ),
+                    has_catalyst=bool(signals) or _f(getattr(r, "catalyst_score", 0.0)) > 0,
+                    catalyst_signals=signals,
+                )
+            )
         _logger.info("P17 source: %d watchlist names from %s", len(out), os.path.basename(csv))
         return out
 
     def _latest_p17_csv(self) -> str:
         """Most recent ``{date}/{date}_candidates.csv`` with date ≤ target_date."""
         files = sorted(glob.glob(os.path.join(self.p17_results_dir, "*", "*_candidates.csv")))
-        eligible = [f for f in files
-                    if os.path.basename(os.path.dirname(f)) <= self.target_date]
+        eligible = [f for f in files if os.path.basename(os.path.dirname(f)) <= self.target_date]
         return eligible[-1] if eligible else ""
 
     def _from_gappers(self) -> List[WatchlistEntry]:
@@ -207,7 +210,7 @@ class WatchlistBuilder:
         succeeds from the P17 source alone.
         """
         feed = self.cfg.feed_config
-        try:                                  # prefer maintained ib_async (Py3.13-safe)
+        try:  # prefer maintained ib_async (Py3.13-safe)
             from ib_async import IB, ScannerSubscription, TagValue
         except ImportError:
             try:
@@ -220,21 +223,23 @@ class WatchlistBuilder:
         try:
             # readonly=True skips the order/account startup exchange, which is the
             # usual culprit when the socket connects but the API handshake times out.
-            ib.connect(feed.ibkr_host, feed.ibkr_port,
-                       clientId=feed.ibkr_scanner_client_id, timeout=15, readonly=True)
+            ib.connect(feed.ibkr_host, feed.ibkr_port, clientId=feed.ibkr_scanner_client_id, timeout=15, readonly=True)
         except Exception as e:
             _logger.warning(
                 "IBKR connect %s:%s clientId=%s failed (%s: %s) — gappers source skipped. "
                 "If the socket connects but the handshake times out, suspect a clientId "
                 "conflict (try another id / restart the paper Gateway) or an "
                 "ib_insync/Python version mismatch.",
-                feed.ibkr_host, feed.ibkr_port, feed.ibkr_scanner_client_id,
-                type(e).__name__, e)
+                feed.ibkr_host,
+                feed.ibkr_port,
+                feed.ibkr_scanner_client_id,
+                type(e).__name__,
+                e,
+            )
             return []
 
         try:
-            sub = ScannerSubscription(
-                instrument="STK", locationCode="STK.US.MAJOR", scanCode="TOP_PERC_GAIN")
+            sub = ScannerSubscription(instrument="STK", locationCode="STK.US.MAJOR", scanCode="TOP_PERC_GAIN")
             tag_values = [
                 TagValue("priceBelow", str(self.cfg.filter_config.max_price)),
                 TagValue("volumeAbove", str(int(self.cfg.filter_config.min_daily_volume))),
@@ -258,8 +263,7 @@ class WatchlistBuilder:
                 pass
 
     def _from_manual(self) -> List[WatchlistEntry]:
-        return [WatchlistEntry(ticker=t.strip().upper(), source="manual")
-                for t in self.cfg.manual_pins if t.strip()]
+        return [WatchlistEntry(ticker=t.strip().upper(), source="manual") for t in self.cfg.manual_pins if t.strip()]
 
     # ── Filter / rank / merge ──────────────────────────────────────────────
 
@@ -283,7 +287,7 @@ class WatchlistBuilder:
             base += 250.0
         if e.has_catalyst:
             base += 50.0
-        base -= e.dilution_penalty        # fade risk lowers priority
+        base -= e.dilution_penalty  # fade risk lowers priority
         return base
 
     @staticmethod
@@ -300,7 +304,7 @@ class WatchlistBuilder:
         path = out_dir / "watchlist.json"
         payload = {
             "date": self.target_date,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "count": len(entries),
             "watchlist_cap": self.cfg.feed_config.watchlist_cap,
             "entries": [e.to_dict() for e in entries],

@@ -5,13 +5,12 @@ Service layer for short squeeze detection pipeline business logic.
 Provides high-level operations and coordinates between repositories.
 """
 
-from datetime import datetime, date, timedelta, timezone
-from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
+from datetime import UTC, date, datetime, timedelta
+from typing import Any, Dict, List
 
-
-from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
 from src.data.db.models.model_short_squeeze import AlertLevel, CandidateSource
+from src.data.db.services.base_service import BaseDBService, handle_db_error, with_uow
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -21,6 +20,7 @@ _logger = setup_logger(__name__)
 @dataclass
 class StructuralMetrics:
     """Structural metrics for short squeeze analysis."""
+
     short_interest_pct: float
     days_to_cover: float
     float_shares: int
@@ -44,6 +44,7 @@ class StructuralMetrics:
 @dataclass
 class VolumeMetrics:
     """Volume-based metrics for short squeeze analysis."""
+
     volume_spike_ratio: float
     avg_volume_20d: int
     current_volume: int
@@ -65,10 +66,11 @@ class VolumeMetrics:
 @dataclass
 class FINRAMetrics:
     """FINRA short interest metrics."""
+
     short_interest_shares: int
-    short_interest_pct: Optional[float]
+    short_interest_pct: float | None
     settlement_date: date
-    days_to_cover: Optional[float]
+    days_to_cover: float | None
     data_age_days: int
 
     def __post_init__(self):
@@ -86,9 +88,10 @@ class FINRAMetrics:
 @dataclass
 class HybridMetrics:
     """Combined volume and FINRA metrics."""
+
     volume_metrics: VolumeMetrics
-    finra_metrics: Optional[FINRAMetrics]
-    transient_metrics: 'TransientMetrics'
+    finra_metrics: FINRAMetrics | None
+    transient_metrics: "TransientMetrics"
     combined_score: float
 
     def __post_init__(self):
@@ -100,10 +103,11 @@ class HybridMetrics:
 @dataclass
 class TransientMetrics:
     """Transient metrics for short squeeze analysis."""
+
     volume_spike: float
-    call_put_ratio: Optional[float]
+    call_put_ratio: float | None
     sentiment_24h: float
-    borrow_fee_pct: Optional[float]
+    borrow_fee_pct: float | None
 
     def __post_init__(self):
         """Validate transient metrics after initialization."""
@@ -120,6 +124,7 @@ class TransientMetrics:
 @dataclass
 class Candidate:
     """Short squeeze candidate."""
+
     ticker: str
     screener_score: float
     structural_metrics: StructuralMetrics
@@ -138,10 +143,11 @@ class Candidate:
 @dataclass
 class ScoredCandidate:
     """Candidate with transient metrics and final squeeze score."""
+
     candidate: Candidate
     transient_metrics: TransientMetrics
     squeeze_score: float
-    alert_level: Optional[AlertLevel] = None
+    alert_level: AlertLevel | None = None
 
     def __post_init__(self):
         """Validate scored candidate after initialization."""
@@ -152,14 +158,15 @@ class ScoredCandidate:
 @dataclass
 class Alert:
     """Short squeeze alert."""
+
     ticker: str
     alert_level: AlertLevel
     reason: str
     squeeze_score: float
     timestamp: datetime = field(default_factory=datetime.now)
-    cooldown_expires: Optional[datetime] = None
+    cooldown_expires: datetime | None = None
     sent: bool = False
-    notification_id: Optional[str] = None
+    notification_id: str | None = None
 
     def __post_init__(self):
         """Validate alert after initialization."""
@@ -173,10 +180,11 @@ class Alert:
 @dataclass
 class AdHocCandidate:
     """Ad-hoc candidate for manual monitoring."""
+
     ticker: str
     reason: str
     first_seen: datetime = field(default_factory=datetime.now)
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
     active: bool = True
     promoted_by_screener: bool = False
 
@@ -211,14 +219,18 @@ class ShortSqueezeService(BaseDBService):
 
         # Add run_date to each result
         for result in results:
-            result['run_date'] = run_date
+            result["run_date"] = run_date
 
         snapshots = self.repos.short_squeeze.screener_snapshots.bulk_create_snapshots(results)
 
         # Verify the data was saved
         final_count = self.repos.short_squeeze.screener_snapshots.get_snapshot_count_by_date(run_date)
-        self._logger.info("Successfully saved %d screener snapshots (replaced %d existing). Final count: %d",
-                    len(snapshots), deleted_count, final_count)
+        self._logger.info(
+            "Successfully saved %d screener snapshots (replaced %d existing). Final count: %d",
+            len(snapshots),
+            deleted_count,
+            final_count,
+        )
         return len(snapshots)
 
     @with_uow
@@ -229,7 +241,7 @@ class ShortSqueezeService(BaseDBService):
 
         # Add scan_date to each result
         for result in results:
-            result['date'] = scan_date
+            result["date"] = scan_date
 
         metrics = self.repos.short_squeeze.deep_scan_metrics.bulk_upsert_metrics(results)
         self._logger.info("Successfully saved %d deep scan metrics", len(metrics))
@@ -249,10 +261,9 @@ class ShortSqueezeService(BaseDBService):
             self._logger.error("Cannot add ad-hoc candidate: ticker cannot be empty")
             return False
 
-        expires_at = datetime.now(timezone.utc) + timedelta(days=ttl_days)
+        expires_at = datetime.now(UTC) + timedelta(days=ttl_days)
         candidate = self.repos.short_squeeze.adhoc_candidates.add_candidate(ticker, reason, expires_at)
-        self._logger.info("Added ad-hoc candidate: %s (reason: %s, expires: %s)",
-                    ticker, reason, expires_at)
+        self._logger.info("Added ad-hoc candidate: %s (reason: %s, expires: %s)", ticker, reason, expires_at)
         return True
 
     @with_uow
@@ -272,33 +283,38 @@ class ShortSqueezeService(BaseDBService):
         """Expire ad-hoc candidates past their TTL."""
         expired_tickers = self.repos.short_squeeze.adhoc_candidates.expire_candidates()
         if expired_tickers:
-            self._logger.info("Expired %d ad-hoc candidates: %s",
-                       len(expired_tickers), expired_tickers)
+            self._logger.info("Expired %d ad-hoc candidates: %s", len(expired_tickers), expired_tickers)
         return expired_tickers
 
     @with_uow
     @handle_db_error
-    def create_alert(self, ticker: str, alert_level: AlertLevel, reason: str,
-                    squeeze_score: float, cooldown_days: int = 7) -> Optional[int]:
+    def create_alert(
+        self, ticker: str, alert_level: AlertLevel, reason: str, squeeze_score: float, cooldown_days: int = 7
+    ) -> int | None:
         """Create a new squeeze alert with cooldown."""
         # Check if ticker is in cooldown
         if self.repos.short_squeeze.alerts.check_cooldown(ticker, alert_level):
             self._logger.debug("Ticker %s is in cooldown for %s alerts", ticker, alert_level.value)
             return None
 
-        cooldown_expires = datetime.now(timezone.utc) + timedelta(days=cooldown_days)
+        cooldown_expires = datetime.now(UTC) + timedelta(days=cooldown_days)
 
         alert_data = {
-            'ticker': ticker,
-            'alert_level': alert_level.value,
-            'reason': reason,
-            'squeeze_score': squeeze_score,
-            'cooldown_expires': cooldown_expires
+            "ticker": ticker,
+            "alert_level": alert_level.value,
+            "reason": reason,
+            "squeeze_score": squeeze_score,
+            "cooldown_expires": cooldown_expires,
         }
 
         alert = self.repos.short_squeeze.alerts.create_alert(alert_data)
-        self._logger.info("Created %s alert for %s (score: %.3f, cooldown until: %s)",
-                    alert_level.value, ticker, squeeze_score, cooldown_expires)
+        self._logger.info(
+            "Created %s alert for %s (score: %.3f, cooldown until: %s)",
+            alert_level.value,
+            ticker,
+            squeeze_score,
+            cooldown_expires,
+        )
         return alert.id
 
     @with_uow
@@ -321,20 +337,22 @@ class ShortSqueezeService(BaseDBService):
 
         results = []
         for snapshot in snapshots:
-            results.append({
-                'ticker': snapshot.ticker,
-                'screener_score': float(snapshot.screener_score) if snapshot.screener_score else 0.0,
-                'short_interest_pct': float(snapshot.short_interest_pct) if snapshot.short_interest_pct else None,
-                'days_to_cover': float(snapshot.days_to_cover) if snapshot.days_to_cover else None,
-                'market_cap': snapshot.market_cap,
-                'run_date': snapshot.run_date,
-                'data_quality': float(snapshot.data_quality) if snapshot.data_quality else None
-            })
+            results.append(
+                {
+                    "ticker": snapshot.ticker,
+                    "screener_score": float(snapshot.screener_score) if snapshot.screener_score else 0.0,
+                    "short_interest_pct": float(snapshot.short_interest_pct) if snapshot.short_interest_pct else None,
+                    "days_to_cover": float(snapshot.days_to_cover) if snapshot.days_to_cover else None,
+                    "market_cap": snapshot.market_cap,
+                    "run_date": snapshot.run_date,
+                    "data_quality": float(snapshot.data_quality) if snapshot.data_quality else None,
+                }
+            )
 
         return results
 
     @with_uow
-    def get_top_squeeze_scores(self, scan_date: Optional[date] = None, limit: int = 20) -> List[Dict[str, Any]]:
+    def get_top_squeeze_scores(self, scan_date: date | None = None, limit: int = 20) -> List[Dict[str, Any]]:
         """Get top squeeze scores from deep scan."""
         if scan_date is None:
             scan_date = date.today()
@@ -343,16 +361,18 @@ class ShortSqueezeService(BaseDBService):
 
         results = []
         for metric in metrics:
-            results.append({
-                'ticker': metric.ticker,
-                'squeeze_score': float(metric.squeeze_score) if metric.squeeze_score else 0.0,
-                'volume_spike': float(metric.volume_spike) if metric.volume_spike else None,
-                'sentiment_24h': float(metric.sentiment_24h) if metric.sentiment_24h else None,
-                'call_put_ratio': float(metric.call_put_ratio) if metric.call_put_ratio else None,
-                'borrow_fee_pct': float(metric.borrow_fee_pct) if metric.borrow_fee_pct else None,
-                'alert_level': metric.alert_level,
-                'date': metric.date
-            })
+            results.append(
+                {
+                    "ticker": metric.ticker,
+                    "squeeze_score": float(metric.squeeze_score) if metric.squeeze_score else 0.0,
+                    "volume_spike": float(metric.volume_spike) if metric.volume_spike else None,
+                    "sentiment_24h": float(metric.sentiment_24h) if metric.sentiment_24h else None,
+                    "call_put_ratio": float(metric.call_put_ratio) if metric.call_put_ratio else None,
+                    "borrow_fee_pct": float(metric.borrow_fee_pct) if metric.borrow_fee_pct else None,
+                    "alert_level": metric.alert_level,
+                    "date": metric.date,
+                }
+            )
 
         return results
 
@@ -374,42 +394,44 @@ class ShortSqueezeService(BaseDBService):
         adhoc_candidate = self.repos.short_squeeze.adhoc_candidates.get_candidate(ticker)
 
         return {
-            'ticker': ticker,
-            'screener_history': [
+            "ticker": ticker,
+            "screener_history": [
                 {
-                    'run_date': s.run_date,
-                    'screener_score': float(s.screener_score) if s.screener_score else None,
-                    'short_interest_pct': float(s.short_interest_pct) if s.short_interest_pct else None,
-                    'days_to_cover': float(s.days_to_cover) if s.days_to_cover else None
+                    "run_date": s.run_date,
+                    "screener_score": float(s.screener_score) if s.screener_score else None,
+                    "short_interest_pct": float(s.short_interest_pct) if s.short_interest_pct else None,
+                    "days_to_cover": float(s.days_to_cover) if s.days_to_cover else None,
                 }
                 for s in screener_history
             ],
-            'metrics_history': [
+            "metrics_history": [
                 {
-                    'date': m.date,
-                    'squeeze_score': float(m.squeeze_score) if m.squeeze_score else None,
-                    'volume_spike': float(m.volume_spike) if m.volume_spike else None,
-                    'sentiment_24h': float(m.sentiment_24h) if m.sentiment_24h else None,
-                    'alert_level': m.alert_level
+                    "date": m.date,
+                    "squeeze_score": float(m.squeeze_score) if m.squeeze_score else None,
+                    "volume_spike": float(m.volume_spike) if m.volume_spike else None,
+                    "sentiment_24h": float(m.sentiment_24h) if m.sentiment_24h else None,
+                    "alert_level": m.alert_level,
                 }
                 for m in metrics_history
             ],
-            'alert_history': [
+            "alert_history": [
                 {
-                    'timestamp': a.timestamp,
-                    'alert_level': a.alert_level,
-                    'reason': a.reason,
-                    'squeeze_score': float(a.squeeze_score) if a.squeeze_score else None,
-                    'sent': a.sent
+                    "timestamp": a.timestamp,
+                    "alert_level": a.alert_level,
+                    "reason": a.reason,
+                    "squeeze_score": float(a.squeeze_score) if a.squeeze_score else None,
+                    "sent": a.sent,
                 }
                 for a in alert_history
             ],
-            'adhoc_candidate': {
-                'active': adhoc_candidate.active if adhoc_candidate else False,
-                'reason': adhoc_candidate.reason if adhoc_candidate else None,
-                'first_seen': adhoc_candidate.first_seen if adhoc_candidate else None,
-                'expires_at': adhoc_candidate.expires_at if adhoc_candidate else None
-            } if adhoc_candidate else None
+            "adhoc_candidate": {
+                "active": adhoc_candidate.active if adhoc_candidate else False,
+                "reason": adhoc_candidate.reason if adhoc_candidate else None,
+                "first_seen": adhoc_candidate.first_seen if adhoc_candidate else None,
+                "expires_at": adhoc_candidate.expires_at if adhoc_candidate else None,
+            }
+            if adhoc_candidate
+            else None,
         }
 
     @with_uow
@@ -441,20 +463,17 @@ class ShortSqueezeService(BaseDBService):
             finra_report = self.get_finra_data_freshness_report()
 
             return {
-                'latest_screener_run': latest_run_date,
-                'active_adhoc_candidates': active_adhoc,
-                'recent_alerts_7d': recent_alerts,
-                'todays_deep_scan_count': today_metrics,
-                'finra_data_age_days': finra_report.get('data_age_days'),
-                'finra_unique_tickers': finra_report.get('unique_tickers', 0),
-                'status': 'healthy'
+                "latest_screener_run": latest_run_date,
+                "active_adhoc_candidates": active_adhoc,
+                "recent_alerts_7d": recent_alerts,
+                "todays_deep_scan_count": today_metrics,
+                "finra_data_age_days": finra_report.get("data_age_days"),
+                "finra_unique_tickers": finra_report.get("unique_tickers", 0),
+                "status": "healthy",
             }
         except Exception as e:
             self._logger.exception("Failed to get pipeline statistics:")
-            return {
-                'status': 'error',
-                'error': str(e)
-            }
+            return {"status": "error", "error": str(e)}
 
     @with_uow
     def get_active_adhoc_candidates(self) -> List[Dict[str, Any]]:
@@ -463,14 +482,16 @@ class ShortSqueezeService(BaseDBService):
             candidates = self.repos.short_squeeze.adhoc_candidates.get_active_candidates()
             result = []
             for candidate in candidates:
-                result.append({
-                    'ticker': candidate.ticker,
-                    'reason': candidate.reason,
-                    'first_seen': candidate.first_seen,
-                    'expires_at': candidate.expires_at,
-                    'active': candidate.active,
-                    'promoted_by_screener': candidate.promoted_by_screener
-                })
+                result.append(
+                    {
+                        "ticker": candidate.ticker,
+                        "reason": candidate.reason,
+                        "first_seen": candidate.first_seen,
+                        "expires_at": candidate.expires_at,
+                        "active": candidate.active,
+                        "promoted_by_screener": candidate.promoted_by_screener,
+                    }
+                )
             return result
         except Exception:
             self._logger.exception("Error getting active adhoc candidates:")
@@ -487,22 +508,25 @@ class ShortSqueezeService(BaseDBService):
             snapshots = self.repos.short_squeeze.screener_snapshots.get_snapshots_by_run_date(latest_run_date)
             result = []
             for snapshot in snapshots:
-                result.append({
-                    'ticker': snapshot.ticker,
-                    'screener_score': float(snapshot.screener_score) if snapshot.screener_score else 0.0,
-                    'run_date': snapshot.run_date,
-                    'short_interest_pct': float(snapshot.short_interest_pct) if snapshot.short_interest_pct else None,
-                    'days_to_cover': float(snapshot.days_to_cover) if snapshot.days_to_cover else None,
-                    'market_cap': snapshot.market_cap,
-                    'data_quality': float(snapshot.data_quality) if snapshot.data_quality else None
-                })
+                result.append(
+                    {
+                        "ticker": snapshot.ticker,
+                        "screener_score": float(snapshot.screener_score) if snapshot.screener_score else 0.0,
+                        "run_date": snapshot.run_date,
+                        "short_interest_pct": float(snapshot.short_interest_pct)
+                        if snapshot.short_interest_pct
+                        else None,
+                        "days_to_cover": float(snapshot.days_to_cover) if snapshot.days_to_cover else None,
+                        "market_cap": snapshot.market_cap,
+                        "data_quality": float(snapshot.data_quality) if snapshot.data_quality else None,
+                    }
+                )
             return result
         except Exception:
             self._logger.exception("Error getting candidates for deep scan:")
             return []
 
-    def get_combined_squeeze_candidates(self, volume_candidates: List[str],
-                                      finra_candidates: List[str]) -> List[str]:
+    def get_combined_squeeze_candidates(self, volume_candidates: List[str], finra_candidates: List[str]) -> List[str]:
         """Combine volume-based and FINRA-based candidates, prioritizing overlap."""
         # Find overlapping candidates (highest priority)
         overlap = set(volume_candidates) & set(finra_candidates)
@@ -516,13 +540,18 @@ class ShortSqueezeService(BaseDBService):
         # Combine in priority order: overlap first, then volume, then FINRA
         combined = list(overlap) + list(volume_only) + list(finra_only)
 
-        self._logger.info("Combined candidates: %d overlap, %d volume-only, %d FINRA-only, %d total",
-                    len(overlap), len(volume_only), len(finra_only), len(combined))
+        self._logger.info(
+            "Combined candidates: %d overlap, %d volume-only, %d FINRA-only, %d total",
+            len(overlap),
+            len(volume_only),
+            len(finra_only),
+            len(combined),
+        )
 
         return combined
 
     @with_uow
-    def get_latest_finra_short_interest(self, ticker: str) -> Optional[Dict[str, Any]]:
+    def get_latest_finra_short_interest(self, ticker: str) -> Dict[str, Any] | None:
         """Get latest FINRA short interest data for a ticker."""
         try:
             finra_data = self.repos.short_squeeze.finra_short_interest.get_latest_by_ticker(ticker)
@@ -530,12 +559,12 @@ class ShortSqueezeService(BaseDBService):
                 return None
 
             return {
-                'ticker': finra_data.ticker,
-                'short_interest_shares': finra_data.short_interest_shares,
-                'short_interest_pct': finra_data.short_interest_pct,
-                'settlement_date': finra_data.settlement_date,
-                'days_to_cover': finra_data.days_to_cover,
-                'data_age_days': (date.today() - finra_data.settlement_date).days
+                "ticker": finra_data.ticker,
+                "short_interest_shares": finra_data.short_interest_shares,
+                "short_interest_pct": finra_data.short_interest_pct,
+                "settlement_date": finra_data.settlement_date,
+                "days_to_cover": finra_data.days_to_cover,
+                "data_age_days": (date.today() - finra_data.settlement_date).days,
             }
         except Exception:
             self._logger.exception("Error getting FINRA data for %s:", ticker)
@@ -547,19 +576,15 @@ class ShortSqueezeService(BaseDBService):
         try:
             latest_date = self.repos.short_squeeze.finra_short_interest.get_latest_settlement_date()
             if not latest_date:
-                return {'data_age_days': None, 'unique_tickers': 0}
+                return {"data_age_days": None, "unique_tickers": 0}
 
             data_age = (date.today() - latest_date).days
             unique_tickers = self.repos.short_squeeze.finra_short_interest.count_unique_tickers()
 
-            return {
-                'data_age_days': data_age,
-                'latest_settlement_date': latest_date,
-                'unique_tickers': unique_tickers
-            }
+            return {"data_age_days": data_age, "latest_settlement_date": latest_date, "unique_tickers": unique_tickers}
         except Exception:
             self._logger.exception("Error getting FINRA freshness report:")
-            return {'data_age_days': None, 'unique_tickers': 0}
+            return {"data_age_days": None, "unique_tickers": 0}
 
     @with_uow
     @handle_db_error

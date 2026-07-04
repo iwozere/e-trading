@@ -39,7 +39,7 @@ import argparse
 import subprocess
 import time
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 from src.notification.logger import setup_logger
 
@@ -55,16 +55,15 @@ class DataPipelineRunner:
         """Initialize the pipeline runner."""
         self.pipeline_dir = Path(__file__).parent
         self.stats = {
-            'pipeline_start_time': None,
-            'pipeline_end_time': None,
-            'total_duration': 0,
-            'steps_executed': [],
-            'steps_failed': [],
-            'step_results': {}
+            "pipeline_start_time": None,
+            "pipeline_end_time": None,
+            "total_duration": 0,
+            "steps_executed": [],
+            "steps_failed": [],
+            "step_results": {},
         }
 
-    def run_step(self, step_num: int, step_name: str, script_path: Path,
-                 args: List[str] = None) -> Dict[str, Any]:
+    def run_step(self, step_num: int, step_name: str, script_path: Path, args: List[str] = None) -> Dict[str, Any]:
         """
         Run a single pipeline step.
 
@@ -89,15 +88,10 @@ class DataPipelineRunner:
             if args:
                 cmd.extend(args)
 
-            _logger.info("Executing: %s", ' '.join(cmd))
+            _logger.info("Executing: %s", " ".join(cmd))
 
             # Run the step
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd=PROJECT_ROOT
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=PROJECT_ROOT)
 
             step_duration = time.time() - step_start_time
 
@@ -111,40 +105,44 @@ class DataPipelineRunner:
             # Check result
             if result.returncode == 0:
                 _logger.info("✅ Step %d completed successfully (%.1f seconds)", step_num, step_duration)
-                self.stats['steps_executed'].append(step_num)
+                self.stats["steps_executed"].append(step_num)
                 return {
-                    'success': True,
-                    'duration': step_duration,
-                    'return_code': result.returncode,
-                    'stdout': result.stdout,
-                    'stderr': result.stderr
+                    "success": True,
+                    "duration": step_duration,
+                    "return_code": result.returncode,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
                 }
             else:
-                _logger.error("❌ Step %d failed with return code %d (%.1f seconds)",
-                             step_num, result.returncode, step_duration)
-                self.stats['steps_failed'].append(step_num)
+                _logger.error(
+                    "❌ Step %d failed with return code %d (%.1f seconds)", step_num, result.returncode, step_duration
+                )
+                self.stats["steps_failed"].append(step_num)
                 return {
-                    'success': False,
-                    'duration': step_duration,
-                    'return_code': result.returncode,
-                    'stdout': result.stdout,
-                    'stderr': result.stderr,
-                    'error': f"Process failed with return code {result.returncode}"
+                    "success": False,
+                    "duration": step_duration,
+                    "return_code": result.returncode,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "error": f"Process failed with return code {result.returncode}",
                 }
 
         except Exception as e:
             step_duration = time.time() - step_start_time
             _logger.error("❌ Step %d failed with exception: %s (%.1f seconds)", step_num, e, step_duration)
-            self.stats['steps_failed'].append(step_num)
-            return {
-                'success': False,
-                'duration': step_duration,
-                'error': str(e)
-            }
+            self.stats["steps_failed"].append(step_num)
+            return {"success": False, "duration": step_duration, "error": str(e)}
 
-    def run_pipeline(self, steps: List[int], tickers: str = None, timeframes: str = None,
-                    start_date: str = None, end_date: str = None, force_refresh: bool = False,
-                    cache_dir: str = None) -> Dict[str, Any]:
+    def run_pipeline(
+        self,
+        steps: List[int],
+        tickers: str = None,
+        timeframes: str = None,
+        start_date: str = None,
+        end_date: str = None,
+        force_refresh: bool = False,
+        cache_dir: str = None,
+    ) -> Dict[str, Any]:
         """
         Run the complete pipeline or specific steps.
 
@@ -160,7 +158,7 @@ class DataPipelineRunner:
         Returns:
             Dictionary with pipeline results
         """
-        self.stats['pipeline_start_time'] = datetime.now()
+        self.stats["pipeline_start_time"] = datetime.now()
 
         _logger.info("🚀 STARTING DATA PIPELINE")
         _logger.info("Steps to run: %s", steps)
@@ -181,26 +179,23 @@ class DataPipelineRunner:
         if 1 in steps:
             step1_args = []
             if tickers:
-                step1_args.extend(['--tickers', tickers])
+                step1_args.extend(["--tickers", tickers])
             if start_date:
-                step1_args.extend(['--start-date', start_date])
+                step1_args.extend(["--start-date", start_date])
             if end_date:
-                step1_args.extend(['--end-date', end_date])
+                step1_args.extend(["--end-date", end_date])
             if force_refresh:
-                step1_args.append('--force-refresh')
+                step1_args.append("--force-refresh")
             if cache_dir:
-                step1_args.extend(['--cache-dir', cache_dir])
+                step1_args.extend(["--cache-dir", cache_dir])
 
             step1_result = self.run_step(
-                1,
-                "Download 1-Minute Data from Alpaca",
-                self.pipeline_dir / "step01_download_alpaca_1m.py",
-                step1_args
+                1, "Download 1-Minute Data from Alpaca", self.pipeline_dir / "step01_download_alpaca_1m.py", step1_args
             )
-            self.stats['step_results']['step1'] = step1_result
+            self.stats["step_results"]["step1"] = step1_result
 
             # Stop if step 1 failed and we need its output for step 2
-            if not step1_result['success'] and 2 in steps:
+            if not step1_result["success"] and 2 in steps:
                 _logger.error("Step 1 failed, cannot proceed to step 2")
                 return self._finalize_pipeline_stats()
 
@@ -208,29 +203,26 @@ class DataPipelineRunner:
         if 2 in steps:
             step2_args = []
             if tickers:
-                step2_args.extend(['--tickers', tickers])
+                step2_args.extend(["--tickers", tickers])
             if timeframes:
-                step2_args.extend(['--timeframes', timeframes])
+                step2_args.extend(["--timeframes", timeframes])
             if force_refresh:
-                step2_args.append('--force-refresh')
+                step2_args.append("--force-refresh")
             if cache_dir:
-                step2_args.extend(['--cache-dir', cache_dir])
+                step2_args.extend(["--cache-dir", cache_dir])
 
             step2_result = self.run_step(
-                2,
-                "Calculate Higher Timeframes",
-                self.pipeline_dir / "step02_calculate_timeframes.py",
-                step2_args
+                2, "Calculate Higher Timeframes", self.pipeline_dir / "step02_calculate_timeframes.py", step2_args
             )
-            self.stats['step_results']['step2'] = step2_result
+            self.stats["step_results"]["step2"] = step2_result
 
         return self._finalize_pipeline_stats()
 
     def _finalize_pipeline_stats(self) -> Dict[str, Any]:
         """Finalize pipeline statistics and print summary."""
-        self.stats['pipeline_end_time'] = datetime.now()
-        self.stats['total_duration'] = (
-            self.stats['pipeline_end_time'] - self.stats['pipeline_start_time']
+        self.stats["pipeline_end_time"] = datetime.now()
+        self.stats["total_duration"] = (
+            self.stats["pipeline_end_time"] - self.stats["pipeline_start_time"]
         ).total_seconds()
 
         self.print_pipeline_summary()
@@ -243,31 +235,31 @@ class DataPipelineRunner:
         _logger.info("=" * 80)
 
         # Overall statistics
-        total_steps = len(self.stats['steps_executed']) + len(self.stats['steps_failed'])
-        successful_steps = len(self.stats['steps_executed'])
-        failed_steps = len(self.stats['steps_failed'])
+        total_steps = len(self.stats["steps_executed"]) + len(self.stats["steps_failed"])
+        successful_steps = len(self.stats["steps_executed"])
+        failed_steps = len(self.stats["steps_failed"])
 
         _logger.info("📊 EXECUTION STATISTICS:")
-        _logger.info("   Pipeline duration: %.1f seconds", self.stats['total_duration'])
+        _logger.info("   Pipeline duration: %.1f seconds", self.stats["total_duration"])
         _logger.info("   Steps executed: %d", total_steps)
         _logger.info("   ✅ Successful: %d", successful_steps)
         _logger.info("   ❌ Failed: %d", failed_steps)
 
         # Step details
-        if self.stats['steps_executed']:
+        if self.stats["steps_executed"]:
             _logger.info("\n✅ SUCCESSFUL STEPS:")
-            for step_num in self.stats['steps_executed']:
-                step_key = f'step{step_num}'
-                if step_key in self.stats['step_results']:
-                    duration = self.stats['step_results'][step_key]['duration']
+            for step_num in self.stats["steps_executed"]:
+                step_key = f"step{step_num}"
+                if step_key in self.stats["step_results"]:
+                    duration = self.stats["step_results"][step_key]["duration"]
                     _logger.info("   Step %d: %.1f seconds", step_num, duration)
 
-        if self.stats['steps_failed']:
+        if self.stats["steps_failed"]:
             _logger.info("\n❌ FAILED STEPS:")
-            for step_num in self.stats['steps_failed']:
-                step_key = f'step{step_num}'
-                if step_key in self.stats['step_results']:
-                    error = self.stats['step_results'][step_key].get('error', 'Unknown error')
+            for step_num in self.stats["steps_failed"]:
+                step_key = f"step{step_num}"
+                if step_key in self.stats["step_results"]:
+                    error = self.stats["step_results"][step_key].get("error", "Unknown error")
                     _logger.info("   Step %d: %s", step_num, error)
 
         # Overall result
@@ -305,50 +297,27 @@ Examples:
 Pipeline Steps:
   1. Download 1-minute data from Alpaca
   2. Calculate higher timeframes (5m, 15m, 1h, 4h, 1d)
-        """
+        """,
+    )
+
+    parser.add_argument("--steps", type=str, default="1,2", help="Comma-separated list of steps to run (default: 1,2)")
+
+    parser.add_argument(
+        "--tickers", type=str, help="Comma-separated list of tickers to process (default: discover from cache)"
     )
 
     parser.add_argument(
-        "--steps",
-        type=str,
-        default="1,2",
-        help="Comma-separated list of steps to run (default: 1,2)"
+        "--timeframes", type=str, help="Comma-separated list of timeframes to calculate (default: 5m,15m,1h,4h,1d)"
     )
 
-    parser.add_argument(
-        "--tickers",
-        type=str,
-        help="Comma-separated list of tickers to process (default: discover from cache)"
-    )
+    parser.add_argument("--start-date", type=str, help="Start date for data download (YYYY-MM-DD, default: 2020-01-01)")
+
+    parser.add_argument("--end-date", type=str, help="End date for data download (YYYY-MM-DD, default: yesterday)")
+
+    parser.add_argument("--cache-dir", type=str, help="Cache directory path")
 
     parser.add_argument(
-        "--timeframes",
-        type=str,
-        help="Comma-separated list of timeframes to calculate (default: 5m,15m,1h,4h,1d)"
-    )
-
-    parser.add_argument(
-        "--start-date",
-        type=str,
-        help="Start date for data download (YYYY-MM-DD, default: 2020-01-01)"
-    )
-
-    parser.add_argument(
-        "--end-date",
-        type=str,
-        help="End date for data download (YYYY-MM-DD, default: yesterday)"
-    )
-
-    parser.add_argument(
-        "--cache-dir",
-        type=str,
-        help="Cache directory path"
-    )
-
-    parser.add_argument(
-        "--force-refresh",
-        action="store_true",
-        help="Force refresh: re-download and recalculate all data"
+        "--force-refresh", action="store_true", help="Force refresh: re-download and recalculate all data"
     )
 
     args = parser.parse_args()
@@ -371,13 +340,13 @@ Pipeline Steps:
             start_date=args.start_date,
             end_date=args.end_date,
             force_refresh=args.force_refresh,
-            cache_dir=args.cache_dir
+            cache_dir=args.cache_dir,
         )
 
         # Exit with appropriate code
-        if len(results['steps_failed']) == 0:
+        if len(results["steps_failed"]) == 0:
             sys.exit(0)  # Success
-        elif len(results['steps_executed']) > 0:
+        elif len(results["steps_executed"]) > 0:
             sys.exit(0)  # Partial success
         else:
             sys.exit(1)  # Complete failure

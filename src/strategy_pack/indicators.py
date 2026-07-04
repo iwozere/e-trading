@@ -13,9 +13,7 @@ def atr_rma(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> p
     return tr.ewm(alpha=1.0 / period, adjust=False).mean()
 
 
-def supertrend_line_and_direction(
-    df: pd.DataFrame, period: int, multiplier: float
-) -> tuple[pd.Series, pd.Series]:
+def supertrend_line_and_direction(df: pd.DataFrame, period: int, multiplier: float) -> tuple[pd.Series, pd.Series]:
     """
     SuperTrend line and trend direction (+1 bullish, -1 bearish).
     Ported from ``src/backtester/plotter/run_plotter.py::_calculate_supertrend`` with direction output.

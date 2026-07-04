@@ -6,25 +6,26 @@ It extracts common functionality like trade tracking, position management,
 and performance monitoring that is shared across different strategy implementations.
 """
 
-from datetime import datetime
-from typing import Dict, Any
-import backtrader as bt
 import sys
+from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict
+
+import backtrader as bt
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
 
+from src.data.data_manager import get_provider_selector
 from src.notification.logger import setup_logger
 from src.trading.dto.created_trade import CreatedTrade
-from src.data.data_manager import get_provider_selector
 
 # Loggers will be set up with multiprocessing support when needed
 # The multiprocessing logging is set up in the optimizer main process
 _logger = setup_logger(__name__, use_multiprocessing=True)
-_order_logger = setup_logger('orders', use_multiprocessing=True)
-_trade_logger = setup_logger('trades', use_multiprocessing=True)
+_order_logger = setup_logger("orders", use_multiprocessing=True)
+_trade_logger = setup_logger("trades", use_multiprocessing=True)
 
 
 class BaseStrategy(bt.Strategy):
@@ -40,14 +41,14 @@ class BaseStrategy(bt.Strategy):
     """
 
     params = (
-        ("strategy_config", None), # Strategy configuration
-        ("position_size", 0.1),    # Default position size as fraction of capital
-        ("symbol", ""),            # Trading symbol
-        ("timeframe", ""),         # Trading timeframe
+        ("strategy_config", None),  # Strategy configuration
+        ("position_size", 0.1),  # Default position size as fraction of capital
+        ("symbol", ""),  # Trading symbol
+        ("timeframe", ""),  # Trading timeframe
         ("asset_type", "crypto"),  # Asset type: "crypto" or "stock"
         ("min_order_value", 0.0),  # Minimum order value (for stocks)
-        ("on_order_executed_callback", None), # Strategy manager callback
-        ("on_signal_callback", None),          # Signal generation callback
+        ("on_order_executed_callback", None),  # Strategy manager callback
+        ("on_signal_callback", None),  # Signal generation callback
     )
 
     def __init__(self):
@@ -57,14 +58,12 @@ class BaseStrategy(bt.Strategy):
         # Callback hook from StrategyManager
         self.on_order_executed_callback = self.p.on_order_executed_callback
 
-
-
         # Configuration
         self.config = self.p.strategy_config or {}
         self.symbol = self.p.symbol
         self.timeframe = self.p.timeframe
-        self.asset_type = self.config.get('asset_type', self.p.asset_type)
-        self.min_order_value = self.config.get('min_order_value', self.p.min_order_value)
+        self.asset_type = self.config.get("asset_type", self.p.asset_type)
+        self.min_order_value = self.config.get("min_order_value", self.p.min_order_value)
 
         # Auto-detect asset type from symbol if not explicitly set
         if not self.asset_type or self.asset_type == "crypto":
@@ -86,9 +85,9 @@ class BaseStrategy(bt.Strategy):
         # Database integration
         self.trade_repository = None
         self.bot_instance_id = None
-        self.enable_database_logging = self.config.get('enable_database_logging', False)
-        self.bot_type = self.config.get('bot_type', 'paper')  # paper, live, optimization
-        self.optimization_mode = self.bot_type == 'optimization' or self.config.get('optimization_mode', False)
+        self.enable_database_logging = self.config.get("enable_database_logging", False)
+        self.bot_type = self.config.get("bot_type", "paper")  # paper, live, optimization
+        self.optimization_mode = self.bot_type == "optimization" or self.config.get("optimization_mode", False)
         self.current_position_id = None  # Track current position ID for partial exits
 
         # Trade history
@@ -105,9 +104,9 @@ class BaseStrategy(bt.Strategy):
         self.peak_equity = 0.0
 
         # Position sizing
-        self.base_position_size = self.config.get('position_size', self.p.position_size)
-        self.max_position_size = self.config.get('max_position_size', 0.2)
-        self.min_position_size = self.config.get('min_position_size', 0.05)
+        self.base_position_size = self.config.get("position_size", self.p.position_size)
+        self.max_position_size = self.config.get("max_position_size", 0.2)
+        self.min_position_size = self.config.get("min_position_size", 0.05)
 
         # Indicator management (for new TALib-based architecture)
         self.indicators = {}  # Dict[str, bt.Indicator] - stores indicator line objects by alias
@@ -171,8 +170,23 @@ class BaseStrategy(bt.Strategy):
 
         # Common crypto patterns
         crypto_patterns = [
-            "BTC", "ETH", "USDT", "USDC", "BNB", "ADA", "SOL", "DOT", "MATIC",
-            "AVAX", "LINK", "UNI", "LTC", "BCH", "XRP", "DOGE", "SHIB"
+            "BTC",
+            "ETH",
+            "USDT",
+            "USDC",
+            "BNB",
+            "ADA",
+            "SOL",
+            "DOT",
+            "MATIC",
+            "AVAX",
+            "LINK",
+            "UNI",
+            "LTC",
+            "BCH",
+            "XRP",
+            "DOGE",
+            "SHIB",
         ]
 
         # Check if symbol contains crypto patterns
@@ -213,18 +227,18 @@ class BaseStrategy(bt.Strategy):
         # Extract indicator configs from entry and exit logic
         all_indicator_configs = []
 
-        strategy_params = strategy_config.get('parameters', {})
+        strategy_params = strategy_config.get("parameters", {})
 
         # Get entry logic indicators
-        entry_logic = strategy_params.get('entry_logic', {})
-        if 'indicators' in entry_logic:
-            all_indicator_configs.extend(entry_logic['indicators'])
+        entry_logic = strategy_params.get("entry_logic", {})
+        if "indicators" in entry_logic:
+            all_indicator_configs.extend(entry_logic["indicators"])
             _logger.debug(f"Found {len(entry_logic['indicators'])} indicators in entry_logic")
 
         # Get exit logic indicators
-        exit_logic = strategy_params.get('exit_logic', {})
-        if 'indicators' in exit_logic:
-            all_indicator_configs.extend(exit_logic['indicators'])
+        exit_logic = strategy_params.get("exit_logic", {})
+        if "indicators" in exit_logic:
+            all_indicator_configs.extend(exit_logic["indicators"])
             _logger.debug(f"Found {len(exit_logic['indicators'])} indicators in exit_logic")
 
         if not all_indicator_configs:
@@ -236,11 +250,10 @@ class BaseStrategy(bt.Strategy):
 
         # Create indicators using factory
         try:
-            self.indicators = IndicatorFactory.create_indicators(
-                self.data,
-                all_indicator_configs
+            self.indicators = IndicatorFactory.create_indicators(self.data, all_indicator_configs)
+            _logger.info(
+                f"Successfully created {len(self.indicators)} indicator outputs: {list(self.indicators.keys())}"
             )
-            _logger.info(f"Successfully created {len(self.indicators)} indicator outputs: {list(self.indicators.keys())}")
         except Exception as e:
             _logger.error(f"Failed to create indicators: {e}")
             raise
@@ -263,10 +276,7 @@ class BaseStrategy(bt.Strategy):
             rsi_prev = self.get_indicator('entry_rsi')[-1]  # Previous bar
         """
         if alias not in self.indicators:
-            raise KeyError(
-                f"Indicator '{alias}' not found. "
-                f"Available indicators: {list(self.indicators.keys())}"
-            )
+            raise KeyError(f"Indicator '{alias}' not found. Available indicators: {list(self.indicators.keys())}")
 
         return self.indicators[alias]
 
@@ -299,7 +309,7 @@ class BaseStrategy(bt.Strategy):
         warmups = [0]
 
         # Check entry mixin
-        if hasattr(self, 'entry_mixin') and self.entry_mixin:
+        if hasattr(self, "entry_mixin") and self.entry_mixin:
             try:
                 entry_lookback = self.entry_mixin.get_minimum_lookback()
                 warmups.append(entry_lookback)
@@ -308,7 +318,7 @@ class BaseStrategy(bt.Strategy):
                 _logger.warning(f"Error getting warmup from entry mixin: {e}")
 
         # Check exit mixin
-        if hasattr(self, 'exit_mixin') and self.exit_mixin:
+        if hasattr(self, "exit_mixin") and self.exit_mixin:
             try:
                 exit_lookback = self.exit_mixin.get_minimum_lookback()
                 warmups.append(exit_lookback)
@@ -354,7 +364,7 @@ class BaseStrategy(bt.Strategy):
                 try:
                     # Method 1: Use self.data.datetime.datetime() - get full datetime with time
                     current_date = self.data.datetime.datetime()
-                    #_logger.debug("Current datetime from self.data.datetime.datetime(): %s (type: %s)",
+                    # _logger.debug("Current datetime from self.data.datetime.datetime(): %s (type: %s)",
                     #             current_date.strftime("%Y-%m-%d %H:%M:%S") if hasattr(current_date, 'strftime') else str(current_date),
                     #             type(current_date))
                 except Exception as e1:
@@ -362,16 +372,24 @@ class BaseStrategy(bt.Strategy):
                     try:
                         # Method 2: Use num2date with current bar index
                         current_date = self.data.num2date(self.data.idx)
-                        _logger.debug("Current date from num2date(idx): %s (type: %s)",
-                                     current_date.strftime("%Y-%m-%d %H:%M:%S") if hasattr(current_date, 'strftime') else str(current_date),
-                                     type(current_date))
+                        _logger.debug(
+                            "Current date from num2date(idx): %s (type: %s)",
+                            current_date.strftime("%Y-%m-%d %H:%M:%S")
+                            if hasattr(current_date, "strftime")
+                            else str(current_date),
+                            type(current_date),
+                        )
                     except Exception as e2:
                         _logger.debug("Method 2 failed: %s", e2)
                         # Method 3: Use num2date(1) as fallback
                         current_date = self.data.num2date(1)
-                        _logger.debug("Current date from num2date(1): %s (type: %s)",
-                                     current_date.strftime("%Y-%m-%d %H:%M:%S") if hasattr(current_date, 'strftime') else str(current_date),
-                                     type(current_date))
+                        _logger.debug(
+                            "Current date from num2date(1): %s (type: %s)",
+                            current_date.strftime("%Y-%m-%d %H:%M:%S")
+                            if hasattr(current_date, "strftime")
+                            else str(current_date),
+                            type(current_date),
+                        )
 
                 self.equity_dates.append(current_date)
             except (ValueError, IndexError) as e:
@@ -384,13 +402,13 @@ class BaseStrategy(bt.Strategy):
                 _logger.debug("Error type: %s", type(e).__name__)
                 _logger.debug("Error message: %s", str(e))
                 _logger.debug("Data feed type: %s", type(self.data))
-                _logger.debug("Data feed name: %s", getattr(self.data, 'name', 'Unknown'))
+                _logger.debug("Data feed name: %s", getattr(self.data, "name", "Unknown"))
 
                 # Check if we can access the datetime line directly
                 try:
                     _logger.debug("self.data.datetime type: %s", type(self.data.datetime))
                     _logger.debug("self.data.datetime value: %s", self.data.datetime)
-                    if hasattr(self.data.datetime, 'date'):
+                    if hasattr(self.data.datetime, "date"):
                         _logger.debug("self.data.datetime.date(): %s", self.data.datetime.date())
                 except Exception as dt_e:
                     _logger.debug("Error accessing self.data.datetime: %s", dt_e)
@@ -398,21 +416,25 @@ class BaseStrategy(bt.Strategy):
                 # Check data feed attributes
                 try:
                     _logger.debug("Data feed dataname type: %s", type(self.data.dataname))
-                    if hasattr(self.data.dataname, 'columns'):
+                    if hasattr(self.data.dataname, "columns"):
                         _logger.debug("DataFrame columns: %s", list(self.data.dataname.columns))
-                    if hasattr(self.data.dataname, 'index'):
+                    if hasattr(self.data.dataname, "index"):
                         _logger.debug("DataFrame index type: %s", type(self.data.dataname.index))
                         _logger.debug("DataFrame index length: %s", len(self.data.dataname.index))
                         if len(self.data.dataname.index) > 0:
-                            _logger.debug("First index value: %s (type: %s)", self.data.dataname.index[0], type(self.data.dataname.index[0]))
+                            _logger.debug(
+                                "First index value: %s (type: %s)",
+                                self.data.dataname.index[0],
+                                type(self.data.dataname.index[0]),
+                            )
                 except Exception as debug_e:
                     _logger.debug("Error accessing data feed attributes: %s", debug_e)
 
                 # Check data feed parameters
                 try:
-                    _logger.debug("Data feed datetime param: %s", getattr(self.data, 'datetime', 'Not set'))
-                    _logger.debug("Data feed fromdate: %s", getattr(self.data, 'fromdate', 'Not set'))
-                    _logger.debug("Data feed todate: %s", getattr(self.data, 'todate', 'Not set'))
+                    _logger.debug("Data feed datetime param: %s", getattr(self.data, "datetime", "Not set"))
+                    _logger.debug("Data feed fromdate: %s", getattr(self.data, "fromdate", "Not set"))
+                    _logger.debug("Data feed todate: %s", getattr(self.data, "todate", "Not set"))
                 except Exception as debug_e:
                     _logger.debug("Error accessing data feed parameters: %s", debug_e)
 
@@ -505,8 +527,7 @@ class BaseStrategy(bt.Strategy):
             _logger.exception("Error calculating shares")
             return 0.0
 
-    def _enter_position(self, direction: str, confidence: float = 1.0,
-                       risk_multiplier: float = 1.0, reason: str = ""):
+    def _enter_position(self, direction: str, confidence: float = 1.0, risk_multiplier: float = 1.0, reason: str = ""):
         """
         Enter a position with the specified parameters.
 
@@ -534,29 +555,45 @@ class BaseStrategy(bt.Strategy):
             if self.p.on_signal_callback:
                 # DECOUPLED MODE: Send signal to external handler instead of placing order
                 signal = {
-                    'symbol': self.symbol,
-                    'direction': direction.lower(),
-                    'side': 'buy' if direction.lower() == 'long' else 'sell',
-                    'quantity': shares,
-                    'price': self.data.close[0],
-                    'confidence': confidence,
-                    'reason': reason,
-                    'timestamp': self.data.datetime[0]
+                    "symbol": self.symbol,
+                    "direction": direction.lower(),
+                    "side": "buy" if direction.lower() == "long" else "sell",
+                    "quantity": shares,
+                    "price": self.data.close[0],
+                    "confidence": confidence,
+                    "reason": reason,
+                    "timestamp": self.data.datetime[0],
                 }
                 self.p.on_signal_callback(signal)
                 _logger.info("SIGNAL_GENERATED - %s | %s | Reason: %s", self.symbol, direction.upper(), reason)
                 return
 
-            if direction.lower() == 'long':
+            if direction.lower() == "long":
                 order = self.buy(size=shares)
                 if not self.optimization_mode:
-                    _logger.info("POSITION_ENTRY - %s | Direction: LONG | Size: %.6f shares (%.2f%% of capital) | Price: %.4f | Confidence: %.2f | Risk Multiplier: %.2f | Reason: %s",
-                                self.symbol, shares, position_size * 100, self.data.close[0], confidence, risk_multiplier, reason)
-            elif direction.lower() == 'short':
+                    _logger.info(
+                        "POSITION_ENTRY - %s | Direction: LONG | Size: %.6f shares (%.2f%% of capital) | Price: %.4f | Confidence: %.2f | Risk Multiplier: %.2f | Reason: %s",
+                        self.symbol,
+                        shares,
+                        position_size * 100,
+                        self.data.close[0],
+                        confidence,
+                        risk_multiplier,
+                        reason,
+                    )
+            elif direction.lower() == "short":
                 order = self.sell(size=shares)
                 if not self.optimization_mode:
-                    _logger.info("POSITION_ENTRY - %s | Direction: SHORT | Size: %.6f shares (%.2f%% of capital) | Price: %.4f | Confidence: %.2f | Risk Multiplier: %.2f | Reason: %s",
-                                self.symbol, shares, position_size * 100, self.data.close[0], confidence, risk_multiplier, reason)
+                    _logger.info(
+                        "POSITION_ENTRY - %s | Direction: SHORT | Size: %.6f shares (%.2f%% of capital) | Price: %.4f | Confidence: %.2f | Risk Multiplier: %.2f | Reason: %s",
+                        self.symbol,
+                        shares,
+                        position_size * 100,
+                        self.data.close[0],
+                        confidence,
+                        risk_multiplier,
+                        reason,
+                    )
             else:
                 _logger.error("Invalid direction: %s", direction)
                 return
@@ -565,6 +602,7 @@ class BaseStrategy(bt.Strategy):
                 # Validate price before setting entry_price
                 current_price = self.data.close[0]
                 import math
+
                 if math.isnan(current_price) or math.isinf(current_price):
                     _logger.error("Invalid price data: %s, cannot set entry price", current_price)
                     return
@@ -574,13 +612,13 @@ class BaseStrategy(bt.Strategy):
                 self.highest_profit = 0.0
 
                 # Notify exit mixin of position entry
-                if hasattr(self, 'exit_mixin') and self.exit_mixin:
+                if hasattr(self, "exit_mixin") and self.exit_mixin:
                     try:
                         self.exit_mixin.on_entry(
                             entry_price=self.entry_price,
                             entry_time=self.data.datetime[0],
                             position_size=abs(shares),
-                            direction=direction
+                            direction=direction,
                         )
                     except Exception as e:
                         _logger.warning("Error notifying exit mixin of entry: %s", e)
@@ -644,13 +682,13 @@ class BaseStrategy(bt.Strategy):
             if self.p.on_signal_callback:
                 # DECOUPLED MODE: Send signal to external handler instead of placing order
                 signal = {
-                    'symbol': self.symbol,
-                    'direction': 'exit',
-                    'side': 'sell' if self.position.size > 0 else 'buy',
-                    'quantity': abs(self.position.size),
-                    'price': self.data.close[0],
-                    'reason': reason,
-                    'timestamp': self.data.datetime[0]
+                    "symbol": self.symbol,
+                    "direction": "exit",
+                    "side": "sell" if self.position.size > 0 else "buy",
+                    "quantity": abs(self.position.size),
+                    "price": self.data.close[0],
+                    "reason": reason,
+                    "timestamp": self.data.datetime[0],
                 }
                 self.p.on_signal_callback(signal)
                 _logger.info("SIGNAL_GENERATED - %s | EXIT | Reason: %s", self.symbol, reason)
@@ -658,8 +696,15 @@ class BaseStrategy(bt.Strategy):
 
             self.close()
             if not self.optimization_mode:
-                _logger.info("POSITION_EXIT - %s | Size: %.6f | Exit Price: %.4f | Unrealized PnL: %.4f (%.2f%%) | Reason: %s",
-                            self.symbol, self.exit_size, self.data.close[0], current_pnl, current_pnl_pct, reason)
+                _logger.info(
+                    "POSITION_EXIT - %s | Size: %.6f | Exit Price: %.4f | Unrealized PnL: %.4f (%.2f%%) | Reason: %s",
+                    self.symbol,
+                    self.exit_size,
+                    self.data.close[0],
+                    current_pnl,
+                    current_pnl_pct,
+                    reason,
+                )
 
             # Note: Don't reset entry_price here - it will be reset in notify_trade after the trade is actually closed
 
@@ -704,8 +749,12 @@ class BaseStrategy(bt.Strategy):
 
                 # Update current position size
                 self.current_position_size = abs(self.position.size - exit_size)
-                _logger.info("Partial exit - Size: %.6f, Remaining: %.6f, Reason: %s",
-                           exit_size, self.current_position_size, reason)
+                _logger.info(
+                    "Partial exit - Size: %.6f, Remaining: %.6f, Reason: %s",
+                    exit_size,
+                    self.current_position_size,
+                    reason,
+                )
 
         except Exception:
             _logger.exception("Error in partial exit")
@@ -716,7 +765,7 @@ class BaseStrategy(bt.Strategy):
             return abs(trade.size)
 
         # Use the stored exit size if available (most reliable)
-        if hasattr(self, 'exit_size') and self.exit_size is not None:
+        if hasattr(self, "exit_size") and self.exit_size is not None:
             return self.exit_size
 
         # Fallback: use current position size (for full closes)
@@ -739,17 +788,18 @@ class BaseStrategy(bt.Strategy):
 
         try:
             from src.trading.services.trading_bot_service import trading_bot_service
+
             self.trade_repository = trading_bot_service
 
             # Create or get bot instance
             bot_data = {
-                'name': self.config.get('bot_instance_name', f"{self.__class__.__name__}_{self.symbol}"),
-                'type': self.bot_type,  # Use the bot_type from config
-                'status': 'running',
-                'strategy_name': self.__class__.__name__,
-                'symbol': self.symbol,
-                'timeframe': self.timeframe,
-                'config': self.config
+                "name": self.config.get("bot_instance_name", f"{self.__class__.__name__}_{self.symbol}"),
+                "type": self.bot_type,  # Use the bot_type from config
+                "status": "running",
+                "strategy_name": self.__class__.__name__,
+                "symbol": self.symbol,
+                "timeframe": self.timeframe,
+                "config": self.config,
             }
 
             bot_instance = self.trade_repository.create_bot_instance(bot_data)
@@ -767,34 +817,33 @@ class BaseStrategy(bt.Strategy):
             return
 
         try:
-
             if is_partial_exit:
                 # Store as partial exit
                 trade_data = {
-                    'bot_id': self.bot_instance_id,
-                    'symbol': self.symbol,
-                    'trade_type': self.bot_type,  # Use the bot_type from config
-                    'strategy_name': self.__class__.__name__,
-                    'entry_logic_name': getattr(self, 'entry_logic', {}).get('name', 'unknown'),
-                    'exit_logic_name': getattr(self, 'exit_logic', {}).get('name', 'unknown'),
-                    'interval': self.timeframe,
-                    'entry_time': trade_record['entry_time'],
-                    'exit_time': trade_record['exit_time'],
-                    'entry_price': trade_record['entry_price'],
-                    'exit_price': trade_record['exit_price'],
-                    'size': trade_record['size'],
-                    'direction': trade_record['direction'],
-                    'commission': trade_record['commission'],
-                    'gross_pnl': trade_record['gross_pnl'],
-                    'net_pnl': trade_record['net_pnl'],
-                    'pnl_percentage': trade_record['pnl_percentage'],
-                    'exit_reason': trade_record['exit_reason'],
-                    'status': 'closed',
-                    'position_id': self.current_position_id,
-                    'extra_metadata': {
-                        'duration_minutes': trade_record['duration_minutes'],
-                        'strategy_config': self.config
-                    }
+                    "bot_id": self.bot_instance_id,
+                    "symbol": self.symbol,
+                    "trade_type": self.bot_type,  # Use the bot_type from config
+                    "strategy_name": self.__class__.__name__,
+                    "entry_logic_name": getattr(self, "entry_logic", {}).get("name", "unknown"),
+                    "exit_logic_name": getattr(self, "exit_logic", {}).get("name", "unknown"),
+                    "interval": self.timeframe,
+                    "entry_time": trade_record["entry_time"],
+                    "exit_time": trade_record["exit_time"],
+                    "entry_price": trade_record["entry_price"],
+                    "exit_price": trade_record["exit_price"],
+                    "size": trade_record["size"],
+                    "direction": trade_record["direction"],
+                    "commission": trade_record["commission"],
+                    "gross_pnl": trade_record["gross_pnl"],
+                    "net_pnl": trade_record["net_pnl"],
+                    "pnl_percentage": trade_record["pnl_percentage"],
+                    "exit_reason": trade_record["exit_reason"],
+                    "status": "closed",
+                    "position_id": self.current_position_id,
+                    "extra_metadata": {
+                        "duration_minutes": trade_record["duration_minutes"],
+                        "strategy_config": self.config,
+                    },
                 }
 
                 # Get the original position trade
@@ -807,43 +856,42 @@ class BaseStrategy(bt.Strategy):
             else:
                 # Store as new position
                 trade_data = {
-                    'bot_id': self.bot_instance_id,
-                    'symbol': self.symbol,
-                    'trade_type': self.bot_type,  # Use the bot_type from config
-                    'strategy_name': self.__class__.__name__,
-                    'entry_logic_name': getattr(self, 'entry_logic', {}).get('name', 'unknown'),
-                    'exit_logic_name': getattr(self, 'exit_logic', {}).get('name', 'unknown'),
-                    'interval': self.timeframe,
-                    'entry_time': trade_record['entry_time'],
-                    'exit_time': trade_record['exit_time'],
-                    'entry_price': trade_record['entry_price'],
-                    'exit_price': trade_record['exit_price'],
-                    'size': trade_record['size'],
-                    'direction': trade_record['direction'],
-                    'commission': trade_record['commission'],
-                    'gross_pnl': trade_record['gross_pnl'],
-                    'net_pnl': trade_record['net_pnl'],
-                    'pnl_percentage': trade_record['pnl_percentage'],
-                    'exit_reason': trade_record['exit_reason'],
-                    'status': 'closed',
-                    'original_position_size': trade_record['size'],
-                    'remaining_position_size': 0,  # Fully closed
-                    'is_partial_exit': False,
-                    'extra_metadata': {
-                        'duration_minutes': trade_record['duration_minutes'],
-                        'strategy_config': self.config
-                    }
+                    "bot_id": self.bot_instance_id,
+                    "symbol": self.symbol,
+                    "trade_type": self.bot_type,  # Use the bot_type from config
+                    "strategy_name": self.__class__.__name__,
+                    "entry_logic_name": getattr(self, "entry_logic", {}).get("name", "unknown"),
+                    "exit_logic_name": getattr(self, "exit_logic", {}).get("name", "unknown"),
+                    "interval": self.timeframe,
+                    "entry_time": trade_record["entry_time"],
+                    "exit_time": trade_record["exit_time"],
+                    "entry_price": trade_record["entry_price"],
+                    "exit_price": trade_record["exit_price"],
+                    "size": trade_record["size"],
+                    "direction": trade_record["direction"],
+                    "commission": trade_record["commission"],
+                    "gross_pnl": trade_record["gross_pnl"],
+                    "net_pnl": trade_record["net_pnl"],
+                    "pnl_percentage": trade_record["pnl_percentage"],
+                    "exit_reason": trade_record["exit_reason"],
+                    "status": "closed",
+                    "original_position_size": trade_record["size"],
+                    "remaining_position_size": 0,  # Fully closed
+                    "is_partial_exit": False,
+                    "extra_metadata": {
+                        "duration_minutes": trade_record["duration_minutes"],
+                        "strategy_config": self.config,
+                    },
                 }
 
                 trade = self.trade_repository.create_trade(trade_data)
                 if not isinstance(trade, CreatedTrade):
                     raise TypeError(
-                        "trade_repository.create_trade must return CreatedTrade, "
-                        f"got {type(trade).__name__}"
+                        f"trade_repository.create_trade must return CreatedTrade, got {type(trade).__name__}"
                     )
                 self.current_position_id = trade.id
 
-            _logger.debug("Stored trade in database: %s", trade_data.get('id', 'unknown'))
+            _logger.debug("Stored trade in database: %s", trade_data.get("id", "unknown"))
 
         except Exception as e:
             _logger.exception("Error storing trade in database: %s", e)
@@ -882,10 +930,10 @@ class BaseStrategy(bt.Strategy):
             if order.status in [order.Submitted]:
                 # Store order metadata for later reference
                 self.order_refs[order.ref] = {
-                    'type': order_type,
-                    'size': order.size,
-                    'price': order.price or self.data.close[0],
-                    'reason': self.current_entry_reason if order.isbuy() else self.current_exit_reason
+                    "type": order_type,
+                    "size": order.size,
+                    "price": order.price or self.data.close[0],
+                    "reason": self.current_entry_reason if order.isbuy() else self.current_exit_reason,
                 }
 
                 _order_logger.info(
@@ -895,16 +943,13 @@ class BaseStrategy(bt.Strategy):
                     order.size,
                     order.price or self.data.close[0],
                     order.ref,
-                    self.current_entry_reason if order.isbuy() else (self.current_exit_reason or "unknown")
+                    self.current_entry_reason if order.isbuy() else (self.current_exit_reason or "unknown"),
                 )
 
             # Order accepted by broker
             elif order.status in [order.Accepted]:
                 _order_logger.info(
-                    "ORDER - %s | Type: %s | Status: Accepted | Order ID: %d",
-                    self.symbol,
-                    order_type,
-                    order.ref
+                    "ORDER - %s | Type: %s | Status: Accepted | Order ID: %d", self.symbol, order_type, order.ref
                 )
 
             # Order completed (filled)
@@ -916,7 +961,7 @@ class BaseStrategy(bt.Strategy):
                     order.executed.size,
                     order.executed.price,
                     order.ref,
-                    order.executed.comm or 0.0
+                    order.executed.comm or 0.0,
                 )
 
                 # Send execution callback up to StrategyManager
@@ -925,14 +970,11 @@ class BaseStrategy(bt.Strategy):
                     # Often in this architecture, the Strategy relies on StrategyManager querying it, or we can pass
                     # the execution upstream. Since StrategyManager listens if we had a direct callback, we'll
                     # try to see if strategy_manager is accessible or just let it poll trades.
-                    
+
                     # Alternatively, if there's a custom callback injected, we call it
-                    if hasattr(self, 'on_order_executed_callback') and self.on_order_executed_callback:
+                    if hasattr(self, "on_order_executed_callback") and self.on_order_executed_callback:
                         self.on_order_executed_callback(
-                            order_type, 
-                            order.executed.price, 
-                            order.executed.size, 
-                            self.data.datetime.datetime(0)
+                            order_type, order.executed.price, order.executed.size, self.data.datetime.datetime(0)
                         )
                 except Exception as e:
                     _logger.warning(f"Error calling on_order_executed_callback: {e}")
@@ -948,10 +990,7 @@ class BaseStrategy(bt.Strategy):
             # Order canceled
             elif order.status in [order.Canceled]:
                 _order_logger.warning(
-                    "ORDER - %s | Type: %s | Status: Canceled | Order ID: %d",
-                    self.symbol,
-                    order_type,
-                    order.ref
+                    "ORDER - %s | Type: %s | Status: Canceled | Order ID: %d", self.symbol, order_type, order.ref
                 )
 
                 # Clean up order metadata
@@ -964,7 +1003,7 @@ class BaseStrategy(bt.Strategy):
                     "ORDER - %s | Type: %s | Status: Rejected | Order ID: %d | Reason: Insufficient margin or invalid parameters",
                     self.symbol,
                     order_type,
-                    order.ref
+                    order.ref,
                 )
 
                 # Clean up order metadata
@@ -977,7 +1016,7 @@ class BaseStrategy(bt.Strategy):
                     "ORDER - %s | Type: %s | Status: Margin | Order ID: %d | Reason: Insufficient cash/margin",
                     self.symbol,
                     order_type,
-                    order.ref
+                    order.ref,
                 )
 
                 # Clean up order metadata
@@ -998,8 +1037,10 @@ class BaseStrategy(bt.Strategy):
             # Log trade notification with correct size
             _logger.info(
                 "Trade notification - Status: %s, Size: %.6f, PnL: %s, Price: %s",
-                'CLOSED' if trade.isclosed else 'OPEN',
-                actual_size, trade_pnl, trade_price
+                "CLOSED" if trade.isclosed else "OPEN",
+                actual_size,
+                trade_pnl,
+                trade_price,
             )
 
             if trade.isclosed:
@@ -1009,10 +1050,12 @@ class BaseStrategy(bt.Strategy):
                 # Calculate trade metrics
                 duration_days = trade.dtclose - trade.dtopen
                 duration_minutes = duration_days * 24 * 60
-                duration_bars = len(self.data) - trade.baropen if hasattr(trade, 'baropen') else 0
+                duration_bars = len(self.data) - trade.baropen if hasattr(trade, "baropen") else 0
 
                 # Use executed exit price from broker if available, otherwise fallback to current close
-                actual_exit_price = self.executed_exit_price if self.executed_exit_price is not None else self.data.close[0]
+                actual_exit_price = (
+                    self.executed_exit_price if self.executed_exit_price is not None else self.data.close[0]
+                )
 
                 # Calculate PnL
                 entry_value = self.entry_price * actual_size if self.entry_price else 0
@@ -1021,7 +1064,7 @@ class BaseStrategy(bt.Strategy):
                 # Determine position direction for PnL calculation
                 # For closed trades, we need to determine if it was a long or short position
                 # We can use the stored exit_size and current position to determine this
-                if hasattr(self, 'exit_size') and self.exit_size is not None:
+                if hasattr(self, "exit_size") and self.exit_size is not None:
                     # If we have exit_size, we can determine direction from the original position
                     # For now, assume long position (this could be improved with direction tracking)
                     gross_pnl = exit_value - entry_value
@@ -1046,7 +1089,7 @@ class BaseStrategy(bt.Strategy):
                     "pnl_percentage": ((net_pnl / entry_value) * 100 if entry_value != 0 else 0),
                     "direction": "long" if actual_size > 0 else "short",
                     "exit_reason": self.current_exit_reason or "unknown",
-                    "status": "closed"
+                    "status": "closed",
                 }
 
                 self.trades.append(trade_record)
@@ -1078,7 +1121,7 @@ class BaseStrategy(bt.Strategy):
                     pnl_pct,
                     duration_bars,
                     duration_minutes,
-                    exit_reason
+                    exit_reason,
                 )
 
                 # Also log detailed trade record to trades.log
@@ -1088,14 +1131,16 @@ class BaseStrategy(bt.Strategy):
                     _trade_logger.info(
                         "TRADE_RECORD | Symbol: %s | Entry_Time: %s | Exit_Time: %s | Entry_Price: %.4f | Exit_Price: %.4f | Size: %.6f | PnL: %.4f | Commission: %.4f | Exit_Reason: %s",
                         self.symbol,
-                        entry_time.strftime("%Y-%m-%d %H:%M:%S") if hasattr(entry_time, 'strftime') else str(entry_time),
-                        exit_time.strftime("%Y-%m-%d %H:%M:%S") if hasattr(exit_time, 'strftime') else str(exit_time),
+                        entry_time.strftime("%Y-%m-%d %H:%M:%S")
+                        if hasattr(entry_time, "strftime")
+                        else str(entry_time),
+                        exit_time.strftime("%Y-%m-%d %H:%M:%S") if hasattr(exit_time, "strftime") else str(exit_time),
                         self.entry_price if self.entry_price is not None else 0.0,
                         actual_exit_price,
                         actual_size,
                         net_pnl,
                         trade.commission or 0.0,
-                        exit_reason
+                        exit_reason,
                     )
                 except Exception as log_err:
                     _logger.warning("Error logging detailed trade record: %s", log_err)
@@ -1118,6 +1163,7 @@ class BaseStrategy(bt.Strategy):
             else:
                 # Trade opened - create new position ID
                 import uuid
+
                 self.current_position_id = str(uuid.uuid4())
 
                 self.current_trade = {
@@ -1126,7 +1172,7 @@ class BaseStrategy(bt.Strategy):
                     "size": actual_size,
                     "symbol": self.symbol,
                     "status": "open",
-                    "direction": "long" if actual_size > 0 else "short"
+                    "direction": "long" if actual_size > 0 else "short",
                 }
 
                 # Enhanced trade open logging
@@ -1139,7 +1185,7 @@ class BaseStrategy(bt.Strategy):
                     direction,
                     trade_price,
                     actual_size,
-                    entry_reason
+                    entry_reason,
                 )
 
                 # Log to trades.log as well
@@ -1148,11 +1194,13 @@ class BaseStrategy(bt.Strategy):
                     _trade_logger.info(
                         "TRADE_OPEN | Symbol: %s | Entry_Time: %s | Entry_Price: %.4f | Size: %.6f | Direction: %s | Reason: %s",
                         self.symbol,
-                        entry_time.strftime("%Y-%m-%d %H:%M:%S") if hasattr(entry_time, 'strftime') else str(entry_time),
+                        entry_time.strftime("%Y-%m-%d %H:%M:%S")
+                        if hasattr(entry_time, "strftime")
+                        else str(entry_time),
                         trade_price,
                         actual_size,
                         direction,
-                        entry_reason
+                        entry_reason,
                     )
                 except Exception as log_err:
                     _logger.warning("Error logging trade open record: %s", log_err)
@@ -1169,13 +1217,7 @@ class BaseStrategy(bt.Strategy):
         """
         try:
             if not self.trades:
-                return {
-                    "total_trades": 0,
-                    "win_rate": 0.0,
-                    "total_pnl": 0.0,
-                    "avg_pnl": 0.0,
-                    "max_drawdown": 0.0
-                }
+                return {"total_trades": 0, "win_rate": 0.0, "total_pnl": 0.0, "avg_pnl": 0.0, "max_drawdown": 0.0}
 
             win_rate = (self.winning_trades / self.total_trades) * 100 if self.total_trades > 0 else 0
             avg_pnl = self.total_pnl / self.total_trades if self.total_trades > 0 else 0
@@ -1189,7 +1231,7 @@ class BaseStrategy(bt.Strategy):
                 "avg_pnl": avg_pnl,
                 "max_drawdown": self.max_drawdown,
                 "peak_equity": self.peak_equity,
-                "current_equity": self.broker.getvalue() if hasattr(self, 'broker') else 0
+                "current_equity": self.broker.getvalue() if hasattr(self, "broker") else 0,
             }
 
         except Exception:

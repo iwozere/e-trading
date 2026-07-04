@@ -6,8 +6,8 @@ prices, evaluate PnL, and dispatch one combined notification.
 """
 
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any, Dict, List
 
 from src.notification.logger import setup_logger
 from src.portfolio.pnl_alert.config import PnLAlertConfig
@@ -55,13 +55,13 @@ class RunSummary:
     errors: List[str] = field(default_factory=list)
 
 
-async def _build_ibkr_broker() -> Optional[Any]:
+async def _build_ibkr_broker() -> Any | None:
     """
     Build and connect an `IBKRBroker` instance using environment-sourced
     credentials. Returns `None` on failure.
     """
     try:
-        from config.donotshare.donotshare import IBKR_HOST, IBKR_PORT, IBKR_CLIENT_ID
+        from config.donotshare.donotshare import IBKR_CLIENT_ID, IBKR_HOST, IBKR_PORT
         from src.trading.broker.ibkr_broker import IBKRBroker
     except ImportError:
         _logger.exception("Could not import IBKR broker dependencies")
@@ -96,10 +96,10 @@ async def run_once(
     cfg: PnLAlertConfig,
     *,
     dry_run: bool = False,
-    threshold_override: Optional[float] = None,
-    broker: Optional[Any] = None,
-    data_manager: Optional[Any] = None,
-    client: Optional[Any] = None,
+    threshold_override: float | None = None,
+    broker: Any | None = None,
+    data_manager: Any | None = None,
+    client: Any | None = None,
 ) -> RunSummary:
     """
     Execute one pipeline run.
@@ -115,7 +115,7 @@ async def run_once(
     Returns:
         `RunSummary` describing what happened.
     """
-    ran_at = datetime.now(timezone.utc)
+    ran_at = datetime.now(UTC)
     threshold = threshold_override if threshold_override is not None else cfg.threshold_pct
 
     summary = RunSummary(ran_at=ran_at.isoformat(), dry_run=dry_run)
@@ -167,9 +167,7 @@ async def run_once(
     for p in live_ibkr:
         combined[p.symbol] = p
 
-    holdings, conflicts = merge_holdings(
-        list(combined.values()), watchlist, stk_only=cfg.ibkr_stk_only
-    )
+    holdings, conflicts = merge_holdings(list(combined.values()), watchlist, stk_only=cfg.ibkr_stk_only)
 
     summary.ibkr_count = sum(1 for h in holdings if h.source == "ibkr")
     summary.holdings_count = len(holdings)
@@ -183,6 +181,7 @@ async def run_once(
     # fetch_latest_closes is synchronous (blocking network I/O); offload to
     # a thread pool so the scheduler's event loop is not blocked.
     import asyncio as _asyncio
+
     prices = await _asyncio.to_thread(fetch_latest_closes, symbols, data_manager)
     summary.priced_count = len(prices)
 

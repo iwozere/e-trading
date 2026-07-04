@@ -1,11 +1,11 @@
+import sys
+from pathlib import Path
+
+import joblib
 import numpy as np
 import pandas as pd
 from hmmlearn import hmm
 from sklearn.preprocessing import StandardScaler
-import joblib
-from pathlib import Path
-from typing import Optional
-import sys
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -15,6 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class P07RegimeModel:
     """
@@ -27,14 +28,9 @@ class P07RegimeModel:
         self.model_dir = model_dir
         self.model_dir.mkdir(parents=True, exist_ok=True)
 
-        self.model = hmm.GaussianHMM(
-            n_components=n_components,
-            covariance_type="diag",
-            n_iter=1000,
-            random_state=42
-        )
+        self.model = hmm.GaussianHMM(n_components=n_components, covariance_type="diag", n_iter=1000, random_state=42)
         self.scaler = StandardScaler()
-        self.state_mapping = {} # To be defined after inspection (e.g., 0=Bear, 1=Sideways, 2=Bull)
+        self.state_mapping = {}  # To be defined after inspection (e.g., 0=Bear, 1=Sideways, 2=Bull)
 
     def prepare_features(self, df: pd.DataFrame, fit: bool = False) -> np.ndarray:
         """
@@ -71,7 +67,7 @@ class P07RegimeModel:
                 _logger.warning("Scaler not fitted. Returning zeros.")
                 return np.zeros((len(features), features.shape[1]))
 
-    def train(self, macro_df: pd.DataFrame, anchor_date: Optional[pd.Timestamp] = None) -> bool:
+    def train(self, macro_df: pd.DataFrame, anchor_date: pd.Timestamp | None = None) -> bool:
         """
         Train the HMM on macro historical data.
         If anchor_date is provided, only data up to that date is used (prevents look-ahead bias).

@@ -20,7 +20,8 @@ import json
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List
+
 import pandas as pd
 
 # Add project root to path
@@ -29,15 +30,15 @@ sys.path.insert(0, str(project_root))
 
 from config.donotshare.donotshare import ALPHA_VANTAGE_API_KEY, DATA_CACHE_DIR
 from src.data.cache.unified_cache import configure_unified_cache
+from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
 from src.data.downloader.binance_data_downloader import BinanceDataDownloader
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
-from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
 
-def load_validation_metadata(cache_dir: str) -> Optional[Dict[str, Any]]:
+def load_validation_metadata(cache_dir: str) -> Dict[str, Any] | None:
     """
     Load validation metadata from validate-metadata.json.
 
@@ -55,7 +56,7 @@ def load_validation_metadata(cache_dir: str) -> Optional[Dict[str, Any]]:
         return None
 
     try:
-        with open(metadata_file, 'r') as f:
+        with open(metadata_file) as f:
             metadata = json.load(f)
         print(f"📄 Loaded validation metadata from: {metadata_file}")
         return metadata
@@ -76,14 +77,14 @@ def initialize_downloaders() -> Dict[str, Any]:
 
     # Initialize Binance downloader
     try:
-        downloaders['binance'] = BinanceDataDownloader()
+        downloaders["binance"] = BinanceDataDownloader()
         print("  ✅ Binance downloader initialized")
     except Exception as e:
         print(f"  ⚠️  Binance downloader failed: {str(e)}")
 
     # Initialize Yahoo downloader
     try:
-        downloaders['yfinance'] = YahooDataDownloader()
+        downloaders["yfinance"] = YahooDataDownloader()
         print("  ✅ Yahoo downloader initialized")
     except Exception as e:
         print(f"  ⚠️  Yahoo downloader failed: {str(e)}")
@@ -91,7 +92,7 @@ def initialize_downloaders() -> Dict[str, Any]:
     # Initialize Alpha Vantage downloader
     try:
         if ALPHA_VANTAGE_API_KEY:
-            downloaders['alpha_vantage'] = AlphaVantageDataDownloader(api_key=ALPHA_VANTAGE_API_KEY)
+            downloaders["alpha_vantage"] = AlphaVantageDataDownloader(api_key=ALPHA_VANTAGE_API_KEY)
             print("  ✅ Alpha Vantage downloader initialized")
         else:
             print("  ⚠️  Alpha Vantage downloader skipped: No API key found in donotshare.py")
@@ -101,7 +102,8 @@ def initialize_downloaders() -> Dict[str, Any]:
     # Initialize CoinGecko downloader for crypto gap filling
     try:
         from src.data.downloader.coingecko_data_downloader import CoinGeckoDataDownloader
-        downloaders['coingecko'] = CoinGeckoDataDownloader()
+
+        downloaders["coingecko"] = CoinGeckoDataDownloader()
         print("  ✅ CoinGecko downloader initialized")
     except Exception as e:
         print(f"  ⚠️  CoinGecko downloader failed: {str(e)}")
@@ -109,7 +111,7 @@ def initialize_downloaders() -> Dict[str, Any]:
     return downloaders
 
 
-def select_gap_filling_provider(symbol: str, interval: str, downloaders: Dict) -> Optional[str]:
+def select_gap_filling_provider(symbol: str, interval: str, downloaders: Dict) -> str | None:
     """
     Select the best ALTERNATIVE provider for gap filling based on symbol type and available downloaders.
     Since gaps exist in data from primary providers (Binance/Yahoo), we need alternative providers.
@@ -125,13 +127,13 @@ def select_gap_filling_provider(symbol: str, interval: str, downloaders: Dict) -
     # Check if it's a crypto symbol
     if is_crypto_symbol(symbol):
         # For crypto, use CoinGecko as alternative (Binance is primary in populate_cache.py)
-        if 'coingecko' in downloaders:
-            return 'coingecko'
+        if "coingecko" in downloaders:
+            return "coingecko"
         # Note: We don't use Binance here since it's the primary provider and gaps exist in its data
     else:
         # For stocks, use Alpha Vantage as alternative (Yahoo Finance is primary in populate_cache.py)
-        if 'alpha_vantage' in downloaders:
-            return 'alpha_vantage'
+        if "alpha_vantage" in downloaders:
+            return "alpha_vantage"
         # Note: We don't use Yahoo Finance here since it's the primary provider and gaps exist in its data
 
     return None
@@ -148,7 +150,7 @@ def is_crypto_symbol(symbol: str) -> bool:
         True if crypto, False otherwise
     """
     # Common crypto suffixes
-    crypto_suffixes = ['USDT', 'USDC', 'BTC', 'ETH', 'BNB', 'ADA', 'DOT', 'LINK', 'LTC', 'XRP']
+    crypto_suffixes = ["USDT", "USDC", "BTC", "ETH", "BNB", "ADA", "DOT", "LINK", "LTC", "XRP"]
     return any(symbol.endswith(suffix) for suffix in crypto_suffixes)
 
 
@@ -163,24 +165,25 @@ def convert_symbol_for_provider(symbol: str, provider: str) -> str:
     Returns:
         Converted symbol
     """
-    if provider == 'coingecko':
+    if provider == "coingecko":
         # Convert BTCUSDT -> bitcoin, ETHUSDT -> ethereum, etc.
         symbol_map = {
-            'BTCUSDT': 'bitcoin',
-            'ETHUSDT': 'ethereum',
-            'ADAUSDT': 'cardano',
-            'LTCUSDT': 'litecoin',
-            'DOTUSDT': 'polkadot',
-            'LINKUSDT': 'chainlink',
-            'XRPUSDT': 'ripple'
+            "BTCUSDT": "bitcoin",
+            "ETHUSDT": "ethereum",
+            "ADAUSDT": "cardano",
+            "LTCUSDT": "litecoin",
+            "DOTUSDT": "polkadot",
+            "LINKUSDT": "chainlink",
+            "XRPUSDT": "ripple",
         }
-        return symbol_map.get(symbol, symbol.lower().replace('usdt', ''))
+        return symbol_map.get(symbol, symbol.lower().replace("usdt", ""))
 
     return symbol
 
 
-def download_gap_data(symbol: str, interval: str, start_date: datetime, end_date: datetime,
-                     provider: str, downloaders: Dict) -> Optional[pd.DataFrame]:
+def download_gap_data(
+    symbol: str, interval: str, start_date: datetime, end_date: datetime, provider: str, downloaders: Dict
+) -> pd.DataFrame | None:
     """
     Download data for a specific gap period using the specified provider.
 
@@ -199,11 +202,11 @@ def download_gap_data(symbol: str, interval: str, start_date: datetime, end_date
         # Check for API limitations
         days_ago = (datetime.now() - start_date).days
 
-        if provider == 'coingecko' and days_ago > 365:
+        if provider == "coingecko" and days_ago > 365:
             print(f"        ⚠️  CoinGecko free API limited to 365 days (gap is {days_ago} days old)")
             return None
 
-        if provider == 'alpha_vantage':
+        if provider == "alpha_vantage":
             print(f"        ⚠️  Alpha Vantage free API has 25 requests/day limit (gap is {days_ago} days old)")
 
         downloader = downloaders[provider]
@@ -216,8 +219,8 @@ def download_gap_data(symbol: str, interval: str, start_date: datetime, end_date
 
         if data is not None and not data.empty:
             # Ensure data is properly formatted
-            if 'timestamp' in data.columns:
-                data = data.set_index('timestamp')
+            if "timestamp" in data.columns:
+                data = data.set_index("timestamp")
 
             # Filter to exact gap period
             data = data[(data.index >= start_date) & (data.index <= end_date)]
@@ -225,8 +228,7 @@ def download_gap_data(symbol: str, interval: str, start_date: datetime, end_date
             return data
 
     except Exception as e:
-        _logger.exception("Error downloading gap data for %s %s from %s: %s",
-                         symbol, interval, provider, e)
+        _logger.exception("Error downloading gap data for %s %s from %s: %s", symbol, interval, provider, e)
 
     return None
 
@@ -246,7 +248,7 @@ def merge_gap_data(existing_data: pd.DataFrame, gap_data: pd.DataFrame) -> pd.Da
     combined = pd.concat([existing_data, gap_data])
 
     # Remove duplicates based on index (timestamp)
-    combined = combined[~combined.index.duplicated(keep='last')]
+    combined = combined[~combined.index.duplicated(keep="last")]
 
     # Sort by timestamp
     combined = combined.sort_index()
@@ -254,8 +256,9 @@ def merge_gap_data(existing_data: pd.DataFrame, gap_data: pd.DataFrame) -> pd.Da
     return combined
 
 
-def fill_gaps_for_symbol_interval(symbol: str, interval: str, metadata: Dict[str, Any],
-                                 cache: Any, downloaders: Dict, max_gap_hours: float) -> Dict[str, Any]:
+def fill_gaps_for_symbol_interval(
+    symbol: str, interval: str, metadata: Dict[str, Any], cache: Any, downloaders: Dict, max_gap_hours: float
+) -> Dict[str, Any]:
     """
     Fill gaps for a specific symbol/interval combination.
 
@@ -270,21 +273,16 @@ def fill_gaps_for_symbol_interval(symbol: str, interval: str, metadata: Dict[str
     Returns:
         Dictionary with gap filling results
     """
-    results = {
-        'gaps_filled': 0,
-        'gaps_failed': 0,
-        'gaps_skipped': 0,
-        'details': []
-    }
+    results = {"gaps_filled": 0, "gaps_failed": 0, "gaps_skipped": 0, "details": []}
 
     symbol_interval_key = f"{symbol}_{interval}"
 
-    if symbol_interval_key not in metadata['detailed_results']:
+    if symbol_interval_key not in metadata["detailed_results"]:
         print(f"  ❌ No validation data found for {symbol} {interval}")
         return results
 
-    symbol_data = metadata['detailed_results'][symbol_interval_key]
-    available_years = symbol_data['available_years']
+    symbol_data = metadata["detailed_results"][symbol_interval_key]
+    available_years = symbol_data["available_years"]
 
     print(f"🔧 Processing {symbol} {interval}...")
 
@@ -292,8 +290,8 @@ def fill_gaps_for_symbol_interval(symbol: str, interval: str, metadata: Dict[str
     provider = select_gap_filling_provider(symbol, interval, downloaders)
     if not provider:
         print(f"  ❌ No suitable provider for {symbol} {interval}")
-        results['gaps_failed'] = 1
-        results['details'].append("No suitable provider available")
+        results["gaps_failed"] = 1
+        results["details"].append("No suitable provider available")
         return results
 
     print(f"  📡 Using provider: {provider}")
@@ -301,11 +299,11 @@ def fill_gaps_for_symbol_interval(symbol: str, interval: str, metadata: Dict[str
     # Process each year
     for year in available_years:
         year_str = str(year)
-        if year_str not in symbol_data['yearly_breakdown']:
+        if year_str not in symbol_data["yearly_breakdown"]:
             continue
 
-        year_data = symbol_data['yearly_breakdown'][year_str]
-        gaps = year_data.get('gaps', [])
+        year_data = symbol_data["yearly_breakdown"][year_str]
+        gaps = year_data.get("gaps", [])
 
         if not gaps:
             continue
@@ -313,32 +311,34 @@ def fill_gaps_for_symbol_interval(symbol: str, interval: str, metadata: Dict[str
         print(f"    🔍 Processing {year} with {len(gaps)} gaps...")
 
         # Filter gaps that are small enough to fill
-        fillable_gaps = [gap for gap in gaps if gap['duration_hours'] <= max_gap_hours]
+        fillable_gaps = [gap for gap in gaps if gap["duration_hours"] <= max_gap_hours]
 
         if not fillable_gaps:
             print(f"      ⚠️  All gaps in {year} too large to fill (max: {max_gap_hours}h)")
-            results['gaps_skipped'] += len(gaps)
+            results["gaps_skipped"] += len(gaps)
             continue
 
         print(f"      📊 Found {len(fillable_gaps)} fillable gaps in {year}")
 
         # Load existing year data
         try:
-            existing_data = cache.get(symbol, interval, start_date=datetime(year, 1, 1), end_date=datetime(year, 12, 31))
+            existing_data = cache.get(
+                symbol, interval, start_date=datetime(year, 1, 1), end_date=datetime(year, 12, 31)
+            )
             if existing_data is None or existing_data.empty:
                 print(f"      ❌ No existing data for {year}")
-                results['gaps_failed'] += len(fillable_gaps)
+                results["gaps_failed"] += len(fillable_gaps)
                 continue
         except Exception as e:
             print(f"      ❌ Error loading existing data for {year}: {e}")
-            results['gaps_failed'] += len(fillable_gaps)
+            results["gaps_failed"] += len(fillable_gaps)
             continue
 
         # Attempt to fill each gap
         for gap in fillable_gaps:
             try:
-                gap_start = datetime.fromisoformat(gap['start'])
-                gap_end = gap_start + timedelta(hours=gap['duration_hours'])
+                gap_start = datetime.fromisoformat(gap["start"])
+                gap_end = gap_start + timedelta(hours=gap["duration_hours"])
 
                 print(f"        🔧 Filling gap: {gap_start} to {gap_end} ({gap['duration_hours']:.1f}h)")
 
@@ -353,27 +353,24 @@ def fill_gaps_for_symbol_interval(symbol: str, interval: str, metadata: Dict[str
                     cache.put(symbol, interval, merged_data)
 
                     print(f"        ✅ Gap filled: {len(gap_data)} new rows")
-                    results['gaps_filled'] += 1
-                    results['details'].append(f"{year}: Filled {len(gap_data)} rows")
+                    results["gaps_filled"] += 1
+                    results["details"].append(f"{year}: Filled {len(gap_data)} rows")
                 else:
                     print("        ❌ Failed to download gap data")
-                    results['gaps_failed'] += 1
-                    results['details'].append(f"{year}: Failed to download gap data")
+                    results["gaps_failed"] += 1
+                    results["details"].append(f"{year}: Failed to download gap data")
 
             except Exception as e:
                 print(f"        ❌ Error filling gap: {e}")
-                results['gaps_failed'] += 1
-                results['details'].append(f"{year}: Error - {str(e)}")
+                results["gaps_failed"] += 1
+                results["details"].append(f"{year}: Error - {str(e)}")
                 _logger.exception("Error filling gap for %s_%s_%d: %s", symbol, interval, year, e)
 
     return results
 
 
 def fill_data_gaps(
-    symbols: List[str],
-    intervals: List[str],
-    cache_dir: str = DATA_CACHE_DIR,
-    max_gap_hours: float = 24.0
+    symbols: List[str], intervals: List[str], cache_dir: str = DATA_CACHE_DIR, max_gap_hours: float = 24.0
 ) -> Dict[str, Any]:
     """
     Fill gaps in cached data using alternative providers.
@@ -392,13 +389,16 @@ def fill_data_gaps(
     print(f"⏱️  Intervals: {', '.join(intervals) if intervals else 'ALL'}")
     print()
 
-    _logger.info("Starting gap filling for %s symbols, %s intervals",
-                 len(symbols) if symbols else "ALL", len(intervals) if intervals else "ALL")
+    _logger.info(
+        "Starting gap filling for %s symbols, %s intervals",
+        len(symbols) if symbols else "ALL",
+        len(intervals) if intervals else "ALL",
+    )
 
     # Load validation metadata
     metadata = load_validation_metadata(cache_dir)
     if not metadata:
-        return {'error': 'Failed to load validation metadata'}
+        return {"error": "Failed to load validation metadata"}
 
     # Initialize downloaders
     print("🔧 Initializing downloaders...")
@@ -409,13 +409,13 @@ def fill_data_gaps(
     cache = configure_unified_cache(cache_dir=cache_dir)
 
     # Get all symbol/interval combinations from metadata
-    all_combinations = list(metadata['detailed_results'].keys())
+    all_combinations = list(metadata["detailed_results"].keys())
 
     # Filter by symbols and intervals if specified
     if symbols or intervals:
         filtered_combinations = []
         for combo in all_combinations:
-            symbol, interval = combo.split('_', 1)
+            symbol, interval = combo.split("_", 1)
             if (not symbols or symbol in symbols) and (not intervals or interval in intervals):
                 filtered_combinations.append(combo)
         all_combinations = filtered_combinations
@@ -423,29 +423,23 @@ def fill_data_gaps(
     print(f"📊 Processing {len(all_combinations)} symbol/interval combinations")
     print()
 
-    results = {
-        'total_processed': 0,
-        'gaps_filled': 0,
-        'gaps_failed': 0,
-        'gaps_skipped': 0,
-        'symbol_results': {}
-    }
+    results = {"total_processed": 0, "gaps_filled": 0, "gaps_failed": 0, "gaps_skipped": 0, "symbol_results": {}}
 
     # Process each symbol/interval combination
     for combo in all_combinations:
-        symbol, interval = combo.split('_', 1)
+        symbol, interval = combo.split("_", 1)
 
-        symbol_results = fill_gaps_for_symbol_interval(
-            symbol, interval, metadata, cache, downloaders, max_gap_hours
+        symbol_results = fill_gaps_for_symbol_interval(symbol, interval, metadata, cache, downloaders, max_gap_hours)
+
+        results["symbol_results"][combo] = symbol_results
+        results["total_processed"] += 1
+        results["gaps_filled"] += symbol_results["gaps_filled"]
+        results["gaps_failed"] += symbol_results["gaps_failed"]
+        results["gaps_skipped"] += symbol_results["gaps_skipped"]
+
+        print(
+            f"  📊 {combo}: {symbol_results['gaps_filled']} filled, {symbol_results['gaps_failed']} failed, {symbol_results['gaps_skipped']} skipped"
         )
-
-        results['symbol_results'][combo] = symbol_results
-        results['total_processed'] += 1
-        results['gaps_filled'] += symbol_results['gaps_filled']
-        results['gaps_failed'] += symbol_results['gaps_failed']
-        results['gaps_skipped'] += symbol_results['gaps_skipped']
-
-        print(f"  📊 {combo}: {symbol_results['gaps_filled']} filled, {symbol_results['gaps_failed']} failed, {symbol_results['gaps_skipped']} skipped")
         print()
 
     return results
@@ -453,15 +447,15 @@ def fill_data_gaps(
 
 def main():
     """Main function for gap filling."""
-    parser = argparse.ArgumentParser(description='Fill gaps in cached data using alternative providers')
+    parser = argparse.ArgumentParser(description="Fill gaps in cached data using alternative providers")
 
     # Data selection arguments
-    parser.add_argument('--symbols', type=str, help='Comma-separated list of symbols (e.g., BTCUSDT,ETHUSDT)')
-    parser.add_argument('--intervals', type=str, help='Comma-separated list of intervals (e.g., 5m,15m,1h)')
+    parser.add_argument("--symbols", type=str, help="Comma-separated list of symbols (e.g., BTCUSDT,ETHUSDT)")
+    parser.add_argument("--intervals", type=str, help="Comma-separated list of intervals (e.g., 5m,15m,1h)")
 
     # Configuration arguments
-    parser.add_argument('--cache-dir', type=str, default=DATA_CACHE_DIR, help='Cache directory path')
-    parser.add_argument('--max-gap-hours', type=float, default=24.0, help='Maximum gap size to attempt filling (hours)')
+    parser.add_argument("--cache-dir", type=str, default=DATA_CACHE_DIR, help="Cache directory path")
+    parser.add_argument("--max-gap-hours", type=float, default=24.0, help="Maximum gap size to attempt filling (hours)")
 
     args = parser.parse_args()
 
@@ -470,15 +464,15 @@ def main():
     intervals = None
 
     if args.symbols:
-        symbols = [s.strip() for s in args.symbols.split(',')]
+        symbols = [s.strip() for s in args.symbols.split(",")]
 
     if args.intervals:
-        intervals = [i.strip() for i in args.intervals.split(',')]
+        intervals = [i.strip() for i in args.intervals.split(",")]
 
     # Execute gap filling
     results = fill_data_gaps(symbols, intervals, args.cache_dir, args.max_gap_hours)
 
-    if 'error' in results:
+    if "error" in results:
         print(f"❌ {results['error']}")
         return
 
@@ -489,10 +483,10 @@ def main():
     print(f"  ❌ Gaps failed: {results['gaps_failed']}")
     print(f"  ⚠️  Gaps skipped: {results['gaps_skipped']}")
 
-    if results['gaps_filled'] > 0:
+    if results["gaps_filled"] > 0:
         print(f"\n🎉 Successfully filled {results['gaps_filled']} gaps!")
 
-    if results['gaps_failed'] > 0:
+    if results["gaps_failed"] > 0:
         print(f"\n⚠️  Failed to fill {results['gaps_failed']} gaps")
         print("   Check logs for details")
 

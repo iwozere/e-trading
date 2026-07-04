@@ -1,5 +1,4 @@
 import asyncio
-import os
 import sys
 from pathlib import Path
 
@@ -7,17 +6,17 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.trading.broker.ibkr_broker import IBKRBroker
-from src.screeners.ibkr_screener_service import IBKRScreenerService
-from src.screeners.discovery.portfolio import PortfolioDiscovery
-from src.screeners.discovery.static import StaticDiscovery
-from src.screeners.logic.notifier import SignalNotifier
-from src.notification.service.client import NotificationServiceClient
-from src.strategy.custom_strategy import CustomStrategy
-from src.notification.logger import setup_logger
 import config.donotshare.donotshare as donotshare
+from src.notification.logger import setup_logger
+from src.notification.service.client import NotificationServiceClient
+from src.screeners.discovery.portfolio import PortfolioDiscovery
+from src.screeners.ibkr_screener_service import IBKRScreenerService
+from src.screeners.logic.notifier import SignalNotifier
+from src.strategy.custom_strategy import CustomStrategy
+from src.trading.broker.ibkr_broker import IBKRBroker
 
 _logger = setup_logger("ibkr_screener_main")
+
 
 async def main():
     _logger.info("Initializing IBKR Scalable Screener...")
@@ -30,11 +29,7 @@ async def main():
     ibkr_client_id = int(donotshare.IBKR_CLIENT_ID) if donotshare.IBKR_CLIENT_ID else 3
 
     # 2. Setup Broker
-    broker = IBKRBroker(
-        host=ibkr_host,
-        port=ibkr_port,
-        client_id=ibkr_client_id
-    )
+    broker = IBKRBroker(host=ibkr_host, port=ibkr_port, client_id=ibkr_client_id)
 
     # 3. Setup Notification Client
     notif_client = NotificationServiceClient()
@@ -43,14 +38,10 @@ async def main():
     # 4. Strategy Config (Placeholder - should be dynamic or loaded from file)
     strategy_config = {
         "parameters": {
-            "entry_logic": {
-                "indicators": [
-                    {"name": "RSI", "params": {"timeperiod": 14}, "alias": "rsi_14"}
-                ]
-            }
+            "entry_logic": {"indicators": [{"name": "RSI", "params": {"timeperiod": 14}, "alias": "rsi_14"}]}
         },
         "warmup_period": 100,
-        "bot_type": "optimization" # To disable DB logging
+        "bot_type": "optimization",  # To disable DB logging
     }
 
     # 5. Discovery Providers
@@ -64,8 +55,8 @@ async def main():
         strategy_config=strategy_config,
         discovery_providers=[portfolio_provider],
         notifier=notifier,
-        interval='1h',
-        concurrency=50
+        interval="1h",
+        concurrency=50,
     )
 
     # 7. Start Loop
@@ -81,6 +72,7 @@ async def main():
         service.shutdown()
         await broker.disconnect()
         await notif_client.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

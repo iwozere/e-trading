@@ -1,23 +1,23 @@
 """P05 AI Selector — 4-stage pipeline orchestrator."""
 
 import logging
-import time
-from datetime import date, datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 import sys
+import time
+from datetime import UTC, date, datetime
+from pathlib import Path
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.ml.pipeline.p05_ai_selector.stages.universe_loader import UniverseLoader
-from src.ml.pipeline.p05_ai_selector.signals.p18_reader import P18Reader
+from src.ml.pipeline.p05_ai_selector.config import LLM_MODEL, RESULTS_BASE
 from src.ml.pipeline.p05_ai_selector.signals.earnings_calendar import EarningsCalendar
+from src.ml.pipeline.p05_ai_selector.signals.p18_reader import P18Reader
 from src.ml.pipeline.p05_ai_selector.stages.stage1_prefilter import Stage1Prefilter
 from src.ml.pipeline.p05_ai_selector.stages.stage2_scorer import Stage2Scorer
 from src.ml.pipeline.p05_ai_selector.stages.stage3_llm_synthesizer import Stage3LLMSynthesizer
 from src.ml.pipeline.p05_ai_selector.stages.stage4_output import Stage4Output
-from src.ml.pipeline.p05_ai_selector.config import LLM_MODEL, RESULTS_BASE
+from src.ml.pipeline.p05_ai_selector.stages.universe_loader import UniverseLoader
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -53,8 +53,8 @@ class P05Pipeline:
 
     def run(
         self,
-        user_id: Optional[str] = None,
-        as_of_date: Optional[date] = None,
+        user_id: str | None = None,
+        as_of_date: date | None = None,
         force_refresh: bool = False,
     ) -> Dict[str, Any]:
         """
@@ -103,18 +103,14 @@ class P05Pipeline:
 
             # Stage 2 — Scorer
             t0 = time.monotonic()
-            stage2_df = Stage2Scorer().run(
-                stage1_df, p18_data, earnings_flags, run_date, force_refresh=force_refresh
-            )
+            stage2_df = Stage2Scorer().run(stage1_df, p18_data, earnings_flags, run_date, force_refresh=force_refresh)
             stage_times["stage2_s"] = round(time.monotonic() - t0, 1)
             stage2_out = len(stage2_df)
             _logger.info("Stage 2 done: %d candidates in %.1fs", stage2_out, stage_times["stage2_s"])
 
             if stage2_df.empty:
                 _logger.error("Stage 2 returned empty — aborting pipeline")
-                return self._failure_result(
-                    "Stage 2 returned no candidates", p18_data, user_id, run_date, t_start
-                )
+                return self._failure_result("Stage 2 returned no candidates", p18_data, user_id, run_date, t_start)
 
             # Stage 3 — LLM
             t0 = time.monotonic()
@@ -132,9 +128,7 @@ class P05Pipeline:
 
             # Stage 4 — Output
             output = Stage4Output()
-            notify, trigger_reason = output.should_notify(
-                p18_data["high_score_count"], notification_override
-            )
+            notify, trigger_reason = output.should_notify(p18_data["high_score_count"], notification_override)
             _logger.info("Notification decision: %s (%s)", notify, trigger_reason)
 
             elapsed = round(time.monotonic() - t_start, 1)
@@ -150,7 +144,7 @@ class P05Pipeline:
                 "elapsed_seconds": elapsed,
                 "market_context": llm_result.get("market_context", ""),
                 "stage_times": stage_times,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
             results_dir = output.write_results(picks, stage2_df, metadata, run_date)
@@ -181,7 +175,7 @@ class P05Pipeline:
                 "stage2_out": stage2_out,
                 "llm_tokens_used": tokens_used,
                 "results_dir": str(results_dir),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "user_id": user_id,
             }
             _logger.info("P05 pipeline complete: %s", result)
@@ -202,7 +196,7 @@ class P05Pipeline:
         trigger_reason: str,
         run_date: date,
         results_dir: Path,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> None:
         """
         Send the day's picks as rich Telegram and email notifications.
@@ -224,9 +218,7 @@ class P05Pipeline:
             user_id: Scheduler-injected user id; notifications are skipped if absent.
         """
         if not user_id:
-            _logger.warning(
-                "No user_id provided — skipping P05 notifications (results in %s)", results_dir
-            )
+            _logger.warning("No user_id provided — skipping P05 notifications (results in %s)", results_dir)
             return
 
         try:
@@ -254,14 +246,16 @@ class P05Pipeline:
         if channels.get("telegram_chat_id"):
             try:
                 tg_text = output.format_telegram(picks, trigger_reason, run_date)
-                notif_service.create_message({
-                    "message_type": "REPORT",
-                    "channels": ["telegram"],
-                    "recipient_id": str(user_id),
-                    "content": {"title": subject, "message": tg_text, "source": "p05_ai_selector"},
-                    "priority": "NORMAL",
-                    "message_metadata": {"source": "p05_ai_selector"},
-                })
+                notif_service.create_message(
+                    {
+                        "message_type": "REPORT",
+                        "channels": ["telegram"],
+                        "recipient_id": str(user_id),
+                        "content": {"title": subject, "message": tg_text, "source": "p05_ai_selector"},
+                        "priority": "NORMAL",
+                        "message_metadata": {"source": "p05_ai_selector"},
+                    }
+                )
                 _logger.info("Queued P05 Telegram notification for user %s", user_id)
             except Exception:
                 _logger.exception("Failed to queue P05 Telegram notification for user %s", user_id)
@@ -270,24 +264,28 @@ class P05Pipeline:
         if channels.get("email"):
             try:
                 html = output.format_email_html(picks, market_context, trigger_reason, run_date)
-                attachments = {"files": [
-                    str(results_dir / "top_picks.csv"),
-                    str(results_dir / "report.md"),
-                ]}
-                notif_service.create_message({
-                    "message_type": "REPORT",
-                    "channels": ["email"],
-                    "recipient_id": str(user_id),
-                    "content": {
-                        "title": subject,
-                        "message": output.format_telegram(picks, trigger_reason, run_date),
-                        "html": html,
-                        "attachments": attachments,
-                        "source": "p05_ai_selector",
-                    },
-                    "priority": "NORMAL",
-                    "message_metadata": {"source": "p05_ai_selector"},
-                })
+                attachments = {
+                    "files": [
+                        str(results_dir / "top_picks.csv"),
+                        str(results_dir / "report.md"),
+                    ]
+                }
+                notif_service.create_message(
+                    {
+                        "message_type": "REPORT",
+                        "channels": ["email"],
+                        "recipient_id": str(user_id),
+                        "content": {
+                            "title": subject,
+                            "message": output.format_telegram(picks, trigger_reason, run_date),
+                            "html": html,
+                            "attachments": attachments,
+                            "source": "p05_ai_selector",
+                        },
+                        "priority": "NORMAL",
+                        "message_metadata": {"source": "p05_ai_selector"},
+                    }
+                )
                 _logger.info("Queued P05 email notification for user %s", user_id)
             except Exception:
                 _logger.exception("Failed to queue P05 email notification for user %s", user_id)
@@ -296,7 +294,7 @@ class P05Pipeline:
         self,
         error: str,
         p18_data: Dict[str, Any],
-        user_id: Optional[str],
+        user_id: str | None,
         run_date: date,
         t_start: float,
     ) -> Dict[str, Any]:
@@ -313,6 +311,6 @@ class P05Pipeline:
             "stage2_out": 0,
             "llm_tokens_used": 0,
             "results_dir": "",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "user_id": user_id,
         }

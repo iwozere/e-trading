@@ -5,19 +5,19 @@ Centralized heartbeat management for all subsystems.
 Each process can use this to regularly update their health status.
 """
 
-import time
-import threading
-from datetime import datetime, timezone
-from typing import Optional, Dict, Any, Callable
-from pathlib import Path
 import sys
+import threading
+import time
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Callable, Dict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.data.db.models.model_system_health import SystemHealthStatus
 from src.data.db.services.database_service import DatabaseService
 from src.data.db.services.system_health_service import SystemHealthService
-from src.data.db.models.model_system_health import SystemHealthStatus
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -34,9 +34,9 @@ class HeartbeatManager:
     def __init__(
         self,
         system: str,
-        component: Optional[str] = None,
+        component: str | None = None,
         interval_seconds: int = 30,
-        db_service: Optional[DatabaseService] = None
+        db_service: DatabaseService | None = None,
     ):
         """
         Initialize heartbeat manager.
@@ -53,13 +53,12 @@ class HeartbeatManager:
         self.db_service = db_service or DatabaseService()
 
         self._running = False
-        self._thread: Optional[threading.Thread] = None
-        self._health_check_func: Optional[Callable] = None
+        self._thread: threading.Thread | None = None
+        self._health_check_func: Callable | None = None
         self._last_heartbeat = None
 
         _logger.info(
-            "Initialized heartbeat manager for %s.%s (interval: %ds)",
-            system, component or 'main', interval_seconds
+            "Initialized heartbeat manager for %s.%s (interval: %ds)", system, component or "main", interval_seconds
         )
 
     def set_health_check_function(self, health_check_func: Callable[[], Dict[str, Any]]):
@@ -76,19 +75,19 @@ class HeartbeatManager:
             health_check_func: Function that returns health status data
         """
         self._health_check_func = health_check_func
-        _logger.debug("Set custom health check function for %s.%s", self.system, self.component or 'main')
+        _logger.debug("Set custom health check function for %s.%s", self.system, self.component or "main")
 
     def start_heartbeat(self):
         """Start the heartbeat thread."""
         if self._running:
-            _logger.warning("Heartbeat already running for %s.%s", self.system, self.component or 'main')
+            _logger.warning("Heartbeat already running for %s.%s", self.system, self.component or "main")
             return
 
         self._running = True
         self._thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
         self._thread.start()
 
-        _logger.info("Started heartbeat for %s.%s", self.system, self.component or 'main')
+        _logger.info("Started heartbeat for %s.%s", self.system, self.component or "main")
 
     def stop_heartbeat(self):
         """Stop the heartbeat thread."""
@@ -99,14 +98,14 @@ class HeartbeatManager:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5)
 
-        _logger.info("Stopped heartbeat for %s.%s", self.system, self.component or 'main')
+        _logger.info("Stopped heartbeat for %s.%s", self.system, self.component or "main")
 
     def send_immediate_heartbeat(
         self,
         status: SystemHealthStatus = SystemHealthStatus.HEALTHY,
-        response_time_ms: Optional[int] = None,
-        error_message: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        response_time_ms: int | None = None,
+        error_message: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ):
         """
         Send an immediate heartbeat update.
@@ -119,11 +118,9 @@ class HeartbeatManager:
         """
         try:
             self._update_health_status(status, response_time_ms, error_message, metadata)
-            _logger.debug("Sent immediate heartbeat for %s.%s: %s",
-                         self.system, self.component or 'main', status.value)
+            _logger.debug("Sent immediate heartbeat for %s.%s: %s", self.system, self.component or "main", status.value)
         except Exception:
-            _logger.exception("Failed to send immediate heartbeat for %s.%s:",
-                         self.system, self.component or 'main')
+            _logger.exception("Failed to send immediate heartbeat for %s.%s:", self.system, self.component or "main")
 
     def _heartbeat_loop(self):
         """Main heartbeat loop running in a separate thread."""
@@ -133,7 +130,7 @@ class HeartbeatManager:
                 if self._health_check_func:
                     # Use custom health check function
                     health_data = self._health_check_func()
-                    status_str = health_data.get('status', 'HEALTHY').upper()
+                    status_str = health_data.get("status", "HEALTHY").upper()
 
                     try:
                         status = SystemHealthStatus(status_str)
@@ -143,26 +140,22 @@ class HeartbeatManager:
 
                     self._update_health_status(
                         status=status,
-                        response_time_ms=health_data.get('response_time_ms'),
-                        error_message=health_data.get('error_message'),
-                        metadata=health_data.get('metadata')
+                        response_time_ms=health_data.get("response_time_ms"),
+                        error_message=health_data.get("error_message"),
+                        metadata=health_data.get("metadata"),
                     )
                 else:
                     # Default: just send HEALTHY status
                     self._update_health_status(SystemHealthStatus.HEALTHY)
 
-                self._last_heartbeat = datetime.now(timezone.utc)
+                self._last_heartbeat = datetime.now(UTC)
 
             except Exception as e:
-                _logger.exception("Error in heartbeat loop for %s.%s:",
-                             self.system, self.component or 'main')
+                _logger.exception("Error in heartbeat loop for %s.%s:", self.system, self.component or "main")
 
                 # Send DOWN status on error
                 try:
-                    self._update_health_status(
-                        SystemHealthStatus.DOWN,
-                        error_message=f"Heartbeat error: {str(e)}"
-                    )
+                    self._update_health_status(SystemHealthStatus.DOWN, error_message=f"Heartbeat error: {str(e)}")
                 except Exception:
                     _logger.exception("Failed to update DOWN status:")
 
@@ -172,9 +165,9 @@ class HeartbeatManager:
     def _update_health_status(
         self,
         status: SystemHealthStatus,
-        response_time_ms: Optional[int] = None,
-        error_message: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        response_time_ms: int | None = None,
+        error_message: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ):
         """Update health status in the database."""
         try:
@@ -187,12 +180,11 @@ class HeartbeatManager:
                 status=status,
                 response_time_ms=response_time_ms,
                 error_message=error_message,
-                metadata=metadata
+                metadata=metadata,
             )
 
         except Exception:
-            _logger.exception("Failed to update health status for %s.%s:",
-                         self.system, self.component or 'main')
+            _logger.exception("Failed to update health status for %s.%s:", self.system, self.component or "main")
             # Don't re-raise - heartbeat should continue even if health update fails
 
     @property
@@ -201,7 +193,7 @@ class HeartbeatManager:
         return self._running
 
     @property
-    def last_heartbeat(self) -> Optional[datetime]:
+    def last_heartbeat(self) -> datetime | None:
         """Get timestamp of last successful heartbeat."""
         return self._last_heartbeat
 
@@ -213,7 +205,7 @@ class ProcessHeartbeatManager:
     For example, the notification service might have components for each channel.
     """
 
-    def __init__(self, system: str, db_service: Optional[DatabaseService] = None):
+    def __init__(self, system: str, db_service: DatabaseService | None = None):
         """
         Initialize process heartbeat manager.
 
@@ -228,10 +220,7 @@ class ProcessHeartbeatManager:
         _logger.info("Initialized process heartbeat manager for %s", system)
 
     def add_component_heartbeat(
-        self,
-        component: str,
-        interval_seconds: int = 30,
-        health_check_func: Optional[Callable] = None
+        self, component: str, interval_seconds: int = 30, health_check_func: Callable | None = None
     ) -> HeartbeatManager:
         """
         Add a heartbeat for a specific component.
@@ -251,10 +240,7 @@ class ProcessHeartbeatManager:
             return self._heartbeat_managers[key]
 
         manager = HeartbeatManager(
-            system=self.system,
-            component=component,
-            interval_seconds=interval_seconds,
-            db_service=self.db_service
+            system=self.system, component=component, interval_seconds=interval_seconds, db_service=self.db_service
         )
 
         if health_check_func:
@@ -264,9 +250,7 @@ class ProcessHeartbeatManager:
         return manager
 
     def add_main_heartbeat(
-        self,
-        interval_seconds: int = 30,
-        health_check_func: Optional[Callable] = None
+        self, interval_seconds: int = 30, health_check_func: Callable | None = None
     ) -> HeartbeatManager:
         """
         Add a heartbeat for the main system (no component).
@@ -285,10 +269,7 @@ class ProcessHeartbeatManager:
             return self._heartbeat_managers[key]
 
         manager = HeartbeatManager(
-            system=self.system,
-            component=None,
-            interval_seconds=interval_seconds,
-            db_service=self.db_service
+            system=self.system, component=None, interval_seconds=interval_seconds, db_service=self.db_service
         )
 
         if health_check_func:
@@ -311,7 +292,7 @@ class ProcessHeartbeatManager:
 
         _logger.info("Stopped %d heartbeats for %s", len(self._heartbeat_managers), self.system)
 
-    def get_heartbeat_manager(self, component: Optional[str] = None) -> Optional[HeartbeatManager]:
+    def get_heartbeat_manager(self, component: str | None = None) -> HeartbeatManager | None:
         """
         Get heartbeat manager for a specific component or main system.
 

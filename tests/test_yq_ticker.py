@@ -3,15 +3,18 @@
 Test script to debug YQ ticker issue
 """
 
-import sys
 import os
-sys.path.append(os.path.abspath('.'))
+import sys
 
-import yfinance as yf
+sys.path.append(os.path.abspath("."))
+
 import numpy as np
+import yfinance as yf
+
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
+
 
 def test_yq_ticker():
     """Test the YQ ticker specifically"""
@@ -44,18 +47,22 @@ def test_yq_ticker():
             return
 
         # Convert to arrays
-        high = df_clean['High'].values.astype(float)
-        low = df_clean['Low'].values.astype(float)
-        close = df_clean['Close'].values.astype(float)
-        volume = df_clean['Volume'].values.astype(float)
+        high = df_clean["High"].values.astype(float)
+        low = df_clean["Low"].values.astype(float)
+        close = df_clean["Close"].values.astype(float)
+        volume = df_clean["Volume"].values.astype(float)
 
         print(f"Array lengths: high={len(high)}, low={len(low)}, close={len(close)}, volume={len(volume)}")
 
         # Check for NaN in arrays
-        print(f"NaN in arrays: high={np.isnan(high).sum()}, low={np.isnan(low).sum()}, close={np.isnan(close).sum()}, volume={np.isnan(volume).sum()}")
+        print(
+            f"NaN in arrays: high={np.isnan(high).sum()}, low={np.isnan(low).sum()}, close={np.isnan(close).sum()}, volume={np.isnan(volume).sum()}"
+        )
 
         # Check for infinite values
-        print(f"Infinite in arrays: high={np.isinf(high).sum()}, low={np.isinf(low).sum()}, close={np.isinf(close).sum()}, volume={np.isinf(volume).sum()}")
+        print(
+            f"Infinite in arrays: high={np.isinf(high).sum()}, low={np.isinf(low).sum()}, close={np.isinf(close).sum()}, volume={np.isinf(volume).sum()}"
+        )
 
         # Check array shapes
         print(f"Array shapes: high={high.shape}, low={low.shape}, close={close.shape}, volume={volume.shape}")
@@ -78,6 +85,7 @@ def test_yq_ticker():
 
         # Test TA-Lib
         import talib
+
         try:
             rsi = talib.RSI(close, timeperiod=14)
             print(f"RSI calculation successful, length: {len(rsi)}")
@@ -90,6 +98,7 @@ def test_yq_ticker():
 
     except Exception as e:
         logger.exception("Error testing YQ ticker: %s", str(e))
+
 
 if __name__ == "__main__":
     test_yq_ticker()

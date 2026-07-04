@@ -1,10 +1,11 @@
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
 
 from src.data.db.models.model_jobs import (
     Schedule,
-    ScheduleRun,
     ScheduleCreate,
+    ScheduleRun,
 )
 
 
@@ -30,7 +31,7 @@ def test_schedule_db_insert_and_query(db_session):
     sr.job_type = "report"
     sr.job_id = s.id
     sr.status = "PENDING"
-    sr.scheduled_for = datetime.now(timezone.utc)
+    sr.scheduled_for = datetime.now(UTC)
     db_session.add(sr)
     db_session.flush()
 

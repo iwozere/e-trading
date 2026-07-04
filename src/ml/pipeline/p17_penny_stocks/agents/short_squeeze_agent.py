@@ -12,10 +12,10 @@ The two signals are combined:
 FINRA credentials are optional — the agent degrades gracefully to yfinance-only.
 """
 
-from pathlib import Path
 import sys
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import Dict, List
 
 import pandas as pd
 
@@ -23,15 +23,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.ml.pipeline.p17_penny_stocks.config import P17ShortSqueezeConfig
 from src.ml.pipeline.p17_penny_stocks.models.candidate import Candidate
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
 _download_trf = None
 try:
     from src.ml.pipeline.shared.trf_downloader import download_trf as _download_trf
+
     _TRF_AVAILABLE = True
 except Exception:
     _TRF_AVAILABLE = False
@@ -102,9 +103,11 @@ class ShortSqueezeAgent:
                 c.days_to_cover = float(short_ratio)
 
             # Flag extremely high SI + low liquidity as halt risk
-            if (c.short_interest_pct_float is not None
-                    and c.short_interest_pct_float > self.config.si_extreme_threshold
-                    and c.volume < self.config.high_si_min_volume):
+            if (
+                c.short_interest_pct_float is not None
+                and c.short_interest_pct_float > self.config.si_extreme_threshold
+                and c.volume < self.config.high_si_min_volume
+            ):
                 if "halt_risk_high_si" not in c.signals:
                     c.signals.append("halt_risk_high_si")
 
@@ -137,9 +140,7 @@ class ShortSqueezeAgent:
             tv_by_ticker[t] = tv_by_ticker.get(t, 0.0) + float(row.get(total_vol_col, 0) or 0)
 
         ratios: Dict[str, float] = {
-            t: sv_by_ticker[t] / tv_by_ticker[t]
-            for t in sv_by_ticker
-            if tv_by_ticker.get(t, 0.0) > 0
+            t: sv_by_ticker[t] / tv_by_ticker[t] for t in sv_by_ticker if tv_by_ticker.get(t, 0.0) > 0
         }
 
         enriched_n = 0
@@ -151,7 +152,7 @@ class ShortSqueezeAgent:
 
         _logger.info("FINRA short-vol ratio: enriched %d/%d candidates", enriched_n, len(candidates))
 
-    def _load_finra_data(self) -> Optional[pd.DataFrame]:
+    def _load_finra_data(self) -> pd.DataFrame | None:
         """Download or load cached FINRA TRF data for target_date."""
         cache_file = self.results_dir / "finra_trf_cache.parquet"
 
@@ -186,7 +187,7 @@ class ShortSqueezeAgent:
     @staticmethod
     def _detect_columns(
         df: pd.DataFrame,
-    ) -> Optional[tuple]:
+    ) -> tuple | None:
         """
         Map FINRA TRF columns to (ticker, short_vol, total_vol).
         Column names vary across FINRA data versions.
@@ -231,20 +232,18 @@ class ShortSqueezeAgent:
         elif si < cfg.si_moderate_threshold:
             base = 10.0 + 10.0 * (si - 0.05) / (cfg.si_moderate_threshold - 0.05)
         elif si < cfg.si_high_threshold:
-            base = 20.0 + 30.0 * (si - cfg.si_moderate_threshold) / (
-                cfg.si_high_threshold - cfg.si_moderate_threshold
-            )
+            base = 20.0 + 30.0 * (si - cfg.si_moderate_threshold) / (cfg.si_high_threshold - cfg.si_moderate_threshold)
         elif si < cfg.si_extreme_threshold:
-            base = 50.0 + 40.0 * (si - cfg.si_high_threshold) / (
-                cfg.si_extreme_threshold - cfg.si_high_threshold
-            )
+            base = 50.0 + 40.0 * (si - cfg.si_high_threshold) / (cfg.si_extreme_threshold - cfg.si_high_threshold)
         else:
             base = 100.0
 
         # Volume-confirmed squeeze bonus
-        if (c.days_to_cover is not None
-                and c.days_to_cover >= cfg.days_to_cover_threshold
-                and c.relative_volume >= cfg.min_rvol_for_trigger):
+        if (
+            c.days_to_cover is not None
+            and c.days_to_cover >= cfg.days_to_cover_threshold
+            and c.relative_volume >= cfg.min_rvol_for_trigger
+        ):
             base = min(100.0, base + 10.0)
 
         # FINRA daily short-vol ratio supplement

@@ -5,7 +5,7 @@ Implements sequential ATH and Drawdown analysis logic.
 """
 
 from datetime import date, datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,6 +14,7 @@ from matplotlib.ticker import FuncFormatter, MaxNLocator
 
 from src.data.data_manager import DataManager
 from src.notification.logger import setup_logger
+
 from .config import ATHPipelineConfig
 
 _logger = setup_logger(__name__)
@@ -83,7 +84,9 @@ def _simulate_ath_dd_equity(
     return pd.Series(equity, index=idx)
 
 
-def _bollinger_bands(close: pd.Series, period: int = 14, num_std: float = 2.0) -> Tuple[pd.Series, pd.Series, pd.Series]:
+def _bollinger_bands(
+    close: pd.Series, period: int = 14, num_std: float = 2.0
+) -> Tuple[pd.Series, pd.Series, pd.Series]:
     """SMA middle band and upper/lower at ± num_std × rolling std of close."""
     mid = close.rolling(period, min_periods=period).mean()
     std = close.rolling(period, min_periods=period).std()
@@ -96,7 +99,7 @@ def _rsi_wilder(close: pd.Series, period: int = 14) -> pd.Series:
     """RSI (Wilder / RMA smoothing), range ~0–100."""
     delta = close.diff()
     gain = delta.clip(lower=0.0)
-    loss = (-delta.clip(upper=0.0))
+    loss = -delta.clip(upper=0.0)
     avg_gain = gain.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
     avg_loss = loss.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
     rs = avg_gain / avg_loss.replace(0, np.nan)
@@ -109,7 +112,7 @@ class ATHPipeline:
     Pipeline for Sequential ATH & Drawdown Analysis.
     """
 
-    def __init__(self, config: Optional[ATHPipelineConfig] = None):
+    def __init__(self, config: ATHPipelineConfig | None = None):
         """
         Initialize the pipeline.
 
@@ -125,7 +128,7 @@ class ATHPipeline:
 
         _logger.info("ATH Pipeline initialized (results_dir: %s)", self.results_dir)
 
-    def analyze_ticker(self, ticker: str, df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    def analyze_ticker(self, ticker: str, df: pd.DataFrame | None = None) -> pd.DataFrame:
         """
         Analyze a single ticker for sequential ATHs and drawdowns.
 
@@ -146,10 +149,7 @@ class ATHPipeline:
 
             try:
                 df = self.data_manager.get_ohlcv(
-                    symbol=ticker,
-                    timeframe=self.config.interval,
-                    start_date=start_date,
-                    end_date=end_date
+                    symbol=ticker, timeframe=self.config.interval, start_date=start_date, end_date=end_date
                 )
             except Exception as e:
                 _logger.error("Failed to fetch data for %s: %s", ticker, e)
@@ -162,14 +162,14 @@ class ATHPipeline:
         # Core Logic: Greedy Peak-Trough Algorithm
         # Ensure data is sorted by date
         df = df.sort_index()
-        prices = df['close']
+        prices = df["close"]
         results = []
 
         global_ath_price = -1
         current_ath_date = None
         current_ath_price = -1
 
-        drawdown_min_price = float('inf')
+        drawdown_min_price = float("inf")
         drawdown_min_date = None
 
         for bar_dt, price in prices.items():
@@ -179,22 +179,24 @@ class ATHPipeline:
                 # AND it must be more than 1% as requested to reduce clutter
                 if current_ath_date is not None and drawdown_min_date is not None:
                     drop_pct = round(((drawdown_min_price - current_ath_price) / current_ath_price) * 100, 2)
-                    if drop_pct < -1.0: # Restriction 1: More than 1% drop
-                        results.append({
-                            'Ticker': ticker,
-                            'ATH_Date': current_ath_date.strftime('%Y-%m-%d'),
-                            'ATH_Price': round(float(current_ath_price), 2),
-                            'Max_Drop_Date': drawdown_min_date.strftime('%Y-%m-%d'),
-                            'Max_Drop_Price': round(float(drawdown_min_price), 2),
-                            'Drop_Percent': drop_pct,
-                            'Days_To_Drop': (drawdown_min_date - current_ath_date).days
-                        })
+                    if drop_pct < -1.0:  # Restriction 1: More than 1% drop
+                        results.append(
+                            {
+                                "Ticker": ticker,
+                                "ATH_Date": current_ath_date.strftime("%Y-%m-%d"),
+                                "ATH_Price": round(float(current_ath_price), 2),
+                                "Max_Drop_Date": drawdown_min_date.strftime("%Y-%m-%d"),
+                                "Max_Drop_Price": round(float(drawdown_min_price), 2),
+                                "Drop_Percent": drop_pct,
+                                "Days_To_Drop": (drawdown_min_date - current_ath_date).days,
+                            }
+                        )
 
                 # Reset for the new window starting at this new ATH
                 global_ath_price = price
                 current_ath_date = bar_dt
                 current_ath_price = price
-                drawdown_min_price = float('inf')
+                drawdown_min_price = float("inf")
                 drawdown_min_date = None
             else:
                 # Continue monitoring drawdown in the current window
@@ -205,16 +207,18 @@ class ATHPipeline:
         # Record the final ATH window if it exists, found on different day, and > 1% drop
         if current_ath_date is not None and drawdown_min_date is not None:
             drop_pct = round(((drawdown_min_price - current_ath_price) / current_ath_price) * 100, 2)
-            if drop_pct < -1.0: # Restriction 1: More than 1% drop
-                results.append({
-                    'Ticker': ticker,
-                    'ATH_Date': current_ath_date.strftime('%Y-%m-%d'),
-                    'ATH_Price': round(float(current_ath_price), 2),
-                    'Max_Drop_Date': drawdown_min_date.strftime('%Y-%m-%d'),
-                    'Max_Drop_Price': round(float(drawdown_min_price), 2),
-                    'Drop_Percent': drop_pct,
-                    'Days_To_Drop': (drawdown_min_date - current_ath_date).days
-                })
+            if drop_pct < -1.0:  # Restriction 1: More than 1% drop
+                results.append(
+                    {
+                        "Ticker": ticker,
+                        "ATH_Date": current_ath_date.strftime("%Y-%m-%d"),
+                        "ATH_Price": round(float(current_ath_price), 2),
+                        "Max_Drop_Date": drawdown_min_date.strftime("%Y-%m-%d"),
+                        "Max_Drop_Price": round(float(drawdown_min_price), 2),
+                        "Drop_Percent": drop_pct,
+                        "Days_To_Drop": (drawdown_min_date - current_ath_date).days,
+                    }
+                )
 
         results_df = pd.DataFrame(results)
 
@@ -245,60 +249,90 @@ class ATHPipeline:
                 3, 1, figsize=(56, 44), sharex=True, gridspec_kw={"height_ratios": [2.4, 1.0, 1.0]}
             )
 
-            ax_price.plot(df.index, df['close'], label='Close Price', color='royalblue', alpha=0.7)
-            ax_price.plot(df.index, bb_upper, label=f'BB upper ({bb_period}, σ={bb_std})', color='steelblue', linewidth=1.0, alpha=0.85)
-            ax_price.plot(df.index, bb_mid, label=f'BB mid ({bb_period})', color='gray', linewidth=1.0, linestyle='--', alpha=0.8)
-            ax_price.plot(df.index, bb_lower, label=f'BB lower ({bb_period}, σ={bb_std})', color='steelblue', linewidth=1.0, alpha=0.85)
-            ax_price.fill_between(df.index, bb_lower, bb_upper, color='steelblue', alpha=0.08)
+            ax_price.plot(df.index, df["close"], label="Close Price", color="royalblue", alpha=0.7)
+            ax_price.plot(
+                df.index,
+                bb_upper,
+                label=f"BB upper ({bb_period}, σ={bb_std})",
+                color="steelblue",
+                linewidth=1.0,
+                alpha=0.85,
+            )
+            ax_price.plot(
+                df.index, bb_mid, label=f"BB mid ({bb_period})", color="gray", linewidth=1.0, linestyle="--", alpha=0.8
+            )
+            ax_price.plot(
+                df.index,
+                bb_lower,
+                label=f"BB lower ({bb_period}, σ={bb_std})",
+                color="steelblue",
+                linewidth=1.0,
+                alpha=0.85,
+            )
+            ax_price.fill_between(df.index, bb_lower, bb_upper, color="steelblue", alpha=0.08)
 
             if self.config.plot_markers:
                 # Convert date strings back to datetime for matching index
-                ath_dates = pd.to_datetime(results_df['ATH_Date'])
-                drop_dates = pd.to_datetime(results_df['Max_Drop_Date'])
+                ath_dates = pd.to_datetime(results_df["ATH_Date"])
+                drop_dates = pd.to_datetime(results_df["Max_Drop_Date"])
 
                 # Markers (triangles) kept at s=100 as requested (not scaled)
-                ax_price.scatter(ath_dates, results_df['ATH_Price'],
-                            marker='^', color='green', s=100, label='Sequential ATH', zorder=5)
-                ax_price.scatter(drop_dates, results_df['Max_Drop_Price'],
-                            marker='v', color='red', s=100, label='Max Drawdown Trough', zorder=5)
+                ax_price.scatter(
+                    ath_dates,
+                    results_df["ATH_Price"],
+                    marker="^",
+                    color="green",
+                    s=100,
+                    label="Sequential ATH",
+                    zorder=5,
+                )
+                ax_price.scatter(
+                    drop_dates,
+                    results_df["Max_Drop_Price"],
+                    marker="v",
+                    color="red",
+                    s=100,
+                    label="Max Drawdown Trough",
+                    zorder=5,
+                )
 
             ax_price.set_title(f"{ticker} Sequential ATH & Drawdown Analysis (10-Year View)", fontsize=48)
             ax_price.set_ylabel("Price (USD)", fontsize=36)
-            ax_price.tick_params(axis='both', labelsize=28)
+            ax_price.tick_params(axis="both", labelsize=28)
 
             if self.config.log_scale:
-                ax_price.set_yscale('log')
+                ax_price.set_yscale("log")
 
             ax_price.grid(True, which="both", ls="--", alpha=0.3)
-            ax_price.legend(loc='best', fontsize=22)
+            ax_price.legend(loc="best", fontsize=22)
 
-            ax_rsi.plot(rsi.index, rsi.values, color='purple', linewidth=1.5, label=f'RSI ({rsi_period})')
-            ax_rsi.axhline(70.0, color='gray', linewidth=0.8, linestyle='--', alpha=0.6)
-            ax_rsi.axhline(30.0, color='gray', linewidth=0.8, linestyle='--', alpha=0.6)
+            ax_rsi.plot(rsi.index, rsi.values, color="purple", linewidth=1.5, label=f"RSI ({rsi_period})")
+            ax_rsi.axhline(70.0, color="gray", linewidth=0.8, linestyle="--", alpha=0.6)
+            ax_rsi.axhline(30.0, color="gray", linewidth=0.8, linestyle="--", alpha=0.6)
             ax_rsi.set_ylabel("RSI", fontsize=36)
             ax_rsi.set_ylim(0.0, 100.0)
-            ax_rsi.tick_params(axis='both', labelsize=28)
+            ax_rsi.tick_params(axis="both", labelsize=28)
             ax_rsi.grid(True, which="both", ls="--", alpha=0.3)
-            ax_rsi.legend(loc='best', fontsize=22)
+            ax_rsi.legend(loc="best", fontsize=22)
 
             start_usd = float(self.config.initial_equity_usd)
             eq_series = _simulate_ath_dd_equity(df, results_df, start_usd=start_usd)
-            ax_eq.plot(eq_series.index, eq_series.values, color='darkorange', linewidth=2.0,
-                       label=f'ATH / trough strategy (${start_usd:,.0f} start)')
+            ax_eq.plot(
+                eq_series.index,
+                eq_series.values,
+                color="darkorange",
+                linewidth=2.0,
+                label=f"ATH / trough strategy (${start_usd:,.0f} start)",
+            )
             ax_eq.set_ylabel("Portfolio (USD)", fontsize=36)
             ax_eq.set_xlabel("Date", fontsize=36)
-            ax_eq.tick_params(axis='both', labelsize=28)
+            ax_eq.tick_params(axis="both", labelsize=28)
             ax_eq.grid(True, which="both", ls="--", alpha=0.3)
 
             eq_clean = eq_series.replace([np.inf, -np.inf], np.nan).dropna()
             eq_pos = eq_clean[eq_clean > 0]
             ratio = float(eq_pos.max() / eq_pos.min()) if len(eq_pos) else 1.0
-            use_log = (
-                self.config.equity_log_scale
-                and len(eq_pos) > 0
-                and float(eq_pos.min()) > 0
-                and ratio > 3.0
-            )
+            use_log = self.config.equity_log_scale and len(eq_pos) > 0 and float(eq_pos.min()) > 0 and ratio > 3.0
             if use_log:
                 ax_eq.set_yscale("log")
                 ax_eq.set_ylim(
@@ -314,7 +348,7 @@ class ATHPipeline:
 
             ax_eq.yaxis.set_major_formatter(FuncFormatter(_fmt_usd_axis))
 
-            ax_eq.legend(loc='best', fontsize=28)
+            ax_eq.legend(loc="best", fontsize=28)
 
             plt.tight_layout()
 
@@ -326,7 +360,7 @@ class ATHPipeline:
         except Exception as e:
             _logger.error("Failed to generate plot for %s: %s", ticker, e)
 
-    def run(self, tickers: Optional[List[str]] = None) -> pd.DataFrame:
+    def run(self, tickers: List[str] | None = None) -> pd.DataFrame:
         """
         Run the pipeline for a list of tickers.
 
@@ -346,10 +380,7 @@ class ATHPipeline:
         # 1. Batch fetch all data at once (optimizes for deltas and Yahoo batching)
         _logger.info("Prefetching data for %d symbols in batch...", len(tickers_to_process))
         all_data = self.data_manager.get_ohlcv_batch(
-            symbols=tickers_to_process,
-            timeframe=self.config.interval,
-            start_date=start_date,
-            end_date=end_date
+            symbols=tickers_to_process, timeframe=self.config.interval, start_date=start_date, end_date=end_date
         )
 
         all_results = []

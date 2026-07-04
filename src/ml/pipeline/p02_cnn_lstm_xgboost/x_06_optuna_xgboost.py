@@ -8,18 +8,21 @@ extracted in the previous stage.
 """
 
 import sys
-import yaml
+from pathlib import Path
+
 import numpy as np
 import optuna
 import xgboost as xgb
-from sklearn.metrics import mean_squared_error, mean_absolute_error
-from pathlib import Path
+import yaml
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 # Add src to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
+
 
 class XGBoostOptimizer:
     """XGBoost hyperparameter optimizer using Optuna."""
@@ -41,7 +44,7 @@ class XGBoostOptimizer:
     def _load_config(self) -> dict:
         """Load configuration from YAML file."""
         try:
-            with open(self.config_path, 'r') as file:
+            with open(self.config_path) as file:
                 return yaml.safe_load(file)
         except Exception as e:
             raise Exception(f"Failed to load config from {self.config_path}: {e}")
@@ -52,18 +55,18 @@ class XGBoostOptimizer:
 
         # Load train data
         train_data = np.load(data_dir / "combined_features_train.npz")
-        X_train = train_data['features']
-        y_train = train_data['targets']
+        X_train = train_data["features"]
+        y_train = train_data["targets"]
 
         # Load validation data
         val_data = np.load(data_dir / "combined_features_val.npz")
-        X_val = val_data['features']
-        y_val = val_data['targets']
+        X_val = val_data["features"]
+        y_val = val_data["targets"]
 
         # Load test data
         test_data = np.load(data_dir / "combined_features_test.npz")
-        X_test = test_data['features']
-        y_test = test_data['targets']
+        X_test = test_data["features"]
+        y_test = test_data["targets"]
 
         _logger.info("Loaded combined features:")
         _logger.info("  Train: %d, %d", X_train.shape, y_train.shape)
@@ -72,46 +75,51 @@ class XGBoostOptimizer:
 
         return (X_train, y_train), (X_val, y_val), (X_test, y_test)
 
-    def _objective(self, trial: optuna.Trial, X_train: np.ndarray, y_train: np.ndarray,
-                   X_val: np.ndarray, y_val: np.ndarray) -> float:
+    def _objective(
+        self, trial: optuna.Trial, X_train: np.ndarray, y_train: np.ndarray, X_val: np.ndarray, y_val: np.ndarray
+    ) -> float:
         """Optuna objective function for XGBoost hyperparameter optimization."""
         # Get hyperparameters from trial
         params = {
-            'n_estimators': trial.suggest_int('n_estimators',
-                                            self.config['xgboost']['n_estimators']['min'],
-                                            self.config['xgboost']['n_estimators']['max']),
-            'learning_rate': trial.suggest_float('learning_rate',
-                                               self.config['xgboost']['learning_rate']['min'],
-                                               self.config['xgboost']['learning_rate']['max'],
-                                               log=True),
-            'max_depth': trial.suggest_int('max_depth',
-                                         self.config['xgboost']['max_depth']['min'],
-                                         self.config['xgboost']['max_depth']['max']),
-            'subsample': trial.suggest_float('subsample',
-                                           self.config['xgboost']['subsample']['min'],
-                                           self.config['xgboost']['subsample']['max']),
-            'colsample_bytree': trial.suggest_float('colsample_bytree',
-                                                  self.config['xgboost']['colsample_bytree']['min'],
-                                                  self.config['xgboost']['colsample_bytree']['max']),
-            'gamma': trial.suggest_float('gamma',
-                                       self.config['xgboost']['gamma']['min'],
-                                       self.config['xgboost']['gamma']['max']),
-            'reg_lambda': trial.suggest_float('reg_lambda',
-                                            self.config['xgboost']['reg_lambda']['min'],
-                                            self.config['xgboost']['reg_lambda']['max']),
-            'reg_alpha': trial.suggest_float('reg_alpha',
-                                           self.config['xgboost']['reg_alpha']['min'],
-                                           self.config['xgboost']['reg_alpha']['max']),
-            'random_state': 42,
-            'n_jobs': -1,
-            'verbosity': 0
+            "n_estimators": trial.suggest_int(
+                "n_estimators",
+                self.config["xgboost"]["n_estimators"]["min"],
+                self.config["xgboost"]["n_estimators"]["max"],
+            ),
+            "learning_rate": trial.suggest_float(
+                "learning_rate",
+                self.config["xgboost"]["learning_rate"]["min"],
+                self.config["xgboost"]["learning_rate"]["max"],
+                log=True,
+            ),
+            "max_depth": trial.suggest_int(
+                "max_depth", self.config["xgboost"]["max_depth"]["min"], self.config["xgboost"]["max_depth"]["max"]
+            ),
+            "subsample": trial.suggest_float(
+                "subsample", self.config["xgboost"]["subsample"]["min"], self.config["xgboost"]["subsample"]["max"]
+            ),
+            "colsample_bytree": trial.suggest_float(
+                "colsample_bytree",
+                self.config["xgboost"]["colsample_bytree"]["min"],
+                self.config["xgboost"]["colsample_bytree"]["max"],
+            ),
+            "gamma": trial.suggest_float(
+                "gamma", self.config["xgboost"]["gamma"]["min"], self.config["xgboost"]["gamma"]["max"]
+            ),
+            "reg_lambda": trial.suggest_float(
+                "reg_lambda", self.config["xgboost"]["reg_lambda"]["min"], self.config["xgboost"]["reg_lambda"]["max"]
+            ),
+            "reg_alpha": trial.suggest_float(
+                "reg_alpha", self.config["xgboost"]["reg_alpha"]["min"], self.config["xgboost"]["reg_alpha"]["max"]
+            ),
+            "random_state": 42,
+            "n_jobs": -1,
+            "verbosity": 0,
         }
 
         # Train XGBoost model
         model = xgb.XGBRegressor(**params, early_stopping_rounds=50)
-        model.fit(X_train, y_train,
-                 eval_set=[(X_val, y_val)],
-                 verbose=False)
+        model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
 
         # Make predictions on validation set
         y_pred = model.predict(X_val)
@@ -129,24 +137,17 @@ class XGBoostOptimizer:
         (X_train, y_train), (X_val, y_val), (X_test, y_test) = self._load_combined_features()
 
         # Create Optuna study
-        study_name = self.config['optuna']['xgboost_study_name']
-        storage = self.config['optuna']['storage']
-        n_trials = self.config['optuna']['n_trials']
-        timeout = self.config['optuna']['timeout']
+        study_name = self.config["optuna"]["xgboost_study_name"]
+        storage = self.config["optuna"]["storage"]
+        n_trials = self.config["optuna"]["n_trials"]
+        timeout = self.config["optuna"]["timeout"]
 
-        study = optuna.create_study(
-            study_name=study_name,
-            storage=storage,
-            load_if_exists=True,
-            direction='minimize'
-        )
+        study = optuna.create_study(study_name=study_name, storage=storage, load_if_exists=True, direction="minimize")
 
         # Run optimization
         _logger.info("Running %s trials with %ss timeout...", n_trials, timeout)
         study.optimize(
-            lambda trial: self._objective(trial, X_train, y_train, X_val, y_val),
-            n_trials=n_trials,
-            timeout=timeout
+            lambda trial: self._objective(trial, X_train, y_train, X_val, y_val), n_trials=n_trials, timeout=timeout
         )
 
         # Get best parameters
@@ -163,12 +164,12 @@ class XGBoostOptimizer:
         # Save best parameters
         best_params_path = self.configs_dir / "best_xgboost_params.json"
         import json
-        with open(best_params_path, 'w') as f:
+
+        with open(best_params_path, "w") as f:
             json.dump(best_params, f, indent=2)
 
         # Create optimization plots
         try:
-
             # Parameter importance plot
             fig = optuna.visualization.plot_param_importances(study)
             fig.write_html(str(self.studies_dir / "xgboost_param_importance.html"))
@@ -188,9 +189,7 @@ class XGBoostOptimizer:
 
         # Evaluate best model on test set
         best_model = xgb.XGBRegressor(**best_params, random_state=42, n_jobs=-1, verbosity=0, early_stopping_rounds=50)
-        best_model.fit(X_train, y_train,
-                      eval_set=[(X_val, y_val)],
-                      verbose=False)
+        best_model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
 
         y_test_pred = best_model.predict(X_test)
         test_mse = mean_squared_error(y_test, y_test_pred)
@@ -203,14 +202,14 @@ class XGBoostOptimizer:
         directional_accuracy = np.mean((y_test_diff > 0) == (y_pred_diff > 0))
 
         results = {
-            'best_params': best_params,
-            'best_validation_mse': best_value,
-            'test_mse': test_mse,
-            'test_mae': test_mae,
-            'test_rmse': test_rmse,
-            'directional_accuracy': directional_accuracy,
-            'study_path': str(study_path),
-            'best_params_path': str(best_params_path)
+            "best_params": best_params,
+            "best_validation_mse": best_value,
+            "test_mse": test_mse,
+            "test_mae": test_mae,
+            "test_rmse": test_rmse,
+            "directional_accuracy": directional_accuracy,
+            "study_path": str(study_path),
+            "best_params_path": str(best_params_path),
         }
 
         _logger.info("XGBoost optimization completed")
@@ -221,13 +220,13 @@ class XGBoostOptimizer:
 
         return results
 
+
 def main():
     """Main function to run XGBoost optimization."""
     import argparse
 
     parser = argparse.ArgumentParser(description="XGBoost Hyperparameter Optimization")
-    parser.add_argument("--config", default="config/pipeline/x02.yaml",
-                       help="Path to configuration file")
+    parser.add_argument("--config", default="config/pipeline/x02.yaml", help="Path to configuration file")
 
     args = parser.parse_args()
 
@@ -235,20 +234,21 @@ def main():
         optimizer = XGBoostOptimizer(args.config)
         results = optimizer.optimize()
 
-        print("\n" + "="*50)
+        print("\n" + "=" * 50)
         print("XGBOOST OPTIMIZATION RESULTS")
-        print("="*50)
+        print("=" * 50)
         print(f"Best Validation MSE: {results['best_validation_mse']:.6f}")
         print(f"Test MSE: {results['test_mse']:.6f}")
         print(f"Test MAE: {results['test_mae']:.6f}")
         print(f"Test RMSE: {results['test_rmse']:.6f}")
         print(f"Directional Accuracy: {results['directional_accuracy']:.4f}")
         print(f"Best Parameters: {results['best_params']}")
-        print("="*50)
+        print("=" * 50)
 
     except Exception as e:
         print(f"Error during XGBoost optimization: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

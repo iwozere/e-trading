@@ -9,20 +9,21 @@ API Documentation: https://site.financialmodelingprep.com/developer/docs
 Free API Key: https://site.financialmodelingprep.com/developer/docs
 """
 
-import requests
-import pandas as pd
+import sys
 import time
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
 from pathlib import Path
-import sys
+from typing import Any, Dict, List
+
+import pandas as pd
+import requests
 
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from src.notification.logger import setup_logger
 from src.data.downloader.base_data_downloader import BaseDataDownloader
 from src.error_handling.exceptions import RateLimitException
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -30,7 +31,7 @@ _logger = setup_logger(__name__)
 class FMPDataDownloader(BaseDataDownloader):
     """Financial Modeling Prep (FMP) data downloader."""
 
-    def __init__(self, api_key: Optional[str] = None, rate_limit_delay: float = 0.1):
+    def __init__(self, api_key: str | None = None, rate_limit_delay: float = 0.1):
         """
         Initialize FMP data downloader.
 
@@ -39,18 +40,21 @@ class FMPDataDownloader(BaseDataDownloader):
             rate_limit_delay: Delay between requests in seconds
         """
         super().__init__()
-        self.api_key = api_key or self._get_config_value('FMP_API_KEY', 'FMP_API_KEY')
+        self.api_key = api_key or self._get_config_value("FMP_API_KEY", "FMP_API_KEY")
         self.rate_limit_delay = rate_limit_delay
-        #self.base_url = "https://financialmodelingprep.com/api/v3" -- Deprecated v3 endpoints end of life August 31, 2025
+        # self.base_url = "https://financialmodelingprep.com/api/v3" -- Deprecated v3 endpoints end of life August 31, 2025
         self.stable_url = "https://financialmodelingprep.com/stable"
 
         if not self.api_key:
-            raise ValueError("FMP API key is required. Get one at: https://site.financialmodelingprep.com/developer/docs")
+            raise ValueError(
+                "FMP API key is required. Get one at: https://site.financialmodelingprep.com/developer/docs"
+            )
 
         _logger.info("FMP Data Downloader initialized with API key")
 
-    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime,
-                   end_date: datetime, **kwargs) -> Optional[pd.DataFrame]:
+    def get_ohlcv(
+        self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs
+    ) -> pd.DataFrame | None:
         """
         Get OHLCV data from FMP.
 
@@ -65,7 +69,7 @@ class FMPDataDownloader(BaseDataDownloader):
             DataFrame with OHLCV data or None if failed
         """
         try:
-            limit: Optional[int] = kwargs.get('limit')
+            limit: int | None = kwargs.get("limit")
             # Convert interval to FMP format
             fmp_interval = self._convert_interval(interval)
             if not fmp_interval:
@@ -73,32 +77,22 @@ class FMPDataDownloader(BaseDataDownloader):
                 return None
 
             # Format dates
-            start_str = start_date.strftime('%Y-%m-%d')
-            end_str = end_date.strftime('%Y-%m-%d')
+            start_str = start_date.strftime("%Y-%m-%d")
+            end_str = end_date.strftime("%Y-%m-%d")
 
             # Build URL
-            if fmp_interval == '1day':
+            if fmp_interval == "1day":
                 # Daily data endpoint
                 url = f"{self.stable_url}/historical-price-full"
-                params = {
-                    'apikey': self.api_key,
-                    'from': start_str,
-                    'to': end_str,
-                    'symbol': symbol
-                }
+                params = {"apikey": self.api_key, "from": start_str, "to": end_str, "symbol": symbol}
             else:
                 # Intraday data endpoint
                 url = f"{self.stable_url}/historical-chart/{fmp_interval}"
-                params = {
-                    'apikey': self.api_key,
-                    'from': start_str,
-                    'to': end_str,
-                    'symbol': symbol
-                }
+                params = {"apikey": self.api_key, "from": start_str, "to": end_str, "symbol": symbol}
 
             # Add limit if specified
             if limit:
-                params['limit'] = min(limit, 1000)  # FMP max limit is 1000
+                params["limit"] = min(limit, 1000)  # FMP max limit is 1000
 
             _logger.info("Fetching %s %s data from %s to %s", symbol, interval, start_str, end_str)
 
@@ -116,12 +110,12 @@ class FMPDataDownloader(BaseDataDownloader):
             data = response.json()
 
             # Parse response based on endpoint
-            if fmp_interval == '1day':
+            if fmp_interval == "1day":
                 # Daily data structure: {"historical": [...]}
-                if 'historical' not in data:
+                if "historical" not in data:
                     _logger.warning("No historical data found for %s", symbol)
                     return None
-                historical_data = data['historical']
+                historical_data = data["historical"]
             else:
                 # Intraday data structure: [...] (direct array)
                 if not isinstance(data, list):
@@ -149,16 +143,16 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.exception("Error fetching data for %s %s:", symbol, interval)
             return None
 
-    def _convert_interval(self, interval: str) -> Optional[str]:
+    def _convert_interval(self, interval: str) -> str | None:
         """Convert standard interval to FMP format."""
         interval_map = {
-            '1m': '1min',
-            '5m': '5min',
-            '15m': '15min',
-            '30m': '30min',
-            '1h': '1hour',
-            '4h': '4hour',
-            '1d': '1day'
+            "1m": "1min",
+            "5m": "5min",
+            "15m": "15min",
+            "30m": "30min",
+            "1h": "1hour",
+            "4h": "4hour",
+            "1d": "1day",
         }
         return interval_map.get(interval)
 
@@ -167,41 +161,41 @@ class FMPDataDownloader(BaseDataDownloader):
         try:
             # FMP column mapping
             column_mapping = {
-                'date': 'timestamp',
-                'open': 'open',
-                'high': 'high',
-                'low': 'low',
-                'close': 'close',
-                'volume': 'volume'
+                "date": "timestamp",
+                "open": "open",
+                "high": "high",
+                "low": "low",
+                "close": "close",
+                "volume": "volume",
             }
 
             # Rename columns
             df = df.rename(columns=column_mapping)
 
             # Ensure required columns exist
-            required_columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+            required_columns = ["timestamp", "open", "high", "low", "close", "volume"]
             for col in required_columns:
                 if col not in df.columns:
                     _logger.error("Missing required column: %s", col)
                     return pd.DataFrame()
 
             # Convert timestamp to datetime
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
 
             # Convert numeric columns
-            numeric_columns = ['open', 'high', 'low', 'close', 'volume']
+            numeric_columns = ["open", "high", "low", "close", "volume"]
             for col in numeric_columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+                df[col] = pd.to_numeric(df[col], errors="coerce")
 
             # Remove rows with NaN values
             df = df.dropna()
 
             # Sort by timestamp
-            df = df.sort_values('timestamp').reset_index(drop=True)
+            df = df.sort_values("timestamp").reset_index(drop=True)
 
             # Set timestamp as index
-            df = df.set_index('timestamp')
-            df.index.name = 'timestamp'
+            df = df.set_index("timestamp")
+            df.index.name = "timestamp"
 
             return df
 
@@ -221,11 +215,11 @@ class FMPDataDownloader(BaseDataDownloader):
 
     def get_supported_intervals(self) -> List[str]:
         """Get list of supported intervals."""
-        return ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
+        return ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
 
     def get_periods(self) -> List[str]:
         """Return list of supported periods for FMP."""
-        return ['1d', '7d', '1mo', '3mo', '6mo', '1y', '2y']
+        return ["1d", "7d", "1mo", "3mo", "6mo", "1y", "2y"]
 
     def get_intervals(self) -> List[str]:
         """Return list of supported intervals for FMP."""
@@ -247,10 +241,7 @@ class FMPDataDownloader(BaseDataDownloader):
         """
         try:
             url = f"{self.stable_url}/stock-screener"
-            params = {
-                'apikey': self.api_key,
-                **criteria
-            }
+            params = {"apikey": self.api_key, **criteria}
 
             _logger.info("Running FMP stock screener with criteria: %s", criteria)
 
@@ -296,7 +287,7 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting batch fundamentals:")
             return {}
 
-    def get_fundamentals(self, symbol: str) -> Optional[Dict[str, Any]]:  # type: ignore[override]
+    def get_fundamentals(self, symbol: str) -> Dict[str, Any] | None:  # type: ignore[override]
         """
         Get fundamental data for a single ticker.
 
@@ -319,12 +310,7 @@ class FMPDataDownloader(BaseDataDownloader):
             ratios = self.get_financial_ratios(symbol)
 
             # Combine all data
-            fundamentals = {
-                'symbol': symbol,
-                'profile': profile,
-                'metrics': metrics or {},
-                'ratios': ratios or {}
-            }
+            fundamentals = {"symbol": symbol, "profile": profile, "metrics": metrics or {}, "ratios": ratios or {}}
 
             _logger.info("Retrieved fundamentals for %s", symbol)
             return fundamentals
@@ -336,22 +322,19 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting fundamentals for %s:", symbol)
             return None
 
-    def get_company_profile(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_company_profile(self, symbol: str) -> Dict[str, Any] | None:
         """Get company profile information using the /stable endpoint."""
         try:
             # Use /stable endpoint (v3 endpoints deprecated as of August 31, 2025)
             url = f"{self.stable_url}/profile"
-            params = {
-                'symbol': symbol,
-                'apikey': self.api_key
-            }
+            params = {"symbol": symbol, "apikey": self.api_key}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
-            
+
             # Explicitly handle 429 Too Many Requests
             if response.status_code == 429:
-                retry_after = int(response.headers.get('Retry-After', 60))
+                retry_after = int(response.headers.get("Retry-After", 60))
                 _logger.warning("FMP Rate limit exceeded for %s, retry after %d seconds", symbol, retry_after)
                 raise RateLimitException(url=url, retry_after=retry_after)
 
@@ -373,23 +356,20 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting company profile for %s:", symbol)
             return None
 
-    def get_key_metrics(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_key_metrics(self, symbol: str) -> Dict[str, Any] | None:
         """Get key financial metrics using the /stable endpoint (requires paid subscription)."""
         try:
             # Use /stable endpoint (v3 endpoints deprecated as of August 31, 2025)
             # Note: /stable/key-metrics requires paid subscription
             url = f"{self.stable_url}/key-metrics"
-            params = {
-                'symbol': symbol,
-                'apikey': self.api_key
-            }
+            params = {"symbol": symbol, "apikey": self.api_key}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
 
             # Explicitly handle 429 Too Many Requests
             if response.status_code == 429:
-                retry_after = int(response.headers.get('Retry-After', 60))
+                retry_after = int(response.headers.get("Retry-After", 60))
                 _logger.warning("FMP Rate limit exceeded for %s, retry after %d seconds", symbol, retry_after)
                 raise RateLimitException(url=url, retry_after=retry_after)
 
@@ -422,23 +402,20 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting key metrics for %s:", symbol)
             return None
 
-    def get_financial_ratios(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_financial_ratios(self, symbol: str) -> Dict[str, Any] | None:
         """Get financial ratios using the /stable endpoint (requires paid subscription)."""
         try:
             # Use /stable endpoint (v3 endpoints deprecated as of August 31, 2025)
             # Note: /stable/ratios requires paid subscription
             url = f"{self.stable_url}/ratios"
-            params = {
-                'symbol': symbol,
-                'apikey': self.api_key
-            }
+            params = {"symbol": symbol, "apikey": self.api_key}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
 
             # Explicitly handle 429 Too Many Requests
             if response.status_code == 429:
-                retry_after = int(response.headers.get('Retry-After', 60))
+                retry_after = int(response.headers.get("Retry-After", 60))
                 _logger.warning("FMP Rate limit exceeded for %s, retry after %d seconds", symbol, retry_after)
                 raise RateLimitException(url=url, retry_after=retry_after)
 
@@ -470,11 +447,11 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting financial ratios for %s:", symbol)
             return None
 
-    def get_income_statement(self, symbol: str, limit: int = 1) -> Optional[List[Dict[str, Any]]]:
+    def get_income_statement(self, symbol: str, limit: int = 1) -> List[Dict[str, Any]] | None:
         """Get income statement data."""
         try:
             url = f"{self.stable_url}/income-statement"
-            params = {'apikey': self.api_key, 'limit': limit, 'symbol': symbol}
+            params = {"apikey": self.api_key, "limit": limit, "symbol": symbol}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
@@ -487,11 +464,11 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting income statement for %s:", symbol)
             return None
 
-    def get_balance_sheet(self, symbol: str, limit: int = 1) -> Optional[List[Dict[str, Any]]]:
+    def get_balance_sheet(self, symbol: str, limit: int = 1) -> List[Dict[str, Any]] | None:
         """Get balance sheet data."""
         try:
             url = f"{self.stable_url}/balance-sheet-statement"
-            params = {'apikey': self.api_key, 'limit': limit, 'symbol': symbol}
+            params = {"apikey": self.api_key, "limit": limit, "symbol": symbol}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
@@ -504,11 +481,11 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting balance sheet for %s:", symbol)
             return None
 
-    def get_cash_flow(self, symbol: str, limit: int = 1) -> Optional[List[Dict[str, Any]]]:
+    def get_cash_flow(self, symbol: str, limit: int = 1) -> List[Dict[str, Any]] | None:
         """Get cash flow statement data."""
         try:
             url = f"{self.stable_url}/cash-flow-statement"
-            params = {'apikey': self.api_key, 'limit': limit, 'symbol': symbol}
+            params = {"apikey": self.api_key, "limit": limit, "symbol": symbol}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
@@ -521,11 +498,11 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting cash flow for %s:", symbol)
             return None
 
-    def get_enterprise_value(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_enterprise_value(self, symbol: str) -> Dict[str, Any] | None:
         """Get enterprise value data."""
         try:
             url = f"{self.stable_url}/enterprise-values"
-            params = {'apikey': self.api_key, 'limit': 1, 'symbol': symbol}
+            params = {"apikey": self.api_key, "limit": 1, "symbol": symbol}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
@@ -542,11 +519,11 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting enterprise value for %s:", symbol)
             return None
 
-    def get_dcf_valuation(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_dcf_valuation(self, symbol: str) -> Dict[str, Any] | None:
         """Get DCF valuation data."""
         try:
             url = f"{self.stable_url}/dcf"
-            params = {'apikey': self.api_key, 'limit': 1, 'symbol': symbol}
+            params = {"apikey": self.api_key, "limit": 1, "symbol": symbol}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
@@ -565,7 +542,7 @@ class FMPDataDownloader(BaseDataDownloader):
 
     # Short Squeeze Detection Pipeline Extensions
 
-    def get_short_interest_data(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_short_interest_data(self, symbol: str) -> Dict[str, Any] | None:
         """
         Get short interest data for a symbol.
 
@@ -577,7 +554,7 @@ class FMPDataDownloader(BaseDataDownloader):
         """
         try:
             url = f"{self.stable_url}/short-interest"
-            params = {'apikey': self.api_key, 'symbol': symbol}
+            params = {"apikey": self.api_key, "symbol": symbol}
 
             _logger.debug("Fetching short interest data for %s", symbol)
 
@@ -590,8 +567,11 @@ class FMPDataDownloader(BaseDataDownloader):
             if isinstance(data, list) and len(data) > 0:
                 # Return the most recent short interest data
                 short_data = data[0]
-                _logger.debug("Retrieved short interest data for %s: %s shares short",
-                            symbol, short_data.get('shortInterest', 'N/A'))
+                _logger.debug(
+                    "Retrieved short interest data for %s: %s shares short",
+                    symbol,
+                    short_data.get("shortInterest", "N/A"),
+                )
                 return short_data
             else:
                 _logger.warning("No short interest data found for %s", symbol)
@@ -601,7 +581,7 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting short interest data for %s:", symbol)
             return None
 
-    def get_float_shares_data(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_float_shares_data(self, symbol: str) -> Dict[str, Any] | None:
         """
         Get float shares data for a symbol from company profile.
 
@@ -619,22 +599,23 @@ class FMPDataDownloader(BaseDataDownloader):
 
             # Extract float-related data
             float_data = {
-                'symbol': symbol,
-                'sharesOutstanding': profile.get('sharesOutstanding'),
-                'floatShares': profile.get('floatShares'),
-                'marketCap': profile.get('mktCap'),
-                'lastUpdated': profile.get('lastUpdated', datetime.now().isoformat())
+                "symbol": symbol,
+                "sharesOutstanding": profile.get("sharesOutstanding"),
+                "floatShares": profile.get("floatShares"),
+                "marketCap": profile.get("mktCap"),
+                "lastUpdated": profile.get("lastUpdated", datetime.now().isoformat()),
             }
 
-            _logger.debug("Retrieved float shares data for %s: %s float shares",
-                        symbol, float_data.get('floatShares', 'N/A'))
+            _logger.debug(
+                "Retrieved float shares data for %s: %s float shares", symbol, float_data.get("floatShares", "N/A")
+            )
             return float_data
 
         except Exception:
             _logger.exception("Error getting float shares data for %s:", symbol)
             return None
 
-    def get_market_cap_data(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_market_cap_data(self, symbol: str) -> Dict[str, Any] | None:
         """
         Get market capitalization data for a symbol.
 
@@ -650,22 +631,21 @@ class FMPDataDownloader(BaseDataDownloader):
                 return None
 
             market_cap_data = {
-                'symbol': symbol,
-                'marketCap': profile.get('mktCap'),
-                'price': profile.get('price'),
-                'sharesOutstanding': profile.get('sharesOutstanding'),
-                'lastUpdated': profile.get('lastUpdated', datetime.now().isoformat())
+                "symbol": symbol,
+                "marketCap": profile.get("mktCap"),
+                "price": profile.get("price"),
+                "sharesOutstanding": profile.get("sharesOutstanding"),
+                "lastUpdated": profile.get("lastUpdated", datetime.now().isoformat()),
             }
 
-            _logger.debug("Retrieved market cap data for %s: $%s",
-                        symbol, market_cap_data.get('marketCap', 'N/A'))
+            _logger.debug("Retrieved market cap data for %s: $%s", symbol, market_cap_data.get("marketCap", "N/A"))
             return market_cap_data
 
         except Exception:
             _logger.exception("Error getting market cap data for %s:", symbol)
             return None
 
-    def load_universe_from_screener(self, criteria: Optional[Dict[str, Any]] = None) -> List[str]:
+    def load_universe_from_screener(self, criteria: Dict[str, Any] | None = None) -> List[str]:
         """
         Load universe of stocks from FMP stock screener for short squeeze analysis.
 
@@ -678,11 +658,11 @@ class FMPDataDownloader(BaseDataDownloader):
         try:
             # Default criteria for short squeeze detection
             default_criteria = {
-                'marketCapMoreThan': 100_000_000,  # > $100M market cap
-                'marketCapLowerThan': 10_000_000_000,  # < $10B market cap
-                'volumeMoreThan': 200_000,  # > 200k average volume
-                'exchange': 'NYSE,NASDAQ',  # Major US exchanges
-                'limit': 1000  # Maximum results
+                "marketCapMoreThan": 100_000_000,  # > $100M market cap
+                "marketCapLowerThan": 10_000_000_000,  # < $10B market cap
+                "volumeMoreThan": 200_000,  # > 200k average volume
+                "exchange": "NYSE,NASDAQ",  # Major US exchanges
+                "limit": 1000,  # Maximum results
             }
 
             # Use provided criteria or defaults
@@ -700,7 +680,7 @@ class FMPDataDownloader(BaseDataDownloader):
             # Extract ticker symbols
             tickers = []
             for stock in screener_results:
-                symbol = stock.get('symbol')
+                symbol = stock.get("symbol")
                 if symbol:
                     tickers.append(symbol)
 
@@ -740,11 +720,11 @@ class FMPDataDownloader(BaseDataDownloader):
 
                     # Combine all data
                     ticker_data = {
-                        'symbol': ticker,
-                        'profile': profile,
-                        'shortInterest': short_interest,
-                        'metrics': metrics,
-                        'timestamp': datetime.now().isoformat()
+                        "symbol": ticker,
+                        "profile": profile,
+                        "shortInterest": short_interest,
+                        "metrics": metrics,
+                        "timestamp": datetime.now().isoformat(),
                     }
 
                     batch_data[ticker] = ticker_data
@@ -768,10 +748,7 @@ class FMPDataDownloader(BaseDataDownloader):
         try:
             # Test with stable API format: /stable/profile?symbol=AAPL&apikey=xxx
             url = f"{self.stable_url}/profile"
-            params = {
-                'symbol': 'AAPL',
-                'apikey': self.api_key
-            }
+            params = {"symbol": "AAPL", "apikey": self.api_key}
 
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
@@ -807,7 +784,7 @@ if __name__ == "__main__":
         end_date = datetime.now()
         start_date = end_date - timedelta(days=30)
 
-        df = downloader.get_ohlcv('AAPL', '1d', start_date, end_date)
+        df = downloader.get_ohlcv("AAPL", "1d", start_date, end_date)
         if df is not None:
             print(f"✅ Downloaded {len(df)} OHLCV data points for AAPL")
             print(df.head())
@@ -815,7 +792,7 @@ if __name__ == "__main__":
             print("❌ Failed to download OHLCV data")
 
         # Test fundamental data download
-        fundamentals = downloader.get_fundamentals('AAPL')
+        fundamentals = downloader.get_fundamentals("AAPL")
         if fundamentals:
             print("✅ Downloaded fundamental data for AAPL")
             print(f"Company: {fundamentals.get('profile', {}).get('companyName', 'N/A')}")
@@ -824,11 +801,13 @@ if __name__ == "__main__":
             print("❌ Failed to download fundamental data")
 
         # Test stock screener
-        screener_results = downloader.get_stock_screener({
-            'marketCapMoreThan': 1000000000,  # > $1B market cap
-            'peRatioLessThan': 20,            # P/E < 20
-            'limit': 10
-        })
+        screener_results = downloader.get_stock_screener(
+            {
+                "marketCapMoreThan": 1000000000,  # > $1B market cap
+                "peRatioLessThan": 20,  # P/E < 20
+                "limit": 10,
+            }
+        )
         if screener_results:
             print(f"✅ Stock screener returned {len(screener_results)} results")
             for stock in screener_results[:3]:  # Show first 3

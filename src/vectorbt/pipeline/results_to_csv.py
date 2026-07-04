@@ -1,10 +1,11 @@
-import os
 import json
-import pandas as pd
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any, Dict
 
-def flatten_dict(d: Dict[str, Any], parent_key: str = '', sep: str = '_') -> Dict[str, Any]:
+import pandas as pd
+
+
+def flatten_dict(d: Dict[str, Any], parent_key: str = "", sep: str = "_") -> Dict[str, Any]:
     """Recursively flatten a nested dictionary."""
     items = []
     for k, v in d.items():
@@ -14,6 +15,7 @@ def flatten_dict(d: Dict[str, Any], parent_key: str = '', sep: str = '_') -> Dic
         else:
             items.append((new_key, v))
     return dict(items)
+
 
 def aggregate_results(results_dir: str = "results/vectorbt"):
     """
@@ -44,24 +46,24 @@ def aggregate_results(results_dir: str = "results/vectorbt"):
             interval = parts[1]
 
         try:
-            with open(json_file, 'r') as f:
+            with open(json_file) as f:
                 data = json.load(f)
 
             # If strategy_name is in the JSON (newly generated), use that
-            if 'strategy_name' in data:
-                strategy_name = data['strategy_name']
+            if "strategy_name" in data:
+                strategy_name = data["strategy_name"]
 
             # Remove 'trades' list as it's too large for a flat CSV cell
-            data.pop('trades', None)
+            data.pop("trades", None)
 
             # Flatten metrics and params
             flat_data = flatten_dict(data)
 
             # Add metadata (override if already in JSON but ensure it reflects folder structure too)
-            flat_data['strategy_name'] = strategy_name
-            flat_data['symbol'] = symbol
-            flat_data['interval'] = interval
-            flat_data['source_file'] = str(json_file)
+            flat_data["strategy_name"] = strategy_name
+            flat_data["symbol"] = symbol
+            flat_data["interval"] = interval
+            flat_data["source_file"] = str(json_file)
 
             all_data.append(flat_data)
         except Exception as e:
@@ -75,7 +77,7 @@ def aggregate_results(results_dir: str = "results/vectorbt"):
     df = pd.DataFrame(all_data)
 
     # Reorder columns to put metadata first
-    cols = ['strategy_name', 'symbol', 'interval', 'trial_id']
+    cols = ["strategy_name", "symbol", "interval", "trial_id"]
     actual_cols = [c for c in cols if c in df.columns]
     other_cols = [c for c in df.columns if c not in actual_cols]
     df = df[actual_cols + other_cols]
@@ -83,6 +85,7 @@ def aggregate_results(results_dir: str = "results/vectorbt"):
     output_path = base_path / "comparison_report.csv"
     df.to_csv(output_path, index=False)
     print(f"✅ Aggregated {len(all_data)} trials into {output_path.absolute()}")
+
 
 if __name__ == "__main__":
     aggregate_results()

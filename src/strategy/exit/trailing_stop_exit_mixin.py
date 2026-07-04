@@ -25,11 +25,10 @@ Configuration Example (New TALib Architecture):
     }
 """
 
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List
 
-import backtrader as bt
-from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
+from src.strategy.exit.base_exit_mixin import BaseExitMixin
 
 logger = setup_logger(__name__)
 
@@ -39,7 +38,7 @@ class TrailingStopExitMixin(BaseExitMixin):
     New Architecture only.
     """
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
         self.highest_price = 0
@@ -67,13 +66,7 @@ class TrailingStopExitMixin(BaseExitMixin):
             return []
 
         atr_period = params.get("atr_period") or params.get("x_atr_period", 14)
-        return [
-            {
-                "type": "ATR",
-                "params": {"timeperiod": atr_period},
-                "fields_mapping": {"atr": "exit_atr"}
-            }
-        ]
+        return [{"type": "ATR", "params": {"timeperiod": atr_period}, "fields_mapping": {"atr": "exit_atr"}}]
 
     def _init_indicators(self):
         """No-op for new architecture."""
@@ -81,17 +74,17 @@ class TrailingStopExitMixin(BaseExitMixin):
 
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
-        use_atr = self._resolve_param('use_atr', 'x_use_atr', False)
+        use_atr = self._resolve_param("use_atr", "x_use_atr", False)
         if not use_atr:
             return 0
-        return self._resolve_param('atr_period', 'x_atr_period', 14)
+        return self._resolve_param("atr_period", "x_atr_period", 14)
 
     def are_indicators_ready(self) -> bool:
         """Check if required indicators exist in the strategy registry."""
-        use_atr = self._resolve_param('use_atr', 'x_use_atr', False)
+        use_atr = self._resolve_param("use_atr", "x_use_atr", False)
         if not use_atr:
             return True
-        return 'exit_atr' in getattr(self.strategy, 'indicators', {})
+        return "exit_atr" in getattr(self.strategy, "indicators", {})
 
     def should_exit(self) -> bool:
         """Check if we should exit a position."""
@@ -109,14 +102,14 @@ class TrailingStopExitMixin(BaseExitMixin):
             self.highest_price = max(self.highest_price, price)
 
             # Get parameters
-            use_atr = self._resolve_param('use_atr', 'x_use_atr', False)
-            atr_multiplier = self._resolve_param('atr_multiplier', 'x_atr_multiplier', 2.0)
-            trail_pct = self._resolve_param('trail_pct', 'x_trail_pct', 0.02)
-            activation_pct = self._resolve_param('activation_pct', 'x_activation_pct', 0.0)
+            use_atr = self._resolve_param("use_atr", "x_use_atr", False)
+            atr_multiplier = self._resolve_param("atr_multiplier", "x_atr_multiplier", 2.0)
+            trail_pct = self._resolve_param("trail_pct", "x_trail_pct", 0.02)
+            activation_pct = self._resolve_param("activation_pct", "x_activation_pct", 0.0)
 
             # Calculate stop level
             if use_atr:
-                atr_val = self.get_indicator('exit_atr')
+                atr_val = self.get_indicator("exit_atr")
                 stop_level = self.highest_price - (atr_val * atr_multiplier)
             else:
                 stop_level = self.highest_price * (1 - trail_pct)

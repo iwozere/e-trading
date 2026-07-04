@@ -14,7 +14,6 @@ Crisis events used for annotations:
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -35,14 +34,21 @@ _CRISIS_EVENTS: dict = {
 }
 
 _PALETTE = [
-    "#00B4D8", "#90E0EF", "#F77F00", "#FCBF49",
-    "#E63946", "#A8DADC", "#457B9D", "#1D3557",
+    "#00B4D8",
+    "#90E0EF",
+    "#F77F00",
+    "#FCBF49",
+    "#E63946",
+    "#A8DADC",
+    "#457B9D",
+    "#1D3557",
 ]
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def save_chart(fig: go.Figure, name: str, charts_dir: Path) -> None:
     """
@@ -73,7 +79,8 @@ def _add_crisis_lines(fig: go.Figure, row: int = 1, col: int = 1) -> None:
             line_dash="dot",
             line_color="rgba(255,100,100,0.5)",
             line_width=1,
-            row=row, col=col,  # type: ignore[call-arg]
+            row=row,
+            col=col,  # type: ignore[call-arg]
         )
         fig.add_annotation(
             x=date_str,
@@ -84,13 +91,15 @@ def _add_crisis_lines(fig: go.Figure, row: int = 1, col: int = 1) -> None:
             font={"size": 9, "color": "#ff6464"},
             textangle=-90,
             xanchor="right",
-            row=row, col=col,  # type: ignore[call-arg]
+            row=row,
+            col=col,  # type: ignore[call-arg]
         )
 
 
 # ---------------------------------------------------------------------------
 # Chart 1: S&P 500 Price + Drawdown (dual axis) + VIX subplot
 # ---------------------------------------------------------------------------
+
 
 def chart_sp500_drawdown(df: pd.DataFrame) -> go.Figure:
     """
@@ -103,7 +112,8 @@ def chart_sp500_drawdown(df: pd.DataFrame) -> go.Figure:
         go.Figure with two rows: price+drawdown above, VIX below.
     """
     fig = make_subplots(
-        rows=2, cols=1,
+        rows=2,
+        cols=1,
         shared_xaxes=True,
         row_heights=[0.65, 0.35],
         vertical_spacing=0.04,
@@ -113,11 +123,14 @@ def chart_sp500_drawdown(df: pd.DataFrame) -> go.Figure:
     # SP500 price
     fig.add_trace(
         go.Scatter(
-            x=df.index, y=df["close"],
+            x=df.index,
+            y=df["close"],
             name="S&P 500 (SPY)",
             line={"color": _PALETTE[0], "width": 1.5},
         ),
-        row=1, col=1, secondary_y=False,
+        row=1,
+        col=1,
+        secondary_y=False,
     )
 
     # Drawdown as filled area
@@ -125,28 +138,40 @@ def chart_sp500_drawdown(df: pd.DataFrame) -> go.Figure:
     deep_mask = draw < -10
     fig.add_trace(
         go.Scatter(
-            x=df.index, y=draw,
+            x=df.index,
+            y=draw,
             name="Drawdown %",
             fill="tozeroy",
             line={"width": 0},
             fillcolor="rgba(231,76,60,0.35)",
             marker={"color": np.where(deep_mask, "#e74c3c", "#f39c12")},  # type: ignore[arg-type]
         ),
-        row=1, col=1, secondary_y=True,
+        row=1,
+        col=1,
+        secondary_y=True,
     )
 
     # Threshold line
-    fig.add_hline(y=-10, line_dash="dash", line_color="#e74c3c", line_width=1, row=1, col=1,  # type: ignore[call-arg]
-                  secondary_y=True)
+    fig.add_hline(
+        y=-10,
+        line_dash="dash",
+        line_color="#e74c3c",
+        line_width=1,
+        row=1,
+        col=1,  # type: ignore[call-arg]
+        secondary_y=True,
+    )
 
     # VIX
     fig.add_trace(
         go.Scatter(
-            x=df.index, y=df["vix"],
+            x=df.index,
+            y=df["vix"],
             name="VIX",
             line={"color": _PALETTE[2], "width": 1.2},
         ),
-        row=2, col=1,
+        row=2,
+        col=1,
     )
     fig.add_hline(y=30, line_dash="dash", line_color="#e74c3c", line_width=1, row=2, col=1)  # type: ignore[call-arg]
 
@@ -167,6 +192,7 @@ def chart_sp500_drawdown(df: pd.DataFrame) -> go.Figure:
 # ---------------------------------------------------------------------------
 # Chart 2: Strike Optimization Heatmap
 # ---------------------------------------------------------------------------
+
 
 def chart_heatmap(opt_df: pd.DataFrame) -> go.Figure:
     """
@@ -191,9 +217,7 @@ def chart_heatmap(opt_df: pd.DataFrame) -> go.Figure:
     traces = []
     buttons = []
     for i, (metric_col, metric_label) in enumerate(metrics.items()):
-        pivot = opt_df.pivot_table(
-            index="T_days", columns="strike_otm_pct", values=metric_col
-        )
+        pivot = opt_df.pivot_table(index="T_days", columns="strike_otm_pct", values=metric_col)
         pivot = pivot.reindex(index=T_vals, columns=otm_vals)
         traces.append(
             go.Heatmap(
@@ -203,31 +227,33 @@ def chart_heatmap(opt_df: pd.DataFrame) -> go.Figure:
                 colorscale="RdYlGn",
                 colorbar={"title": metric_label},
                 visible=(i == 0),
-                hovertemplate=(
-                    f"OTM: %{{x}}<br>Tenor: %{{y}}<br>{metric_label}: %{{z:.2f}}<extra></extra>"
-                ),
+                hovertemplate=(f"OTM: %{{x}}<br>Tenor: %{{y}}<br>{metric_label}: %{{z:.2f}}<extra></extra>"),
             )
         )
         visibility = [j == i for j in range(len(metrics))]
-        buttons.append({
-            "label": metric_label,
-            "method": "update",
-            "args": [{"visible": visibility}, {"title": f"Strike Optimization — {metric_label}"}],
-        })
+        buttons.append(
+            {
+                "label": metric_label,
+                "method": "update",
+                "args": [{"visible": visibility}, {"title": f"Strike Optimization — {metric_label}"}],
+            }
+        )
 
     fig = go.Figure(data=traces)
     fig.update_layout(
         template=_TEMPLATE,
         title="Strike Optimization — Net ROI (%)",
         height=450,
-        updatemenus=[{
-            "buttons": buttons,
-            "direction": "down",
-            "showactive": True,
-            "x": 0.01,
-            "xanchor": "left",
-            "y": 1.18,
-        }],
+        updatemenus=[
+            {
+                "buttons": buttons,
+                "direction": "down",
+                "showactive": True,
+                "x": 0.01,
+                "xanchor": "left",
+                "y": 1.18,
+            }
+        ],
         xaxis_title="OTM %",
         yaxis_title="Tenor",
     )
@@ -238,9 +264,10 @@ def chart_heatmap(opt_df: pd.DataFrame) -> go.Figure:
 # Chart 3: Cumulative P&L Comparison
 # ---------------------------------------------------------------------------
 
+
 def chart_cumulative_pnl(
     results: dict,
-    df: Optional[pd.DataFrame] = None,
+    df: pd.DataFrame | None = None,
 ) -> go.Figure:
     """
     Multi-line cumulative P&L, one trace per simulated strike.
@@ -264,7 +291,8 @@ def chart_cumulative_pnl(
                 band_start = date
             elif dd >= -0.10 and in_drawdown:
                 fig.add_vrect(
-                    x0=str(band_start), x1=str(date),
+                    x0=str(band_start),
+                    x1=str(date),
                     fillcolor="rgba(231,76,60,0.12)",
                     line_width=0,
                 )
@@ -274,12 +302,14 @@ def chart_cumulative_pnl(
         if sim.empty:
             continue
         color = _PALETTE[i % len(_PALETTE)]
-        fig.add_trace(go.Scatter(
-            x=sim.index,
-            y=sim["cum_pnl"],
-            name=label,
-            line={"color": color, "width": 1.8},
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=sim.index,
+                y=sim["cum_pnl"],
+                name=label,
+                line={"color": color, "width": 1.8},
+            )
+        )
         # Annotate spike payoffs (top 3 payoffs)
         top_idx = sim["payoff"].nlargest(3).index
         for date in top_idx:
@@ -312,6 +342,7 @@ def chart_cumulative_pnl(
 # Chart 4: Payoff Distribution
 # ---------------------------------------------------------------------------
 
+
 def chart_payoff_distribution(sim: pd.DataFrame) -> go.Figure:
     """
     Histogram of per-period P&L with normal distribution overlay.
@@ -326,30 +357,41 @@ def chart_payoff_distribution(sim: pd.DataFrame) -> go.Figure:
     fig = go.Figure()
 
     # Histogram
-    fig.add_trace(go.Histogram(
-        x=pnl,
-        nbinsx=60,
-        name="P&L per Period",
-        marker_color=_PALETTE[0],
-        opacity=0.75,
-        histnorm="probability density",
-    ))
+    fig.add_trace(
+        go.Histogram(
+            x=pnl,
+            nbinsx=60,
+            name="P&L per Period",
+            marker_color=_PALETTE[0],
+            opacity=0.75,
+            histnorm="probability density",
+        )
+    )
 
     # Normal overlay
     x_range = np.linspace(pnl.min(), pnl.max(), 300)
     normal_y = norm.pdf(x_range, pnl.mean(), pnl.std())
-    fig.add_trace(go.Scatter(
-        x=x_range, y=normal_y,
-        name="Normal fit",
-        line={"color": _PALETTE[2], "dash": "dash", "width": 1.5},
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=x_range,
+            y=normal_y,
+            name="Normal fit",
+            line={"color": _PALETTE[2], "dash": "dash", "width": 1.5},
+        )
+    )
 
     mean_loss = float(pnl[pnl < 0].mean())
     max_gain = float(pnl.max())
-    fig.add_vline(x=mean_loss, line_dash="dot", line_color="#e74c3c", line_width=1,
-                  annotation_text=f"Avg bleed: ${mean_loss:,.0f}")
-    fig.add_vline(x=max_gain, line_dash="dot", line_color="#2ecc71", line_width=1,
-                  annotation_text=f"Max gain: ${max_gain:,.0f}")
+    fig.add_vline(
+        x=mean_loss,
+        line_dash="dot",
+        line_color="#e74c3c",
+        line_width=1,
+        annotation_text=f"Avg bleed: ${mean_loss:,.0f}",
+    )
+    fig.add_vline(
+        x=max_gain, line_dash="dot", line_color="#2ecc71", line_width=1, annotation_text=f"Max gain: ${max_gain:,.0f}"
+    )
 
     fig.update_layout(
         template=_TEMPLATE,
@@ -366,6 +408,7 @@ def chart_payoff_distribution(sim: pd.DataFrame) -> go.Figure:
 # Chart 5: Premium Bleed vs Payoff
 # ---------------------------------------------------------------------------
 
+
 def chart_premium_bleed(sim: pd.DataFrame, window: int = 12) -> go.Figure:
     """
     Rolling 12-month total premium paid vs payoff received.
@@ -381,20 +424,26 @@ def chart_premium_bleed(sim: pd.DataFrame, window: int = 12) -> go.Figure:
     roll_payoff = sim["payoff"].rolling(window).sum()
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=sim.index, y=roll_cost,
-        name=f"Rolling {window}-period Cost",
-        fill="tozeroy",
-        fillcolor="rgba(231,76,60,0.25)",
-        line={"color": "#e74c3c", "width": 1.5},
-    ))
-    fig.add_trace(go.Scatter(
-        x=sim.index, y=roll_payoff,
-        name=f"Rolling {window}-period Payoff",
-        fill="tozeroy",
-        fillcolor="rgba(46,204,113,0.25)",
-        line={"color": "#2ecc71", "width": 1.5},
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=sim.index,
+            y=roll_cost,
+            name=f"Rolling {window}-period Cost",
+            fill="tozeroy",
+            fillcolor="rgba(231,76,60,0.25)",
+            line={"color": "#e74c3c", "width": 1.5},
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=sim.index,
+            y=roll_payoff,
+            name=f"Rolling {window}-period Payoff",
+            fill="tozeroy",
+            fillcolor="rgba(46,204,113,0.25)",
+            line={"color": "#2ecc71", "width": 1.5},
+        )
+    )
 
     fig.update_layout(
         template=_TEMPLATE,
@@ -410,6 +459,7 @@ def chart_premium_bleed(sim: pd.DataFrame, window: int = 12) -> go.Figure:
 # ---------------------------------------------------------------------------
 # Chart 6: VIX vs Option Cost Scatter
 # ---------------------------------------------------------------------------
+
 
 def chart_vix_vs_cost(sim: pd.DataFrame) -> go.Figure:
     """
@@ -432,22 +482,20 @@ def chart_vix_vs_cost(sim: pd.DataFrame) -> go.Figure:
         groups = [(sim.get("moneyness", pd.Series([0.85])).iloc[0], sim)]
 
     for i, (otm_val, grp) in enumerate(groups):
-        fig.add_trace(go.Scatter(
-            x=grp["vix"],
-            y=grp["put_price_pct_of_S"],
-            mode="markers",
-            name=f"{otm_val:.0f}% OTM",
-            marker={
-                "size": 5,
-                "color": _PALETTE[i % len(_PALETTE)],
-                "opacity": 0.7,
-            },
-            hovertemplate=(
-                "VIX: %{x:.1f}<br>"
-                "Put cost: %{y:.2f}% of S<br>"
-                "<extra></extra>"
-            ),
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=grp["vix"],
+                y=grp["put_price_pct_of_S"],
+                mode="markers",
+                name=f"{otm_val:.0f}% OTM",
+                marker={
+                    "size": 5,
+                    "color": _PALETTE[i % len(_PALETTE)],
+                    "opacity": 0.7,
+                },
+                hovertemplate=("VIX: %{x:.1f}<br>Put cost: %{y:.2f}% of S<br><extra></extra>"),
+            )
+        )
 
     fig.update_layout(
         template=_TEMPLATE,
@@ -463,6 +511,7 @@ def chart_vix_vs_cost(sim: pd.DataFrame) -> go.Figure:
 # Chart 7: GDELT Tone vs Crisis Events (optional)
 # ---------------------------------------------------------------------------
 
+
 def chart_gdelt_tone(df: pd.DataFrame) -> go.Figure:
     """
     GDELT daily average tone and rolling 5-day MA vs S&P 500 drawdown.
@@ -477,8 +526,12 @@ def chart_gdelt_tone(df: pd.DataFrame) -> go.Figure:
         fig = go.Figure()
         fig.add_annotation(
             text="GDELT data not available",
-            xref="paper", yref="paper", x=0.5, y=0.5,
-            showarrow=False, font={"size": 18, "color": "gray"},
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+            font={"size": 18, "color": "gray"},
         )
         fig.update_layout(template=_TEMPLATE, title="GDELT Tone vs Drawdown", height=450)
         return fig
@@ -488,32 +541,49 @@ def chart_gdelt_tone(df: pd.DataFrame) -> go.Figure:
     gdelt_start = df["avgtone"].first_valid_index()
 
     # GDELT tone
-    fig.add_trace(go.Scatter(
-        x=df.index, y=df["avgtone"],
-        name="GDELT AvgTone",
-        line={"color": _PALETTE[1], "width": 0.8},
-        opacity=0.4,
-    ), secondary_y=False)
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["avgtone"],
+            name="GDELT AvgTone",
+            line={"color": _PALETTE[1], "width": 0.8},
+            opacity=0.4,
+        ),
+        secondary_y=False,
+    )
 
     if "gdelt_tone_ma5" in df.columns:
-        fig.add_trace(go.Scatter(
-            x=df.index, y=df["gdelt_tone_ma5"],
-            name="GDELT Tone MA5",
-            line={"color": _PALETTE[0], "width": 1.5},
-        ), secondary_y=False)
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=df["gdelt_tone_ma5"],
+                name="GDELT Tone MA5",
+                line={"color": _PALETTE[0], "width": 1.5},
+            ),
+            secondary_y=False,
+        )
 
     # Drawdown
-    fig.add_trace(go.Scatter(
-        x=df.index, y=df["drawdown"] * 100,
-        name="S&P 500 Drawdown %",
-        fill="tozeroy",
-        fillcolor="rgba(231,76,60,0.2)",
-        line={"color": "#e74c3c", "width": 1.2},
-    ), secondary_y=True)
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["drawdown"] * 100,
+            name="S&P 500 Drawdown %",
+            fill="tozeroy",
+            fillcolor="rgba(231,76,60,0.2)",
+            line={"color": "#e74c3c", "width": 1.2},
+        ),
+        secondary_y=True,
+    )
 
     if gdelt_start is not None:
-        fig.add_vline(x=str(gdelt_start), line_dash="dash", line_color="gray",
-                      annotation_text="GDELT v2 Start", annotation_position="top right")
+        fig.add_vline(
+            x=str(gdelt_start),
+            line_dash="dash",
+            line_color="gray",
+            annotation_text="GDELT v2 Start",
+            annotation_position="top right",
+        )
 
     fig.update_layout(
         template=_TEMPLATE,
@@ -530,6 +600,7 @@ def chart_gdelt_tone(df: pd.DataFrame) -> go.Figure:
 # Chart 8: Pareto Frontier (Win Rate vs ROI)
 # ---------------------------------------------------------------------------
 
+
 def chart_pareto(opt_df: pd.DataFrame) -> go.Figure:
     """
     Scatter of (win_rate_pct, net_roi_pct) for all grid combinations.
@@ -544,9 +615,7 @@ def chart_pareto(opt_df: pd.DataFrame) -> go.Figure:
     """
     x = opt_df["win_rate_pct"].values
     y = opt_df["net_roi_pct"].values
-    labels = opt_df.apply(
-        lambda r: f"{r['strike_otm_pct']:.0f}% OTM, {r['T_days']:.0f}d", axis=1
-    )
+    labels = opt_df.apply(lambda r: f"{r['strike_otm_pct']:.0f}% OTM, {r['T_days']:.0f}d", axis=1)
 
     # Identify Pareto-efficient points (maximise both axes)
     is_pareto = _pareto_mask(x, y)
@@ -554,37 +623,44 @@ def chart_pareto(opt_df: pd.DataFrame) -> go.Figure:
     fig = go.Figure()
 
     # All points
-    fig.add_trace(go.Scatter(
-        x=x[~is_pareto], y=y[~is_pareto],
-        mode="markers",
-        text=labels[~is_pareto],
-        name="Grid Points",
-        marker={"size": 7, "color": _PALETTE[4], "opacity": 0.6},
-        hovertemplate="%{text}<br>Win Rate: %{x:.1f}%<br>ROI: %{y:.1f}%<extra></extra>",
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=x[~is_pareto],
+            y=y[~is_pareto],
+            mode="markers",
+            text=labels[~is_pareto],
+            name="Grid Points",
+            marker={"size": 7, "color": _PALETTE[4], "opacity": 0.6},
+            hovertemplate="%{text}<br>Win Rate: %{x:.1f}%<br>ROI: %{y:.1f}%<extra></extra>",
+        )
+    )
 
     # Pareto frontier
     pf_x = x[is_pareto]
     pf_y = y[is_pareto]
     sort_idx = np.argsort(pf_x)
-    fig.add_trace(go.Scatter(
-        x=pf_x[sort_idx], y=pf_y[sort_idx],
-        mode="markers+lines",
-        text=labels[is_pareto].values[sort_idx],
-        name="Pareto Frontier",
-        marker={"size": 10, "color": "#FFD700", "symbol": "star"},
-        line={"color": "#FFD700", "width": 2},
-        hovertemplate="%{text}<br>Win Rate: %{x:.1f}%<br>ROI: %{y:.1f}%<extra></extra>",
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=pf_x[sort_idx],
+            y=pf_y[sort_idx],
+            mode="markers+lines",
+            text=labels[is_pareto].values[sort_idx],
+            name="Pareto Frontier",
+            marker={"size": 10, "color": "#FFD700", "symbol": "star"},
+            line={"color": "#FFD700", "width": 2},
+            hovertemplate="%{text}<br>Win Rate: %{x:.1f}%<br>ROI: %{y:.1f}%<extra></extra>",
+        )
+    )
 
     med_win = float(np.median(x))
     med_roi = float(np.median(y))
-    fig.add_vline(x=med_win, line_dash="dash", line_color="gray", line_width=1,
-                  annotation_text=f"Median WR {med_win:.1f}%")
-    fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1,
-                  annotation_text="Break-even")
-    fig.add_hline(y=med_roi, line_dash="dash", line_color="#aaa", line_width=1,
-                  annotation_text=f"Median ROI {med_roi:.1f}%")
+    fig.add_vline(
+        x=med_win, line_dash="dash", line_color="gray", line_width=1, annotation_text=f"Median WR {med_win:.1f}%"
+    )
+    fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1, annotation_text="Break-even")
+    fig.add_hline(
+        y=med_roi, line_dash="dash", line_color="#aaa", line_width=1, annotation_text=f"Median ROI {med_roi:.1f}%"
+    )
 
     fig.update_layout(
         template=_TEMPLATE,

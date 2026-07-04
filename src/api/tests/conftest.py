@@ -7,20 +7,21 @@ Shared test configuration, fixtures, and utilities for the web UI backend tests.
 Provides database setup, authentication mocking, and common test data.
 """
 
-import pytest
-from unittest.mock import Mock
-from fastapi.testclient import TestClient
-from pathlib import Path
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
+from unittest.mock import Mock
+
+import pytest
+from fastapi.testclient import TestClient
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.api.auth import create_access_token, get_current_user, require_admin, require_trader_or_admin
 from src.api.main import app
 from src.data.db.models.model_users import User
-from src.api.auth import create_access_token, get_current_user, require_admin, require_trader_or_admin
 
 
 @pytest.fixture
@@ -37,9 +38,9 @@ def mock_admin_user():
         email="admin@test.com",
         role="admin",
         is_active=True,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-        last_login=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        last_login=datetime.now(UTC),
     )
 
 
@@ -51,9 +52,9 @@ def mock_trader_user():
         email="trader@test.com",
         role="trader",
         is_active=True,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-        last_login=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        last_login=datetime.now(UTC),
     )
 
 
@@ -65,9 +66,9 @@ def mock_viewer_user():
         email="viewer@test.com",
         role="viewer",
         is_active=True,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-        last_login=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        last_login=datetime.now(UTC),
     )
 
 
@@ -79,34 +80,28 @@ def mock_inactive_user():
         email="inactive@test.com",
         role="trader",
         is_active=False,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-        last_login=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        last_login=datetime.now(UTC),
     )
 
 
 @pytest.fixture
 def admin_token(mock_admin_user):
     """Create JWT token for admin user."""
-    return create_access_token(
-        data={"sub": str(mock_admin_user.id), "username": "admin"}
-    )
+    return create_access_token(data={"sub": str(mock_admin_user.id), "username": "admin"})
 
 
 @pytest.fixture
 def trader_token(mock_trader_user):
     """Create JWT token for trader user."""
-    return create_access_token(
-        data={"sub": str(mock_trader_user.id), "username": "trader"}
-    )
+    return create_access_token(data={"sub": str(mock_trader_user.id), "username": "trader"})
 
 
 @pytest.fixture
 def viewer_token(mock_viewer_user):
     """Create JWT token for viewer user."""
-    return create_access_token(
-        data={"sub": str(mock_viewer_user.id), "username": "viewer"}
-    )
+    return create_access_token(data={"sub": str(mock_viewer_user.id), "username": "viewer"})
 
 
 @pytest.fixture
@@ -162,14 +157,10 @@ def mock_monitoring_service():
     """Mock monitoring service for testing."""
     mock_service = Mock()
     mock_service.get_comprehensive_metrics.return_value = {
-        'cpu': {'usage_percent': 25.5},
-        'memory': {'usage_percent': 60.2},
-        'temperature': {'average_celsius': 45.0},
-        'disk': {
-            'partitions': {
-                '/': {'usage_percent': 75.0}
-            }
-        }
+        "cpu": {"usage_percent": 25.5},
+        "memory": {"usage_percent": 60.2},
+        "temperature": {"average_celsius": 45.0},
+        "disk": {"partitions": {"/": {"usage_percent": 75.0}}},
     }
     mock_service.get_alerts.return_value = []
     mock_service.acknowledge_alert.return_value = True
@@ -185,46 +176,46 @@ def mock_telegram_service():
     # Mock user data
     mock_service.list_users.return_value = [
         {
-            'telegram_user_id': '123456789',
-            'email': 'test@example.com',
-            'verified': True,
-            'approved': True,
-            'language': 'en',
-            'is_admin': False,
-            'max_alerts': 5,
-            'max_schedules': 5,
-            'created_at': datetime.now(timezone.utc),
-            'updated_at': datetime.now(timezone.utc)
+            "telegram_user_id": "123456789",
+            "email": "test@example.com",
+            "verified": True,
+            "approved": True,
+            "language": "en",
+            "is_admin": False,
+            "max_alerts": 5,
+            "max_schedules": 5,
+            "created_at": datetime.now(UTC),
+            "updated_at": datetime.now(UTC),
         }
     ]
 
     # Mock alert data
     mock_service.get_active_alerts.return_value = [
         {
-            'id': 1,
-            'user_id': '123456789',
-            'ticker': 'BTCUSDT',
-            'price': 50000.0,
-            'condition': 'above',
-            'active': True,
-            'email': False,
-            'created': datetime.now(timezone.utc)
+            "id": 1,
+            "user_id": "123456789",
+            "ticker": "BTCUSDT",
+            "price": 50000.0,
+            "condition": "above",
+            "active": True,
+            "email": False,
+            "created": datetime.now(UTC),
         }
     ]
 
     # Mock audit data
     mock_service.get_all_command_audit.return_value = [
         {
-            'id': 1,
-            'telegram_user_id': '123456789',
-            'command': '/start',
-            'full_message': '/start',
-            'is_registered_user': True,
-            'user_email': 'test@example.com',
-            'success': True,
-            'error_message': None,
-            'response_time_ms': 150,
-            'created': datetime.now(timezone.utc)
+            "id": 1,
+            "telegram_user_id": "123456789",
+            "command": "/start",
+            "full_message": "/start",
+            "is_registered_user": True,
+            "user_email": "test@example.com",
+            "success": True,
+            "error_message": None,
+            "response_time_ms": 150,
+            "created": datetime.now(UTC),
         }
     ]
 
@@ -239,31 +230,12 @@ def sample_strategy_config():
         "name": "Test Strategy",
         "enabled": True,
         "symbol": "BTCUSDT",
-        "broker": {
-            "type": "paper",
-            "balance": 10000
-        },
-        "strategy": {
-            "type": "sma_crossover",
-            "fast_period": 10,
-            "slow_period": 20
-        },
-        "data": {
-            "provider": "binance",
-            "timeframe": "1h"
-        },
-        "trading": {
-            "position_size": 0.1,
-            "max_positions": 1
-        },
-        "risk_management": {
-            "stop_loss": 0.02,
-            "take_profit": 0.04
-        },
-        "notifications": {
-            "enabled": True,
-            "channels": ["telegram"]
-        }
+        "broker": {"type": "paper", "balance": 10000},
+        "strategy": {"type": "sma_crossover", "fast_period": 10, "slow_period": 20},
+        "data": {"provider": "binance", "timeframe": "1h"},
+        "trading": {"position_size": 0.1, "max_positions": 1},
+        "risk_management": {"stop_loss": 0.02, "take_profit": 0.04},
+        "notifications": {"enabled": True, "channels": ["telegram"]},
     }
 
 
@@ -280,7 +252,7 @@ def sample_strategy_status():
         "broker_type": "paper",
         "trading_mode": "paper",
         "symbol": "BTCUSDT",
-        "strategy_type": "sma_crossover"
+        "strategy_type": "sma_crossover",
     }
 
 
@@ -309,9 +281,9 @@ class MockUser:
         self.email = email
         self.role = role
         self.is_active = is_active
-        self.created_at = datetime.now(timezone.utc)
-        self.updated_at = datetime.now(timezone.utc)
-        self.last_login = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
+        self.updated_at = datetime.now(UTC)
+        self.last_login = datetime.now(UTC)
 
     def to_dict(self):
         return {
@@ -321,7 +293,7 @@ class MockUser:
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
-            "last_login": self.last_login.isoformat() if self.last_login else None
+            "last_login": self.last_login.isoformat() if self.last_login else None,
         }
 
     def verify_password(self, password):
@@ -331,34 +303,38 @@ class MockUser:
 
 def override_get_current_user(user):
     """Helper to override get_current_user dependency."""
+
     def _get_current_user():
         return user
+
     return _get_current_user
 
 
 def override_require_admin(user):
     """Helper to override require_admin dependency."""
+
     def _require_admin():
         if user.role != "admin":
             from fastapi import HTTPException, status
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied. Required roles: admin"
-            )
+
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied. Required roles: admin")
         return user
+
     return _require_admin
 
 
 def override_require_trader_or_admin(user):
     """Helper to override require_trader_or_admin dependency."""
+
     def _require_trader_or_admin():
         if user.role not in ["trader", "admin"]:
             from fastapi import HTTPException, status
+
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied. Required roles: trader, admin"
+                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied. Required roles: trader, admin"
             )
         return user
+
     return _require_trader_or_admin
 
 
@@ -396,87 +372,87 @@ TEST_SCHEDULE_ID = 1
 # Mock responses
 MOCK_TELEGRAM_USERS = [
     {
-        'telegram_user_id': '123456789',
-        'email': 'test1@example.com',
-        'verified': True,
-        'approved': True,
-        'language': 'en',
-        'is_admin': False,
-        'max_alerts': 5,
-        'max_schedules': 5
+        "telegram_user_id": "123456789",
+        "email": "test1@example.com",
+        "verified": True,
+        "approved": True,
+        "language": "en",
+        "is_admin": False,
+        "max_alerts": 5,
+        "max_schedules": 5,
     },
     {
-        'telegram_user_id': '987654321',
-        'email': 'test2@example.com',
-        'verified': True,
-        'approved': False,
-        'language': 'en',
-        'is_admin': False,
-        'max_alerts': 5,
-        'max_schedules': 5
+        "telegram_user_id": "987654321",
+        "email": "test2@example.com",
+        "verified": True,
+        "approved": False,
+        "language": "en",
+        "is_admin": False,
+        "max_alerts": 5,
+        "max_schedules": 5,
     },
     {
-        'telegram_user_id': '555666777',
-        'email': 'test3@example.com',
-        'verified': False,
-        'approved': False,
-        'language': 'en',
-        'is_admin': False,
-        'max_alerts': 5,
-        'max_schedules': 5
-    }
+        "telegram_user_id": "555666777",
+        "email": "test3@example.com",
+        "verified": False,
+        "approved": False,
+        "language": "en",
+        "is_admin": False,
+        "max_alerts": 5,
+        "max_schedules": 5,
+    },
 ]
 
 MOCK_TELEGRAM_ALERTS = [
     {
-        'id': 1,
-        'user_id': '123456789',
-        'ticker': 'BTCUSDT',
-        'price': 50000.0,
-        'condition': 'above',
-        'active': True,
-        'email': False,
-        'alert_type': 'price',
-        'timeframe': '15m',
-        'created': datetime.now(timezone.utc)
+        "id": 1,
+        "user_id": "123456789",
+        "ticker": "BTCUSDT",
+        "price": 50000.0,
+        "condition": "above",
+        "active": True,
+        "email": False,
+        "alert_type": "price",
+        "timeframe": "15m",
+        "created": datetime.now(UTC),
     },
     {
-        'id': 2,
-        'user_id': '123456789',
-        'ticker': 'ETHUSDT',
-        'price': 3000.0,
-        'condition': 'below',
-        'active': False,
-        'email': True,
-        'alert_type': 'price',
-        'timeframe': '1h',
-        'created': datetime.now(timezone.utc)
-    }
+        "id": 2,
+        "user_id": "123456789",
+        "ticker": "ETHUSDT",
+        "price": 3000.0,
+        "condition": "below",
+        "active": False,
+        "email": True,
+        "alert_type": "price",
+        "timeframe": "1h",
+        "created": datetime.now(UTC),
+    },
 ]
 
 MOCK_AUDIT_LOGS = [
     {
-        'id': 1,
-        'telegram_user_id': '123456789',
-        'command': '/start',
-        'full_message': '/start',
-        'is_registered_user': True,
-        'user_email': 'test@example.com',
-        'success': True,
-        'error_message': None,
-        'response_time_ms': 150,
-        'created': datetime.now(timezone.utc)
+        "id": 1,
+        "telegram_user_id": "123456789",
+        "command": "/start",
+        "full_message": "/start",
+        "is_registered_user": True,
+        "user_email": "test@example.com",
+        "success": True,
+        "error_message": None,
+        "response_time_ms": 150,
+        "created": datetime.now(UTC),
     },
     {
-        'id': 2,
-        'telegram_user_id': '123456789',
-        'command': '/report',
-        'full_message': '/report BTCUSDT',
-        'is_registered_user': True,
-        'user_email': 'test@example.com',
-        'success': True,
-        'error_message': None,
-        'response_time_ms': 2500,
-        'created': datetime.now(timezone.utc)
-    }
+        "id": 2,
+        "telegram_user_id": "123456789",
+        "command": "/report",
+        "full_message": "/report BTCUSDT",
+        "is_registered_user": True,
+        "user_email": "test@example.com",
+        "success": True,
+        "error_message": None,
+        "response_time_ms": 2500,
+        "created": datetime.now(UTC),
+    },
 ]

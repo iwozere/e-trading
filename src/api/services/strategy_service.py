@@ -6,10 +6,10 @@ Service layer for managing trading strategies through the web UI.
 Provides a clean interface between the web API and the enhanced trading system.
 """
 
-from typing import List, Dict, Any, Optional
-from pathlib import Path
 import json
 import sys
+from pathlib import Path
+from typing import Any, Dict, List
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -21,8 +21,9 @@ _logger = setup_logger(__name__)
 
 # Import trading system components with error handling
 try:
-    from src.trading.strategy_manager import StrategyManager, StrategyInstance
     from src.model.config_models import StrategyConfig as TradingStrategyConfig
+    from src.trading.strategy_manager import StrategyInstance, StrategyManager
+
     TRADING_SYSTEM_AVAILABLE = True
 except ImportError as e:
     _logger.warning("Trading system not available: %s", e)
@@ -34,11 +35,13 @@ except ImportError as e:
 
 class StrategyValidationError(Exception):
     """Raised when strategy configuration validation fails."""
+
     pass
 
 
 class StrategyOperationError(Exception):
     """Raised when strategy operations fail."""
+
     pass
 
 
@@ -54,7 +57,7 @@ class StrategyManagementService:
     - Error handling and logging
     """
 
-    def __init__(self, strategy_manager: Optional[StrategyManager] = None):
+    def __init__(self, strategy_manager: StrategyManager | None = None):
         """
         Initialize the strategy management service.
 
@@ -82,55 +85,55 @@ class StrategyManagementService:
         """
         try:
             # Required fields validation
-            required_fields = ['id', 'name', 'symbol', 'broker', 'strategy']
+            required_fields = ["id", "name", "symbol", "broker", "strategy"]
             missing_fields = [field for field in required_fields if field not in config]
 
             if missing_fields:
                 raise StrategyValidationError(f"Missing required fields: {', '.join(missing_fields)}")
 
             # Validate strategy ID format
-            strategy_id = config['id']
+            strategy_id = config["id"]
             if not isinstance(strategy_id, str) or not strategy_id.strip():
                 raise StrategyValidationError("Strategy ID must be a non-empty string")
 
             # Validate broker configuration
-            broker_config = config['broker']
+            broker_config = config["broker"]
             if not isinstance(broker_config, dict):
                 raise StrategyValidationError("Broker configuration must be a dictionary")
 
-            required_broker_fields = ['type', 'trading_mode']
+            required_broker_fields = ["type", "trading_mode"]
             missing_broker_fields = [field for field in required_broker_fields if field not in broker_config]
 
             if missing_broker_fields:
                 raise StrategyValidationError(f"Missing broker fields: {', '.join(missing_broker_fields)}")
 
             # Validate trading mode
-            valid_trading_modes = ['paper', 'live']
-            if broker_config['trading_mode'] not in valid_trading_modes:
+            valid_trading_modes = ["paper", "live"]
+            if broker_config["trading_mode"] not in valid_trading_modes:
                 raise StrategyValidationError(f"Trading mode must be one of: {', '.join(valid_trading_modes)}")
 
             # Validate strategy configuration
-            strategy_config = config['strategy']
+            strategy_config = config["strategy"]
             if not isinstance(strategy_config, dict):
                 raise StrategyValidationError("Strategy configuration must be a dictionary")
 
             # Validate symbol format
-            symbol = config['symbol']
+            symbol = config["symbol"]
             if not isinstance(symbol, str) or not symbol.strip():
                 raise StrategyValidationError("Symbol must be a non-empty string")
 
             # Set default values for optional fields
             validated_config = {
-                'id': strategy_id.strip(),
-                'name': config['name'].strip() if isinstance(config['name'], str) else strategy_id,
-                'enabled': config.get('enabled', True),
-                'symbol': symbol.strip().upper(),
-                'broker': broker_config,
-                'strategy': strategy_config,
-                'data': config.get('data', {}),
-                'trading': config.get('trading', {}),
-                'risk_management': config.get('risk_management', {}),
-                'notifications': config.get('notifications', {})
+                "id": strategy_id.strip(),
+                "name": config["name"].strip() if isinstance(config["name"], str) else strategy_id,
+                "enabled": config.get("enabled", True),
+                "symbol": symbol.strip().upper(),
+                "broker": broker_config,
+                "strategy": strategy_config,
+                "data": config.get("data", {}),
+                "trading": config.get("trading", {}),
+                "risk_management": config.get("risk_management", {}),
+                "notifications": config.get("notifications", {}),
             }
 
             _logger.info("Strategy configuration validated successfully: %s", strategy_id)
@@ -162,7 +165,7 @@ class StrategyManagementService:
         try:
             # Validate configuration
             validated_config = self.validate_strategy_config(config)
-            strategy_id = validated_config['id']
+            strategy_id = validated_config["id"]
 
             # Check if strategy already exists
             if strategy_id in self.strategy_manager.strategy_instances:
@@ -175,10 +178,10 @@ class StrategyManagementService:
             _logger.info("Strategy created successfully: %s", strategy_id)
 
             return {
-                'strategy_id': strategy_id,
-                'name': validated_config['name'],
-                'status': 'created',
-                'message': 'Strategy created successfully'
+                "strategy_id": strategy_id,
+                "name": validated_config["name"],
+                "status": "created",
+                "message": "Strategy created successfully",
             }
 
         except (StrategyValidationError, StrategyOperationError):
@@ -216,7 +219,7 @@ class StrategyManagementService:
             instance = self.strategy_manager.strategy_instances[strategy_id]
 
             # Check if strategy is running
-            if instance.status == 'running':
+            if instance.status == "running":
                 _logger.warning("Updating configuration of running strategy: %s", strategy_id)
 
             # Update configuration
@@ -225,10 +228,10 @@ class StrategyManagementService:
             _logger.info("Strategy updated successfully: %s", strategy_id)
 
             return {
-                'strategy_id': strategy_id,
-                'name': validated_config['name'],
-                'status': 'updated',
-                'message': 'Strategy updated successfully'
+                "strategy_id": strategy_id,
+                "name": validated_config["name"],
+                "status": "updated",
+                "message": "Strategy updated successfully",
             }
 
         except (StrategyValidationError, StrategyOperationError):
@@ -262,11 +265,13 @@ class StrategyManagementService:
             instance = self.strategy_manager.strategy_instances[strategy_id]
 
             # Check if strategy is running
-            if instance.status == 'running' and not force:
-                raise StrategyOperationError(f"Cannot delete running strategy '{strategy_id}'. Stop it first or use force=True")
+            if instance.status == "running" and not force:
+                raise StrategyOperationError(
+                    f"Cannot delete running strategy '{strategy_id}'. Stop it first or use force=True"
+                )
 
             # Stop strategy if running
-            if instance.status == 'running':
+            if instance.status == "running":
                 _logger.warning("Force stopping strategy before deletion: %s", strategy_id)
                 await self.stop_strategy(strategy_id)
 
@@ -275,11 +280,7 @@ class StrategyManagementService:
 
             _logger.info("Strategy deleted successfully: %s", strategy_id)
 
-            return {
-                'strategy_id': strategy_id,
-                'status': 'deleted',
-                'message': 'Strategy deleted successfully'
-            }
+            return {"strategy_id": strategy_id, "status": "deleted", "message": "Strategy deleted successfully"}
 
         except StrategyOperationError:
             raise
@@ -312,8 +313,7 @@ class StrategyManagementService:
             instance = self.strategy_manager.strategy_instances[strategy_id]
 
             # Check live trading confirmation
-            if (instance.config.get('broker', {}).get('trading_mode') == 'live' and
-                not confirm_live_trading):
+            if instance.config.get("broker", {}).get("trading_mode") == "live" and not confirm_live_trading:
                 raise StrategyOperationError("Live trading requires explicit confirmation")
 
             # Start strategy
@@ -324,11 +324,7 @@ class StrategyManagementService:
 
             _logger.info("Strategy started successfully: %s", strategy_id)
 
-            return {
-                'strategy_id': strategy_id,
-                'status': 'started',
-                'message': 'Strategy started successfully'
-            }
+            return {"strategy_id": strategy_id, "status": "started", "message": "Strategy started successfully"}
 
         except StrategyOperationError:
             raise
@@ -365,11 +361,7 @@ class StrategyManagementService:
 
             _logger.info("Strategy stopped successfully: %s", strategy_id)
 
-            return {
-                'strategy_id': strategy_id,
-                'status': 'stopped',
-                'message': 'Strategy stopped successfully'
-            }
+            return {"strategy_id": strategy_id, "status": "stopped", "message": "Strategy stopped successfully"}
 
         except StrategyOperationError:
             raise
@@ -402,8 +394,7 @@ class StrategyManagementService:
             instance = self.strategy_manager.strategy_instances[strategy_id]
 
             # Check live trading confirmation
-            if (instance.config.get('broker', {}).get('trading_mode') == 'live' and
-                not confirm_live_trading):
+            if instance.config.get("broker", {}).get("trading_mode") == "live" and not confirm_live_trading:
                 raise StrategyOperationError("Live trading requires explicit confirmation")
 
             # Restart strategy
@@ -414,11 +405,7 @@ class StrategyManagementService:
 
             _logger.info("Strategy restarted successfully: %s", strategy_id)
 
-            return {
-                'strategy_id': strategy_id,
-                'status': 'restarted',
-                'message': 'Strategy restarted successfully'
-            }
+            return {"strategy_id": strategy_id, "status": "restarted", "message": "Strategy restarted successfully"}
 
         except StrategyOperationError:
             raise
@@ -426,7 +413,7 @@ class StrategyManagementService:
             _logger.exception("Failed to restart strategy %s:", strategy_id)
             raise StrategyOperationError(f"Strategy restart failed: {str(e)}")
 
-    def get_strategy_status(self, strategy_id: str) -> Optional[Dict[str, Any]]:
+    def get_strategy_status(self, strategy_id: str) -> Dict[str, Any] | None:
         """
         Get status of a specific strategy.
 
@@ -486,26 +473,26 @@ class StrategyManagementService:
             instance = self.strategy_manager.strategy_instances[strategy_id]
 
             # Update strategy parameters in configuration
-            if 'strategy' not in instance.config:
-                instance.config['strategy'] = {}
+            if "strategy" not in instance.config:
+                instance.config["strategy"] = {}
 
-            if 'parameters' not in instance.config['strategy']:
-                instance.config['strategy']['parameters'] = {}
+            if "parameters" not in instance.config["strategy"]:
+                instance.config["strategy"]["parameters"] = {}
 
             # Merge new parameters
-            instance.config['strategy']['parameters'].update(parameters)
+            instance.config["strategy"]["parameters"].update(parameters)
 
             # If strategy is running, apply parameters dynamically
-            if instance.status == 'running' and hasattr(self.strategy_manager, 'update_strategy_parameters'):
+            if instance.status == "running" and hasattr(self.strategy_manager, "update_strategy_parameters"):
                 await self.strategy_manager.update_strategy_parameters(strategy_id, parameters)
 
             _logger.info("Strategy parameters updated successfully: %s", strategy_id)
 
             return {
-                'strategy_id': strategy_id,
-                'status': 'parameters_updated',
-                'message': 'Strategy parameters updated successfully',
-                'updated_parameters': parameters
+                "strategy_id": strategy_id,
+                "status": "parameters_updated",
+                "message": "Strategy parameters updated successfully",
+                "updated_parameters": parameters,
             }
 
         except StrategyOperationError:
@@ -526,7 +513,7 @@ class StrategyManagementService:
             templates_file = PROJECT_ROOT / "config/examples/enhanced_trading_config_examples.json"
 
             if templates_file.exists():
-                with open(templates_file, 'r') as f:
+                with open(templates_file) as f:
                     templates = json.load(f)
                 return templates
             else:
@@ -545,10 +532,10 @@ class StrategyManagementService:
             Dict: Service status information
         """
         return {
-            'service_name': 'Strategy Management Service',
-            'available': self.is_available,
-            'trading_system_available': TRADING_SYSTEM_AVAILABLE,
-            'strategy_manager_connected': self.strategy_manager is not None,
-            'total_strategies': len(self.strategy_manager.strategy_instances) if self.is_available else 0,
-            'active_strategies': len([s for s in self.get_all_strategies_status() if s.get('status') == 'running'])
+            "service_name": "Strategy Management Service",
+            "available": self.is_available,
+            "trading_system_available": TRADING_SYSTEM_AVAILABLE,
+            "strategy_manager_connected": self.strategy_manager is not None,
+            "total_strategies": len(self.strategy_manager.strategy_instances) if self.is_available else 0,
+            "active_strategies": len([s for s in self.get_all_strategies_status() if s.get("status") == "running"]),
         }

@@ -6,10 +6,10 @@ maintaining the line-based interface that existing strategies expect while
 leveraging the unified service's capabilities.
 """
 
+from typing import Any, Dict, List
+
 import backtrader as bt
 import pandas as pd
-from typing import Dict, Any, Optional, List
-
 
 from src.indicators.adapters.base import BaseAdapter
 from src.notification.logger import setup_logger
@@ -34,21 +34,22 @@ class BacktraderIndicatorWrapper(bt.Indicator):
     def __init__(self):
         super().__init__()
         # Use object.__setattr__ to bypass Backtrader's attribute access mechanism
-        object.__setattr__(self, '_backend', self.p.backend)
-        object.__setattr__(self, '_use_unified', self.p.use_unified_service)
-        object.__setattr__(self, '_unified_service', None)
-        object.__setattr__(self, '_fallback_impl', None)
-        object.__setattr__(self, '_data_cache', [])
-        object.__setattr__(self, '_last_computed_len', 0)
+        object.__setattr__(self, "_backend", self.p.backend)
+        object.__setattr__(self, "_use_unified", self.p.use_unified_service)
+        object.__setattr__(self, "_unified_service", None)
+        object.__setattr__(self, "_fallback_impl", None)
+        object.__setattr__(self, "_data_cache", [])
+        object.__setattr__(self, "_last_computed_len", 0)
 
         # Initialize unified service if requested (deprecated)
-        if object.__getattribute__(self, '_use_unified'):
+        if object.__getattribute__(self, "_use_unified"):
             try:
                 from src.indicators.service import UnifiedIndicatorService
-                object.__setattr__(self, '_unified_service', UnifiedIndicatorService())
+
+                object.__setattr__(self, "_unified_service", UnifiedIndicatorService())
             except ImportError as e:
                 logger.warning("Failed to import UnifiedIndicatorService, falling back to native implementation: %s", e)
-                object.__setattr__(self, '_use_unified', False)
+                object.__setattr__(self, "_use_unified", False)
 
         # Initialize fallback implementation
         self._init_fallback()
@@ -74,7 +75,7 @@ class BacktraderIndicatorWrapper(bt.Indicator):
         current_len = len(self.data)
 
         # Only rebuild if we have new data
-        last_computed_len = object.__getattribute__(self, '_last_computed_len')
+        last_computed_len = object.__getattribute__(self, "_last_computed_len")
         if current_len <= last_computed_len:
             return None
 
@@ -92,7 +93,7 @@ class BacktraderIndicatorWrapper(bt.Indicator):
                 opens.append(float(self.data.open[-i]))
                 highs.append(float(self.data.high[-i]))
                 lows.append(float(self.data.low[-i]))
-                if hasattr(self.data, 'volume'):
+                if hasattr(self.data, "volume"):
                     volumes.append(float(self.data.volume[-i]))
                 else:
                     volumes.append(0.0)
@@ -105,13 +106,7 @@ class BacktraderIndicatorWrapper(bt.Indicator):
             volumes.reverse()
 
             # Create DataFrame
-            df = pd.DataFrame({
-                'open': opens,
-                'high': highs,
-                'low': lows,
-                'close': closes,
-                'volume': volumes
-            })
+            df = pd.DataFrame({"open": opens, "high": highs, "low": lows, "close": closes, "volume": volumes})
 
             return df
 
@@ -134,35 +129,35 @@ class BacktraderIndicatorWrapper(bt.Indicator):
         indicator_lower = indicator_name.lower()
 
         # RSI parameter normalization
-        if 'rsi' in indicator_lower:
-            if 'period' in normalized and 'timeperiod' not in normalized:
-                normalized['timeperiod'] = normalized.pop('period')
-            if 'length' in normalized and 'timeperiod' not in normalized:
-                normalized['timeperiod'] = normalized.pop('length')
+        if "rsi" in indicator_lower:
+            if "period" in normalized and "timeperiod" not in normalized:
+                normalized["timeperiod"] = normalized.pop("period")
+            if "length" in normalized and "timeperiod" not in normalized:
+                normalized["timeperiod"] = normalized.pop("length")
 
         # Bollinger Bands normalization
-        if 'bollinger' in indicator_lower or 'bb' in indicator_lower:
-            if 'period' in normalized and 'timeperiod' not in normalized:
-                normalized['timeperiod'] = normalized.pop('period')
+        if "bollinger" in indicator_lower or "bb" in indicator_lower:
+            if "period" in normalized and "timeperiod" not in normalized:
+                normalized["timeperiod"] = normalized.pop("period")
             # Handle both 'dev' and 'devfactor' parameter names
-            if 'dev' in normalized and 'nbdevup' not in normalized:
-                dev = normalized.pop('dev')
-                normalized['nbdevup'] = dev
-                normalized['nbdevdn'] = dev
-            if 'devfactor' in normalized and 'nbdevup' not in normalized:
-                dev = normalized.pop('devfactor')
-                normalized['nbdevup'] = dev
-                normalized['nbdevdn'] = dev
+            if "dev" in normalized and "nbdevup" not in normalized:
+                dev = normalized.pop("dev")
+                normalized["nbdevup"] = dev
+                normalized["nbdevdn"] = dev
+            if "devfactor" in normalized and "nbdevup" not in normalized:
+                dev = normalized.pop("devfactor")
+                normalized["nbdevup"] = dev
+                normalized["nbdevdn"] = dev
 
         # ATR parameter normalization
-        if 'atr' in indicator_lower:
-            if 'period' in normalized and 'timeperiod' not in normalized:
-                normalized['timeperiod'] = normalized.pop('period')
+        if "atr" in indicator_lower:
+            if "period" in normalized and "timeperiod" not in normalized:
+                normalized["timeperiod"] = normalized.pop("period")
 
         # Volume normalization
-        if 'volume' in indicator_lower:
-            if 'period' in normalized and 'timeperiod' not in normalized:
-                normalized['timeperiod'] = normalized.pop('period')
+        if "volume" in indicator_lower:
+            if "period" in normalized and "timeperiod" not in normalized:
+                normalized["timeperiod"] = normalized.pop("period")
 
         return normalized
 
@@ -180,11 +175,11 @@ class BacktraderIndicatorWrapper(bt.Indicator):
 
         # Common name mappings
         name_map = {
-            'bollinger_bands': 'bbands',
-            'bollinger': 'bbands',
-            'moving_average': 'sma',
-            'simple_moving_average': 'sma',
-            'exponential_moving_average': 'ema',
+            "bollinger_bands": "bbands",
+            "bollinger": "bbands",
+            "moving_average": "sma",
+            "simple_moving_average": "sma",
+            "exponential_moving_average": "ema",
         }
 
         return name_map.get(name_lower, name_lower)
@@ -192,8 +187,8 @@ class BacktraderIndicatorWrapper(bt.Indicator):
     def next(self):
         """Called for each new bar"""
         # Use object.__getattribute__ to bypass Backtrader's attribute access
-        use_unified = object.__getattribute__(self, '_use_unified')
-        unified_service = object.__getattribute__(self, '_unified_service')
+        use_unified = object.__getattribute__(self, "_use_unified")
+        unified_service = object.__getattribute__(self, "_unified_service")
 
         if use_unified and unified_service:
             try:
@@ -210,15 +205,16 @@ class BacktraderIndicatorWrapper(bt.Indicator):
 
                     # Create inputs dict
                     inputs = {
-                        'close': df['close'],
-                        'open': df['open'],
-                        'high': df['high'],
-                        'low': df['low'],
-                        'volume': df['volume']
+                        "close": df["close"],
+                        "open": df["open"],
+                        "high": df["high"],
+                        "low": df["low"],
+                        "volume": df["volume"],
                     }
 
                     # Compute asynchronously (we'll need to handle this synchronously in Backtrader)
                     import asyncio
+
                     try:
                         loop = asyncio.get_event_loop()
                     except RuntimeError:
@@ -228,29 +224,22 @@ class BacktraderIndicatorWrapper(bt.Indicator):
                     # Get the appropriate adapter from the service
                     adapter = unified_service._select_provider(normalized_name)
 
-                    results = loop.run_until_complete(
-                        adapter.compute(
-                            normalized_name,
-                            df,
-                            inputs,
-                            normalized_params
-                        )
-                    )
+                    results = loop.run_until_complete(adapter.compute(normalized_name, df, inputs, normalized_params))
 
                     # Map results to Backtrader lines
                     self._map_unified_results(results)
-                    object.__setattr__(self, '_last_computed_len', len(df))
+                    object.__setattr__(self, "_last_computed_len", len(df))
                     return
 
             except Exception as e:
                 logger.warning("Unified service computation failed, falling back to native implementation: %s", e)
                 logger.exception("Full error details:")
-                object.__setattr__(self, '_use_unified', False)
+                object.__setattr__(self, "_use_unified", False)
 
         # Use fallback implementation
-        fallback_impl = object.__getattribute__(self, '_fallback_impl')
+        fallback_impl = object.__getattribute__(self, "_fallback_impl")
         if fallback_impl:
-            #logger.debug("Using fallback Backtrader implementation for %s", self._get_indicator_name())
+            # logger.debug("Using fallback Backtrader implementation for %s", self._get_indicator_name())
             self._use_fallback()
         else:
             logger.warning("No fallback implementation available for %s", self._get_indicator_name())
@@ -278,11 +267,7 @@ class BacktraderAdapter(BaseAdapter):
         return name.lower() in self._indicator_registry
 
     async def compute(
-        self,
-        name: str,
-        df: pd.DataFrame | None,
-        inputs: Dict[str, pd.Series],
-        params: Dict[str, Any]
+        self, name: str, df: pd.DataFrame | None, inputs: Dict[str, pd.Series], params: Dict[str, Any]
     ) -> Dict[str, pd.Series]:
         """
         Compute indicator for Backtrader compatibility.
@@ -294,13 +279,7 @@ class BacktraderAdapter(BaseAdapter):
         # Direct computation is handled by other adapters
         raise NotImplementedError("BacktraderAdapter works through wrapper classes, not direct computation")
 
-    def create_indicator(
-        self,
-        name: str,
-        data: bt.feeds.DataBase,
-        backend: str = "bt",
-        **params
-    ) -> bt.Indicator:
+    def create_indicator(self, name: str, data: bt.feeds.DataBase, backend: str = "bt", **params) -> bt.Indicator:
         """
         Create a Backtrader indicator instance.
 
@@ -327,12 +306,12 @@ class BacktraderAdapter(BaseAdapter):
     def _register_indicators(self):
         """Register all supported Backtrader indicators"""
         from src.indicators.adapters.backtrader_wrappers import (
-            UnifiedRSIIndicator,
-            UnifiedBollingerBandsIndicator,
-            UnifiedMACDIndicator,
             UnifiedATRIndicator,
+            UnifiedBollingerBandsIndicator,
+            UnifiedEMAIndicator,
+            UnifiedMACDIndicator,
+            UnifiedRSIIndicator,
             UnifiedSMAIndicator,
-            UnifiedEMAIndicator
         )
 
         self._indicator_registry = {
@@ -355,23 +334,15 @@ class BacktraderIndicatorFactory:
     with both the unified service and native Backtrader implementations.
     """
 
-    def __init__(self, adapter: Optional[BacktraderAdapter] = None):
+    def __init__(self, adapter: BacktraderAdapter | None = None):
         self._adapter = adapter or BacktraderAdapter()
 
     def create_rsi(
-        self,
-        data: bt.feeds.DataBase,
-        period: int = 14,
-        backend: str = "bt",
-        use_unified_service: bool = False
+        self, data: bt.feeds.DataBase, period: int = 14, backend: str = "bt", use_unified_service: bool = False
     ) -> bt.Indicator:
         """Create RSI indicator"""
         return self._adapter.create_indicator(
-            "rsi",
-            data,
-            backend=backend,
-            period=period,
-            use_unified_service=use_unified_service
+            "rsi", data, backend=backend, period=period, use_unified_service=use_unified_service
         )
 
     def create_bollinger_bands(
@@ -380,7 +351,7 @@ class BacktraderIndicatorFactory:
         period: int = 20,
         devfactor: float = 2.0,
         backend: str = "bt",
-        use_unified_service: bool = False
+        use_unified_service: bool = False,
     ) -> bt.Indicator:
         """Create Bollinger Bands indicator"""
         return self._adapter.create_indicator(
@@ -389,7 +360,7 @@ class BacktraderIndicatorFactory:
             backend=backend,
             period=period,
             devfactor=devfactor,
-            use_unified_service=use_unified_service
+            use_unified_service=use_unified_service,
         )
 
     def create_macd(
@@ -399,7 +370,7 @@ class BacktraderIndicatorFactory:
         slow_period: int = 26,
         signal_period: int = 9,
         backend: str = "bt",
-        use_unified_service: bool = False
+        use_unified_service: bool = False,
     ) -> bt.Indicator:
         """Create MACD indicator"""
         return self._adapter.create_indicator(
@@ -409,55 +380,31 @@ class BacktraderIndicatorFactory:
             fast_period=fast_period,
             slow_period=slow_period,
             signal_period=signal_period,
-            use_unified_service=use_unified_service
+            use_unified_service=use_unified_service,
         )
 
     def create_atr(
-        self,
-        data: bt.feeds.DataBase,
-        period: int = 14,
-        backend: str = "bt",
-        use_unified_service: bool = False
+        self, data: bt.feeds.DataBase, period: int = 14, backend: str = "bt", use_unified_service: bool = False
     ) -> bt.Indicator:
         """Create ATR indicator"""
         return self._adapter.create_indicator(
-            "atr",
-            data,
-            backend=backend,
-            period=period,
-            use_unified_service=use_unified_service
+            "atr", data, backend=backend, period=period, use_unified_service=use_unified_service
         )
 
     def create_sma(
-        self,
-        data: bt.feeds.DataBase,
-        period: int = 20,
-        backend: str = "bt",
-        use_unified_service: bool = False
+        self, data: bt.feeds.DataBase, period: int = 20, backend: str = "bt", use_unified_service: bool = False
     ) -> bt.Indicator:
         """Create Simple Moving Average indicator"""
         return self._adapter.create_indicator(
-            "sma",
-            data,
-            backend=backend,
-            period=period,
-            use_unified_service=use_unified_service
+            "sma", data, backend=backend, period=period, use_unified_service=use_unified_service
         )
 
     def create_ema(
-        self,
-        data: bt.feeds.DataBase,
-        period: int = 20,
-        backend: str = "bt",
-        use_unified_service: bool = False
+        self, data: bt.feeds.DataBase, period: int = 20, backend: str = "bt", use_unified_service: bool = False
     ) -> bt.Indicator:
         """Create Exponential Moving Average indicator"""
         return self._adapter.create_indicator(
-            "ema",
-            data,
-            backend=backend,
-            period=period,
-            use_unified_service=use_unified_service
+            "ema", data, backend=backend, period=period, use_unified_service=use_unified_service
         )
 
 
@@ -468,11 +415,7 @@ class BackendSelector:
     BACKEND_PRIORITY = ["bt", "bt-talib", "talib"]
 
     @staticmethod
-    def select_backend(
-        preferred: str,
-        available_backends: List[str],
-        indicator_name: str
-    ) -> str:
+    def select_backend(preferred: str, available_backends: List[str], indicator_name: str) -> str:
         """
         Select the best available backend for an indicator.
 
@@ -491,16 +434,12 @@ class BackendSelector:
         for backend in BackendSelector.BACKEND_PRIORITY:
             if backend in available_backends:
                 logger.info(
-                    "Preferred backend '%s' not available for %s, using '%s'",
-                    preferred, indicator_name, backend
+                    "Preferred backend '%s' not available for %s, using '%s'", preferred, indicator_name, backend
                 )
                 return backend
 
         # Default fallback
-        logger.warning(
-            "No preferred backends available for %s, using 'bt'",
-            indicator_name
-        )
+        logger.warning("No preferred backends available for %s, using 'bt'", indicator_name)
         return "bt"
 
     @staticmethod
@@ -511,6 +450,7 @@ class BackendSelector:
         # Check for bt-talib
         try:
             import backtrader as bt
+
             if hasattr(bt, "talib"):
                 available.append("bt-talib")
         except ImportError:
@@ -519,6 +459,7 @@ class BackendSelector:
         # Check for talib
         try:
             import talib
+
             available.append("talib")
         except ImportError:
             pass

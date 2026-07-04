@@ -6,8 +6,9 @@ indicator service when available, and fall back to direct calculations
 when the service is unavailable.
 """
 
+from typing import Any, Dict
+
 import pandas as pd
-from typing import Dict, Any
 
 from src.indicators.adapters.backtrader_adapter import BacktraderIndicatorWrapper
 from src.notification.logger import setup_logger
@@ -68,7 +69,7 @@ class UnifiedRSIIndicator(BacktraderIndicatorWrapper):
         gains = []
         losses = []
         for i in range(1, len(closes)):
-            change = closes[i] - closes[i-1]
+            change = closes[i] - closes[i - 1]
             if change > 0:
                 gains.append(change)
                 losses.append(0)
@@ -111,10 +112,7 @@ class UnifiedBollingerBandsIndicator(BacktraderIndicatorWrapper):
         return "bollinger_bands"
 
     def _get_indicator_params(self) -> Dict[str, Any]:
-        return {
-            "period": self.p.period,
-            "devfactor": self.p.devfactor
-        }
+        return {"period": self.p.period, "devfactor": self.p.devfactor}
 
     def _map_unified_results(self, results: Dict[str, pd.Series]):
         """Map unified service results to Bollinger Bands lines"""
@@ -151,7 +149,7 @@ class UnifiedBollingerBandsIndicator(BacktraderIndicatorWrapper):
 
         # Calculate standard deviation
         variance = sum((x - sma) ** 2 for x in closes) / period
-        std = variance ** 0.5
+        std = variance**0.5
 
         # Calculate bands
         self.lines.middle[0] = sma
@@ -184,7 +182,7 @@ class UnifiedMACDIndicator(BacktraderIndicatorWrapper):
         return {
             "fast_period": self.p.fast_period,
             "slow_period": self.p.slow_period,
-            "signal_period": self.p.signal_period
+            "signal_period": self.p.signal_period,
         }
 
     def _map_unified_results(self, results: Dict[str, pd.Series]):
@@ -288,11 +286,7 @@ class UnifiedATRIndicator(BacktraderIndicatorWrapper):
             prev_close = self.data.close[-(i + 1)]
 
             # True Range = max(high - low, abs(high - prev_close), abs(low - prev_close))
-            tr = max(
-                high - low,
-                abs(high - prev_close),
-                abs(low - prev_close)
-            )
+            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
 
         # ATR is the average of True Ranges
@@ -470,11 +464,7 @@ class UnifiedSuperTrendIndicator(BacktraderIndicatorWrapper):
             low = self.data.low[-i]
             prev_close = self.data.close[-(i + 1)]
 
-            tr = max(
-                high - low,
-                abs(high - prev_close),
-                abs(low - prev_close)
-            )
+            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
 
         atr = sum(true_ranges) / period

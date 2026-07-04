@@ -7,9 +7,9 @@ These exceptions provide standardized error handling with detailed context
 and categorization for different types of errors.
 """
 
-from typing import Optional, Dict, Any
-from datetime import datetime, timezone
 import traceback
+from datetime import UTC, datetime
+from typing import Any, Dict
 
 
 class TradingException(Exception):
@@ -24,13 +24,15 @@ class TradingException(Exception):
     - Recovery suggestions
     """
 
-    def __init__(self,
-                 message: str,
-                 error_code: Optional[str] = None,
-                 context: Optional[Dict[str, Any]] = None,
-                 severity: str = "ERROR",
-                 recoverable: bool = True,
-                 retry_after: Optional[int] = None):
+    def __init__(
+        self,
+        message: str,
+        error_code: str | None = None,
+        context: Dict[str, Any] | None = None,
+        severity: str = "ERROR",
+        recoverable: bool = True,
+        retry_after: int | None = None,
+    ):
         """
         Initialize the trading exception.
 
@@ -50,32 +52,32 @@ class TradingException(Exception):
         self.severity = severity.upper()
         self.recoverable = recoverable
         self.retry_after = retry_after
-        self.timestamp = datetime.now(timezone.utc)
+        self.timestamp = datetime.now(UTC)
         self.stack_trace = traceback.format_exc()
 
         # Add default context
-        if 'timestamp' not in self.context:
-            self.context['timestamp'] = self.timestamp.isoformat()
-        if 'error_code' not in self.context:
-            self.context['error_code'] = self.error_code
+        if "timestamp" not in self.context:
+            self.context["timestamp"] = self.timestamp.isoformat()
+        if "error_code" not in self.context:
+            self.context["error_code"] = self.error_code
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert exception to dictionary for serialization."""
         return {
-            'type': self.__class__.__name__,
-            'message': self.message,
-            'error_code': self.error_code,
-            'context': self.context,
-            'severity': self.severity,
-            'recoverable': self.recoverable,
-            'retry_after': self.retry_after,
-            'timestamp': self.timestamp.isoformat(),
-            'stack_trace': self.stack_trace
+            "type": self.__class__.__name__,
+            "message": self.message,
+            "error_code": self.error_code,
+            "context": self.context,
+            "severity": self.severity,
+            "recoverable": self.recoverable,
+            "retry_after": self.retry_after,
+            "timestamp": self.timestamp.isoformat(),
+            "stack_trace": self.stack_trace,
         }
 
-    def get_recovery_suggestion(self) -> Optional[str]:
+    def get_recovery_suggestion(self) -> str | None:
         """Get recovery suggestion for this error."""
-        return self.context.get('recovery_suggestion')
+        return self.context.get("recovery_suggestion")
 
     def should_retry(self) -> bool:
         """Determine if this error should be retried."""
@@ -89,8 +91,9 @@ class TradingException(Exception):
             parts.append(f"Code: {self.error_code}")
 
         if self.context:
-            context_str = ", ".join([f"{k}={v}" for k, v in self.context.items()
-                                   if k not in ['timestamp', 'error_code']])
+            context_str = ", ".join(
+                [f"{k}={v}" for k, v in self.context.items() if k not in ["timestamp", "error_code"]]
+            )
             if context_str:
                 parts.append(f"Context: {context_str}")
 
@@ -100,12 +103,14 @@ class TradingException(Exception):
 class DataFeedException(TradingException):
     """Exception raised for data feed related errors."""
 
-    def __init__(self,
-                 message: str,
-                 data_source: Optional[str] = None,
-                 symbol: Optional[str] = None,
-                 interval: Optional[str] = None,
-                 **kwargs):
+    def __init__(
+        self,
+        message: str,
+        data_source: str | None = None,
+        symbol: str | None = None,
+        interval: str | None = None,
+        **kwargs,
+    ):
         """
         Initialize data feed exception.
 
@@ -116,28 +121,25 @@ class DataFeedException(TradingException):
             interval: Data interval
             **kwargs: Additional arguments for TradingException
         """
-        context = kwargs.get('context', {})
-        context.update({
-            'data_source': data_source,
-            'symbol': symbol,
-            'interval': interval,
-            'component': 'data_feed'
-        })
+        context = kwargs.get("context", {})
+        context.update({"data_source": data_source, "symbol": symbol, "interval": interval, "component": "data_feed"})
 
         # Remove context from kwargs to avoid duplicate argument
-        kwargs.pop('context', None)
+        kwargs.pop("context", None)
         super().__init__(message, error_code="DATA_FEED_ERROR", context=context, **kwargs)
 
 
 class BrokerException(TradingException):
     """Exception raised for broker related errors."""
 
-    def __init__(self,
-                 message: str,
-                 broker_type: Optional[str] = None,
-                 symbol: Optional[str] = None,
-                 order_type: Optional[str] = None,
-                 **kwargs):
+    def __init__(
+        self,
+        message: str,
+        broker_type: str | None = None,
+        symbol: str | None = None,
+        order_type: str | None = None,
+        **kwargs,
+    ):
         """
         Initialize broker exception.
 
@@ -148,27 +150,20 @@ class BrokerException(TradingException):
             order_type: Type of order that failed
             **kwargs: Additional arguments for TradingException
         """
-        context = kwargs.get('context', {})
-        context.update({
-            'broker_type': broker_type,
-            'symbol': symbol,
-            'order_type': order_type,
-            'component': 'broker'
-        })
+        context = kwargs.get("context", {})
+        context.update({"broker_type": broker_type, "symbol": symbol, "order_type": order_type, "component": "broker"})
 
         # Remove context from kwargs to avoid duplicate argument
-        kwargs.pop('context', None)
+        kwargs.pop("context", None)
         super().__init__(message, error_code="BROKER_ERROR", context=context, **kwargs)
 
 
 class StrategyException(TradingException):
     """Exception raised for strategy related errors."""
 
-    def __init__(self,
-                 message: str,
-                 strategy_name: Optional[str] = None,
-                 strategy_type: Optional[str] = None,
-                 **kwargs):
+    def __init__(
+        self, message: str, strategy_name: str | None = None, strategy_type: str | None = None, **kwargs
+    ):
         """
         Initialize strategy exception.
 
@@ -178,26 +173,18 @@ class StrategyException(TradingException):
             strategy_type: Type of strategy (entry/exit)
             **kwargs: Additional arguments for TradingException
         """
-        context = kwargs.get('context', {})
-        context.update({
-            'strategy_name': strategy_name,
-            'strategy_type': strategy_type,
-            'component': 'strategy'
-        })
+        context = kwargs.get("context", {})
+        context.update({"strategy_name": strategy_name, "strategy_type": strategy_type, "component": "strategy"})
 
         # Remove context from kwargs to avoid duplicate argument
-        kwargs.pop('context', None)
+        kwargs.pop("context", None)
         super().__init__(message, error_code="STRATEGY_ERROR", context=context, **kwargs)
 
 
 class ConfigurationException(TradingException):
     """Exception raised for configuration related errors."""
 
-    def __init__(self,
-                 message: str,
-                 config_file: Optional[str] = None,
-                 config_section: Optional[str] = None,
-                 **kwargs):
+    def __init__(self, message: str, config_file: str | None = None, config_section: str | None = None, **kwargs):
         """
         Initialize configuration exception.
 
@@ -207,27 +194,25 @@ class ConfigurationException(TradingException):
             config_section: Configuration section that failed
             **kwargs: Additional arguments for TradingException
         """
-        context = kwargs.get('context', {})
-        context.update({
-            'config_file': config_file,
-            'config_section': config_section,
-            'component': 'configuration'
-        })
+        context = kwargs.get("context", {})
+        context.update({"config_file": config_file, "config_section": config_section, "component": "configuration"})
 
         # Remove context from kwargs to avoid duplicate argument
-        kwargs.pop('context', None)
+        kwargs.pop("context", None)
         super().__init__(message, error_code="CONFIG_ERROR", context=context, **kwargs)
 
 
 class NetworkException(TradingException):
     """Exception raised for network related errors."""
 
-    def __init__(self,
-                 message: str,
-                 url: Optional[str] = None,
-                 status_code: Optional[int] = None,
-                 timeout: Optional[float] = None,
-                 **kwargs):
+    def __init__(
+        self,
+        message: str,
+        url: str | None = None,
+        status_code: int | None = None,
+        timeout: float | None = None,
+        **kwargs,
+    ):
         """
         Initialize network exception.
 
@@ -238,32 +223,29 @@ class NetworkException(TradingException):
             timeout: Timeout value
             **kwargs: Additional arguments for TradingException
         """
-        context = kwargs.get('context', {})
-        context.update({
-            'url': url,
-            'status_code': status_code,
-            'timeout': timeout,
-            'component': 'network'
-        })
+        context = kwargs.get("context", {})
+        context.update({"url": url, "status_code": status_code, "timeout": timeout, "component": "network"})
 
         # Set retry_after for network errors
-        if 'retry_after' not in kwargs:
-            kwargs['retry_after'] = 30  # Default 30 seconds
+        if "retry_after" not in kwargs:
+            kwargs["retry_after"] = 30  # Default 30 seconds
 
         # Remove context from kwargs to avoid duplicate argument
-        kwargs.pop('context', None)
+        kwargs.pop("context", None)
         super().__init__(message, error_code="NETWORK_ERROR", context=context, **kwargs)
 
 
 class ValidationException(TradingException):
     """Exception raised for validation errors."""
 
-    def __init__(self,
-                 message: str,
-                 field: Optional[str] = None,
-                 value: Optional[Any] = None,
-                 expected_type: Optional[str] = None,
-                 **kwargs):
+    def __init__(
+        self,
+        message: str,
+        field: str | None = None,
+        value: Any | None = None,
+        expected_type: str | None = None,
+        **kwargs,
+    ):
         """
         Initialize validation exception.
 
@@ -274,27 +256,31 @@ class ValidationException(TradingException):
             expected_type: Expected data type
             **kwargs: Additional arguments for TradingException
         """
-        context = kwargs.get('context', {})
-        context.update({
-            'field': field,
-            'value': str(value) if value is not None else None,
-            'expected_type': expected_type,
-            'component': 'validation'
-        })
+        context = kwargs.get("context", {})
+        context.update(
+            {
+                "field": field,
+                "value": str(value) if value is not None else None,
+                "expected_type": expected_type,
+                "component": "validation",
+            }
+        )
 
         # Remove context from kwargs to avoid duplicate argument
-        kwargs.pop('context', None)
+        kwargs.pop("context", None)
         super().__init__(message, error_code="VALIDATION_ERROR", context=context, **kwargs)
 
 
 class RecoveryException(TradingException):
     """Exception raised when recovery strategies fail."""
 
-    def __init__(self,
-                 message: str,
-                 original_error: Optional[Exception] = None,
-                 recovery_strategy: Optional[str] = None,
-                 **kwargs):
+    def __init__(
+        self,
+        message: str,
+        original_error: Exception | None = None,
+        recovery_strategy: str | None = None,
+        **kwargs,
+    ):
         """
         Initialize recovery exception.
 
@@ -304,15 +290,17 @@ class RecoveryException(TradingException):
             recovery_strategy: Recovery strategy that failed
             **kwargs: Additional arguments for TradingException
         """
-        context = kwargs.get('context', {})
-        context.update({
-            'original_error': str(original_error) if original_error else None,
-            'recovery_strategy': recovery_strategy,
-            'component': 'recovery'
-        })
+        context = kwargs.get("context", {})
+        context.update(
+            {
+                "original_error": str(original_error) if original_error else None,
+                "recovery_strategy": recovery_strategy,
+                "component": "recovery",
+            }
+        )
 
         # Remove context from kwargs to avoid duplicate argument
-        kwargs.pop('context', None)
+        kwargs.pop("context", None)
         super().__init__(message, error_code="RECOVERY_ERROR", context=context, **kwargs)
 
 
@@ -322,13 +310,10 @@ class InsufficientFundsException(BrokerException):
 
     def __init__(self, symbol: str, required_amount: float, available_amount: float, **kwargs):
         message = f"Insufficient funds for {symbol}: required {required_amount}, available {available_amount}"
-        context = kwargs.get('context', {})
-        context.update({
-            'required_amount': required_amount,
-            'available_amount': available_amount
-        })
+        context = kwargs.get("context", {})
+        context.update({"required_amount": required_amount, "available_amount": available_amount})
         # Remove context from kwargs to avoid duplicate argument
-        kwargs.pop('context', None)
+        kwargs.pop("context", None)
         super().__init__(message, symbol=symbol, context=context, **kwargs)
 
 
@@ -410,10 +395,6 @@ class ErrorCodes:
 class CircuitBreakerOpenException(TradingException):
     """Exception raised when circuit breaker is open."""
 
-    def __init__(self, message: str, circuit_name: str, last_failure_time: Optional[float] = None):
-        context = {
-            'circuit_name': circuit_name,
-            'last_failure_time': last_failure_time,
-            'component': 'circuit_breaker'
-        }
+    def __init__(self, message: str, circuit_name: str, last_failure_time: float | None = None):
+        context = {"circuit_name": circuit_name, "last_failure_time": last_failure_time, "component": "circuit_breaker"}
         super().__init__(message, error_code="CIRCUIT_BREAKER_OPEN", context=context)

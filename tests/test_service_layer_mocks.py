@@ -11,10 +11,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
 import pytest
+
 from tests.fixtures.service_fixtures import (
-    setup_indicator_data_in_mock, create_parsed_command,
-    simulate_database_error, simulate_indicator_api_error,
-    ServiceTestContext
+    ServiceTestContext,
+    create_parsed_command,
+    setup_indicator_data_in_mock,
+    simulate_database_error,
+    simulate_indicator_api_error,
 )
 
 
@@ -58,15 +61,13 @@ class TestServiceLayerMocks:
             indicator_service_mock,
             "AAPL",
             technical_indicators={"RSI": 65.5, "MACD": 1.23},
-            fundamental_indicators={"PE": 25.4}
+            fundamental_indicators={"PE": 25.4},
         )
 
         # Create request
         from src.indicators.models import TickerIndicatorsRequest
-        request = TickerIndicatorsRequest(
-            ticker="AAPL",
-            indicators=["RSI", "MACD", "PE"]
-        )
+
+        request = TickerIndicatorsRequest(ticker="AAPL", indicators=["RSI", "MACD", "PE"])
 
         # Test computation
         result = await indicator_service_mock.compute_for_ticker(request)
@@ -86,6 +87,7 @@ class TestServiceLayerMocks:
         indicator_service_mock.configure_error("compute_for_ticker", ValueError("Invalid ticker"))
 
         from src.indicators.models import TickerIndicatorsRequest
+
         request = TickerIndicatorsRequest(ticker="INVALID", indicators=["RSI"])
 
         # Test error is raised
@@ -99,17 +101,10 @@ class TestServiceLayerMocks:
 
         # Setup test data using direct mock methods
         telegram_service_mock.add_test_user("test_user", approved=True, verified=True)
-        setup_indicator_data_in_mock(
-            indicator_service_mock,
-            "AAPL",
-            technical_indicators={"RSI": 65.5}
-        )
+        setup_indicator_data_in_mock(indicator_service_mock, "AAPL", technical_indicators={"RSI": 65.5})
 
         # Test indicator calculation through business logic
-        result = await business_logic.calculate_indicators_for_ticker(
-            ticker="AAPL",
-            indicators=["RSI"]
-        )
+        result = await business_logic.calculate_indicators_for_ticker(ticker="AAPL", indicators=["RSI"])
 
         assert result["status"] == "ok"
         assert result["ticker"] == "AAPL"
@@ -168,9 +163,7 @@ class TestServiceLayerMocks:
 
         # Test business logic error handling wrapper
         result = business_logic.handle_telegram_service_error(
-            ConnectionError("Database connection failed"),
-            "get_user_status",
-            "test_context"
+            ConnectionError("Database connection failed"), "get_user_status", "test_context"
         )
         assert result["status"] == "error"
         assert result["fallback_available"] is True
@@ -179,18 +172,14 @@ class TestServiceLayerMocks:
         simulate_indicator_api_error(indicator_service_mock, "compute_for_ticker")
 
         # Test business logic indicator error handling
-        calc_result = await business_logic.calculate_indicators_for_ticker(
-            ticker="AAPL",
-            indicators=["RSI"]
-        )
+        calc_result = await business_logic.calculate_indicators_for_ticker(ticker="AAPL", indicators=["RSI"])
 
         assert calc_result["status"] == "error"
         assert "API" in calc_result.get("message", "") or "connection" in calc_result.get("message", "").lower()
 
         # Test business logic indicator error categorization
         indicator_error_result = business_logic.handle_indicator_service_error(
-            Exception("API key missing"),
-            "test_context"
+            Exception("API key missing"), "test_context"
         )
         assert indicator_error_result["status"] == "error"
         assert "API configuration" in indicator_error_result["message"]
@@ -312,7 +301,7 @@ class TestServiceLayerMocks:
             "language": "en",
             "is_admin": False,
             "max_alerts": 10,
-            "max_schedules": 5
+            "max_schedules": 5,
         }
         telegram_service_mock.add_test_user("test_user", **user_data)
 
@@ -320,7 +309,7 @@ class TestServiceLayerMocks:
             indicator_service_mock,
             "AAPL",
             technical_indicators={"RSI": 65.5, "MACD": 1.23, "SMA": 150.25},
-            fundamental_indicators={"PE": 25.4, "MarketCap": 2500000000000}
+            fundamental_indicators={"PE": 25.4, "MarketCap": 2500000000000},
         )
 
         # Test user info command
@@ -333,8 +322,7 @@ class TestServiceLayerMocks:
 
         # Test indicator calculation
         calc_result = await business_logic.calculate_indicators_for_ticker(
-            ticker="AAPL",
-            indicators=["RSI", "MACD", "SMA", "PE"]
+            ticker="AAPL", indicators=["RSI", "MACD", "SMA", "PE"]
         )
 
         assert calc_result["status"] == "ok"
@@ -344,10 +332,9 @@ class TestServiceLayerMocks:
 
         # Test indicator value extraction
         from src.indicators.models import IndicatorResultSet
+
         result_set = IndicatorResultSet(
-            ticker="AAPL",
-            technical=calc_result["technical"],
-            fundamental=calc_result["fundamental"]
+            ticker="AAPL", technical=calc_result["technical"], fundamental=calc_result["fundamental"]
         )
 
         formatted = business_logic.extract_indicator_values(result_set)

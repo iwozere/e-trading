@@ -12,22 +12,19 @@ This demo shows how to configure a bot that behaves like a real trading bot
 but uses historical CSV data and simulated order execution.
 """
 
-import json
 import asyncio
-from pathlib import Path
+import json
 import sys
+from pathlib import Path
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.trading.broker.broker_factory import get_broker
 from src.data.feed.file_data_feed import FileDataFeed
-from src.trading.services.bot_config_validator import (
-    validate_database_bot_record,
-    print_validation_results
-)
 from src.notification.logger import setup_logger
+from src.trading.broker.broker_factory import get_broker
+from src.trading.services.bot_config_validator import print_validation_results, validate_database_bot_record
 
 _logger = setup_logger(__name__)
 
@@ -46,7 +43,7 @@ class MockFileTradingDemo:
         if not config_path.exists():
             raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             config = json.load(f)
 
         _logger.info("Loaded configuration: %s", config_name)
@@ -54,9 +51,9 @@ class MockFileTradingDemo:
 
     def validate_configuration(self, config: dict) -> bool:
         """Validate the bot configuration."""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("CONFIGURATION VALIDATION")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Create a mock database record for validation
         bot_record = {
@@ -73,7 +70,7 @@ class MockFileTradingDemo:
             "total_pnl": None,
             "extra_metadata": None,
             "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": None
+            "updated_at": None,
         }
 
         is_valid, errors, warnings = validate_database_bot_record(bot_record)
@@ -99,6 +96,7 @@ class MockFileTradingDemo:
         # Check file size and basic format
         try:
             import pandas as pd
+
             df = pd.read_csv(full_path, nrows=5)  # Read first 5 rows
             _logger.info("Data file check passed: %s", full_path)
             _logger.info("Columns: %s", list(df.columns))
@@ -112,15 +110,15 @@ class MockFileTradingDemo:
         """Create a broker instance from configuration."""
         broker_config = config["broker"]
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("BROKER CREATION")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         try:
             broker = get_broker(broker_config)
             _logger.info("Created broker: %s", broker.__class__.__name__)
-            _logger.info("Trading mode: %s", broker_config['trading_mode'])
-            _logger.info("Initial cash: $%.2f", broker_config['cash'])
+            _logger.info("Trading mode: %s", broker_config["trading_mode"])
+            _logger.info("Initial cash: $%.2f", broker_config["cash"])
             return broker
         except Exception:
             _logger.exception("Failed to create broker:")
@@ -130,9 +128,9 @@ class MockFileTradingDemo:
         """Create a data feed instance from configuration."""
         data_config = config["data"]
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("DATA FEED CREATION")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         try:
             file_path = PROJECT_ROOT / data_config["file_path"]
@@ -151,12 +149,12 @@ class MockFileTradingDemo:
                 realtime_interval=data_config.get("realtime_interval", 60),
                 fromdate=data_config.get("fromdate"),
                 todate=data_config.get("todate"),
-                on_new_bar=self._on_new_bar_callback
+                on_new_bar=self._on_new_bar_callback,
             )
 
-            _logger.info("Created data feed for %s", config['symbol'])
-            _logger.info("Data source: %s", data_config['file_path'])
-            _logger.info("Real-time simulation: %s", data_config.get('simulate_realtime', False))
+            _logger.info("Created data feed for %s", config["symbol"])
+            _logger.info("Data source: %s", data_config["file_path"])
+            _logger.info("Real-time simulation: %s", data_config.get("simulate_realtime", False))
 
             return data_feed
         except Exception:
@@ -178,9 +176,9 @@ class MockFileTradingDemo:
 
     async def run_trading_simulation(self, config: dict, duration_seconds: int = 30):
         """Run a trading simulation for a specified duration."""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("TRADING SIMULATION")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         try:
             # Create broker and data feed
@@ -195,6 +193,7 @@ class MockFileTradingDemo:
 
             # Simulate trading for the specified duration
             import time
+
             start_time = time.time()
 
             while time.time() - start_time < duration_seconds:
@@ -204,7 +203,9 @@ class MockFileTradingDemo:
                 # For demo purposes, just log status periodically
                 if int(time.time() - start_time) % 10 == 0:
                     status = data_feed.get_status()
-                    _logger.info("Simulation running... Data points: %s/%s", status['current_index'], status['total_rows'])
+                    _logger.info(
+                        "Simulation running... Data points: %s/%s", status["current_index"], status["total_rows"]
+                    )
 
                 await asyncio.sleep(1)
 
@@ -223,9 +224,9 @@ class MockFileTradingDemo:
 
     def demonstrate_configuration(self, config_name: str):
         """Demonstrate a complete configuration setup."""
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"MOCK FILE TRADING DEMO - {config_name.upper()}")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         try:
             # Load configuration
@@ -245,9 +246,9 @@ class MockFileTradingDemo:
             broker = self.create_broker(config)
             data_feed = self.create_data_feed(config)
 
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print("SETUP SUMMARY")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
 
             print(f"✅ Configuration: {config['name']}")
             print(f"✅ Symbol: {config['symbol']}")
@@ -270,11 +271,7 @@ class MockFileTradingDemo:
         print("🚀 Mock File Trading Bot Demo")
         print("This demo shows how to set up test trading bots using CSV data and mock brokers.")
 
-        configurations = [
-            "mock_file_test_btc_5m",
-            "mock_file_test_eth_15m",
-            "mock_file_test_ltc_simple"
-        ]
+        configurations = ["mock_file_test_btc_5m", "mock_file_test_eth_15m", "mock_file_test_ltc_simple"]
 
         successful_demos = 0
 
@@ -289,9 +286,9 @@ class MockFileTradingDemo:
             except Exception:
                 _logger.exception("❌ Demo error for %s:", config_name)
 
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print("DEMO SUMMARY")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
         print(f"Successful demos: {successful_demos}/{len(configurations)}")
 
         if successful_demos == len(configurations):
@@ -315,9 +312,9 @@ async def main():
         success = await demo.run_full_demo()
 
         if success:
-            print("\n" + "="*80)
+            print("\n" + "=" * 80)
             print("NEXT STEPS")
-            print("="*80)
+            print("=" * 80)
             print("1. Insert these configurations into your trading_bots database table")
             print("2. Use the enhanced trading service to run the bots")
             print("3. Monitor the bots through the notification system")

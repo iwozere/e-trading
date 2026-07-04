@@ -7,13 +7,14 @@ Scans historical daily results to identify:
 """
 
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict
+
 import pandas as pd
 
-from src.notification.logger import setup_logger
 from src.ml.pipeline.p06_emps2.config import RollingMemoryConfig
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -30,13 +31,7 @@ class RollingMemoryScanner:
     5. Generate watchlists and alerts
     """
 
-    def __init__(
-        self,
-        config: RollingMemoryConfig,
-        results_base_path: Path,
-        target_date: str,
-        verbose: bool = True
-    ):
+    def __init__(self, config: RollingMemoryConfig, results_base_path: Path, target_date: str, verbose: bool = True):
         """
         Initialize rolling memory scanner.
 
@@ -51,10 +46,7 @@ class RollingMemoryScanner:
         self.target_date = target_date
         self.verbose = verbose
 
-    def scan_historical_results(
-        self,
-        lookback_days: Optional[int] = None
-    ) -> pd.DataFrame:
+    def scan_historical_results(self, lookback_days: int | None = None) -> pd.DataFrame:
         """
         Scan historical results from last N days.
 
@@ -70,20 +62,18 @@ class RollingMemoryScanner:
 
         # Calculate date range using target_date as reference
         from datetime import datetime as dt
-        today = dt.strptime(self.target_date, '%Y-%m-%d').date()
+
+        today = dt.strptime(self.target_date, "%Y-%m-%d").date()
         start_date = today - timedelta(days=lookback)
 
-        _logger.info(
-            "Scanning historical results from %s to %s (%d days)",
-            start_date, today, lookback
-        )
+        _logger.info("Scanning historical results from %s to %s (%d days)", start_date, today, lookback)
 
         all_results = []
 
         # Scan each day's folder
         for days_back in range(lookback + 1):
             scan_date = today - timedelta(days=days_back)
-            date_str = scan_date.strftime('%Y-%m-%d')
+            date_str = scan_date.strftime("%Y-%m-%d")
             day_folder = self.results_base_path / date_str
 
             if not day_folder.exists():
@@ -92,14 +82,14 @@ class RollingMemoryScanner:
 
             # P06 (VolatilityFilter) writes 05_volatility_filtered.csv;
             # P10 / accumulation mode writes 07_prebreakout_watchlist.csv.
-            vol_file = day_folder / '05_volatility_filtered.csv'
+            vol_file = day_folder / "05_volatility_filtered.csv"
             if not vol_file.exists():
-                vol_file = day_folder / '07_prebreakout_watchlist.csv'
+                vol_file = day_folder / "07_prebreakout_watchlist.csv"
 
             if vol_file.exists():
                 try:
                     df = pd.read_csv(vol_file)
-                    df['scan_date'] = scan_date
+                    df["scan_date"] = scan_date
                     all_results.append(df)
                     _logger.debug("Loaded %d tickers from %s (%s)", len(df), date_str, vol_file.name)
                 except Exception:
@@ -111,17 +101,11 @@ class RollingMemoryScanner:
 
         # Combine all results
         combined_df = pd.concat(all_results, ignore_index=True)
-        _logger.info(
-            "Loaded %d total records from %d days",
-            len(combined_df), len(all_results)
-        )
+        _logger.info("Loaded %d total records from %d days", len(combined_df), len(all_results))
 
         return combined_df
 
-    def calculate_appearance_frequency(
-        self,
-        historical_df: pd.DataFrame
-    ) -> pd.DataFrame:
+    def calculate_appearance_frequency(self, historical_df: pd.DataFrame) -> pd.DataFrame:
         """
         Calculate how many times each ticker appeared in lookback period.
 
@@ -138,68 +122,61 @@ class RollingMemoryScanner:
 
         # Group by ticker and aggregate
         agg_dict = {
-            'scan_date': ['count', 'min', 'max'],
+            "scan_date": ["count", "min", "max"],
         }
 
         # Add metrics if they exist
-        if 'vol_zscore' in historical_df.columns:
-            agg_dict['vol_zscore'] = ['mean', 'max', 'last']
-        if 'vol_rv_ratio' in historical_df.columns:
-            agg_dict['vol_rv_ratio'] = ['mean', 'max', 'last']
-        if 'atr_ratio' in historical_df.columns:
-            agg_dict['atr_ratio'] = ['mean', 'last']
-        if 'last_price' in historical_df.columns:
-            agg_dict['last_price'] = 'last'
-        if 'market_cap' in historical_df.columns:
-            agg_dict['market_cap'] = 'last'
-        if 'avg_volume' in historical_df.columns:
-            agg_dict['avg_volume'] = 'last'
+        if "vol_zscore" in historical_df.columns:
+            agg_dict["vol_zscore"] = ["mean", "max", "last"]
+        if "vol_rv_ratio" in historical_df.columns:
+            agg_dict["vol_rv_ratio"] = ["mean", "max", "last"]
+        if "atr_ratio" in historical_df.columns:
+            agg_dict["atr_ratio"] = ["mean", "last"]
+        if "last_price" in historical_df.columns:
+            agg_dict["last_price"] = "last"
+        if "market_cap" in historical_df.columns:
+            agg_dict["market_cap"] = "last"
+        if "avg_volume" in historical_df.columns:
+            agg_dict["avg_volume"] = "last"
 
-        freq_df = historical_df.groupby('ticker').agg(agg_dict).reset_index()
+        freq_df = historical_df.groupby("ticker").agg(agg_dict).reset_index()
 
         # Flatten column names
-        new_columns = ['ticker']
+        new_columns = ["ticker"]
         for col in freq_df.columns[1:]:
             if isinstance(col, tuple):
-                if col[1] == 'count':
-                    new_columns.append('appearance_count')
-                elif col[1] == 'min':
-                    new_columns.append('first_seen')
-                elif col[1] == 'max' and col[0] == 'scan_date':
-                    new_columns.append('last_seen')
-                elif col[1] == 'mean':
-                    new_columns.append(f'avg_{col[0]}')
-                elif col[1] == 'max':
-                    new_columns.append(f'max_{col[0]}')
-                elif col[1] == 'last':
-                    new_columns.append(f'latest_{col[0]}')
+                if col[1] == "count":
+                    new_columns.append("appearance_count")
+                elif col[1] == "min":
+                    new_columns.append("first_seen")
+                elif col[1] == "max" and col[0] == "scan_date":
+                    new_columns.append("last_seen")
+                elif col[1] == "mean":
+                    new_columns.append(f"avg_{col[0]}")
+                elif col[1] == "max":
+                    new_columns.append(f"max_{col[0]}")
+                elif col[1] == "last":
+                    new_columns.append(f"latest_{col[0]}")
                 else:
-                    new_columns.append(f'{col[0]}_{col[1]}')
+                    new_columns.append(f"{col[0]}_{col[1]}")
             else:
                 new_columns.append(col)
 
         freq_df.columns = new_columns
 
         # Sort by appearance count
-        freq_df = freq_df.sort_values('appearance_count', ascending=False)
+        freq_df = freq_df.sort_values("appearance_count", ascending=False)
 
-        _logger.info(
-            "Calculated frequency for %d unique tickers", len(freq_df)
-        )
+        _logger.info("Calculated frequency for %d unique tickers", len(freq_df))
 
         if len(freq_df) > 0:
             _logger.info(
-                "Top ticker: %s with %d appearances",
-                freq_df.iloc[0]['ticker'],
-                freq_df.iloc[0]['appearance_count']
+                "Top ticker: %s with %d appearances", freq_df.iloc[0]["ticker"], freq_df.iloc[0]["appearance_count"]
             )
 
         return freq_df
 
-    def detect_phase1_candidates(
-        self,
-        frequency_df: pd.DataFrame
-    ) -> pd.DataFrame:
+    def detect_phase1_candidates(self, frequency_df: pd.DataFrame) -> pd.DataFrame:
         """
         Detect Phase 1: Quiet Accumulation.
 
@@ -216,24 +193,17 @@ class RollingMemoryScanner:
         if frequency_df.empty:
             return pd.DataFrame()
 
-        phase1_df = frequency_df[
-            frequency_df['appearance_count'] >= self.config.phase1_min_appearances
-        ].copy()
+        phase1_df = frequency_df[frequency_df["appearance_count"] >= self.config.phase1_min_appearances].copy()
 
-        phase1_df['phase'] = 'Phase 1: Quiet Accumulation'
+        phase1_df["phase"] = "Phase 1: Quiet Accumulation"
 
         _logger.info(
-            "Detected %d Phase 1 candidates (%d+ appearances)",
-            len(phase1_df), self.config.phase1_min_appearances
+            "Detected %d Phase 1 candidates (%d+ appearances)", len(phase1_df), self.config.phase1_min_appearances
         )
 
         return phase1_df
 
-    def detect_phase2_candidates(
-        self,
-        phase1_df: pd.DataFrame,
-        current_scan_df: pd.DataFrame
-    ) -> pd.DataFrame:
+    def detect_phase2_candidates(self, phase1_df: pd.DataFrame, current_scan_df: pd.DataFrame) -> pd.DataFrame:
         """
         Detect Phase 2: Early Public Signal.
 
@@ -261,16 +231,13 @@ class RollingMemoryScanner:
             return pd.DataFrame()
 
         # Merge Phase 1 tickers with today's scan results
-        merge_cols = ['ticker']
-        for col in ('vol_zscore', 'last_price', 'sentiment_score', 'mentions_24h', 'virality_index'):
+        merge_cols = ["ticker"]
+        for col in ("vol_zscore", "last_price", "sentiment_score", "mentions_24h", "virality_index"):
             if col in current_scan_df.columns:
                 merge_cols.append(col)
 
         phase2_df = phase1_df.merge(
-            current_scan_df[merge_cols],
-            on='ticker',
-            how='inner',
-            suffixes=('_history', '_today')
+            current_scan_df[merge_cols], on="ticker", how="inner", suffixes=("_history", "_today")
         )
 
         if phase2_df.empty:
@@ -281,18 +248,16 @@ class RollingMemoryScanner:
         # Stale signals (ticker has been accumulating too long without triggering)
         # perform worse. See docs/TIMING_ANALYSIS.md 2026-05-20.
         from datetime import datetime as _dt
-        alert_date = _dt.strptime(self.target_date, '%Y-%m-%d').date()
-        phase2_df['lag_days'] = phase2_df['first_seen'].apply(
+
+        alert_date = _dt.strptime(self.target_date, "%Y-%m-%d").date()
+        phase2_df["lag_days"] = phase2_df["first_seen"].apply(
             lambda fs: (alert_date - fs).days if not pd.isna(fs) else 999
         )
         before_lag = len(phase2_df)
         if self.config.max_phase2_lag_days > 0:
-            phase2_df = phase2_df[
-                phase2_df['lag_days'] <= self.config.max_phase2_lag_days
-            ].copy()
+            phase2_df = phase2_df[phase2_df["lag_days"] <= self.config.max_phase2_lag_days].copy()
         _logger.info(
-            "Lag gate (<= %d days): %d -> %d tickers",
-            self.config.max_phase2_lag_days, before_lag, len(phase2_df)
+            "Lag gate (<= %d days): %d -> %d tickers", self.config.max_phase2_lag_days, before_lag, len(phase2_df)
         )
         if phase2_df.empty:
             _logger.info("All Phase 2 candidates filtered out by lag gate")
@@ -302,40 +267,32 @@ class RollingMemoryScanner:
         # Vol acceleration: today's zscore relative to the historical average.
         # latest_last_price holds the price on first_seen date (oldest entry in the
         # reversed-iteration rolling window — see rolling_memory.scan_historical_results).
-        if 'vol_zscore' in phase2_df.columns and 'avg_vol_zscore' in phase2_df.columns:
-            safe_avg = phase2_df['avg_vol_zscore'].replace(0.0, float('nan'))
-            phase2_df['vol_acceleration'] = phase2_df['vol_zscore'] / safe_avg
+        if "vol_zscore" in phase2_df.columns and "avg_vol_zscore" in phase2_df.columns:
+            safe_avg = phase2_df["avg_vol_zscore"].replace(0.0, float("nan"))
+            phase2_df["vol_acceleration"] = phase2_df["vol_zscore"] / safe_avg
 
-        if 'last_price' in phase2_df.columns and 'latest_last_price' in phase2_df.columns:
-            safe_first = phase2_df['latest_last_price'].replace(0.0, float('nan'))
-            phase2_df['pre_alert_drift_pct'] = (
-                (phase2_df['last_price'] / safe_first - 1.0) * 100.0
-            )
+        if "last_price" in phase2_df.columns and "latest_last_price" in phase2_df.columns:
+            safe_first = phase2_df["latest_last_price"].replace(0.0, float("nan"))
+            phase2_df["pre_alert_drift_pct"] = (phase2_df["last_price"] / safe_first - 1.0) * 100.0
 
         # ── Signal conditions ─────────────────────────────────────────────────
         conditions = []
 
         # Absolute vol level: today's zscore must be strong
-        if 'vol_zscore' in phase2_df.columns:
-            conditions.append(phase2_df['vol_zscore'] >= self.config.phase2_min_vol_zscore)
+        if "vol_zscore" in phase2_df.columns:
+            conditions.append(phase2_df["vol_zscore"] >= self.config.phase2_min_vol_zscore)
 
         # Gate 2: Vol acceleration — volume must be rising vs its own history
         # Filters out tickers that had one spike days ago but are now cooling.
-        if 'vol_acceleration' in phase2_df.columns:
-            conditions.append(
-                phase2_df['vol_acceleration'].fillna(0.0) >= self.config.phase2_min_vol_acceleration
-            )
+        if "vol_acceleration" in phase2_df.columns:
+            conditions.append(phase2_df["vol_acceleration"].fillna(0.0) >= self.config.phase2_min_vol_acceleration)
 
         # Sentiment OR virality (optional enrichment if data is available)
         sentiment_conditions = []
-        if 'sentiment_score' in phase2_df.columns:
-            sentiment_conditions.append(
-                phase2_df['sentiment_score'] >= self.config.phase2_min_sentiment
-            )
-        if 'virality_index' in phase2_df.columns:
-            sentiment_conditions.append(
-                phase2_df['virality_index'] >= self.config.phase2_min_virality
-            )
+        if "sentiment_score" in phase2_df.columns:
+            sentiment_conditions.append(phase2_df["sentiment_score"] >= self.config.phase2_min_sentiment)
+        if "virality_index" in phase2_df.columns:
+            sentiment_conditions.append(phase2_df["virality_index"] >= self.config.phase2_min_virality)
 
         # Combine: all hard conditions AND (sentiment OR virality if available)
         if conditions:
@@ -364,36 +321,39 @@ class RollingMemoryScanner:
         # ── Gate 3: Price drift filter ────────────────────────────────────────
         # Tickers that have already run up >5% before the alert fire with much lower
         # win rates. See docs/TIMING_ANALYSIS.md 2026-05-20.
-        if 'pre_alert_drift_pct' in phase2_df.columns and self.config.max_pre_alert_drift_pct > 0:
+        if "pre_alert_drift_pct" in phase2_df.columns and self.config.max_pre_alert_drift_pct > 0:
             before_drift = len(phase2_df)
-            drift_ok = (
-                (phase2_df['pre_alert_drift_pct'] <= self.config.max_pre_alert_drift_pct)
-                | phase2_df['pre_alert_drift_pct'].isna()
-            )
+            drift_ok = (phase2_df["pre_alert_drift_pct"] <= self.config.max_pre_alert_drift_pct) | phase2_df[
+                "pre_alert_drift_pct"
+            ].isna()
             phase2_df = phase2_df[drift_ok].copy()
             _logger.info(
                 "Price drift gate (<= +%.0f%%): %d -> %d tickers",
-                self.config.max_pre_alert_drift_pct, before_drift, len(phase2_df)
+                self.config.max_pre_alert_drift_pct,
+                before_drift,
+                len(phase2_df),
             )
 
         if phase2_df.empty:
             _logger.info("All Phase 2 candidates filtered out by price drift gate")
             return pd.DataFrame()
 
-        phase2_df['phase'] = 'Phase 2: Early Public Signal'
+        phase2_df["phase"] = "Phase 2: Early Public Signal"
 
         # PREMIUM priority: price pulled back during accumulation (strongest signal)
-        if 'pre_alert_drift_pct' in phase2_df.columns:
-            phase2_df['alert_priority'] = phase2_df['pre_alert_drift_pct'].apply(
-                lambda x: 'PREMIUM' if (not pd.isna(x) and float(x) < 0.0) else 'HIGH'
+        if "pre_alert_drift_pct" in phase2_df.columns:
+            phase2_df["alert_priority"] = phase2_df["pre_alert_drift_pct"].apply(
+                lambda x: "PREMIUM" if (not pd.isna(x) and float(x) < 0.0) else "HIGH"
             )
         else:
-            phase2_df['alert_priority'] = 'HIGH'
+            phase2_df["alert_priority"] = "HIGH"
 
-        premium_count = (phase2_df['alert_priority'] == 'PREMIUM').sum()
+        premium_count = (phase2_df["alert_priority"] == "PREMIUM").sum()
         _logger.info(
             "Phase 2 detection complete: %d candidates (%d PREMIUM, %d HIGH)",
-            len(phase2_df), premium_count, len(phase2_df) - premium_count
+            len(phase2_df),
+            premium_count,
+            len(phase2_df) - premium_count,
         )
 
         return phase2_df
@@ -421,7 +381,7 @@ class RollingMemoryScanner:
     def check_bootstrap_health(
         self,
         phase1_count: int,
-        lookback_days: Optional[int] = None,
+        lookback_days: int | None = None,
     ) -> None:
         """
         Persist run state and emit error if Phase 1 has never fired after lookback_days.
@@ -450,9 +410,11 @@ class RollingMemoryScanner:
         active_days = (today - first_run).days
 
         _logger.debug(
-            "Rolling memory health: active_days=%d, lookback=%d, "
-            "cumulative_phase1=%d (this_run=%d)",
-            active_days, lookback, state["cumulative_phase1_count"], phase1_count,
+            "Rolling memory health: active_days=%d, lookback=%d, cumulative_phase1=%d (this_run=%d)",
+            active_days,
+            lookback,
+            state["cumulative_phase1_count"],
+            phase1_count,
         )
 
         if active_days > lookback and state["cumulative_phase1_count"] == 0:
@@ -460,15 +422,13 @@ class RollingMemoryScanner:
                 "Rolling memory health check FAILED: scanner has been active %d days "
                 "(> lookback %d days) but cumulative Phase 1 detections = 0. "
                 "Check data quality, filter thresholds, and results path: %s",
-                active_days, lookback, self.results_base_path,
+                active_days,
+                lookback,
+                self.results_base_path,
             )
 
     def generate_outputs(
-        self,
-        frequency_df: pd.DataFrame,
-        phase1_df: pd.DataFrame,
-        phase2_df: pd.DataFrame,
-        output_dir: Path
+        self, frequency_df: pd.DataFrame, phase1_df: pd.DataFrame, phase2_df: pd.DataFrame, output_dir: Path
     ) -> Dict[str, Path]:
         """
         Generate output files.
@@ -487,23 +447,23 @@ class RollingMemoryScanner:
 
         # 1. Rolling candidates (all tickers in 14-day window)
         if self.config.save_rolling_candidates and not frequency_df.empty:
-            rolling_file = output_dir / '06_rolling_candidates.csv'
+            rolling_file = output_dir / "06_rolling_candidates.csv"
             frequency_df.to_csv(rolling_file, index=False)
-            output_files['rolling_candidates'] = rolling_file
+            output_files["rolling_candidates"] = rolling_file
             _logger.info("Saved rolling candidates: %s", rolling_file)
 
         # 2. Phase 1 watchlist
         if self.config.save_phase1_watchlist and not phase1_df.empty:
-            phase1_file = output_dir / '07_phase1_watchlist.csv'
+            phase1_file = output_dir / "07_phase1_watchlist.csv"
             phase1_df.to_csv(phase1_file, index=False)
-            output_files['phase1_watchlist'] = phase1_file
+            output_files["phase1_watchlist"] = phase1_file
             _logger.info("Saved Phase 1 watchlist: %s", phase1_file)
 
         # 3. Phase 2 alerts (HOT)
         if self.config.save_phase2_alerts and not phase2_df.empty:
-            phase2_file = output_dir / '08_phase2_alerts.csv'
+            phase2_file = output_dir / "08_phase2_alerts.csv"
             phase2_df.to_csv(phase2_file, index=False)
-            output_files['phase2_alerts'] = phase2_file
+            output_files["phase2_alerts"] = phase2_file
             _logger.info("Saved Phase 2 alerts: %s ⚠️", phase2_file)
 
         return output_files

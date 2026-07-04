@@ -15,11 +15,11 @@ Conditions (all must be true):
 5. No overbought RSI: RSI < rsi_overbought threshold
 """
 
-from typing import Any, Dict, Optional, List
 import math
+from typing import Any, Dict, List
 
-from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 from src.notification.logger import setup_logger
+from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 
 _logger = setup_logger(__name__)
 
@@ -30,7 +30,7 @@ class EOMBreakoutEntryMixin(BaseEntryMixin):
     New Architecture only.
     """
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
 
@@ -67,40 +67,30 @@ class EOMBreakoutEntryMixin(BaseEntryMixin):
             {
                 "type": "SupportResistance",
                 "params": {"lookback_bars": res_lookback},
-                "fields_mapping": {"resistance": "entry_resistance", "support": "entry_support"}
+                "fields_mapping": {"resistance": "entry_resistance", "support": "entry_support"},
             },
-            {
-                "type": "EOM",
-                "params": {"timeperiod": eom_period},
-                "fields_mapping": {"eom": "entry_eom"}
-            },
+            {"type": "EOM", "params": {"timeperiod": eom_period}, "fields_mapping": {"eom": "entry_eom"}},
             {
                 "type": "SMA",
                 "params": {"timeperiod": vol_sma_period},
                 "data_field": "volume",
-                "fields_mapping": {"sma": "entry_volume_sma"}
+                "fields_mapping": {"sma": "entry_volume_sma"},
             },
-            {
-                "type": "RSI",
-                "params": {"timeperiod": rsi_period},
-                "fields_mapping": {"rsi": "entry_rsi"}
-            }
+            {"type": "RSI", "params": {"timeperiod": rsi_period}, "fields_mapping": {"rsi": "entry_rsi"}},
         ]
 
         if params.get("use_atr_filter", params.get("e_use_atr_filter", True)):
-            config.extend([
-                {
-                    "type": "ATR",
-                    "params": {"timeperiod": atr_period},
-                    "fields_mapping": {"atr": "entry_atr"}
-                },
-                {
-                    "type": "SMA",
-                    "params": {"timeperiod": atr_sma_period},
-                    "data_field": "entry_atr",
-                    "fields_mapping": {"sma": "entry_atr_sma"}
-                }
-            ])
+            config.extend(
+                [
+                    {"type": "ATR", "params": {"timeperiod": atr_period}, "fields_mapping": {"atr": "entry_atr"}},
+                    {
+                        "type": "SMA",
+                        "params": {"timeperiod": atr_sma_period},
+                        "data_field": "entry_atr",
+                        "fields_mapping": {"sma": "entry_atr_sma"},
+                    },
+                ]
+            )
 
         return config
 
@@ -116,19 +106,17 @@ class EOMBreakoutEntryMixin(BaseEntryMixin):
             self.get_param("atr_period", 14),
             self.get_param("atr_sma_period", 100),
             self.get_param("rsi_period", 14),
-            self.get_param("resistance_lookback", 2) * 5 # S/R needs some data
+            self.get_param("resistance_lookback", 2) * 5,  # S/R needs some data
         ]
         return max(periods)
 
     def are_indicators_ready(self) -> bool:
         """Check if required indicators exist in the strategy registry."""
-        required = [
-            'entry_resistance', 'entry_eom', 'entry_volume_sma', 'entry_rsi'
-        ]
+        required = ["entry_resistance", "entry_eom", "entry_volume_sma", "entry_rsi"]
         if self._resolve_param("use_atr_filter", "e_use_atr_filter", True):
-            required.extend(['entry_atr', 'entry_atr_sma'])
+            required.extend(["entry_atr", "entry_atr_sma"])
 
-        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
+        return all(alias in getattr(self.strategy, "indicators", {}) for alias in required)
 
     def should_enter(self) -> bool:
         """Determines if the mixin should enter a position."""
@@ -141,11 +129,11 @@ class EOMBreakoutEntryMixin(BaseEntryMixin):
             volume = self.strategy.data.volume[0]
 
             # Standardized Indicator Access
-            resistance = self.get_indicator('entry_resistance')
-            eom = self.get_indicator('entry_eom')
-            eom_prev = self.get_indicator_prev('entry_eom', 1)
-            volume_sma = self.get_indicator('entry_volume_sma')
-            rsi = self.get_indicator('entry_rsi')
+            resistance = self.get_indicator("entry_resistance")
+            eom = self.get_indicator("entry_eom")
+            eom_prev = self.get_indicator_prev("entry_eom", 1)
+            volume_sma = self.get_indicator("entry_volume_sma")
+            rsi = self.get_indicator("entry_rsi")
 
             # Get parameters
             breakout_threshold = self._resolve_param("breakout_threshold", "e_breakout_threshold", 0.002)
@@ -177,8 +165,8 @@ class EOMBreakoutEntryMixin(BaseEntryMixin):
 
             # 4. ATR trend filter (optional): ATR > ATR_SMA
             if use_atr_filter:
-                atr = self.get_indicator('entry_atr')
-                atr_sma = self.get_indicator('entry_atr_sma')
+                atr = self.get_indicator("entry_atr")
+                atr_sma = self.get_indicator("entry_atr_sma")
 
                 if atr <= atr_sma:
                     return False

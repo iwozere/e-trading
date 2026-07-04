@@ -1,6 +1,6 @@
 """Technical signal computation — pure functions, no side effects."""
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -104,11 +104,13 @@ def compute_atr_compression(
     """
     if len(close) < long + 1:
         return False
-    tr = pd.DataFrame({
-        "hl": high - low,
-        "hc": (high - close.shift()).abs(),
-        "lc": (low - close.shift()).abs(),
-    }).max(axis=1)
+    tr = pd.DataFrame(
+        {
+            "hl": high - low,
+            "hc": (high - close.shift()).abs(),
+            "lc": (low - close.shift()).abs(),
+        }
+    ).max(axis=1)
     short_atr = float(tr.rolling(short, min_periods=short).mean().iloc[-1])
     long_atr = float(tr.rolling(long, min_periods=long).mean().iloc[-1])
     if long_atr == 0 or np.isnan(long_atr) or np.isnan(short_atr):
@@ -140,7 +142,7 @@ def compute_52w_proximity(prices: pd.Series) -> Tuple[float, float]:
 
 def score_technicals(
     ohlcv: pd.DataFrame,
-    weights: Optional[Dict[str, int]] = None,
+    weights: Dict[str, int] | None = None,
 ) -> Tuple[float, Dict[str, object]]:
     """
     Compute all technical signals and return (total_score, breakdown_dict).
@@ -153,6 +155,7 @@ def score_technicals(
         Tuple of (total_score, signal_breakdown).
     """
     from src.ml.pipeline.p05_ai_selector.config import TECHNICAL_WEIGHTS
+
     w = weights or TECHNICAL_WEIGHTS
 
     if ohlcv.empty or len(ohlcv) < 10:
@@ -175,14 +178,8 @@ def score_technicals(
     atr_comp = compute_atr_compression(high, low, close)
     pct_from_high, pct_from_low = compute_52w_proximity(close)
 
-    sma_bullish = (
-        last_sma20 is not None and last_sma50 is not None
-        and last_close > last_sma20 > last_sma50
-    )
-    sma_bearish = (
-        last_sma20 is not None and last_sma50 is not None
-        and last_close < last_sma20 < last_sma50
-    )
+    sma_bullish = last_sma20 is not None and last_sma50 is not None and last_close > last_sma20 > last_sma50
+    sma_bearish = last_sma20 is not None and last_sma50 is not None and last_close < last_sma20 < last_sma50
     rsi_oversold = rsi < 30
     rsi_overbought = rsi > 70
     volume_surge = vol_surge_ratio > 1.5

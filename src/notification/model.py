@@ -10,6 +10,7 @@ from enum import Enum
 
 class NotificationType(str, Enum):
     """Notification types for categorization."""
+
     TRADE_ENTRY = "trade_entry"
     TRADE_EXIT = "trade_exit"
     ERROR = "error"
@@ -22,6 +23,7 @@ class NotificationType(str, Enum):
 
 class NotificationPriority(str, Enum):
     """Notification priority levels."""
+
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"

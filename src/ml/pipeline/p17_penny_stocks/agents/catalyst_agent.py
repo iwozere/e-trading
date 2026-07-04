@@ -35,10 +35,10 @@ dilution agent. Catalysts decay quickly, so only filings within
 ``lookback_days`` are considered and more recent ones are weighted higher.
 """
 
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-import sys
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 if str(PROJECT_ROOT) not in sys.path:
@@ -46,32 +46,54 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import pandas as pd
 
-from src.notification.logger import setup_logger
 from src.data.downloader.edgar_downloader import EdgarDownloader
 from src.ml.pipeline.p17_penny_stocks.config import P17CatalystConfig
 from src.ml.pipeline.p17_penny_stocks.models.candidate import Candidate
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
 _CATALYST_FORMS = {"8-K", "8-K/A"}
 
 # Structured 8-K item codes
-_MATERIAL_AGREEMENT_ITEMS = {"1.01"}          # contract / partnership — Tier 1
-_EARNINGS_ITEMS = {"2.02"}                     # results of operations — Tier 2
-_PRESS_RELEASE_ITEMS = {"7.01", "8.01"}        # Reg-FD / other events — Tier 2
+_MATERIAL_AGREEMENT_ITEMS = {"1.01"}  # contract / partnership — Tier 1
+_EARNINGS_ITEMS = {"2.02"}  # results of operations — Tier 2
+_PRESS_RELEASE_ITEMS = {"7.01", "8.01"}  # Reg-FD / other events — Tier 2
 _BEARISH_ITEMS = {"1.02", "1.03", "3.01", "4.02"}  # never a catalyst
 
 # Keyword refinement on primaryDocDescription (lower-cased)
 _TIER1_KEYWORDS = {
-    "fda", "clearance", "approval", "breakthrough", "phase 3", "phase iii",
-    "defense", "department of defense", "darpa", "contract award",
-    "awarded a contract", "definitive agreement", "merger", "acquisition",
-    "acquire", "letter of intent", "guidance", "record revenue",
-    "nuclear", "rare earth",
+    "fda",
+    "clearance",
+    "approval",
+    "breakthrough",
+    "phase 3",
+    "phase iii",
+    "defense",
+    "department of defense",
+    "darpa",
+    "contract award",
+    "awarded a contract",
+    "definitive agreement",
+    "merger",
+    "acquisition",
+    "acquire",
+    "letter of intent",
+    "guidance",
+    "record revenue",
+    "nuclear",
+    "rare earth",
 }
 _TIER2_KEYWORDS = {
-    "artificial intelligence", " ai ", "patent", "milestone", "launch",
-    "partnership", "collaboration", "uplist", "grant",
+    "artificial intelligence",
+    " ai ",
+    "patent",
+    "milestone",
+    "launch",
+    "partnership",
+    "collaboration",
+    "uplist",
+    "grant",
 }
 
 
@@ -132,9 +154,7 @@ class CatalystAgent:
         # file exists for the window (e.g. before the P15 8-K job has backfilled).
         index_by_cik = self._load_index_window(today, since)
         source = "8-K index cache" if index_by_cik is not None else "per-CIK EDGAR (fallback)"
-        _logger.info(
-            "Catalyst agent: analysing %d candidates via %s", len(candidates), source
-        )
+        _logger.info("Catalyst agent: analysing %d candidates via %s", len(candidates), source)
 
         flagged, skipped = 0, 0
         for c in candidates:
@@ -151,7 +171,8 @@ class CatalystAgent:
 
         _logger.info(
             "Catalyst agent: %d candidates with a catalyst, %d skipped (no CIK)",
-            flagged, skipped,
+            flagged,
+            skipped,
         )
         return candidates
 
@@ -161,7 +182,7 @@ class CatalystAgent:
         self,
         today: datetime,
         since: datetime,
-    ) -> Optional[Dict[str, List[Dict[str, Any]]]]:
+    ) -> Dict[str, List[Dict[str, Any]]] | None:
         """
         Load cached daily 8-K index rows for [since, today], grouped by CIK key.
 
@@ -191,11 +212,13 @@ class CatalystAgent:
                         key = _cik_key(r.get("cik", ""))
                         if not key:
                             continue
-                        by_cik.setdefault(key, []).append({
-                            "items": str(r.get("items", "") or ""),
-                            "description": str(r.get("description", "") or ""),
-                            "filing_date": self._parse_date(str(r.get("filed_date", "") or "")),
-                        })
+                        by_cik.setdefault(key, []).append(
+                            {
+                                "items": str(r.get("items", "") or ""),
+                                "description": str(r.get("description", "") or ""),
+                                "filing_date": self._parse_date(str(r.get("filed_date", "") or "")),
+                            }
+                        )
             current += timedelta(days=1)
 
         return by_cik if found_file else None
@@ -208,9 +231,7 @@ class CatalystAgent:
     ) -> List[Dict[str, Any]]:
         """Legacy fallback: fetch a candidate's recent 8-K filings directly from EDGAR."""
         try:
-            filings = self._edgar.get_recent_filings(
-                cik, form_type=None, since=since, force_refresh=force_refresh
-            )
+            filings = self._edgar.get_recent_filings(cik, form_type=None, since=since, force_refresh=force_refresh)
         except Exception:
             _logger.debug("Could not fetch filings for CIK %s", cik)
             return []
@@ -220,11 +241,13 @@ class CatalystAgent:
             form = str(filing.get("form") or "").upper().strip()
             if form not in _CATALYST_FORMS:
                 continue
-            rows.append({
-                "items": str(filing.get("items") or ""),
-                "description": str(filing.get("primaryDocDescription") or ""),
-                "filing_date": self._parse_date(str(filing.get("filingDate") or "")),
-            })
+            rows.append(
+                {
+                    "items": str(filing.get("items") or ""),
+                    "description": str(filing.get("primaryDocDescription") or ""),
+                    "filing_date": self._parse_date(str(filing.get("filingDate") or "")),
+                }
+            )
         return rows
 
     def _score_candidate(
@@ -277,7 +300,7 @@ class CatalystAgent:
         _logger.debug("%s catalyst_score=%.1f signals=%s", c.ticker, c.catalyst_score, c.catalyst_signals)
         return True
 
-    def _classify(self, items: str, description: str) -> Tuple[Optional[str], float]:
+    def _classify(self, items: str, description: str) -> Tuple[str | None, float]:
         """
         Map an 8-K's item codes + description to (category, base_points).
 
@@ -337,7 +360,7 @@ class CatalystAgent:
             return {}
 
     @staticmethod
-    def _parse_date(date_str: str) -> Optional[datetime]:
+    def _parse_date(date_str: str) -> datetime | None:
         for fmt in ("%Y-%m-%d", "%Y%m%d"):
             try:
                 return datetime.strptime(date_str, fmt)

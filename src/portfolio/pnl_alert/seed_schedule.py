@@ -16,7 +16,7 @@ Usage::
 import argparse
 import sys
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
@@ -33,7 +33,7 @@ DEFAULT_SCHEDULE_NAME = "portfolio_pnl_alert"
 DEFAULT_TARGET = "portfolio.pnl_alert"
 
 
-def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse CLI arguments for seeding."""
     parser = argparse.ArgumentParser(
         prog="python -m src.portfolio.pnl_alert.seed_schedule",
@@ -74,7 +74,7 @@ def seed(
     name: str,
     target: str,
     enabled: bool,
-    jobs_service: Optional[JobsService] = None,
+    jobs_service: JobsService | None = None,
 ) -> int:
     """
     Insert or update the schedule row.
@@ -128,7 +128,7 @@ def seed(
     return created.id
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point."""
     args = _parse_args(argv)
     try:

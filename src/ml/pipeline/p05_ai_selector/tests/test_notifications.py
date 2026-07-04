@@ -59,10 +59,13 @@ def _run_with_channels(channels: dict, tmp_path: Path, user_id="2"):
     pipeline = P05Pipeline.__new__(P05Pipeline)  # skip __init__ (no instance state needed)
     output = Stage4Output(results_base=tmp_path)
 
-    with patch.dict(sys.modules, {
-        "src.data.db.services.notification_service": ns_mod,
-        "src.data.db.services.users_service": us_mod,
-    }):
+    with patch.dict(
+        sys.modules,
+        {
+            "src.data.db.services.notification_service": ns_mod,
+            "src.data.db.services.users_service": us_mod,
+        },
+    ):
         pipeline._send_notifications(
             output=output,
             picks=_picks(),

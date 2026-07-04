@@ -6,7 +6,7 @@ Parses and validates the user-editable watchlist for the PnL alert pipeline.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import yaml
 
@@ -28,7 +28,7 @@ class WatchlistEntry:
 
     symbol: str
     avg_price: float
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class WatchlistValidationError(ValueError):
@@ -67,52 +67,36 @@ def load_watchlist(path: str) -> List[WatchlistEntry]:
         with wl_path.open("r", encoding="utf-8") as f:
             raw = yaml.safe_load(f) or {}
     except yaml.YAMLError as exc:
-        raise WatchlistValidationError(
-            f"Watchlist YAML is not parseable ({wl_path}): {exc}"
-        ) from exc
+        raise WatchlistValidationError(f"Watchlist YAML is not parseable ({wl_path}): {exc}") from exc
 
     if not isinstance(raw, dict):
-        raise WatchlistValidationError(
-            f"Watchlist must be a mapping at the top level, got {type(raw).__name__}"
-        )
+        raise WatchlistValidationError(f"Watchlist must be a mapping at the top level, got {type(raw).__name__}")
 
     raw_entries = raw.get("entries") or []
     if not isinstance(raw_entries, list):
-        raise WatchlistValidationError(
-            f"Watchlist 'entries' must be a list, got {type(raw_entries).__name__}"
-        )
+        raise WatchlistValidationError(f"Watchlist 'entries' must be a list, got {type(raw_entries).__name__}")
 
     entries: List[WatchlistEntry] = []
     seen_symbols: set[str] = set()
 
     for idx, item in enumerate(raw_entries):
         if not isinstance(item, dict):
-            raise WatchlistValidationError(
-                f"Watchlist entry #{idx} must be a mapping, got {type(item).__name__}"
-            )
+            raise WatchlistValidationError(f"Watchlist entry #{idx} must be a mapping, got {type(item).__name__}")
 
         symbol_raw = item.get("symbol")
         if not symbol_raw or not isinstance(symbol_raw, str):
-            raise WatchlistValidationError(
-                f"Watchlist entry #{idx} is missing a non-empty 'symbol' string"
-            )
+            raise WatchlistValidationError(f"Watchlist entry #{idx} is missing a non-empty 'symbol' string")
         symbol = symbol_raw.strip().upper()
 
         avg_price_raw = item.get("avg_price")
         if not isinstance(avg_price_raw, (int, float)):
-            raise WatchlistValidationError(
-                f"Watchlist entry {symbol!r} has a non-numeric avg_price: {avg_price_raw!r}"
-            )
+            raise WatchlistValidationError(f"Watchlist entry {symbol!r} has a non-numeric avg_price: {avg_price_raw!r}")
         avg_price = float(avg_price_raw)
         if avg_price <= 0:
-            raise WatchlistValidationError(
-                f"Watchlist entry {symbol!r} has a non-positive avg_price: {avg_price}"
-            )
+            raise WatchlistValidationError(f"Watchlist entry {symbol!r} has a non-positive avg_price: {avg_price}")
 
         if symbol in seen_symbols:
-            raise WatchlistValidationError(
-                f"Watchlist has duplicate entries for symbol {symbol!r}"
-            )
+            raise WatchlistValidationError(f"Watchlist has duplicate entries for symbol {symbol!r}")
         seen_symbols.add(symbol)
 
         notes_raw = item.get("notes")

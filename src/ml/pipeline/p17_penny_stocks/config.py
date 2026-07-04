@@ -3,7 +3,6 @@ P17 Penny Stock Screener — Pipeline Configuration
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 from src.ml.pipeline.shared.config import FundamentalFilterConfig, UniverseConfig
 
@@ -19,22 +18,22 @@ class P17FilterConfig(FundamentalFilterConfig):
     # Liquidity
     min_daily_volume: int = 500_000
     min_avg_dollar_volume: float = 1_000_000.0
-    min_avg_volume: int = 500_000      # satisfies FundamentalFilterConfig.min_avg_volume
+    min_avg_volume: int = 500_000  # satisfies FundamentalFilterConfig.min_avg_volume
 
     # Market cap
-    min_market_cap: int = 30_000_000   # $30M
+    min_market_cap: int = 30_000_000  # $30M
     max_market_cap: int = 2_000_000_000  # $2B
 
     # Float (public shares)
-    min_float: int = 5_000_000         # 5M shares
-    max_float: int = 50_000_000        # 50M shares
+    min_float: int = 5_000_000  # 5M shares
+    max_float: int = 50_000_000  # 50M shares
 
     # Financial survival hard-stops
     min_cash_runway_months: float = 6.0
     max_debt_to_cash: float = 5.0
 
     # Risk controls
-    max_intraday_spread_pct: float = 0.08   # 8% bid-ask spread
+    max_intraday_spread_pct: float = 0.08  # 8% bid-ask spread
     max_offerings_last_12m: int = 3
 
     # Data download parameters
@@ -51,7 +50,7 @@ class P17TechnicalConfig:
     rvol_strong_threshold: float = 3.0
 
     # Price momentum
-    momentum_20d_max: float = 3.00      # >300% 20d return → late euphoric spike, penalise
+    momentum_20d_max: float = 3.00  # >300% 20d return → late euphoric spike, penalise
 
     # Bollinger Band squeeze detection
     bb_period: int = 20
@@ -73,12 +72,12 @@ class P17TechnicalConfig:
 class P17ShortSqueezeConfig:
     """Short squeeze detection thresholds."""
 
-    si_moderate_threshold: float = 0.10   # 10% of float
-    si_high_threshold: float = 0.20       # 20% of float
-    si_extreme_threshold: float = 0.30    # 30% of float — adds halt risk flag
+    si_moderate_threshold: float = 0.10  # 10% of float
+    si_high_threshold: float = 0.20  # 20% of float
+    si_extreme_threshold: float = 0.30  # 30% of float — adds halt risk flag
 
     days_to_cover_threshold: float = 3.0
-    min_rvol_for_trigger: float = 2.5     # squeeze only scores high when volume confirms
+    min_rvol_for_trigger: float = 2.5  # squeeze only scores high when volume confirms
 
     # Extra liquidity requirement when SI is extreme
     high_si_min_volume: int = 1_000_000
@@ -93,7 +92,7 @@ class P17ScoringConfig:
     weight_volume: float = 0.20
     weight_technical: float = 0.15
     weight_fundamentals: float = 0.15
-    weight_catalyst: float = 0.10       # live since the CatalystAgent (8-K detection) landed
+    weight_catalyst: float = 0.10  # live since the CatalystAgent (8-K detection) landed
     weight_short_squeeze: float = 0.10
     weight_accumulation: float = 0.05
 
@@ -143,7 +142,7 @@ class P17AlertConfig:
     enabled: bool = True
     min_alert_score: float = 75.0
     telegram_enabled: bool = True
-    email_enabled: bool = True   # Tier A/B picks emailed at end of each daily run (requires user_id)
+    email_enabled: bool = True  # Tier A/B picks emailed at end of each daily run (requires user_id)
 
 
 @dataclass
@@ -160,7 +159,7 @@ class P17PipelineConfig:
 
     save_intermediate_results: bool = True
     verbose_logging: bool = True
-    user_id: Optional[str] = None
+    user_id: str | None = None
 
     @classmethod
     def create_default(cls) -> "P17PipelineConfig":

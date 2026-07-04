@@ -5,12 +5,15 @@ Includes:
 - Trade data structure
 - Performance metrics (returns, drawdown, Sharpe, win rate, etc.)
 """
+
 from dataclasses import dataclass, field
-from datetime import datetime,timedelta
+from datetime import datetime, timedelta
+
 
 @dataclass
 class Trade:
     """Trade data structure"""
+
     entry_time: datetime
     exit_time: datetime
     symbol: str
@@ -40,6 +43,7 @@ class Trade:
 @dataclass
 class PerformanceMetrics:
     """Comprehensive performance metrics"""
+
     # Basic metrics
     total_trades: int = 0
     winning_trades: int = 0

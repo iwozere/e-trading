@@ -1,18 +1,17 @@
 import sys
 from pathlib import Path
-import pandas as pd
-import vectorbt as vbt
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from src.ml.pipeline.p07_combined.pipeline import P07Pipeline
 from src.ml.pipeline.p07_combined.json2csv import aggregate_results
+from src.ml.pipeline.p07_combined.pipeline import P07Pipeline
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 def test_reporting_functionality():
     """
@@ -40,7 +39,7 @@ def test_reporting_functionality():
             df_enriched=df_enriched,
             n_trials=2,
             start_date="20250101",
-            end_date="20251111"
+            end_date="20251111",
         )
 
         # 2. Aggregation Check
@@ -59,6 +58,7 @@ def test_reporting_functionality():
 
     except Exception as e:
         _logger.exception("Reporting test failed: %s", e)
+
 
 if __name__ == "__main__":
     test_reporting_functionality()

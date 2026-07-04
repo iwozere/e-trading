@@ -12,22 +12,22 @@ FINRA provides:
 FINRA Short Interest Data: https://www.finra.org/finra-data/browse-catalog/short-sale-volume-data
 """
 
+import io
 import sys
+import time
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timedelta, date, timezone
-from typing import List, Optional, Dict, Any, Union
+from typing import Any, Dict, List, Union
 
 import pandas as pd
 import requests
-import io
-import time
 import yfinance as yf
 
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from src.notification.logger import setup_logger
 from src.data.downloader.base_data_downloader import BaseDataDownloader
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -55,10 +55,10 @@ class FinraDataDownloader(BaseDataDownloader):
     def __init__(
         self,
         rate_limit_delay: float = 1.0,
-        date: Optional[str] = None,
-        output_dir: Optional[Path] = None,
+        date: str | None = None,
+        output_dir: Path | None = None,
         output_filename: str = "finra_trf.csv",
-        fetch_yfinance_data: bool = True
+        fetch_yfinance_data: bool = True,
     ):
         """
         Initialize FINRA data downloader.
@@ -95,12 +95,12 @@ class FinraDataDownloader(BaseDataDownloader):
             self.output_file = None
 
         # OAuth token management for TRF API
-        self._access_token: Optional[str] = None
-        self._token_expires_at: Optional[datetime] = None
+        self._access_token: str | None = None
+        self._token_expires_at: datetime | None = None
 
         # Store API credentials for OAuth (loaded via centralized config)
-        self._finra_api_client = self._get_config_value('FINRA_API_CLIENT', 'FINRA_API_CLIENT')
-        self._finra_api_secret = self._get_config_value('FINRA_API_SECRET', 'FINRA_API_SECRET')
+        self._finra_api_client = self._get_config_value("FINRA_API_CLIENT", "FINRA_API_CLIENT")
+        self._finra_api_secret = self._get_config_value("FINRA_API_SECRET", "FINRA_API_SECRET")
 
         _logger.info("FinraDataDownloader initialized")
 
@@ -121,14 +121,7 @@ class FinraDataDownloader(BaseDataDownloader):
         """
         return []  # FINRA doesn't provide interval-based OHLCV data
 
-    def get_ohlcv(
-        self,
-        symbol: str,
-        interval: str,
-        start_date: datetime,
-        end_date: datetime,
-        **kwargs
-    ) -> pd.DataFrame:
+    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> pd.DataFrame:
         """
         Download historical OHLCV data for a given symbol.
 
@@ -270,7 +263,7 @@ class FinraDataDownloader(BaseDataDownloader):
         except Exception:
             return False
 
-    def get_short_interest_data(self, date: Union[datetime, date] = None) -> Optional[pd.DataFrame]:
+    def get_short_interest_data(self, date: Union[datetime, date] = None) -> pd.DataFrame | None:
         """
         Download FINRA short interest data for a specific date.
 
@@ -306,7 +299,7 @@ class FinraDataDownloader(BaseDataDownloader):
             response.raise_for_status()
 
             # Parse the pipe-delimited file
-            df = pd.read_csv(io.StringIO(response.text), sep='|')
+            df = pd.read_csv(io.StringIO(response.text), sep="|")
 
             # Clean and standardize column names
             df.columns = df.columns.str.strip()
@@ -318,19 +311,24 @@ class FinraDataDownloader(BaseDataDownloader):
             else:
                 report_date = date  # Already a date object
 
-            df['report_date'] = report_date
-            df['data_source'] = 'FINRA'
-            df['downloaded_at'] = datetime.now()
+            df["report_date"] = report_date
+            df["data_source"] = "FINRA"
+            df["downloaded_at"] = datetime.now()
 
             _logger.info("Downloaded FINRA data: %d records for %s", len(df), date_for_format.strftime("%Y-%m-%d"))
             return df
 
         except Exception as e:
-            _logger.error("Error downloading FINRA data for %s: %s",
-                         date_for_format.strftime("%Y-%m-%d") if date else "unknown", e)
+            _logger.error(
+                "Error downloading FINRA data for %s: %s",
+                date_for_format.strftime("%Y-%m-%d") if date else "unknown",
+                e,
+            )
             return None
 
-    def get_short_interest_for_symbol(self, symbol: str, date: Union[datetime, date] = None) -> Optional[Dict[str, Any]]:
+    def get_short_interest_for_symbol(
+        self, symbol: str, date: Union[datetime, date] = None
+    ) -> Dict[str, Any] | None:
         """
         Get short interest data for a specific symbol.
 
@@ -347,7 +345,7 @@ class FinraDataDownloader(BaseDataDownloader):
                 return None
 
             # Filter for the specific symbol
-            symbol_data = df[df['Symbol'] == symbol.upper()]
+            symbol_data = df[df["Symbol"] == symbol.upper()]
 
             if symbol_data.empty:
                 _logger.warning("No FINRA data found for symbol %s", symbol)
@@ -356,7 +354,7 @@ class FinraDataDownloader(BaseDataDownloader):
             # Return the most recent record for the symbol
             record = symbol_data.iloc[0].to_dict()
 
-            _logger.debug("Found FINRA data for %s: %s shares short", symbol, record.get('ShortVolume', 'N/A'))
+            _logger.debug("Found FINRA data for %s: %s shares short", symbol, record.get("ShortVolume", "N/A"))
             return record
 
         except Exception as e:
@@ -384,12 +382,12 @@ class FinraDataDownloader(BaseDataDownloader):
 
             # Filter for requested symbols
             symbols_upper = [s.upper() for s in symbols]
-            filtered_df = df[df['Symbol'].isin(symbols_upper)]
+            filtered_df = df[df["Symbol"].isin(symbols_upper)]
 
             # Convert to dictionary
             result = {}
             for _, row in filtered_df.iterrows():
-                symbol = row['Symbol']
+                symbol = row["Symbol"]
                 result[symbol] = row.to_dict()
 
             _logger.info("Found FINRA data for %d/%d requested symbols", len(result), len(symbols))
@@ -399,8 +397,7 @@ class FinraDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting bulk FINRA data:")
             return {}
 
-    def calculate_short_interest_metrics(self, finra_data: Dict[str, Any],
-                                       shares_outstanding: int) -> Dict[str, float]:
+    def calculate_short_interest_metrics(self, finra_data: Dict[str, Any], shares_outstanding: int) -> Dict[str, float]:
         """
         Calculate short interest metrics from FINRA data.
 
@@ -412,8 +409,8 @@ class FinraDataDownloader(BaseDataDownloader):
             Dictionary with calculated metrics
         """
         try:
-            short_volume = finra_data.get('ShortVolume', 0)
-            total_volume = finra_data.get('TotalVolume', 0)
+            short_volume = finra_data.get("ShortVolume", 0)
+            total_volume = finra_data.get("TotalVolume", 0)
 
             # Calculate short interest percentage (approximation)
             # Note: FINRA provides daily short volume, not total short interest
@@ -428,12 +425,12 @@ class FinraDataDownloader(BaseDataDownloader):
             # This would be calculated elsewhere with volume data
 
             metrics = {
-                'short_volume': short_volume,
-                'total_volume': total_volume,
-                'short_volume_ratio': short_volume_ratio,
-                'estimated_short_interest_pct': estimated_short_interest_pct,
-                'report_date': finra_data.get('report_date'),
-                'data_source': 'FINRA'
+                "short_volume": short_volume,
+                "total_volume": total_volume,
+                "short_volume_ratio": short_volume_ratio,
+                "estimated_short_interest_pct": estimated_short_interest_pct,
+                "report_date": finra_data.get("report_date"),
+                "data_source": "FINRA",
             }
 
             return metrics
@@ -442,7 +439,7 @@ class FinraDataDownloader(BaseDataDownloader):
             _logger.exception("Error calculating short interest metrics:")
             return {}
 
-    def get_historical_short_data(self, symbol: str, days_back: int = 30) -> Optional[pd.DataFrame]:
+    def get_historical_short_data(self, symbol: str, days_back: int = 30) -> pd.DataFrame | None:
         """
         Get historical short interest data for a symbol.
 
@@ -473,8 +470,8 @@ class FinraDataDownloader(BaseDataDownloader):
                 return None
 
             df = pd.DataFrame(historical_data)
-            df['report_date'] = pd.to_datetime(df['report_date'])
-            df = df.sort_values('report_date')
+            df["report_date"] = pd.to_datetime(df["report_date"])
+            df = df.sort_values("report_date")
 
             _logger.info("Retrieved %d historical records for %s", len(df), symbol)
             return df
@@ -530,7 +527,7 @@ class FinraDataDownloader(BaseDataDownloader):
         return False
 
     @staticmethod
-    def _parse_date(date_str: Optional[str] = None) -> datetime:
+    def _parse_date(date_str: str | None = None) -> datetime:
         """Parse date string or return yesterday's date if None."""
         if date_str:
             return datetime.strptime(date_str, "%Y-%m-%d")
@@ -548,7 +545,7 @@ class FinraDataDownloader(BaseDataDownloader):
         """
         # Check if we have a valid cached token
         if self._access_token and self._token_expires_at:
-            if datetime.now(timezone.utc) < self._token_expires_at:
+            if datetime.now(UTC) < self._token_expires_at:
                 _logger.debug("Using cached access token")
                 return self._access_token
 
@@ -557,9 +554,7 @@ class FinraDataDownloader(BaseDataDownloader):
         try:
             # Use Basic Auth with Client ID and Secret
             response = requests.post(
-                self.FINRA_AUTH_URL,
-                auth=(self._finra_api_client, self._finra_api_secret),
-                timeout=30
+                self.FINRA_AUTH_URL, auth=(self._finra_api_client, self._finra_api_secret), timeout=30
             )
             response.raise_for_status()
 
@@ -577,7 +572,7 @@ class FinraDataDownloader(BaseDataDownloader):
 
             # Cache token for 30 minutes (or use expires_in from response)
             expires_in = int(token_data.get("expires_in", 1800))  # Default 30 minutes
-            self._token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in - 60)
+            self._token_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in - 60)
 
             _logger.info("Successfully obtained access token (expires in %s seconds)", expires_in)
             return self._access_token
@@ -586,7 +581,7 @@ class FinraDataDownloader(BaseDataDownloader):
             _logger.error("Failed to obtain access token: %s", str(e))
             raise
 
-    def download_trf_data(self, date: Optional[str] = None) -> pd.DataFrame:
+    def download_trf_data(self, date: str | None = None) -> pd.DataFrame:
         """
         Download TRF data from FINRA API.
 
@@ -615,30 +610,19 @@ class FinraDataDownloader(BaseDataDownloader):
 
             # Prepare the request headers with Bearer token
             headers = {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': f'Bearer {access_token}'
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Authorization": f"Bearer {access_token}",
             }
 
             # Filter for the specific trade date
             filters = {
-                "compareFilters": [
-                    {
-                        "compareType": "EQUAL",
-                        "fieldName": "tradeReportDate",
-                        "fieldValue": date_str
-                    }
-                ],
-                "limit": 10000  # Adjust based on expected data volume
+                "compareFilters": [{"compareType": "EQUAL", "fieldName": "tradeReportDate", "fieldValue": date_str}],
+                "limit": 10000,  # Adjust based on expected data volume
             }
 
             # Make POST request to FINRA API
-            response = requests.post(
-                self.finra_url,
-                headers=headers,
-                json=filters,
-                timeout=30
-            )
+            response = requests.post(self.finra_url, headers=headers, json=filters, timeout=30)
 
             # Log response details for debugging
             _logger.debug("Response status: %s", response.status_code)
@@ -664,8 +648,12 @@ class FinraDataDownloader(BaseDataDownloader):
             try:
                 data = response.json()
             except requests.exceptions.JSONDecodeError as e:
-                _logger.error("Failed to decode JSON response from FINRA TRF API for %s. Error: %s. Raw response content: %s",
-                             date_str, str(e), response.text)
+                _logger.error(
+                    "Failed to decode JSON response from FINRA TRF API for %s. Error: %s. Raw response content: %s",
+                    date_str,
+                    str(e),
+                    response.text,
+                )
                 return pd.DataFrame()
 
             if not data:
@@ -679,15 +667,17 @@ class FinraDataDownloader(BaseDataDownloader):
                 return df
 
             # Standardize column names based on actual API response
-            df = df.rename(columns={
-                "securitiesInformationProcessorSymbolIdentifier": "ticker",
-                "tradeReportDate": "date",
-                "shortParQuantity": "short_volume",
-                "shortExemptParQuantity": "short_exempt_volume",
-                "totalParQuantity": "total_volume",
-                "marketCode": "market_code",
-                "reportingFacilityCode": "facility_code"
-            })
+            df = df.rename(
+                columns={
+                    "securitiesInformationProcessorSymbolIdentifier": "ticker",
+                    "tradeReportDate": "date",
+                    "shortParQuantity": "short_volume",
+                    "shortExemptParQuantity": "short_exempt_volume",
+                    "totalParQuantity": "total_volume",
+                    "marketCode": "market_code",
+                    "reportingFacilityCode": "facility_code",
+                }
+            )
 
             # Convert date column
             df["date"] = pd.to_datetime(df["date"]).dt.date
@@ -696,8 +686,16 @@ class FinraDataDownloader(BaseDataDownloader):
             df["short_ratio"] = df["short_volume"] / df["total_volume"]
 
             # Keep only relevant columns
-            keep_columns = ["date", "ticker", "short_volume", "short_exempt_volume",
-                          "total_volume", "short_ratio", "market_code", "facility_code"]
+            keep_columns = [
+                "date",
+                "ticker",
+                "short_volume",
+                "short_exempt_volume",
+                "total_volume",
+                "short_ratio",
+                "market_code",
+                "facility_code",
+            ]
             df = df[[col for col in keep_columns if col in df.columns]]
 
             return df
@@ -706,7 +704,9 @@ class FinraDataDownloader(BaseDataDownloader):
             _logger.error("Failed to download TRF data: %s", str(e))
             raise
 
-    def get_volume_data(self, tickers: List[str], batch_size: int = 100, target_date: Optional[datetime] = None) -> pd.DataFrame:
+    def get_volume_data(
+        self, tickers: List[str], batch_size: int = 100, target_date: datetime | None = None
+    ) -> pd.DataFrame:
         """
         Fetch volume data from yfinance for the given tickers.
 
@@ -731,7 +731,7 @@ class FinraDataDownloader(BaseDataDownloader):
 
         # Process tickers in batches to balance speed and error handling
         for i in range(0, len(tickers), batch_size):
-            batch = tickers[i:i + batch_size]
+            batch = tickers[i : i + batch_size]
             batch_num = i // batch_size + 1
             total_batches = (len(tickers) + batch_size - 1) // batch_size
 
@@ -744,9 +744,9 @@ class FinraDataDownloader(BaseDataDownloader):
                     batch,
                     start=trf_date - timedelta(days=1),
                     end=trf_date + timedelta(days=1),
-                    group_by='ticker',
+                    group_by="ticker",
                     progress=False,
-                    threads=False  # Disable threading to avoid error propagation
+                    threads=False,  # Disable threading to avoid error propagation
                 )
 
                 if data.empty:
@@ -782,16 +782,18 @@ class FinraDataDownloader(BaseDataDownloader):
                             # Check if Volume is valid (not NaN and > 0)
                             volume = row.get("Volume") if isinstance(row, pd.Series) else None
                             if pd.notna(volume) and volume > 0:
-                                volume_data.append({
-                                    "ticker": ticker,
-                                    "date": trf_date.date(),
-                                    "volume": volume,
-                                    "open": row.get("Open"),
-                                    "high": row.get("High"),
-                                    "low": row.get("Low"),
-                                    "close": row.get("Close"),
-                                    "adj_close": row.get("Adj Close", row.get("Close"))
-                                })
+                                volume_data.append(
+                                    {
+                                        "ticker": ticker,
+                                        "date": trf_date.date(),
+                                        "volume": volume,
+                                        "open": row.get("Open"),
+                                        "high": row.get("High"),
+                                        "low": row.get("Low"),
+                                        "close": row.get("Close"),
+                                        "adj_close": row.get("Adj Close", row.get("Close")),
+                                    }
+                                )
                             else:
                                 _logger.debug("No volume data for ticker %s on %s", ticker, target_date_str)
                                 failed_tickers.append(ticker)
@@ -804,14 +806,12 @@ class FinraDataDownloader(BaseDataDownloader):
                         failed_tickers.append(ticker)
 
             except Exception as e:
-                _logger.warning("Batch %d failed: %s (marking %d tickers as failed)",
-                              batch_num, str(e), len(batch))
+                _logger.warning("Batch %d failed: %s (marking %d tickers as failed)", batch_num, str(e), len(batch))
                 failed_tickers.extend(batch)
 
         # Log summary
         if volume_data:
-            _logger.info("Successfully fetched volume data for %d/%d tickers",
-                        len(volume_data), len(tickers))
+            _logger.info("Successfully fetched volume data for %d/%d tickers", len(volume_data), len(tickers))
         else:
             _logger.warning("No volume data fetched for any tickers")
 
@@ -824,7 +824,7 @@ class FinraDataDownloader(BaseDataDownloader):
 
         return pd.DataFrame(volume_data)
 
-    def run(self, date: Optional[str] = None) -> pd.DataFrame:
+    def run(self, date: str | None = None) -> pd.DataFrame:
         """
         Run the TRF and volume data download process.
 
@@ -860,11 +860,7 @@ class FinraDataDownloader(BaseDataDownloader):
                 if not volume_df.empty:
                     # Merge on ticker and date
                     result_df = pd.merge(
-                        trf_df,
-                        volume_df,
-                        on=["ticker", "date"],
-                        how="left",
-                        suffixes=("_finra", "_yf")
+                        trf_df, volume_df, on=["ticker", "date"], how="left", suffixes=("_finra", "_yf")
                     )
 
                     # Calculate ratio of FINRA total volume to yfinance volume (should be ~1.0)
@@ -919,14 +915,14 @@ if __name__ == "__main__":
             print(f"Most recent: {dates[-1].strftime('%Y-%m-%d')}")
 
             # Test getting data for a specific symbol
-            symbol_data = finra.get_short_interest_for_symbol('AAPL')
+            symbol_data = finra.get_short_interest_for_symbol("AAPL")
             if symbol_data:
                 print(f"✅ Found FINRA data for AAPL: {symbol_data.get('ShortVolume', 'N/A')} short volume")
             else:
                 print("❌ No FINRA data found for AAPL")
 
             # Test bulk download
-            bulk_data = finra.get_bulk_short_interest(['AAPL', 'TSLA', 'GME'])
+            bulk_data = finra.get_bulk_short_interest(["AAPL", "TSLA", "GME"])
             print(f"✅ Bulk download: {len(bulk_data)} symbols found")
 
         else:

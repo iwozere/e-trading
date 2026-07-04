@@ -1,7 +1,7 @@
 """Tests for P17 ScoringAgent."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
@@ -32,6 +32,7 @@ def _make_candidate(**kwargs) -> Candidate:
 
 
 # ── _interp ────────────────────────────────────────────────────────────────────
+
 
 def test_interp_at_low_boundary():
     assert _interp(0.0, 0.0, 0.5, 1.0) == 0.0
@@ -65,6 +66,7 @@ def test_interp_upper_segment():
 
 # ── Momentum score ─────────────────────────────────────────────────────────────
 
+
 def test_momentum_score_zero_return():
     agent = _make_agent()
     c = _make_candidate(price_20d_return=0.0)
@@ -96,6 +98,7 @@ def test_momentum_score_euphoric_spike():
 
 # ── Volume score ───────────────────────────────────────────────────────────────
 
+
 def test_volume_score_low_rvol():
     agent = _make_agent()
     c = _make_candidate(relative_volume=0.5)
@@ -118,6 +121,7 @@ def test_volume_score_high_rvol():
 
 
 # ── Technical score ────────────────────────────────────────────────────────────
+
 
 def test_technical_score_no_signals():
     agent = _make_agent()
@@ -146,6 +150,7 @@ def test_technical_score_all_signals():
 
 
 # ── Fundamentals score ─────────────────────────────────────────────────────────
+
 
 def test_fundamentals_score_unknown_revenue():
     """Unknown revenue growth scores neutral (50), not a penalty (see _fundamentals_score)."""
@@ -179,6 +184,7 @@ def test_fundamentals_score_negative_margin_penalty():
 
 # ── Dilution penalty ───────────────────────────────────────────────────────────
 
+
 def test_dilution_penalty_reduces_final_score():
     agent = _make_agent()
     c = _make_candidate(
@@ -198,6 +204,7 @@ def test_final_score_floored_at_zero():
 
 
 # ── Tier assignment ────────────────────────────────────────────────────────────
+
 
 def test_tier_a_requires_mandatory_conditions():
     agent = _make_agent()
@@ -226,7 +233,7 @@ def test_tier_b_when_mandatory_conditions_missing():
     c = _make_candidate(
         relative_volume=5.0,
         price_20d_return=0.50,
-        above_sma50=False,   # mandatory condition missing
+        above_sma50=False,  # mandatory condition missing
         breakout_20d=False,
         revenue_growth_yoy=0.50,
     )
@@ -242,6 +249,7 @@ def test_tier_w_low_score():
 
 
 # ── Sorting ────────────────────────────────────────────────────────────────────
+
 
 def test_run_sorts_candidates_descending():
     agent = _make_agent()

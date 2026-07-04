@@ -4,7 +4,9 @@ API-scoped settings loaded via pydantic-settings.
 Reads from config/donotshare/.env using an absolute path derived from this
 file's location, so the app works regardless of the working directory.
 """
+
 from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _ENV_FILE = Path(__file__).resolve().parents[2] / "config" / "donotshare" / ".env"

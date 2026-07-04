@@ -4,7 +4,10 @@ Stop Loss Manager Module
 Implements dynamic stop-loss adjustment.
 """
 
-def dynamic_stop_loss(entry_price: float, current_price: float, initial_stop: float, trailing_pct: float = 0.02) -> float:
+
+def dynamic_stop_loss(
+    entry_price: float, current_price: float, initial_stop: float, trailing_pct: float = 0.02
+) -> float:
     """
     Adjust stop-loss dynamically using a trailing percentage.
     Args:
@@ -21,4 +24,4 @@ def dynamic_stop_loss(entry_price: float, current_price: float, initial_stop: fl
     else:
         # For short or losing positions, keep initial stop
         new_stop = initial_stop
-    return new_stop 
+    return new_stop

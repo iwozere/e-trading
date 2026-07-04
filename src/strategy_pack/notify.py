@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List
 
 from src.notification.logger import setup_logger
 from src.notification.service.client import MessagePriority, MessageType, NotificationServiceClient
@@ -35,7 +35,7 @@ async def send_pack_notifications(
     dedup: DedupStore,
     *,
     source: str = "strategy_pack",
-    recipient_id: Optional[str] = None,
+    recipient_id: str | None = None,
 ) -> int:
     """Send alerts for signals with ``notify_recommended`` and passing dedup.
 

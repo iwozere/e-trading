@@ -12,22 +12,24 @@ Features:
 - Real-time message processing capabilities
 - Rate limit handling and permissions management
 """
+
 import asyncio
-import aiohttp
 import os
-from typing import List, Dict, Optional, Any
-from pathlib import Path
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Dict, List
+
+import aiohttp
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
 from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -40,9 +42,16 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
     sentiment analysis, and community engagement metrics.
     """
 
-    def __init__(self, name: str = "discord", session: Optional[aiohttp.ClientSession] = None,
-                 concurrency: int = 2, rate_limit_delay: float = 1.0, max_retries: int = 3,
-                 bot_token: Optional[str] = None, guild_ids: Optional[List[str]] = None):
+    def __init__(
+        self,
+        name: str = "discord",
+        session: aiohttp.ClientSession | None = None,
+        concurrency: int = 2,
+        rate_limit_delay: float = 1.0,
+        max_retries: int = 3,
+        bot_token: str | None = None,
+        guild_ids: List[str] | None = None,
+    ):
         super().__init__(name, concurrency, rate_limit_delay)
         self._provided_session = session is not None
         self._session = session
@@ -51,11 +60,11 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
         self._analyzer = HeuristicSentimentAnalyzer()
 
         # Discord API configuration
-        self.bot_token = bot_token or os.getenv('DISCORD_BOT_TOKEN')
+        self.bot_token = bot_token or os.getenv("DISCORD_BOT_TOKEN")
         self.base_url = "https://discord.com/api/v10"
 
         # Guild and channel configuration
-        self.guild_ids = guild_ids or os.getenv('DISCORD_GUILD_IDS', '').split(',')
+        self.guild_ids = guild_ids or os.getenv("DISCORD_GUILD_IDS", "").split(",")
         self.guild_ids = [gid.strip() for gid in self.guild_ids if gid.strip()]
 
         # Keywords to identify financial channels
@@ -80,9 +89,9 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
             raise ValueError("Discord bot token not configured")
 
         return {
-            'Authorization': f'Bot {self.bot_token}',
-            'Content-Type': 'application/json',
-            'User-Agent': 'SentimentBot/1.0'
+            "Authorization": f"Bot {self.bot_token}",
+            "Content-Type": "application/json",
+            "User-Agent": "SentimentBot/1.0",
         }
 
     def _check_global_rate_limit(self) -> bool:
@@ -90,10 +99,7 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
         current_time = time.time()
 
         # Remove old requests outside the 1-second window
-        self._request_times = [
-            req_time for req_time in self._request_times
-            if current_time - req_time < 1.0
-        ]
+        self._request_times = [req_time for req_time in self._request_times if current_time - req_time < 1.0]
 
         return len(self._request_times) < self.global_rate_limit
 
@@ -106,13 +112,12 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
 
         # Remove old requests outside the 5-second window
         self._channel_requests[channel_id] = [
-            req_time for req_time in self._channel_requests[channel_id]
-            if current_time - req_time < 5.0
+            req_time for req_time in self._channel_requests[channel_id] if current_time - req_time < 5.0
         ]
 
         return len(self._channel_requests[channel_id]) < self.channel_rate_limit
 
-    def _record_request(self, channel_id: Optional[str] = None) -> None:
+    def _record_request(self, channel_id: str | None = None) -> None:
         """Record a new API request for rate limiting."""
         current_time = time.time()
         self._request_times.append(current_time)
@@ -122,8 +127,9 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
                 self._channel_requests[channel_id] = []
             self._channel_requests[channel_id].append(current_time)
 
-    async def _get_with_retry(self, url: str, params: Optional[dict] = None,
-                             channel_id: Optional[str] = None, timeout: int = 30) -> Optional[dict]:
+    async def _get_with_retry(
+        self, url: str, params: dict | None = None, channel_id: str | None = None, timeout: int = 30
+    ) -> dict | None:
         """Make HTTP request with exponential backoff retry logic."""
         if not self.bot_token:
             _logger.error("Discord bot token not configured")
@@ -157,14 +163,18 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
 
                         if resp.status == 429:
                             # Rate limited - check headers for retry time
-                            retry_after = resp.headers.get('retry-after')
+                            retry_after = resp.headers.get("retry-after")
                             if retry_after:
                                 wait_time = float(retry_after)
                             else:
-                                wait_time = self.rate_limit_delay * (2 ** attempt)
+                                wait_time = self.rate_limit_delay * (2**attempt)
 
-                            _logger.warning("Discord 429 rate limit (attempt %d/%d) - sleeping %.2fs",
-                                          attempt + 1, self.max_retries + 1, wait_time)
+                            _logger.warning(
+                                "Discord 429 rate limit (attempt %d/%d) - sleeping %.2fs",
+                                attempt + 1,
+                                self.max_retries + 1,
+                                wait_time,
+                            )
                             await asyncio.sleep(wait_time)
 
                             if attempt < self.max_retries:
@@ -174,7 +184,7 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
                                     request_info=resp.request_info,
                                     history=resp.history,
                                     status=resp.status,
-                                    message="Rate limit exceeded after retries"
+                                    message="Rate limit exceeded after retries",
                                 )
 
                         if resp.status == 401:
@@ -183,7 +193,7 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
                                 request_info=resp.request_info,
                                 history=resp.history,
                                 status=resp.status,
-                                message="Authentication failed"
+                                message="Authentication failed",
                             )
 
                         if resp.status == 403:
@@ -193,9 +203,14 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
                         if resp.status >= 500:
                             # Server error - retry with backoff
                             if attempt < self.max_retries:
-                                backoff_delay = self.rate_limit_delay * (2 ** attempt)
-                                _logger.warning("Discord server error %d (attempt %d/%d) - retrying in %.2fs",
-                                              resp.status, attempt + 1, self.max_retries + 1, backoff_delay)
+                                backoff_delay = self.rate_limit_delay * (2**attempt)
+                                _logger.warning(
+                                    "Discord server error %d (attempt %d/%d) - retrying in %.2fs",
+                                    resp.status,
+                                    attempt + 1,
+                                    self.max_retries + 1,
+                                    backoff_delay,
+                                )
                                 await asyncio.sleep(backoff_delay)
                                 continue
 
@@ -208,23 +223,34 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
 
                         return data
 
-                except asyncio.TimeoutError as e:
+                except TimeoutError as e:
                     last_exception = e
                     if attempt < self.max_retries:
-                        backoff_delay = self.rate_limit_delay * (2 ** attempt)
-                        _logger.warning("Discord timeout (attempt %d/%d) - retrying in %.2fs",
-                                      attempt + 1, self.max_retries + 1, backoff_delay)
+                        backoff_delay = self.rate_limit_delay * (2**attempt)
+                        _logger.warning(
+                            "Discord timeout (attempt %d/%d) - retrying in %.2fs",
+                            attempt + 1,
+                            self.max_retries + 1,
+                            backoff_delay,
+                        )
                         await asyncio.sleep(backoff_delay)
                         continue
 
                 except (aiohttp.ClientError, aiohttp.ClientResponseError) as e:
                     last_exception = e
-                    if attempt < self.max_retries and not isinstance(e, aiohttp.ClientResponseError) or (
-                        isinstance(e, aiohttp.ClientResponseError) and e.status >= 500
+                    if (
+                        attempt < self.max_retries
+                        and not isinstance(e, aiohttp.ClientResponseError)
+                        or (isinstance(e, aiohttp.ClientResponseError) and e.status >= 500)
                     ):
-                        backoff_delay = self.rate_limit_delay * (2 ** attempt)
-                        _logger.warning("Discord client error (attempt %d/%d) - retrying in %.2fs: %s",
-                                      attempt + 1, self.max_retries + 1, backoff_delay, e)
+                        backoff_delay = self.rate_limit_delay * (2**attempt)
+                        _logger.warning(
+                            "Discord client error (attempt %d/%d) - retrying in %.2fs: %s",
+                            attempt + 1,
+                            self.max_retries + 1,
+                            backoff_delay,
+                            e,
+                        )
                         await asyncio.sleep(backoff_delay)
                         continue
                     else:
@@ -233,10 +259,9 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
 
                 except Exception as e:
                     last_exception = e
-                    _logger.debug("Discord unexpected error (attempt %d/%d): %s",
-                                attempt + 1, self.max_retries + 1, e)
+                    _logger.debug("Discord unexpected error (attempt %d/%d): %s", attempt + 1, self.max_retries + 1, e)
                     if attempt < self.max_retries:
-                        backoff_delay = self.rate_limit_delay * (2 ** attempt)
+                        backoff_delay = self.rate_limit_delay * (2**attempt)
                         await asyncio.sleep(backoff_delay)
                         continue
                     break
@@ -245,8 +270,7 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
         self._consecutive_failures += 1
         if last_exception:
             self._update_health_failure(last_exception)
-            _logger.error("Discord request failed after %d attempts: %s %s",
-                         self.max_retries + 1, url, last_exception)
+            _logger.error("Discord request failed after %d attempts: %s %s", self.max_retries + 1, url, last_exception)
 
         return None
 
@@ -267,19 +291,21 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
 
                 for channel in guild_channels:
                     # Only process text channels
-                    if channel.get('type') != 0:  # 0 = GUILD_TEXT
+                    if channel.get("type") != 0:  # 0 = GUILD_TEXT
                         continue
 
-                    channel_name = channel.get('name', '').lower()
+                    channel_name = channel.get("name", "").lower()
 
                     # Check if channel name contains financial keywords
                     if any(keyword in channel_name for keyword in self.channel_keywords):
-                        channels.append({
-                            'id': channel['id'],
-                            'name': channel['name'],
-                            'guild_id': guild_id,
-                            'topic': channel.get('topic', '')
-                        })
+                        channels.append(
+                            {
+                                "id": channel["id"],
+                                "name": channel["name"],
+                                "guild_id": guild_id,
+                                "topic": channel.get("topic", ""),
+                            }
+                        )
 
                 await asyncio.sleep(self.rate_limit_delay)
 
@@ -293,20 +319,23 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
     def _message_mentions_ticker(self, message_content: str, ticker: str) -> bool:
         """Check if message mentions the ticker symbol."""
         import re
+
         content_lower = message_content.lower()
         ticker_lower = ticker.lower()
 
         # Check various formats
         patterns = [
-            f'\\${ticker_lower}\\b',  # Cashtag
-            f'#{ticker_lower}\\b',  # Hashtag
-            f'\\b{ticker_lower}\\b',  # Word boundary
-            f'\\({ticker_lower}\\)',  # In parentheses
+            f"\\${ticker_lower}\\b",  # Cashtag
+            f"#{ticker_lower}\\b",  # Hashtag
+            f"\\b{ticker_lower}\\b",  # Word boundary
+            f"\\({ticker_lower}\\)",  # In parentheses
         ]
 
         return any(re.search(pattern, content_lower) for pattern in patterns)
 
-    async def fetch_messages(self, ticker: str, since_ts: Optional[int] = None, limit: int = 200) -> List[Dict[str, Any]]:
+    async def fetch_messages(
+        self, ticker: str, since_ts: int | None = None, limit: int = 200
+    ) -> List[Dict[str, Any]]:
         """
         Fetch individual Discord messages for a ticker.
 
@@ -342,12 +371,12 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
                 if len(messages) >= limit:
                     break
 
-                channel_id = channel['id']
+                channel_id = channel["id"]
 
                 try:
                     # Build API parameters
                     params = {
-                        'limit': min(100, messages_per_channel)  # Discord API limit is 100 per request
+                        "limit": min(100, messages_per_channel)  # Discord API limit is 100 per request
                     }
 
                     # Add time filter if provided
@@ -357,7 +386,7 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
                         discord_epoch = 1420070400000  # Discord epoch in milliseconds
                         timestamp_ms = since_ts * 1000
                         snowflake = (timestamp_ms - discord_epoch) << 22
-                        params['after'] = str(snowflake)
+                        params["after"] = str(snowflake)
 
                     url = f"{self.base_url}/channels/{channel_id}/messages"
                     channel_messages = await self._get_with_retry(url, params=params, channel_id=channel_id)
@@ -393,7 +422,7 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
                                     "id": str(author.get("id", "")),
                                     "followers": 0,  # Discord doesn't have followers concept
                                     "discriminator": author.get("discriminator", ""),
-                                    "avatar": author.get("avatar", "")
+                                    "avatar": author.get("avatar", ""),
                                 },
                                 "likes": 0,  # Discord doesn't have likes
                                 "replies": 0,  # Would need additional API calls to count
@@ -402,9 +431,9 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
                                 "channel": {
                                     "id": channel_id,
                                     "name": channel.get("name", ""),
-                                    "guild_id": channel.get("guild_id", "")
+                                    "guild_id": channel.get("guild_id", ""),
                                 },
-                                "provider": "discord"
+                                "provider": "discord",
                             }
                             messages.append(normalized_msg)
 
@@ -422,8 +451,9 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
                     _logger.warning("Failed to fetch messages from channel %s: %s", channel_id, e)
                     continue
 
-            _logger.debug("Fetched %d Discord messages for ticker %s from %d channels",
-                         len(messages), symbol, len(channels))
+            _logger.debug(
+                "Fetched %d Discord messages for ticker %s from %d channels", len(messages), symbol, len(channels)
+            )
             return messages
 
         except Exception as e:
@@ -431,7 +461,7 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
             self._update_health_failure(e)
             raise
 
-    async def fetch_summary(self, ticker: str, since_ts: Optional[int] = None) -> Dict[str, Any]:
+    async def fetch_summary(self, ticker: str, since_ts: int | None = None) -> Dict[str, Any]:
         """
         Fetch aggregated sentiment summary for a ticker from Discord.
 
@@ -517,11 +547,16 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
                 "unique_users": unique_user_count,
                 "channel_distribution": dict(top_channels),
                 "provider": "discord",
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
-            _logger.debug("Generated Discord summary for ticker %s: %d mentions, score %.3f, %d users",
-                         ticker, mentions, score, unique_user_count)
+            _logger.debug(
+                "Generated Discord summary for ticker %s: %d mentions, score %.3f, %d users",
+                ticker,
+                mentions,
+                score,
+                unique_user_count,
+            )
             return summary
 
         except Exception as e:

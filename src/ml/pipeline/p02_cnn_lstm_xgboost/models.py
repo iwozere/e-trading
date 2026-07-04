@@ -12,7 +12,7 @@ selected when cnn_variant = "cnn_lstm".
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List
 
 import torch
 import torch.nn as nn
@@ -26,6 +26,7 @@ _logger = setup_logger(__name__)
 # CNN1D — merged from src/ml/pipeline/p03_cnn_xgboost/x_02_train_cnn.py
 # ---------------------------------------------------------------------------
 
+
 class CNN1D(nn.Module):
     """
     1D Convolutional Neural Network for time series feature extraction.
@@ -34,12 +35,14 @@ class CNN1D(nn.Module):
     Produces a fixed-length embedding vector via global average pooling.
     """
 
-    def __init__(self,
-                 input_channels: int = 5,
-                 sequence_length: int = 120,
-                 num_filters: Optional[List[int]] = None,
-                 kernel_sizes: Optional[List[int]] = None,
-                 dropout_rate: float = 0.3) -> None:
+    def __init__(
+        self,
+        input_channels: int = 5,
+        sequence_length: int = 120,
+        num_filters: List[int] | None = None,
+        kernel_sizes: List[int] | None = None,
+        dropout_rate: float = 0.3,
+    ) -> None:
         """
         Args:
             input_channels: Number of input features (OHLCV = 5).
@@ -62,12 +65,14 @@ class CNN1D(nn.Module):
         layers: list = []
         in_ch = input_channels
         for filters, ks in zip(num_filters, kernel_sizes):
-            layers.extend([
-                nn.Conv1d(in_ch, filters, ks, padding=ks // 2),
-                nn.BatchNorm1d(filters),
-                nn.ReLU(),
-                nn.Dropout(dropout_rate),
-            ])
+            layers.extend(
+                [
+                    nn.Conv1d(in_ch, filters, ks, padding=ks // 2),
+                    nn.BatchNorm1d(filters),
+                    nn.ReLU(),
+                    nn.Dropout(dropout_rate),
+                ]
+            )
             in_ch = filters
 
         self.conv_layers = nn.Sequential(*layers)
@@ -88,6 +93,7 @@ class CNN1D(nn.Module):
 # ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
+
 
 def build_cnn_model(cnn_variant: str = "cnn_lstm", **kwargs) -> nn.Module:
     """
@@ -115,17 +121,16 @@ def build_cnn_model(cnn_variant: str = "cnn_lstm", **kwargs) -> nn.Module:
         try:
             import sys
             from pathlib import Path
+
             p02_dir = Path(__file__).parent
             if str(p02_dir) not in sys.path:
                 sys.path.insert(0, str(p02_dir))
             from x_03_optuna_cnn_lstm import HybridCNNLSTM  # type: ignore[import]
+
             return HybridCNNLSTM(**kwargs)
         except ImportError as e:
             raise ImportError(
-                "HybridCNNLSTM requires x_03_optuna_cnn_lstm.py to be importable. "
-                f"Original error: {e}"
+                f"HybridCNNLSTM requires x_03_optuna_cnn_lstm.py to be importable. Original error: {e}"
             ) from e
 
-    raise ValueError(
-        f"Unknown cnn_variant '{cnn_variant}'. Valid values: 'simple', 'cnn_lstm'."
-    )
+    raise ValueError(f"Unknown cnn_variant '{cnn_variant}'. Valid values: 'simple', 'cnn_lstm'.")

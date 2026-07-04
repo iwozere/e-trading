@@ -11,13 +11,13 @@ import json
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.ml.pipeline.p20_kestrel.config import DATA_CACHE_PATH, HAIKU_MODEL, RESULTS_DIR
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+from src.ml.pipeline.p20_kestrel.config import DATA_CACHE_PATH, HAIKU_MODEL, RESULTS_DIR
 
 _kestrel = _KestrelService()
 finish_job_run = _kestrel.finish_job_run
@@ -54,7 +54,7 @@ def _read_queue() -> List[Dict[str, Any]]:
         return []
 
 
-def _fetch_filing_body(filing: Dict[str, Any]) -> Optional[str]:
+def _fetch_filing_body(filing: Dict[str, Any]) -> str | None:
     """
     Fetch the filing body text from P15 cache or EDGAR.
 
@@ -76,6 +76,7 @@ def _fetch_filing_body(filing: Dict[str, Any]) -> Optional[str]:
     # Try EDGAR directly (minimal body fetch)
     try:
         import requests
+
         cik = filing.get("cik")
         primary_doc = filing.get("primary_document")
         if not cik or not accession or not primary_doc:
@@ -90,7 +91,7 @@ def _fetch_filing_body(filing: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
+def run(as_of_date: date | None = None) -> Dict[str, Any]:
     """
     Classify all 8-K filings in the current LLM queue.
 

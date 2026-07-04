@@ -12,14 +12,46 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.ml.pipeline.p14_ath.config import ATHPipelineConfig  # noqa: E402
 from src.ml.pipeline.p14_ath.ath_pipeline import ATHPipeline  # noqa: E402
+from src.ml.pipeline.p14_ath.config import ATHPipelineConfig  # noqa: E402
 from src.notification.logger import setup_logger  # noqa: E402
 
 _logger = setup_logger(__name__)
 
 # List of tickers to analyze (overrides config defaults if set)
-TICKERS = ["SPY", "VT", "ORCL", "QQQ", "IWM", "TLT", "GLD", "SLV", "VXX", "TLT", "USO", "UNG", "DXY", "TSLA", "NVDA", "META", "AMZN", "GOOGL", "AAPL", "MSFT", "INTC", "BTC-USD", "ETH-USD", "XAUUSD=X", "XAGUSD=X", "XRP-USD", "LTC-USD", "BCH-USD", "ADA-USD", "XLM-USD"]
+TICKERS = [
+    "SPY",
+    "VT",
+    "ORCL",
+    "QQQ",
+    "IWM",
+    "TLT",
+    "GLD",
+    "SLV",
+    "VXX",
+    "TLT",
+    "USO",
+    "UNG",
+    "DXY",
+    "TSLA",
+    "NVDA",
+    "META",
+    "AMZN",
+    "GOOGL",
+    "AAPL",
+    "MSFT",
+    "INTC",
+    "BTC-USD",
+    "ETH-USD",
+    "XAUUSD=X",
+    "XAGUSD=X",
+    "XRP-USD",
+    "LTC-USD",
+    "BCH-USD",
+    "ADA-USD",
+    "XLM-USD",
+]
+
 
 def main():
     parser = argparse.ArgumentParser(description="Run Sequential ATH & Drawdown Analysis Pipeline")
@@ -40,7 +72,7 @@ def main():
         ticker_list = []
         for arg in args.tickers:
             # Each arg could be "SPY" or "SPY,VT"
-            ticker_list.extend([t.strip() for t in arg.split(',') if t.strip()])
+            ticker_list.extend([t.strip() for t in arg.split(",") if t.strip()])
         config.tickers = ticker_list
     config.lookback_years = args.lookback
     if args.no_plots:
@@ -59,6 +91,7 @@ def main():
         print(f"Results saved to: {pipeline.results_dir}")
     else:
         print("\nNo results generated. Check the logs for details.")
+
 
 if __name__ == "__main__":
     main()

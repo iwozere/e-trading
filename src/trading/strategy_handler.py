@@ -16,8 +16,8 @@ Features:
 
 import importlib
 import inspect
-from typing import Dict, Any, Type, Optional, List, Tuple
 from pathlib import Path
+from typing import Any, Dict, List, Tuple, Type
 
 from src.notification.logger import setup_logger
 from src.trading.strategy_registry import strategy_registry
@@ -49,7 +49,7 @@ class StrategyHandler:
             module_path="src.strategy.custom_strategy",
             class_name="CustomStrategy",
             description="Custom strategy with configurable entry/exit mixins",
-            requires_mixins=True
+            requires_mixins=True,
         )
 
         # Register P08XGBStrategy
@@ -58,7 +58,7 @@ class StrategyHandler:
             module_path="src.strategy.p08_xgb_strategy",
             class_name="P08XGBStrategy",
             description="P08 MTF Strategy using XGBoost",
-            requires_mixins=False
+            requires_mixins=False,
         )
 
         # Register AdvancedStrategyFramework (if exists)
@@ -68,7 +68,7 @@ class StrategyHandler:
                 module_path="src.strategy.future.composite_strategy_manager",
                 class_name="AdvancedStrategyFramework",
                 description="Advanced composite strategy framework",
-                requires_mixins=False
+                requires_mixins=False,
             )
         except Exception as e:
             _logger.debug("AdvancedStrategyFramework not available: %s", e)
@@ -82,7 +82,7 @@ class StrategyHandler:
         class_name: str,
         description: str = "",
         requires_mixins: bool = False,
-        validator_func: Optional[callable] = None
+        validator_func: callable | None = None,
     ):
         """
         Register a new strategy type.
@@ -101,7 +101,7 @@ class StrategyHandler:
             "description": description,
             "requires_mixins": requires_mixins,
             "validator_func": validator_func,
-            "class_ref": None  # Lazy loaded
+            "class_ref": None,  # Lazy loaded
         }
         _logger.info("Registered strategy type: %s (%s)", strategy_type, description)
 
@@ -124,10 +124,9 @@ class StrategyHandler:
         # Check if registered
         if strategy_type not in self.strategy_registry:
             _logger.warning(
-                "Unknown strategy type '%s', falling back to CustomStrategy. "
-                "Available types: %s",
+                "Unknown strategy type '%s', falling back to CustomStrategy. Available types: %s",
                 strategy_type,
-                list(self.strategy_registry.keys())
+                list(self.strategy_registry.keys()),
             )
             strategy_type = "CustomStrategy"
 
@@ -139,13 +138,11 @@ class StrategyHandler:
                 module = importlib.import_module(strategy_info["module_path"])
                 strategy_class = getattr(module, strategy_info["class_name"])
                 strategy_info["class_ref"] = strategy_class
-                
+
                 # Register in the global registry
                 strategy_registry.register(strategy_type, strategy_class)
-                
-                _logger.debug("Loaded strategy class: %s.%s",
-                             strategy_info["module_path"],
-                             strategy_info["class_name"])
+
+                _logger.debug("Loaded strategy class: %s.%s", strategy_info["module_path"], strategy_info["class_name"])
             except Exception as e:
                 _logger.exception("Failed to load strategy class %s:", strategy_type)
                 # Fallback to CustomStrategy if not already trying it
@@ -157,9 +154,7 @@ class StrategyHandler:
         return strategy_info["class_ref"]
 
     def validate_strategy_config(
-        self,
-        strategy_type: str,
-        strategy_config: Dict[str, Any]
+        self, strategy_type: str, strategy_config: Dict[str, Any]
     ) -> Tuple[bool, List[str], List[str]]:
         """
         Validate strategy configuration parameters.
@@ -179,9 +174,7 @@ class StrategyHandler:
 
         # Check if type is registered
         if strategy_type not in self.strategy_registry:
-            warnings.append(
-                f"Unknown strategy type '{strategy_type}', will fallback to CustomStrategy"
-            )
+            warnings.append(f"Unknown strategy type '{strategy_type}', will fallback to CustomStrategy")
             strategy_type = "CustomStrategy"
 
         strategy_info = self.strategy_registry[strategy_type]
@@ -200,9 +193,7 @@ class StrategyHandler:
         # Run custom validator if provided
         if strategy_info["validator_func"]:
             try:
-                custom_valid, custom_errors, custom_warnings = strategy_info["validator_func"](
-                    strategy_config
-                )
+                custom_valid, custom_errors, custom_warnings = strategy_info["validator_func"](strategy_config)
                 if not custom_valid:
                     errors.extend(custom_errors)
                 warnings.extend(custom_warnings)
@@ -212,10 +203,7 @@ class StrategyHandler:
         is_valid = len(errors) == 0
         return is_valid, errors, warnings
 
-    def _validate_mixin_config(
-        self,
-        parameters: Dict[str, Any]
-    ) -> Tuple[List[str], List[str]]:
+    def _validate_mixin_config(self, parameters: Dict[str, Any]) -> Tuple[List[str], List[str]]:
         """
         Validate mixin configuration for CustomStrategy.
 
@@ -241,9 +229,7 @@ class StrategyHandler:
                 # Validate entry mixin name
                 entry_name = entry_logic.get("name")
                 if not self._is_valid_mixin_name(entry_name):
-                    warnings.append(
-                        f"Entry mixin '{entry_name}' may not be a valid mixin class"
-                    )
+                    warnings.append(f"Entry mixin '{entry_name}' may not be a valid mixin class")
 
                 # Check for params
                 if "params" not in entry_logic:
@@ -262,9 +248,7 @@ class StrategyHandler:
                 # Validate exit mixin name
                 exit_name = exit_logic.get("name")
                 if not self._is_valid_mixin_name(exit_name):
-                    warnings.append(
-                        f"Exit mixin '{exit_name}' may not be a valid mixin class"
-                    )
+                    warnings.append(f"Exit mixin '{exit_name}' may not be a valid mixin class")
 
                 # Check for params
                 if "params" not in exit_logic:
@@ -276,9 +260,7 @@ class StrategyHandler:
             if not isinstance(position_size, (int, float)):
                 errors.append("'position_size' must be a number")
             elif position_size <= 0 or position_size > 1:
-                warnings.append(
-                    f"'position_size' {position_size} should be between 0 and 1"
-                )
+                warnings.append(f"'position_size' {position_size} should be between 0 and 1")
 
         return errors, warnings
 
@@ -308,10 +290,7 @@ class StrategyHandler:
         Returns:
             Dictionary mapping strategy type to description
         """
-        return {
-            stype: info["description"]
-            for stype, info in self.strategy_registry.items()
-        }
+        return {stype: info["description"] for stype, info in self.strategy_registry.items()}
 
     def discover_strategies(self, search_paths: List[Path]) -> int:
         """
@@ -354,7 +333,7 @@ class StrategyHandler:
                                     strategy_type=strategy_type,
                                     module_path=module_path,
                                     class_name=name,
-                                    description=f"Auto-discovered strategy: {name}"
+                                    description=f"Auto-discovered strategy: {name}",
                                 )
                                 discovered += 1
 

@@ -15,13 +15,13 @@ sys.path.append(str(project_root))
 import json
 import pickle
 from pathlib import Path
-from typing import Dict, List, Any, Tuple
+from typing import Any, Dict, List, Tuple
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import auc, roc_curve
 from sklearn.model_selection import TimeSeriesSplit
 
 from src.notification.logger import setup_logger
@@ -32,6 +32,7 @@ _logger = setup_logger(__name__)
 
 class NumpyEncoder(json.JSONEncoder):
     """Custom JSON encoder to handle NumPy data types."""
+
     def default(self, obj):
         if isinstance(obj, np.integer):
             return int(obj)
@@ -41,7 +42,7 @@ class NumpyEncoder(json.JSONEncoder):
             return obj.tolist()
         elif isinstance(obj, np.bool_):
             return bool(obj)
-        return super(NumpyEncoder, self).default(obj)
+        return super().default(obj)
 
 
 class ModelValidator:
@@ -119,7 +120,7 @@ class ModelValidator:
                 "status": "completed",
                 "validation_results": validation_results,
                 "backtest_results": backtest_results,
-                "performance_reports": performance_reports
+                "performance_reports": performance_reports,
             }
 
         except Exception as e:
@@ -202,15 +203,18 @@ class ModelValidator:
                 for target in self.targets:
                     if target in df.columns:
                         # Convert target to numeric type to handle string/int mismatches
-                        target_values = pd.to_numeric(df[target], errors='coerce')
+                        target_values = pd.to_numeric(df[target], errors="coerce")
 
                         # Check for any NaN values after conversion
                         nan_count = target_values.isna().sum()
                         if nan_count > 0:
-                            _logger.warning("Found %d NaN values in target %s for file %s",
-                                          nan_count, target, file_path.name)
+                            _logger.warning(
+                                "Found %d NaN values in target %s for file %s", nan_count, target, file_path.name
+                            )
                             # Fill NaN values with mode or most common value
-                            target_values = target_values.fillna(target_values.mode().iloc[0] if len(target_values.mode()) > 0 else 0)
+                            target_values = target_values.fillna(
+                                target_values.mode().iloc[0] if len(target_values.mode()) > 0 else 0
+                            )
 
                         all_targets[target].append(target_values.values)
 
@@ -230,15 +234,13 @@ class ModelValidator:
             if all_targets[target]:
                 y_val_dict[target] = np.concatenate(all_targets[target])
 
-        _logger.info("Prepared validation data: X shape %s, targets: %s",
-                    X_val.shape, list(y_val_dict.keys()))
+        _logger.info("Prepared validation data: X shape %s, targets: %s", X_val.shape, list(y_val_dict.keys()))
 
         return X_val, y_val_dict
 
-    def _perform_validation(self,
-                           trained_models: Dict[str, Any],
-                           X_val: np.ndarray,
-                           y_val_dict: Dict[str, np.ndarray]) -> Dict[str, Any]:
+    def _perform_validation(
+        self, trained_models: Dict[str, Any], X_val: np.ndarray, y_val_dict: Dict[str, np.ndarray]
+    ) -> Dict[str, Any]:
         """
         Perform comprehensive validation of trained models.
 
@@ -277,15 +279,14 @@ class ModelValidator:
                     "feature_importance": feature_importance,
                     "predictions": y_pred.tolist(),
                     "probabilities": y_pred_proba.tolist(),
-                    "true_labels": y_true.tolist()
+                    "true_labels": y_true.tolist(),
                 }
 
         return validation_results
 
-    def _calculate_comprehensive_metrics(self,
-                                       y_true: np.ndarray,
-                                       y_pred: np.ndarray,
-                                       y_pred_proba: np.ndarray) -> Dict[str, Any]:
+    def _calculate_comprehensive_metrics(
+        self, y_true: np.ndarray, y_pred: np.ndarray, y_pred_proba: np.ndarray
+    ) -> Dict[str, Any]:
         """
         Calculate comprehensive metrics for model evaluation.
 
@@ -298,18 +299,24 @@ class ModelValidator:
             Dictionary of comprehensive metrics
         """
         from sklearn.metrics import (
-            accuracy_score, precision_score, recall_score, f1_score,
-            roc_auc_score, average_precision_score, log_loss,
-            confusion_matrix, classification_report
+            accuracy_score,
+            average_precision_score,
+            classification_report,
+            confusion_matrix,
+            f1_score,
+            log_loss,
+            precision_score,
+            recall_score,
+            roc_auc_score,
         )
 
         # Basic metrics
         metrics = {
             "accuracy": accuracy_score(y_true, y_pred),
-            "precision": precision_score(y_true, y_pred, average='weighted', zero_division=0),
-            "recall": recall_score(y_true, y_pred, average='weighted', zero_division=0),
-            "f1_score": f1_score(y_true, y_pred, average='weighted', zero_division=0),
-            "log_loss": log_loss(y_true, y_pred_proba)
+            "precision": precision_score(y_true, y_pred, average="weighted", zero_division=0),
+            "recall": recall_score(y_true, y_pred, average="weighted", zero_division=0),
+            "f1_score": f1_score(y_true, y_pred, average="weighted", zero_division=0),
+            "log_loss": log_loss(y_true, y_pred_proba),
         }
 
         # ROC and PR metrics (for binary classification)
@@ -331,10 +338,7 @@ class ModelValidator:
 
         return metrics
 
-    def _perform_time_series_cv(self,
-                               model: Any,
-                               X: np.ndarray,
-                               y: np.ndarray) -> Dict[str, Any]:
+    def _perform_time_series_cv(self, model: Any, X: np.ndarray, y: np.ndarray) -> Dict[str, Any]:
         """
         Perform time series cross-validation.
 
@@ -371,7 +375,7 @@ class ModelValidator:
             "std_accuracy": np.std([score["accuracy"] for score in cv_scores]),
             "mean_f1": np.mean([score["f1_score"] for score in cv_scores]),
             "std_f1": np.std([score["f1_score"] for score in cv_scores]),
-            "fold_scores": cv_scores
+            "fold_scores": cv_scores,
         }
 
         return cv_results
@@ -387,7 +391,7 @@ class ModelValidator:
         Returns:
             Dictionary containing feature importance analysis
         """
-        if hasattr(model, 'feature_importances_'):
+        if hasattr(model, "feature_importances_"):
             importances = model.feature_importances_
 
             # Get top features
@@ -395,7 +399,7 @@ class ModelValidator:
             top_features = {
                 f"feature_{i}": {
                     "importance": float(importances[i]),
-                    "rank": int(np.where(np.argsort(importances)[::-1] == i)[0][0])
+                    "rank": int(np.where(np.argsort(importances)[::-1] == i)[0][0]),
                 }
                 for i in top_indices
             }
@@ -403,14 +407,12 @@ class ModelValidator:
             return {
                 "importances": importances.tolist(),
                 "top_features": top_features,
-                "total_features": len(importances)
+                "total_features": len(importances),
             }
         else:
             return {"error": "Model does not support feature importance"}
 
-    def _perform_backtesting(self,
-                            trained_models: Dict[str, Any],
-                            feature_files: List[Path]) -> Dict[str, Any]:
+    def _perform_backtesting(self, trained_models: Dict[str, Any], feature_files: List[Path]) -> Dict[str, Any]:
         """
         Perform backtesting on historical data.
 
@@ -450,10 +452,9 @@ class ModelValidator:
 
         return backtest_results
 
-    def _walk_forward_backtest(self,
-                              trained_models: Dict[str, Any],
-                              features: np.ndarray,
-                              df: pd.DataFrame) -> Dict[str, Any]:
+    def _walk_forward_backtest(
+        self, trained_models: Dict[str, Any], features: np.ndarray, df: pd.DataFrame
+    ) -> Dict[str, Any]:
         """
         Perform walk-forward backtesting.
 
@@ -479,7 +480,7 @@ class ModelValidator:
 
             for i in range(self.backtest_window, len(features)):
                 # Use data up to current point for prediction
-                X_current = features[i:i+1]
+                X_current = features[i : i + 1]
                 y_pred_proba = model.predict_proba(X_current)
                 y_pred = model.predict(X_current)
 
@@ -488,7 +489,7 @@ class ModelValidator:
 
             # Calculate backtesting metrics
             if len(predictions) > 0:
-                y_true_backtest = y_true[self.backtest_window:]
+                y_true_backtest = y_true[self.backtest_window :]
                 y_pred_backtest = np.array(predictions)
                 y_pred_proba_backtest = np.array(probabilities)
 
@@ -500,14 +501,14 @@ class ModelValidator:
                     "metrics": backtest_metrics,
                     "predictions": predictions,
                     "probabilities": probabilities,
-                    "true_labels": y_true_backtest.tolist()
+                    "true_labels": y_true_backtest.tolist(),
                 }
 
         return results
 
-    def _generate_performance_reports(self,
-                                    validation_results: Dict[str, Any],
-                                    backtest_results: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_performance_reports(
+        self, validation_results: Dict[str, Any], backtest_results: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Generate comprehensive performance reports.
 
@@ -523,14 +524,14 @@ class ModelValidator:
         reports = {
             "summary": self._generate_summary_report(validation_results, backtest_results),
             "detailed": self._generate_detailed_reports(validation_results, backtest_results),
-            "recommendations": self._generate_recommendations(validation_results, backtest_results)
+            "recommendations": self._generate_recommendations(validation_results, backtest_results),
         }
 
         return reports
 
-    def _generate_summary_report(self,
-                                validation_results: Dict[str, Any],
-                                backtest_results: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_summary_report(
+        self, validation_results: Dict[str, Any], backtest_results: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Generate summary performance report.
 
@@ -546,7 +547,7 @@ class ModelValidator:
             "targets": list(validation_results.keys()),
             "overall_performance": {},
             "best_performing_target": None,
-            "worst_performing_target": None
+            "worst_performing_target": None,
         }
 
         # Calculate overall performance
@@ -561,7 +562,7 @@ class ModelValidator:
             "mean_accuracy": np.mean(accuracies),
             "std_accuracy": np.std(accuracies),
             "mean_f1": np.mean(f1_scores),
-            "std_f1": np.std(f1_scores)
+            "std_f1": np.std(f1_scores),
         }
 
         # Find best and worst performing targets
@@ -573,9 +574,9 @@ class ModelValidator:
 
         return summary
 
-    def _generate_detailed_reports(self,
-                                  validation_results: Dict[str, Any],
-                                  backtest_results: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_detailed_reports(
+        self, validation_results: Dict[str, Any], backtest_results: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Generate detailed performance reports.
 
@@ -586,16 +587,13 @@ class ModelValidator:
         Returns:
             Dictionary containing detailed reports
         """
-        detailed = {
-            "validation_reports": validation_results,
-            "backtest_reports": backtest_results
-        }
+        detailed = {"validation_reports": validation_results, "backtest_reports": backtest_results}
 
         return detailed
 
-    def _generate_recommendations(self,
-                                 validation_results: Dict[str, Any],
-                                 backtest_results: Dict[str, Any]) -> List[str]:
+    def _generate_recommendations(
+        self, validation_results: Dict[str, Any], backtest_results: Dict[str, Any]
+    ) -> List[str]:
         """
         Generate recommendations based on validation results.
 
@@ -614,24 +612,30 @@ class ModelValidator:
             f1 = results["metrics"]["f1_score"]
 
             if accuracy < 0.6:
-                recommendations.append(f"Target '{target}' has low accuracy ({accuracy:.3f}). Consider feature engineering or hyperparameter tuning.")
+                recommendations.append(
+                    f"Target '{target}' has low accuracy ({accuracy:.3f}). Consider feature engineering or hyperparameter tuning."
+                )
 
             if f1 < 0.5:
-                recommendations.append(f"Target '{target}' has low F1 score ({f1:.3f}). Check for class imbalance or model complexity.")
+                recommendations.append(
+                    f"Target '{target}' has low F1 score ({f1:.3f}). Check for class imbalance or model complexity."
+                )
 
         # General recommendations
         if len(validation_results) > 0:
             mean_accuracy = np.mean([r["metrics"]["accuracy"] for r in validation_results.values()])
             if mean_accuracy > 0.7:
-                recommendations.append("Overall model performance is good. Consider ensemble methods for further improvement.")
+                recommendations.append(
+                    "Overall model performance is good. Consider ensemble methods for further improvement."
+                )
             else:
-                recommendations.append("Overall model performance needs improvement. Consider data quality, feature selection, or model architecture changes.")
+                recommendations.append(
+                    "Overall model performance needs improvement. Consider data quality, feature selection, or model architecture changes."
+                )
 
         return recommendations
 
-    def _create_visualizations(self,
-                              validation_results: Dict[str, Any],
-                              backtest_results: Dict[str, Any]) -> None:
+    def _create_visualizations(self, validation_results: Dict[str, Any], backtest_results: Dict[str, Any]) -> None:
         """
         Create performance visualizations.
 
@@ -642,7 +646,7 @@ class ModelValidator:
         _logger.info("Creating performance visualizations")
 
         # Set up plotting style
-        plt.style.use('seaborn-v0_8')
+        plt.style.use("seaborn-v0_8")
         sns.set_palette("husl")
 
         # Create visualizations directory
@@ -663,11 +667,9 @@ class ModelValidator:
 
         _logger.info("Visualizations saved to %s", viz_dir)
 
-    def _plot_performance_comparison(self,
-                                   validation_results: Dict[str, Any],
-                                   viz_dir: Path) -> None:
+    def _plot_performance_comparison(self, validation_results: Dict[str, Any], viz_dir: Path) -> None:
         """Plot performance comparison across targets."""
-        metrics = ['accuracy', 'precision', 'recall', 'f1_score']
+        metrics = ["accuracy", "precision", "recall", "f1_score"]
 
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
         axes = axes.ravel()
@@ -677,17 +679,15 @@ class ModelValidator:
             targets = list(validation_results.keys())
 
             axes[i].bar(targets, values)
-            axes[i].set_title(f'{metric.replace("_", " ").title()} by Target')
+            axes[i].set_title(f"{metric.replace('_', ' ').title()} by Target")
             axes[i].set_ylabel(metric.replace("_", " ").title())
-            axes[i].tick_params(axis='x', rotation=45)
+            axes[i].tick_params(axis="x", rotation=45)
 
         plt.tight_layout()
-        plt.savefig(viz_dir / "performance_comparison.png", dpi=300, bbox_inches='tight')
+        plt.savefig(viz_dir / "performance_comparison.png", dpi=300, bbox_inches="tight")
         plt.close()
 
-    def _plot_confusion_matrices(self,
-                                validation_results: Dict[str, Any],
-                                viz_dir: Path) -> None:
+    def _plot_confusion_matrices(self, validation_results: Dict[str, Any], viz_dir: Path) -> None:
         """Plot confusion matrices for each target."""
         n_targets = len(validation_results)
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
@@ -696,18 +696,16 @@ class ModelValidator:
         for i, (target, results) in enumerate(validation_results.items()):
             if i < 4:  # Limit to 4 plots
                 cm = np.array(results["metrics"]["confusion_matrix"])
-                sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[i])
-                axes[i].set_title(f'Confusion Matrix - {target}')
-                axes[i].set_xlabel('Predicted')
-                axes[i].set_ylabel('Actual')
+                sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=axes[i])
+                axes[i].set_title(f"Confusion Matrix - {target}")
+                axes[i].set_xlabel("Predicted")
+                axes[i].set_ylabel("Actual")
 
         plt.tight_layout()
-        plt.savefig(viz_dir / "confusion_matrices.png", dpi=300, bbox_inches='tight')
+        plt.savefig(viz_dir / "confusion_matrices.png", dpi=300, bbox_inches="tight")
         plt.close()
 
-    def _plot_feature_importance(self,
-                                validation_results: Dict[str, Any],
-                                viz_dir: Path) -> None:
+    def _plot_feature_importance(self, validation_results: Dict[str, Any], viz_dir: Path) -> None:
         """Plot feature importance for each target."""
         for target, results in validation_results.items():
             if "feature_importance" in results and "importances" in results["feature_importance"]:
@@ -716,18 +714,16 @@ class ModelValidator:
 
                 plt.figure(figsize=(12, 8))
                 plt.barh(range(len(top_indices)), [importances[i] for i in top_indices])
-                plt.yticks(range(len(top_indices)), [f'Feature_{i}' for i in top_indices])
-                plt.xlabel('Feature Importance')
-                plt.title(f'Top 20 Feature Importance - {target}')
+                plt.yticks(range(len(top_indices)), [f"Feature_{i}" for i in top_indices])
+                plt.xlabel("Feature Importance")
+                plt.title(f"Top 20 Feature Importance - {target}")
                 plt.gca().invert_yaxis()
 
                 plt.tight_layout()
-                plt.savefig(viz_dir / f"feature_importance_{target}.png", dpi=300, bbox_inches='tight')
+                plt.savefig(viz_dir / f"feature_importance_{target}.png", dpi=300, bbox_inches="tight")
                 plt.close()
 
-    def _plot_roc_curves(self,
-                        validation_results: Dict[str, Any],
-                        viz_dir: Path) -> None:
+    def _plot_roc_curves(self, validation_results: Dict[str, Any], viz_dir: Path) -> None:
         """Plot ROC curves for binary targets."""
         plt.figure(figsize=(10, 8))
 
@@ -739,25 +735,24 @@ class ModelValidator:
                 fpr, tpr, _ = roc_curve(y_true, y_pred_proba[:, 1])
                 roc_auc = auc(fpr, tpr)
 
-                plt.plot(fpr, tpr, label=f'{target} (AUC = {roc_auc:.3f})')
+                plt.plot(fpr, tpr, label=f"{target} (AUC = {roc_auc:.3f})")
 
-        plt.plot([0, 1], [0, 1], 'k--', label='Random')
+        plt.plot([0, 1], [0, 1], "k--", label="Random")
         plt.xlim([0.0, 1.0])
         plt.ylim([0.0, 1.05])
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.title('ROC Curves')
+        plt.xlabel("False Positive Rate")
+        plt.ylabel("True Positive Rate")
+        plt.title("ROC Curves")
         plt.legend()
         plt.grid(True)
 
         plt.tight_layout()
-        plt.savefig(viz_dir / "roc_curves.png", dpi=300, bbox_inches='tight')
+        plt.savefig(viz_dir / "roc_curves.png", dpi=300, bbox_inches="tight")
         plt.close()
 
-    def _save_validation_summary(self,
-                                validation_results: Dict[str, Any],
-                                backtest_results: Dict[str, Any],
-                                performance_reports: Dict[str, Any]) -> None:
+    def _save_validation_summary(
+        self, validation_results: Dict[str, Any], backtest_results: Dict[str, Any], performance_reports: Dict[str, Any]
+    ) -> None:
         """
         Save comprehensive validation summary.
 
@@ -776,7 +771,7 @@ class ModelValidator:
             "timestamp": pd.Timestamp.now().isoformat(),
             "validation_results": validation_results,
             "backtest_results": backtest_results,
-            "performance_reports": performance_reports
+            "performance_reports": performance_reports,
         }
 
         with open(summary_path, "w") as f:

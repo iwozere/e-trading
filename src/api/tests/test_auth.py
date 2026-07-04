@@ -7,33 +7,34 @@ Tests for JWT token management, password hashing, role-based access control,
 and authentication utilities.
 """
 
-import pytest
-from unittest.mock import patch, Mock
-from datetime import datetime, timedelta, timezone
-from fastapi import HTTPException, status
-from pathlib import Path
 import sys
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from unittest.mock import Mock, patch
+
 import jwt
+import pytest
+from fastapi import HTTPException, status
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.api.auth import (
-    create_access_token,
-    create_refresh_token,
-    verify_token,
-    authenticate_user,
-    get_current_user,
-    require_admin,
-    require_trader_or_admin,
-    log_user_action,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    ALGORITHM,
+    REFRESH_TOKEN_EXPIRE_DAYS,
+    SECRET_KEY,
     AuthenticationError,
     AuthorizationError,
-    SECRET_KEY,
-    ALGORITHM,
-    ACCESS_TOKEN_EXPIRE_MINUTES,
-    REFRESH_TOKEN_EXPIRE_DAYS
+    authenticate_user,
+    create_access_token,
+    create_refresh_token,
+    get_current_user,
+    log_user_action,
+    require_admin,
+    require_trader_or_admin,
+    verify_token,
 )
 from src.data.db.models.model_users import User
 
@@ -58,8 +59,8 @@ class TestTokenManagement:
         assert "exp" in payload
 
         # Verify expiry is approximately correct (within 1 minute)
-        exp_time = datetime.fromtimestamp(payload["exp"], timezone.utc)
-        expected_exp = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        exp_time = datetime.fromtimestamp(payload["exp"], UTC)
+        expected_exp = datetime.now(UTC) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         time_diff = abs((exp_time - expected_exp).total_seconds())
         assert time_diff < 60  # Within 1 minute
 
@@ -70,8 +71,8 @@ class TestTokenManagement:
         token = create_access_token(data, custom_expiry)
 
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        exp_time = datetime.fromtimestamp(payload["exp"], timezone.utc)
-        expected_exp = datetime.now(timezone.utc) + custom_expiry
+        exp_time = datetime.fromtimestamp(payload["exp"], UTC)
+        expected_exp = datetime.now(UTC) + custom_expiry
         time_diff = abs((exp_time - expected_exp).total_seconds())
         assert time_diff < 60  # Within 1 minute
 
@@ -92,8 +93,8 @@ class TestTokenManagement:
         assert "exp" in payload
 
         # Verify expiry is approximately correct
-        exp_time = datetime.fromtimestamp(payload["exp"], timezone.utc)
-        expected_exp = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        exp_time = datetime.fromtimestamp(payload["exp"], UTC)
+        expected_exp = datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
         time_diff = abs((exp_time - expected_exp).total_seconds())
         assert time_diff < 3600  # Within 1 hour
 
@@ -127,9 +128,7 @@ class TestTokenManagement:
         """Test verifying token with wrong secret."""
         # Create token with different secret
         wrong_token = jwt.encode(
-            {"sub": "123", "username": "testuser", "type": "access"},
-            "wrong-secret",
-            algorithm=ALGORITHM
+            {"sub": "123", "username": "testuser", "type": "access"}, "wrong-secret", algorithm=ALGORITHM
         )
 
         with pytest.raises(AuthenticationError, match="Invalid token"):
@@ -139,7 +138,7 @@ class TestTokenManagement:
 class TestUserAuthentication:
     """Test cases for user authentication."""
 
-    @patch('src.api.auth.webui_app_service')
+    @patch("src.api.auth.webui_app_service")
     def test_authenticate_user_by_email_success(self, mock_service):
         """Test successful authentication by email."""
         # Mock database session and user
@@ -158,9 +157,9 @@ class TestUserAuthentication:
         mock_db.commit.assert_called_once()
         assert mock_user.last_login is not None
 
-    @patch('src.api.auth.webui_app_service')
-    @patch('src.api.auth.get_user_by_telegram_id')
-    @patch('src.api.auth.get_user_by_email')
+    @patch("src.api.auth.webui_app_service")
+    @patch("src.api.auth.get_user_by_telegram_id")
+    @patch("src.api.auth.get_user_by_email")
     def test_authenticate_user_by_telegram_id_success(self, mock_get_by_email, mock_get_by_telegram, mock_service):
         """Test successful authentication by telegram ID."""
         mock_db = Mock()
@@ -180,7 +179,7 @@ class TestUserAuthentication:
         mock_get_by_telegram.assert_called_once_with("123456789")
         mock_user.verify_password.assert_called_once_with("password")
 
-    @patch('src.api.auth.webui_app_service')
+    @patch("src.api.auth.webui_app_service")
     def test_authenticate_user_not_found(self, mock_service):
         """Test authentication when user not found."""
         mock_db = Mock()
@@ -190,7 +189,7 @@ class TestUserAuthentication:
 
         assert result is None
 
-    @patch('src.api.auth.webui_app_service')
+    @patch("src.api.auth.webui_app_service")
     def test_authenticate_user_inactive(self, mock_service):
         """Test authentication with inactive user."""
         mock_db = Mock()
@@ -203,7 +202,7 @@ class TestUserAuthentication:
 
         assert result is None
 
-    @patch('src.api.auth.webui_app_service')
+    @patch("src.api.auth.webui_app_service")
     def test_authenticate_user_wrong_password(self, mock_service):
         """Test authentication with wrong password."""
         mock_db = Mock()
@@ -222,7 +221,7 @@ class TestUserAuthentication:
 class TestGetCurrentUser:
     """Test cases for get_current_user dependency."""
 
-    @patch('src.api.auth.get_database_service')
+    @patch("src.api.auth.get_database_service")
     def test_get_current_user_success(self, mock_get_db_service):
         """Test successful user retrieval from token."""
         # Mock token
@@ -242,9 +241,9 @@ class TestGetCurrentUser:
         mock_user.email = "testuser@trading-system.local"
         mock_user.role = "trader"
         mock_user.is_active = True
-        mock_user.created_at = datetime.now(timezone.utc)
-        mock_user.updated_at = datetime.now(timezone.utc)
-        mock_user.last_login = datetime.now(timezone.utc)
+        mock_user.created_at = datetime.now(UTC)
+        mock_user.updated_at = datetime.now(UTC)
+        mock_user.last_login = datetime.now(UTC)
 
         mock_get_db_service.return_value = mock_db_service
         mock_db_service.uow.return_value.__enter__ = Mock(return_value=mock_uow)
@@ -285,7 +284,7 @@ class TestGetCurrentUser:
         assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
         assert "Invalid token type" in str(exc_info.value.detail)
 
-    @patch('src.api.auth.get_database_service')
+    @patch("src.api.auth.get_database_service")
     def test_get_current_user_user_not_found(self, mock_get_db_service):
         """Test get_current_user when user not found in database."""
         token_data = {"sub": "999", "username": "nonexistent", "type": "access"}
@@ -311,7 +310,7 @@ class TestGetCurrentUser:
         assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
         assert "User not found" in str(exc_info.value.detail)
 
-    @patch('src.api.auth.get_database_service')
+    @patch("src.api.auth.get_database_service")
     def test_get_current_user_inactive_user(self, mock_get_db_service):
         """Test get_current_user with inactive user."""
         token_data = {"sub": "123", "username": "testuser", "type": "access"}
@@ -381,7 +380,7 @@ class TestRoleBasedAccess:
 class TestUserActionLogging:
     """Test cases for user action logging."""
 
-    @patch('src.api.auth.webui_app_service')
+    @patch("src.api.auth.webui_app_service")
     def test_log_user_action_success(self, mock_service, mock_admin_user):
         """Test successful user action logging."""
         mock_service.log_user_action.return_value = 1
@@ -393,7 +392,7 @@ class TestUserActionLogging:
             resource_id="session_123",
             details={"method": "jwt"},
             ip_address="192.168.1.1",
-            user_agent="Mozilla/5.0"
+            user_agent="Mozilla/5.0",
         )
 
         mock_service.log_user_action.assert_called_once_with(
@@ -403,25 +402,22 @@ class TestUserActionLogging:
             resource_id="session_123",
             details={"method": "jwt"},
             ip_address="192.168.1.1",
-            user_agent="Mozilla/5.0"
+            user_agent="Mozilla/5.0",
         )
 
-    @patch('src.api.auth.webui_app_service')
-    @patch('src.api.auth._logger')
+    @patch("src.api.auth.webui_app_service")
+    @patch("src.api.auth._logger")
     def test_log_user_action_failure(self, mock_logger, mock_service, mock_admin_user):
         """Test user action logging failure handling."""
         mock_service.log_user_action.side_effect = Exception("Database error")
 
         # Should not raise exception, just log error
-        log_user_action(
-            user=mock_admin_user,
-            action="login"
-        )
+        log_user_action(user=mock_admin_user, action="login")
 
         mock_logger.error.assert_called_once()
         assert "Failed to log user action" in str(mock_logger.error.call_args)
 
-    @patch('src.api.auth.webui_app_service')
+    @patch("src.api.auth.webui_app_service")
     def test_log_user_action_minimal_params(self, mock_service, mock_admin_user):
         """Test user action logging with minimal parameters."""
         mock_service.log_user_action.return_value = 1
@@ -435,7 +431,7 @@ class TestUserActionLogging:
             resource_id=None,
             details=None,
             ip_address=None,
-            user_agent=None
+            user_agent=None,
         )
 
 

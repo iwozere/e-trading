@@ -23,15 +23,14 @@ with the child's PID suffix.  This is intentional.  Do NOT import this module fr
 the PID-suffix behaviour is acceptable.
 """
 
+import atexit
 import logging
 import sys
-import traceback
-from logging.handlers import RotatingFileHandler, QueueHandler, QueueListener
-from pathlib import Path
-from contextvars import ContextVar
-from multiprocessing import Queue, Manager
-import atexit
 import threading
+from contextvars import ContextVar
+from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
+from multiprocessing import Manager, Queue
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -39,7 +38,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import logging.config
-from datetime import datetime as dt
 
 # Ensure log directory exists relative to project root
 log_dir = PROJECT_ROOT / "logs" / "log"
@@ -50,9 +48,10 @@ MAX_BYTES = 50 * 1024 * 1024  # 50MB (Reduced from 500MB for P2.2)
 BACKUP_COUNT = 10  # Keep 10 backup files (Reduced from 99 for P2.2)
 
 # Context variable to track the current logging context
-_logging_context = ContextVar('logging_context', default=None)
+_logging_context = ContextVar("logging_context", default=None)
 
 import re
+
 
 class SensitiveDataFilter(logging.Filter):
     """
@@ -62,23 +61,30 @@ class SensitiveDataFilter(logging.Filter):
     secret leakage (nested JSON, custom encoding, structured payloads).  The
     primary defence is keeping secrets/PII out of log arguments at the call site.
     """
-    SENSITIVE_KEYS = ['apikey', 'api_key', 'token', 'secret', 'api-key', 'app_key', 'app_secret',
-                      'password', 'passwd', 'authorization', 'access_token', 'refresh_token']
+
+    SENSITIVE_KEYS = [
+        "apikey",
+        "api_key",
+        "token",
+        "secret",
+        "api-key",
+        "app_key",
+        "app_secret",
+        "password",
+        "passwd",
+        "authorization",
+        "access_token",
+        "refresh_token",
+    ]
 
     # Regex to match key=value patterns in URLs or strings
     # Matches: key=value, key:value, "key":"value", 'key':'value'
     # Supports various delimiters: &, ?, ", ', or space
-    MASK_PATTERN = re.compile(
-        rf'({"|".join(SENSITIVE_KEYS)})[=:]\s*(["\']?)([a-zA-Z0-9.\-_/+]{{4,}})\2',
-        re.IGNORECASE
-    )
+    MASK_PATTERN = re.compile(rf'({"|".join(SENSITIVE_KEYS)})[=:]\s*(["\']?)([a-zA-Z0-9.\-_/+]{{4,}})\2', re.IGNORECASE)
 
     # Match HTTP Authorization header values: "Bearer <token>" or "Basic <credentials>"
     # Handles base64 characters (+, /, =) that the key=value pattern misses.
-    BEARER_PATTERN = re.compile(
-        r'\b(Bearer|Basic|Token)\s+([A-Za-z0-9+/=._\-]{8,})',
-        re.IGNORECASE
-    )
+    BEARER_PATTERN = re.compile(r"\b(Bearer|Basic|Token)\s+([A-Za-z0-9+/=._\-]{8,})", re.IGNORECASE)
 
     def filter(self, record):
         if isinstance(record.msg, str):
@@ -86,14 +92,10 @@ class SensitiveDataFilter(logging.Filter):
         if record.args:
             if isinstance(record.args, dict):
                 record.args = {
-                    k: self._mask_sensitive_data(v) if isinstance(v, str) else v
-                    for k, v in record.args.items()
+                    k: self._mask_sensitive_data(v) if isinstance(v, str) else v for k, v in record.args.items()
                 }
             else:
-                record.args = tuple(
-                    self._mask_sensitive_data(v) if isinstance(v, str) else v
-                    for v in record.args
-                )
+                record.args = tuple(self._mask_sensitive_data(v) if isinstance(v, str) else v for v in record.args)
         # Also mask the fully-rendered message to catch pre-formatted strings
         # (e.g. urllib3 passes the full URL with apikey as a single arg)
         try:
@@ -108,6 +110,7 @@ class SensitiveDataFilter(logging.Filter):
 
     def _mask_sensitive_data(self, text: str) -> str:
         """Replace sensitive values with [MASKED]."""
+
         def mask_match(match):
             key = match.group(1)
             quote = match.group(2)
@@ -147,11 +150,7 @@ LOG_CONFIG = {
         },
         "standard": {"format": "%(asctime)s - [PID %(process)d] - %(levelname)s - %(message)s"},
     },
-    "filters": {
-        "mask_sensitive": {
-            "()": SensitiveDataFilter
-        }
-    },
+    "filters": {"mask_sensitive": {"()": SensitiveDataFilter}},
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
@@ -186,7 +185,6 @@ LOG_CONFIG = {
             "formatter": "detailed",
             "filters": ["mask_sensitive"],
         },
-
         "telegram_screener_bot_file": {
             "class": "logging.handlers.RotatingFileHandler",
             "filename": str(PROJECT_ROOT / "logs" / "log" / "telegram_screener_bot.log"),
@@ -244,7 +242,6 @@ LOG_CONFIG = {
             "level": "DEBUG",
             "propagate": False,
         },
-
         "telegram_screener_bot": {
             "handlers": ["console", "telegram_screener_bot_file"],
             "level": "DEBUG",
@@ -303,13 +300,13 @@ if not hasattr(logging, _LOG_LEVEL_NAME):
 # But sometimes frameworks mangle this. Let's check the name too.
 try:
     _current = multiprocessing.current_process()
-    _is_main_process = (_current.name == 'MainProcess')
+    _is_main_process = _current.name == "MainProcess"
 
     # Double check with parent process if available (Python 3.8+)
-    if hasattr(multiprocessing, 'parent_process'):
+    if hasattr(multiprocessing, "parent_process"):
         _parent = multiprocessing.parent_process()
         if _parent is not None:
-             _is_main_process = False
+            _is_main_process = False
 
     # Check if we are imported as __main__ vs module? No, logger is imported.
 except Exception:
@@ -317,7 +314,7 @@ except Exception:
 
 
 # These keys are not accepted by logging.NullHandler
-INVALID_NULL_HANDLER_KEYS = ['filename', 'maxBytes', 'backupCount', 'encoding', 'delay']
+INVALID_NULL_HANDLER_KEYS = ["filename", "maxBytes", "backupCount", "encoding", "delay"]
 
 for handler_name in LOG_CONFIG["handlers"]:
     handler_config = LOG_CONFIG["handlers"][handler_name]
@@ -329,13 +326,13 @@ for handler_name in LOG_CONFIG["handlers"]:
         # If we are in a child process, append PID to filename to avoid locking/rollover issues
         if not _is_main_process:
             import os
+
             base_filename = handler_config["filename"]
             # Check if it already has a PID (avoid double appending if re-imported)
             pid_suffix = f".{os.getpid()}"
             if not base_filename.endswith(pid_suffix):
                 new_filename = f"{base_filename}{pid_suffix}"
                 handler_config["filename"] = new_filename
-
 
 
 # Promote DEBUG → _LOG_LEVEL_NAME for every handler and logger that was DEBUG.
@@ -383,54 +380,50 @@ def _create_file_handlers(pid_suffix: str = ""):
 
     # Create file handler for main app log
     file_handler = RotatingFileHandler(
-        get_log_path("app.log"),
-        maxBytes=MAX_BYTES,
-        backupCount=BACKUP_COUNT,
-        encoding="utf-8"
+        get_log_path("app.log"), maxBytes=MAX_BYTES, backupCount=BACKUP_COUNT, encoding="utf-8"
     )
     file_handler.setLevel(_level)
-    file_handler.setFormatter(logging.Formatter(
-        "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
-    ))
+    file_handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
+        )
+    )
     handlers.append(file_handler)
 
     # Create trade log handler
     trade_handler = RotatingFileHandler(
-        get_log_path("trades.log"),
-        maxBytes=MAX_BYTES,
-        backupCount=BACKUP_COUNT,
-        encoding="utf-8"
+        get_log_path("trades.log"), maxBytes=MAX_BYTES, backupCount=BACKUP_COUNT, encoding="utf-8"
     )
     trade_handler.setLevel(_level)
-    trade_handler.setFormatter(logging.Formatter(
-        "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
-    ))
+    trade_handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
+        )
+    )
     handlers.append(trade_handler)
 
     # Create order log handler
     order_handler = RotatingFileHandler(
-        get_log_path("orders.log"),
-        maxBytes=MAX_BYTES,
-        backupCount=BACKUP_COUNT,
-        encoding="utf-8"
+        get_log_path("orders.log"), maxBytes=MAX_BYTES, backupCount=BACKUP_COUNT, encoding="utf-8"
     )
     order_handler.setLevel(_level)
-    order_handler.setFormatter(logging.Formatter(
-        "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
-    ))
+    order_handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
+        )
+    )
     handlers.append(order_handler)
 
     # Create error log handler
     error_handler = RotatingFileHandler(
-        get_log_path("app_errors.log"),
-        maxBytes=MAX_BYTES,
-        backupCount=BACKUP_COUNT,
-        encoding="utf-8"
+        get_log_path("app_errors.log"), maxBytes=MAX_BYTES, backupCount=BACKUP_COUNT, encoding="utf-8"
     )
     error_handler.setLevel(logging.ERROR)
-    error_handler.setFormatter(logging.Formatter(
-        "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
-    ))
+    error_handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
+        )
+    )
     handlers.append(error_handler)
 
     return handlers
@@ -464,9 +457,7 @@ def setup_multiprocessing_logging():
         # Create console handler
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(getattr(logging, _LOG_LEVEL_NAME, logging.INFO))
-        console_handler.setFormatter(logging.Formatter(
-            "%(asctime)s - [PID %(process)d] - %(levelname)s - %(message)s"
-        ))
+        console_handler.setFormatter(logging.Formatter("%(asctime)s - [PID %(process)d] - %(levelname)s - %(message)s"))
 
         # Combine all handlers
         all_handlers = [console_handler] + file_handlers
@@ -546,7 +537,9 @@ def get_multiprocessing_logger(name: str, level: int = logging.DEBUG, external_q
     if not _is_main_process:
         root = logging.getLogger()
         # Only add if not already present
-        has_pid_handler = any(isinstance(h, RotatingFileHandler) and str(os.getpid()) in h.baseFilename for h in root.handlers)
+        has_pid_handler = any(
+            isinstance(h, RotatingFileHandler) and str(os.getpid()) in h.baseFilename for h in root.handlers
+        )
 
         if not has_pid_handler:
             # Add PID-suffixed file handlers to root so all loggers benefit
@@ -580,11 +573,7 @@ class ContextAwareLogger:
         the existing handler object directly so both loggers share one instance.
         """
         parent_logger = logging.getLogger(parent_name)
-        existing_filenames = {
-            h.baseFilename
-            for h in self.logger.handlers
-            if isinstance(h, RotatingFileHandler)
-        }
+        existing_filenames = {h.baseFilename for h in self.logger.handlers if isinstance(h, RotatingFileHandler)}
         for handler in parent_logger.handlers:
             if isinstance(handler, RotatingFileHandler):
                 if handler.baseFilename not in existing_filenames:
@@ -621,11 +610,7 @@ def _apply_context_to_existing_logger(logger_name: str, context_name: str):
     logger = logging.getLogger(logger_name)
     context_logger = logging.getLogger(context_name)
 
-    existing_filenames = {
-        h.baseFilename
-        for h in logger.handlers
-        if isinstance(h, RotatingFileHandler)
-    }
+    existing_filenames = {h.baseFilename for h in logger.handlers if isinstance(h, RotatingFileHandler)}
     for handler in context_logger.handlers:
         if isinstance(handler, RotatingFileHandler):
             if handler.baseFilename not in existing_filenames:
@@ -652,8 +637,14 @@ def get_logging_context() -> str:
     return _logging_context.get()
 
 
-def setup_logger(name: str, log_file: str = None, level: int = logging.DEBUG,
-                inherit_from: str = None, use_multiprocessing: bool = False, **kwargs) -> logging.Logger:
+def setup_logger(
+    name: str,
+    log_file: str = None,
+    level: int = logging.DEBUG,
+    inherit_from: str = None,
+    use_multiprocessing: bool = False,
+    **kwargs,
+) -> logging.Logger:
     """
     Set up the logger with custom configuration.
 
@@ -672,7 +663,7 @@ def setup_logger(name: str, log_file: str = None, level: int = logging.DEBUG,
     # If multiprocessing mode is requested, use queue-based logging
     if use_multiprocessing:
         # Check if we have an external queue in kwargs (hacky but works for joblib passing)
-        external_queue = kwargs.get('external_queue')
+        external_queue = kwargs.get("external_queue")
         return get_multiprocessing_logger(name, level, external_queue=external_queue)
     # Check if we should inherit from a parent logger
     if inherit_from:
@@ -682,7 +673,7 @@ def setup_logger(name: str, log_file: str = None, level: int = logging.DEBUG,
     context = get_logging_context()
     if context:
         # Inherit from the context logger for notification modules
-        if name.startswith('src.notification.'):
+        if name.startswith("src.notification."):
             return ContextAwareLogger(name, context).logger
 
     # Standard logger setup
@@ -697,9 +688,7 @@ def setup_logger(name: str, log_file: str = None, level: int = logging.DEBUG,
             log_dir.mkdir(parents=True, exist_ok=True)
 
         # Create file handler with UTF-8 encoding
-        file_handler = RotatingFileHandler(
-            log_file, maxBytes=MAX_BYTES, backupCount=BACKUP_COUNT, encoding="utf-8"
-        )
+        file_handler = RotatingFileHandler(log_file, maxBytes=MAX_BYTES, backupCount=BACKUP_COUNT, encoding="utf-8")
         file_handler.setLevel(level)
         file_formatter = logging.Formatter(
             "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"

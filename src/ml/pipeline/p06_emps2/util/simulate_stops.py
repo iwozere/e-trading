@@ -24,10 +24,9 @@ Usage:
 """
 
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 
@@ -38,16 +37,17 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-RESULTS_BASE    = PROJECT_ROOT / "results" / "p06_emps2"
-TIMING_CSV      = RESULTS_BASE / "timing_analysis.csv"
-OUTPUT_CSV      = RESULTS_BASE / "stop_simulation.csv"
-SUMMARY_CSV     = RESULTS_BASE / "stop_simulation_summary.csv"
-CACHE_DIR       = RESULTS_BASE / "_ohlcv_cache"
+RESULTS_BASE = PROJECT_ROOT / "results" / "p06_emps2"
+TIMING_CSV = RESULTS_BASE / "timing_analysis.csv"
+OUTPUT_CSV = RESULTS_BASE / "stop_simulation.csv"
+SUMMARY_CSV = RESULTS_BASE / "stop_simulation_summary.csv"
+CACHE_DIR = RESULTS_BASE / "_ohlcv_cache"
 
-_SEARCH_ROOTS   = [RESULTS_BASE, RESULTS_BASE / "p06_emps2"]
+_SEARCH_ROOTS = [RESULTS_BASE, RESULTS_BASE / "p06_emps2"]
 
 
 # ── Config ─────────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class SimConfig:
@@ -70,21 +70,22 @@ class SimConfig:
         tight_trail_trigger_pct > 0: once price has risen past this threshold, switch to a
             tighter trailing stop (tight_trail_pct) to lock in more of the gain.
     """
+
     label: str
-    stop_pct: float                          # fallback / fixed stop (e.g. 0.08 = 8%)
-    trailing: bool = False                   # plain trailing stop from entry
+    stop_pct: float  # fallback / fixed stop (e.g. 0.08 = 8%)
+    trailing: bool = False  # plain trailing stop from entry
     max_hold_days: int = 20
-    atr_multiplier: float = 0.0              # > 0 → ATR-based stop
-    breakeven_trigger_pct: float = 0.0       # > 0 → activate breakeven once price +X%
-    breakeven_trail_pct: float = 0.0         # trail from high after breakeven (0 = fixed at entry)
+    atr_multiplier: float = 0.0  # > 0 → ATR-based stop
+    breakeven_trigger_pct: float = 0.0  # > 0 → activate breakeven once price +X%
+    breakeven_trail_pct: float = 0.0  # trail from high after breakeven (0 = fixed at entry)
 
     # Improved exit: cut dead-money positions early
-    dead_money_days: int = 0                 # > 0 → check for dead money at this day
-    dead_money_pct: float = 0.03             # "near entry" = within ±3%
+    dead_money_days: int = 0  # > 0 → check for dead money at this day
+    dead_money_pct: float = 0.03  # "near entry" = within ±3%
 
     # Improved exit: tighten trail once a big winner emerges
-    tight_trail_trigger_pct: float = 0.0    # > 0 → once up this %, switch to tight trail
-    tight_trail_pct: float = 0.0            # the tighter trailing % (e.g. 0.05)
+    tight_trail_trigger_pct: float = 0.0  # > 0 → once up this %, switch to tight trail
+    tight_trail_pct: float = 0.0  # the tighter trailing % (e.g. 0.05)
 
     @property
     def key(self) -> str:
@@ -111,6 +112,7 @@ class SimConfig:
 
 # ── OHLCV fetching with local cache ───────────────────────────────────────────
 
+
 def _fetch_ohlcv(ticker: str, start: date, end: date) -> pd.DataFrame:
     """Download daily OHLCV; cached in RESULTS_BASE/_ohlcv_cache/."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -119,9 +121,8 @@ def _fetch_ohlcv(ticker: str, start: date, end: date) -> pd.DataFrame:
         return pd.read_csv(cache_file, index_col=0, parse_dates=True)
     try:
         import yfinance as yf
-        df = yf.Ticker(ticker).history(
-            start=str(start), end=str(end), auto_adjust=True
-        )
+
+        df = yf.Ticker(ticker).history(start=str(start), end=str(end), auto_adjust=True)
         if df.empty:
             return pd.DataFrame()
         df = df[["Open", "High", "Low", "Close", "Volume"]]
@@ -133,7 +134,7 @@ def _fetch_ohlcv(ticker: str, start: date, end: date) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def _atr_ratio_for_alert(ticker: str, alert_date: date) -> Optional[float]:
+def _atr_ratio_for_alert(ticker: str, alert_date: date) -> float | None:
     """Look up ATR/price ratio from the volatility filter CSV on alert_date."""
     for root in _SEARCH_ROOTS:
         vol_file = root / str(alert_date) / "05_volatility_filtered.csv"
@@ -150,7 +151,8 @@ def _atr_ratio_for_alert(ticker: str, alert_date: date) -> Optional[float]:
 
 # ── Core simulation ────────────────────────────────────────────────────────────
 
-def _as_date(ts) -> Optional[date]:
+
+def _as_date(ts) -> date | None:
     if ts is None:
         return None
     return ts.date() if hasattr(ts, "date") else ts
@@ -161,7 +163,7 @@ def _simulate_trade(
     entry_price: float,
     cfg: SimConfig,
     effective_stop_pct: float,
-) -> tuple[Optional[date], Optional[float], str, int]:
+) -> tuple[date | None, float | None, str, int]:
     """
     Simulate a single trade from day-after-entry through the OHLCV window.
 
@@ -175,15 +177,15 @@ def _simulate_trade(
 
     Returns (exit_date, exit_price, exit_reason, hold_days).
     """
-    high_watermark     = entry_price
-    stop_price         = entry_price * (1.0 - effective_stop_pct)
-    breakeven_active   = False
+    high_watermark = entry_price
+    stop_price = entry_price * (1.0 - effective_stop_pct)
+    breakeven_active = False
     tight_trail_active = False
 
     for day_idx, (ts, row) in enumerate(ohlcv.iterrows()):
-        day_open  = float(row["Open"])
-        day_high  = float(row["High"])
-        day_low   = float(row["Low"])
+        day_open = float(row["Open"])
+        day_high = float(row["High"])
+        day_low = float(row["Low"])
         day_close = float(row["Close"])
         exit_date = _as_date(ts)
 
@@ -227,9 +229,7 @@ def _simulate_trade(
         # ── 5. Dead-money exit ────────────────────────────────────────────────
         # If price has gone nowhere by dead_money_days, redeploy capital early.
         # Only fires when breakeven was never triggered (i.e. no meaningful winner).
-        if (cfg.dead_money_days > 0
-                and day_idx + 1 == cfg.dead_money_days
-                and not breakeven_active):
+        if cfg.dead_money_days > 0 and day_idx + 1 == cfg.dead_money_days and not breakeven_active:
             if abs(day_close / entry_price - 1.0) <= cfg.dead_money_pct:
                 return (exit_date, day_close, "dead_money", day_idx + 1)
 
@@ -246,19 +246,20 @@ def _simulate_trade(
 
 # ── Per-alert simulation ───────────────────────────────────────────────────────
 
+
 @dataclass
 class TradeResult:
     ticker: str
     alert_date: date
-    entry_date: Optional[date]
-    entry_price: Optional[float]
-    exit_date: Optional[date]
-    exit_price: Optional[float]
+    entry_date: date | None
+    entry_price: float | None
+    exit_date: date | None
+    exit_price: float | None
     exit_reason: str
     hold_days: int
-    return_pct: Optional[float]
+    return_pct: float | None
     config_key: str
-    effective_stop_pct: Optional[float]
+    effective_stop_pct: float | None
 
 
 def simulate_alert(
@@ -266,53 +267,72 @@ def simulate_alert(
     alert_date: date,
     alert_price: float,
     cfg: SimConfig,
-    atr_ratio: Optional[float] = None,
+    atr_ratio: float | None = None,
 ) -> TradeResult:
     """Simulate one trade: enter next-day open, apply cfg, exit at stop or time limit."""
     effective_stop_pct = (
-        cfg.atr_multiplier * atr_ratio
-        if cfg.atr_multiplier > 0 and atr_ratio is not None
-        else cfg.stop_pct
+        cfg.atr_multiplier * atr_ratio if cfg.atr_multiplier > 0 and atr_ratio is not None else cfg.stop_pct
     )
 
     fetch_start = alert_date + timedelta(days=1)
-    fetch_end   = alert_date + timedelta(days=cfg.max_hold_days + 35)
-    ohlcv       = _fetch_ohlcv(ticker, fetch_start, fetch_end)
+    fetch_end = alert_date + timedelta(days=cfg.max_hold_days + 35)
+    ohlcv = _fetch_ohlcv(ticker, fetch_start, fetch_end)
 
     if ohlcv.empty:
-        return TradeResult(ticker=ticker, alert_date=alert_date,
-                           entry_date=None, entry_price=None,
-                           exit_date=None, exit_price=None,
-                           exit_reason="no_data", hold_days=0,
-                           return_pct=None, config_key=cfg.key,
-                           effective_stop_pct=effective_stop_pct)
+        return TradeResult(
+            ticker=ticker,
+            alert_date=alert_date,
+            entry_date=None,
+            entry_price=None,
+            exit_date=None,
+            exit_price=None,
+            exit_reason="no_data",
+            hold_days=0,
+            return_pct=None,
+            config_key=cfg.key,
+            effective_stop_pct=effective_stop_pct,
+        )
 
-    entry_date   = _as_date(ohlcv.iloc[0].name)
-    entry_price  = float(ohlcv.iloc[0]["Open"])
+    entry_date = _as_date(ohlcv.iloc[0].name)
+    entry_price = float(ohlcv.iloc[0]["Open"])
     trading_window = ohlcv.iloc[1:]
 
     if trading_window.empty:
-        return TradeResult(ticker=ticker, alert_date=alert_date,
-                           entry_date=entry_date, entry_price=entry_price,
-                           exit_date=entry_date, exit_price=entry_price,
-                           exit_reason="no_data", hold_days=0,
-                           return_pct=0.0, config_key=cfg.key,
-                           effective_stop_pct=effective_stop_pct)
+        return TradeResult(
+            ticker=ticker,
+            alert_date=alert_date,
+            entry_date=entry_date,
+            entry_price=entry_price,
+            exit_date=entry_date,
+            exit_price=entry_price,
+            exit_reason="no_data",
+            hold_days=0,
+            return_pct=0.0,
+            config_key=cfg.key,
+            effective_stop_pct=effective_stop_pct,
+        )
 
     exit_date, exit_price, exit_reason, hold_days = _simulate_trade(
         trading_window, entry_price, cfg, effective_stop_pct
     )
 
-    return_pct: Optional[float] = None
+    return_pct: float | None = None
     if exit_price is not None and entry_price > 0:
         return_pct = (exit_price / entry_price - 1.0) * 100.0
 
-    return TradeResult(ticker=ticker, alert_date=alert_date,
-                       entry_date=entry_date, entry_price=entry_price,
-                       exit_date=exit_date, exit_price=exit_price,
-                       exit_reason=exit_reason, hold_days=hold_days,
-                       return_pct=return_pct, config_key=cfg.key,
-                       effective_stop_pct=effective_stop_pct)
+    return TradeResult(
+        ticker=ticker,
+        alert_date=alert_date,
+        entry_date=entry_date,
+        entry_price=entry_price,
+        exit_date=exit_date,
+        exit_price=exit_price,
+        exit_reason=exit_reason,
+        hold_days=hold_days,
+        return_pct=return_pct,
+        config_key=cfg.key,
+        effective_stop_pct=effective_stop_pct,
+    )
 
 
 def simulate_baseline(
@@ -323,71 +343,87 @@ def simulate_baseline(
 ) -> TradeResult:
     """Buy next-day open, hold exactly max_hold_days, no stop."""
     fetch_start = alert_date + timedelta(days=1)
-    fetch_end   = alert_date + timedelta(days=max_hold_days + 35)
-    ohlcv       = _fetch_ohlcv(ticker, fetch_start, fetch_end)
+    fetch_end = alert_date + timedelta(days=max_hold_days + 35)
+    ohlcv = _fetch_ohlcv(ticker, fetch_start, fetch_end)
 
     key = f"no_stop_{max_hold_days}d"
     if ohlcv.empty:
-        return TradeResult(ticker=ticker, alert_date=alert_date,
-                           entry_date=None, entry_price=None,
-                           exit_date=None, exit_price=None,
-                           exit_reason="no_data", hold_days=0,
-                           return_pct=None, config_key=key,
-                           effective_stop_pct=None)
+        return TradeResult(
+            ticker=ticker,
+            alert_date=alert_date,
+            entry_date=None,
+            entry_price=None,
+            exit_date=None,
+            exit_price=None,
+            exit_reason="no_data",
+            hold_days=0,
+            return_pct=None,
+            config_key=key,
+            effective_stop_pct=None,
+        )
 
     entry_price = float(ohlcv.iloc[0]["Open"])
-    entry_date  = _as_date(ohlcv.iloc[0].name)
-    exit_row    = ohlcv.iloc[max_hold_days] if len(ohlcv) > max_hold_days else ohlcv.iloc[-1]
-    exit_price  = float(exit_row["Close"])
-    exit_date   = _as_date(exit_row.name)
+    entry_date = _as_date(ohlcv.iloc[0].name)
+    exit_row = ohlcv.iloc[max_hold_days] if len(ohlcv) > max_hold_days else ohlcv.iloc[-1]
+    exit_price = float(exit_row["Close"])
+    exit_date = _as_date(exit_row.name)
 
-    return TradeResult(ticker=ticker, alert_date=alert_date,
-                       entry_date=entry_date, entry_price=entry_price,
-                       exit_date=exit_date, exit_price=exit_price,
-                       exit_reason="time_exit", hold_days=max_hold_days,
-                       return_pct=(exit_price / entry_price - 1.0) * 100.0,
-                       config_key=key, effective_stop_pct=None)
+    return TradeResult(
+        ticker=ticker,
+        alert_date=alert_date,
+        entry_date=entry_date,
+        entry_price=entry_price,
+        exit_date=exit_date,
+        exit_price=exit_price,
+        exit_reason="time_exit",
+        hold_days=max_hold_days,
+        return_pct=(exit_price / entry_price - 1.0) * 100.0,
+        config_key=key,
+        effective_stop_pct=None,
+    )
 
 
 # ── Summary statistics ─────────────────────────────────────────────────────────
+
 
 def _summarise(results: list[TradeResult], label: str) -> dict:
     valid = [r for r in results if r.return_pct is not None]
     if not valid:
         return {"label": label, "n": 0}
 
-    returns   = pd.Series([r.return_pct for r in valid])
-    hold_days = pd.Series([r.hold_days  for r in valid])
-    stopped   = [r for r in valid if r.exit_reason in ("stop_hit", "gap_stop")]
-    dead_mon  = [r for r in valid if r.exit_reason == "dead_money"]
-    wins      = returns[returns > 0]
-    losses    = returns[returns <= 0]
-    stop_ret  = pd.Series([r.return_pct for r in stopped]) if stopped else pd.Series(dtype=float)
+    returns = pd.Series([r.return_pct for r in valid])
+    hold_days = pd.Series([r.hold_days for r in valid])
+    stopped = [r for r in valid if r.exit_reason in ("stop_hit", "gap_stop")]
+    dead_mon = [r for r in valid if r.exit_reason == "dead_money"]
+    wins = returns[returns > 0]
+    losses = returns[returns <= 0]
+    stop_ret = pd.Series([r.return_pct for r in stopped]) if stopped else pd.Series(dtype=float)
 
     expectancy = (
-        (len(wins) / len(returns)) * float(wins.mean())
-        + (len(losses) / len(returns)) * float(losses.mean())
-    ) if len(returns) else 0.0
+        ((len(wins) / len(returns)) * float(wins.mean()) + (len(losses) / len(returns)) * float(losses.mean()))
+        if len(returns)
+        else 0.0
+    )
 
     atr_used = [r.effective_stop_pct for r in valid if r.effective_stop_pct]
 
     return {
-        "label":                  label,
-        "n":                      len(valid),
-        "avg_hold_days":          round(float(hold_days.mean()), 1),
-        "win_rate_pct":           round(float((returns > 0).mean() * 100), 1),
-        "mean_return_pct":        round(float(returns.mean()), 2),
-        "median_return_pct":      round(float(returns.median()), 2),
-        "avg_win_pct":            round(float(wins.mean()), 2) if len(wins) else None,
-        "avg_loss_pct":           round(float(losses.mean()), 2) if len(losses) else None,
-        "max_loss_pct":           round(float(returns.min()), 2),
-        "max_gain_pct":           round(float(returns.max()), 2),
-        "expectancy_pct":         round(expectancy, 2),
-        "stop_hit_pct":           round(len(stopped) / len(valid) * 100, 1),
-        "dead_money_exit_pct":    round(len(dead_mon) / len(valid) * 100, 1),
-        "avg_stop_return_pct":    round(float(stop_ret.mean()), 2) if len(stop_ret) else None,
-        "crashes_gt_15pct":       int((returns < -15).sum()),
-        "crashes_gt_25pct":       int((returns < -25).sum()),
+        "label": label,
+        "n": len(valid),
+        "avg_hold_days": round(float(hold_days.mean()), 1),
+        "win_rate_pct": round(float((returns > 0).mean() * 100), 1),
+        "mean_return_pct": round(float(returns.mean()), 2),
+        "median_return_pct": round(float(returns.median()), 2),
+        "avg_win_pct": round(float(wins.mean()), 2) if len(wins) else None,
+        "avg_loss_pct": round(float(losses.mean()), 2) if len(losses) else None,
+        "max_loss_pct": round(float(returns.min()), 2),
+        "max_gain_pct": round(float(returns.max()), 2),
+        "expectancy_pct": round(expectancy, 2),
+        "stop_hit_pct": round(len(stopped) / len(valid) * 100, 1),
+        "dead_money_exit_pct": round(len(dead_mon) / len(valid) * 100, 1),
+        "avg_stop_return_pct": round(float(stop_ret.mean()), 2) if len(stop_ret) else None,
+        "crashes_gt_15pct": int((returns < -15).sum()),
+        "crashes_gt_25pct": int((returns < -25).sum()),
         "avg_effective_stop_pct": round(float(pd.Series(atr_used).mean() * 100), 1) if atr_used else None,
     }
 
@@ -397,26 +433,40 @@ def _print_table(summaries: list[dict], title: str) -> None:
     _logger.info("=== %s ===", title)
     _logger.info(
         "%-50s %4s %6s %5s %7s %8s %6s %8s %9s %9s",
-        "Strategy", "n", "HoldD", "Win%", "Mean%", "Median%",
-        "Stop%", "MaxLoss", "Crash>15", "Expect%"
+        "Strategy",
+        "n",
+        "HoldD",
+        "Win%",
+        "Mean%",
+        "Median%",
+        "Stop%",
+        "MaxLoss",
+        "Crash>15",
+        "Expect%",
     )
     _logger.info("-" * 120)
     for s in summaries:
         if s.get("n", 0) == 0:
             continue
         stop_pct = f"{s['stop_hit_pct']:>5.1f}%" if s.get("stop_hit_pct") is not None else "   N/A"
-        crash15  = str(s.get("crashes_gt_15pct", "-"))
+        crash15 = str(s.get("crashes_gt_15pct", "-"))
         _logger.info(
             "%-50s %4d %6.1f %4.0f%% %+6.1f%% %+7.1f%%  %s  %+8.1f%%  %6s  %+8.1f%%",
-            s["label"], s["n"],
+            s["label"],
+            s["n"],
             s.get("avg_hold_days", 0),
-            s["win_rate_pct"], s["mean_return_pct"], s["median_return_pct"],
-            stop_pct, s["max_loss_pct"],
-            crash15, s["expectancy_pct"]
+            s["win_rate_pct"],
+            s["mean_return_pct"],
+            s["median_return_pct"],
+            stop_pct,
+            s["max_loss_pct"],
+            crash15,
+            s["expectancy_pct"],
         )
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     extended = "--extended" in sys.argv
@@ -431,64 +481,92 @@ def main() -> None:
     baseline_cfgs: list[SimConfig] = []
     if extended:
         baseline_cfgs = [
-            SimConfig("Fixed stop  5% / 20d",  stop_pct=0.05, max_hold_days=20),
-            SimConfig("Fixed stop  8% / 20d",  stop_pct=0.08, max_hold_days=20),
-            SimConfig("Fixed stop 10% / 20d",  stop_pct=0.10, max_hold_days=20),
-            SimConfig("Fixed stop 15% / 20d",  stop_pct=0.15, max_hold_days=20),
-            SimConfig("Trail stop  5% / 20d",  stop_pct=0.05, trailing=True, max_hold_days=20),
-            SimConfig("Trail stop  8% / 20d",  stop_pct=0.08, trailing=True, max_hold_days=20),
-            SimConfig("Trail stop 15% / 20d",  stop_pct=0.15, trailing=True, max_hold_days=20),
+            SimConfig("Fixed stop  5% / 20d", stop_pct=0.05, max_hold_days=20),
+            SimConfig("Fixed stop  8% / 20d", stop_pct=0.08, max_hold_days=20),
+            SimConfig("Fixed stop 10% / 20d", stop_pct=0.10, max_hold_days=20),
+            SimConfig("Fixed stop 15% / 20d", stop_pct=0.15, max_hold_days=20),
+            SimConfig("Trail stop  5% / 20d", stop_pct=0.05, trailing=True, max_hold_days=20),
+            SimConfig("Trail stop  8% / 20d", stop_pct=0.08, trailing=True, max_hold_days=20),
+            SimConfig("Trail stop 15% / 20d", stop_pct=0.15, trailing=True, max_hold_days=20),
         ]
 
     atr_be_cfgs: list[SimConfig] = [
-        SimConfig("ATR 2.0x stop / 20d",
-                  stop_pct=0.08, atr_multiplier=2.0, max_hold_days=20),
-        SimConfig("ATR 2.5x stop / 20d",
-                  stop_pct=0.08, atr_multiplier=2.5, max_hold_days=20),
-        SimConfig("ATR 3.0x stop / 20d",
-                  stop_pct=0.08, atr_multiplier=3.0, max_hold_days=20),
-        SimConfig("Breakeven: 8% init, +10% lock, trail 8%, 20d",
-                  stop_pct=0.08, max_hold_days=20,
-                  breakeven_trigger_pct=0.10, breakeven_trail_pct=0.08),
-        SimConfig("Breakeven: 8% init, +8%  lock, trail 8%, 20d",
-                  stop_pct=0.08, max_hold_days=20,
-                  breakeven_trigger_pct=0.08, breakeven_trail_pct=0.08),
-        SimConfig("Breakeven: 10% init, +15% lock, trail 8%, 20d",
-                  stop_pct=0.10, max_hold_days=20,
-                  breakeven_trigger_pct=0.15, breakeven_trail_pct=0.08),
-        SimConfig("Breakeven: 10% init, +10% lock, fixed, 20d",
-                  stop_pct=0.10, max_hold_days=20,
-                  breakeven_trigger_pct=0.10, breakeven_trail_pct=0.0),
+        SimConfig("ATR 2.0x stop / 20d", stop_pct=0.08, atr_multiplier=2.0, max_hold_days=20),
+        SimConfig("ATR 2.5x stop / 20d", stop_pct=0.08, atr_multiplier=2.5, max_hold_days=20),
+        SimConfig("ATR 3.0x stop / 20d", stop_pct=0.08, atr_multiplier=3.0, max_hold_days=20),
+        SimConfig(
+            "Breakeven: 8% init, +10% lock, trail 8%, 20d",
+            stop_pct=0.08,
+            max_hold_days=20,
+            breakeven_trigger_pct=0.10,
+            breakeven_trail_pct=0.08,
+        ),
+        SimConfig(
+            "Breakeven: 8% init, +8%  lock, trail 8%, 20d",
+            stop_pct=0.08,
+            max_hold_days=20,
+            breakeven_trigger_pct=0.08,
+            breakeven_trail_pct=0.08,
+        ),
+        SimConfig(
+            "Breakeven: 10% init, +15% lock, trail 8%, 20d",
+            stop_pct=0.10,
+            max_hold_days=20,
+            breakeven_trigger_pct=0.15,
+            breakeven_trail_pct=0.08,
+        ),
+        SimConfig(
+            "Breakeven: 10% init, +10% lock, fixed, 20d",
+            stop_pct=0.10,
+            max_hold_days=20,
+            breakeven_trigger_pct=0.10,
+            breakeven_trail_pct=0.0,
+        ),
     ]
 
     # Improved exit strategies — each builds on the previous
     improved_cfgs: list[SimConfig] = [
         # Improvement 1: reduce ceiling to 10 days
-        SimConfig("Impr-1: BE 8%/+10%/trail8%, 10d ceiling",
-                  stop_pct=0.08, max_hold_days=10,
-                  breakeven_trigger_pct=0.10, breakeven_trail_pct=0.08),
+        SimConfig(
+            "Impr-1: BE 8%/+10%/trail8%, 10d ceiling",
+            stop_pct=0.08,
+            max_hold_days=10,
+            breakeven_trigger_pct=0.10,
+            breakeven_trail_pct=0.08,
+        ),
         # Improvement 2: dead-money exit at day 10, but let winners run to 20d
-        SimConfig("Impr-2: BE 8%/+10%/trail8%, 20d + dead-money d10",
-                  stop_pct=0.08, max_hold_days=20,
-                  breakeven_trigger_pct=0.10, breakeven_trail_pct=0.08,
-                  dead_money_days=10, dead_money_pct=0.03),
+        SimConfig(
+            "Impr-2: BE 8%/+10%/trail8%, 20d + dead-money d10",
+            stop_pct=0.08,
+            max_hold_days=20,
+            breakeven_trigger_pct=0.10,
+            breakeven_trail_pct=0.08,
+            dead_money_days=10,
+            dead_money_pct=0.03,
+        ),
         # Improvement 3: add tight trail at +15% (5% trail instead of 8%)
-        SimConfig("Impr-3: BE 8%/+10%/trail8%, 20d + dm10 + tt+15%->5%",
-                  stop_pct=0.08, max_hold_days=20,
-                  breakeven_trigger_pct=0.10, breakeven_trail_pct=0.08,
-                  dead_money_days=10, dead_money_pct=0.03,
-                  tight_trail_trigger_pct=0.15, tight_trail_pct=0.05),
+        SimConfig(
+            "Impr-3: BE 8%/+10%/trail8%, 20d + dm10 + tt+15%->5%",
+            stop_pct=0.08,
+            max_hold_days=20,
+            breakeven_trigger_pct=0.10,
+            breakeven_trail_pct=0.08,
+            dead_money_days=10,
+            dead_money_pct=0.03,
+            tight_trail_trigger_pct=0.15,
+            tight_trail_pct=0.05,
+        ),
     ]
 
-    all_cfgs    = baseline_cfgs + atr_be_cfgs + improved_cfgs
+    all_cfgs = baseline_cfgs + atr_be_cfgs + improved_cfgs
     all_results: list[TradeResult] = []
     baseline20_results: list[TradeResult] = []
     baseline10_results: list[TradeResult] = []
 
     total = len(df)
     for i, row in df.iterrows():
-        ticker      = str(row["ticker"])
-        alert_date  = row["alert_date"]
+        ticker = str(row["ticker"])
+        alert_date = row["alert_date"]
         alert_price = float(row["price_at_alert"])
 
         if (int(i) + 1) % 25 == 0:  # type: ignore[arg-type]
@@ -506,15 +584,15 @@ def main() -> None:
     # ── Save per-trade detail ──────────────────────────────────────────────────
     rows = [
         {
-            "ticker":             r.ticker,
-            "alert_date":         r.alert_date,
-            "entry_price":        r.entry_price,
-            "exit_price":         r.exit_price,
-            "exit_reason":        r.exit_reason,
-            "hold_days":          r.hold_days,
-            "return_pct":         r.return_pct,
+            "ticker": r.ticker,
+            "alert_date": r.alert_date,
+            "entry_price": r.entry_price,
+            "exit_price": r.exit_price,
+            "exit_reason": r.exit_reason,
+            "hold_days": r.hold_days,
+            "return_pct": r.return_pct,
             "effective_stop_pct": r.effective_stop_pct,
-            "config":             r.config_key,
+            "config": r.config_key,
         }
         for r in all_results
     ]
@@ -535,16 +613,10 @@ def main() -> None:
 
     # ── Print: baselines ───────────────────────────────────────────────────────
     if extended:
-        _print_table(
-            summaries[:len(baseline_cfgs) + 2],
-            "BASELINES (fixed / trailing stops)"
-        )
+        _print_table(summaries[: len(baseline_cfgs) + 2], "BASELINES (fixed / trailing stops)")
 
     # ── Print: ATR + breakeven (previous session's results) ───────────────────
-    atr_be_summaries = [summaries[0]] + [
-        s for s in summaries
-        if any(s["label"] == cfg.label for cfg in atr_be_cfgs)
-    ]
+    atr_be_summaries = [summaries[0]] + [s for s in summaries if any(s["label"] == cfg.label for cfg in atr_be_cfgs)]
     _print_table(atr_be_summaries, "ATR-based + Breakeven (from previous run)")
 
     # ── Print: improved exit strategies ───────────────────────────────────────
@@ -557,10 +629,7 @@ def main() -> None:
         _summarise(baseline20_results, "Baseline: no stop, 20d"),
         _summarise(baseline10_results, "Baseline: no stop, 10d"),
         old_best_row,
-    ] + [
-        s for s in summaries
-        if any(s["label"] == cfg.label for cfg in improved_cfgs)
-    ]
+    ] + [s for s in summaries if any(s["label"] == cfg.label for cfg in improved_cfgs)]
     _print_table(impr_summaries, "IMPROVED EXIT STRATEGIES (incremental)")
 
     # ── PREMIUM vs HIGH breakdown for improved configs ─────────────────────────
@@ -595,7 +664,7 @@ def main() -> None:
         ]
 
         # Show old best and Impr-3 for PREMIUM vs HIGH
-        for cfg in [atr_be_cfgs[3], improved_cfgs[2]]:   # old best + Impr-3
+        for cfg in [atr_be_cfgs[3], improved_cfgs[2]]:  # old best + Impr-3
             cfg_res = [r for r in all_results if r.config_key == cfg.key]
             prem_high_summaries.append(_summarise(_prem(cfg_res), f"PREMIUM  {cfg.label}"))
             prem_high_summaries.append(_summarise(_high(cfg_res), f"HIGH     {cfg.label}"))

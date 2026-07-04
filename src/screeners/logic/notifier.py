@@ -1,11 +1,10 @@
-import asyncio
-from typing import Dict, Any, List
-from datetime import datetime
+from typing import Any, Dict, List
 
-from src.notification.service.client import NotificationServiceClient, MessageType, MessagePriority
 from src.notification.logger import setup_logger
+from src.notification.service.client import MessagePriority, MessageType, NotificationServiceClient
 
 _logger = setup_logger(__name__)
+
 
 class SignalNotifier:
     """
@@ -33,13 +32,7 @@ class SignalNotifier:
         title = f"🚀 SCREENER ALERT: {side} {symbol}"
 
         # Build Body
-        body = [
-            f"*Symbol:* {symbol}",
-            f"*Price:* ${price:.2f}",
-            f"*Signal:* {side}",
-            "",
-            "*ML Analysis:*"
-        ]
+        body = [f"*Symbol:* {symbol}", f"*Price:* ${price:.2f}", f"*Signal:* {side}", "", "*ML Analysis:*"]
 
         ml = signal.get("ml_analysis", {})
         if ml:
@@ -66,7 +59,7 @@ class SignalNotifier:
             title=title,
             message=full_message,
             priority=MessagePriority.HIGH,
-            source="ibkr_screener"
+            source="ibkr_screener",
         )
 
         if success:

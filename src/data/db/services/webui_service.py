@@ -10,9 +10,11 @@ All operations use a single Unit-of-Work:
 """
 
 from __future__ import annotations
-from typing import Any, Dict, List, Optional
 
-from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
+from typing import Any, Dict, List
+
+from src.data.db.services.base_service import BaseDBService, handle_db_error, with_uow
+
 
 # ---------- DTO helpers ----------
 def _config_to_dict(c) -> Dict[str, Any]:
@@ -25,6 +27,7 @@ def _config_to_dict(c) -> Dict[str, Any]:
         "updated_at": c.updated_at,
     }
 
+
 def _template_to_dict(t) -> Dict[str, Any]:
     return {
         "id": t.id,
@@ -36,6 +39,7 @@ def _template_to_dict(t) -> Dict[str, Any]:
         "created_at": t.created_at,
         "updated_at": t.updated_at,
     }
+
 
 def _snapshot_to_dict(s) -> Dict[str, Any]:
     return {
@@ -65,13 +69,13 @@ class WebUIService(BaseDBService):
     # ---------- System Config ----------
     @with_uow
     @handle_db_error
-    def set_config(self, key: str, value: Dict[str, Any], description: Optional[str] = None) -> Dict[str, Any]:
+    def set_config(self, key: str, value: Dict[str, Any], description: str | None = None) -> Dict[str, Any]:
         row = self.repos.webui_config.set(key, value, description=description)
         return self._config_to_dict(row)
 
     @with_uow
     @handle_db_error
-    def get_config(self, key: str) -> Optional[Dict[str, Any]]:
+    def get_config(self, key: str) -> Dict[str, Any] | None:
         row = self.repos.webui_config.get(key)
         return self._config_to_dict(row) if row else None
 
@@ -109,11 +113,11 @@ class WebUIService(BaseDBService):
         user_id: int,
         action: str,
         *,
-        resource_type: Optional[str] = None,
-        resource_id: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None,
+        resource_type: str | None = None,
+        resource_id: str | None = None,
+        details: Dict[str, Any] | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
     ) -> int:
         row = self.repos.webui_audit.log(
             user_id=user_id,

@@ -21,19 +21,19 @@ Usage:
 
 import argparse
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
 import pandas as pd
 
 # Add project root
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger  # noqa: E402
 from src.ml.pipeline.p06_emps2.config import EMPS2PipelineConfig  # noqa: E402
 from src.ml.pipeline.p06_emps2.emps2_pipeline import EMPS2Pipeline  # noqa: E402
 from src.ml.pipeline.shared.pipeline_summary_generator import PipelineSummaryGenerator  # noqa: E402
-
+from src.notification.logger import setup_logger  # noqa: E402
 
 _logger = setup_logger(__name__)
 
@@ -43,7 +43,6 @@ def print_header(title: str):
     print(f"\n{'=' * 70}")
     print(f" {title}")
     print(f"{'=' * 70}\n")
-
 
 
 def parse_args() -> argparse.Namespace:
@@ -82,147 +81,76 @@ Examples:
 
   # Quiet mode (less logging)
   python run_emps2_scan.py --quiet
-        """
+        """,
     )
 
     # Preset configurations
     preset_group = parser.add_mutually_exclusive_group()
     preset_group.add_argument(
-        '--aggressive',
-        action='store_true',
-        help='Use aggressive filtering (stricter criteria for highest volatility)'
+        "--aggressive", action="store_true", help="Use aggressive filtering (stricter criteria for highest volatility)"
     )
     preset_group.add_argument(
-        '--conservative',
-        action='store_true',
-        help='Use conservative filtering (broader universe)'
+        "--conservative", action="store_true", help="Use conservative filtering (broader universe)"
     )
 
     # Fundamental filter parameters
-    fundamental_group = parser.add_argument_group('Fundamental Filters')
-    fundamental_group.add_argument(
-        '--min-price',
-        type=float,
-        help='Minimum stock price (default: 1.0)'
-    )
-    fundamental_group.add_argument(
-        '--min-volume',
-        type=int,
-        help='Minimum average volume (default: 400000)'
-    )
-    fundamental_group.add_argument(
-        '--min-cap',
-        type=int,
-        help='Minimum market cap (default: 50000000 = $50M)'
-    )
-    fundamental_group.add_argument(
-        '--max-cap',
-        type=int,
-        help='Maximum market cap (default: 5000000000 = $5B)'
-    )
-    fundamental_group.add_argument(
-        '--max-float',
-        type=int,
-        help='Maximum float shares (default: 60000000 = 60M)'
-    )
+    fundamental_group = parser.add_argument_group("Fundamental Filters")
+    fundamental_group.add_argument("--min-price", type=float, help="Minimum stock price (default: 1.0)")
+    fundamental_group.add_argument("--min-volume", type=int, help="Minimum average volume (default: 400000)")
+    fundamental_group.add_argument("--min-cap", type=int, help="Minimum market cap (default: 50000000 = $50M)")
+    fundamental_group.add_argument("--max-cap", type=int, help="Maximum market cap (default: 5000000000 = $5B)")
+    fundamental_group.add_argument("--max-float", type=int, help="Maximum float shares (default: 60000000 = 60M)")
 
     # Volatility filter parameters
-    volatility_group = parser.add_argument_group('Volatility Filters')
+    volatility_group = parser.add_argument_group("Volatility Filters")
     volatility_group.add_argument(
-        '--min-volatility',
-        type=float,
-        default=0.015,
-        help='Minimum ATR/Price ratio (default: 0.02 = 2%%)'
+        "--min-volatility", type=float, default=0.015, help="Minimum ATR/Price ratio (default: 0.02 = 2%%)"
     )
+    volatility_group.add_argument("--min-range", type=float, help="Minimum price range (default: 0.05 = 5%%)")
+    volatility_group.add_argument("--lookback-days", type=int, default=15, help="Lookback period in days (default: 15)")
     volatility_group.add_argument(
-        '--min-range',
-        type=float,
-        help='Minimum price range (default: 0.05 = 5%%)'
+        "--interval", type=str, choices=["5m", "15m", "30m", "1h"], help="Data interval (default: 15m)"
     )
-    volatility_group.add_argument(
-        '--lookback-days',
-        type=int,
-        default=15,
-        help='Lookback period in days (default: 15)'
-    )
-    volatility_group.add_argument(
-        '--interval',
-        type=str,
-        choices=['5m', '15m', '30m', '1h'],
-        help='Data interval (default: 15m)'
-    )
-    volatility_group.add_argument(
-        '--atr-period',
-        type=int,
-        default=14,
-        help='ATR calculation period (default: 14)'
-    )
+    volatility_group.add_argument("--atr-period", type=int, default=14, help="ATR calculation period (default: 14)")
 
     # Rolling memory parameters
-    rolling_group = parser.add_argument_group('Rolling Memory & Phase Detection')
+    rolling_group = parser.add_argument_group("Rolling Memory & Phase Detection")
     rolling_group.add_argument(
-        '--no-rolling-memory',
-        action='store_true',
-        help='Disable rolling memory (single-day scan only)'
+        "--no-rolling-memory", action="store_true", help="Disable rolling memory (single-day scan only)"
     )
     rolling_group.add_argument(
-        '--lookback-days-rolling',
-        type=int,
-        default=14,
-        help='Rolling memory lookback period (default: 14 days)'
+        "--lookback-days-rolling", type=int, default=14, help="Rolling memory lookback period (default: 14 days)"
     )
+    rolling_group.add_argument("--phase1-threshold", type=int, help="Minimum appearances for Phase 1 (default: 5)")
     rolling_group.add_argument(
-        '--phase1-threshold',
-        type=int,
-        help='Minimum appearances for Phase 1 (default: 5)'
-    )
-    rolling_group.add_argument(
-        '--no-alerts',
-        action='store_true',
-        help='Disable Telegram/Email alerts for Phase 2 transitions'
+        "--no-alerts", action="store_true", help="Disable Telegram/Email alerts for Phase 2 transitions"
     )
 
     # Execution parameters
-    execution_group = parser.add_argument_group('Execution Options')
+    execution_group = parser.add_argument_group("Execution Options")
     execution_group.add_argument(
-        '--force-refresh',
-        action='store_true',
-        help='Force refresh (bypass cache and fetch fresh data)'
+        "--force-refresh", action="store_true", help="Force refresh (bypass cache and fetch fresh data)"
     )
-    execution_group.add_argument(
-        '--quiet',
-        action='store_true',
-        help='Quiet mode (less verbose logging)'
-    )
-    execution_group.add_argument(
-        '--no-summary',
-        action='store_true',
-        help='Skip summary generation'
-    )
-    execution_group.add_argument(
-        '--user-id',
-        type=str,
-        help='User ID to associate with alerts and jobs'
-    )
+    execution_group.add_argument("--quiet", action="store_true", help="Quiet mode (less verbose logging)")
+    execution_group.add_argument("--no-summary", action="store_true", help="Skip summary generation")
+    execution_group.add_argument("--user-id", type=str, help="User ID to associate with alerts and jobs")
 
     # Stage 3 analyzer selection
     parser.add_argument(
-        '--analyzer-type',
+        "--analyzer-type",
         type=str,
-        choices=['volatility', 'accumulation'],
-        default='volatility',
+        choices=["volatility", "accumulation"],
+        default="volatility",
         help=(
             "Stage 3 analyzer: 'volatility' (default — VolatilityFilter, original P06) "
             "or 'accumulation' (AccumulationAnalyzer, Coiled Spring / former P10 approach)"
-        )
+        ),
     )
 
     # Sentiment filtering parameters
-    sentiment_group = parser.add_argument_group('Sentiment Filtering')
+    sentiment_group = parser.add_argument_group("Sentiment Filtering")
     sentiment_group.add_argument(
-        '--no-sentiment',
-        action='store_true',
-        help='Disable sentiment filtering (skip social momentum analysis)'
+        "--no-sentiment", action="store_true", help="Disable sentiment filtering (skip social momentum analysis)"
     )
 
     return parser.parse_args()
@@ -248,25 +176,24 @@ def print_results_summary(final_df, config: EMPS2PipelineConfig):
     print("Top 20 candidates:")
     print("-" * 70)
 
-    display_cols = ['ticker', 'market_cap', 'avg_volume', 'sector', 'current_price']
+    display_cols = ["ticker", "market_cap", "avg_volume", "sector", "current_price"]
     available_cols = [col for col in display_cols if col in final_df.columns]
 
     if available_cols:
         for idx, row in final_df[available_cols].head(20).iterrows():
-            ticker = row.get('ticker', 'N/A')
-            market_cap = row.get('market_cap', 0)
-            volume = row.get('avg_volume', 0)
-            sector = row.get('sector', 'N/A')
-            price = row.get('current_price', 0)
+            ticker = row.get("ticker", "N/A")
+            market_cap = row.get("market_cap", 0)
+            volume = row.get("avg_volume", 0)
+            sector = row.get("sector", "N/A")
+            price = row.get("current_price", 0)
 
-            market_cap_str = f"${market_cap/1e6:.0f}M" if market_cap > 0 else "N/A"
-            volume_str = f"{volume/1e3:.0f}K" if volume > 0 else "N/A"
+            market_cap_str = f"${market_cap / 1e6:.0f}M" if market_cap > 0 else "N/A"
+            volume_str = f"{volume / 1e3:.0f}K" if volume > 0 else "N/A"
 
-            print(f"{ticker:6s} | Cap: {market_cap_str:8s} | Vol: {volume_str:8s} | "
-                  f"Price: ${price:6.2f} | {sector}")
+            print(f"{ticker:6s} | Cap: {market_cap_str:8s} | Vol: {volume_str:8s} | Price: ${price:6.2f} | {sector}")
     else:
         # Fallback if columns not available
-        for ticker in final_df['ticker'].head(20):
+        for ticker in final_df["ticker"].head(20):
             print(f"  {ticker}")
 
     if len(final_df) > 20:
@@ -341,7 +268,7 @@ def main() -> int:
 
     # Apply analyzer type
     config.analyzer_type = args.analyzer_type
-    if args.analyzer_type == 'accumulation':
+    if args.analyzer_type == "accumulation":
         _logger.info("Stage 3: AccumulationAnalyzer (accumulation mode — former P10 approach)")
 
     # Determine force_refresh (default is False, use cache unless --force-refresh is specified)
@@ -351,11 +278,13 @@ def main() -> int:
     print("Configuration:")
     print(f"  Min Price: ${config.filter_config.min_price}")
     print(f"  Min Volume: {config.filter_config.min_avg_volume:,}")
-    print(f"  Market Cap: ${config.filter_config.min_market_cap/1e6:.0f}M - "
-          f"${config.filter_config.max_market_cap/1e9:.1f}B")
-    print(f"  Max Float: {config.filter_config.max_float/1e6:.0f}M shares")
-    print(f"  Min Volatility (ATR/Price): {config.filter_config.min_volatility_threshold*100:.1f}%")
-    print(f"  Min Price Range: {config.filter_config.min_price_range*100:.1f}%")
+    print(
+        f"  Market Cap: ${config.filter_config.min_market_cap / 1e6:.0f}M - "
+        f"${config.filter_config.max_market_cap / 1e9:.1f}B"
+    )
+    print(f"  Max Float: {config.filter_config.max_float / 1e6:.0f}M shares")
+    print(f"  Min Volatility (ATR/Price): {config.filter_config.min_volatility_threshold * 100:.1f}%")
+    print(f"  Min Price Range: {config.filter_config.min_price_range * 100:.1f}%")
     print(f"  Lookback: {config.filter_config.lookback_days} days")
     print(f"  Interval: {config.filter_config.interval}")
     print(f"  Force Refresh: {force_refresh}")
@@ -370,7 +299,7 @@ def main() -> int:
     if config.sentiment_config.enabled:
         print(f"  Min Mentions: {config.sentiment_config.min_mentions_24h}")
         print(f"  Min Sentiment Score: {config.sentiment_config.min_sentiment_score}")
-        print(f"  Max Bot Activity: {config.sentiment_config.max_bot_pct*100:.0f}%")
+        print(f"  Max Bot Activity: {config.sentiment_config.max_bot_pct * 100:.0f}%")
     print()
 
     # Create and run pipeline
@@ -384,7 +313,7 @@ def main() -> int:
         # Must match EMPS2Pipeline._results_dir (target_date defaults to yesterday for EOD data).
         # Using "today" here broke scheduler notifications: phase CSVs were read from the wrong folder
         # so phase1_count/phase2_count were always 0.
-        results_dir = PROJECT_ROOT / 'results' / 'p06_emps2' / pipeline.target_date
+        results_dir = PROJECT_ROOT / "results" / "p06_emps2" / pipeline.target_date
 
         print_header("Output Files")
         print(f"Results saved to: {results_dir} (target_date={pipeline.target_date})\n")
@@ -411,11 +340,12 @@ def main() -> int:
 
         # Output result for scheduler
         import json
+
         result = {
             "success": True,
             "total_candidates": len(final_df),
             "results_dir": str(results_dir),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         # Check for phase 1 and phase 2 candidates if rolling memory is enabled
@@ -455,10 +385,8 @@ def main() -> int:
 
         # Output error result for scheduler
         import json
-        result = {
-            "success": False,
-            "error": "Pipeline execution failed"
-        }
+
+        result = {"success": False, "error": "Pipeline execution failed"}
         print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")
 
         return 1

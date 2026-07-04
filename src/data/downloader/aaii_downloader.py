@@ -34,10 +34,10 @@ Classes:
 """
 
 import json
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Dict, List, Union
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
@@ -97,7 +97,7 @@ class AaiiDownloader(BaseDataDownloader):
 
     def __init__(
         self,
-        cache_dir: Optional[Union[str, Path]] = None,
+        cache_dir: Union[str, Path] | None = None,
         request_timeout: int = 60,
     ):
         """
@@ -115,9 +115,11 @@ class AaiiDownloader(BaseDataDownloader):
         self._aaii_file = self._aaii_dir / "aaii.csv.gz"
         self._timeout = request_timeout
         self._session = requests.Session()
-        self._session.headers.update({
-            "User-Agent": "Mozilla/5.0 (compatible; e-trading-research; akossyrev@gmail.com)",
-        })
+        self._session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (compatible; e-trading-research; akossyrev@gmail.com)",
+            }
+        )
 
     # ------------------------------------------------------------------
     # BaseDataDownloader interface
@@ -160,7 +162,7 @@ class AaiiDownloader(BaseDataDownloader):
     # Main entry points
     # ------------------------------------------------------------------
 
-    def download(self, force: bool = False) -> Optional[Path]:
+    def download(self, force: bool = False) -> Path | None:
         """
         Download the AAII sentiment XLS, parse, and cache as aaii.csv.gz.
 
@@ -218,7 +220,7 @@ class AaiiDownloader(BaseDataDownloader):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _fetch_xls(self) -> Optional[bytes]:
+    def _fetch_xls(self) -> bytes | None:
         """
         Download the AAII XLS file and return raw bytes.
 
@@ -237,7 +239,7 @@ class AaiiDownloader(BaseDataDownloader):
             _logger.exception("Failed to fetch AAII XLS")
             return None
 
-    def _parse_xls(self, raw_bytes: bytes) -> Optional[pd.DataFrame]:
+    def _parse_xls(self, raw_bytes: bytes) -> pd.DataFrame | None:
         """
         Parse the AAII XLS bytes into a clean DataFrame.
 
@@ -300,22 +302,25 @@ class AaiiDownloader(BaseDataDownloader):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Download AAII investor sentiment survey data to local cache."
-    )
+    parser = argparse.ArgumentParser(description="Download AAII investor sentiment survey data to local cache.")
     parser.add_argument(
-        "--cache-dir", type=str, default=None,
+        "--cache-dir",
+        type=str,
+        default=None,
         help=f"Cache root directory (default: {DATA_CACHE_DIR})",
     )
     parser.add_argument(
-        "--timeout", type=int, default=60,
+        "--timeout",
+        type=int,
+        default=60,
         help="HTTP request timeout in seconds (default: 60)",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     p_dl = subparsers.add_parser("download", help="Download and cache AAII sentiment data")
     p_dl.add_argument(
-        "--force", action="store_true",
+        "--force",
+        action="store_true",
         help="Re-download even if the cache file already exists",
     )
 
@@ -329,6 +334,6 @@ if __name__ == "__main__":
             "success": file_path is not None,
             "path": str(file_path) if file_path else None,
             "rows": rows,
-            "downloaded_at": datetime.now(timezone.utc).isoformat(),
+            "downloaded_at": datetime.now(UTC).isoformat(),
         }
         print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")

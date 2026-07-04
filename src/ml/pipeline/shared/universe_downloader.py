@@ -5,13 +5,13 @@ Downloads complete US stock universe from NASDAQ Trader FTP service.
 Stores results in results/emps2/YYYY-MM-DD/ for date-based organization.
 """
 
-from pathlib import Path
-import sys
-from typing import List, Optional
-from datetime import datetime
 import io
 import json
+import sys
+from datetime import datetime
 from ftplib import FTP
+from pathlib import Path
+from typing import List
 
 import pandas as pd
 
@@ -20,6 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
+
 from .config import UniverseConfig
 
 _logger = setup_logger(__name__)
@@ -34,7 +35,12 @@ class NasdaqUniverseDownloader:
     - NYSE, AMEX, and other exchange listings
     """
 
-    def __init__(self, config: Optional[UniverseConfig] = None, results_dir: Optional[Path] = None, target_date: Optional[str] = None):
+    def __init__(
+        self,
+        config: UniverseConfig | None = None,
+        results_dir: Path | None = None,
+        target_date: str | None = None,
+    ):
         """
         Initialize NASDAQ universe downloader.
 
@@ -48,13 +54,14 @@ class NasdaqUniverseDownloader:
         # Cache in results folder with target date
         if target_date is None:
             from datetime import timedelta
-            target_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+
+            target_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
 
         if results_dir:
             self._cache_dir = results_dir
         else:
             self._cache_dir = Path("results") / "shared" / target_date
-            
+
         self._cache_dir.mkdir(parents=True, exist_ok=True)
 
         _logger.info("NASDAQ Universe Downloader initialized (cache: %s)", self._cache_dir)
@@ -104,26 +111,26 @@ class NasdaqUniverseDownloader:
             _logger.info("Downloading from NASDAQ Trader FTP...")
 
             # Connect to FTP server
-            ftp = FTP('ftp.nasdaqtrader.com', timeout=30)
+            ftp = FTP("ftp.nasdaqtrader.com", timeout=30)
             ftp.login()  # Anonymous login
             _logger.debug("Connected to FTP server: %s", ftp.getwelcome())
 
             # Change to SymbolDirectory
-            ftp.cwd('SymbolDirectory')
+            ftp.cwd("SymbolDirectory")
 
             # Download NASDAQ listed
             _logger.debug("Fetching nasdaqlisted.txt")
             nasdaq_data = []
-            ftp.retrlines('RETR nasdaqlisted.txt', nasdaq_data.append)
-            nasdaq_text = '\n'.join(nasdaq_data)
+            ftp.retrlines("RETR nasdaqlisted.txt", nasdaq_data.append)
+            nasdaq_text = "\n".join(nasdaq_data)
             df1 = pd.read_csv(io.StringIO(nasdaq_text), sep="|")
             _logger.debug("Downloaded %d rows from nasdaqlisted.txt", len(df1))
 
             # Download other listed (NYSE, AMEX, etc.)
             _logger.debug("Fetching otherlisted.txt")
             other_data = []
-            ftp.retrlines('RETR otherlisted.txt', other_data.append)
-            other_text = '\n'.join(other_data)
+            ftp.retrlines("RETR otherlisted.txt", other_data.append)
+            other_text = "\n".join(other_data)
             df2 = pd.read_csv(io.StringIO(other_text), sep="|")
             _logger.debug("Downloaded %d rows from otherlisted.txt", len(df2))
 
@@ -135,7 +142,7 @@ class NasdaqUniverseDownloader:
             _logger.debug("Columns: %s", df.columns.tolist())
 
             # Drop any completely empty rows (from trailing pipes in file)
-            df = df.dropna(how='all')
+            df = df.dropna(how="all")
 
             # Filter test issues
             if self.config.exclude_test_issues and "Test Issue" in df.columns:
@@ -175,7 +182,9 @@ class NasdaqUniverseDownloader:
         except Exception:
             _logger.exception("Error downloading from NASDAQ Trader FTP:")
             _logger.error("Unable to download from NASDAQ Trader. Please check network/firewall settings.")
-            _logger.info("You can try manual download using: python src/ml/pipeline/p06_emps2/download_nasdaq_manual.py")
+            _logger.info(
+                "You can try manual download using: python src/ml/pipeline/p06_emps2/download_nasdaq_manual.py"
+            )
             return []
 
     def _apply_filters(self, tickers: List[str]) -> List[str]:
@@ -234,7 +243,7 @@ class NasdaqUniverseDownloader:
             if df_filtered.empty:
                 _logger.warning("Filtered DataFrame is empty, saving ticker list only")
                 # Create simple DataFrame with just tickers
-                df_filtered = pd.DataFrame({'Symbol': tickers})
+                df_filtered = pd.DataFrame({"Symbol": tickers})
 
             df_filtered.to_csv(output_path, index=False)
             _logger.info("Saved %d tickers to: %s", len(df_filtered), output_path)
@@ -242,7 +251,7 @@ class NasdaqUniverseDownloader:
         except Exception:
             _logger.exception("Error saving universe file:")
 
-    def _load_from_cache(self) -> Optional[List[str]]:
+    def _load_from_cache(self) -> List[str] | None:
         """
         Load universe from cache if valid.
 
@@ -263,37 +272,38 @@ class NasdaqUniverseDownloader:
                 return None
 
             # Load cache
-            with open(cache_file, 'r') as f:
+            with open(cache_file) as f:
                 cache_data = json.load(f)
 
-            if not isinstance(cache_data, dict) or 'tickers' not in cache_data:
+            if not isinstance(cache_data, dict) or "tickers" not in cache_data:
                 _logger.warning("Invalid cache structure")
                 return None
 
             # Invalidate cache when filtering-related config changes.
             # This avoids reusing old universes generated before new filters
             # (e.g. ETF exclusion) were introduced or toggled.
-            cached_config = cache_data.get('config') if isinstance(cache_data.get('config'), dict) else {}
+            cached_config = cache_data.get("config") if isinstance(cache_data.get("config"), dict) else {}
             expected_config = {
-                'exclude_test_issues': self.config.exclude_test_issues,
-                'exclude_etfs': getattr(self.config, "exclude_etfs", False),
-                'alphabetic_only': self.config.alphabetic_only,
+                "exclude_test_issues": self.config.exclude_test_issues,
+                "exclude_etfs": getattr(self.config, "exclude_etfs", False),
+                "alphabetic_only": self.config.alphabetic_only,
             }
             if cached_config != expected_config:
                 _logger.info(
                     "Universe cache invalidated due to config mismatch (cached=%s, current=%s)",
                     cached_config,
-                    expected_config
+                    expected_config,
                 )
                 return None
 
-            tickers = cache_data['tickers']
+            tickers = cache_data["tickers"]
             if not isinstance(tickers, list):
                 _logger.warning("Invalid ticker list in cache")
                 return None
 
-            _logger.info("Loaded %d tickers from cache (created: %s)",
-                        len(tickers), cache_data.get('created_at', 'unknown'))
+            _logger.info(
+                "Loaded %d tickers from cache (created: %s)", len(tickers), cache_data.get("created_at", "unknown")
+            )
             return tickers
 
         except Exception:
@@ -311,16 +321,16 @@ class NasdaqUniverseDownloader:
             cache_file = self._cache_dir / "nasdaq_universe_cache.json"
 
             cache_data = {
-                'tickers': tickers,
-                'created_at': datetime.now().isoformat(),
-                'config': {
-                    'exclude_test_issues': self.config.exclude_test_issues,
-                    'exclude_etfs': getattr(self.config, "exclude_etfs", False),
-                    'alphabetic_only': self.config.alphabetic_only
-                }
+                "tickers": tickers,
+                "created_at": datetime.now().isoformat(),
+                "config": {
+                    "exclude_test_issues": self.config.exclude_test_issues,
+                    "exclude_etfs": getattr(self.config, "exclude_etfs", False),
+                    "alphabetic_only": self.config.alphabetic_only,
+                },
             }
 
-            with open(cache_file, 'w') as f:
+            with open(cache_file, "w") as f:
                 json.dump(cache_data, f, indent=2)
 
             _logger.info("Saved %d tickers to cache", len(tickers))
@@ -339,8 +349,8 @@ class NasdaqUniverseDownloader:
             _logger.exception("Error clearing cache:")
 
 
-def create_universe_downloader(config: Optional[UniverseConfig] = None,
-                               results_dir: Optional[Path] = None,
-                               target_date: Optional[str] = None) -> NasdaqUniverseDownloader:
+def create_universe_downloader(
+    config: UniverseConfig | None = None, results_dir: Path | None = None, target_date: str | None = None
+) -> NasdaqUniverseDownloader:
     """Factory function."""
     return NasdaqUniverseDownloader(config, results_dir, target_date)

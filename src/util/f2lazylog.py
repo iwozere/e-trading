@@ -16,17 +16,20 @@ Usage:
 - Не трогает сложные выражения сборки строки (format(), f-strings в вложенных вызовах и т.п.).
 - Всегда полезно сделать тестовый прогон и ревью diff'ов перед коммитом.
 """
-import ast
-import astor
+
 import argparse
+import ast
 import os
 import re
-from typing import List, Tuple, Optional
+from typing import List, Tuple
+
+import astor
 
 LOG_METHODS = {"debug", "info", "warning", "warn", "error", "critical", "exception", "log"}
 
 # Регекс для распознавания простых формат-спеков типа ".4f", "0.2f", ".0f"
-_FMT_RE = re.compile(r'^(?P<dot>\.?)(?P<num>\d*)(?P<spec>[df])$')
+_FMT_RE = re.compile(r"^(?P<dot>\.?)(?P<num>\d*)(?P<spec>[df])$")
+
 
 class FstringToLazyLoggingTransformer(ast.NodeTransformer):
     def visit_Call(self, node: ast.Call) -> ast.AST:
@@ -73,7 +76,7 @@ class FstringToLazyLoggingTransformer(ast.NodeTransformer):
         new_call = ast.Call(func=node.func, args=new_args, keywords=node.keywords)
         return ast.copy_location(new_call, node)
 
-    def _extract_format_and_values(self, node: ast.AST) -> Optional[Tuple[str, List[ast.AST]]]:
+    def _extract_format_and_values(self, node: ast.AST) -> Tuple[str, List[ast.AST]] | None:
         """
         Попытаться преобразовать node (JoinedStr или BinOp конкатенация) в форматную строку + список выражений.
         Возвращает (fmt_string, [expr_nodes]) или None, если не получилось.
@@ -130,6 +133,7 @@ class FstringToLazyLoggingTransformer(ast.NodeTransformer):
                     return handle_joinedstr(n)
                 else:
                     return False
+
             return rec(bop)
 
         if isinstance(node, ast.JoinedStr):
@@ -150,7 +154,7 @@ class FstringToLazyLoggingTransformer(ast.NodeTransformer):
         fmt = "".join(parts).replace("%", "%%")
         return fmt, values
 
-    def _format_spec_to_placeholder(self, spec: Optional[str]) -> str:
+    def _format_spec_to_placeholder(self, spec: str | None) -> str:
         """
         Преобразуем формат-спек из f-string'а (без двоеточия) в printf-спек.
         Примеры:
@@ -166,12 +170,20 @@ class FstringToLazyLoggingTransformer(ast.NodeTransformer):
         m = _FMT_RE.match(s)
         if m:
             # s/t: поддерживаем d и f
-            return "%" + (m.group("num") or "") + ("." + m.group("num") if (m.group("dot") and m.group("num")) else "") + m.group("spec") if False else None
+            return (
+                "%"
+                + (m.group("num") or "")
+                + ("." + m.group("num") if (m.group("dot") and m.group("num")) else "")
+                + m.group("spec")
+                if False
+                else None
+            )
         # Попробуем простой перевод: если содержит 'f' или 'd' в конце — сохранить
         if s.endswith("f") or s.endswith("d"):
             return "%" + s
         # Иначе дефолт
         return "%s"
+
 
 def find_py_files(path: str) -> List[str]:
     files = []
@@ -184,12 +196,13 @@ def find_py_files(path: str) -> List[str]:
                     files.append(os.path.join(root, fn))
     return files
 
-def process_file(path: str, inplace: bool = False) -> Tuple[bool, Optional[str]]:
+
+def process_file(path: str, inplace: bool = False) -> Tuple[bool, str | None]:
     """
     Возвращает (changed:bool, new_source_or_None)
     Если inplace=True и есть изменения — перезаписывает файл, делая резервную копию path + '.bak'.
     """
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         src = f.read()
     try:
         tree = ast.parse(src, filename=path)
@@ -216,6 +229,7 @@ def process_file(path: str, inplace: bool = False) -> Tuple[bool, Optional[str]]
     else:
         return False, None
 
+
 def main():
     ap = argparse.ArgumentParser(description="Convert f-strings in logger calls to lazy logging format.")
     ap.add_argument("path", help="file or directory")
@@ -234,6 +248,7 @@ def main():
             changed += 1
 
     print(f"Done. Files changed: {changed}/{len(files)}")
+
 
 if __name__ == "__main__":
     main()

@@ -7,14 +7,15 @@ and memory usage monitoring to handle large datasets efficiently.
 
 import gc
 import sys
+import threading
 import weakref
-from typing import Any, Dict, List, Optional, Iterator
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
-import psutil
-import threading
 from pathlib import Path
+from typing import Any, Dict, Iterator, List
+
+import psutil
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -28,6 +29,7 @@ _logger = setup_logger(__name__)
 @dataclass
 class MemoryStats:
     """Memory usage statistics."""
+
     total_mb: float
     available_mb: float
     used_mb: float
@@ -40,8 +42,7 @@ class MemoryStats:
 class MemoryMonitor:
     """Monitor memory usage and provide alerts."""
 
-    def __init__(self, warning_threshold_percent: float = 80.0,
-                 critical_threshold_percent: float = 90.0):
+    def __init__(self, warning_threshold_percent: float = 80.0, critical_threshold_percent: float = 90.0):
         """
         Initialize memory monitor.
 
@@ -70,13 +71,13 @@ class MemoryMonitor:
                 used_mb=memory.used / (1024 * 1024),
                 percent_used=memory.percent,
                 process_rss_mb=process_memory.rss / (1024 * 1024),
-                process_vms_mb=process_memory.vms / (1024 * 1024)
+                process_vms_mb=process_memory.vms / (1024 * 1024),
             )
         except Exception as e:
             _logger.debug("Failed to get memory stats: %s", e)
             return MemoryStats(0, 0, 0, 0, 0, 0)
 
-    def check_memory_pressure(self) -> Optional[str]:
+    def check_memory_pressure(self) -> str | None:
         """
         Check for memory pressure and return alert level.
 
@@ -86,15 +87,16 @@ class MemoryMonitor:
         stats = self.get_memory_stats()
 
         if stats.percent_used >= self.critical_threshold:
-            return 'critical'
+            return "critical"
         elif stats.percent_used >= self.warning_threshold:
-            return 'warning'
+            return "warning"
 
         return None
 
     def log_memory_warning(self, force: bool = False) -> None:
         """Log memory warning if threshold exceeded."""
         import time
+
         current_time = time.time()
 
         if not force and current_time - self._last_warning_time < self._warning_interval:
@@ -109,7 +111,7 @@ class MemoryMonitor:
                 stats.percent_used,
                 stats.used_mb,
                 stats.total_mb,
-                stats.process_rss_mb
+                stats.process_rss_mb,
             )
             self._last_warning_time = current_time
 
@@ -117,7 +119,7 @@ class MemoryMonitor:
 class StreamingDataProcessor:
     """Process data in streaming fashion to minimize memory usage."""
 
-    def __init__(self, chunk_size: int = 1000, memory_monitor: Optional[MemoryMonitor] = None):
+    def __init__(self, chunk_size: int = 1000, memory_monitor: MemoryMonitor | None = None):
         """
         Initialize streaming processor.
 
@@ -128,8 +130,7 @@ class StreamingDataProcessor:
         self.chunk_size = chunk_size
         self.memory_monitor = memory_monitor or MemoryMonitor()
 
-    def process_in_chunks(self, data: List[Any],
-                         processor: callable) -> Iterator[Any]:
+    def process_in_chunks(self, data: List[Any], processor: callable) -> Iterator[Any]:
         """
         Process data in chunks to minimize memory usage.
 
@@ -143,19 +144,19 @@ class StreamingDataProcessor:
         for i in range(0, len(data), self.chunk_size):
             # Check memory pressure
             alert_level = self.memory_monitor.check_memory_pressure()
-            if alert_level == 'critical':
+            if alert_level == "critical":
                 _logger.warning("Critical memory pressure, forcing garbage collection")
                 gc.collect()
 
                 # Reduce chunk size temporarily
                 current_chunk_size = max(10, self.chunk_size // 2)
-            elif alert_level == 'warning':
+            elif alert_level == "warning":
                 current_chunk_size = max(50, int(self.chunk_size * 0.8))
             else:
                 current_chunk_size = self.chunk_size
 
             # Process chunk
-            chunk = data[i:i + current_chunk_size]
+            chunk = data[i : i + current_chunk_size]
             try:
                 result = processor(chunk)
                 yield result
@@ -166,8 +167,7 @@ class StreamingDataProcessor:
                 # Clean up chunk reference
                 del chunk
 
-    def aggregate_streaming_results(self, results_iterator: Iterator[Any],
-                                  aggregator: callable) -> Any:
+    def aggregate_streaming_results(self, results_iterator: Iterator[Any], aggregator: callable) -> Any:
         """
         Aggregate streaming results efficiently.
 
@@ -306,26 +306,25 @@ class MemoryEfficientDataStructures:
         for msg in messages:
             # Keep only essential fields
             optimized_msg = {
-                'body': msg.get('body', ''),
-                'user': msg.get('user', {}).get('username', ''),
-                'likes': int(msg.get('likes', 0)),
-                'replies': int(msg.get('replies', 0)),
-                'retweets': int(msg.get('retweets', 0)),
-                'timestamp': msg.get('timestamp')
+                "body": msg.get("body", ""),
+                "user": msg.get("user", {}).get("username", ""),
+                "likes": int(msg.get("likes", 0)),
+                "replies": int(msg.get("replies", 0)),
+                "retweets": int(msg.get("retweets", 0)),
+                "timestamp": msg.get("timestamp"),
             }
 
             # Remove empty/null values
-            optimized_msg = {k: v for k, v in optimized_msg.items()
-                           if v is not None and v != ''}
+            optimized_msg = {k: v for k, v in optimized_msg.items() if v is not None and v != ""}
 
             optimized.append(optimized_msg)
 
         return optimized
 
     @staticmethod
-    def batch_process_with_memory_limit(data: List[Any],
-                                      processor: callable,
-                                      memory_limit_mb: float = 500.0) -> List[Any]:
+    def batch_process_with_memory_limit(
+        data: List[Any], processor: callable, memory_limit_mb: float = 500.0
+    ) -> List[Any]:
         """
         Process data in batches with memory limit enforcement.
 
@@ -349,8 +348,7 @@ class MemoryEfficientDataStructures:
             stats = monitor.get_memory_stats()
             if stats.process_rss_mb > memory_limit_mb:
                 _logger.warning(
-                    "Memory limit exceeded (%.1f MB > %.1f MB), forcing cleanup",
-                    stats.process_rss_mb, memory_limit_mb
+                    "Memory limit exceeded (%.1f MB > %.1f MB), forcing cleanup", stats.process_rss_mb, memory_limit_mb
                 )
                 gc.collect()
 
@@ -365,10 +363,7 @@ class MemoryOptimizer:
     cleanup, and efficient data structure management.
     """
 
-    def __init__(self,
-                 warning_threshold: float = 80.0,
-                 critical_threshold: float = 90.0,
-                 auto_cleanup: bool = True):
+    def __init__(self, warning_threshold: float = 80.0, critical_threshold: float = 90.0, auto_cleanup: bool = True):
         """
         Initialize memory optimizer.
 
@@ -414,35 +409,36 @@ class MemoryOptimizer:
         final_stats = self.monitor.get_memory_stats()
 
         cleanup_result = {
-            'initial_memory_mb': initial_stats.process_rss_mb,
-            'final_memory_mb': final_stats.process_rss_mb,
-            'memory_freed_mb': initial_stats.process_rss_mb - final_stats.process_rss_mb,
-            'gc_objects_collected': collected,
-            'callbacks_executed': len(self._cleanup_callbacks),
-            'weak_refs_cleaned': len([ref for ref in self._weak_refs if ref() is None])
+            "initial_memory_mb": initial_stats.process_rss_mb,
+            "final_memory_mb": final_stats.process_rss_mb,
+            "memory_freed_mb": initial_stats.process_rss_mb - final_stats.process_rss_mb,
+            "gc_objects_collected": collected,
+            "callbacks_executed": len(self._cleanup_callbacks),
+            "weak_refs_cleaned": len([ref for ref in self._weak_refs if ref() is None]),
         }
 
         _logger.info(
             "Memory cleanup completed: freed %.1f MB, collected %d objects",
-            cleanup_result['memory_freed_mb'], collected
+            cleanup_result["memory_freed_mb"],
+            collected,
         )
 
         return cleanup_result
 
-    def check_and_cleanup(self) -> Optional[Dict[str, Any]]:
+    def check_and_cleanup(self) -> Dict[str, Any] | None:
         """Check memory pressure and cleanup if necessary."""
         if not self.auto_cleanup:
             return None
 
         alert_level = self.monitor.check_memory_pressure()
 
-        if alert_level == 'critical':
+        if alert_level == "critical":
             return self.force_cleanup()
-        elif alert_level == 'warning':
+        elif alert_level == "warning":
             self.monitor.log_memory_warning()
             # Light cleanup
             gc.collect()
-            return {'light_cleanup': True}
+            return {"light_cleanup": True}
 
         return None
 
@@ -451,24 +447,24 @@ class MemoryOptimizer:
         stats = self.monitor.get_memory_stats()
 
         return {
-            'memory_stats': {
-                'total_mb': stats.total_mb,
-                'used_mb': stats.used_mb,
-                'percent_used': stats.percent_used,
-                'process_rss_mb': stats.process_rss_mb
+            "memory_stats": {
+                "total_mb": stats.total_mb,
+                "used_mb": stats.used_mb,
+                "percent_used": stats.percent_used,
+                "process_rss_mb": stats.process_rss_mb,
             },
-            'optimizer_stats': {
-                'cleanup_callbacks': len(self._cleanup_callbacks),
-                'weak_references': len(self._weak_refs),
-                'auto_cleanup_enabled': self.auto_cleanup,
-                'warning_threshold': self.monitor.warning_threshold,
-                'critical_threshold': self.monitor.critical_threshold
-            }
+            "optimizer_stats": {
+                "cleanup_callbacks": len(self._cleanup_callbacks),
+                "weak_references": len(self._weak_refs),
+                "auto_cleanup_enabled": self.auto_cleanup,
+                "warning_threshold": self.monitor.warning_threshold,
+                "critical_threshold": self.monitor.critical_threshold,
+            },
         }
 
 
 # Global memory optimizer instance
-_global_optimizer: Optional[MemoryOptimizer] = None
+_global_optimizer: MemoryOptimizer | None = None
 
 
 def get_memory_optimizer() -> MemoryOptimizer:

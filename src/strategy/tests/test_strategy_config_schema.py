@@ -20,12 +20,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.strategy.strategy_config_schema import validate_strategy_config, StrategyConfig
-
+from src.strategy.strategy_config_schema import StrategyConfig, validate_strategy_config
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _minimal_config(**overrides) -> dict:
     base = {
@@ -47,8 +47,8 @@ def _minimal_config(**overrides) -> dict:
 # Happy-path
 # ---------------------------------------------------------------------------
 
-class TestValidConfig:
 
+class TestValidConfig:
     def test_minimal_config_parses(self):
         cfg = validate_strategy_config(_minimal_config())
         assert isinstance(cfg, StrategyConfig)
@@ -75,34 +75,36 @@ class TestValidConfig:
 
     def test_all_registered_entry_mixins_accepted(self):
         from src.strategy.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
+
         for name in ENTRY_MIXIN_REGISTRY:
-            cfg = validate_strategy_config(_minimal_config(
-                entry_logic={"name": name}
-            ))
+            cfg = validate_strategy_config(_minimal_config(entry_logic={"name": name}))
             assert cfg.entry_logic.name == name
 
     def test_all_registered_exit_mixins_accepted(self):
         from src.strategy.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
+
         for name in EXIT_MIXIN_REGISTRY:
-            cfg = validate_strategy_config(_minimal_config(
-                exit_logic={"name": name}
-            ))
+            cfg = validate_strategy_config(_minimal_config(exit_logic={"name": name}))
             assert cfg.exit_logic.name == name
 
     def test_legacy_params_key_accepted(self):
-        cfg = validate_strategy_config(_minimal_config(
-            entry_logic={"name": "RSIBBEntryMixin", "params": {"rsi_period": 14}},
-        ))
+        cfg = validate_strategy_config(
+            _minimal_config(
+                entry_logic={"name": "RSIBBEntryMixin", "params": {"rsi_period": 14}},
+            )
+        )
         assert cfg.entry_logic.effective_params()["rsi_period"] == 14
 
     def test_extra_unknown_params_are_allowed(self):
         """Unknown param keys are not blocked — they may be legacy e_-prefixed names."""
-        cfg = validate_strategy_config(_minimal_config(
-            entry_logic={
-                "name": "RSIBBEntryMixin",
-                "logic_params": {"e_rsi_period": 14, "rsi_oversold": 30},
-            }
-        ))
+        cfg = validate_strategy_config(
+            _minimal_config(
+                entry_logic={
+                    "name": "RSIBBEntryMixin",
+                    "logic_params": {"e_rsi_period": 14, "rsi_oversold": 30},
+                }
+            )
+        )
         assert cfg.entry_logic.name == "RSIBBEntryMixin"
 
 
@@ -110,70 +112,74 @@ class TestValidConfig:
 # Entry logic errors
 # ---------------------------------------------------------------------------
 
-class TestEntryLogicErrors:
 
+class TestEntryLogicErrors:
     def test_unknown_entry_mixin_raises(self):
         with pytest.raises(ValidationError, match="Unknown entry mixin"):
-            validate_strategy_config(_minimal_config(
-                entry_logic={"name": "DoesNotExistMixin"}
-            ))
+            validate_strategy_config(_minimal_config(entry_logic={"name": "DoesNotExistMixin"}))
 
     def test_entry_param_wrong_type_str_for_int(self):
         with pytest.raises(ValidationError, match="numeric"):
-            validate_strategy_config(_minimal_config(
-                entry_logic={
-                    "name": "RSIBBEntryMixin",
-                    "logic_params": {"rsi_period": "fourteen"},  # must be int/float
-                }
-            ))
+            validate_strategy_config(
+                _minimal_config(
+                    entry_logic={
+                        "name": "RSIBBEntryMixin",
+                        "logic_params": {"rsi_period": "fourteen"},  # must be int/float
+                    }
+                )
+            )
 
     def test_entry_param_wrong_type_int_for_bool(self):
         with pytest.raises(ValidationError, match="bool"):
-            validate_strategy_config(_minimal_config(
-                entry_logic={
-                    "name": "RSIBBEntryMixin",
-                    "logic_params": {"use_bb_touch": 1},  # must be bool, not int
-                }
-            ))
+            validate_strategy_config(
+                _minimal_config(
+                    entry_logic={
+                        "name": "RSIBBEntryMixin",
+                        "logic_params": {"use_bb_touch": 1},  # must be bool, not int
+                    }
+                )
+            )
 
     def test_entry_param_wrong_type_str_for_float(self):
         with pytest.raises(ValidationError, match="numeric"):
-            validate_strategy_config(_minimal_config(
-                entry_logic={
-                    "name": "RSIBBEntryMixin",
-                    "logic_params": {"bb_dev": "two"},  # must be numeric
-                }
-            ))
+            validate_strategy_config(
+                _minimal_config(
+                    entry_logic={
+                        "name": "RSIBBEntryMixin",
+                        "logic_params": {"bb_dev": "two"},  # must be numeric
+                    }
+                )
+            )
 
 
 # ---------------------------------------------------------------------------
 # Exit logic errors
 # ---------------------------------------------------------------------------
 
-class TestExitLogicErrors:
 
+class TestExitLogicErrors:
     def test_unknown_exit_mixin_raises(self):
         with pytest.raises(ValidationError, match="Unknown exit mixin"):
-            validate_strategy_config(_minimal_config(
-                exit_logic={"name": "GhostExitMixin"}
-            ))
+            validate_strategy_config(_minimal_config(exit_logic={"name": "GhostExitMixin"}))
 
     def test_exit_param_wrong_type_raises(self):
         with pytest.raises(ValidationError, match="numeric"):
-            validate_strategy_config(_minimal_config(
-                exit_logic={
-                    "name": "FixedRatioExitMixin",
-                    "logic_params": {"take_profit": "five_percent"},  # must be float
-                }
-            ))
+            validate_strategy_config(
+                _minimal_config(
+                    exit_logic={
+                        "name": "FixedRatioExitMixin",
+                        "logic_params": {"take_profit": "five_percent"},  # must be float
+                    }
+                )
+            )
 
 
 # ---------------------------------------------------------------------------
 # position_size errors
 # ---------------------------------------------------------------------------
 
-class TestPositionSizeErrors:
 
+class TestPositionSizeErrors:
     def test_position_size_zero_raises(self):
         with pytest.raises(ValidationError):
             validate_strategy_config(_minimal_config(position_size=0.0))

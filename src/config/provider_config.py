@@ -28,9 +28,9 @@ Usage::
 
 from __future__ import annotations
 
-import os
 import logging
-from typing import Optional, Dict
+import os
+from typing import Dict
 
 _logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ _KNOWN_KEYS = [
 # ---------------------------------------------------------------------------
 # Internal cache filled at import time.
 # ---------------------------------------------------------------------------
-_cache: Dict[str, Optional[str]] = {}
+_cache: Dict[str, str | None] = {}
 
 
 def _load() -> None:
@@ -71,6 +71,7 @@ def _load() -> None:
     donotshare = None
     try:
         import importlib
+
         donotshare = importlib.import_module("config.donotshare.donotshare")
     except ImportError:
         _logger.debug("config.donotshare.donotshare not available; relying on env vars only")
@@ -97,7 +98,7 @@ def reload() -> None:
     _load()
 
 
-def get_api_key(key_name: str) -> Optional[str]:
+def get_api_key(key_name: str) -> str | None:
     """
     Return the API key/token for the given config key name.
 
@@ -119,6 +120,7 @@ def get_api_key(key_name: str) -> Optional[str]:
     if not value:
         try:
             import importlib
+
             mod = importlib.import_module("config.donotshare.donotshare")
             value = getattr(mod, key_name, None) or None
         except ImportError:

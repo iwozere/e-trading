@@ -5,9 +5,9 @@ Scheduler Service CLI
 Command-line interface for managing the scheduler service.
 """
 
+import argparse
 import asyncio
 import sys
-import argparse
 from pathlib import Path
 
 # Add project root to path if not already present
@@ -15,9 +15,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.scheduler.main import SchedulerApplication
-from src.scheduler.config import SchedulerServiceConfig
 from src.notification.logger import setup_logger
+from src.scheduler.config import SchedulerServiceConfig
+from src.scheduler.main import SchedulerApplication
 
 _logger = setup_logger(__name__)
 
@@ -33,7 +33,7 @@ async def start_service(config: SchedulerServiceConfig) -> None:
         _logger.info("Max workers: %d", config.scheduler.max_workers)
         _logger.info(
             "Database: %s",
-            config.database.url.split('@')[1] if '@' in config.database.url else 'local',
+            config.database.url.split("@")[1] if "@" in config.database.url else "local",
         )
         _logger.info("Press Ctrl+C to stop...")
 
@@ -58,18 +58,18 @@ async def show_status(config: SchedulerServiceConfig) -> None:
 
         _logger.info("Scheduler Service Status:")
         _logger.info("=" * 40)
-        _logger.info("Service:              %s", status['service'])
-        _logger.info("Version:              %s", status['version'])
-        _logger.info("Environment:          %s", status['environment'])
-        _logger.info("Database:             %s", status['database_url'])
-        _logger.info("Max Workers:          %s", status['max_workers'])
-        _logger.info("Notification Method:  %s", status.get('notification_method', 'N/A'))
+        _logger.info("Service:              %s", status["service"])
+        _logger.info("Version:              %s", status["version"])
+        _logger.info("Environment:          %s", status["environment"])
+        _logger.info("Database:             %s", status["database_url"])
+        _logger.info("Max Workers:          %s", status["max_workers"])
+        _logger.info("Notification Method:  %s", status.get("notification_method", "N/A"))
 
-        if status['scheduler']:
-            scheduler_status = status['scheduler']
-            _logger.info("Scheduler Running:    %s", scheduler_status['is_running'])
-            _logger.info("Scheduler State:      %s", scheduler_status.get('scheduler_state', 'N/A'))
-            _logger.info("Job Count:            %s", scheduler_status.get('job_count', 0))
+        if status["scheduler"]:
+            scheduler_status = status["scheduler"]
+            _logger.info("Scheduler Running:    %s", scheduler_status["is_running"])
+            _logger.info("Scheduler State:      %s", scheduler_status.get("scheduler_state", "N/A"))
+            _logger.info("Job Count:            %s", scheduler_status.get("job_count", 0))
 
     except Exception as e:
         _logger.error("Error getting status: %s", e)
@@ -103,10 +103,10 @@ async def validate_config(config: SchedulerServiceConfig) -> None:
         config_dict = config.to_dict()
 
         _logger.info("✓ Configuration loaded successfully")
-        _logger.info("✓ Environment:     %s", config_dict['service']['environment'])
-        _logger.info("✓ Database URL:    %s", config_dict['database']['url'])
-        _logger.info("✓ Max Workers:     %s", config_dict['scheduler']['max_workers'])
-        _logger.info("✓ Alert Schema Dir: %s", config_dict['alert']['schema_dir'])
+        _logger.info("✓ Environment:     %s", config_dict["service"]["environment"])
+        _logger.info("✓ Database URL:    %s", config_dict["database"]["url"])
+        _logger.info("✓ Max Workers:     %s", config_dict["scheduler"]["max_workers"])
+        _logger.info("✓ Alert Schema Dir: %s", config_dict["alert"]["schema_dir"])
 
         # Check schema directory
         schema_path = Path(config.alert.schema_dir)
@@ -133,43 +133,28 @@ Examples:
   %(prog)s status                   # Show service status
   %(prog)s reload                   # Reload schedules from database
   %(prog)s validate                 # Validate configuration
-        """
+        """,
     )
 
-    parser.add_argument(
-        "command",
-        choices=["start", "status", "reload", "validate"],
-        help="Command to execute"
-    )
+    parser.add_argument("command", choices=["start", "status", "reload", "validate"], help="Command to execute")
 
-    parser.add_argument(
-        "--env",
-        default=None,
-        help="Environment to use (development, staging, production)"
-    )
+    parser.add_argument("--env", default=None, help="Environment to use (development, staging, production)")
 
-    parser.add_argument(
-        "--config-file",
-        default=None,
-        help="Path to configuration file (not implemented yet)"
-    )
+    parser.add_argument("--config-file", default=None, help="Path to configuration file (not implemented yet)")
 
-    parser.add_argument(
-        "--log-level",
-        default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="Log level"
-    )
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Log level")
 
     args = parser.parse_args()
 
     # Set environment if provided
     if args.env:
         import os
+
         os.environ["TRADING_ENV"] = args.env
 
     # Set log level
     import os
+
     os.environ["LOG_LEVEL"] = args.log_level
 
     try:

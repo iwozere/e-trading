@@ -15,10 +15,12 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
-from src.notification.logger import setup_logger
 from run_pipeline import PipelineRunner
 
+from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
+
 
 def test_pipeline_error_handling():
     """Test different pipeline error handling scenarios."""
@@ -102,6 +104,7 @@ def test_pipeline_error_handling():
     print("=" * 80)
     print("TEST COMPLETED")
     print("=" * 80)
+
 
 if __name__ == "__main__":
     test_pipeline_error_handling()

@@ -4,9 +4,9 @@ Unit tests for EOM (Ease of Movement) Indicator
 Tests the calculation, edge cases, and parameter validation of the EOM indicator.
 """
 
+import sys
 import unittest
 from pathlib import Path
-import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
@@ -14,7 +14,7 @@ sys.path.append(str(PROJECT_ROOT))
 import backtrader as bt
 import numpy as np
 
-from src.indicators.eom_indicator import EOMIndicator, EOM
+from src.indicators.eom_indicator import EOM, EOMIndicator
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -74,12 +74,14 @@ class TestEOMIndicator(unittest.TestCase):
 
             def next(self):
                 if len(self.data) >= 20:
-                    results.append({
-                        'eom': self.eom[0],
-                        'high': self.data.high[0],
-                        'low': self.data.low[0],
-                        'volume': self.data.volume[0]
-                    })
+                    results.append(
+                        {
+                            "eom": self.eom[0],
+                            "high": self.data.high[0],
+                            "low": self.data.low[0],
+                            "volume": self.data.volume[0],
+                        }
+                    )
 
         self.cerebro.addstrategy(TestStrategy)
         data = bt.feeds.PandasData(dataname=self._create_test_data())
@@ -92,8 +94,8 @@ class TestEOMIndicator(unittest.TestCase):
 
         # Check that EOM values are numeric
         for result in results:
-            self.assertIsInstance(result['eom'], (int, float), "EOM should be numeric")
-            self.assertFalse(np.isnan(result['eom']), "EOM should not be NaN after warmup")
+            self.assertIsInstance(result["eom"], (int, float), "EOM should be numeric")
+            self.assertFalse(np.isnan(result["eom"]), "EOM should not be NaN after warmup")
 
     def test_eom_bullish_movement(self):
         """Test EOM is positive during bullish price movement"""
@@ -121,8 +123,7 @@ class TestEOMIndicator(unittest.TestCase):
         total_count = len(results)
 
         _logger.info(f"Bullish test: {positive_count}/{total_count} positive EOM values")
-        self.assertGreater(positive_count / total_count, 0.5,
-                          "EOM should be mostly positive during bullish movement")
+        self.assertGreater(positive_count / total_count, 0.5, "EOM should be mostly positive during bullish movement")
 
     def test_eom_bearish_movement(self):
         """Test EOM is negative during bearish price movement"""
@@ -150,8 +151,7 @@ class TestEOMIndicator(unittest.TestCase):
         total_count = len(results)
 
         _logger.info(f"Bearish test: {negative_count}/{total_count} negative EOM values")
-        self.assertGreater(negative_count / total_count, 0.5,
-                          "EOM should be mostly negative during bearish movement")
+        self.assertGreater(negative_count / total_count, 0.5, "EOM should be mostly negative during bearish movement")
 
     def test_eom_zero_volume_handling(self):
         """Test EOM handles zero volume gracefully"""
@@ -232,8 +232,9 @@ class TestEOMIndicator(unittest.TestCase):
 
     def _create_test_data(self):
         """Create standard test data"""
-        import pandas as pd
         from datetime import datetime, timedelta
+
+        import pandas as pd
 
         dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(100)]
 
@@ -245,22 +246,18 @@ class TestEOMIndicator(unittest.TestCase):
         open_price = close + np.random.randn(100)
         volume = np.random.randint(1000000, 10000000, 100)
 
-        df = pd.DataFrame({
-            'datetime': dates,
-            'open': open_price,
-            'high': high,
-            'low': low,
-            'close': close,
-            'volume': volume
-        })
-        df.set_index('datetime', inplace=True)
+        df = pd.DataFrame(
+            {"datetime": dates, "open": open_price, "high": high, "low": low, "close": close, "volume": volume}
+        )
+        df.set_index("datetime", inplace=True)
 
         return df
 
     def _create_bullish_test_data(self):
         """Create bullish trending data"""
-        import pandas as pd
         from datetime import datetime, timedelta
+
+        import pandas as pd
 
         dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(100)]
 
@@ -271,22 +268,18 @@ class TestEOMIndicator(unittest.TestCase):
         open_price = close - np.random.rand(100) * 0.5
         volume = np.random.randint(5000000, 15000000, 100)
 
-        df = pd.DataFrame({
-            'datetime': dates,
-            'open': open_price,
-            'high': high,
-            'low': low,
-            'close': close,
-            'volume': volume
-        })
-        df.set_index('datetime', inplace=True)
+        df = pd.DataFrame(
+            {"datetime": dates, "open": open_price, "high": high, "low": low, "close": close, "volume": volume}
+        )
+        df.set_index("datetime", inplace=True)
 
         return df
 
     def _create_bearish_test_data(self):
         """Create bearish trending data"""
-        import pandas as pd
         from datetime import datetime, timedelta
+
+        import pandas as pd
 
         dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(100)]
 
@@ -297,22 +290,18 @@ class TestEOMIndicator(unittest.TestCase):
         open_price = close + np.random.rand(100) * 0.5
         volume = np.random.randint(5000000, 15000000, 100)
 
-        df = pd.DataFrame({
-            'datetime': dates,
-            'open': open_price,
-            'high': high,
-            'low': low,
-            'close': close,
-            'volume': volume
-        })
-        df.set_index('datetime', inplace=True)
+        df = pd.DataFrame(
+            {"datetime": dates, "open": open_price, "high": high, "low": low, "close": close, "volume": volume}
+        )
+        df.set_index("datetime", inplace=True)
 
         return df
 
     def _create_zero_volume_data(self):
         """Create data with zero volume"""
-        import pandas as pd
         from datetime import datetime, timedelta
+
+        import pandas as pd
 
         dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(100)]
 
@@ -322,22 +311,18 @@ class TestEOMIndicator(unittest.TestCase):
         open_price = close + np.random.randn(100)
         volume = np.zeros(100)  # Zero volume
 
-        df = pd.DataFrame({
-            'datetime': dates,
-            'open': open_price,
-            'high': high,
-            'low': low,
-            'close': close,
-            'volume': volume
-        })
-        df.set_index('datetime', inplace=True)
+        df = pd.DataFrame(
+            {"datetime": dates, "open": open_price, "high": high, "low": low, "close": close, "volume": volume}
+        )
+        df.set_index("datetime", inplace=True)
 
         return df
 
     def _create_flat_price_data(self):
         """Create data with flat prices (high == low)"""
-        import pandas as pd
         from datetime import datetime, timedelta
+
+        import pandas as pd
 
         dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(100)]
 
@@ -348,18 +333,13 @@ class TestEOMIndicator(unittest.TestCase):
         open_price = close.copy()
         volume = np.random.randint(1000000, 10000000, 100)
 
-        df = pd.DataFrame({
-            'datetime': dates,
-            'open': open_price,
-            'high': high,
-            'low': low,
-            'close': close,
-            'volume': volume
-        })
-        df.set_index('datetime', inplace=True)
+        df = pd.DataFrame(
+            {"datetime": dates, "open": open_price, "high": high, "low": low, "close": close, "volume": volume}
+        )
+        df.set_index("datetime", inplace=True)
 
         return df
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

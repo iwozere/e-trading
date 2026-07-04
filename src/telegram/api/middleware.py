@@ -6,6 +6,7 @@ matching TELEGRAM_API_KEY.  The lightweight /api/health probe (used by load-bala
 and container health-checks) is intentionally unauthenticated — it returns only
 {"status": "ok"} or {"status": "error"} with no internal information.
 """
+
 import hmac
 import os
 
@@ -23,6 +24,7 @@ _API_KEY: str = os.environ.get("TELEGRAM_API_KEY", "")
 
 if not _API_KEY:
     import logging as _logging
+
     _logging.getLogger(__name__).error(
         "TELEGRAM_API_KEY is not set — all non-open API endpoints will be denied. "
         "Set the env var to enable authenticated access."

@@ -12,14 +12,15 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
-import pytest
 import time
-from unittest.mock import Mock, patch, AsyncMock
-from tests.fixtures.service_fixtures import (
-    setup_indicator_data_in_mock, create_parsed_command
-)
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+
+from src.indicators.models import IndicatorResultSet, IndicatorValue, TickerIndicatorsRequest
 from src.telegram.screener.business_logic import TelegramBusinessLogic
-from src.indicators.models import TickerIndicatorsRequest, IndicatorResultSet, IndicatorValue
+from tests.fixtures.service_fixtures import create_parsed_command, setup_indicator_data_in_mock
+
 # Skip real service imports due to dependency issues - use mocks only
 # from src.data.db.services import telegram_service
 # from src.indicators.service import IndicatorService
@@ -39,16 +40,13 @@ class TestServiceLayerIntegration:
             indicator_service_mock,
             "AAPL",
             technical_indicators={"RSI": 65.5, "MACD": 1.23, "SMA": 150.25},
-            fundamental_indicators={"PE": 25.4, "MarketCap": 2500000000000}
+            fundamental_indicators={"PE": 25.4, "MarketCap": 2500000000000},
         )
 
         # Create report command - the business logic doesn't have a direct report handler
         # Instead test the indicator calculation functionality
         result = await business_logic.calculate_indicators_for_ticker(
-            ticker="AAPL",
-            indicators=["RSI", "MACD", "SMA", "PE"],
-            timeframe="1d",
-            period="1y"
+            ticker="AAPL", indicators=["RSI", "MACD", "SMA", "PE"], timeframe="1d", period="1y"
         )
 
         # Verify successful processing
@@ -83,6 +81,7 @@ class TestServiceLayerIntegration:
 
         # Setup user with verification code for verification
         import time
+
         current_time = int(time.time())
         telegram_service_mock.add_test_user(
             "new_user",
@@ -90,7 +89,7 @@ class TestServiceLayerIntegration:
             verified=False,
             approved=False,
             verification_code=verification_code,
-            code_sent_time=current_time - 300  # 5 minutes ago
+            code_sent_time=current_time - 300,  # 5 minutes ago
         )
         telegram_service_mock.configure_response("verify_user_email", True)
 
@@ -119,13 +118,7 @@ class TestServiceLayerIntegration:
 
         # Step 1: Add alert
         add_alert_command = create_parsed_command(
-            "alerts",
-            "test_user",
-            action="add",
-            ticker="AAPL",
-            price=150.0,
-            condition="above",
-            email=True
+            "alerts", "test_user", action="add", ticker="AAPL", price=150.0, condition="above", email=True
         )
 
         add_result = await business_logic.handle_command(add_alert_command)
@@ -161,10 +154,7 @@ class TestServiceLayerIntegration:
         indicator_service_mock.configure_error("compute_for_ticker", ValueError("Invalid ticker"))
 
         # Test direct indicator calculation instead of report command
-        calc_result = await business_logic.calculate_indicators_for_ticker(
-            ticker="INVALID",
-            indicators=["RSI"]
-        )
+        calc_result = await business_logic.calculate_indicators_for_ticker(ticker="INVALID", indicators=["RSI"])
 
         assert calc_result["status"] == "error"
         assert "invalid" in calc_result["message"].lower() or "ticker" in calc_result["message"].lower()
@@ -176,6 +166,7 @@ class TestServiceLayerIntegration:
 
         # Configure service to fail first time, succeed second time
         call_count = 0
+
         def side_effect(*args, **kwargs):
             nonlocal call_count
             call_count += 1
@@ -186,7 +177,7 @@ class TestServiceLayerIntegration:
                 "verified": True,
                 "email": "test@example.com",
                 "is_admin": False,  # Add missing field
-                "language": "en"
+                "language": "en",
             }
 
         telegram_service_mock.get_user_status = Mock(side_effect=side_effect)
@@ -230,15 +221,12 @@ class TestServiceLayerIntegration:
             indicator_service_mock,
             "BTCUSDT",
             technical_indicators={"RSI": 45.2, "MACD": -0.5, "BollingerBands": 42000.0},
-            fundamental_indicators={}
+            fundamental_indicators={},
         )
 
         # Test indicator calculation
         result = await business_logic.calculate_indicators_for_ticker(
-            ticker="BTCUSDT",
-            indicators=["RSI", "MACD", "BollingerBands"],
-            timeframe="1h",
-            period="1mo"
+            ticker="BTCUSDT", indicators=["RSI", "MACD", "BollingerBands"], timeframe="1h", period="1mo"
         )
 
         assert result["status"] == "ok"
@@ -263,10 +251,7 @@ class TestServiceLayerIntegration:
 
         # Test get_user_status contract
         status = business_logic.safe_telegram_service_call(
-            telegram_service_mock.get_user_status,
-            "get_user_status",
-            "contract_test",
-            "contract_test_user"
+            telegram_service_mock.get_user_status, "get_user_status", "contract_test", "contract_test_user"
         )
 
         assert isinstance(status, dict)
@@ -281,7 +266,7 @@ class TestServiceLayerIntegration:
             "contract_test",
             "contract_test_user",
             "max_alerts",
-            20
+            20,
         )
 
         # Verify limit was set
@@ -294,7 +279,7 @@ class TestServiceLayerIntegration:
             "contract_test",
             "contract_test_user",
             "bug",
-            "Test feedback message"
+            "Test feedback message",
         )
 
         assert isinstance(feedback_id, int)
@@ -310,36 +295,28 @@ class TestServiceLayerIntegration:
             indicator_service_mock,
             "TSLA",
             technical_indicators={"RSI": 72.1, "MACD": 2.5},
-            fundamental_indicators={"PE": 45.2}
+            fundamental_indicators={"PE": 45.2},
         )
 
         # Test compute_for_ticker contract
-        request = TickerIndicatorsRequest(
-            ticker="TSLA",
-            indicators=["RSI", "MACD", "PE"],
-            timeframe="1d",
-            period="6mo"
-        )
+        request = TickerIndicatorsRequest(ticker="TSLA", indicators=["RSI", "MACD", "PE"], timeframe="1d", period="6mo")
 
         result = await business_logic.safe_indicator_service_call(
-            indicator_service_mock.compute_for_ticker,
-            "compute_for_ticker",
-            "contract_test",
-            request
+            indicator_service_mock.compute_for_ticker, "compute_for_ticker", "contract_test", request
         )
 
         # Verify result structure
-        assert hasattr(result, 'ticker')
-        assert hasattr(result, 'technical')
-        assert hasattr(result, 'fundamental')
+        assert hasattr(result, "ticker")
+        assert hasattr(result, "technical")
+        assert hasattr(result, "fundamental")
         assert result.ticker == "TSLA"
         assert "RSI" in result.technical
         assert "PE" in result.fundamental
 
         # Verify indicator values have correct structure
         rsi_value = result.technical["RSI"]
-        assert hasattr(rsi_value, 'name')
-        assert hasattr(rsi_value, 'value')
+        assert hasattr(rsi_value, "name")
+        assert hasattr(rsi_value, "value")
         assert rsi_value.name == "RSI"
         assert rsi_value.value == 72.1
 
@@ -368,16 +345,15 @@ class TestServiceLayerIntegration:
         pytest.skip("Skipped due to import dependencies - dependency injection is tested in other tests")
 
         # Test with mock service instances instead
-        from tests.mocks.telegram_service_mock import TelegramServiceMock
         from tests.mocks.indicator_service_mock import IndicatorServiceMock
+        from tests.mocks.telegram_service_mock import TelegramServiceMock
 
         mock_telegram_service = TelegramServiceMock()
         mock_indicator_service = IndicatorServiceMock()
 
         # Create business logic with dependency injection
         business_logic = TelegramBusinessLogic(
-            telegram_service=mock_telegram_service,
-            indicator_service=mock_indicator_service
+            telegram_service=mock_telegram_service, indicator_service=mock_indicator_service
         )
 
         # Verify services are injected correctly
@@ -424,6 +400,7 @@ class TestServiceLayerIntegration:
 
         # Add delay to simulate slow service
         original_get_user_status = telegram_service_mock.get_user_status
+
         def slow_get_user_status(*args, **kwargs):
             time.sleep(0.1)  # 100ms delay
             return original_get_user_status(*args, **kwargs)
@@ -438,7 +415,7 @@ class TestServiceLayerIntegration:
 
         assert result["status"] == "ok"
         assert elapsed_time >= 0.1  # Should take at least 100ms due to delay
-        assert elapsed_time < 5.0   # But should not timeout
+        assert elapsed_time < 5.0  # But should not timeout
 
     def test_service_layer_configuration_validation(self):
         """Test that service layer configuration is properly validated."""
@@ -477,31 +454,23 @@ class TestServiceLayerIntegrationWithRealServices:
         # Skip due to pandas-ta import issues
         pytest.skip("Skipped due to pandas-ta import dependencies")
 
-        with patch('src.indicators.service.IndicatorService') as mock_indicator_service_class:
+        with patch("src.indicators.service.IndicatorService") as mock_indicator_service_class:
             # Setup indicator service mock
             mock_indicator_service = AsyncMock()
             mock_indicator_service_class.return_value = mock_indicator_service
 
             # Setup compute_for_ticker mock to return proper IndicatorResultSet
             mock_result = IndicatorResultSet(
-                ticker="AAPL",
-                technical={"RSI": IndicatorValue(name="RSI", value=65.5)},
-                fundamental={}
+                ticker="AAPL", technical={"RSI": IndicatorValue(name="RSI", value=65.5)}, fundamental={}
             )
             mock_indicator_service.compute_for_ticker.return_value = mock_result
 
             # Create business logic with mocked IndicatorService
-            business_logic = TelegramBusinessLogic(
-                telegram_service=None,
-                indicator_service=mock_indicator_service
-            )
+            business_logic = TelegramBusinessLogic(telegram_service=None, indicator_service=mock_indicator_service)
 
             # Test indicator calculation
             result = await business_logic.calculate_indicators_for_ticker(
-                ticker="AAPL",
-                indicators=["RSI"],
-                timeframe="1d",
-                period="1y"
+                ticker="AAPL", indicators=["RSI"], timeframe="1d", period="1y"
             )
 
             assert result["status"] == "ok"

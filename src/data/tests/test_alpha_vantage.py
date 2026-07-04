@@ -7,17 +7,16 @@ that's not limited by the 60-day restriction of yfinance.
 """
 
 import sys
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
-
 # Import API key from donotshare configuration
 from config.donotshare.donotshare import ALPHA_VANTAGE_API_KEY
+from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
 
 
 def test_alpha_vantage_intraday():
@@ -73,6 +72,7 @@ def test_alpha_vantage_intraday():
     except Exception as e:
         print(f"❌ Error: {str(e)}")
         import traceback
+
         traceback.print_exc()
         assert False, f"Test failed: {str(e)}"
 

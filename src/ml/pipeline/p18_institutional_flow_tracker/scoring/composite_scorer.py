@@ -8,10 +8,10 @@ Tickers exceeding the alert threshold are returned as actionable signals.
 """
 
 import json
+import sys
 from datetime import date
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-import sys
+from typing import Dict, List, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
@@ -24,9 +24,11 @@ _logger = setup_logger(__name__)
 
 # Seasonal redemption windows that increase distribution probability
 _REDEMPTION_MONTHS = {
-    10, 11, 12,  # Tax-loss harvesting / hedge-fund redemption gates (Dec 31)
-    3,            # Fiscal year-end for many funds
-    9,            # Q3 close / window dressing
+    10,
+    11,
+    12,  # Tax-loss harvesting / hedge-fund redemption gates (Dec 31)
+    3,  # Fiscal year-end for many funds
+    9,  # Q3 close / window dressing
 }
 
 # Graded large-exit award by total dollars sold (descending). A flat bonus made
@@ -56,9 +58,9 @@ class CompositeScorer:
 
     def __init__(
         self,
-        signal_weights: Optional[Dict[str, int]] = None,
+        signal_weights: Dict[str, int] | None = None,
         alert_threshold: int = 60,
-        large_exit_tiers_usd: Optional[List[Tuple[float, int]]] = None,
+        large_exit_tiers_usd: List[Tuple[float, int]] | None = None,
         breadth_min_institutions: int = _DEFAULT_BREADTH_MIN_INSTITUTIONS,
         breadth_points_per_institution: int = _DEFAULT_BREADTH_POINTS_PER_INSTITUTION,
         breadth_cap: int = _DEFAULT_BREADTH_CAP,
@@ -115,8 +117,8 @@ class CompositeScorer:
         volume_df: pd.DataFrame,
         form4_df: pd.DataFrame,
         dg_df: pd.DataFrame,
-        as_of_date: Optional[date] = None,
-        price_proximity_df: Optional[pd.DataFrame] = None,
+        as_of_date: date | None = None,
+        price_proximity_df: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
         """
         Compute composite scores for all tickers present in any input DataFrame.
@@ -144,11 +146,13 @@ class CompositeScorer:
         in_seasonal_window = today.month in _REDEMPTION_MONTHS
 
         # Build per-ticker score rows
-        all_tickers: List[str] = list(set(
-            list(consensus_df["ticker"].dropna().tolist() if not consensus_df.empty else []) +
-            list(volume_df["ticker"].dropna().tolist() if not volume_df.empty else []) +
-            list(form4_df["ticker"].dropna().tolist() if not form4_df.empty else [])
-        ))
+        all_tickers: List[str] = list(
+            set(
+                list(consensus_df["ticker"].dropna().tolist() if not consensus_df.empty else [])
+                + list(volume_df["ticker"].dropna().tolist() if not volume_df.empty else [])
+                + list(form4_df["ticker"].dropna().tolist() if not form4_df.empty else [])
+            )
+        )
 
         if not all_tickers:
             return pd.DataFrame()
@@ -197,9 +201,7 @@ class CompositeScorer:
             # dg_df currently has entity_name, not ticker (fuzzy match deferred).
             # Only apply when a ticker column is present to avoid scoring all tickers.
             dg_row = (
-                dg_df[dg_df["ticker"] == ticker]
-                if (not dg_df.empty and "ticker" in dg_df.columns)
-                else pd.DataFrame()
+                dg_df[dg_df["ticker"] == ticker] if (not dg_df.empty and "ticker" in dg_df.columns) else pd.DataFrame()
             )
             if not dg_row.empty:
                 detail["schedule_13dg_drop"] = True
@@ -217,14 +219,16 @@ class CompositeScorer:
                     detail["price_below_52w_high_15pct"] = True
                     score += self._weights["price_below_52w_high_15pct"]
 
-            rows.append({
-                "ticker": ticker,
-                "total_score": score,
-                "signals_active": sum(1 for v in detail.values() if v),
-                "institution_count": institution_count,
-                "total_value_sold_usd": total_sold,
-                "signal_detail": json.dumps(detail),
-            })
+            rows.append(
+                {
+                    "ticker": ticker,
+                    "total_score": score,
+                    "signals_active": sum(1 for v in detail.values() if v),
+                    "institution_count": institution_count,
+                    "total_value_sold_usd": total_sold,
+                    "signal_detail": json.dumps(detail),
+                }
+            )
 
         if not rows:
             return pd.DataFrame()
@@ -241,6 +245,8 @@ class CompositeScorer:
 
         _logger.info(
             "Composite scorer: %d tickers scored, %d above threshold %d",
-            len(result), len(alerts), self._threshold,
+            len(result),
+            len(alerts),
+            self._threshold,
         )
         return alerts

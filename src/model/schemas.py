@@ -5,12 +5,13 @@ This module provides type definitions, protocols, and data structures used acros
 the data management system, ensuring consistency and type safety.
 """
 
-from typing import Protocol, runtime_checkable, Optional, Union, Dict, Any, List
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Protocol, Union, runtime_checkable
+
 import pandas as pd
-from dataclasses import dataclass, field
 
 # Import cache directory setting
 try:
@@ -21,6 +22,7 @@ except ImportError:
 
 class DataInterval(Enum):
     """Standard data intervals supported by the system."""
+
     MINUTE_1 = "1m"
     MINUTE_5 = "5m"
     MINUTE_15 = "15m"
@@ -39,6 +41,7 @@ class DataInterval(Enum):
 
 class DataProvider(Enum):
     """Supported data providers."""
+
     BINANCE = "binance"
     YAHOO = "yahoo"
     ALPHA_VANTAGE = "alpha_vantage"
@@ -52,6 +55,7 @@ class DataProvider(Enum):
 
 class Environment(Enum):
     """Environment types for the trading system."""
+
     DEVELOPMENT = "development"
     STAGING = "staging"
     PRODUCTION = "production"
@@ -59,6 +63,7 @@ class Environment(Enum):
 
 class BrokerType(Enum):
     """Supported broker types."""
+
     BINANCE_PAPER = "binance_paper"
     BINANCE_LIVE = "binance_live"
     IBKR_PAPER = "ibkr_paper"
@@ -67,6 +72,7 @@ class BrokerType(Enum):
 
 class DataSourceType(Enum):
     """Data source types."""
+
     BINANCE = "binance"
     YAHOO = "yahoo"
     ALPHA_VANTAGE = "alpha_vantage"
@@ -80,6 +86,7 @@ class DataSourceType(Enum):
 
 class StrategyType(Enum):
     """Strategy types."""
+
     CUSTOM = "custom"
     MOMENTUM = "momentum"
     MEAN_REVERSION = "mean_reversion"
@@ -89,6 +96,7 @@ class StrategyType(Enum):
 
 class NotificationType(Enum):
     """Notification types."""
+
     TRADE_ENTRY = "trade_entry"
     TRADE_EXIT = "trade_exit"
     ERROR = "error"
@@ -105,27 +113,27 @@ class Fundamentals(Protocol):
     downloader to implement it.
     """
 
-    def get_pe_ratio(self) -> Optional[float]:
+    def get_pe_ratio(self) -> float | None:
         """Get Price-to-Earnings ratio."""
         ...
 
-    def get_market_cap(self) -> Optional[float]:
+    def get_market_cap(self) -> float | None:
         """Get market capitalization."""
         ...
 
-    def get_dividend_yield(self) -> Optional[float]:
+    def get_dividend_yield(self) -> float | None:
         """Get dividend yield."""
         ...
 
-    def get_beta(self) -> Optional[float]:
+    def get_beta(self) -> float | None:
         """Get beta value."""
         ...
 
-    def get_52_week_high(self) -> Optional[float]:
+    def get_52_week_high(self) -> float | None:
         """Get 52-week high price."""
         ...
 
-    def get_52_week_low(self) -> Optional[float]:
+    def get_52_week_low(self) -> float | None:
         """Get 52-week low price."""
         ...
 
@@ -146,9 +154,9 @@ class OHLCVData:
         close_prices: Union[pd.Series, list, None] = None,
         volumes: Union[pd.Series, list, None] = None,
         timestamps: Union[pd.Series, list, None] = None,
-        symbol: Optional[str] = None,
-        interval: Optional[DataInterval] = None,
-        provider: Optional[DataProvider] = None
+        symbol: str | None = None,
+        interval: DataInterval | None = None,
+        provider: DataProvider | None = None,
     ):
         self.open_prices = pd.Series(open_prices) if open_prices is not None else pd.Series()
         self.high_prices = pd.Series(high_prices) if high_prices is not None else pd.Series()
@@ -171,7 +179,7 @@ class OHLCVData:
             len(self.low_prices),
             len(self.close_prices),
             len(self.volumes),
-            len(self.timestamps)
+            len(self.timestamps),
         ]
 
         if len(set(lengths)) > 1:
@@ -179,14 +187,16 @@ class OHLCVData:
 
     def to_dataframe(self) -> pd.DataFrame:
         """Convert to pandas DataFrame with standard column names."""
-        return pd.DataFrame({
-            'timestamp': self.timestamps,
-            'open': self.open_prices,
-            'high': self.high_prices,
-            'low': self.low_prices,
-            'close': self.close_prices,
-            'volume': self.volumes
-        }).set_index('timestamp')
+        return pd.DataFrame(
+            {
+                "timestamp": self.timestamps,
+                "open": self.open_prices,
+                "high": self.high_prices,
+                "low": self.low_prices,
+                "close": self.close_prices,
+                "volume": self.volumes,
+            }
+        ).set_index("timestamp")
 
     def to_csv(self, filepath: Union[str, Path], **kwargs) -> None:
         """Save data to CSV file."""
@@ -203,7 +213,9 @@ class OHLCVData:
         return len(self.timestamps)
 
     def __repr__(self) -> str:
-        return f"OHLCVData(symbol={self.symbol}, interval={self.interval}, provider={self.provider}, length={len(self)})"
+        return (
+            f"OHLCVData(symbol={self.symbol}, interval={self.interval}, provider={self.provider}, length={len(self)})"
+        )
 
 
 class DataCacheConfig:
@@ -214,7 +226,7 @@ class DataCacheConfig:
         cache_dir: Union[str, Path] = DATA_CACHE_DIR,
         max_cache_size_gb: float = 10.0,
         compression: str = "snappy",
-        partition_by: list = None
+        partition_by: list = None,
     ):
         self.cache_dir = Path(cache_dir)
         self.max_cache_size_gb = max_cache_size_gb
@@ -228,9 +240,15 @@ class DataCacheConfig:
         """Get cache path for specific provider, symbol, and interval."""
         return self.cache_dir / provider / symbol / interval
 
-    def get_cache_file_path(self, provider: str, symbol: str, interval: str,
-                           start_date: datetime, end_date: datetime,
-                           file_format: str = "parquet") -> Path:
+    def get_cache_file_path(
+        self,
+        provider: str,
+        symbol: str,
+        interval: str,
+        start_date: datetime,
+        end_date: datetime,
+        file_format: str = "parquet",
+    ) -> Path:
         """Get full cache file path with date range."""
         cache_dir = self.get_cache_path(provider, symbol, interval)
         cache_dir.mkdir(parents=True, exist_ok=True)
@@ -248,15 +266,15 @@ OptionalFundamentals = Optional[Fundamentals]
 CachePath = Union[str, Path]
 
 __all__ = [
-    'DataInterval',
-    'DataProvider',
-    'Fundamentals',
-    'OHLCVData',
-    'DataCacheConfig',
-    'DataFrameOrOHLCV',
-    'OptionalFundamentals',
-    'CachePath',
-    'SentimentData'
+    "DataInterval",
+    "DataProvider",
+    "Fundamentals",
+    "OHLCVData",
+    "DataCacheConfig",
+    "DataFrameOrOHLCV",
+    "OptionalFundamentals",
+    "CachePath",
+    "SentimentData",
 ]
 
 
@@ -268,82 +286,83 @@ class Fundamentals:
     This class provides all the fundamental data fields that can be returned
     by data providers, maintaining compatibility with existing code.
     """
-    symbol: Optional[str] = None
-    ticker: Optional[str] = None
-    company_name: Optional[str] = None
-    current_price: Optional[float] = None
-    market_cap: Optional[float] = None
-    pe_ratio: Optional[float] = None
-    forward_pe: Optional[float] = None
-    dividend_yield: Optional[float] = None
-    earnings_per_share: Optional[float] = None
-    # Additional fields for comprehensive fundamental analysis
-    price_to_book: Optional[float] = None
-    return_on_equity: Optional[float] = None
-    return_on_assets: Optional[float] = None
-    debt_to_equity: Optional[float] = None
-    current_ratio: Optional[float] = None
-    quick_ratio: Optional[float] = None
-    revenue: Optional[float] = None
-    revenue_growth: Optional[float] = None
-    net_income: Optional[float] = None
-    net_income_growth: Optional[float] = None
-    free_cash_flow: Optional[float] = None
-    operating_margin: Optional[float] = None
-    profit_margin: Optional[float] = None
-    beta: Optional[float] = None
-    sector: Optional[str] = None
-    industry: Optional[str] = None
-    country: Optional[str] = None
-    exchange: Optional[str] = None
-    currency: Optional[str] = None
-    shares_outstanding: Optional[float] = None
-    float_shares: Optional[float] = None
-    avg_volume: Optional[float] = None  # 10-day average trading volume
-    short_ratio: Optional[float] = None
-    payout_ratio: Optional[float] = None
-    peg_ratio: Optional[float] = None
-    price_to_sales: Optional[float] = None
-    enterprise_value: Optional[float] = None
-    enterprise_value_to_ebitda: Optional[float] = None
-    # Data source information
-    data_source: Optional[str] = None
-    last_updated: Optional[str] = None
-    # Extended trading metrics (used by p17 penny-stock pipeline)
-    quote_type: Optional[str] = None
-    volume: Optional[float] = None
-    short_pct_float: Optional[float] = None
-    fifty_two_week_high: Optional[float] = None
-    fifty_two_week_low: Optional[float] = None
-    institutional_pct: Optional[float] = None
-    gross_margin: Optional[float] = None
-    total_cash: Optional[float] = None
-    total_debt: Optional[float] = None
-    operating_cashflow: Optional[float] = None
-    # Track which provider supplied each value
-    sources: Optional[Dict[str, str]] = field(default_factory=dict)
 
-    def get_pe_ratio(self) -> Optional[float]:
+    symbol: str | None = None
+    ticker: str | None = None
+    company_name: str | None = None
+    current_price: float | None = None
+    market_cap: float | None = None
+    pe_ratio: float | None = None
+    forward_pe: float | None = None
+    dividend_yield: float | None = None
+    earnings_per_share: float | None = None
+    # Additional fields for comprehensive fundamental analysis
+    price_to_book: float | None = None
+    return_on_equity: float | None = None
+    return_on_assets: float | None = None
+    debt_to_equity: float | None = None
+    current_ratio: float | None = None
+    quick_ratio: float | None = None
+    revenue: float | None = None
+    revenue_growth: float | None = None
+    net_income: float | None = None
+    net_income_growth: float | None = None
+    free_cash_flow: float | None = None
+    operating_margin: float | None = None
+    profit_margin: float | None = None
+    beta: float | None = None
+    sector: str | None = None
+    industry: str | None = None
+    country: str | None = None
+    exchange: str | None = None
+    currency: str | None = None
+    shares_outstanding: float | None = None
+    float_shares: float | None = None
+    avg_volume: float | None = None  # 10-day average trading volume
+    short_ratio: float | None = None
+    payout_ratio: float | None = None
+    peg_ratio: float | None = None
+    price_to_sales: float | None = None
+    enterprise_value: float | None = None
+    enterprise_value_to_ebitda: float | None = None
+    # Data source information
+    data_source: str | None = None
+    last_updated: str | None = None
+    # Extended trading metrics (used by p17 penny-stock pipeline)
+    quote_type: str | None = None
+    volume: float | None = None
+    short_pct_float: float | None = None
+    fifty_two_week_high: float | None = None
+    fifty_two_week_low: float | None = None
+    institutional_pct: float | None = None
+    gross_margin: float | None = None
+    total_cash: float | None = None
+    total_debt: float | None = None
+    operating_cashflow: float | None = None
+    # Track which provider supplied each value
+    sources: Dict[str, str] | None = field(default_factory=dict)
+
+    def get_pe_ratio(self) -> float | None:
         """Get Price-to-Earnings ratio."""
         return self.pe_ratio
 
-    def get_market_cap(self) -> Optional[float]:
+    def get_market_cap(self) -> float | None:
         """Get market capitalization."""
         return self.market_cap
 
-    def get_dividend_yield(self) -> Optional[float]:
+    def get_dividend_yield(self) -> float | None:
         """Get dividend yield."""
         return self.dividend_yield
 
-    def get_beta(self) -> Optional[float]:
+    def get_beta(self) -> float | None:
         """Get beta value."""
         return self.beta
 
-    def get_52_week_high(self) -> Optional[float]:
+    def get_52_week_high(self) -> float | None:
         """Get 52-week high price."""
         return self.fifty_two_week_high
 
-    def get_52_week_low(self) -> Optional[float]:
+    def get_52_week_low(self) -> float | None:
         """Get 52-week low price."""
         return self.fifty_two_week_low
 
@@ -369,76 +388,80 @@ class SentimentData:
     timestamp: str  # ISO 8601 format
 
     # Sentiment scores (normalized to -1 to 1 where possible)
-    sentiment_score: Optional[float] = None  # Overall sentiment (-1 to 1)
-    bullish_score: Optional[float] = None     # 0 to 1 or percentage
-    bearish_score: Optional[float] = None     # 0 to 1 or percentage
-    neutral_score: Optional[float] = None     # 0 to 1 or percentage
+    sentiment_score: float | None = None  # Overall sentiment (-1 to 1)
+    bullish_score: float | None = None  # 0 to 1 or percentage
+    bearish_score: float | None = None  # 0 to 1 or percentage
+    neutral_score: float | None = None  # 0 to 1 or percentage
 
     # Volume/buzz metrics
-    mention_count: Optional[int] = None       # Total mentions
-    buzz_ratio: Optional[float] = None        # Current vs historical average
+    mention_count: int | None = None  # Total mentions
+    buzz_ratio: float | None = None  # Current vs historical average
 
     # Source breakdown (for multi-source providers)
-    sources: Optional[Dict[str, Any]] = None  # {'reddit': {...}, 'twitter': {...}}
+    sources: Dict[str, Any] | None = None  # {'reddit': {...}, 'twitter': {...}}
 
     # News-specific fields
-    article_count: Optional[int] = None
-    articles: Optional[List[Dict[str, Any]]] = None  # Full article data if needed
+    article_count: int | None = None
+    articles: List[Dict[str, Any]] | None = None  # Full article data if needed
 
     # Social media specific (by platform)
-    reddit_data: Optional[Dict[str, Any]] = None
-    twitter_data: Optional[Dict[str, Any]] = None
+    reddit_data: Dict[str, Any] | None = None
+    twitter_data: Dict[str, Any] | None = None
 
     # Comparative metrics (vs sector or historical)
-    sector_comparison: Optional[Dict[str, float]] = None
+    sector_comparison: Dict[str, float] | None = None
 
     # Raw provider-specific data (for advanced users who need original format)
-    raw_data: Optional[Dict[str, Any]] = None
+    raw_data: Dict[str, Any] | None = None
 
     # Data quality indicators
-    confidence_score: Optional[float] = None  # Provider's confidence in the data (0-1)
-    data_source: Optional[str] = None  # Specific API endpoint used
+    confidence_score: float | None = None  # Provider's confidence in the data (0-1)
+    data_source: str | None = None  # Specific API endpoint used
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
         return {
-            'symbol': self.symbol,
-            'provider': self.provider,
-            'timestamp': self.timestamp,
-            'sentiment_score': self.sentiment_score,
-            'bullish_score': self.bullish_score,
-            'bearish_score': self.bearish_score,
-            'neutral_score': self.neutral_score,
-            'mention_count': self.mention_count,
-            'buzz_ratio': self.buzz_ratio,
-            'sources': self.sources,
-            'article_count': self.article_count,
-            'reddit_data': self.reddit_data,
-            'twitter_data': self.twitter_data,
-            'sector_comparison': self.sector_comparison,
-            'confidence_score': self.confidence_score,
-            'data_source': self.data_source
+            "symbol": self.symbol,
+            "provider": self.provider,
+            "timestamp": self.timestamp,
+            "sentiment_score": self.sentiment_score,
+            "bullish_score": self.bullish_score,
+            "bearish_score": self.bearish_score,
+            "neutral_score": self.neutral_score,
+            "mention_count": self.mention_count,
+            "buzz_ratio": self.buzz_ratio,
+            "sources": self.sources,
+            "article_count": self.article_count,
+            "reddit_data": self.reddit_data,
+            "twitter_data": self.twitter_data,
+            "sector_comparison": self.sector_comparison,
+            "confidence_score": self.confidence_score,
+            "data_source": self.data_source,
         }
 
     def __repr__(self) -> str:
-        return (f"SentimentData(symbol={self.symbol}, provider={self.provider}, "
-                f"sentiment_score={self.sentiment_score}, mentions={self.mention_count})")
+        return (
+            f"SentimentData(symbol={self.symbol}, provider={self.provider}, "
+            f"sentiment_score={self.sentiment_score}, mentions={self.mention_count})"
+        )
 
 
 # Configuration Schema Classes
 @dataclass
 class ConfigSchema:
     """Base configuration schema."""
+
     version: str = "1.0.0"
-    description: Optional[str] = None
+    description: str | None = None
     environment: str = "development"
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 @dataclass
 class TradingConfig(ConfigSchema):
     """Trading bot configuration schema."""
+
     bot_id: str = ""
     broker: Dict[str, Any] = field(default_factory=dict)
     trading: Dict[str, Any] = field(default_factory=dict)
@@ -449,6 +472,7 @@ class TradingConfig(ConfigSchema):
 @dataclass
 class OptimizerConfig(ConfigSchema):
     """Optimizer configuration schema."""
+
     optimizer_id: str = ""
     strategy: Dict[str, Any] = field(default_factory=dict)
     parameters: Dict[str, Any] = field(default_factory=dict)
@@ -459,6 +483,7 @@ class OptimizerConfig(ConfigSchema):
 @dataclass
 class DataConfig(ConfigSchema):
     """Data configuration schema."""
+
     data_source: str = "binance"
     symbol: str = "BTCUSDT"
     interval: str = "1h"
@@ -469,6 +494,7 @@ class DataConfig(ConfigSchema):
 @dataclass
 class NotificationConfig(ConfigSchema):
     """Notification configuration schema."""
+
     notification_id: str = ""
     type: str = "email"
     enabled: bool = True
@@ -479,6 +505,7 @@ class NotificationConfig(ConfigSchema):
 @dataclass
 class RiskManagementConfig(ConfigSchema):
     """Risk management configuration schema."""
+
     risk_id: str = ""
     max_position_size: float = 0.1
     stop_loss: float = 0.02
@@ -490,8 +517,9 @@ class RiskManagementConfig(ConfigSchema):
 @dataclass
 class LoggingConfig(ConfigSchema):
     """Logging configuration schema."""
+
     log_level: str = "INFO"
-    log_file: Optional[str] = None
+    log_file: str | None = None
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     max_file_size: int = 10485760  # 10MB
     backup_count: int = 5
@@ -500,6 +528,7 @@ class LoggingConfig(ConfigSchema):
 @dataclass
 class SchedulingConfig(ConfigSchema):
     """Scheduling configuration schema."""
+
     schedule_id: str = ""
     cron_expression: str = "0 0 * * *"
     timezone: str = "UTC"
@@ -510,6 +539,7 @@ class SchedulingConfig(ConfigSchema):
 @dataclass
 class PerformanceConfig(ConfigSchema):
     """Performance configuration schema."""
+
     performance_id: str = ""
     benchmark: str = "SPY"
     risk_free_rate: float = 0.02

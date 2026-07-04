@@ -1,9 +1,11 @@
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from src.data.db.models.model_notification import DeliveryStatus, Message
 from src.data.db.services.database_service import get_database_service
-from src.data.db.models.model_notification import Message, DeliveryStatus
+
 
 def check_delivery():
     db = get_database_service()
@@ -30,6 +32,7 @@ def check_delivery():
                 print(f"  Status: {d.status}")
                 print(f"  Error: {d.error_message}")
                 print(f"  External ID: {d.external_id}")
+
 
 if __name__ == "__main__":
     check_delivery()

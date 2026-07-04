@@ -14,13 +14,14 @@ Examples:
     python test_live_bot_config.py live_data_example.json
 """
 
-import sys
 import json
+import sys
 
-from src.trading.config_validator import validate_config_file, print_validation_results
 from src.data.data_feed_factory import DataFeedFactory
-from src.trading.broker.broker_factory import get_broker
+
 from src.notification.logger import setup_logger
+from src.trading.broker.broker_factory import get_broker
+from src.trading.config_validator import print_validation_results, validate_config_file
 
 _logger = setup_logger(__name__)
 
@@ -35,9 +36,9 @@ def test_configuration(config_file: str) -> bool:
     Returns:
         True if validation passed, False otherwise
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Testing Configuration: {config_file}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     is_valid, errors, warnings = validate_config_file(config_file)
     print_validation_results(is_valid, errors, warnings)
@@ -55,13 +56,13 @@ def test_data_feed_creation(config_file: str) -> bool:
     Returns:
         True if data feed creation succeeded, False otherwise
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Testing Data Feed Creation")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     try:
         # Load configuration
-        with open(config_file, 'r') as f:
+        with open(config_file) as f:
             config = json.load(f)
 
         if "data" not in config:
@@ -106,13 +107,13 @@ def test_broker_creation(config_file: str) -> bool:
     Returns:
         True if broker creation succeeded, False otherwise
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Testing Broker Creation")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     try:
         # Load configuration
-        with open(config_file, 'r') as f:
+        with open(config_file) as f:
             config = json.load(f)
 
         if "broker" not in config:
@@ -150,13 +151,13 @@ def test_strategy_configuration(config_file: str) -> bool:
     Returns:
         True if strategy configuration is valid, False otherwise
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Testing Strategy Configuration")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     try:
         # Load configuration
-        with open(config_file, 'r') as f:
+        with open(config_file) as f:
             config = json.load(f)
 
         if "strategy" not in config:
@@ -206,13 +207,13 @@ def test_notification_configuration(config_file: str) -> bool:
     Returns:
         True if notification configuration is valid, False otherwise
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Testing Notification Configuration")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     try:
         # Load configuration
-        with open(config_file, 'r') as f:
+        with open(config_file) as f:
             config = json.load(f)
 
         if "notifications" not in config:
@@ -280,9 +281,9 @@ def main():
     notifications_ok = test_notification_configuration(config_file)
 
     # Summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("TEST SUMMARY")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Configuration Validation: {'✅ PASS' if config_valid else '❌ FAIL'}")
     print(f"Data Feed Creation: {'✅ PASS' if data_feed_ok else '❌ FAIL'}")
     print(f"Broker Creation: {'✅ PASS' if broker_ok else '❌ FAIL'}")

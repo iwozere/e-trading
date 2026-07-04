@@ -14,17 +14,15 @@ Features:
 """
 
 import time
-from typing import Callable, Optional, Dict, Any, List
 from functools import wraps
 from threading import Lock
+from typing import Any, Callable, Dict, List
 
-from src.model.error_handling import CircuitState, CircuitBreakerConfig
-from src.error_handling.exceptions import NetworkException, CircuitBreakerOpenException
+from src.error_handling.exceptions import CircuitBreakerOpenException, NetworkException
+from src.model.error_handling import CircuitBreakerConfig, CircuitState
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
-
-
 
 
 class CircuitBreaker:
@@ -37,7 +35,7 @@ class CircuitBreaker:
     - HALF_OPEN: Limited calls allowed to test recovery
     """
 
-    def __init__(self, name: str, config: Optional[CircuitBreakerConfig] = None):
+    def __init__(self, name: str, config: CircuitBreakerConfig | None = None):
         """
         Initialize circuit breaker.
 
@@ -91,7 +89,7 @@ class CircuitBreaker:
                 raise CircuitBreakerOpenException(
                     f"Circuit breaker '{self.name}' is OPEN",
                     circuit_name=self.name,
-                    last_failure_time=self.last_failure_time
+                    last_failure_time=self.last_failure_time,
                 )
 
             # Execute function
@@ -115,8 +113,7 @@ class CircuitBreaker:
 
         if self.state == CircuitState.OPEN:
             # Check if recovery timeout has passed
-            if (self.last_failure_time and
-                current_time - self.last_failure_time >= self.config.recovery_timeout):
+            if self.last_failure_time and current_time - self.last_failure_time >= self.config.recovery_timeout:
                 self._transition_to_half_open()
 
         elif self.state == CircuitState.HALF_OPEN:
@@ -139,7 +136,12 @@ class CircuitBreaker:
 
         if self.state == CircuitState.HALF_OPEN:
             self.success_count += 1
-            _logger.info("Circuit breaker '%s' success in HALF_OPEN state: %d/%d", self.name, self.success_count, self.config.success_threshold)
+            _logger.info(
+                "Circuit breaker '%s' success in HALF_OPEN state: %d/%d",
+                self.name,
+                self.success_count,
+                self.config.success_threshold,
+            )
 
         # Reset failure count in CLOSED state
         elif self.state == CircuitState.CLOSED:
@@ -161,11 +163,12 @@ class CircuitBreaker:
         self.failure_times.append(current_time)
         self.last_failure_time = current_time
 
-        _logger.warning("Circuit breaker '%s' failure: %d/%d", self.name, self.failure_count, self.config.failure_threshold)
+        _logger.warning(
+            "Circuit breaker '%s' failure: %d/%d", self.name, self.failure_count, self.config.failure_threshold
+        )
 
         # Check if we should open the circuit
-        if (self.state == CircuitState.CLOSED and
-            self.failure_count >= self.config.failure_threshold):
+        if self.state == CircuitState.CLOSED and self.failure_count >= self.config.failure_threshold:
             self._transition_to_open()
 
         elif self.state == CircuitState.HALF_OPEN:
@@ -218,16 +221,16 @@ class CircuitBreaker:
         """Get circuit breaker statistics."""
         with self._lock:
             return {
-                'name': self.name,
-                'state': self.state.value,
-                'total_calls': self.total_calls,
-                'successful_calls': self.successful_calls,
-                'failed_calls': self.failed_calls,
-                'failure_count': self.failure_count,
-                'success_count': self.success_count,
-                'last_failure_time': self.last_failure_time,
-                'last_state_change': self.last_state_change,
-                'failure_rate': self.failed_calls / self.total_calls if self.total_calls > 0 else 0.0
+                "name": self.name,
+                "state": self.state.value,
+                "total_calls": self.total_calls,
+                "successful_calls": self.successful_calls,
+                "failed_calls": self.failed_calls,
+                "failure_count": self.failure_count,
+                "success_count": self.success_count,
+                "last_failure_time": self.last_failure_time,
+                "last_state_change": self.last_state_change,
+                "failure_rate": self.failed_calls / self.total_calls if self.total_calls > 0 else 0.0,
             }
 
     def is_open(self) -> bool:
@@ -249,7 +252,7 @@ class CircuitBreaker:
             return self.state == CircuitState.HALF_OPEN
 
 
-def circuit_breaker(name: str, config: Optional[CircuitBreakerConfig] = None):
+def circuit_breaker(name: str, config: CircuitBreakerConfig | None = None):
     """
     Decorator for adding circuit breaker functionality to functions.
 
@@ -263,6 +266,7 @@ def circuit_breaker(name: str, config: Optional[CircuitBreakerConfig] = None):
             # Function that may fail
             pass
     """
+
     def decorator(func: Callable) -> Callable:
         cb = CircuitBreaker(name, config)
 
@@ -284,7 +288,7 @@ def circuit_breaker_for_api(name: str, failure_threshold: int = 5):
         failure_threshold=failure_threshold,
         failure_window=60,
         recovery_timeout=60,
-        failure_exceptions=(NetworkException, ConnectionError, TimeoutError)
+        failure_exceptions=(NetworkException, ConnectionError, TimeoutError),
     )
     return circuit_breaker(name, config)
 
@@ -295,7 +299,7 @@ def circuit_breaker_for_database(name: str, failure_threshold: int = 3):
         failure_threshold=failure_threshold,
         failure_window=30,
         recovery_timeout=30,
-        failure_exceptions=(Exception,)  # Most database exceptions
+        failure_exceptions=(Exception,),  # Most database exceptions
     )
     return circuit_breaker(name, config)
 
@@ -308,14 +312,14 @@ class CircuitBreakerRegistry:
         self._circuit_breakers: Dict[str, CircuitBreaker] = {}
         self._lock = Lock()
 
-    def get_or_create(self, name: str, config: Optional[CircuitBreakerConfig] = None) -> CircuitBreaker:
+    def get_or_create(self, name: str, config: CircuitBreakerConfig | None = None) -> CircuitBreaker:
         """Get existing circuit breaker or create new one."""
         with self._lock:
             if name not in self._circuit_breakers:
                 self._circuit_breakers[name] = CircuitBreaker(name, config)
             return self._circuit_breakers[name]
 
-    def get(self, name: str) -> Optional[CircuitBreaker]:
+    def get(self, name: str) -> CircuitBreaker | None:
         """Get circuit breaker by name."""
         with self._lock:
             return self._circuit_breakers.get(name)

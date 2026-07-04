@@ -1,8 +1,6 @@
-from pathlib import Path
 import sys
-from typing import Any, Dict, List, Optional, Set
-from datetime import datetime
-import time
+from pathlib import Path
+from typing import Any, List
 
 import pandas as pd
 
@@ -11,8 +9,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.data.data_manager import DataManager
+from src.notification.logger import setup_logger
+
 from .config import FundamentalFilterConfig
 
 _logger = setup_logger(__name__)
@@ -41,12 +40,14 @@ class FundamentalFilter:
     - Progress tracking and intermediate saves
     """
 
-    def __init__(self,
-                 data_manager: DataManager,
-                 config: FundamentalFilterConfig,
-                 results_dir: Path,
-                 checkpoint_enabled: bool = True,
-                 checkpoint_interval: int = 100):
+    def __init__(
+        self,
+        data_manager: DataManager,
+        config: FundamentalFilterConfig,
+        results_dir: Path,
+        checkpoint_enabled: bool = True,
+        checkpoint_interval: int = 100,
+    ):
         """
         Initialize fundamental filter.
 
@@ -62,15 +63,17 @@ class FundamentalFilter:
         self._results_dir = results_dir
         self.checkpoint_enabled = checkpoint_enabled
         self.checkpoint_interval = checkpoint_interval
-        self.ttl_days = getattr(config, 'fundamental_cache_ttl_days', 14)
+        self.ttl_days = getattr(config, "fundamental_cache_ttl_days", 14)
 
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
-        _logger.info("Fundamental Filter initialized: cap=$%dM-$%dB, volume=%dK, float<%dM",
-                    config.min_market_cap // 1_000_000,
-                    config.max_market_cap // 1_000_000_000,
-                    config.min_avg_volume // 1_000,
-                    config.max_float // 1_000_000)
+        _logger.info(
+            "Fundamental Filter initialized: cap=$%dM-$%dB, volume=%dK, float<%dM",
+            config.min_market_cap // 1_000_000,
+            config.max_market_cap // 1_000_000_000,
+            config.min_avg_volume // 1_000,
+            config.max_float // 1_000_000,
+        )
         _logger.info("Results directory: %s", self._results_dir)
 
     def apply_filters(self, tickers: List[str], force_refresh: bool = False) -> pd.DataFrame:
@@ -91,10 +94,9 @@ class FundamentalFilter:
             checkpoint_data = self._load_checkpoint()
             if checkpoint_data is not None and not force_refresh:
                 _logger.info("Resuming from checkpoint with %d existing records", len(checkpoint_data))
-                processed_tickers = set(checkpoint_data['ticker'].str.upper())
+                processed_tickers = set(checkpoint_data["ticker"].str.upper())
                 remaining_tickers = [t for t in tickers if t.upper() not in processed_tickers]
-                _logger.info("Already processed: %d, Remaining: %d",
-                            len(processed_tickers), len(remaining_tickers))
+                _logger.info("Already processed: %d, Remaining: %d", len(processed_tickers), len(remaining_tickers))
             else:
                 checkpoint_data = pd.DataFrame()
                 remaining_tickers = tickers
@@ -134,9 +136,11 @@ class FundamentalFilter:
             # Clear checkpoint after successful completion
             self._clear_checkpoint()
 
-            _logger.info("After fundamental filtering: %d tickers (%.1f%%)",
-                        len(df_filtered),
-                        100.0 * len(df_filtered) / len(tickers) if tickers else 0)
+            _logger.info(
+                "After fundamental filtering: %d tickers (%.1f%%)",
+                len(df_filtered),
+                100.0 * len(df_filtered) / len(tickers) if tickers else 0,
+            )
 
             return df_filtered
 
@@ -171,10 +175,14 @@ class FundamentalFilter:
                 processed += 1
 
                 if processed % 100 == 0:
-                    _logger.info("Progress: %d/%d (%.1f%%), successful: %d, failed: %d",
-                                processed, total_tickers,
-                                100.0 * processed / total_tickers,
-                                len(fundamentals), failed)
+                    _logger.info(
+                        "Progress: %d/%d (%.1f%%), successful: %d, failed: %d",
+                        processed,
+                        total_tickers,
+                        100.0 * processed / total_tickers,
+                        len(fundamentals),
+                        failed,
+                    )
 
             except KeyboardInterrupt:
                 _logger.warning("Interrupted by user. Saving checkpoint...")
@@ -192,74 +200,69 @@ class FundamentalFilter:
 
         return fundamentals
 
-    def _fetch_ticker_profile(self, ticker: str, force_refresh: bool = False) -> Optional[dict]:
+    def _fetch_ticker_profile(self, ticker: str, force_refresh: bool = False) -> dict | None:
         """
         Fetch fundamentals for a single ticker using DataManager.
         """
         try:
             # Use DataManager to get combined fundamentals (includes profile, metrics, quote)
             # This uses the centralized cache in c:\data-cache
-            data = self.data_manager.get_fundamentals(
-                ticker, 
-                force_refresh=force_refresh,
-                max_age_days=self.ttl_days
-            )
-            
+            data = self.data_manager.get_fundamentals(ticker, force_refresh=force_refresh, max_age_days=self.ttl_days)
+
             if not data:
                 return None
 
             # The combined data may contain a nested 'profile' dict from FMP
             # with additional fields not present at the top level
-            profile = data.get('profile', {}) or {}
+            profile = data.get("profile", {}) or {}
 
             # Map DataManager fields to FundamentalFilter expected format
             # with fallbacks from nested profile dict
             # Use explicit None/zero checks — 0.0 from a bad provider should fall back
-            market_cap = data.get('market_cap')
+            market_cap = data.get("market_cap")
             # Yahoo often returns 0.0 when marketCap is unknown; still read nested profile.
             if not _positive_scalar(market_cap):
-                market_cap = profile.get('marketCap') or profile.get('market_cap')
+                market_cap = profile.get("marketCap") or profile.get("market_cap")
 
-            shares = data.get('shares_outstanding')
+            shares = data.get("shares_outstanding")
             if not shares:
-                shares = profile.get('sharesOutstanding')
+                shares = profile.get("sharesOutstanding")
 
-            avg_vol = data.get('avg_volume')
+            avg_vol = data.get("avg_volume")
             if avg_vol is None or avg_vol == 0:
-                avg_vol = data.get('average_volume')
+                avg_vol = data.get("average_volume")
             if avg_vol is None or avg_vol == 0:
                 avg_vol = (
-                    profile.get('averageVolume')
-                    or profile.get('averageVolume10days')
-                    or profile.get('avgVolume')
-                    or profile.get('volAvg')
-                    or profile.get('volume')
+                    profile.get("averageVolume")
+                    or profile.get("averageVolume10days")
+                    or profile.get("avgVolume")
+                    or profile.get("volAvg")
+                    or profile.get("volume")
                 )
 
-            current_price = data.get('current_price')
+            current_price = data.get("current_price")
             if not current_price:
-                current_price = profile.get('price')
+                current_price = profile.get("price")
 
-            sector = data.get('sector')
+            sector = data.get("sector")
             if not sector:
-                sector = profile.get('sector')
-            
+                sector = profile.get("sector")
+
             # Fallbacks and calculations if some fields are missing but derivable
             if not market_cap and shares and current_price:
                 market_cap = shares * current_price
-            
+
             if market_cap is None or avg_vol is None:
-                _logger.debug("Ticker %s missing critical fundamentals: cap=%s, vol=%s", 
-                            ticker, market_cap, avg_vol)
+                _logger.debug("Ticker %s missing critical fundamentals: cap=%s, vol=%s", ticker, market_cap, avg_vol)
                 return None
 
             return {
-                'ticker': ticker.upper(),
-                'market_cap': market_cap,
-                'float': shares, # Using shares as proxy for float as before
-                'sector': sector,
-                'current_price': current_price or 0,
-                'avg_volume': avg_vol,
+                "ticker": ticker.upper(),
+                "market_cap": market_cap,
+                "float": shares,  # Using shares as proxy for float as before
+                "sector": sector,
+                "current_price": current_price or 0,
+                "avg_volume": avg_vol,
             }
 
         except Exception:
@@ -269,19 +272,16 @@ class FundamentalFilter:
     def _apply_fundamental_filters(self, df: pd.DataFrame) -> pd.DataFrame:
         """Apply fundamental filter criteria."""
         initial_count = len(df)
-        df = df.dropna(subset=['market_cap', 'avg_volume'])
-        
-        df = df[
-            (df['market_cap'] >= self.config.min_market_cap) &
-            (df['market_cap'] <= self.config.max_market_cap)
-        ]
-        
-        df = df[df['avg_volume'] >= self.config.min_avg_volume]
+        df = df.dropna(subset=["market_cap", "avg_volume"])
 
-        if 'float' in df.columns:
-            df_with_float = df[df['float'].notna()]
-            df_with_float = df_with_float[df_with_float['float'] <= self.config.max_float]
-            df_without_float = df[df['float'].isna()]
+        df = df[(df["market_cap"] >= self.config.min_market_cap) & (df["market_cap"] <= self.config.max_market_cap)]
+
+        df = df[df["avg_volume"] >= self.config.min_avg_volume]
+
+        if "float" in df.columns:
+            df_with_float = df[df["float"].notna()]
+            df_with_float = df_with_float[df_with_float["float"] <= self.config.max_float]
+            df_without_float = df[df["float"].isna()]
             df = pd.concat([df_with_float, df_without_float], ignore_index=True)
 
         _logger.info("Fundamental filtering: %d -> %d tickers", initial_count, len(df))
@@ -306,7 +306,7 @@ class FundamentalFilter:
         except Exception:
             _logger.exception("Error saving checkpoint:")
 
-    def _load_checkpoint(self) -> Optional[pd.DataFrame]:
+    def _load_checkpoint(self) -> pd.DataFrame | None:
         """Load existing checkpoint if available."""
         if not self.checkpoint_enabled:
             return None
@@ -332,9 +332,7 @@ class FundamentalFilter:
 
 
 def create_fundamental_filter(
-    data_manager: DataManager,
-    config: FundamentalFilterConfig,
-    results_dir: Path
+    data_manager: DataManager, config: FundamentalFilterConfig, results_dir: Path
 ) -> FundamentalFilter:
     """Factory function to create fundamental filter."""
     return FundamentalFilter(data_manager, config, results_dir)

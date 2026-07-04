@@ -21,7 +21,7 @@ VIX_LOOKBACK = 30
 INITIAL_CAPITAL = 100000.0  # $100,000
 SLIPPAGE_PCT = 0.001  # 0.1% for slippage and commissions
 STOP_LOSS_PCT = 0.10  # 10% hard stop-loss (Legacy/Fallback)
-ATR_PERIOD = 14       # Window for ATR calculation
+ATR_PERIOD = 14  # Window for ATR calculation
 ATR_MULTIPLIER = 2.0  # Multiplier for ATR stop-loss (2x ATR)
 
 # Symbols

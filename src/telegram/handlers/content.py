@@ -4,19 +4,20 @@ handlers/content.py — /report and /screener commands, and email/attachment hel
 Heavy processing commands (report, screener) delegate to screener/notifications.py.
 Email notification helpers are shared with other handler modules.
 """
+
 from aiogram import Dispatcher
-from aiogram.types import Message
 from aiogram.filters import Command
+from aiogram.types import Message
 
 from src.notification.logger import setup_logger
 from src.telegram.command_parser import parse_command
-from src.model.telegram_bot import ParsedCommand
 from src.telegram.lifecycle import get_notification_client, get_service_instances
 
 _logger = setup_logger("telegram_screener_bot")
 
 
 # ─── Email / attachment helpers ───────────────────────────────────────────────
+
 
 async def send_email_notification_if_requested(message: Message, response_text: str, command: str) -> None:
     """Send email copy of a command response if -email flag is present."""
@@ -32,7 +33,9 @@ async def send_email_notification_if_requested(message: Message, response_text: 
 
         user_status = telegram_svc.get_user_status(str(message.from_user.id))
         if not user_status or not user_status.get("email"):
-            await message.answer("📧 Email notification requested but no verified email found. Use /register to set up email notifications.")
+            await message.answer(
+                "📧 Email notification requested but no verified email found. Use /register to set up email notifications."
+            )
             return
 
         client = await get_notification_client()
@@ -59,7 +62,9 @@ async def send_email_notification_if_requested(message: Message, response_text: 
         _logger.error("Error sending email notification for %s: %s", command, exc)
 
 
-async def send_email_notification_with_attachments(message: Message, response_text: str, command: str, attachments: dict = None) -> None:
+async def send_email_notification_with_attachments(
+    message: Message, response_text: str, command: str, attachments: dict = None
+) -> None:
     """Send email copy with optional file attachments."""
     try:
         parsed = parse_command(message.text)
@@ -72,7 +77,9 @@ async def send_email_notification_with_attachments(message: Message, response_te
 
         user_status = telegram_svc.get_user_status(str(message.from_user.id))
         if not user_status or not user_status.get("email"):
-            await message.answer("📧 Email notification requested but no verified email found. Use /register to set up email notifications.")
+            await message.answer(
+                "📧 Email notification requested but no verified email found. Use /register to set up email notifications."
+            )
             return
 
         client = await get_notification_client()
@@ -88,7 +95,12 @@ async def send_email_notification_with_attachments(message: Message, response_te
             email_receiver=user_status["email"],
             recipient_id=str(message.from_user.id),
             attachments=attachments,
-            data={"command": command, "telegram_user_id": str(message.from_user.id), "source": "telegram_bot", "has_attachments": bool(attachments)},
+            data={
+                "command": command,
+                "telegram_user_id": str(message.from_user.id),
+                "source": "telegram_bot",
+                "has_attachments": bool(attachments),
+            },
         )
         if success:
             _logger.info("Email+attachments sent for %s to user %s", command, message.from_user.id)
@@ -134,6 +146,7 @@ async def extract_attachments_from_telegram_message(bot, message: Message) -> di
 
 
 # ─── Route registration ───────────────────────────────────────────────────────
+
 
 def register(dp: Dispatcher) -> None:
     """Register /report and /screener handlers onto the Dispatcher."""

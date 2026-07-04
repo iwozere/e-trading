@@ -5,15 +5,18 @@ Usage:
     from src.common.fundamentals import get_fundamentals
     fundamentals = get_fundamentals('AAPL', provider='yf')
 """
-from src.data.downloader.data_downloader_factory import DataDownloaderFactory
-from src.model.telegram_bot import Fundamentals
-from src.model.schemas import Fundamentals as SchemasFundamentals
+
 from src.data.data_manager import get_data_manager
+from src.data.downloader.data_downloader_factory import DataDownloaderFactory
+from src.model.schemas import Fundamentals as SchemasFundamentals
+from src.model.telegram_bot import Fundamentals
 
-PROVIDER_CODES = ['fmp', 'yf', 'av', 'fh', 'td', 'pg', 'bnc', 'cg']
+PROVIDER_CODES = ["fmp", "yf", "av", "fh", "td", "pg", "bnc", "cg"]
 
 
-async def get_fundamentals_unified(ticker: str, provider: str = None, force_refresh: bool = False, **kwargs) -> Fundamentals:
+async def get_fundamentals_unified(
+    ticker: str, provider: str = None, force_refresh: bool = False, **kwargs
+) -> Fundamentals:
     """
     Get fundamentals using the unified indicator service.
     This is the new recommended approach.
@@ -29,7 +32,7 @@ async def get_fundamentals_unified(ticker: str, provider: str = None, force_refr
     """
     # First, try DataManager path which handles caching and multi-provider merge
     dm = get_data_manager()
-    
+
     providers_list = None
     if provider:
         provider_map = {
@@ -41,7 +44,7 @@ async def get_fundamentals_unified(ticker: str, provider: str = None, force_refr
             "fh": "finnhub",
             "finnhub": "finnhub",
             "td": "twelvedata",
-            "twelvedata": "twelvedata"
+            "twelvedata": "twelvedata",
         }
         mapped_prov = provider_map.get(provider.lower())
         if mapped_prov:
@@ -50,106 +53,122 @@ async def get_fundamentals_unified(ticker: str, provider: str = None, force_refr
     combined = dm.get_fundamentals(symbol=ticker, providers=providers_list, force_refresh=force_refresh)
 
     fundamental_data = {
-        'ticker': ticker,
-        'company_name': None,
-        'current_price': None,
-        'market_cap': None,
-        'pe_ratio': None,
-        'forward_pe': None,
-        'dividend_yield': None,
-        'earnings_per_share': None,
-        'price_to_book': None,
-        'return_on_equity': None,
-        'return_on_assets': None,
-        'debt_to_equity': None,
-        'current_ratio': None,
-        'quick_ratio': None,
-        'revenue': None,
-        'revenue_growth': None,
-        'net_income': None,
-        'net_income_growth': None,
-        'free_cash_flow': None,
-        'operating_margin': None,
-        'profit_margin': None,
-        'beta': None,
-        'sector': None,
-        'industry': None,
-        'country': None,
-        'exchange': None,
-        'currency': None,
-        'shares_outstanding': None,
-        'float_shares': None,
-        'short_ratio': None,
-        'payout_ratio': None,
-        'peg_ratio': None,
-        'price_to_sales': None,
-        'enterprise_value': None,
-        'enterprise_value_to_ebitda': None,
-        'data_source': None,
-        'last_updated': None,
-        'sources': {}
+        "ticker": ticker,
+        "company_name": None,
+        "current_price": None,
+        "market_cap": None,
+        "pe_ratio": None,
+        "forward_pe": None,
+        "dividend_yield": None,
+        "earnings_per_share": None,
+        "price_to_book": None,
+        "return_on_equity": None,
+        "return_on_assets": None,
+        "debt_to_equity": None,
+        "current_ratio": None,
+        "quick_ratio": None,
+        "revenue": None,
+        "revenue_growth": None,
+        "net_income": None,
+        "net_income_growth": None,
+        "free_cash_flow": None,
+        "operating_margin": None,
+        "profit_margin": None,
+        "beta": None,
+        "sector": None,
+        "industry": None,
+        "country": None,
+        "exchange": None,
+        "currency": None,
+        "shares_outstanding": None,
+        "float_shares": None,
+        "short_ratio": None,
+        "payout_ratio": None,
+        "peg_ratio": None,
+        "price_to_sales": None,
+        "enterprise_value": None,
+        "enterprise_value_to_ebitda": None,
+        "data_source": None,
+        "last_updated": None,
+        "sources": {},
     }
 
     # If DataManager returned combined fundamentals, map known fields
     if isinstance(combined, dict) and combined:
         # DataManager returns nested structure with 'profile', 'ratios', 'metrics' sections
-        profile = combined.get('profile', {})
-        ratios = combined.get('ratios', {})
-        metrics = combined.get('metrics', {})
+        profile = combined.get("profile", {})
+        ratios = combined.get("ratios", {})
+        metrics = combined.get("metrics", {})
 
         # Map fields from profile section
         if profile:
-            fundamental_data['ticker'] = profile.get('symbol') or combined.get('symbol')
-            fundamental_data['company_name'] = profile.get('companyName')
-            fundamental_data['current_price'] = profile.get('price')
-            fundamental_data['market_cap'] = profile.get('marketCap')
-            fundamental_data['beta'] = profile.get('beta')
-            fundamental_data['sector'] = profile.get('sector')
-            fundamental_data['industry'] = profile.get('industry')
-            fundamental_data['country'] = profile.get('country')
-            fundamental_data['exchange'] = profile.get('exchange')
-            fundamental_data['currency'] = profile.get('currency')
-            fundamental_data['dividend_yield'] = profile.get('lastDividend')
+            fundamental_data["ticker"] = profile.get("symbol") or combined.get("symbol")
+            fundamental_data["company_name"] = profile.get("companyName")
+            fundamental_data["current_price"] = profile.get("price")
+            fundamental_data["market_cap"] = profile.get("marketCap")
+            fundamental_data["beta"] = profile.get("beta")
+            fundamental_data["sector"] = profile.get("sector")
+            fundamental_data["industry"] = profile.get("industry")
+            fundamental_data["country"] = profile.get("country")
+            fundamental_data["exchange"] = profile.get("exchange")
+            fundamental_data["currency"] = profile.get("currency")
+            fundamental_data["dividend_yield"] = profile.get("lastDividend")
 
         # Map fields from ratios section
         if ratios:
-            fundamental_data['pe_ratio'] = ratios.get('priceEarningsRatio')
-            fundamental_data['price_to_book'] = ratios.get('priceToBookRatio')
-            fundamental_data['debt_to_equity'] = ratios.get('debtEquityRatio')
-            fundamental_data['current_ratio'] = ratios.get('currentRatio')
-            fundamental_data['quick_ratio'] = ratios.get('quickRatio')
-            fundamental_data['return_on_equity'] = ratios.get('returnOnEquity')
-            fundamental_data['return_on_assets'] = ratios.get('returnOnAssets')
-            fundamental_data['operating_margin'] = ratios.get('operatingProfitMargin')
-            fundamental_data['profit_margin'] = ratios.get('netProfitMargin')
-            fundamental_data['peg_ratio'] = ratios.get('priceEarningsToGrowthRatio')
-            fundamental_data['price_to_sales'] = ratios.get('priceToSalesRatio')
-            fundamental_data['payout_ratio'] = ratios.get('payoutRatio')
+            fundamental_data["pe_ratio"] = ratios.get("priceEarningsRatio")
+            fundamental_data["price_to_book"] = ratios.get("priceToBookRatio")
+            fundamental_data["debt_to_equity"] = ratios.get("debtEquityRatio")
+            fundamental_data["current_ratio"] = ratios.get("currentRatio")
+            fundamental_data["quick_ratio"] = ratios.get("quickRatio")
+            fundamental_data["return_on_equity"] = ratios.get("returnOnEquity")
+            fundamental_data["return_on_assets"] = ratios.get("returnOnAssets")
+            fundamental_data["operating_margin"] = ratios.get("operatingProfitMargin")
+            fundamental_data["profit_margin"] = ratios.get("netProfitMargin")
+            fundamental_data["peg_ratio"] = ratios.get("priceEarningsToGrowthRatio")
+            fundamental_data["price_to_sales"] = ratios.get("priceToSalesRatio")
+            fundamental_data["payout_ratio"] = ratios.get("payoutRatio")
 
         # Map fields from metrics section
         if metrics:
-            fundamental_data['revenue'] = metrics.get('revenue')
-            fundamental_data['revenue_growth'] = metrics.get('revenueGrowth')
-            fundamental_data['net_income'] = metrics.get('netIncome')
-            fundamental_data['net_income_growth'] = metrics.get('netIncomeGrowth')
-            fundamental_data['earnings_per_share'] = metrics.get('netIncomePerShare')
-            fundamental_data['free_cash_flow'] = metrics.get('freeCashFlow')
-            fundamental_data['enterprise_value'] = metrics.get('enterpriseValue')
-            fundamental_data['enterprise_value_to_ebitda'] = metrics.get('enterpriseValueOverEBITDA')
-            fundamental_data['shares_outstanding'] = metrics.get('sharesOutstanding')
+            fundamental_data["revenue"] = metrics.get("revenue")
+            fundamental_data["revenue_growth"] = metrics.get("revenueGrowth")
+            fundamental_data["net_income"] = metrics.get("netIncome")
+            fundamental_data["net_income_growth"] = metrics.get("netIncomeGrowth")
+            fundamental_data["earnings_per_share"] = metrics.get("netIncomePerShare")
+            fundamental_data["free_cash_flow"] = metrics.get("freeCashFlow")
+            fundamental_data["enterprise_value"] = metrics.get("enterpriseValue")
+            fundamental_data["enterprise_value_to_ebitda"] = metrics.get("enterpriseValueOverEBITDA")
+            fundamental_data["shares_outstanding"] = metrics.get("sharesOutstanding")
 
         # Store metadata
-        metadata = combined.get('_metadata', {})
+        metadata = combined.get("_metadata", {})
         if metadata:
-            fundamental_data['data_source'] = ', '.join(metadata.get('providers_used', []))
-            fundamental_data['last_updated'] = metadata.get('combination_timestamp')
+            fundamental_data["data_source"] = ", ".join(metadata.get("providers_used", []))
+            fundamental_data["last_updated"] = metadata.get("combination_timestamp")
     # If DataManager had no data, fundamental_data will remain with default None values
 
     # Enrich with traditional fundamentals if still missing key metadata
     try:
         traditional_fundamentals = get_fundamentals(ticker, provider)
         if traditional_fundamentals:
-            for key in ['company_name','current_price','sector','industry','country','exchange','currency','earnings_per_share','revenue','net_income','beta','shares_outstanding','float_shares','short_ratio','enterprise_value_to_ebitda']:
+            for key in [
+                "company_name",
+                "current_price",
+                "sector",
+                "industry",
+                "country",
+                "exchange",
+                "currency",
+                "earnings_per_share",
+                "revenue",
+                "net_income",
+                "beta",
+                "shares_outstanding",
+                "float_shares",
+                "short_ratio",
+                "enterprise_value_to_ebitda",
+            ]:
                 val = getattr(traditional_fundamentals, key, None)
                 if val is not None and fundamental_data.get(key) is None:
                     fundamental_data[key] = val
@@ -189,10 +208,11 @@ def get_fundamentals(ticker: str, provider: str = None, **kwargs) -> Fundamental
                 if downloader:
                     result = downloader.get_fundamentals(ticker)
                     # Accept both Fundamentals and dicts
-                    provider_results[code] = result.__dict__ if hasattr(result, '__dict__') else result
+                    provider_results[code] = result.__dict__ if hasattr(result, "__dict__") else result
             except Exception:
                 continue  # Skip providers that fail
         return normalize_fundamentals(provider_results)
+
 
 def normalize_fundamentals(sources: dict) -> Fundamentals:
     """
@@ -223,8 +243,8 @@ def normalize_fundamentals(sources: dict) -> Fundamentals:
                 data = sources[provider_code]
                 if isinstance(data, dict):
                     # Support nested paths (e.g., "profile.companyName")
-                    if '.' in field_key:
-                        keys = field_key.split('.')
+                    if "." in field_key:
+                        keys = field_key.split(".")
                         value = data
                         for key in keys:
                             if isinstance(value, dict) and key in value:
@@ -237,7 +257,7 @@ def normalize_fundamentals(sources: dict) -> Fundamentals:
                     else:
                         value = None
 
-                    if value is not None and value != '':
+                    if value is not None and value != "":
                         field_sources[field_name] = provider_code
                         return value
         return None
@@ -461,9 +481,10 @@ def normalize_fundamentals(sources: dict) -> Fundamentals:
             ("td", "last_updated"),
             ("pg", "last_updated"),
         ),
-        sources=field_sources
+        sources=field_sources,
     )
     return fundamentals
+
 
 def format_fundamental_analysis(fundamentals) -> str:
     """
@@ -477,14 +498,14 @@ def format_fundamental_analysis(fundamentals) -> str:
     if fundamentals.current_price is not None:
         lines.append(f"💵 Price: ${fundamentals.current_price:.2f}")
     if fundamentals.market_cap is not None:
-        lines.append(f"💸 Market Cap: ${(fundamentals.market_cap/1e9):.2f}B")
+        lines.append(f"💸 Market Cap: ${(fundamentals.market_cap / 1e9):.2f}B")
     if fundamentals.pe_ratio is not None or fundamentals.forward_pe is not None:
         pe = f"{fundamentals.pe_ratio:.2f}" if fundamentals.pe_ratio is not None else "-"
         fpe = f"{fundamentals.forward_pe:.2f}" if fundamentals.forward_pe is not None else "-"
         lines.append(f"🏦 P/E: {pe}, Forward P/E: {fpe}")
     if fundamentals.earnings_per_share is not None or fundamentals.dividend_yield is not None:
         eps = f"${fundamentals.earnings_per_share:.2f}" if fundamentals.earnings_per_share is not None else "-"
-        dy = f"{fundamentals.dividend_yield*100:.2f}%" if fundamentals.dividend_yield is not None else "-"
+        dy = f"{fundamentals.dividend_yield * 100:.2f}%" if fundamentals.dividend_yield is not None else "-"
         lines.append(f"📊 EPS: {eps}, Div Yield: {dy}")
     # Profitability
     if fundamentals.operating_margin is not None:
@@ -506,22 +527,22 @@ def format_fundamental_analysis(fundamentals) -> str:
         lines.append(f"⚡ Quick Ratio: {fundamentals.quick_ratio:.2f}")
     # Growth
     if fundamentals.revenue is not None:
-        lines.append(f"📈 Revenue: ${fundamentals.revenue/1e6:.2f}M")
+        lines.append(f"📈 Revenue: ${fundamentals.revenue / 1e6:.2f}M")
     if fundamentals.revenue_growth is not None:
         lines.append(f"📈 Revenue Growth: {fundamentals.revenue_growth:.2f}")
     if fundamentals.net_income is not None:
-        lines.append(f"💵 Net Income: ${fundamentals.net_income/1e6:.2f}M")
+        lines.append(f"💵 Net Income: ${fundamentals.net_income / 1e6:.2f}M")
     if fundamentals.net_income_growth is not None:
         lines.append(f"💵 Net Income Growth: {fundamentals.net_income_growth:.2f}")
     if fundamentals.free_cash_flow is not None:
-        lines.append(f"💸 Free Cash Flow: ${fundamentals.free_cash_flow/1e6:.2f}M")
+        lines.append(f"💸 Free Cash Flow: ${fundamentals.free_cash_flow / 1e6:.2f}M")
     # Other ratios
     if fundamentals.beta is not None:
         lines.append(f"📉 Beta: {fundamentals.beta:.2f}")
     if fundamentals.shares_outstanding is not None:
-        lines.append(f"🧾 Shares Outstanding: {fundamentals.shares_outstanding/1e6:.2f}M")
+        lines.append(f"🧾 Shares Outstanding: {fundamentals.shares_outstanding / 1e6:.2f}M")
     if fundamentals.float_shares is not None:
-        lines.append(f"🧾 Float Shares: {fundamentals.float_shares/1e6:.2f}M")
+        lines.append(f"🧾 Float Shares: {fundamentals.float_shares / 1e6:.2f}M")
     if fundamentals.short_ratio is not None:
         lines.append(f"📉 Short Ratio: {fundamentals.short_ratio:.2f}")
     if fundamentals.payout_ratio is not None:
@@ -531,7 +552,7 @@ def format_fundamental_analysis(fundamentals) -> str:
     if fundamentals.price_to_sales is not None:
         lines.append(f"💲 Price/Sales: {fundamentals.price_to_sales:.2f}")
     if fundamentals.enterprise_value is not None:
-        lines.append(f"🏢 Enterprise Value: ${fundamentals.enterprise_value/1e9:.2f}B")
+        lines.append(f"🏢 Enterprise Value: ${fundamentals.enterprise_value / 1e9:.2f}B")
     if fundamentals.enterprise_value_to_ebitda is not None:
         lines.append(f"🏢 EV/EBITDA: {fundamentals.enterprise_value_to_ebitda:.2f}")
     # Company Info
@@ -550,4 +571,4 @@ def format_fundamental_analysis(fundamentals) -> str:
         lines.append(f"🔗 Data Source: {fundamentals.data_source}")
     if fundamentals.last_updated:
         lines.append(f"🕒 Last Updated: {fundamentals.last_updated}")
-    return '\n'.join(lines) + '\n'
+    return "\n".join(lines) + "\n"

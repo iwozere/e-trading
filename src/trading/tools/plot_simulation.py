@@ -8,8 +8,8 @@ It reuses logic from the original run_plotter.py but adapted for batch simulatio
 import json
 import os
 import sys
-from typing import Dict, List, Tuple
 from pathlib import Path
+from typing import Dict, List
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -19,6 +19,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import pandas as pd
+
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -39,7 +40,7 @@ class SimulationPlotter:
         """Load optimizer configuration for visualization settings"""
         try:
             full_path = PROJECT_ROOT / config_path
-            with open(full_path, "r") as f:
+            with open(full_path) as f:
                 return json.load(f)
         except Exception:
             _logger.exception("Error loading config from %s", config_path)
@@ -49,7 +50,7 @@ class SimulationPlotter:
         """Load mixin indicators configuration"""
         try:
             full_path = PROJECT_ROOT / "config/indicators.json"
-            with open(full_path, "r") as f:
+            with open(full_path) as f:
                 config = json.load(f)
                 return config.get("plotter_config", {})
         except Exception as e:
@@ -59,7 +60,7 @@ class SimulationPlotter:
     def load_report_data(self, json_file: str) -> Dict:
         """Load data from JSON report file"""
         try:
-            with open(json_file, "r") as f:
+            with open(json_file) as f:
                 return json.load(f)
         except Exception:
             _logger.exception("Error loading report file %s", json_file)
@@ -85,8 +86,8 @@ class SimulationPlotter:
 
             if ts_col:
                 # Handle millisecond timestamps if necessary
-                if df[ts_col].dtype in ['int64', 'float64'] and df[ts_col].max() > 1e11:
-                    df["datetime"] = pd.to_datetime(df[ts_col], unit='ms', utc=True)
+                if df[ts_col].dtype in ["int64", "float64"] and df[ts_col].max() > 1e11:
+                    df["datetime"] = pd.to_datetime(df[ts_col], unit="ms", utc=True)
                 else:
                     df["datetime"] = pd.to_datetime(df[ts_col], utc=True)
             elif isinstance(df.index, pd.DatetimeIndex):
@@ -146,12 +147,14 @@ class SimulationPlotter:
     def calculate_indicators(self, df: pd.DataFrame, indicators: List[str], strategy_params: Dict) -> Dict:
         """Calculation engine for indicators"""
         calculated = {}
+
         # Simple helper to get param values
         def get_p(name, default):
             p = strategy_params.get("parameters", strategy_params)
             for logic in ["entry_logic", "exit_logic"]:
                 logic_params = p.get(logic, {}).get("params", {})
-                if name in logic_params: return logic_params[name]
+                if name in logic_params:
+                    return logic_params[name]
             return default
 
         for ind in indicators:
@@ -192,14 +195,16 @@ class SimulationPlotter:
         return {"upper": sma + (std * d), "middle": sma, "lower": sma - (std * d)}
 
     def _calculate_atr(self, df, p):
-        tr = pd.concat([df['high'] - df['low'],
-                       (df['high'] - df['close'].shift()).abs(),
-                       (df['low'] - df['close'].shift()).abs()], axis=1).max(axis=1)
+        tr = pd.concat(
+            [df["high"] - df["low"], (df["high"] - df["close"].shift()).abs(), (df["low"] - df["close"].shift()).abs()],
+            axis=1,
+        ).max(axis=1)
         return tr.rolling(p).mean()
 
     def _calculate_supertrend(self, df, period, multiplier):
         import numpy as np
-        high, low, close = df['high'], df['low'], df['close']
+
+        high, low, close = df["high"], df["low"], df["close"]
         atr = self._calculate_atr(df, period)
         hl2 = (high + low) / 2
         upper, lower = hl2 + (multiplier * atr), hl2 - (multiplier * atr)
@@ -211,17 +216,22 @@ class SimulationPlotter:
         dir_arr = np.ones(len(df))
 
         for i in range(1, len(df)):
-            if close_arr[i] > upper_arr[i-1]: dir_arr[i] = 1
-            elif close_arr[i] < lower_arr[i-1]: dir_arr[i] = -1
-            else: dir_arr[i] = dir_arr[i-1]
+            if close_arr[i] > upper_arr[i - 1]:
+                dir_arr[i] = 1
+            elif close_arr[i] < lower_arr[i - 1]:
+                dir_arr[i] = -1
+            else:
+                dir_arr[i] = dir_arr[i - 1]
 
-            if dir_arr[i] == 1 and lower_arr[i] < lower_arr[i-1]: lower_arr[i] = lower_arr[i-1]
-            if dir_arr[i] == -1 and upper_arr[i] > upper_arr[i-1]: upper_arr[i] = upper_arr[i-1]
+            if dir_arr[i] == 1 and lower_arr[i] < lower_arr[i - 1]:
+                lower_arr[i] = lower_arr[i - 1]
+            if dir_arr[i] == -1 and upper_arr[i] > upper_arr[i - 1]:
+                upper_arr[i] = upper_arr[i - 1]
             st[i] = lower_arr[i] if dir_arr[i] == 1 else upper_arr[i]
         return pd.Series(st, index=df.index)
 
     def _calculate_ichimoku(self, df, tp, kp, sbp):
-        h, l = df['high'], df['low']
+        h, l = df["high"], df["low"]
         tenkan = (h.rolling(tp).max() + l.rolling(tp).min()) / 2
         kijun = (h.rolling(kp).max() + l.rolling(kp).min()) / 2
         span_a = ((tenkan + kijun) / 2).shift(kp)
@@ -229,7 +239,8 @@ class SimulationPlotter:
         return {"tenkan": tenkan, "kijun": kijun, "span_a": span_a, "span_b": span_b}
 
     def calculate_equity_curve(self, trades: List[Dict], initial: float) -> pd.Series:
-        if not trades: return pd.Series()
+        if not trades:
+            return pd.Series()
         sorted_trades = sorted(trades, key=lambda x: x.get("exit_time", ""))
         equity = [initial]
         times = [pd.Timestamp(sorted_trades[0].get("entry_time")) - pd.Timedelta(days=1)]
@@ -241,21 +252,30 @@ class SimulationPlotter:
                 times.append(pd.Timestamp(t["exit_time"]))
         return pd.Series(equity, index=times)
 
-    def create_plot(self, df: pd.DataFrame, indicators: Dict, trades: List[Dict],
-                    equity: pd.Series, output_file: str, report_data: Dict) -> None:
+    def create_plot(
+        self,
+        df: pd.DataFrame,
+        indicators: Dict,
+        trades: List[Dict],
+        equity: pd.Series,
+        output_file: str,
+        report_data: Dict,
+    ) -> None:
         """Core plotting engine using matplotlib"""
         strategy_inds = self.get_indicators_for_strategy(report_data)
         layout = self.get_subplot_layout(strategy_inds)
 
         n_subs = 1
         for ind in strategy_inds:
-            if layout.get(ind) == "separate": n_subs += 1
-        if self.vis_settings.get("show_equity_curve", True): n_subs += 1
+            if layout.get(ind) == "separate":
+                n_subs += 1
+        if self.vis_settings.get("show_equity_curve", True):
+            n_subs += 1
 
         size = self.vis_settings.get("plot_size", [15, 10])
-        fig, axes = plt.subplots(n_subs, 1, figsize=size,
-                                 gridspec_kw={"height_ratios": [3] + [1] * (n_subs - 1)})
-        if n_subs == 1: axes = [axes]
+        fig, axes = plt.subplots(n_subs, 1, figsize=size, gridspec_kw={"height_ratios": [3] + [1] * (n_subs - 1)})
+        if n_subs == 1:
+            axes = [axes]
 
         title = f"Simulation: {report_data.get('bot_id', 'Unknown')}\nFinal PnL: {report_data.get('total_pnl', 0):.2f}%"
         fig.suptitle(title, fontsize=self.vis_settings.get("font_size", 12))
@@ -267,14 +287,14 @@ class SimulationPlotter:
         for name, data in indicators.items():
             if layout.get(name) == "overlay":
                 if name == "bbands":
-                    ax_p.plot(df.index, data["upper"], 'r--', alpha=0.5, label="BB Upper")
-                    ax_p.plot(df.index, data["lower"], 'g--', alpha=0.5, label="BB Lower")
+                    ax_p.plot(df.index, data["upper"], "r--", alpha=0.5, label="BB Upper")
+                    ax_p.plot(df.index, data["lower"], "g--", alpha=0.5, label="BB Lower")
                 elif name == "supertrend":
-                    ax_p.plot(df.index, data, 'm-', alpha=0.7, label="SuperTrend")
+                    ax_p.plot(df.index, data, "m-", alpha=0.7, label="SuperTrend")
 
         # Trades
         self._plot_trades(ax_p, trades)
-        ax_p.legend(loc='upper left')
+        ax_p.legend(loc="upper left")
         ax_p.grid(True, alpha=0.3)
 
         # Separate subplots
@@ -284,14 +304,14 @@ class SimulationPlotter:
                 ax = axes[idx]
                 if name == "rsi":
                     ax.plot(df.index, data, color="purple", label="RSI")
-                    ax.axhline(70, color='r', ls='--', alpha=0.5)
-                    ax.axhline(30, color='g', ls='--', alpha=0.5)
+                    ax.axhline(70, color="r", ls="--", alpha=0.5)
+                    ax.axhline(30, color="g", ls="--", alpha=0.5)
                     ax.set_ylim(0, 100)
                 elif name == "volume":
                     ax.bar(df.index, data, color="blue", alpha=0.6, label="Volume")
                 elif name == "atr":
                     ax.plot(df.index, data, color="orange", label="ATR")
-                ax.legend(loc='upper left')
+                ax.legend(loc="upper left")
                 ax.grid(True, alpha=0.3)
                 idx += 1
 
@@ -300,7 +320,7 @@ class SimulationPlotter:
             ax_e = axes[-1]
             ax_e.plot(equity.index, equity.values, color="green", lw=2, label="Equity")
             ax_e.grid(True, alpha=0.3)
-            ax_e.legend(loc='upper left')
+            ax_e.legend(loc="upper left")
 
         for ax in axes:
             ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
@@ -319,7 +339,8 @@ class SimulationPlotter:
     def plot_report(self, report_path: str) -> str:
         """Process a report file and save plot"""
         data = self.load_report_data(report_path)
-        if not data: return ""
+        if not data:
+            return ""
 
         data_file = data.get("data_file")
         if not data_file:
@@ -327,7 +348,8 @@ class SimulationPlotter:
             return ""
 
         df = self.load_price_data(data_file)
-        if df.empty: return ""
+        if df.empty:
+            return ""
 
         # Limit data for plotting if it's too large (e.g., > 10,000 bars)
         plot_limit = self.vis_settings.get("max_plot_bars", 10000)

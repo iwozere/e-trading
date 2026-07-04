@@ -1,13 +1,15 @@
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-import numpy as np
 from pathlib import Path
-from typing import Any, List, Dict
+from typing import Any, Dict, List
 
 # Use Agg backend for headless environments (like Pi)
 import matplotlib
-matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+
+matplotlib.use("Agg")
+
 
 class P07Visualizer:
     """
@@ -24,7 +26,7 @@ class P07Visualizer:
         plt.figure(figsize=(15, 10))
         counts = labels.value_counts().sort_index()
         counts.index = counts.index.map({1: "Profit Take", -1: "Stop Loss", 0: "Time Out"})
-        counts.plot(kind='bar', color=['red', 'gray', 'green'])
+        counts.plot(kind="bar", color=["red", "gray", "green"])
         plt.title("Triple Barrier Hit Frequency", fontsize=20)
         plt.tight_layout()
         plt.savefig(self.output_dir / "tbm_barrier_hits.png", dpi=300)
@@ -57,18 +59,34 @@ class P07Visualizer:
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(30, 24), sharex=True)
 
         # 1. Price + Signals
-        ax1.plot(ohlcv.index, ohlcv['close'], label='Close Price', alpha=0.4, color='black')
+        ax1.plot(ohlcv.index, ohlcv["close"], label="Close Price", alpha=0.4, color="black")
 
         buys = signals[signals == 1]
         sells = signals[signals == -1]
 
         if not buys.empty:
-            ax1.scatter(buys.index, ohlcv.loc[buys.index, 'close'], marker='^', color='green', label='Buy / Close Short', s=200, alpha=0.9)
+            ax1.scatter(
+                buys.index,
+                ohlcv.loc[buys.index, "close"],
+                marker="^",
+                color="green",
+                label="Buy / Close Short",
+                s=200,
+                alpha=0.9,
+            )
         if not sells.empty:
-            ax1.scatter(sells.index, ohlcv.loc[sells.index, 'close'], marker='v', color='red', label='Sell / Close Long', s=200, alpha=0.9)
+            ax1.scatter(
+                sells.index,
+                ohlcv.loc[sells.index, "close"],
+                marker="v",
+                color="red",
+                label="Sell / Close Long",
+                s=200,
+                alpha=0.9,
+            )
 
         ax1.set_title("Price Action & Realized Signals (Action-Based)", fontsize=24)
-        ax1.legend(loc='best', fontsize=16)
+        ax1.legend(loc="best", fontsize=16)
 
         # 2. Equity Curve (Realized only to avoid mirroring price)
         # VectorBT trades.pnl.to_pd() gives PnL at exit points, indexed by original ohlcv
@@ -82,14 +100,14 @@ class P07Visualizer:
         realized_pnl = pnl_series.cumsum()
         realized_equity = realized_pnl + pf.init_cash
 
-        ax2.plot(realized_equity.index, realized_equity, label='Realized Equity (Steppy)', color='blue', linewidth=3)
+        ax2.plot(realized_equity.index, realized_equity, label="Realized Equity (Steppy)", color="blue", linewidth=3)
 
         # Benchmark (Buy & Hold) - Mark-to-Market
-        benchmark = (ohlcv['close'] / ohlcv['close'].iloc[0]) * pf.init_cash
-        ax2.plot(benchmark.index, benchmark, label='Benchmark (B&H)', color='gray', linestyle='--', alpha=0.6)
+        benchmark = (ohlcv["close"] / ohlcv["close"].iloc[0]) * pf.init_cash
+        ax2.plot(benchmark.index, benchmark, label="Benchmark (B&H)", color="gray", linestyle="--", alpha=0.6)
 
         ax2.set_title("Equity Curve vs Benchmark", fontsize=24)
-        ax2.legend(loc='best', fontsize=16)
+        ax2.legend(loc="best", fontsize=16)
 
         plt.tight_layout()
         plt.savefig(self.output_dir / "strategy_overlay.png", dpi=300)
@@ -98,7 +116,7 @@ class P07Visualizer:
     def plot_walk_forward_equity(self, combined_equity: pd.Series):
         """Plots the combined OOS equity curve from Walk-Forward Analysis."""
         plt.figure(figsize=(15, 8))
-        combined_equity.plot(color='purple', linewidth=2)
+        combined_equity.plot(color="purple", linewidth=2)
         plt.title("Walk-Forward Analysis: Combined Out-of-Sample Equity", fontsize=18)
         plt.ylabel("Portfolio Value")
         plt.tight_layout()
@@ -111,12 +129,12 @@ class P07Visualizer:
 
         plt.subplot(1, 2, 1)
         sns.histplot(shuffled_results, kde=True, color="blue")
-        plt.axvline(1.0, color='red', linestyle='--')
+        plt.axvline(1.0, color="red", linestyle="--")
         plt.title("MC: Shuffled Returns Outcomes", fontsize=14)
 
         plt.subplot(1, 2, 2)
         sns.histplot(skipped_results, kde=True, color="green")
-        plt.axvline(1.0, color='red', linestyle='--')
+        plt.axvline(1.0, color="red", linestyle="--")
         plt.title("MC: Random Skips Outcomes", fontsize=14)
 
         plt.tight_layout()
@@ -126,10 +144,11 @@ class P07Visualizer:
     def plot_sensitivity_report(self, sensitivity_results: List[Dict[str, Any]]):
         """Plots a bar chart of Sharpe ratios for different parameter perturbations."""
         df = pd.DataFrame(sensitivity_results)
-        if df.empty: return
+        if df.empty:
+            return
 
         plt.figure(figsize=(12, 6))
-        sns.barplot(data=df, x='perturbation', y='sharpe', hue='perturbation', palette='viridis', legend=False)
+        sns.barplot(data=df, x="perturbation", y="sharpe", hue="perturbation", palette="viridis", legend=False)
         plt.title("Parameter Sensitivity Analysis (Sharpe Ratio)", fontsize=16)
         plt.xticks(rotation=45)
         plt.tight_layout()

@@ -5,19 +5,23 @@ Telegram notification channel implementation using aiogram.
 Supports message splitting, attachments, health monitoring, and dynamic chat IDs.
 """
 
-from typing import Dict, Any, List, Optional
-from datetime import datetime, timezone
 import asyncio
+from datetime import UTC, datetime
+from typing import Any, Dict, List
 
 from aiogram import Bot
-from aiogram.types import BufferedInputFile, FSInputFile
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramForbiddenError
+from aiogram.types import BufferedInputFile, FSInputFile
 
 from src.notification.channels.base import (
-    NotificationChannel, DeliveryResult, ChannelHealth, MessageContent,
-    DeliveryStatus, ChannelHealthStatus
+    ChannelHealth,
+    ChannelHealthStatus,
+    DeliveryResult,
+    DeliveryStatus,
+    MessageContent,
+    NotificationChannel,
 )
-from src.notification.channels.config import ConfigValidator, CommonValidationRules
+from src.notification.channels.config import CommonValidationRules, ConfigValidator
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -55,18 +59,14 @@ class TelegramChannel(NotificationChannel):
 
         # Required fields
         validator.require_field(
-            "bot_token",
-            str,
-            description="Telegram bot token from @BotFather",
-            min_length=40,
-            max_length=50
+            "bot_token", str, description="Telegram bot token from @BotFather", min_length=40, max_length=50
         )
 
         validator.optional_field(
             "default_chat_id",
             str,
             description="Default chat ID for messages (can be overridden per message)",
-            min_length=1
+            min_length=1,
         )
 
         # Optional fields
@@ -74,32 +74,16 @@ class TelegramChannel(NotificationChannel):
             "parse_mode",
             str,
             description="Default parse mode (HTML, Markdown, or None)",
-            allowed_values=["HTML", "Markdown", None]
+            allowed_values=["HTML", "Markdown", None],
         )
 
-        validator.optional_field(
-            "disable_web_page_preview",
-            bool,
-            description="Disable web page preview in messages"
-        )
+        validator.optional_field("disable_web_page_preview", bool, description="Disable web page preview in messages")
 
-        validator.optional_field(
-            "disable_notification",
-            bool,
-            description="Send messages silently"
-        )
+        validator.optional_field("disable_notification", bool, description="Send messages silently")
 
-        validator.optional_field(
-            "protect_content",
-            bool,
-            description="Protect message content from forwarding"
-        )
+        validator.optional_field("protect_content", bool, description="Protect message content from forwarding")
 
-        validator.optional_field(
-            "message_thread_id",
-            int,
-            description="Default message thread ID for forum groups"
-        )
+        validator.optional_field("message_thread_id", int, description="Default message thread ID for forum groups")
 
         # Add common validation rules
         validator.add_rule(CommonValidationRules.timeout_seconds(default=30))
@@ -118,11 +102,7 @@ class TelegramChannel(NotificationChannel):
         self.bot = Bot(token=bot_token)
 
     async def send_message(
-        self,
-        recipient: str,
-        content: MessageContent,
-        message_id: Optional[str] = None,
-        priority: str = "NORMAL"
+        self, recipient: str, content: MessageContent, message_id: str | None = None, priority: str = "NORMAL"
     ) -> DeliveryResult:
         """
         Send a message via Telegram.
@@ -136,25 +116,29 @@ class TelegramChannel(NotificationChannel):
         Returns:
             DeliveryResult with delivery status and metadata
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         try:
             # Use recipient as chat_id, or fall back to default
             chat_id = recipient or self.config.get("default_chat_id")
 
-            _logger.info("Telegram send_message called - recipient: %s, chat_id: %s, message_id: %s",
-                        recipient, chat_id, message_id)
-            _logger.debug("Message content: text_length=%d, has_attachments=%s",
-                         len(content.text) if content.text else 0, content.has_attachments)
+            _logger.info(
+                "Telegram send_message called - recipient: %s, chat_id: %s, message_id: %s",
+                recipient,
+                chat_id,
+                message_id,
+            )
+            _logger.debug(
+                "Message content: text_length=%d, has_attachments=%s",
+                len(content.text) if content.text else 0,
+                content.has_attachments,
+            )
 
             if not chat_id:
                 error_msg = "No chat_id provided and no default_chat_id configured"
                 _logger.error("Telegram send failed: %s", error_msg)
                 return DeliveryResult(
-                    success=False,
-                    status=DeliveryStatus.FAILED,
-                    error_message=error_msg,
-                    response_time_ms=0
+                    success=False, status=DeliveryStatus.FAILED, error_message=error_msg, response_time_ms=0
                 )
 
             # Extract metadata for Telegram-specific options
@@ -169,19 +153,24 @@ class TelegramChannel(NotificationChannel):
                 )
 
             # Send text message with splitting if needed
-            _logger.info("Sending text message to chat_id=%s, text_length=%d",
-                        chat_id, len(content.text) if content.text else 0)
+            _logger.info(
+                "Sending text message to chat_id=%s, text_length=%d", chat_id, len(content.text) if content.text else 0
+            )
             telegram_message = await self._send_text_message_with_splitting(
                 chat_id=chat_id,
                 text=content.text,
                 reply_to_message_id=reply_to_message_id,
-                message_thread_id=message_thread_id
+                message_thread_id=message_thread_id,
             )
 
-            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
 
-            _logger.info("Telegram message sent successfully - chat_id=%s, message_id=%s, response_time=%dms",
-                        chat_id, telegram_message.message_id, response_time)
+            _logger.info(
+                "Telegram message sent successfully - chat_id=%s, message_id=%s, response_time=%dms",
+                chat_id,
+                telegram_message.message_id,
+                response_time,
+            )
 
             return DeliveryResult(
                 success=True,
@@ -192,8 +181,8 @@ class TelegramChannel(NotificationChannel):
                     "chat_id": chat_id,
                     "message_id": telegram_message.message_id,
                     "date": telegram_message.date.isoformat() if telegram_message.date else None,
-                    "message_thread_id": message_thread_id
-                }
+                    "message_thread_id": message_thread_id,
+                },
             )
 
         except TelegramForbiddenError as e:
@@ -204,7 +193,7 @@ class TelegramChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.BOUNCED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(UTC) - start_time).total_seconds() * 1000),
             )
 
         except TelegramBadRequest as e:
@@ -215,7 +204,7 @@ class TelegramChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(UTC) - start_time).total_seconds() * 1000),
             )
 
         except TelegramAPIError as e:
@@ -226,7 +215,7 @@ class TelegramChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(UTC) - start_time).total_seconds() * 1000),
             )
 
         except Exception as e:
@@ -237,27 +226,31 @@ class TelegramChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(UTC) - start_time).total_seconds() * 1000),
             )
 
     async def _send_with_attachments(
         self,
         chat_id: str,
         content: MessageContent,
-        reply_to_message_id: Optional[int],
-        message_thread_id: Optional[int],
-        start_time: datetime
+        reply_to_message_id: int | None,
+        message_thread_id: int | None,
+        start_time: datetime,
     ) -> DeliveryResult:
         """Send message with attachments."""
         try:
-            _logger.info("Sending message with %d attachments to chat_id=%s",
-                        len(content.attachments) if content.attachments else 0, chat_id)
-            _logger.debug("Attachment types: %s",
-                         {k: type(v).__name__ for k, v in content.attachments.items()} if content.attachments else {})
+            _logger.info(
+                "Sending message with %d attachments to chat_id=%s",
+                len(content.attachments) if content.attachments else 0,
+                chat_id,
+            )
+            _logger.debug(
+                "Attachment types: %s",
+                {k: type(v).__name__ for k, v in content.attachments.items()} if content.attachments else {},
+            )
 
             for filename, attachment_data in content.attachments.items():
-                _logger.debug("Processing attachment: filename=%s, type=%s",
-                             filename, type(attachment_data).__name__)
+                _logger.debug("Processing attachment: filename=%s, type=%s", filename, type(attachment_data).__name__)
 
                 # Handle different attachment formats
                 actual_data = None
@@ -266,9 +259,9 @@ class TelegramChannel(NotificationChannel):
                     # Attachment stored as base64 in database
                     if attachment_data.get("type") == "base64":
                         import base64
+
                         actual_data = base64.b64decode(attachment_data["data"])
-                        _logger.debug("Decoded base64 attachment: %s (size: %d bytes)",
-                                     filename, len(actual_data))
+                        _logger.debug("Decoded base64 attachment: %s (size: %d bytes)", filename, len(actual_data))
                     elif attachment_data.get("type") == "file_path":
                         # File path stored in database
                         actual_data = attachment_data.get("path")
@@ -276,43 +269,38 @@ class TelegramChannel(NotificationChannel):
                 elif isinstance(attachment_data, bytes):
                     # Raw bytes (direct usage)
                     actual_data = attachment_data
-                    _logger.debug("Using raw bytes attachment: %s (size: %d bytes)",
-                                 filename, len(actual_data))
+                    _logger.debug("Using raw bytes attachment: %s (size: %d bytes)", filename, len(actual_data))
                 elif isinstance(attachment_data, str):
                     # File path as string
                     actual_data = attachment_data
                     _logger.debug("Using file path attachment: %s", actual_data)
                 else:
-                    _logger.warning("Unknown attachment format for %s: %s",
-                                   filename, type(attachment_data).__name__)
+                    _logger.warning("Unknown attachment format for %s: %s", filename, type(attachment_data).__name__)
                     continue
 
                 # Send the attachment
                 if isinstance(actual_data, bytes):
                     # Send as photo if it looks like an image
-                    if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                    if filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
                         _logger.debug("Sending photo: %s", filename)
                         await self._send_photo_with_caption(
-                            chat_id, actual_data, filename, content.text,
-                            reply_to_message_id, message_thread_id
+                            chat_id, actual_data, filename, content.text, reply_to_message_id, message_thread_id
                         )
                     else:
                         # Send as document
                         _logger.debug("Sending document: %s", filename)
                         await self._send_document_with_caption(
-                            chat_id, actual_data, filename, content.text,
-                            reply_to_message_id, message_thread_id
+                            chat_id, actual_data, filename, content.text, reply_to_message_id, message_thread_id
                         )
 
                 elif isinstance(actual_data, str):
                     # File path - send as document
                     _logger.debug("Sending file from path: %s", actual_data)
                     await self._send_file_with_caption(
-                        chat_id, actual_data, filename, content.text,
-                        reply_to_message_id, message_thread_id
+                        chat_id, actual_data, filename, content.text, reply_to_message_id, message_thread_id
                     )
 
-            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
 
             return DeliveryResult(
                 success=True,
@@ -322,8 +310,8 @@ class TelegramChannel(NotificationChannel):
                 metadata={
                     "chat_id": chat_id,
                     "attachment_count": len(content.attachments),
-                    "message_thread_id": message_thread_id
-                }
+                    "message_thread_id": message_thread_id,
+                },
             )
 
         except Exception as e:
@@ -334,7 +322,7 @@ class TelegramChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(UTC) - start_time).total_seconds() * 1000),
             )
 
     async def _send_photo_with_caption(
@@ -343,18 +331,21 @@ class TelegramChannel(NotificationChannel):
         photo_data: bytes,
         filename: str,
         caption: str,
-        reply_to_message_id: Optional[int],
-        message_thread_id: Optional[int]
+        reply_to_message_id: int | None,
+        message_thread_id: int | None,
     ):
         """Send photo with caption, handling long captions."""
-        _logger.info("Sending photo to chat_id=%s: %s (size=%d bytes, caption_length=%d)",
-                    chat_id, filename, len(photo_data), len(caption) if caption else 0)
+        _logger.info(
+            "Sending photo to chat_id=%s: %s (size=%d bytes, caption_length=%d)",
+            chat_id,
+            filename,
+            len(photo_data),
+            len(caption) if caption else 0,
+        )
 
         if len(caption) > self.MAX_CAPTION_LENGTH:
             # Send text first, then photo with short caption
-            await self._send_text_message_with_splitting(
-                chat_id, caption, reply_to_message_id, message_thread_id
-            )
+            await self._send_text_message_with_splitting(chat_id, caption, reply_to_message_id, message_thread_id)
 
             await self.bot.send_photo(
                 chat_id=chat_id,
@@ -363,7 +354,7 @@ class TelegramChannel(NotificationChannel):
                 message_thread_id=message_thread_id,
                 parse_mode=self.config.get("parse_mode"),
                 disable_notification=self.config.get("disable_notification", False),
-                protect_content=self.config.get("protect_content", False)
+                protect_content=self.config.get("protect_content", False),
             )
         else:
             await self.bot.send_photo(
@@ -374,7 +365,7 @@ class TelegramChannel(NotificationChannel):
                 message_thread_id=message_thread_id,
                 parse_mode=self.config.get("parse_mode"),
                 disable_notification=self.config.get("disable_notification", False),
-                protect_content=self.config.get("protect_content", False)
+                protect_content=self.config.get("protect_content", False),
             )
 
     async def _send_document_with_caption(
@@ -383,15 +374,13 @@ class TelegramChannel(NotificationChannel):
         document_data: bytes,
         filename: str,
         caption: str,
-        reply_to_message_id: Optional[int],
-        message_thread_id: Optional[int]
+        reply_to_message_id: int | None,
+        message_thread_id: int | None,
     ):
         """Send document with caption."""
         if len(caption) > self.MAX_CAPTION_LENGTH:
             # Send text first, then document with short caption
-            await self._send_text_message_with_splitting(
-                chat_id, caption, reply_to_message_id, message_thread_id
-            )
+            await self._send_text_message_with_splitting(chat_id, caption, reply_to_message_id, message_thread_id)
 
             await self.bot.send_document(
                 chat_id=chat_id,
@@ -399,7 +388,7 @@ class TelegramChannel(NotificationChannel):
                 caption=f"📄 {filename}",
                 message_thread_id=message_thread_id,
                 disable_notification=self.config.get("disable_notification", False),
-                protect_content=self.config.get("protect_content", False)
+                protect_content=self.config.get("protect_content", False),
             )
         else:
             await self.bot.send_document(
@@ -409,7 +398,7 @@ class TelegramChannel(NotificationChannel):
                 reply_to_message_id=reply_to_message_id,
                 message_thread_id=message_thread_id,
                 disable_notification=self.config.get("disable_notification", False),
-                protect_content=self.config.get("protect_content", False)
+                protect_content=self.config.get("protect_content", False),
             )
 
     async def _send_file_with_caption(
@@ -418,17 +407,15 @@ class TelegramChannel(NotificationChannel):
         file_path: str,
         filename: str,
         caption: str,
-        reply_to_message_id: Optional[int],
-        message_thread_id: Optional[int]
+        reply_to_message_id: int | None,
+        message_thread_id: int | None,
     ):
         """Send file from path with caption."""
         if len(caption) > self.MAX_CAPTION_LENGTH:
             # Send text first, then file with short caption
-            await self._send_text_message_with_splitting(
-                chat_id, caption, reply_to_message_id, message_thread_id
-            )
+            await self._send_text_message_with_splitting(chat_id, caption, reply_to_message_id, message_thread_id)
 
-            if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+            if filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
                 await self.bot.send_photo(
                     chat_id=chat_id,
                     photo=FSInputFile(file_path, filename=filename),
@@ -436,7 +423,7 @@ class TelegramChannel(NotificationChannel):
                     message_thread_id=message_thread_id,
                     parse_mode=self.config.get("parse_mode"),
                     disable_notification=self.config.get("disable_notification", False),
-                    protect_content=self.config.get("protect_content", False)
+                    protect_content=self.config.get("protect_content", False),
                 )
             else:
                 await self.bot.send_document(
@@ -445,10 +432,10 @@ class TelegramChannel(NotificationChannel):
                     caption=f"📄 {filename}",
                     message_thread_id=message_thread_id,
                     disable_notification=self.config.get("disable_notification", False),
-                    protect_content=self.config.get("protect_content", False)
+                    protect_content=self.config.get("protect_content", False),
                 )
         else:
-            if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+            if filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
                 await self.bot.send_photo(
                     chat_id=chat_id,
                     photo=FSInputFile(file_path, filename=filename),
@@ -457,7 +444,7 @@ class TelegramChannel(NotificationChannel):
                     message_thread_id=message_thread_id,
                     parse_mode=self.config.get("parse_mode"),
                     disable_notification=self.config.get("disable_notification", False),
-                    protect_content=self.config.get("protect_content", False)
+                    protect_content=self.config.get("protect_content", False),
                 )
             else:
                 await self.bot.send_document(
@@ -467,21 +454,22 @@ class TelegramChannel(NotificationChannel):
                     reply_to_message_id=reply_to_message_id,
                     message_thread_id=message_thread_id,
                     disable_notification=self.config.get("disable_notification", False),
-                    protect_content=self.config.get("protect_content", False)
+                    protect_content=self.config.get("protect_content", False),
                 )
 
     async def _send_text_message_with_splitting(
         self,
         chat_id: str,
         text: str,
-        reply_to_message_id: Optional[int] = None,
-        message_thread_id: Optional[int] = None
+        reply_to_message_id: int | None = None,
+        message_thread_id: int | None = None,
     ):
         """Send text message with automatic splitting for long messages."""
         if len(text) <= self.MAX_MESSAGE_LENGTH:
             # Message is short enough, send normally
-            _logger.debug("Sending message to Telegram API - chat_id=%s, text_preview='%s...'",
-                         chat_id, text[:50] if text else '')
+            _logger.debug(
+                "Sending message to Telegram API - chat_id=%s, text_preview='%s...'", chat_id, text[:50] if text else ""
+            )
 
             result = await self.bot.send_message(
                 chat_id=chat_id,
@@ -491,11 +479,10 @@ class TelegramChannel(NotificationChannel):
                 parse_mode=self.config.get("parse_mode"),
                 disable_web_page_preview=self.config.get("disable_web_page_preview", False),
                 disable_notification=self.config.get("disable_notification", False),
-                protect_content=self.config.get("protect_content", False)
+                protect_content=self.config.get("protect_content", False),
             )
 
-            _logger.debug("Telegram API returned message_id=%s for chat_id=%s",
-                         result.message_id, chat_id)
+            _logger.debug("Telegram API returned message_id=%s for chat_id=%s", result.message_id, chat_id)
             return result
 
         # Split long message into parts
@@ -505,7 +492,7 @@ class TelegramChannel(NotificationChannel):
         for i, part in enumerate(parts):
             # Add part indicator for multi-part messages
             if len(parts) > 1:
-                part_text = f"📄 Part {i+1}/{len(parts)}\n\n{part}"
+                part_text = f"📄 Part {i + 1}/{len(parts)}\n\n{part}"
             else:
                 part_text = part
 
@@ -521,7 +508,7 @@ class TelegramChannel(NotificationChannel):
                     parse_mode=self.config.get("parse_mode"),
                     disable_web_page_preview=self.config.get("disable_web_page_preview", False),
                     disable_notification=self.config.get("disable_notification", False),
-                    protect_content=self.config.get("protect_content", False)
+                    protect_content=self.config.get("protect_content", False),
                 )
 
                 # Small delay between messages to avoid rate limiting
@@ -529,10 +516,10 @@ class TelegramChannel(NotificationChannel):
                     await asyncio.sleep(0.5)
 
             except Exception as e:
-                _logger.error("Failed to send message part %d/%d: %s", i+1, len(parts), e)
+                _logger.error("Failed to send message part %d/%d: %s", i + 1, len(parts), e)
                 # Try to send a truncated version if splitting failed
                 if i == 0:  # Only for first part
-                    truncated_text = text[:self.MAX_MESSAGE_LENGTH-100] + "\n\n... [Message truncated due to length]"
+                    truncated_text = text[: self.MAX_MESSAGE_LENGTH - 100] + "\n\n... [Message truncated due to length]"
                     last_message = await self.bot.send_message(
                         chat_id=chat_id,
                         text=truncated_text,
@@ -541,7 +528,7 @@ class TelegramChannel(NotificationChannel):
                         parse_mode=self.config.get("parse_mode"),
                         disable_web_page_preview=self.config.get("disable_web_page_preview", False),
                         disable_notification=self.config.get("disable_notification", False),
-                        protect_content=self.config.get("protect_content", False)
+                        protect_content=self.config.get("protect_content", False),
                     )
                 break
 
@@ -563,7 +550,7 @@ class TelegramChannel(NotificationChannel):
 
         parts = []
         current_part = ""
-        lines = text.split('\n')
+        lines = text.split("\n")
 
         for line in lines:
             # If adding this line would exceed the limit
@@ -580,7 +567,7 @@ class TelegramChannel(NotificationChannel):
 
                     for word in words:
                         if len(temp_line) + len(word) + 1 <= max_length:
-                            temp_line += (word + " ")
+                            temp_line += word + " "
                         else:
                             if temp_line:
                                 parts.append(temp_line.strip())
@@ -591,7 +578,7 @@ class TelegramChannel(NotificationChannel):
                 else:
                     current_part = line
             else:
-                current_part += line + '\n'
+                current_part += line + "\n"
 
         # Add the last part
         if current_part.strip():
@@ -606,17 +593,17 @@ class TelegramChannel(NotificationChannel):
         Returns:
             ChannelHealth with current status and metrics
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         try:
             # Test bot API by getting bot info
             bot_info = await self.bot.get_me()
 
-            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
 
             return ChannelHealth(
                 status=ChannelHealthStatus.HEALTHY,
-                last_check=datetime.now(timezone.utc),
+                last_check=datetime.now(UTC),
                 response_time_ms=response_time,
                 metadata={
                     "bot_id": bot_info.id,
@@ -624,12 +611,12 @@ class TelegramChannel(NotificationChannel):
                     "bot_first_name": bot_info.first_name,
                     "can_join_groups": bot_info.can_join_groups,
                     "can_read_all_group_messages": bot_info.can_read_all_group_messages,
-                    "supports_inline_queries": bot_info.supports_inline_queries
-                }
+                    "supports_inline_queries": bot_info.supports_inline_queries,
+                },
             )
 
         except TelegramAPIError as e:
-            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
             error_msg = f"Telegram API error: {str(e)}"
 
             # Determine if this is a temporary or permanent issue
@@ -640,20 +627,20 @@ class TelegramChannel(NotificationChannel):
 
             return ChannelHealth(
                 status=status,
-                last_check=datetime.now(timezone.utc),
+                last_check=datetime.now(UTC),
                 response_time_ms=response_time,
-                error_message=error_msg
+                error_message=error_msg,
             )
 
         except Exception as e:
-            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
             error_msg = f"Unexpected error: {str(e)}"
 
             return ChannelHealth(
                 status=ChannelHealthStatus.DOWN,
-                last_check=datetime.now(timezone.utc),
+                last_check=datetime.now(UTC),
                 response_time_ms=response_time,
-                error_message=error_msg
+                error_message=error_msg,
             )
 
     def get_rate_limit(self) -> int:
@@ -694,7 +681,7 @@ class TelegramChannel(NotificationChannel):
             "animations": True,
             "polls": True,
             "location": True,
-            "contact": True
+            "contact": True,
         }
 
         return supported_features.get(feature, False)
@@ -725,7 +712,7 @@ class TelegramChannel(NotificationChannel):
                 subject=content.subject,
                 html=content.html,
                 attachments=content.attachments,
-                metadata=content.metadata
+                metadata=content.metadata,
             )
 
         # Otherwise return as-is
@@ -733,5 +720,5 @@ class TelegramChannel(NotificationChannel):
 
     async def close(self):
         """Close the bot session."""
-        if hasattr(self, 'bot') and self.bot:
+        if hasattr(self, "bot") and self.bot:
             await self.bot.session.close()

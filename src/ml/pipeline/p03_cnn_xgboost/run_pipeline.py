@@ -15,8 +15,8 @@ This shim is kept for backward-compatibility during the deprecation window.
 Remove once no scheduler or caller references this entrypoint directly.
 """
 
-import warnings
 import sys
+import warnings
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -38,10 +38,10 @@ _logger.warning(_DEPRECATION_MSG)
 if __name__ == "__main__":
     _logger.info("Redirecting to P02 pipeline runner...")
     import subprocess
+
     result = subprocess.run(
-        [sys.executable,
-         str(PROJECT_ROOT / "src" / "ml" / "pipeline" / "p02_cnn_lstm_xgboost" / "run_pipeline.py")] +
-        sys.argv[1:],
-        check=False
+        [sys.executable, str(PROJECT_ROOT / "src" / "ml" / "pipeline" / "p02_cnn_lstm_xgboost" / "run_pipeline.py")]
+        + sys.argv[1:],
+        check=False,
     )
     sys.exit(result.returncode)

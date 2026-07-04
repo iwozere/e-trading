@@ -1,13 +1,17 @@
 from __future__ import annotations
+
 from datetime import date, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from src.data.db.repos.repo_short_squeeze import (
-    ScreenerSnapshotRepo, DeepScanMetricsRepo, SqueezeAlertRepo,
-    AdHocCandidateRepo, FINRAShortInterestRepo
-)
 from src.data.db.models.model_short_squeeze import AlertLevel
+from src.data.db.repos.repo_short_squeeze import (
+    AdHocCandidateRepo,
+    DeepScanMetricsRepo,
+    FINRAShortInterestRepo,
+    ScreenerSnapshotRepo,
+    SqueezeAlertRepo,
+)
 
 
 def test_screener_and_metrics_and_alerts(db_session: Session):
@@ -28,13 +32,15 @@ def test_screener_and_metrics_and_alerts(db_session: Session):
 
     # alerts create + cooldown check
     now = datetime.now()
-    a = alerts.create_alert({
-        "ticker": "AAA",
-        "alert_level": AlertLevel.HIGH.value,
-        "timestamp": now,
-        "cooldown_expires": now + timedelta(minutes=10),
-        "sent": True,
-    })
+    a = alerts.create_alert(
+        {
+            "ticker": "AAA",
+            "alert_level": AlertLevel.HIGH.value,
+            "timestamp": now,
+            "cooldown_expires": now + timedelta(minutes=10),
+            "sent": True,
+        }
+    )
     assert a.id is not None
     assert alerts.check_cooldown("AAA", AlertLevel.HIGH) is True
 
@@ -54,11 +60,13 @@ def test_adhoc_and_finra(db_session: Session):
 
     # FINRA upsert and latest
     sd = date.today()
-    rec = finra.upsert_finra_data({
-        "ticker": "CCC",
-        "settlement_date": sd,
-        "short_interest_shares": 1000,
-        "short_interest_pct": 12.5,
-    })
+    rec = finra.upsert_finra_data(
+        {
+            "ticker": "CCC",
+            "settlement_date": sd,
+            "short_interest_shares": 1000,
+            "short_interest_pct": 12.5,
+        }
+    )
     assert rec.id is not None
     assert finra.get_latest_short_interest("ccc") is not None

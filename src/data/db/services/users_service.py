@@ -1,8 +1,11 @@
 from __future__ import annotations
-from typing import Optional, Dict, Any, List
-from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
+
+from typing import Any, Dict, List
+
 from src.data.db.core.constants import PROVIDER_TG
-from src.data.db.models.model_users import User, AuthIdentity
+from src.data.db.models.model_users import AuthIdentity, User
+from src.data.db.services.base_service import BaseDBService, handle_db_error, with_uow
+
 
 class UsersService(BaseDBService):
     @with_uow
@@ -12,7 +15,7 @@ class UsersService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_telegram_profile(self, telegram_user_id: str | int) -> Optional[Dict[str, Any]]:
+    def get_telegram_profile(self, telegram_user_id: str | int) -> Dict[str, Any] | None:
         return self.repos.users.get_telegram_profile(telegram_user_id)
 
     @with_uow
@@ -36,12 +39,7 @@ class UsersService(BaseDBService):
         self.repos.users.create_user(u)
 
         # Create identity
-        ident = AuthIdentity(
-            user_id=u.id,
-            provider=PROVIDER_TG,
-            external_id=tid,
-            identity_metadata={}
-        )
+        ident = AuthIdentity(user_id=u.id, provider=PROVIDER_TG, external_id=tid, identity_metadata={})
         self.repos.users.create_identity(ident)
 
         return u.id
@@ -77,7 +75,7 @@ class UsersService(BaseDBService):
             email = fields.pop("email")
             if u:
                 u.email = email
-                self.repos.users.create_user(u) # create_user acts as add/update if attached
+                self.repos.users.create_user(u)  # create_user acts as add/update if attached
 
         # Update metadata
         # Create a copy to ensure SQLAlchemy detects the change (handles in-place mutation issues)
@@ -85,7 +83,7 @@ class UsersService(BaseDBService):
         # Filter out None values to allow specific updates (or partial updates)
         meta.update({k: v for k, v in fields.items() if v is not None})
         ident.identity_metadata = meta
-        self.repos.users.create_identity(ident) # flush
+        self.repos.users.create_identity(ident)  # flush
 
     @with_uow
     @handle_db_error
@@ -112,24 +110,24 @@ class UsersService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def authenticate_user_by_email(self, email: str, password: str) -> Optional[Dict[str, Any]]:
+    def authenticate_user_by_email(self, email: str, password: str) -> Dict[str, Any] | None:
         """Authenticate user by email."""
         user = self.repos.users.get_user_by_email(email)
         if not user or not user.is_active:
             return None
-        
+
         if user.verify_password(password):
             return user.to_dict()
         return None
 
     @with_uow
     @handle_db_error
-    def authenticate_user_by_username(self, username: str, password: str) -> Optional[Dict[str, Any]]:
+    def authenticate_user_by_username(self, username: str, password: str) -> Dict[str, Any] | None:
         """Authenticate user by username."""
         user = self.repos.users.get_user_by_username(username)
         if not user or not user.is_active:
             return None
-        
+
         if user.verify_password(password):
             return user.to_dict()
         return None
@@ -154,7 +152,7 @@ class UsersService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_user_notification_channels(self, user_id: int) -> Optional[Dict[str, str]]:
+    def get_user_notification_channels(self, user_id: int) -> Dict[str, str] | None:
         """
         Get user's notification channels (email + telegram_chat_id).
 

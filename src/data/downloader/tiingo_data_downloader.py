@@ -9,14 +9,15 @@ API Documentation: https://api.tiingo.com/documentation
 Free API Key: https://www.tiingo.com/account/api/token
 """
 
-import requests
-import pandas as pd
 import time
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List
 
-from src.notification.logger import setup_logger
+import pandas as pd
+import requests
+
 from src.data.downloader.base_data_downloader import BaseDataDownloader
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -24,7 +25,7 @@ _logger = setup_logger(__name__)
 class TiingoDataDownloader(BaseDataDownloader):
     """Tiingo data downloader."""
 
-    def __init__(self, api_key: Optional[str] = None, rate_limit_delay: float = 0.1):
+    def __init__(self, api_key: str | None = None, rate_limit_delay: float = 0.1):
         """
         Initialize Tiingo data downloader.
 
@@ -33,7 +34,7 @@ class TiingoDataDownloader(BaseDataDownloader):
             rate_limit_delay: Delay between requests in seconds
         """
         super().__init__()
-        self.api_key = api_key or self._get_config_value('TIINGO_API_KEY', 'TIINGO_API_KEY')
+        self.api_key = api_key or self._get_config_value("TIINGO_API_KEY", "TIINGO_API_KEY")
         self.rate_limit_delay = rate_limit_delay
         self.base_url = "https://api.tiingo.com/tiingo"
 
@@ -42,8 +43,9 @@ class TiingoDataDownloader(BaseDataDownloader):
 
         _logger.info("Tiingo Data Downloader initialized with API key")
 
-    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime,
-                   end_date: datetime, **kwargs) -> Optional[pd.DataFrame]:
+    def get_ohlcv(
+        self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs
+    ) -> pd.DataFrame | None:
         """
         Get OHLCV data from Tiingo.
 
@@ -57,7 +59,7 @@ class TiingoDataDownloader(BaseDataDownloader):
         Returns:
             DataFrame with OHLCV data or None if failed
         """
-        limit: Optional[int] = kwargs.get('limit')
+        limit: int | None = kwargs.get("limit")
         try:
             # Convert interval to Tiingo format
             tiingo_interval = self._convert_interval(interval)
@@ -66,30 +68,27 @@ class TiingoDataDownloader(BaseDataDownloader):
                 return None
 
             # Format dates
-            start_str = start_date.strftime('%Y-%m-%d')
-            end_str = end_date.strftime('%Y-%m-%d')
+            start_str = start_date.strftime("%Y-%m-%d")
+            end_str = end_date.strftime("%Y-%m-%d")
 
             # Build URL
             url = f"{self.base_url}/daily/{symbol}/prices"
             params: Dict[str, Any] = {
-                'startDate': start_str,
-                'endDate': end_str,
-                'resampleFreq': tiingo_interval,
-                'format': 'json'
+                "startDate": start_str,
+                "endDate": end_str,
+                "resampleFreq": tiingo_interval,
+                "format": "json",
             }
 
             # Add limit if specified
             if limit:
-                params['limit'] = min(limit, 10000)  # Tiingo max limit is 10,000
+                params["limit"] = min(limit, 10000)  # Tiingo max limit is 10,000
 
             _logger.info("Fetching %s %s data from%s to %s", symbol, interval, start_str, end_str)
 
             # Make request with rate limiting
             time.sleep(self.rate_limit_delay)
-            headers = {
-                'Authorization': f'Token {self.api_key}',
-                'Content-Type': 'application/json'
-            }
+            headers = {"Authorization": f"Token {self.api_key}", "Content-Type": "application/json"}
             response = requests.get(url, params=params, headers=headers, timeout=30)
             response.raise_for_status()
 
@@ -115,13 +114,9 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.exception("Error fetching data for %s %s:", symbol, interval)
             return None
 
-    def _convert_interval(self, interval: str) -> Optional[str]:
+    def _convert_interval(self, interval: str) -> str | None:
         """Convert standard interval to Tiingo format."""
-        interval_map = {
-            '1d': 'daily',
-            '1w': 'weekly',
-            '1m': 'monthly'
-        }
+        interval_map = {"1d": "daily", "1w": "weekly", "1m": "monthly"}
         return interval_map.get(interval)
 
     def _standardize_dataframe(self, df: pd.DataFrame, symbol: str, interval: str) -> pd.DataFrame:
@@ -129,46 +124,46 @@ class TiingoDataDownloader(BaseDataDownloader):
         try:
             # Tiingo column mapping
             column_mapping = {
-                'date': 'timestamp',
-                'open': 'open',
-                'high': 'high',
-                'low': 'low',
-                'close': 'close',
-                'volume': 'volume',
-                'adjOpen': 'adj_open',
-                'adjHigh': 'adj_high',
-                'adjLow': 'adj_low',
-                'adjClose': 'adj_close',
-                'adjVolume': 'adj_volume'
+                "date": "timestamp",
+                "open": "open",
+                "high": "high",
+                "low": "low",
+                "close": "close",
+                "volume": "volume",
+                "adjOpen": "adj_open",
+                "adjHigh": "adj_high",
+                "adjLow": "adj_low",
+                "adjClose": "adj_close",
+                "adjVolume": "adj_volume",
             }
 
             # Rename columns
             df = df.rename(columns=column_mapping)
 
             # Ensure required columns exist
-            required_columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+            required_columns = ["timestamp", "open", "high", "low", "close", "volume"]
             for col in required_columns:
                 if col not in df.columns:
                     _logger.error("Missing required column: %s", col)
                     return pd.DataFrame()
 
             # Convert timestamp to datetime
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
 
             # Convert numeric columns
-            numeric_columns = ['open', 'high', 'low', 'close', 'volume']
+            numeric_columns = ["open", "high", "low", "close", "volume"]
             for col in numeric_columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+                df[col] = pd.to_numeric(df[col], errors="coerce")
 
             # Remove rows with NaN values
             df = df.dropna()
 
             # Sort by timestamp
-            df = df.sort_values('timestamp').reset_index(drop=True)
+            df = df.sort_values("timestamp").reset_index(drop=True)
 
             # Set timestamp as index
-            df = df.set_index('timestamp')
-            df.index.name = 'timestamp'
+            df = df.set_index("timestamp")
+            df.index.name = "timestamp"
 
             return df
 
@@ -176,7 +171,7 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.exception("Error standardizing DataFrame for %s %s:", symbol, interval)
             return pd.DataFrame()
 
-    def get_company_metadata(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_company_metadata(self, symbol: str) -> Dict[str, Any] | None:
         """
         Get company metadata from Tiingo.
 
@@ -188,10 +183,7 @@ class TiingoDataDownloader(BaseDataDownloader):
         """
         try:
             url = f"{self.base_url}/daily/{symbol}"
-            headers = {
-                'Authorization': f'Token {self.api_key}',
-                'Content-Type': 'application/json'
-            }
+            headers = {"Authorization": f"Token {self.api_key}", "Content-Type": "application/json"}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, headers=headers, timeout=30)
@@ -206,7 +198,7 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting metadata for %s:", symbol)
             return None
 
-    def get_fundamentals(self, symbol: str) -> Optional[Dict[str, Any]]:  # type: ignore[override]
+    def get_fundamentals(self, symbol: str) -> Dict[str, Any] | None:  # type: ignore[override]
         """
         Get fundamental data for a ticker from Tiingo.
 
@@ -224,13 +216,13 @@ class TiingoDataDownloader(BaseDataDownloader):
 
             # Get additional fundamental data if available
             fundamentals = {
-                'symbol': symbol,
-                'name': metadata.get('name'),
-                'description': metadata.get('description'),
-                'startDate': metadata.get('startDate'),
-                'endDate': metadata.get('endDate'),
-                'exchangeCode': metadata.get('exchangeCode'),
-                'ticker': metadata.get('ticker')
+                "symbol": symbol,
+                "name": metadata.get("name"),
+                "description": metadata.get("description"),
+                "startDate": metadata.get("startDate"),
+                "endDate": metadata.get("endDate"),
+                "exchangeCode": metadata.get("exchangeCode"),
+                "ticker": metadata.get("ticker"),
             }
 
             _logger.info("Retrieved fundamentals for %s", symbol)
@@ -240,8 +232,9 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting fundamentals for %s:", symbol)
             return None
 
-    def get_income_statement(self, symbol: str, start_date: Optional[datetime] = None,
-                           end_date: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
+    def get_income_statement(
+        self, symbol: str, start_date: datetime | None = None, end_date: datetime | None = None
+    ) -> Dict[str, Any] | None:
         """
         Get income statement data from Tiingo.
 
@@ -255,17 +248,14 @@ class TiingoDataDownloader(BaseDataDownloader):
         """
         try:
             url = f"{self.base_url}/fundamentals/{symbol}/daily"
-            params = {'format': 'json'}
+            params = {"format": "json"}
 
             if start_date:
-                params['startDate'] = start_date.strftime('%Y-%m-%d')
+                params["startDate"] = start_date.strftime("%Y-%m-%d")
             if end_date:
-                params['endDate'] = end_date.strftime('%Y-%m-%d')
+                params["endDate"] = end_date.strftime("%Y-%m-%d")
 
-            headers = {
-                'Authorization': f'Token {self.api_key}',
-                'Content-Type': 'application/json'
-            }
+            headers = {"Authorization": f"Token {self.api_key}", "Content-Type": "application/json"}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, headers=headers, timeout=30)
@@ -280,8 +270,9 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting income statement for %s:", symbol)
             return None
 
-    def get_balance_sheet(self, symbol: str, start_date: Optional[datetime] = None,
-                         end_date: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
+    def get_balance_sheet(
+        self, symbol: str, start_date: datetime | None = None, end_date: datetime | None = None
+    ) -> Dict[str, Any] | None:
         """
         Get balance sheet data from Tiingo.
 
@@ -295,17 +286,14 @@ class TiingoDataDownloader(BaseDataDownloader):
         """
         try:
             url = f"{self.base_url}/fundamentals/{symbol}/daily"
-            params = {'format': 'json'}
+            params = {"format": "json"}
 
             if start_date:
-                params['startDate'] = start_date.strftime('%Y-%m-%d')
+                params["startDate"] = start_date.strftime("%Y-%m-%d")
             if end_date:
-                params['endDate'] = end_date.strftime('%Y-%m-%d')
+                params["endDate"] = end_date.strftime("%Y-%m-%d")
 
-            headers = {
-                'Authorization': f'Token {self.api_key}',
-                'Content-Type': 'application/json'
-            }
+            headers = {"Authorization": f"Token {self.api_key}", "Content-Type": "application/json"}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, headers=headers, timeout=30)
@@ -320,8 +308,9 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting balance sheet for %s:", symbol)
             return None
 
-    def get_cash_flow(self, symbol: str, start_date: Optional[datetime] = None,
-                     end_date: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
+    def get_cash_flow(
+        self, symbol: str, start_date: datetime | None = None, end_date: datetime | None = None
+    ) -> Dict[str, Any] | None:
         """
         Get cash flow statement data from Tiingo.
 
@@ -335,17 +324,14 @@ class TiingoDataDownloader(BaseDataDownloader):
         """
         try:
             url = f"{self.base_url}/fundamentals/{symbol}/daily"
-            params = {'format': 'json'}
+            params = {"format": "json"}
 
             if start_date:
-                params['startDate'] = start_date.strftime('%Y-%m-%d')
+                params["startDate"] = start_date.strftime("%Y-%m-%d")
             if end_date:
-                params['endDate'] = end_date.strftime('%Y-%m-%d')
+                params["endDate"] = end_date.strftime("%Y-%m-%d")
 
-            headers = {
-                'Authorization': f'Token {self.api_key}',
-                'Content-Type': 'application/json'
-            }
+            headers = {"Authorization": f"Token {self.api_key}", "Content-Type": "application/json"}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, headers=headers, timeout=30)
@@ -360,8 +346,9 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting cash flow for %s:", symbol)
             return None
 
-    def get_financial_ratios(self, symbol: str, start_date: Optional[datetime] = None,
-                           end_date: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
+    def get_financial_ratios(
+        self, symbol: str, start_date: datetime | None = None, end_date: datetime | None = None
+    ) -> Dict[str, Any] | None:
         """
         Get financial ratios data from Tiingo.
 
@@ -375,17 +362,14 @@ class TiingoDataDownloader(BaseDataDownloader):
         """
         try:
             url = f"{self.base_url}/fundamentals/{symbol}/daily"
-            params = {'format': 'json'}
+            params = {"format": "json"}
 
             if start_date:
-                params['startDate'] = start_date.strftime('%Y-%m-%d')
+                params["startDate"] = start_date.strftime("%Y-%m-%d")
             if end_date:
-                params['endDate'] = end_date.strftime('%Y-%m-%d')
+                params["endDate"] = end_date.strftime("%Y-%m-%d")
 
-            headers = {
-                'Authorization': f'Token {self.api_key}',
-                'Content-Type': 'application/json'
-            }
+            headers = {"Authorization": f"Token {self.api_key}", "Content-Type": "application/json"}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, headers=headers, timeout=30)
@@ -431,10 +415,7 @@ class TiingoDataDownloader(BaseDataDownloader):
         """Get list of available symbols from Tiingo."""
         try:
             url = f"{self.base_url}/daily"
-            headers = {
-                'Authorization': f'Token {self.api_key}',
-                'Content-Type': 'application/json'
-            }
+            headers = {"Authorization": f"Token {self.api_key}", "Content-Type": "application/json"}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, headers=headers, timeout=30)
@@ -443,7 +424,7 @@ class TiingoDataDownloader(BaseDataDownloader):
             data = response.json()
 
             if isinstance(data, list):
-                symbols = [item.get('ticker', '') for item in data if item.get('ticker')]
+                symbols = [item.get("ticker", "") for item in data if item.get("ticker")]
                 _logger.info("Retrieved %d available symbols", len(symbols))
                 return symbols
             else:
@@ -459,11 +440,11 @@ class TiingoDataDownloader(BaseDataDownloader):
 
     def get_supported_intervals(self) -> List[str]:
         """Get list of supported intervals."""
-        return ['1d', '1w', '1m']  # Tiingo supports daily, weekly, monthly
+        return ["1d", "1w", "1m"]  # Tiingo supports daily, weekly, monthly
 
     def get_periods(self) -> List[str]:
         """Return list of supported periods for Tiingo."""
-        return ['1d', '7d', '1mo', '3mo', '6mo', '1y', '2y']
+        return ["1d", "7d", "1mo", "3mo", "6mo", "1y", "2y"]
 
     def get_intervals(self) -> List[str]:
         """Return list of supported intervals for Tiingo."""
@@ -478,10 +459,7 @@ class TiingoDataDownloader(BaseDataDownloader):
         try:
             # Test with a simple request
             url = f"{self.base_url}/daily/AAPL"
-            headers = {
-                'Authorization': f'Token {self.api_key}',
-                'Content-Type': 'application/json'
-            }
+            headers = {"Authorization": f"Token {self.api_key}", "Content-Type": "application/json"}
 
             response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
@@ -512,7 +490,7 @@ if __name__ == "__main__":
         end_date = datetime.now()
         start_date = end_date - timedelta(days=365)  # 1 year of data
 
-        df = downloader.get_ohlcv('AAPL', '1d', start_date, end_date)
+        df = downloader.get_ohlcv("AAPL", "1d", start_date, end_date)
         if df is not None:
             print(f"✅ Downloaded {len(df)} data points for AAPL")
             print(df.head())
@@ -520,7 +498,7 @@ if __name__ == "__main__":
             print("❌ Failed to download data")
 
         # Test fundamental data
-        fundamentals = downloader.get_fundamentals('AAPL')
+        fundamentals = downloader.get_fundamentals("AAPL")
         if fundamentals:
             print("✅ Downloaded fundamental data for AAPL")
             print(f"Company: {fundamentals.get('name', 'N/A')}")
@@ -532,28 +510,28 @@ if __name__ == "__main__":
         print("\n--- Testing Financial Statements ---")
 
         # Income statement
-        income_stmt = downloader.get_income_statement('AAPL')
+        income_stmt = downloader.get_income_statement("AAPL")
         if income_stmt:
             print("✅ Downloaded income statement")
         else:
             print("❌ Failed to download income statement")
 
         # Balance sheet
-        balance_sheet = downloader.get_balance_sheet('AAPL')
+        balance_sheet = downloader.get_balance_sheet("AAPL")
         if balance_sheet:
             print("✅ Downloaded balance sheet")
         else:
             print("❌ Failed to download balance sheet")
 
         # Cash flow
-        cash_flow = downloader.get_cash_flow('AAPL')
+        cash_flow = downloader.get_cash_flow("AAPL")
         if cash_flow:
             print("✅ Downloaded cash flow statement")
         else:
             print("❌ Failed to download cash flow statement")
 
         # Financial ratios
-        ratios = downloader.get_financial_ratios('AAPL')
+        ratios = downloader.get_financial_ratios("AAPL")
         if ratios:
             print("✅ Downloaded financial ratios")
         else:

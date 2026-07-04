@@ -5,24 +5,21 @@ Tests Backtrader adapter with real strategy code, verifies performance parity
 with existing Backtrader indicators, and tests all backend combinations.
 """
 
-import unittest
-import pytest
-from unittest.mock import Mock, patch
 import sys
+import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
+
+import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.indicators.adapters.backtrader_adapter import (
-    BacktraderAdapter,
-    BacktraderIndicatorFactory,
-    BackendSelector
-)
+from src.indicators.adapters.backtrader_adapter import BackendSelector, BacktraderAdapter, BacktraderIndicatorFactory
 from src.indicators.adapters.backtrader_wrappers import (
-    UnifiedRSIIndicator,
     UnifiedBollingerBandsIndicator,
-    UnifiedMACDIndicator
+    UnifiedMACDIndicator,
+    UnifiedRSIIndicator,
 )
 
 
@@ -52,7 +49,7 @@ class TestBacktraderAdapter(unittest.TestCase):
         self.assertIn("bollinger_bands", supported)
         self.assertIn("macd", supported)
 
-    @patch('backtrader.feeds.DataBase')
+    @patch("backtrader.feeds.DataBase")
     def test_create_indicator_unsupported(self, mock_data):
         """Test creating unsupported indicator raises error"""
         with self.assertRaises(ValueError):
@@ -65,33 +62,30 @@ class TestBacktraderIndicatorFactory(unittest.TestCase):
     def setUp(self):
         self.factory = BacktraderIndicatorFactory()
 
-    @patch('backtrader.feeds.DataBase')
+    @patch("backtrader.feeds.DataBase")
     def test_create_rsi(self, mock_data):
         """Test creating RSI indicator through factory"""
         # This test would require actual Backtrader setup, so we'll mock it
-        with patch.object(self.factory._adapter, 'create_indicator') as mock_create:
+        with patch.object(self.factory._adapter, "create_indicator") as mock_create:
             mock_indicator = Mock()
             mock_create.return_value = mock_indicator
 
             result = self.factory.create_rsi(mock_data, period=14)
 
-            mock_create.assert_called_once_with(
-                "rsi", mock_data, backend="bt", period=14, use_unified_service=False
-            )
+            mock_create.assert_called_once_with("rsi", mock_data, backend="bt", period=14, use_unified_service=False)
             self.assertEqual(result, mock_indicator)
 
-    @patch('backtrader.feeds.DataBase')
+    @patch("backtrader.feeds.DataBase")
     def test_create_bollinger_bands(self, mock_data):
         """Test creating Bollinger Bands indicator through factory"""
-        with patch.object(self.factory._adapter, 'create_indicator') as mock_create:
+        with patch.object(self.factory._adapter, "create_indicator") as mock_create:
             mock_indicator = Mock()
             mock_create.return_value = mock_indicator
 
             result = self.factory.create_bollinger_bands(mock_data, period=20, devfactor=2.0)
 
             mock_create.assert_called_once_with(
-                "bollinger_bands", mock_data, backend="bt",
-                period=20, devfactor=2.0, use_unified_service=False
+                "bollinger_bands", mock_data, backend="bt", period=20, devfactor=2.0, use_unified_service=False
             )
             self.assertEqual(result, mock_indicator)
 
@@ -152,12 +146,12 @@ class TestBacktraderWrapperIntegration(unittest.TestCase):
 
     def test_unified_rsi_initialization(self):
         """Test UnifiedRSIIndicator initialization"""
-        with patch('src.indicators.service.UnifiedIndicatorService'):
+        with patch("src.indicators.service.UnifiedIndicatorService"):
             indicator = UnifiedRSIIndicator(
                 self.mock_data,
                 period=14,
                 backend="bt",
-                use_unified_service=False  # Disable to avoid service dependency
+                use_unified_service=False,  # Disable to avoid service dependency
             )
 
             self.assertEqual(indicator.p.period, 14)
@@ -165,13 +159,13 @@ class TestBacktraderWrapperIntegration(unittest.TestCase):
 
     def test_unified_bollinger_bands_initialization(self):
         """Test UnifiedBollingerBandsIndicator initialization"""
-        with patch('src.indicators.service.UnifiedIndicatorService'):
+        with patch("src.indicators.service.UnifiedIndicatorService"):
             indicator = UnifiedBollingerBandsIndicator(
                 self.mock_data,
                 period=20,
                 devfactor=2.0,
                 backend="bt",
-                use_unified_service=False  # Disable to avoid service dependency
+                use_unified_service=False,  # Disable to avoid service dependency
             )
 
             self.assertEqual(indicator.p.period, 20)
@@ -180,14 +174,14 @@ class TestBacktraderWrapperIntegration(unittest.TestCase):
 
     def test_unified_macd_initialization(self):
         """Test UnifiedMACDIndicator initialization"""
-        with patch('src.indicators.service.UnifiedIndicatorService'):
+        with patch("src.indicators.service.UnifiedIndicatorService"):
             indicator = UnifiedMACDIndicator(
                 self.mock_data,
                 fast_period=12,
                 slow_period=26,
                 signal_period=9,
                 backend="bt",
-                use_unified_service=False  # Disable to avoid service dependency
+                use_unified_service=False,  # Disable to avoid service dependency
             )
 
             self.assertEqual(indicator.p.fast_period, 12)
@@ -196,7 +190,7 @@ class TestBacktraderWrapperIntegration(unittest.TestCase):
             self.assertEqual(indicator._backend, "bt")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
 
 
@@ -226,7 +220,7 @@ class TestBacktraderRealStrategyIntegration(unittest.TestCase):
         # Simulate a strategy that uses RSI, MACD, and Bollinger Bands
         indicators = []
 
-        with patch('src.indicators.service.UnifiedIndicatorService'):
+        with patch("src.indicators.service.UnifiedIndicatorService"):
             # Create multiple indicators as a strategy would
             rsi = UnifiedRSIIndicator(self.mock_data, period=14, use_unified_service=False)
             macd = UnifiedMACDIndicator(self.mock_data, fast_period=12, slow_period=26, use_unified_service=False)
@@ -240,12 +234,12 @@ class TestBacktraderRealStrategyIntegration(unittest.TestCase):
 
     def test_indicator_line_interface_compatibility(self):
         """Test that unified indicators maintain Backtrader line interface."""
-        with patch('src.indicators.service.UnifiedIndicatorService'):
+        with patch("src.indicators.service.UnifiedIndicatorService"):
             rsi = UnifiedRSIIndicator(self.mock_data, period=14, use_unified_service=False)
 
             # Should have line interface like traditional Backtrader indicators
-            self.assertTrue(hasattr(rsi, 'lines'))
-            self.assertTrue(hasattr(rsi, 'params'))
+            self.assertTrue(hasattr(rsi, "lines"))
+            self.assertTrue(hasattr(rsi, "params"))
 
     def test_performance_parity_with_native_backtrader(self):
         """Test performance comparison with native Backtrader indicators."""
@@ -254,14 +248,14 @@ class TestBacktraderRealStrategyIntegration(unittest.TestCase):
 
         import time
 
-        with patch('src.indicators.service.UnifiedIndicatorService'):
+        with patch("src.indicators.service.UnifiedIndicatorService"):
             start_time = time.time()
 
             # Create multiple indicators
             indicators = [
                 UnifiedRSIIndicator(self.mock_data, period=14, use_unified_service=False),
                 UnifiedMACDIndicator(self.mock_data, fast_period=12, slow_period=26, use_unified_service=False),
-                UnifiedBollingerBandsIndicator(self.mock_data, period=20, use_unified_service=False)
+                UnifiedBollingerBandsIndicator(self.mock_data, period=20, use_unified_service=False),
             ]
 
             end_time = time.time()
@@ -277,14 +271,9 @@ class TestBacktraderRealStrategyIntegration(unittest.TestCase):
 
         for backend in backends_to_test:
             with self.subTest(backend=backend):
-                with patch('src.indicators.service.UnifiedIndicatorService'):
+                with patch("src.indicators.service.UnifiedIndicatorService"):
                     try:
-                        rsi = UnifiedRSIIndicator(
-                            self.mock_data,
-                            period=14,
-                            backend=backend,
-                            use_unified_service=False
-                        )
+                        rsi = UnifiedRSIIndicator(self.mock_data, period=14, backend=backend, use_unified_service=False)
                         self.assertIsNotNone(rsi)
                         self.assertEqual(rsi._backend, backend)
                     except Exception as e:
@@ -293,7 +282,7 @@ class TestBacktraderRealStrategyIntegration(unittest.TestCase):
 
     def test_parameter_validation_in_strategy_context(self):
         """Test parameter validation when used in strategies."""
-        with patch('src.indicators.service.UnifiedIndicatorService'):
+        with patch("src.indicators.service.UnifiedIndicatorService"):
             # Valid parameters should work
             rsi_valid = UnifiedRSIIndicator(self.mock_data, period=14, use_unified_service=False)
             self.assertEqual(rsi_valid.p.period, 14)
@@ -311,7 +300,7 @@ class TestBacktraderRealStrategyIntegration(unittest.TestCase):
         daily_data.close = Mock()
         hourly_data.close = Mock()
 
-        with patch('src.indicators.service.UnifiedIndicatorService'):
+        with patch("src.indicators.service.UnifiedIndicatorService"):
             # Should be able to create indicators for different timeframes
             daily_rsi = UnifiedRSIIndicator(daily_data, period=14, use_unified_service=False)
             hourly_rsi = UnifiedRSIIndicator(hourly_data, period=14, use_unified_service=False)
@@ -321,7 +310,7 @@ class TestBacktraderRealStrategyIntegration(unittest.TestCase):
 
     def test_indicator_chaining_in_strategies(self):
         """Test chaining indicators as done in complex strategies."""
-        with patch('src.indicators.service.UnifiedIndicatorService'):
+        with patch("src.indicators.service.UnifiedIndicatorService"):
             # Create base indicators
             rsi = UnifiedRSIIndicator(self.mock_data, period=14, use_unified_service=False)
             bb = UnifiedBollingerBandsIndicator(self.mock_data, period=20, use_unified_service=False)
@@ -337,20 +326,17 @@ class TestBacktraderRealStrategyIntegration(unittest.TestCase):
         param_ranges = [
             (10, 14, 21),  # RSI periods
             (15, 20, 25),  # BB periods
-            (2.0, 2.5, 3.0)  # BB deviation factors
+            (2.0, 2.5, 3.0),  # BB deviation factors
         ]
 
-        with patch('src.indicators.service.UnifiedIndicatorService'):
+        with patch("src.indicators.service.UnifiedIndicatorService"):
             for rsi_period in param_ranges[0]:
                 for bb_period in param_ranges[1]:
                     for bb_dev in param_ranges[2]:
                         # Should be able to create indicators with different parameters
                         rsi = UnifiedRSIIndicator(self.mock_data, period=rsi_period, use_unified_service=False)
                         bb = UnifiedBollingerBandsIndicator(
-                            self.mock_data,
-                            period=bb_period,
-                            devfactor=bb_dev,
-                            use_unified_service=False
+                            self.mock_data, period=bb_period, devfactor=bb_dev, use_unified_service=False
                         )
 
                         self.assertEqual(rsi.p.period, rsi_period)
@@ -359,17 +345,17 @@ class TestBacktraderRealStrategyIntegration(unittest.TestCase):
 
     def test_live_trading_compatibility(self):
         """Test compatibility with live trading scenarios."""
-        with patch('src.indicators.service.UnifiedIndicatorService'):
+        with patch("src.indicators.service.UnifiedIndicatorService"):
             # In live trading, indicators need to handle real-time data
             rsi = UnifiedRSIIndicator(self.mock_data, period=14, use_unified_service=False)
 
             # Should handle initialization for live trading
             self.assertIsNotNone(rsi)
-            self.assertTrue(hasattr(rsi, 'p'))
+            self.assertTrue(hasattr(rsi, "p"))
 
     def test_error_handling_in_strategy_context(self):
         """Test error handling when indicators fail in strategy context."""
-        with patch('src.indicators.service.UnifiedIndicatorService') as mock_service:
+        with patch("src.indicators.service.UnifiedIndicatorService") as mock_service:
             # Mock service failure
             mock_service.side_effect = Exception("Service unavailable")
 
@@ -384,12 +370,12 @@ class TestBacktraderRealStrategyIntegration(unittest.TestCase):
 
     def test_memory_efficiency_in_long_running_strategies(self):
         """Test memory efficiency for long-running strategies."""
-        with patch('src.indicators.service.UnifiedIndicatorService'):
+        with patch("src.indicators.service.UnifiedIndicatorService"):
             # Create many indicators as might happen in complex strategies
             indicators = []
 
             for i in range(10):
-                rsi = UnifiedRSIIndicator(self.mock_data, period=14+i, use_unified_service=False)
+                rsi = UnifiedRSIIndicator(self.mock_data, period=14 + i, use_unified_service=False)
                 indicators.append(rsi)
 
             # Should create all indicators without issues
@@ -408,7 +394,7 @@ class TestBacktraderRealStrategyIntegration(unittest.TestCase):
 
         feeds = [csv_feed, live_feed, yahoo_feed]
 
-        with patch('src.indicators.service.UnifiedIndicatorService'):
+        with patch("src.indicators.service.UnifiedIndicatorService"):
             for feed in feeds:
                 feed.close = Mock()
                 feed.high = Mock()
@@ -431,14 +417,14 @@ class TestBacktraderPerformanceIntegration(unittest.TestCase):
         mock_data.high = Mock()
         mock_data.low = Mock()
 
-        with patch('src.indicators.service.UnifiedIndicatorService'):
+        with patch("src.indicators.service.UnifiedIndicatorService"):
             start_time = time.time()
 
             # Create and initialize multiple indicators
             indicators = [
                 UnifiedRSIIndicator(mock_data, period=14, use_unified_service=False),
                 UnifiedMACDIndicator(mock_data, fast_period=12, slow_period=26, use_unified_service=False),
-                UnifiedBollingerBandsIndicator(mock_data, period=20, use_unified_service=False)
+                UnifiedBollingerBandsIndicator(mock_data, period=20, use_unified_service=False),
             ]
 
             end_time = time.time()
@@ -454,7 +440,7 @@ class TestBacktraderPerformanceIntegration(unittest.TestCase):
         mock_data = Mock()
         mock_data.close = Mock()
 
-        with patch('src.indicators.service.UnifiedIndicatorService'):
+        with patch("src.indicators.service.UnifiedIndicatorService"):
             # Create many indicators and clean up
             for i in range(100):
                 rsi = UnifiedRSIIndicator(mock_data, period=14, use_unified_service=False)
@@ -476,7 +462,7 @@ class TestBacktraderPerformanceIntegration(unittest.TestCase):
         results = []
 
         def create_indicator():
-            with patch('src.indicators.service.UnifiedIndicatorService'):
+            with patch("src.indicators.service.UnifiedIndicatorService"):
                 rsi = UnifiedRSIIndicator(mock_data, period=14, use_unified_service=False)
                 results.append(rsi)
 
@@ -497,6 +483,6 @@ class TestBacktraderPerformanceIntegration(unittest.TestCase):
             self.assertIsNotNone(result)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Run with pytest for better output
-    pytest.main([__file__, '-v'])
+    pytest.main([__file__, "-v"])

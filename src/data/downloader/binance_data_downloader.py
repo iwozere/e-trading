@@ -19,13 +19,13 @@ Classes:
 """
 
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List
 
 import pandas as pd
 
 from src.data.downloader.base_data_downloader import BaseDataDownloader
-from src.notification.logger import setup_logger
 from src.model.schemas import Fundamentals
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -75,7 +75,7 @@ class BinanceDataDownloader(BaseDataDownloader):
     >>>     print(f"Not supported: {e}")
     """
 
-    def __init__(self, api_key: Optional[str] = None, api_secret: Optional[str] = None):
+    def __init__(self, api_key: str | None = None, api_secret: str | None = None):
         """
         Initialize Binance data downloader.
 
@@ -85,10 +85,10 @@ class BinanceDataDownloader(BaseDataDownloader):
         """
         super().__init__()
         # Get API credentials from parameter or config
-        #from config.donotshare.donotshare import BINANCE_KEY, BINANCE_SECRET
+        # from config.donotshare.donotshare import BINANCE_KEY, BINANCE_SECRET
 
-        #self.api_key = api_key or BINANCE_KEY
-        #self.api_secret = api_secret or BINANCE_SECRET
+        # self.api_key = api_key or BINANCE_KEY
+        # self.api_secret = api_secret or BINANCE_SECRET
         self.client = None  # Lazy initialization
 
     def _get_client(self):
@@ -97,7 +97,8 @@ class BinanceDataDownloader(BaseDataDownloader):
             try:
                 # Lazy import to avoid loading binance package at module import time
                 from binance.client import Client
-                #self.client = Client(self.api_key, self.api_secret)
+
+                # self.client = Client(self.api_key, self.api_secret)
                 self.client = Client()
             except Exception as e:
                 _logger.warning("Failed to initialize Binance client: %s", e)
@@ -119,9 +120,21 @@ class BinanceDataDownloader(BaseDataDownloader):
         """
         # Convert interval to minutes for calculation
         interval_minutes = {
-            '1m': 1, '3m': 3, '5m': 5, '15m': 15, '30m': 30,
-            '1h': 60, '2h': 120, '4h': 240, '6h': 360, '8h': 480, '12h': 720,
-            '1d': 1440, '3d': 4320, '1w': 10080, '1M': 43200
+            "1m": 1,
+            "3m": 3,
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60,
+            "2h": 120,
+            "4h": 240,
+            "6h": 360,
+            "8h": 480,
+            "12h": 720,
+            "1d": 1440,
+            "3d": 4320,
+            "1w": 10080,
+            "1M": 43200,
         }
 
         minutes_per_interval = interval_minutes.get(interval, 1440)  # default to 1d
@@ -147,11 +160,11 @@ class BinanceDataDownloader(BaseDataDownloader):
 
     def get_supported_intervals(self) -> List[str]:
         """Return list of supported intervals for Binance."""
-        return ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']
+        return ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"]
 
     def get_periods(self) -> List[str]:
         """Return list of supported periods for Binance."""
-        return ['1d', '7d', '1mo', '3mo', '6mo', '1y', '2y']
+        return ["1d", "7d", "1mo", "3mo", "6mo", "1y", "2y"]
 
     def get_intervals(self) -> List[str]:
         """Return list of supported intervals for Binance."""
@@ -185,8 +198,7 @@ class BinanceDataDownloader(BaseDataDownloader):
                 start_timestamp = int(batch_start.timestamp() * 1000)
                 end_timestamp = int(batch_end.timestamp() * 1000)
 
-                _logger.debug("Downloading batch for %s %s: %s to %s",
-                             symbol, interval, batch_start, batch_end)
+                _logger.debug("Downloading batch for %s %s: %s to %s", symbol, interval, batch_start, batch_end)
 
                 # Get klines data for this batch
                 client = self._get_client()
@@ -194,9 +206,7 @@ class BinanceDataDownloader(BaseDataDownloader):
                     _logger.error("Binance client not available")
                     return pd.DataFrame()
 
-                klines = client.get_historical_klines(
-                    symbol, interval, start_timestamp, end_timestamp
-                )
+                klines = client.get_historical_klines(symbol, interval, start_timestamp, end_timestamp)
 
                 all_klines.extend(klines)
 
@@ -233,7 +243,7 @@ class BinanceDataDownloader(BaseDataDownloader):
                 df[col] = df[col].astype(float)
 
             # Remove duplicates and sort by timestamp
-            df = df.drop_duplicates(subset=['timestamp']).sort_values('timestamp').reset_index(drop=True)
+            df = df.drop_duplicates(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
 
             # Keep timestamp as a column for consistency with other downloaders
             # The timestamp will be used as index by the data manager if needed
@@ -270,7 +280,7 @@ class BinanceDataDownloader(BaseDataDownloader):
         return df
 
     def get_funding_rate_history(
-        self, symbol: str, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None, limit: int = 1000
+        self, symbol: str, start_date: datetime | None = None, end_date: datetime | None = None, limit: int = 1000
     ) -> pd.DataFrame:
         """
         Download historical funding rates from Binance Futures.
@@ -304,11 +314,11 @@ class BinanceDataDownloader(BaseDataDownloader):
 
             df = pd.DataFrame(data)
             df = self._convert_futures_timestamp(df, time_col="fundingTime")
-            
+
             # Convert numeric columns
             if "fundingRate" in df.columns:
                 df["fundingRate"] = df["fundingRate"].astype(float)
-            
+
             _logger.info("Successfully downloaded %d funding rate records for %s", len(df), symbol)
             return df
 
@@ -317,7 +327,12 @@ class BinanceDataDownloader(BaseDataDownloader):
             raise
 
     def get_open_interest_history(
-        self, symbol: str, period: str = "1d", start_date: Optional[datetime] = None, end_date: Optional[datetime] = None, limit: int = 500
+        self,
+        symbol: str,
+        period: str = "1d",
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        limit: int = 500,
     ) -> pd.DataFrame:
         """
         Download historical open interest statistics from Binance Futures.
@@ -352,12 +367,12 @@ class BinanceDataDownloader(BaseDataDownloader):
 
             df = pd.DataFrame(data)
             df = self._convert_futures_timestamp(df, time_col="timestamp")
-            
+
             # Convert numeric columns
             for col in ["sumOpenInterest", "sumOpenInterestValue"]:
                 if col in df.columns:
                     df[col] = df[col].astype(float)
-            
+
             _logger.info("Successfully downloaded %d open interest records for %s", len(df), symbol)
             return df
 
@@ -366,7 +381,12 @@ class BinanceDataDownloader(BaseDataDownloader):
             raise
 
     def get_long_short_ratio(
-        self, symbol: str, period: str = "1d", start_date: Optional[datetime] = None, end_date: Optional[datetime] = None, limit: int = 500
+        self,
+        symbol: str,
+        period: str = "1d",
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        limit: int = 500,
     ) -> pd.DataFrame:
         """
         Download global long/short account ratio from Binance Futures.
@@ -401,12 +421,12 @@ class BinanceDataDownloader(BaseDataDownloader):
 
             df = pd.DataFrame(data)
             df = self._convert_futures_timestamp(df, time_col="timestamp")
-            
+
             # Convert numeric columns
             for col in ["longShortRatio", "longAccount", "shortAccount"]:
                 if col in df.columns:
                     df[col] = df[col].astype(float)
-                    
+
             _logger.info("Successfully downloaded %d long/short records for %s", len(df), symbol)
             return df
 

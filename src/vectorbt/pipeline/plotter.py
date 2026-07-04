@@ -1,18 +1,16 @@
-import vectorbt as vbt
-import pandas as pd
 import argparse
-import os
 import json
+import os
 from pathlib import Path
-from typing import Dict, Any, Optional
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+from typing import Any, Dict
 
+import vectorbt as vbt
+from src.notification.logger import setup_logger
 from src.vectorbt.data.loader import DataLoader
 from src.vectorbt.pipeline.engine import StrategyEngine
-from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class AdvancedPlotter:
     """
@@ -20,11 +18,11 @@ class AdvancedPlotter:
     """
 
     def __init__(self, strategy_path: str):
-        with open(strategy_path, 'r') as f:
+        with open(strategy_path) as f:
             self.strategy_config = json.load(f)
         self.engine = StrategyEngine(self.strategy_config)
 
-    def plot_strategy(self, symbol: str, interval: str, params: Optional[Dict[str, Any]] = None):
+    def plot_strategy(self, symbol: str, interval: str, params: Dict[str, Any] | None = None):
         """
         Calculates signals and generates a multi-panel Plotly figure.
         """
@@ -35,7 +33,7 @@ class AdvancedPlotter:
             _logger.error(f"No data found for {symbol} at {interval}")
             return
 
-        close = data.xs('Close', level='column', axis=1)
+        close = data.xs("Close", level="column", axis=1)
 
         # 2. Run Engine
         if params is None:
@@ -51,31 +49,22 @@ class AdvancedPlotter:
         # 3. Simulate Portfolio & Plot using NATIVE vbt methods
         pf = vbt.Portfolio.from_signals(
             close,
-            entries=res['entries'],
-            exits=res['exits'],
-            short_entries=res['short_entries'],
-            short_exits=res['short_exits'],
+            entries=res["entries"],
+            exits=res["exits"],
+            short_entries=res["short_entries"],
+            short_exits=res["short_exits"],
             fees=0.0004,
-            init_cash=1000
+            init_cash=1000,
         )
 
         _logger.info(f"Generating native Plotly report for {symbol}...")
-        fig = pf.plot(
-            subplots=[
-                'cum_returns',
-                'underwater',
-                'orders',
-                'net_exposure'
-            ],
-            column=symbol,
-            group_by=False
-        )
+        fig = pf.plot(subplots=["cum_returns", "underwater", "orders", "net_exposure"], column=symbol, group_by=False)
 
         fig.update_layout(
             height=1000,
             title_text=f"Vectorbt Native Report: {symbol} ({interval})",
             showlegend=True,
-            xaxis_rangeslider_visible=False
+            xaxis_rangeslider_visible=False,
         )
 
         # 4. Save
@@ -84,6 +73,7 @@ class AdvancedPlotter:
         output_path = output_dir / "visual_backtest.html"
         fig.write_html(str(output_path))
         _logger.info(f"✅ Visual backtest saved to {output_path.absolute()}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Advanced Strategy Plotter")
@@ -96,12 +86,13 @@ def main():
 
     params = None
     if args.trial_json and os.path.exists(args.trial_json):
-        with open(args.trial_json, 'r') as f:
+        with open(args.trial_json) as f:
             trial_data = json.load(f)
-            params = trial_data.get('params')
+            params = trial_data.get("params")
 
     plotter = AdvancedPlotter(args.strategy)
     plotter.plot_strategy(args.symbol, args.interval, params)
+
 
 if __name__ == "__main__":
     main()

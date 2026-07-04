@@ -4,21 +4,26 @@ Test Delivery History API
 Tests for the delivery history API endpoints.
 """
 
-import pytest
-from datetime import datetime, timezone
-from fastapi.testclient import TestClient
-from unittest.mock import Mock, patch
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import Mock, patch
+
+import pytest
+from fastapi.testclient import TestClient
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.service.main import app
 from src.data.db.models.model_notification import (
-    Message, MessageDeliveryStatus, MessageStatus, DeliveryStatus, MessagePriority
+    DeliveryStatus,
+    Message,
+    MessageDeliveryStatus,
+    MessagePriority,
+    MessageStatus,
 )
+from src.notification.service.main import app
 
 
 @pytest.fixture
@@ -50,13 +55,13 @@ def sample_message():
         template_name="alert_template",
         content={"title": "Test Alert", "message": "This is a test"},
         message_metadata={"source": "test"},
-        created_at=datetime.now(timezone.utc),
-        scheduled_for=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        scheduled_for=datetime.now(UTC),
         status=MessageStatus.DELIVERED.value,
         retry_count=0,
         max_retries=3,
         last_error=None,
-        processed_at=datetime.now(timezone.utc)
+        processed_at=datetime.now(UTC),
     )
 
 
@@ -68,18 +73,18 @@ def sample_delivery():
         message_id=1,
         channel="telegram",
         status=DeliveryStatus.DELIVERED.value,
-        delivered_at=datetime.now(timezone.utc),
+        delivered_at=datetime.now(UTC),
         response_time_ms=150,
         error_message=None,
         external_id="tg_msg_123",
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC),
     )
 
 
 class TestDeliveryHistoryAPI:
     """Test delivery history API endpoints."""
 
-    @patch('src.notification.service.main.get_notification_repo')
+    @patch("src.notification.service.main.get_notification_repo")
     def test_get_message_history_basic(self, mock_get_repo, client, mock_repo, sample_message):
         """Test basic message history retrieval."""
         # Setup mock
@@ -105,7 +110,7 @@ class TestDeliveryHistoryAPI:
         assert data["pagination"]["total"] == 1
         assert len(data["messages"]) == 1
 
-    @patch('src.notification.service.main.get_notification_repo')
+    @patch("src.notification.service.main.get_notification_repo")
     def test_get_message_history_with_filters(self, mock_get_repo, client, mock_repo, sample_message):
         """Test message history with filters."""
         # Setup mock
@@ -128,8 +133,8 @@ class TestDeliveryHistoryAPI:
                 "status": "DELIVERED",
                 "message_type": "test_alert",
                 "limit": 50,
-                "offset": 0
-            }
+                "offset": 0,
+            },
         )
 
         # Verify response
@@ -140,7 +145,7 @@ class TestDeliveryHistoryAPI:
         assert data["filters"]["status"] == "DELIVERED"
         assert data["filters"]["message_type"] == "test_alert"
 
-    @patch('src.notification.service.main.get_notification_repo')
+    @patch("src.notification.service.main.get_notification_repo")
     def test_get_delivery_history_basic(self, mock_get_repo, client, mock_repo, sample_delivery):
         """Test basic delivery history retrieval."""
         # Setup mock
@@ -166,7 +171,7 @@ class TestDeliveryHistoryAPI:
         assert data["pagination"]["total"] == 1
         assert len(data["deliveries"]) == 1
 
-    @patch('src.notification.service.main.get_notification_repo')
+    @patch("src.notification.service.main.get_notification_repo")
     def test_get_delivery_history_with_user_filter(self, mock_get_repo, client, mock_repo, sample_delivery):
         """Test delivery history with user filter (requires join)."""
         # Setup mock
@@ -182,17 +187,14 @@ class TestDeliveryHistoryAPI:
         mock_query.all.return_value = [sample_delivery]
 
         # Make request with user filter
-        response = client.get(
-            "/api/v1/history/deliveries",
-            params={"user_id": "user123"}
-        )
+        response = client.get("/api/v1/history/deliveries", params={"user_id": "user123"})
 
         # Verify response
         assert response.status_code == 200
         data = response.json()
         assert data["filters"]["user_id"] == "user123"
 
-    @patch('src.notification.service.main.get_notification_repo')
+    @patch("src.notification.service.main.get_notification_repo")
     def test_export_history_json_small(self, mock_get_repo, client, mock_repo, sample_message, sample_delivery):
         """Test small JSON export (immediate)."""
         # Setup mock
@@ -208,10 +210,7 @@ class TestDeliveryHistoryAPI:
         mock_query.all.return_value = [sample_message]
 
         # Make request
-        response = client.get(
-            "/api/v1/history/export",
-            params={"format": "json", "limit": 100}
-        )
+        response = client.get("/api/v1/history/export", params={"format": "json", "limit": 100})
 
         # Verify response
         assert response.status_code == 200
@@ -221,7 +220,7 @@ class TestDeliveryHistoryAPI:
         assert "data" in data
         assert data["record_count"] == 1
 
-    @patch('src.notification.service.main.get_notification_repo')
+    @patch("src.notification.service.main.get_notification_repo")
     def test_export_history_csv_small(self, mock_get_repo, client, mock_repo, sample_message, sample_delivery):
         """Test small CSV export (immediate)."""
         # Setup mock
@@ -237,10 +236,7 @@ class TestDeliveryHistoryAPI:
         mock_query.all.return_value = [sample_message]
 
         # Make request
-        response = client.get(
-            "/api/v1/history/export",
-            params={"format": "csv", "limit": 100}
-        )
+        response = client.get("/api/v1/history/export", params={"format": "csv", "limit": 100})
 
         # Verify response
         assert response.status_code == 200
@@ -253,10 +249,7 @@ class TestDeliveryHistoryAPI:
     def test_export_history_large_background(self, client):
         """Test large export (background processing)."""
         # Make request for large export
-        response = client.get(
-            "/api/v1/history/export",
-            params={"format": "json", "limit": 5000}
-        )
+        response = client.get("/api/v1/history/export", params={"format": "json", "limit": 5000})
 
         # Verify response
         assert response.status_code == 200
@@ -265,7 +258,7 @@ class TestDeliveryHistoryAPI:
         assert "export_id" in data
         assert data["status"] == "processing"
 
-    @patch('src.notification.service.main.get_notification_repo')
+    @patch("src.notification.service.main.get_notification_repo")
     def test_get_history_summary(self, mock_get_repo, client, mock_repo):
         """Test history summary endpoint."""
         # Setup mock
@@ -279,10 +272,7 @@ class TestDeliveryHistoryAPI:
         mock_query.all.return_value = []
 
         # Make request
-        response = client.get(
-            "/api/v1/history/summary",
-            params={"days": 30}
-        )
+        response = client.get("/api/v1/history/summary", params={"days": 30})
 
         # Verify response
         assert response.status_code == 200
@@ -298,35 +288,26 @@ class TestDeliveryHistoryAPI:
         # Test invalid limit
         response = client.get(
             "/api/v1/history/messages",
-            params={"limit": 2000}  # Over max limit
+            params={"limit": 2000},  # Over max limit
         )
         assert response.status_code == 400
 
         # Test invalid offset
-        response = client.get(
-            "/api/v1/history/messages",
-            params={"offset": -1}
-        )
+        response = client.get("/api/v1/history/messages", params={"offset": -1})
         assert response.status_code == 400
 
         # Test invalid order_by
-        response = client.get(
-            "/api/v1/history/messages",
-            params={"order_by": "invalid_field"}
-        )
+        response = client.get("/api/v1/history/messages", params={"order_by": "invalid_field"})
         assert response.status_code == 400
 
         # Test invalid export format
-        response = client.get(
-            "/api/v1/history/export",
-            params={"format": "xml"}
-        )
+        response = client.get("/api/v1/history/export", params={"format": "xml"})
         assert response.status_code == 400
 
         # Test invalid days in summary
         response = client.get(
             "/api/v1/history/summary",
-            params={"days": 400}  # Over max days
+            params={"days": 400},  # Over max days
         )
         assert response.status_code == 400
 

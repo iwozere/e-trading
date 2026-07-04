@@ -20,18 +20,18 @@ Sub-score thresholds (0 / 50 / 100):
   accumulation  0 / neutral / strong (7+ days)
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
+from src.ml.pipeline.p17_penny_stocks.agents.short_squeeze_agent import ShortSqueezeAgent
 from src.ml.pipeline.p17_penny_stocks.config import P17ScoringConfig
 from src.ml.pipeline.p17_penny_stocks.models.candidate import Candidate
-from src.ml.pipeline.p17_penny_stocks.agents.short_squeeze_agent import ShortSqueezeAgent
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -83,8 +83,10 @@ class ScoringAgent:
 
         _logger.info(
             "Scoring complete: A=%d B=%d C=%d W=%d (total=%d)",
-            tier_counts.get("A", 0), tier_counts.get("B", 0),
-            tier_counts.get("C", 0), tier_counts.get("W", 0),
+            tier_counts.get("A", 0),
+            tier_counts.get("B", 0),
+            tier_counts.get("C", 0),
+            tier_counts.get("W", 0),
             len(candidates),
         )
         return candidates
@@ -136,7 +138,7 @@ class ScoringAgent:
     def _technical_score(c: Candidate) -> float:
         signals = 0
         if c.breakout_20d:
-            signals += 2       # counts double — most important technical signal
+            signals += 2  # counts double — most important technical signal
         if c.breakout_50d:
             signals += 1
         if c.bb_squeeze:
@@ -179,12 +181,14 @@ class ScoringAgent:
 
         if score >= cfg.tier_a_min_score:
             # Tier A requires strong technical structure in addition to high score
-            if (c.relative_volume >= cfg.mandatory_rvol
-                    and c.above_sma50
-                    and (c.breakout_20d or c.breakout_50d)
-                    and c.dilution_penalty <= cfg.mandatory_dilution_penalty_max):
+            if (
+                c.relative_volume >= cfg.mandatory_rvol
+                and c.above_sma50
+                and (c.breakout_20d or c.breakout_50d)
+                and c.dilution_penalty <= cfg.mandatory_dilution_penalty_max
+            ):
                 return "A"
-            return "B"   # high score but mandatory conditions not met
+            return "B"  # high score but mandatory conditions not met
 
         if score >= cfg.tier_b_min_score:
             return "B"

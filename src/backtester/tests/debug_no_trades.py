@@ -32,9 +32,9 @@ def main():
 
     config_path = sys.argv[1]
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("DIAGNOSING: WHY NO TRADES?")
-    print("="*80)
+    print("=" * 80)
 
     debugger = BacktestDebugger(config_path)
 
@@ -44,23 +44,23 @@ def main():
     print(f"✓ Loaded {len(df)} bars")
 
     # Analyze entry conditions
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     debugger.analyze_entry_conditions()
 
     # Suggest adjustments
-    print("\n" + "="*80)
-    print("\nWould you like parameter suggestions? (y/n): ", end='')
+    print("\n" + "=" * 80)
+    print("\nWould you like parameter suggestions? (y/n): ", end="")
     try:
         response = input().strip().lower()
-        if response == 'y':
+        if response == "y":
             debugger.suggest_parameter_adjustments()
     except EOFError:
         print("y")
         debugger.suggest_parameter_adjustments()
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("DIAGNOSTIC COMPLETE")
-    print("="*80)
+    print("=" * 80)
     print()
 
 

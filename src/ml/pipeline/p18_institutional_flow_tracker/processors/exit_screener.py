@@ -5,8 +5,8 @@ Filters position delta rows to those that represent meaningful institutional
 exits, removing noise from tiny positions and small reductions.
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
@@ -60,13 +60,9 @@ class ExitScreener:
         if delta_df.empty:
             return pd.DataFrame()
 
-        is_exit = (
-            (delta_df["exit_type"] == "full_exit") |
-            (delta_df["delta_pct"] <= -self._exit_threshold)
-        )
-        is_significant = (
-            (delta_df["pct_of_portfolio_prev"] >= self._min_pct) |
-            (delta_df["value_usd_prev"] >= self._min_value)
+        is_exit = (delta_df["exit_type"] == "full_exit") | (delta_df["delta_pct"] <= -self._exit_threshold)
+        is_significant = (delta_df["pct_of_portfolio_prev"] >= self._min_pct) | (
+            delta_df["value_usd_prev"] >= self._min_value
         )
 
         filtered = delta_df[is_exit & is_significant]
@@ -74,7 +70,9 @@ class ExitScreener:
         assert isinstance(result, pd.DataFrame)
         _logger.info(
             "Exit screener: %d exits from %d delta rows (threshold=%.0f%%, min_portfolio=%.1f%%)",
-            len(result), len(delta_df),
-            self._exit_threshold * 100, self._min_pct * 100,
+            len(result),
+            len(delta_df),
+            self._exit_threshold * 100,
+            self._min_pct * 100,
         )
         return result

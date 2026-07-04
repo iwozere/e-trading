@@ -7,20 +7,22 @@ Tests the notification integration functionality including:
 - Error handling and retry scenarios
 """
 
-import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch
 
 # Add src to path
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.scheduler.scheduler_service import SchedulerService
-from src.data.db.services.jobs_service import JobsService
 from src.common.alerts.alert_evaluator import AlertEvaluator
-from src.notification.service.client import NotificationServiceClient, MessageType, MessagePriority
+from src.data.db.services.jobs_service import JobsService
+from src.notification.service.client import MessagePriority, MessageType, NotificationServiceClient
+from src.scheduler.scheduler_service import SchedulerService
 
 
 @pytest.fixture
@@ -29,12 +31,9 @@ def mock_notification_client():
     client = Mock(spec=NotificationServiceClient)
     client.send_notification = AsyncMock(return_value=True)
     client.get_health_status = AsyncMock(return_value={"status": "healthy"})
-    client.get_stats = Mock(return_value={
-        "service_url": "http://localhost:8000",
-        "timeout": 30,
-        "max_retries": 3,
-        "session_active": True
-    })
+    client.get_stats = Mock(
+        return_value={"service_url": "http://localhost:8000", "timeout": 30, "max_retries": 3, "session_active": True}
+    )
     return client
 
 
@@ -60,7 +59,7 @@ def scheduler_service_with_notification(mock_jobs_service, mock_alert_evaluator,
         alert_evaluator=mock_alert_evaluator,
         notification_client=mock_notification_client,
         database_url="sqlite:///:memory:",
-        max_workers=2
+        max_workers=2,
     )
 
 
@@ -77,19 +76,9 @@ class TestNotificationServiceIntegration:
             "price": 45000.0,
             "timestamp": "2024-01-01T12:00:00Z",
             "alert_name": "RSI Oversold Alert",
-            "notify_config": {
-                "channels": ["telegram"],
-                "recipient_id": "user123",
-                "priority": "high"
-            },
-            "indicators": {
-                "RSI": 25.5,
-                "SMA_20": 44800.0
-            },
-            "rule_snapshot": {
-                "RSI_threshold": 30.0,
-                "current_RSI": 25.5
-            }
+            "notify_config": {"channels": ["telegram"], "recipient_id": "user123", "priority": "high"},
+            "indicators": {"RSI": 25.5, "SMA_20": 44800.0},
+            "rule_snapshot": {"RSI_threshold": 30.0, "current_RSI": 25.5},
         }
 
         # Execute notification
@@ -118,7 +107,9 @@ class TestNotificationServiceIntegration:
         assert "RSI_threshold: 30.0" in message
 
     @pytest.mark.asyncio
-    async def test_send_notification_with_market_data(self, scheduler_service_with_notification, mock_notification_client):
+    async def test_send_notification_with_market_data(
+        self, scheduler_service_with_notification, mock_notification_client
+    ):
         """Test notification with comprehensive market data."""
         notification_data = {
             "ticker": "ETHUSDT",
@@ -126,32 +117,12 @@ class TestNotificationServiceIntegration:
             "price": 3200.0,
             "timestamp": "2024-01-01T16:00:00Z",
             "alert_name": "Bollinger Band Breakout",
-            "notify_config": {
-                "channels": ["telegram", "email"],
-                "recipient_id": "trader456",
-                "priority": "critical"
-            },
-            "market_data": {
-                "open": 3150.0,
-                "high": 3220.0,
-                "low": 3140.0,
-                "volume": 125000
-            },
-            "indicators": {
-                "BB_Upper": 3180.0,
-                "BB_Middle": 3160.0,
-                "BB_Lower": 3140.0,
-                "ATR": 45.5
-            },
+            "notify_config": {"channels": ["telegram", "email"], "recipient_id": "trader456", "priority": "critical"},
+            "market_data": {"open": 3150.0, "high": 3220.0, "low": 3140.0, "volume": 125000},
+            "indicators": {"BB_Upper": 3180.0, "BB_Middle": 3160.0, "BB_Lower": 3140.0, "ATR": 45.5},
             "rule_description": "Price breaks above upper Bollinger Band",
-            "rearm_info": {
-                "type": "crossing",
-                "value": "above_3180"
-            },
-            "alert_config": {
-                "description": "Bollinger Band breakout strategy",
-                "priority": "critical"
-            }
+            "rearm_info": {"type": "crossing", "value": "above_3180"},
+            "alert_config": {"description": "Bollinger Band breakout strategy", "priority": "critical"},
         }
 
         # Execute notification
@@ -192,13 +163,15 @@ class TestNotificationServiceIntegration:
         assert "email" in call_args.kwargs["channels"]
 
     @pytest.mark.asyncio
-    async def test_send_notification_client_failure_with_retry(self, scheduler_service_with_notification, mock_notification_client):
+    async def test_send_notification_client_failure_with_retry(
+        self, scheduler_service_with_notification, mock_notification_client
+    ):
         """Test notification retry logic when client fails."""
         # Setup client to fail first two attempts, succeed on third
         mock_notification_client.send_notification.side_effect = [
             Exception("Connection timeout"),
             False,  # Service returns failure
-            True    # Success on third attempt
+            True,  # Success on third attempt
         ]
 
         notification_data = {
@@ -206,11 +179,11 @@ class TestNotificationServiceIntegration:
             "timeframe": "15m",
             "price": 0.45,
             "alert_name": "MACD Signal",
-            "notify_config": {"channels": ["telegram"], "recipient_id": "user789"}
+            "notify_config": {"channels": ["telegram"], "recipient_id": "user789"},
         }
 
         # Execute notification
-        with patch('asyncio.sleep', new_callable=AsyncMock):  # Speed up test
+        with patch("asyncio.sleep", new_callable=AsyncMock):  # Speed up test
             result = await scheduler_service_with_notification._send_notification(notification_data)
 
         # Verify eventual success
@@ -220,7 +193,9 @@ class TestNotificationServiceIntegration:
         assert mock_notification_client.send_notification.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_send_notification_all_retries_fail(self, scheduler_service_with_notification, mock_notification_client):
+    async def test_send_notification_all_retries_fail(
+        self, scheduler_service_with_notification, mock_notification_client
+    ):
         """Test notification when all retry attempts fail."""
         # Setup client to always fail
         mock_notification_client.send_notification.side_effect = Exception("Service unavailable")
@@ -230,11 +205,11 @@ class TestNotificationServiceIntegration:
             "timeframe": "1m",
             "price": 0.08,
             "alert_name": "Volume Spike",
-            "notify_config": {"channels": ["telegram"], "recipient_id": "user999"}
+            "notify_config": {"channels": ["telegram"], "recipient_id": "user999"},
         }
 
         # Execute notification
-        with patch('asyncio.sleep', new_callable=AsyncMock):  # Speed up test
+        with patch("asyncio.sleep", new_callable=AsyncMock):  # Speed up test
             result = await scheduler_service_with_notification._send_notification(notification_data)
 
         # Verify failure
@@ -244,13 +219,15 @@ class TestNotificationServiceIntegration:
         assert mock_notification_client.send_notification.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_notification_formatting_with_minimal_data(self, scheduler_service_with_notification, mock_notification_client):
+    async def test_notification_formatting_with_minimal_data(
+        self, scheduler_service_with_notification, mock_notification_client
+    ):
         """Test notification formatting with minimal data."""
         notification_data = {
             "ticker": "LTCUSDT",
             "timeframe": "1d",
             "price": 95.0,
-            "notify_config": {}  # Empty config should use defaults
+            "notify_config": {},  # Empty config should use defaults
         }
 
         # Execute notification
@@ -272,7 +249,9 @@ class TestNotificationServiceIntegration:
         assert "95.0" in message
 
     @pytest.mark.asyncio
-    async def test_notification_channel_configuration(self, scheduler_service_with_notification, mock_notification_client):
+    async def test_notification_channel_configuration(
+        self, scheduler_service_with_notification, mock_notification_client
+    ):
         """Test different channel configurations."""
         test_cases = [
             # Single channel as string
@@ -296,8 +275,8 @@ class TestNotificationServiceIntegration:
                 "notify_config": {
                     "channels": case["channels"],
                     "priority": case.get("priority", "normal"),
-                    "recipient_id": f"user{i}"
-                }
+                    "recipient_id": f"user{i}",
+                },
             }
 
             # Execute notification
@@ -316,7 +295,7 @@ class TestNotificationServiceIntegration:
             ("normal", MessagePriority.NORMAL),
             ("high", MessagePriority.HIGH),
             ("critical", MessagePriority.CRITICAL),
-            ("unknown", MessagePriority.NORMAL)  # Default fallback
+            ("unknown", MessagePriority.NORMAL),  # Default fallback
         ]
 
         for alert_priority, expected_message_priority in priority_mappings:
@@ -327,10 +306,7 @@ class TestNotificationServiceIntegration:
                 "timeframe": "1h",
                 "price": 100.0,
                 "alert_name": "Priority Test",
-                "notify_config": {
-                    "priority": alert_priority,
-                    "recipient_id": "test_user"
-                }
+                "notify_config": {"priority": alert_priority, "recipient_id": "test_user"},
             }
 
             # Execute notification
@@ -342,7 +318,9 @@ class TestNotificationServiceIntegration:
             assert call_args.kwargs["priority"] == expected_message_priority
 
     @pytest.mark.asyncio
-    async def test_notification_data_types_handling(self, scheduler_service_with_notification, mock_notification_client):
+    async def test_notification_data_types_handling(
+        self, scheduler_service_with_notification, mock_notification_client
+    ):
         """Test handling of different data types in indicators and rule snapshots."""
         notification_data = {
             "ticker": "TESTUSDT",
@@ -355,13 +333,9 @@ class TestNotificationServiceIntegration:
                 "int_value": 42,
                 "string_value": "BULLISH",
                 "bool_value": True,
-                "none_value": None
+                "none_value": None,
             },
-            "rule_snapshot": {
-                "threshold": 50.0,
-                "signal": "BUY",
-                "confirmed": True
-            }
+            "rule_snapshot": {"threshold": 50.0, "signal": "BUY", "confirmed": True},
         }
 
         # Execute notification
@@ -396,7 +370,7 @@ class TestNotificationServiceIntegration:
             jobs_service=mock_jobs_service,
             alert_evaluator=mock_alert_evaluator,
             notification_client=None,
-            database_url="sqlite:///:memory:"
+            database_url="sqlite:///:memory:",
         )
 
         # Execute health check
@@ -406,7 +380,9 @@ class TestNotificationServiceIntegration:
         assert result["status"] == "unavailable"
         assert "No notification client configured" in result["error"]
 
-    def test_check_notification_health_client_error(self, scheduler_service_with_notification, mock_notification_client):
+    def test_check_notification_health_client_error(
+        self, scheduler_service_with_notification, mock_notification_client
+    ):
         """Test notification health check when client throws error."""
         # Setup client to throw error
         mock_notification_client.get_health_status.side_effect = Exception("Connection failed")
@@ -433,7 +409,9 @@ class TestNotificationErrorHandling:
     """Test error handling scenarios for notifications."""
 
     @pytest.mark.asyncio
-    async def test_notification_with_malformed_data(self, scheduler_service_with_notification, mock_notification_client):
+    async def test_notification_with_malformed_data(
+        self, scheduler_service_with_notification, mock_notification_client
+    ):
         """Test notification handling with malformed data."""
         # Test with missing required fields
         notification_data = {}
@@ -446,14 +424,16 @@ class TestNotificationErrorHandling:
         mock_notification_client.send_notification.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_notification_with_invalid_price_data(self, scheduler_service_with_notification, mock_notification_client):
+    async def test_notification_with_invalid_price_data(
+        self, scheduler_service_with_notification, mock_notification_client
+    ):
         """Test notification with invalid price data."""
         notification_data = {
             "ticker": "TESTUSDT",
             "timeframe": "1h",
             "price": "invalid_price",  # Invalid price type
             "alert_name": "Invalid Price Test",
-            "notify_config": {"recipient_id": "test_user"}
+            "notify_config": {"recipient_id": "test_user"},
         }
 
         # Execute notification (should handle gracefully)
@@ -463,8 +443,11 @@ class TestNotificationErrorHandling:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_notification_unexpected_exception(self, scheduler_service_with_notification, mock_notification_client):
+    async def test_notification_unexpected_exception(
+        self, scheduler_service_with_notification, mock_notification_client
+    ):
         """Test notification handling when unexpected exception occurs."""
+
         # Setup client to throw unexpected exception during message formatting
         def side_effect(*args, **kwargs):
             raise RuntimeError("Unexpected error during notification")
@@ -476,7 +459,7 @@ class TestNotificationErrorHandling:
             "timeframe": "1h",
             "price": 100.0,
             "alert_name": "Exception Test",
-            "notify_config": {"recipient_id": "test_user"}
+            "notify_config": {"recipient_id": "test_user"},
         }
 
         # Execute notification (should not crash the service)

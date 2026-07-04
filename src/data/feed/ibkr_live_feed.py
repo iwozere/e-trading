@@ -16,7 +16,7 @@ Classes:
 - IBKRLiveDataFeed: Live data feed for Interactive Brokers
 """
 
-from typing import Optional, Dict, Any
+from typing import Any, Dict
 
 import pandas as pd
 from ib_insync import *
@@ -38,13 +38,9 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
     - Error handling and rate limiting
     """
 
-    def __init__(self,
-                 symbol: str,
-                 interval: str,
-                 host: str = '127.0.0.1',
-                 port: int = 7497,
-                 client_id: int = 1,
-                 **kwargs):
+    def __init__(
+        self, symbol: str, interval: str, host: str = "127.0.0.1", port: int = 7497, client_id: int = 1, **kwargs
+    ):
         """
         Initialize IBKR live data feed.
 
@@ -83,17 +79,17 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
             IBKR interval format
         """
         interval_map = {
-            '1m': '1 min',
-            '5m': '5 mins',
-            '15m': '15 mins',
-            '30m': '30 mins',
-            '1h': '1 hour',
-            '4h': '4 hours',
-            '1d': '1 day',
+            "1m": "1 min",
+            "5m": "5 mins",
+            "15m": "15 mins",
+            "30m": "30 mins",
+            "1h": "1 hour",
+            "4h": "4 hours",
+            "1d": "1 day",
         }
-        return interval_map.get(interval, '1 min')
+        return interval_map.get(interval, "1 min")
 
-    def _create_contract(self) -> Optional[Contract]:
+    def _create_contract(self) -> Contract | None:
         """
         Create IBKR contract for the symbol.
 
@@ -102,7 +98,7 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
         """
         try:
             # Try to create a stock contract first
-            contract = Stock(self.symbol, 'SMART', 'USD')
+            contract = Stock(self.symbol, "SMART", "USD")
 
             # Request contract details to validate
             self.ib.reqContractDetails(contract)
@@ -121,7 +117,7 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
             _logger.exception("Error creating contract for %s: %s")
             return None
 
-    def _load_historical_data(self) -> Optional[pd.DataFrame]:
+    def _load_historical_data(self) -> pd.DataFrame | None:
         """
         Load historical data from IBKR.
 
@@ -142,14 +138,14 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
             # Request historical data
             bars = self.ib.reqHistoricalData(
                 self.contract,
-                endDateTime='',
+                endDateTime="",
                 durationStr=duration,
                 barSizeSetting=self.ibkr_interval,
-                whatToShow='TRADES',
+                whatToShow="TRADES",
                 useRTH=True,
                 formatDate=1,
                 keepUpToDate=False,
-                chartOptions=[]
+                chartOptions=[],
             )
 
             if not bars:
@@ -157,17 +153,22 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
                 return None
 
             # Convert to DataFrame
-            df = pd.DataFrame([{
-                'datetime': bar.date,
-                'open': bar.open,
-                'high': bar.high,
-                'low': bar.low,
-                'close': bar.close,
-                'volume': bar.volume
-            } for bar in bars])
+            df = pd.DataFrame(
+                [
+                    {
+                        "datetime": bar.date,
+                        "open": bar.open,
+                        "high": bar.high,
+                        "low": bar.low,
+                        "close": bar.close,
+                        "volume": bar.volume,
+                    }
+                    for bar in bars
+                ]
+            )
 
             # Set datetime as index
-            df.set_index('datetime', inplace=True)
+            df.set_index("datetime", inplace=True)
 
             # Ensure we have the right number of bars
             if len(df) > self.lookback_bars:
@@ -194,17 +195,17 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
         total_days = total_minutes / (24 * 60)
 
         if total_days <= 1:
-            return '1 D'
+            return "1 D"
         elif total_days <= 7:
-            return '1 W'
+            return "1 W"
         elif total_days <= 30:
-            return '1 M'
+            return "1 M"
         elif total_days <= 90:
-            return '3 M'
+            return "3 M"
         elif total_days <= 180:
-            return '6 M'
+            return "6 M"
         else:
-            return '1 Y'
+            return "1 Y"
 
     def _get_interval_minutes(self) -> int:
         """
@@ -214,13 +215,13 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
             Interval duration in minutes
         """
         interval_map = {
-            '1m': 1,
-            '5m': 5,
-            '15m': 15,
-            '30m': 30,
-            '1h': 60,
-            '4h': 240,
-            '1d': 1440,
+            "1m": 1,
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60,
+            "4h": 240,
+            "1d": 1440,
         }
         return interval_map.get(self.interval, 1)
 
@@ -264,8 +265,8 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
                 self.data_subscription = self.ib.reqRealTimeBars(
                     self.contract,
                     barSize=5,  # 5-second bars
-                    whatToShow='TRADES',
-                    useRTH=True
+                    whatToShow="TRADES",
+                    useRTH=True,
                 )
 
                 # Set up callback for real-time data
@@ -301,20 +302,25 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
             latest_bar = bars[-1]
 
             # Create DataFrame with the new bar
-            new_data = pd.DataFrame([{
-                'open': latest_bar.open,
-                'high': latest_bar.high,
-                'low': latest_bar.low,
-                'close': latest_bar.close,
-                'volume': latest_bar.volume
-            }], index=[latest_bar.time])
+            new_data = pd.DataFrame(
+                [
+                    {
+                        "open": latest_bar.open,
+                        "high": latest_bar.high,
+                        "low": latest_bar.low,
+                        "close": latest_bar.close,
+                        "volume": latest_bar.volume,
+                    }
+                ],
+                index=[latest_bar.time],
+            )
 
             self._process_new_data(new_data)
 
         except Exception:
             _logger.exception("Error processing real-time bar update: %s")
 
-    def _get_latest_data(self) -> Optional[pd.DataFrame]:
+    def _get_latest_data(self) -> pd.DataFrame | None:
         """
         Get latest data from IBKR.
         For real-time feeds, this is handled by the bar update callback.
@@ -333,13 +339,15 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
             Dictionary with status information
         """
         status = super().get_status()
-        status.update({
-            'ibkr_connected': self.ib.isConnected() if self.ib else False,
-            'host': self.host,
-            'port': self.port,
-            'client_id': self.client_id,
-            'ibkr_interval': self.ibkr_interval,
-            'contract_valid': self.contract is not None,
-            'data_subscribed': self.data_subscription is not None
-        })
+        status.update(
+            {
+                "ibkr_connected": self.ib.isConnected() if self.ib else False,
+                "host": self.host,
+                "port": self.port,
+                "client_id": self.client_id,
+                "ibkr_interval": self.ibkr_interval,
+                "contract_valid": self.contract is not None,
+                "data_subscribed": self.data_subscription is not None,
+            }
+        )
         return status

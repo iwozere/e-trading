@@ -4,19 +4,20 @@ Comprehensive batch processing tests.
 Tests concurrent processing, error handling, and performance characteristics.
 """
 
-import pytest
 import asyncio
-import pandas as pd
-from unittest.mock import patch
-from datetime import datetime
 import sys
+from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
+
+import pandas as pd
+import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.indicators.service import IndicatorService
 from src.indicators.models import IndicatorResultSet
+from src.indicators.service import IndicatorService
 
 
 class TestBatchProcessing:
@@ -25,13 +26,16 @@ class TestBatchProcessing:
     @pytest.fixture
     def mock_ohlcv_data(self):
         """Mock OHLCV data for testing."""
-        return pd.DataFrame({
-            'open': [100, 101, 102],
-            'high': [102, 103, 104],
-            'low': [99, 100, 101],
-            'close': [101, 102, 103],
-            'volume': [1000, 1100, 1200]
-        }, index=pd.date_range('2024-01-01', periods=3, freq='D', tz='UTC'))
+        return pd.DataFrame(
+            {
+                "open": [100, 101, 102],
+                "high": [102, 103, 104],
+                "low": [99, 100, 101],
+                "close": [101, 102, 103],
+                "volume": [1000, 1100, 1200],
+            },
+            index=pd.date_range("2024-01-01", periods=3, freq="D", tz="UTC"),
+        )
 
     @pytest.mark.asyncio
     async def test_batch_processing_multiple_tickers(self, mock_ohlcv_data):
@@ -39,12 +43,9 @@ class TestBatchProcessing:
         service = IndicatorService()
         tickers = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA"]
 
-        with patch('src.common.get_ohlcv', return_value=mock_ohlcv_data):
+        with patch("src.common.get_ohlcv", return_value=mock_ohlcv_data):
             results = await service.compute_batch(
-                tickers=tickers,
-                indicators=["rsi", "ema"],
-                timeframe="1D",
-                period="1M"
+                tickers=tickers, indicators=["rsi", "ema"], timeframe="1D", period="1M"
             )
 
             assert len(results) == len(tickers)
@@ -63,13 +64,9 @@ class TestBatchProcessing:
                 raise Exception("Invalid ticker")
             return mock_ohlcv_data
 
-        with patch('src.common.get_ohlcv', side_effect=mock_get_ohlcv):
+        with patch("src.common.get_ohlcv", side_effect=mock_get_ohlcv):
             results = await service.compute_batch(
-                tickers=tickers,
-                indicators=["rsi"],
-                timeframe="1D",
-                period="1M",
-                fail_fast=False
+                tickers=tickers, indicators=["rsi"], timeframe="1D", period="1M", fail_fast=False
             )
 
             # Should have results for valid tickers
@@ -91,14 +88,10 @@ class TestBatchProcessing:
             await asyncio.sleep(0.1)  # Simulate processing time
             return mock_ohlcv_data
 
-        with patch('src.common.get_ohlcv', side_effect=mock_get_ohlcv):
+        with patch("src.common.get_ohlcv", side_effect=mock_get_ohlcv):
             start_time = datetime.now()
             results = await service.compute_batch(
-                tickers=tickers,
-                indicators=["rsi"],
-                timeframe="1D",
-                period="1M",
-                max_concurrent=5
+                tickers=tickers, indicators=["rsi"], timeframe="1D", period="1M", max_concurrent=5
             )
             end_time = datetime.now()
 
@@ -114,22 +107,17 @@ class TestBatchProcessing:
         service = IndicatorService()
 
         # Process large number of indicators
-        large_indicator_list = [
-            "rsi", "ema", "sma", "macd", "bbands", "atr", "adx", "stoch", "obv"
-        ]
+        large_indicator_list = ["rsi", "ema", "sma", "macd", "bbands", "atr", "adx", "stoch", "obv"]
 
-        with patch('src.common.get_ohlcv', return_value=mock_ohlcv_data):
-            results = asyncio.run(service.compute_batch(
-                tickers=["AAPL"],
-                indicators=large_indicator_list,
-                timeframe="1D",
-                period="1M"
-            ))
+        with patch("src.common.get_ohlcv", return_value=mock_ohlcv_data):
+            results = asyncio.run(
+                service.compute_batch(tickers=["AAPL"], indicators=large_indicator_list, timeframe="1D", period="1M")
+            )
 
             assert len(results) == 1
             assert "AAPL" in results
             # Should complete without memory issues
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

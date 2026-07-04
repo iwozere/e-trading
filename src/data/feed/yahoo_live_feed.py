@@ -17,7 +17,7 @@ Classes:
 - YahooLiveDataFeed: Live data feed for Yahoo Finance
 """
 
-from typing import Optional, Dict, Any
+from typing import Any, Dict
 
 import pandas as pd
 import yfinance as yf
@@ -39,11 +39,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
     - Error handling and rate limiting
     """
 
-    def __init__(self,
-                 symbol: str,
-                 interval: str,
-                 polling_interval: int = 60,
-                 **kwargs):
+    def __init__(self, symbol: str, interval: str, polling_interval: int = 60, **kwargs):
         """
         Initialize Yahoo Finance live data feed.
 
@@ -73,15 +69,15 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
             yfinance interval format
         """
         interval_map = {
-            '1m': '1m',
-            '5m': '5m',
-            '15m': '15m',
-            '30m': '30m',
-            '1h': '1h',
-            '4h': '4h',
-            '1d': '1d',
+            "1m": "1m",
+            "5m": "5m",
+            "15m": "15m",
+            "30m": "30m",
+            "1h": "1h",
+            "4h": "4h",
+            "1d": "1d",
         }
-        return interval_map.get(interval, '1d')
+        return interval_map.get(interval, "1d")
 
     # Note: _load_historical_data() is now inherited from BaseLiveDataFeed
     # which uses DataManager for historical data loading. This ensures
@@ -101,23 +97,23 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
         total_days = total_minutes / (24 * 60)
 
         if total_days <= 1:
-            return '1d'
+            return "1d"
         elif total_days <= 5:
-            return '5d'
+            return "5d"
         elif total_days <= 30:
-            return '1mo'
+            return "1mo"
         elif total_days <= 90:
-            return '3mo'
+            return "3mo"
         elif total_days <= 180:
-            return '6mo'
+            return "6mo"
         elif total_days <= 365:
-            return '1y'
+            return "1y"
         elif total_days <= 730:
-            return '2y'
+            return "2y"
         elif total_days <= 1825:
-            return '5y'
+            return "5y"
         else:
-            return 'max'
+            return "max"
 
     def _get_interval_minutes(self) -> int:
         """
@@ -127,13 +123,13 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
             Interval duration in minutes
         """
         interval_map = {
-            '1m': 1,
-            '5m': 5,
-            '15m': 15,
-            '30m': 30,
-            '1h': 60,
-            '4h': 240,
-            '1d': 1440,
+            "1m": 1,
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60,
+            "4h": 240,
+            "1d": 1440,
         }
         return interval_map.get(self.interval, 1440)
 
@@ -151,7 +147,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
 
             # Test if ticker is valid by getting basic info
             info = self.ticker.info
-            if 'regularMarketPrice' not in info:
+            if "regularMarketPrice" not in info:
                 _logger.error("Invalid ticker symbol: %s", self.symbol)
                 return False
 
@@ -167,7 +163,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
         self.ticker = None
         _logger.info("Disconnected from Yahoo Finance for %s", self.symbol)
 
-    def _get_latest_data(self) -> Optional[pd.DataFrame]:
+    def _get_latest_data(self) -> pd.DataFrame | None:
         """
         Get latest data from Yahoo Finance via polling.
 
@@ -179,11 +175,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
                 return None
 
             # Get recent data (last few bars to ensure we have the latest)
-            recent_data = self.ticker.history(
-                period='1d',
-                interval=self.yahoo_interval,
-                prepost=True
-            )
+            recent_data = self.ticker.history(period="1d", interval=self.yahoo_interval, prepost=True)
 
             if recent_data.empty:
                 return None
@@ -192,7 +184,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
             recent_data.columns = [col.lower() for col in recent_data.columns]
 
             # Select only required columns
-            required_columns = ['open', 'high', 'low', 'close', 'volume']
+            required_columns = ["open", "high", "low", "close", "volume"]
             recent_data = recent_data[required_columns]
 
             # Check if we have new data
@@ -200,11 +192,11 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
                 # Get the current DataFrame and ensure it has a datetime index
                 current_df = self.df.copy()
                 if not isinstance(current_df.index, pd.DatetimeIndex):
-                    if 'timestamp' in current_df.columns:
-                        current_df = current_df.set_index('timestamp')
+                    if "timestamp" in current_df.columns:
+                        current_df = current_df.set_index("timestamp")
                     else:
                         # If no timestamp column, create a dummy datetime index
-                        current_df.index = pd.date_range('2023-01-01', periods=len(current_df), freq='D')
+                        current_df.index = pd.date_range("2023-01-01", periods=len(current_df), freq="D")
 
                 last_known_time = current_df.index[-1]
 
@@ -249,11 +241,13 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
             Dictionary with status information
         """
         status = super().get_status()
-        status.update({
-            'polling_interval': self.polling_interval,
-            'yahoo_interval': self.yahoo_interval,
-            'last_poll_time': self.last_poll_time,
-            'ticker_valid': self.ticker is not None,
-            'data_source': 'Yahoo Finance'  # Override the base class data_source
-        })
+        status.update(
+            {
+                "polling_interval": self.polling_interval,
+                "yahoo_interval": self.yahoo_interval,
+                "last_poll_time": self.last_poll_time,
+                "ticker_valid": self.ticker is not None,
+                "data_source": "Yahoo Finance",  # Override the base class data_source
+            }
+        )
         return status

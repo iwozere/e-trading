@@ -1,13 +1,14 @@
 from __future__ import annotations
-from datetime import datetime, timedelta, timezone
+
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from src.data.db.repos.repo_jobs import JobsRepository
 from src.data.db.models.model_jobs import JobType, RunStatus
+from src.data.db.repos.repo_jobs import JobsRepository
 from src.data.db.repos.repo_users import UsersRepo
 
-UTC = timezone.utc
+UTC = UTC
 
 
 def test_jobs_repo_basic_flow(db_session: Session):
@@ -16,15 +17,17 @@ def test_jobs_repo_basic_flow(db_session: Session):
 
     repo = JobsRepository(db_session)
     now = datetime.now(UTC)
-    sched = repo.create_schedule({
-        "user_id": u.id,
-        "job_type": JobType.SCREENER.value,
-        "name": "daily-screener",
-        "cron": "0 12 * * *",
-        "enabled": True,
-        "next_run_at": now - timedelta(minutes=1),
-        "metadata": None,
-    })
+    sched = repo.create_schedule(
+        {
+            "user_id": u.id,
+            "job_type": JobType.SCREENER.value,
+            "name": "daily-screener",
+            "cron": "0 12 * * *",
+            "enabled": True,
+            "next_run_at": now - timedelta(minutes=1),
+            "metadata": None,
+        }
+    )
     assert sched.id is not None
 
     # list pending schedules
@@ -36,14 +39,16 @@ def test_jobs_repo_basic_flow(db_session: Session):
     assert repo.update_schedule_next_run(sched.id, next_time)
 
     # create a run
-    run = repo.create_run({
-        "user_id": u.id,
-        "job_type": JobType.SCREENER.value,
-        "job_id": sched.id,
-        "scheduled_for": now,
-        "status": RunStatus.PENDING.value,
-        "result": None,
-    })
+    run = repo.create_run(
+        {
+            "user_id": u.id,
+            "job_type": JobType.SCREENER.value,
+            "job_id": sched.id,
+            "scheduled_for": now,
+            "status": RunStatus.PENDING.value,
+            "result": None,
+        }
+    )
     assert run.id is not None
 
     # claim the run

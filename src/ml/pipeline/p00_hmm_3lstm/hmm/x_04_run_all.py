@@ -33,18 +33,19 @@ Usage:
     python run_pipeline.py --features log_return volatility
 """
 
-import sys
+import argparse
 import subprocess
+import sys
 from glob import glob
 from pathlib import Path
-import argparse
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3] # Go up 3 levels from 'src/ml/hmm'
+PROJECT_ROOT = Path(__file__).resolve().parents[3]  # Go up 3 levels from 'src/ml/hmm'
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 def main(args):
     """
@@ -54,10 +55,10 @@ def main(args):
     and evaluation scripts with parameters provided via command-line arguments.
     """
     # Use pathlib for modern path handling
-    output_dir_results = Path('results')
+    output_dir_results = Path("results")
     output_dir_results.mkdir(exist_ok=True)
 
-    csv_files = glob('data/*.csv')
+    csv_files = glob("data/*.csv")
     if not csv_files:
         _logger.error("Error: No CSV files found in the 'data/' directory.")
         return
@@ -75,23 +76,26 @@ def main(args):
             # Step 1: Construct and run the training command dynamically
             _logger.info("  -> Running training for %s...")
             train_cmd = [
-                "python", "src/ml/hmm/x_02_train_hmm.py",
-                "--csv", str(csv_path),
-                "--timeframe", symbol_tf,
+                "python",
+                "src/ml/hmm/x_02_train_hmm.py",
+                "--csv",
+                str(csv_path),
+                "--timeframe",
+                symbol_tf,
                 "--optimize",
-                "--n_trials", str(args.n_trials),
-                "--backend", args.backend,
-                "--features", *args.features  # Unpack the list of features
+                "--n_trials",
+                str(args.n_trials),
+                "--backend",
+                args.backend,
+                "--features",
+                *args.features,  # Unpack the list of features
             ]
             subprocess.run(train_cmd, check=True, capture_output=True, text=True)
 
             # Step 2: Evaluate the results
             _logger.info("  -> Running evaluation for %s...")
             result_csv_path = output_dir_results / f"HMM_{symbol_tf}.csv"
-            eval_cmd = [
-                "python", "src/ml/hmm/x_03_evaluate_hmm.py",
-                "--csv", str(result_csv_path)
-            ]
+            eval_cmd = ["python", "src/ml/hmm/x_03_evaluate_hmm.py", "--csv", str(result_csv_path)]
             subprocess.run(eval_cmd, check=True, capture_output=True, text=True)
 
         except subprocess.CalledProcessError as e:
@@ -100,16 +104,23 @@ def main(args):
             _logger.error("  -> Return Code: %s", e.returncode)
             _logger.error("  -> STDOUT: %s", e.stdout)
             _logger.error("  -> STDERR: %s", e.stderr)
-            continue # Move to the next file
+            continue  # Move to the next file
 
     _logger.info("\n--- Pipeline finished! ---")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the HMM training and evaluation pipeline.")
     parser.add_argument("--n_trials", type=int, default=50, help="Number of Optuna trials per file.")
-    parser.add_argument("--backend", choices=["gaussian", "pomegranate"], default="gaussian", help="HMM library backend.")
-    parser.add_argument("--features", nargs="*", default=["log_return", "volatility", "rsi", "macd", "boll"], help="List of features to use.")
+    parser.add_argument(
+        "--backend", choices=["gaussian", "pomegranate"], default="gaussian", help="HMM library backend."
+    )
+    parser.add_argument(
+        "--features",
+        nargs="*",
+        default=["log_return", "volatility", "rsi", "macd", "boll"],
+        help="List of features to use.",
+    )
 
     cli_args = parser.parse_args()
     main(cli_args)

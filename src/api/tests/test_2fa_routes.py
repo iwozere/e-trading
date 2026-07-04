@@ -9,32 +9,33 @@ Coverage:
 - Missing linked accounts
 """
 
-import time
-import pytest
-from typing import Optional
-from unittest.mock import patch, Mock, AsyncMock, MagicMock
-from pathlib import Path
 import sys
+import time
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
+
+import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 from src.api.auth import get_current_user
 from src.api.main import app
 from src.api.rate_limiter import limiter
-from src.data.db.models.model_users import User, AuthIdentity, VerificationCode
+from src.data.db.models.model_users import AuthIdentity, User, VerificationCode
 
 
 @pytest.fixture(autouse=True)
 def bypass_rate_limit(monkeypatch):
     """Disable the rate limiter for unit tests — rate-limit behaviour is not under test here."""
-    monkeypatch.setattr(limiter, 'enabled', False)
+    monkeypatch.setattr(limiter, "enabled", False)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_user(email: Optional[str] = "admin@test.com") -> User:
+
+def _make_user(email: str | None = "admin@test.com") -> User:
     return User(id=1, email=email, role="admin", is_active=True)
 
 
@@ -68,8 +69,8 @@ def _make_notify_mock():
 # POST /auth/2fa/send
 # ---------------------------------------------------------------------------
 
-class TestSend2FACode:
 
+class TestSend2FACode:
     @patch("src.api.auth_routes.NotificationServiceClient")
     @patch("src.api.auth_routes.get_database_service")
     @patch("src.api.auth_routes.get_current_user")
@@ -184,8 +185,8 @@ class TestSend2FACode:
 # POST /auth/2fa/verify
 # ---------------------------------------------------------------------------
 
-class TestVerify2FACode:
 
+class TestVerify2FACode:
     def _make_code_row(self, code: str = "123456", age_seconds: int = 30) -> Mock:
         row = Mock(spec=VerificationCode)
         row.code = code
@@ -199,6 +200,7 @@ class TestVerify2FACode:
         """Valid code, not expired → 200 with access_token containing 2fa_verified=True."""
         import jwt
         from fastapi.testclient import TestClient
+
         from src.api.config import settings
 
         user = _make_user()

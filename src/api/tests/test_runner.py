@@ -7,10 +7,11 @@ Comprehensive test runner that executes all backend tests with coverage reportin
 Provides options for running specific test modules or all tests.
 """
 
-import pytest
-import sys
 import importlib.util
+import sys
 from pathlib import Path
+
+import pytest
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -33,12 +34,14 @@ def run_all_tests():
 
     # Add coverage if available
     if importlib.util.find_spec("coverage") is not None:
-        args.extend([
-            "--cov=src.api",
-            "--cov-report=term-missing",
-            "--cov-report=html:htmlcov",
-            "--cov-fail-under=80"  # Require 80% coverage
-        ])
+        args.extend(
+            [
+                "--cov=src.api",
+                "--cov-report=term-missing",
+                "--cov-report=html:htmlcov",
+                "--cov-fail-under=80",  # Require 80% coverage
+            ]
+        )
         print("Running tests with coverage reporting...")
     else:
         print("Coverage not available. Install with: pip install pytest-cov")
@@ -54,8 +57,9 @@ def run_specific_tests(test_pattern):
     args = [
         str(test_dir),
         "-v",
-        "-k", test_pattern,  # Run tests matching pattern
-        "--tb=short"
+        "-k",
+        test_pattern,  # Run tests matching pattern
+        "--tb=short",
     ]
 
     return pytest.main(args)

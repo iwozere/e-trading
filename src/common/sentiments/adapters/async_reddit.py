@@ -12,24 +12,24 @@ Features:
 - Retry mechanism with exponential backoff
 - Ticker mention searching
 """
+
 import asyncio
-import aiohttp
-import json
-import time
-import os
-from typing import List, Dict, Optional, Any
-from pathlib import Path
 import sys
-from datetime import datetime, timezone
+import time
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Dict, List
+
+import aiohttp
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
+import config.donotshare.donotshare as secrets
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
 from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
-import config.donotshare.donotshare as secrets
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -37,14 +37,21 @@ REDDIT_TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
 REDDIT_OAUTH_BASE = "https://oauth.reddit.com"
 CONFIG_PATH = PROJECT_ROOT / "config" / "sentiments" / "subreddits.json"
 
+
 class AsyncRedditAdapter(BaseSentimentAdapter):
-    def __init__(self, name: str = "reddit_direct", session: Optional[aiohttp.ClientSession] = None,
-                 concurrency: int = 5, rate_limit_delay: float = 1.0, max_retries: int = 3):
+    def __init__(
+        self,
+        name: str = "reddit_direct",
+        session: aiohttp.ClientSession | None = None,
+        concurrency: int = 5,
+        rate_limit_delay: float = 1.0,
+        max_retries: int = 3,
+    ):
         super().__init__(name, concurrency, rate_limit_delay)
         self._provided_session = session is not None
         self._session = session
         self.max_retries = max_retries
-        self._token: Optional[str] = None
+        self._token: str | None = None
         self._token_expiry: float = 0
         self._token_lock = asyncio.Lock()
         self._analyzer = HeuristicSentimentAnalyzer()
@@ -62,7 +69,6 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
         self.enabled = bool(self.client_id and self.client_secret and not has_placeholders)
         if not self.enabled:
             _logger.warning("Reddit credentials missing or placeholder detected - adapter will be inactive.")
-
 
     async def _ensure_token(self):
         """Ensure we have a valid OAuth2 token."""
@@ -95,22 +101,22 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
                 self._token = payload["access_token"]
                 # Expires in usually 3600 seconds
                 self._token_expiry = time.time() + payload.get("expires_in", 3600)
-                _logger.debug("Successfully acquired Reddit token, expires in %d seconds", payload.get("expires_in", 3600))
+                _logger.debug(
+                    "Successfully acquired Reddit token, expires in %d seconds", payload.get("expires_in", 3600)
+                )
         except Exception as e:
             _logger.error("Failed to fetch Reddit token: %s", e)
             self._update_health_failure(e)
             raise
 
-    async def _request_with_retry(self, method: str, path: str, params: Optional[Dict] = None,
-                                data: Optional[Dict] = None) -> Optional[Dict]:
+    async def _request_with_retry(
+        self, method: str, path: str, params: Dict | None = None, data: Dict | None = None
+    ) -> Dict | None:
         """Make an authenticated request to Reddit API with retry logic."""
         await self._ensure_token()
 
         url = f"{REDDIT_OAUTH_BASE}{path}"
-        headers = {
-            "Authorization": f"Bearer {self._token}",
-            "User-Agent": self.user_agent
-        }
+        headers = {"Authorization": f"Bearer {self._token}", "User-Agent": self.user_agent}
 
         last_exception = None
         for attempt in range(self.max_retries + 1):
@@ -122,17 +128,26 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
 
                         if resp.status == 429:
                             # Rate limited
-                            retry_after = int(resp.headers.get("Retry-After", self.rate_limit_delay * (2 ** attempt)))
-                            _logger.warning("Reddit 429 rate limit (attempt %d/%d) - sleeping %ds",
-                                          attempt + 1, self.max_retries + 1, retry_after)
+                            retry_after = int(resp.headers.get("Retry-After", self.rate_limit_delay * (2**attempt)))
+                            _logger.warning(
+                                "Reddit 429 rate limit (attempt %d/%d) - sleeping %ds",
+                                attempt + 1,
+                                self.max_retries + 1,
+                                retry_after,
+                            )
                             await asyncio.sleep(retry_after)
                             continue
 
                         if resp.status >= 500:
                             if attempt < self.max_retries:
-                                backoff_delay = self.rate_limit_delay * (2 ** attempt)
-                                _logger.warning("Reddit server error %d (attempt %d/%d) - retrying in %.2fs",
-                                              resp.status, attempt + 1, self.max_retries + 1, backoff_delay)
+                                backoff_delay = self.rate_limit_delay * (2**attempt)
+                                _logger.warning(
+                                    "Reddit server error %d (attempt %d/%d) - retrying in %.2fs",
+                                    resp.status,
+                                    attempt + 1,
+                                    self.max_retries + 1,
+                                    backoff_delay,
+                                )
                                 await asyncio.sleep(backoff_delay)
                                 continue
 
@@ -144,9 +159,14 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
                 except Exception as e:
                     last_exception = e
                     if attempt < self.max_retries:
-                        backoff_delay = self.rate_limit_delay * (2 ** attempt)
-                        _logger.debug("Reddit API error %s (attempt %d/%d) - retrying in %.2fs",
-                                    e, attempt + 1, self.max_retries + 1, backoff_delay)
+                        backoff_delay = self.rate_limit_delay * (2**attempt)
+                        _logger.debug(
+                            "Reddit API error %s (attempt %d/%d) - retrying in %.2fs",
+                            e,
+                            attempt + 1,
+                            self.max_retries + 1,
+                            backoff_delay,
+                        )
                         await asyncio.sleep(backoff_delay)
                         continue
                     break
@@ -157,7 +177,9 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
 
         return None
 
-    async def fetch_messages(self, ticker: str, since_ts: Optional[int] = None, limit: int = 200) -> List[Dict[str, Any]]:
+    async def fetch_messages(
+        self, ticker: str, since_ts: int | None = None, limit: int = 200
+    ) -> List[Dict[str, Any]]:
         """
         Fetch individual messsages (submissions and comments) for a ticker from Reddit.
         """
@@ -178,12 +200,7 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
         # But standard search is mostly submissions.
 
         # 1. Search submissions
-        search_params = {
-            "q": query,
-            "sort": "new",
-            "limit": min(limit, 100),
-            "t": "day" if not since_ts else "all"
-        }
+        search_params = {"q": query, "sort": "new", "limit": min(limit, 100), "t": "day" if not since_ts else "all"}
 
         # If since_ts is provided, we might need to filter manually as 'after' in search is for 'fullname'
 
@@ -208,7 +225,7 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
                         continue
 
                     msg = {
-                        "id": data.get("name"), # Fullname
+                        "id": data.get("name"),  # Fullname
                         "body": (data.get("title", "") + " " + data.get("selftext", "")).strip(),
                         "created_at": created_utc,
                         "user": {
@@ -221,7 +238,7 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
                         "retweets": 0,
                         "provider": self.name,
                         "type": "submission",
-                        "url": f"https://reddit.com{data.get('permalink', '')}"
+                        "url": f"https://reddit.com{data.get('permalink', '')}",
                     }
                     all_messages.append(msg)
 
@@ -233,7 +250,7 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
             _logger.error("Error fetching Reddit messages for %s: %s", ticker, e)
             return []
 
-    async def fetch_summary(self, ticker: str, since_ts: Optional[int] = None) -> Dict[str, Any]:
+    async def fetch_summary(self, ticker: str, since_ts: int | None = None) -> Dict[str, Any]:
         """
         Fetch aggregated sentiment summary for a ticker from Reddit.
         """
@@ -267,16 +284,11 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
                 "sentiment_score": float(avg_score),
                 "unique_authors": len({m["user"]["id"] for m in msgs if m["user"]["id"]}),
                 "provider": self.name,
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         except Exception as e:
             _logger.error("Error fetching Reddit summary for %s: %s", ticker, e)
-            return {
-                "mentions": 0,
-                "sentiment_score": 0.0,
-                "provider": self.name,
-                "error": str(e)
-            }
+            return {"mentions": 0, "sentiment_score": 0.0, "provider": self.name, "error": str(e)}
 
     async def close(self) -> None:
         """Clean up adapter resources."""

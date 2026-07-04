@@ -3,7 +3,9 @@ Drawdown Control Module
 
 Implements circuit breaker logic for drawdown control.
 """
+
 from typing import List
+
 
 def check_drawdown(equity_curve: List[float], max_drawdown_pct: float) -> bool:
     """
@@ -21,4 +23,4 @@ def check_drawdown(equity_curve: List[float], max_drawdown_pct: float) -> bool:
         drawdown = (peak - equity) / peak
         if drawdown > max_drawdown_pct:
             return False
-    return True 
+    return True

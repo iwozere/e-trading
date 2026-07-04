@@ -12,21 +12,20 @@
 # ---------------------------------------------------------------------------
 from __future__ import annotations
 
-from typing import Dict, Optional
-import pandas as pd
+from typing import Dict
+
 import numpy as np
+import pandas as pd
 
 try:
     import talib  # type: ignore
 except Exception as e:
-    raise ImportError(
-        "TA-Lib is required for TaLibAdapter. Install with `pip install TA-Lib`."
-    ) from e
+    raise ImportError("TA-Lib is required for TaLibAdapter. Install with `pip install TA-Lib`.") from e
 
 from src.indicators.adapters.base import BaseAdapter  # optional base
 from src.indicators.registry import INDICATOR_META
-
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
 
 
@@ -49,6 +48,7 @@ def _validate_and_collect_inputs(indicator: str, inputs: Dict[str, pd.Series]) -
         out[k] = s
     return out
 
+
 def _ensure_series(x, index: pd.Index) -> pd.Series:
     if isinstance(x, pd.Series):
         return x.reindex(index)
@@ -70,34 +70,35 @@ _CANONICAL_TO_TALIB: dict[str, dict[str, str]] = {
     "williams_r": {"length": "timeperiod"},
     "aroon": {"length": "timeperiod"},
     "adr": {"length": "timeperiod"},
-
     "macd": {"fast": "fastperiod", "slow": "slowperiod", "signal": "signalperiod"},
-
     "stoch": {
         "k": "fastk_period",
         "d": "slowd_period",
         "smooth_k": "slowk_period",
         # k_ma/d_ma handled separately to matype ints
     },
-
     "bbands": {"length": "timeperiod", "std_up": "nbdevup", "std_down": "nbdevdn"},
-
     "sar": {"acceleration": "acceleration", "maximum": "maximum"},
-
     "adosc": {"fast": "fastperiod", "slow": "slowperiod"},
-
     # Custom indicators
     "ichimoku": {"tenkan": "tenkan", "kijun": "kijun", "senkou": "senkou"},
     "super_trend": {"length": "length", "multiplier": "multiplier"},
 }
 
 _MATYPE: dict[str, int] = {
-    "sma": 0, "ema": 1, "wma": 2, "dema": 3, "tema": 4,
-    "trima": 5, "kama": 6, "mama": 7, "t3": 8,
+    "sma": 0,
+    "ema": 1,
+    "wma": 2,
+    "dema": 3,
+    "tema": 4,
+    "trima": 5,
+    "kama": 6,
+    "mama": 7,
+    "t3": 8,
 }
 
 
-def _xlate(indicator: str, params: Optional[dict]) -> dict:
+def _xlate(indicator: str, params: dict | None) -> dict:
     if not params:
         return {}
     mapping = _CANONICAL_TO_TALIB.get(indicator, {})
@@ -123,6 +124,7 @@ def _xlate(indicator: str, params: Optional[dict]) -> dict:
 
 class TaLibAdapter(BaseAdapter):
     """Adapter using TA-Lib backend with strict input validation."""
+
     _map = {
         # Basic indicators
         "rsi": talib.RSI,
@@ -156,28 +158,17 @@ class TaLibAdapter(BaseAdapter):
         return name in self._map
 
     async def compute(
-        self,
-        name: str,
-        df: pd.DataFrame,
-        inputs: Dict[str, pd.Series],
-        params: Optional[dict]
+        self, name: str, df: pd.DataFrame, inputs: Dict[str, pd.Series], params: dict | None
     ) -> Dict[str, pd.Series]:
         """Wrap synchronous TA-Lib calls in async context"""
         # TA-Lib is CPU-bound, run in thread pool to not block event loop
         import asyncio
+
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            None,
-            self._compute_sync,
-            name, df, inputs, params
-        )
+        return await loop.run_in_executor(None, self._compute_sync, name, df, inputs, params)
 
     def _compute_sync(
-        self,
-        name: str,
-        df: pd.DataFrame,
-        inputs: Dict[str, pd.Series],
-        params: Optional[dict]
+        self, name: str, df: pd.DataFrame, inputs: Dict[str, pd.Series], params: dict | None
     ) -> Dict[str, pd.Series]:
         src = _validate_and_collect_inputs(name, inputs)
         p = _xlate(name, params)
@@ -185,15 +176,19 @@ class TaLibAdapter(BaseAdapter):
 
         if name == "bbands":
             u, m, l = fn(src["close"].values.astype(float), **p)
-            return {"upper": _ensure_series(u, df.index),
-                    "middle": _ensure_series(m, df.index),
-                    "lower": _ensure_series(l, df.index)}
+            return {
+                "upper": _ensure_series(u, df.index),
+                "middle": _ensure_series(m, df.index),
+                "lower": _ensure_series(l, df.index),
+            }
 
         if name == "macd":
             macd, signal, hist = fn(src["close"].values.astype(float), **p)
-            return {"macd": _ensure_series(macd, df.index),
-                    "signal": _ensure_series(signal, df.index),
-                    "hist": _ensure_series(hist, df.index)}
+            return {
+                "macd": _ensure_series(macd, df.index),
+                "signal": _ensure_series(signal, df.index),
+                "hist": _ensure_series(hist, df.index),
+            }
 
         if name == "stoch":
             k, d = fn(
@@ -202,8 +197,7 @@ class TaLibAdapter(BaseAdapter):
                 src["close"].values.astype(float),
                 **p,
             )
-            return {"k": _ensure_series(k, df.index),
-                    "d": _ensure_series(d, df.index)}
+            return {"k": _ensure_series(k, df.index), "d": _ensure_series(d, df.index)}
 
         if name in ("atr", "adx", "plus_di", "minus_di"):
             v = fn(
@@ -228,8 +222,7 @@ class TaLibAdapter(BaseAdapter):
                 src["low"].values.astype(float),
                 **p,
             )
-            return {"aroon_up": _ensure_series(aroon_up, df.index),
-                    "aroon_down": _ensure_series(aroon_down, df.index)}
+            return {"aroon_up": _ensure_series(aroon_up, df.index), "aroon_down": _ensure_series(aroon_down, df.index)}
 
         if name == "sar":
             v = fn(
@@ -338,7 +331,7 @@ class TaLibAdapter(BaseAdapter):
             "kijun": _ensure_series(kijun, index),
             "senkou_a": _ensure_series(senkou_a, index),
             "senkou_b": _ensure_series(senkou_b, index),
-            "chikou": _ensure_series(chikou, index)
+            "chikou": _ensure_series(chikou, index),
         }
 
     def _calculate_super_trend(self, src: Dict[str, pd.Series], index: pd.Index, params: dict) -> Dict[str, pd.Series]:
@@ -351,7 +344,9 @@ class TaLibAdapter(BaseAdapter):
         close = src["close"]
 
         # Calculate ATR
-        atr = talib.ATR(high.values.astype(float), low.values.astype(float), close.values.astype(float), timeperiod=length)
+        atr = talib.ATR(
+            high.values.astype(float), low.values.astype(float), close.values.astype(float), timeperiod=length
+        )
         atr_series = pd.Series(atr, index=index)
 
         # Calculate HL2 (median price)
@@ -367,36 +362,33 @@ class TaLibAdapter(BaseAdapter):
 
         for i in range(1, len(close)):
             # Upper band calculation
-            if upper_band.iloc[i] < upper_band.iloc[i-1] or close.iloc[i-1] > upper_band.iloc[i-1]:
+            if upper_band.iloc[i] < upper_band.iloc[i - 1] or close.iloc[i - 1] > upper_band.iloc[i - 1]:
                 upper_band.iloc[i] = upper_band.iloc[i]
             else:
-                upper_band.iloc[i] = upper_band.iloc[i-1]
+                upper_band.iloc[i] = upper_band.iloc[i - 1]
 
             # Lower band calculation
-            if lower_band.iloc[i] > lower_band.iloc[i-1] or close.iloc[i-1] < lower_band.iloc[i-1]:
+            if lower_band.iloc[i] > lower_band.iloc[i - 1] or close.iloc[i - 1] < lower_band.iloc[i - 1]:
                 lower_band.iloc[i] = lower_band.iloc[i]
             else:
-                lower_band.iloc[i] = lower_band.iloc[i-1]
+                lower_band.iloc[i] = lower_band.iloc[i - 1]
 
             # Super trend calculation
             if i == 1:
                 super_trend.iloc[i] = upper_band.iloc[i]
                 trend.iloc[i] = 1
             else:
-                if super_trend.iloc[i-1] == upper_band.iloc[i-1] and close.iloc[i] <= upper_band.iloc[i]:
+                if super_trend.iloc[i - 1] == upper_band.iloc[i - 1] and close.iloc[i] <= upper_band.iloc[i]:
                     super_trend.iloc[i] = upper_band.iloc[i]
                     trend.iloc[i] = 1
-                elif super_trend.iloc[i-1] == upper_band.iloc[i-1] and close.iloc[i] > upper_band.iloc[i]:
+                elif super_trend.iloc[i - 1] == upper_band.iloc[i - 1] and close.iloc[i] > upper_band.iloc[i]:
                     super_trend.iloc[i] = lower_band.iloc[i]
                     trend.iloc[i] = -1
-                elif super_trend.iloc[i-1] == lower_band.iloc[i-1] and close.iloc[i] >= lower_band.iloc[i]:
+                elif super_trend.iloc[i - 1] == lower_band.iloc[i - 1] and close.iloc[i] >= lower_band.iloc[i]:
                     super_trend.iloc[i] = lower_band.iloc[i]
                     trend.iloc[i] = -1
-                elif super_trend.iloc[i-1] == lower_band.iloc[i-1] and close.iloc[i] < lower_band.iloc[i]:
+                elif super_trend.iloc[i - 1] == lower_band.iloc[i - 1] and close.iloc[i] < lower_band.iloc[i]:
                     super_trend.iloc[i] = upper_band.iloc[i]
                     trend.iloc[i] = 1
 
-        return {
-            "value": _ensure_series(super_trend, index),
-            "trend": _ensure_series(trend, index)
-        }
+        return {"value": _ensure_series(super_trend, index), "trend": _ensure_series(trend, index)}

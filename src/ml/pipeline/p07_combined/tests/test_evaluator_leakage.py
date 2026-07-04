@@ -3,10 +3,10 @@ Tests that run_evaluation() produces zero label overlap between train/val/test
 and that each segment's labels are computed solely from that segment's prices.
 """
 
+
 import numpy as np
 import pandas as pd
 import pytest
-from unittest.mock import patch, MagicMock
 
 from src.ml.pipeline.p07_combined.evaluator import P07Evaluator
 
@@ -15,13 +15,16 @@ def _make_ohlcv(n: int = 600) -> pd.DataFrame:
     np.random.seed(42)
     dates = pd.date_range("2022-01-01", periods=n, freq="15min")
     close = 100 + np.cumsum(np.random.randn(n) * 0.5)
-    df = pd.DataFrame({
-        "open":   close * (1 + np.random.randn(n) * 0.001),
-        "high":   close * (1 + np.abs(np.random.randn(n)) * 0.002),
-        "low":    close * (1 - np.abs(np.random.randn(n)) * 0.002),
-        "close":  close,
-        "volume": np.random.randint(1000, 10000, n).astype(float),
-    }, index=dates)
+    df = pd.DataFrame(
+        {
+            "open": close * (1 + np.random.randn(n) * 0.001),
+            "high": close * (1 + np.abs(np.random.randn(n)) * 0.002),
+            "low": close * (1 - np.abs(np.random.randn(n)) * 0.002),
+            "close": close,
+            "volume": np.random.randint(1000, 10000, n).astype(float),
+        },
+        index=dates,
+    )
     return df
 
 
@@ -60,12 +63,12 @@ def test_no_index_overlap_between_segments(ohlcv, params):
         pytest.skip(f"Evaluation returned error: {res['error']}")
 
     idx_train = set(res["X_train"].index)
-    idx_val   = set(res["X_val"].index)
-    idx_test  = set(res["X_test"].index)
+    idx_val = set(res["X_val"].index)
+    idx_test = set(res["X_test"].index)
 
-    assert idx_train.isdisjoint(idx_val),  "Train and val indices overlap!"
+    assert idx_train.isdisjoint(idx_val), "Train and val indices overlap!"
     assert idx_train.isdisjoint(idx_test), "Train and test indices overlap!"
-    assert idx_val.isdisjoint(idx_test),   "Val and test indices overlap!"
+    assert idx_val.isdisjoint(idx_test), "Val and test indices overlap!"
 
 
 def test_train_ends_before_val_starts(ohlcv, params):
@@ -74,12 +77,8 @@ def test_train_ends_before_val_starts(ohlcv, params):
     if "error" in res:
         pytest.skip(f"Evaluation returned error: {res['error']}")
 
-    assert res["X_train"].index.max() < res["X_val"].index.min(), (
-        "Train set extends into val period"
-    )
-    assert res["X_val"].index.max() < res["X_test"].index.min(), (
-        "Val set extends into test period"
-    )
+    assert res["X_train"].index.max() < res["X_val"].index.min(), "Train set extends into val period"
+    assert res["X_val"].index.max() < res["X_test"].index.min(), "Val set extends into test period"
 
 
 def test_result_has_pf_val_and_pf_test(ohlcv, params):
@@ -100,7 +99,7 @@ def test_tpl_bars_buffer_enforced(ohlcv, params):
     tpl_bars = P07Evaluator.hours_to_bars(params["tpl_hours"], "15m")
     n = len(ohlcv)
     train_end = int(n * 0.60) - tpl_bars
-    val_end   = int(n * 0.80) - tpl_bars
+    val_end = int(n * 0.80) - tpl_bars
 
     # The evaluator slices ohlcv_val starting at train_end + tpl_bars
     expected_val_start = ohlcv.index[train_end + tpl_bars]

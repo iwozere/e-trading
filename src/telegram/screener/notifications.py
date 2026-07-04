@@ -1,6 +1,5 @@
 import sys
 from pathlib import Path
-from typing import Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 # Use insert(0, ...) so the project root takes precedence over any same-named
@@ -8,18 +7,18 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.telegram.screener.business_logic import handle_command, get_service_instances
-from src.telegram.command_parser import ParsedCommand, parse_command
-from src.notification.logger import setup_logger
-from src.notification.service.client import MessageType, MessagePriority
 from src.common.recommendation.engine import RecommendationEngine
+from src.notification.logger import setup_logger
+from src.notification.service.client import MessagePriority, MessageType
+from src.telegram.command_parser import ParsedCommand, parse_command
+from src.telegram.screener.business_logic import get_service_instances, handle_command
 
 _logger = setup_logger(__name__)
 
 # Lazy singleton for RecommendationEngine (P3-TG-4): module-level instantiation
 # triggers heavy imports and potential I/O at import time.  Use get_recommendation_engine()
 # instead, which defers construction until first use.
-_recommendation_engine: Optional[RecommendationEngine] = None
+_recommendation_engine: RecommendationEngine | None = None
 
 
 def get_recommendation_engine() -> RecommendationEngine:
@@ -51,7 +50,7 @@ async def process_report_notifications(result, notification_client, message, use
                     priority=MessagePriority.NORMAL,
                     channels=["email"],
                     email_receiver=user_email,
-                    attachments=attachments
+                    attachments=attachments,
                 )
             else:
                 await notification_client.send_notification(
@@ -61,13 +60,15 @@ async def process_report_notifications(result, notification_client, message, use
                     attachments=attachments,
                     priority=MessagePriority.NORMAL,
                     channels=["email"],
-                    email_receiver=user_email
+                    email_receiver=user_email,
                 )
 
     # Telegram notifications - Send directly to avoid queue issues
     _logger.info("Starting Telegram notifications for %d reports", len(result["reports"]))
     for i, report in enumerate(result["reports"]):
-        _logger.info("Sending Telegram notification %d/%d for ticker: %s", i + 1, len(result["reports"]), report.get("ticker"))
+        _logger.info(
+            "Sending Telegram notification %d/%d for ticker: %s", i + 1, len(result["reports"]), report.get("ticker")
+        )
         if "telegram" in channels:
             attachments = None
             if report.get("chart_bytes"):
@@ -84,12 +85,14 @@ async def process_report_notifications(result, notification_client, message, use
                         channels=["telegram"],
                         telegram_chat_id=int(message.chat.id),
                         recipient_id=str(message.chat.id),
-                        data={"reply_to_message_id": message.message_id}
+                        data={"reply_to_message_id": message.message_id},
                     )
-                    _logger.info("Successfully sent error notification for %s", report['ticker'])
+                    _logger.info("Successfully sent error notification for %s", report["ticker"])
                 else:
                     # Create a more concise message for Telegram to avoid length issues
-                    telegram_message = _create_telegram_friendly_message(report["message"], report.get("ticker", "Unknown"))
+                    telegram_message = _create_telegram_friendly_message(
+                        report["message"], report.get("ticker", "Unknown")
+                    )
 
                     # Send success notification directly
                     await notification_client.send_notification(
@@ -101,14 +104,16 @@ async def process_report_notifications(result, notification_client, message, use
                         telegram_chat_id=int(message.chat.id),
                         recipient_id=str(message.chat.id),
                         attachments=attachments,
-                        data={"reply_to_message_id": message.message_id}
+                        data={"reply_to_message_id": message.message_id},
                     )
-                    _logger.info("Successfully sent Telegram notification for %s", report['ticker'])
+                    _logger.info("Successfully sent Telegram notification for %s", report["ticker"])
             except Exception:
-                _logger.exception("Error sending notification for %s", report['ticker'])
+                _logger.exception("Error sending notification for %s", report["ticker"])
                 # Try fallback without attachment
                 try:
-                    telegram_message = _create_telegram_friendly_message(report["message"], report.get("ticker", "Unknown"))
+                    telegram_message = _create_telegram_friendly_message(
+                        report["message"], report.get("ticker", "Unknown")
+                    )
                     await notification_client.send_notification(
                         notification_type=MessageType.INFO,
                         title=f"Report for {report['ticker']}",
@@ -117,11 +122,11 @@ async def process_report_notifications(result, notification_client, message, use
                         channels=["telegram"],
                         telegram_chat_id=int(message.chat.id),
                         recipient_id=str(message.chat.id),
-                        data={"reply_to_message_id": message.message_id}
+                        data={"reply_to_message_id": message.message_id},
                     )
-                    _logger.info("Successfully sent fallback Telegram notification for %s", report['ticker'])
+                    _logger.info("Successfully sent fallback Telegram notification for %s", report["ticker"])
                 except Exception:
-                    _logger.exception("Error sending fallback notification for %s", report['ticker'])
+                    _logger.exception("Error sending fallback notification for %s", report["ticker"])
 
 
 def _create_telegram_friendly_message(message: str, ticker: str) -> str:
@@ -140,7 +145,7 @@ def _create_telegram_friendly_message(message: str, ticker: str) -> str:
         return message
 
     # For very long messages, create a summary
-    lines = message.split('\n')
+    lines = message.split("\n")
     summary_lines = []
 
     # Keep the header/title
@@ -154,7 +159,7 @@ def _create_telegram_friendly_message(message: str, ticker: str) -> str:
     # Try to extract key metrics
     key_metrics = []
     for line in lines:
-        if any(keyword in line.lower() for keyword in ['price:', 'pe ratio:', 'roe:', 'rsi:', 'macd:']):
+        if any(keyword in line.lower() for keyword in ["price:", "pe ratio:", "roe:", "rsi:", "macd:"]):
             if len(key_metrics) < 8:  # Limit to 8 key metrics
                 key_metrics.append(line.strip())
 
@@ -164,7 +169,7 @@ def _create_telegram_friendly_message(message: str, ticker: str) -> str:
 
     summary_lines.append(f"\n💡 Use `/report {ticker} -email` for complete analysis")
 
-    return '\n'.join(summary_lines)
+    return "\n".join(summary_lines)
 
 
 def _create_telegram_friendly_help(help_content: str) -> str:
@@ -182,7 +187,7 @@ def _create_telegram_friendly_help(help_content: str) -> str:
         return help_content
 
     # For very long help content, create a summary
-    lines = help_content.split('\n')
+    lines = help_content.split("\n")
     summary_lines = []
 
     # Keep the header
@@ -196,7 +201,13 @@ def _create_telegram_friendly_help(help_content: str) -> str:
     # Extract key command categories
     command_categories = []
     for line in lines:
-        if line.startswith('📊') or line.startswith('🚨') or line.startswith('⏰') or line.startswith('🔍') or line.startswith('🔧'):
+        if (
+            line.startswith("📊")
+            or line.startswith("🚨")
+            or line.startswith("⏰")
+            or line.startswith("🔍")
+            or line.startswith("🔧")
+        ):
             if len(command_categories) < 10:  # Limit categories
                 command_categories.append(line.strip())
 
@@ -206,7 +217,7 @@ def _create_telegram_friendly_help(help_content: str) -> str:
     summary_lines.append("\n💡 **For complete help with examples, use:** `/help -email`")
     summary_lines.append("📞 **Need support?** Contact admin or check admin panel")
 
-    return '\n'.join(summary_lines)
+    return "\n".join(summary_lines)
 
 
 def send_screener_email(email: str, report, config):
@@ -214,11 +225,11 @@ def send_screener_email(email: str, report, config):
     try:
         # Create email content
         # Use screener name if available, otherwise fall back to list_type
-        screener_name = getattr(config, 'screener_name', None)
+        screener_name = getattr(config, "screener_name", None)
         if screener_name:
-            title = screener_name.replace('_', ' ').title()
+            title = screener_name.replace("_", " ").title()
         else:
-            title = config.list_type.replace('_', ' ').title()
+            title = config.list_type.replace("_", " ").title()
 
         subject = f"📊 {title} Screener Results - {len(report.top_results)} Stocks Found"
 
@@ -227,7 +238,7 @@ def send_screener_email(email: str, report, config):
         <h2>🎯 {title} Screener Results</h2>
         <p><strong>Analysis Summary:</strong></p>
         <ul>
-            <li>FMP Pre-filtered: {len(report.fmp_results.get('fmp_results', [])) if hasattr(report, 'fmp_results') and report.fmp_results and 'fmp_results' in report.fmp_results else 'N/A'} stocks</li>
+            <li>FMP Pre-filtered: {len(report.fmp_results.get("fmp_results", [])) if hasattr(report, "fmp_results") and report.fmp_results and "fmp_results" in report.fmp_results else "N/A"} stocks</li>
             <li>Processed: {report.total_tickers_processed} tickers</li>
             <li>Found: {len(report.top_results)} matching stocks</li>
         </ul>
@@ -238,9 +249,13 @@ def send_screener_email(email: str, report, config):
         for i, result in enumerate(report.top_results[:20], 1):  # Show top 20
             # Get company name from fundamentals if available
             company_name = ""
-            if result.fundamentals and hasattr(result.fundamentals, 'company_name') and result.fundamentals.company_name:
+            if (
+                result.fundamentals
+                and hasattr(result.fundamentals, "company_name")
+                and result.fundamentals.company_name
+            ):
                 company_name = f" - {result.fundamentals.company_name}"
-            elif result.fundamentals and hasattr(result.fundamentals, 'sector') and result.fundamentals.sector:
+            elif result.fundamentals and hasattr(result.fundamentals, "sector") and result.fundamentals.sector:
                 company_name = f" - {result.fundamentals.sector}"
 
             body += f"""
@@ -304,7 +319,9 @@ def send_screener_email(email: str, report, config):
                     body += f"<p><strong>Quick Ratio:</strong> {result.fundamentals.quick_ratio:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.operating_margin:
-                    recommendation = _get_unified_recommendation("OPERATING_MARGIN", result.fundamentals.operating_margin)
+                    recommendation = _get_unified_recommendation(
+                        "OPERATING_MARGIN", result.fundamentals.operating_margin
+                    )
                     body += f"<p><strong>Operating Margin:</strong> {result.fundamentals.operating_margin:.2%} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.profit_margin:
@@ -316,7 +333,9 @@ def send_screener_email(email: str, report, config):
                     body += f"<p><strong>Revenue Growth:</strong> {result.fundamentals.revenue_growth:.2%} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.net_income_growth:
-                    recommendation = _get_unified_recommendation("NET_INCOME_GROWTH", result.fundamentals.net_income_growth)
+                    recommendation = _get_unified_recommendation(
+                        "NET_INCOME_GROWTH", result.fundamentals.net_income_growth
+                    )
                     body += f"<p><strong>Net Income Growth:</strong> {result.fundamentals.net_income_growth:.2%} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.free_cash_flow:
@@ -357,67 +376,67 @@ def send_screener_email(email: str, report, config):
                 body += "<div style='margin: 10px 0;'>"
                 body += "<h5 style='color: #3498db; margin: 10px 0;'>📈 Technical Analysis:</h5>"
 
-                if hasattr(result.technicals, 'rsi') and result.technicals.rsi is not None:
+                if hasattr(result.technicals, "rsi") and result.technicals.rsi is not None:
                     recommendation = _get_unified_recommendation("RSI", result.technicals.rsi)
                     body += f"<p><strong>RSI:</strong> {result.technicals.rsi:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
-                if hasattr(result.technicals, 'macd') and result.technicals.macd is not None:
+                if hasattr(result.technicals, "macd") and result.technicals.macd is not None:
                     context = {}
-                    if hasattr(result.technicals, 'macd_signal') and result.technicals.macd_signal is not None:
-                        context['macd_signal'] = result.technicals.macd_signal
-                    if hasattr(result.technicals, 'macd_histogram') and result.technicals.macd_histogram is not None:
-                        context['macd_histogram'] = result.technicals.macd_histogram
+                    if hasattr(result.technicals, "macd_signal") and result.technicals.macd_signal is not None:
+                        context["macd_signal"] = result.technicals.macd_signal
+                    if hasattr(result.technicals, "macd_histogram") and result.technicals.macd_histogram is not None:
+                        context["macd_histogram"] = result.technicals.macd_histogram
                     recommendation = _get_unified_recommendation("MACD", result.technicals.macd, context)
                     body += f"<p><strong>MACD:</strong> {result.technicals.macd:.4f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
-                if hasattr(result.technicals, 'macd_signal') and result.technicals.macd_signal is not None:
+                if hasattr(result.technicals, "macd_signal") and result.technicals.macd_signal is not None:
                     body += f"<p><strong>MACD Signal:</strong> {result.technicals.macd_signal:.4f}</p>"
-                if hasattr(result.technicals, 'sma_fast') and result.technicals.sma_fast is not None:
-                    context = {'current_price': result.fundamentals.current_price if result.fundamentals else None}
+                if hasattr(result.technicals, "sma_fast") and result.technicals.sma_fast is not None:
+                    context = {"current_price": result.fundamentals.current_price if result.fundamentals else None}
                     recommendation = _get_unified_recommendation("SMA_FAST", result.technicals.sma_fast, context)
                     body += f"<p><strong>SMA Fast:</strong> ${result.technicals.sma_fast:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
 
-                if hasattr(result.technicals, 'sma_slow') and result.technicals.sma_slow is not None:
-                    context = {'current_price': result.fundamentals.current_price if result.fundamentals else None}
+                if hasattr(result.technicals, "sma_slow") and result.technicals.sma_slow is not None:
+                    context = {"current_price": result.fundamentals.current_price if result.fundamentals else None}
                     recommendation = _get_unified_recommendation("SMA_SLOW", result.technicals.sma_slow, context)
                     body += f"<p><strong>SMA Slow:</strong> ${result.technicals.sma_slow:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
 
-                if hasattr(result.technicals, 'ema_fast') and result.technicals.ema_fast is not None:
+                if hasattr(result.technicals, "ema_fast") and result.technicals.ema_fast is not None:
                     body += f"<p><strong>EMA Fast:</strong> ${result.technicals.ema_fast:.2f}</p>"
 
-                if hasattr(result.technicals, 'ema_slow') and result.technicals.ema_slow is not None:
+                if hasattr(result.technicals, "ema_slow") and result.technicals.ema_slow is not None:
                     body += f"<p><strong>EMA Slow:</strong> ${result.technicals.ema_slow:.2f}</p>"
 
-                if hasattr(result.technicals, 'bb_upper') and result.technicals.bb_upper is not None:
+                if hasattr(result.technicals, "bb_upper") and result.technicals.bb_upper is not None:
                     context = {
-                        'current_price': result.fundamentals.current_price if result.fundamentals else None,
-                        'bb_upper': result.technicals.bb_upper,
-                        'bb_lower': result.technicals.bb_lower if hasattr(result.technicals, 'bb_lower') else None
+                        "current_price": result.fundamentals.current_price if result.fundamentals else None,
+                        "bb_upper": result.technicals.bb_upper,
+                        "bb_lower": result.technicals.bb_lower if hasattr(result.technicals, "bb_lower") else None,
                     }
                     recommendation = _get_unified_recommendation("BB_UPPER", result.technicals.bb_upper, context)
                     body += f"<p><strong>Bollinger Upper:</strong> ${result.technicals.bb_upper:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
-                if hasattr(result.technicals, 'bb_lower') and result.technicals.bb_lower is not None:
+                if hasattr(result.technicals, "bb_lower") and result.technicals.bb_lower is not None:
                     body += f"<p><strong>Bollinger Lower:</strong> ${result.technicals.bb_lower:.2f}</p>"
-                if hasattr(result.technicals, 'bb_middle') and result.technicals.bb_middle is not None:
+                if hasattr(result.technicals, "bb_middle") and result.technicals.bb_middle is not None:
                     body += f"<p><strong>Bollinger Middle:</strong> ${result.technicals.bb_middle:.2f}</p>"
-                if hasattr(result.technicals, 'adx') and result.technicals.adx is not None:
+                if hasattr(result.technicals, "adx") and result.technicals.adx is not None:
                     recommendation = _get_unified_recommendation("ADX", result.technicals.adx)
                     body += f"<p><strong>ADX:</strong> {result.technicals.adx:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
-                if hasattr(result.technicals, 'atr') and result.technicals.atr is not None:
+                if hasattr(result.technicals, "atr") and result.technicals.atr is not None:
                     body += f"<p><strong>ATR:</strong> {result.technicals.atr:.2f}</p>"
-                if hasattr(result.technicals, 'stoch_k') and result.technicals.stoch_k is not None:
+                if hasattr(result.technicals, "stoch_k") and result.technicals.stoch_k is not None:
                     recommendation = _get_unified_recommendation("STOCH_K", result.technicals.stoch_k)
                     body += f"<p><strong>Stochastic K:</strong> {result.technicals.stoch_k:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
-                if hasattr(result.technicals, 'stoch_d') and result.technicals.stoch_d is not None:
+                if hasattr(result.technicals, "stoch_d") and result.technicals.stoch_d is not None:
                     body += f"<p><strong>Stochastic D:</strong> {result.technicals.stoch_d:.2f}</p>"
-                if hasattr(result.technicals, 'williams_r') and result.technicals.williams_r is not None:
+                if hasattr(result.technicals, "williams_r") and result.technicals.williams_r is not None:
                     recommendation = _get_unified_recommendation("WILLIAMS_R", result.technicals.williams_r)
                     body += f"<p><strong>Williams %R:</strong> {result.technicals.williams_r:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
-                if hasattr(result.technicals, 'cci') and result.technicals.cci is not None:
+                if hasattr(result.technicals, "cci") and result.technicals.cci is not None:
                     recommendation = _get_unified_recommendation("CCI", result.technicals.cci)
                     body += f"<p><strong>CCI:</strong> {result.technicals.cci:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
-                if hasattr(result.technicals, 'roc') and result.technicals.roc is not None:
+                if hasattr(result.technicals, "roc") and result.technicals.roc is not None:
                     recommendation = _get_unified_recommendation("ROC", result.technicals.roc)
                     body += f"<p><strong>ROC:</strong> {result.technicals.roc:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
-                if hasattr(result.technicals, 'mfi') and result.technicals.mfi is not None:
+                if hasattr(result.technicals, "mfi") and result.technicals.mfi is not None:
                     recommendation = _get_unified_recommendation("MFI", result.technicals.mfi)
                     body += f"<p><strong>MFI:</strong> {result.technicals.mfi:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
 
@@ -444,6 +463,7 @@ def send_screener_email(email: str, report, config):
 
         # Send email using existing email infrastructure
         from src.notification.emailer import EmailNotifier
+
         email_notifier = EmailNotifier()
         email_notifier.send_email(email, subject, body)
 
@@ -480,8 +500,6 @@ def _get_unified_recommendation(indicator: str, value: float, context: dict = No
         return "HOLD"
 
 
-
-
 async def process_report_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     """
     Process /report command using service layer for all operations.
@@ -505,7 +523,8 @@ async def process_report_command(message, telegram_user_id, parsed: ParsedComman
             channels = ["telegram"]
             if result.get("email", False):
                 channels.append("email")
-            from src.notification.service.client import MessageType, MessagePriority
+            from src.notification.service.client import MessagePriority, MessageType
+
             await notification_client.send_notification(
                 notification_type=MessageType.ERROR,
                 title=result.get("title", "Report"),
@@ -514,14 +533,12 @@ async def process_report_command(message, telegram_user_id, parsed: ParsedComman
                 channels=channels,
                 recipient_id=str(message.chat.id),
                 email_receiver=user_email if "email" in channels else None,
-                data={"reply_to_message_id": message.message_id}
+                data={"reply_to_message_id": message.message_id},
             )
     except Exception as e:
         _logger.exception("Error in report command")
-        return {
-            "status": "error",
-            "message": f"Error processing report command: {str(e)}"
-        }
+        return {"status": "error", "message": f"Error processing report command: {str(e)}"}
+
 
 async def process_help_command(message, telegram_user_id, message_text=None, notification_client=None):
     """
@@ -570,7 +587,7 @@ async def process_help_command(message, telegram_user_id, message_text=None, not
             priority=MessagePriority.NORMAL,
             channels=["telegram"],
             recipient_id=str(message.chat.id),
-            data={"reply_to_message_id": message.message_id}
+            data={"reply_to_message_id": message.message_id},
         )
 
         # Send email if requested and user is verified
@@ -581,15 +598,13 @@ async def process_help_command(message, telegram_user_id, message_text=None, not
                 message=help_content,
                 priority=MessagePriority.NORMAL,
                 channels=["email"],
-                email_receiver=user_email
+                email_receiver=user_email,
             )
 
     except Exception as e:
         _logger.exception("Error in help command")
-        return {
-            "status": "error",
-            "message": f"Error processing help command: {str(e)}"
-        }
+        return {"status": "error", "message": f"Error processing help command: {str(e)}"}
+
 
 def get_comprehensive_help_content():
     """Get comprehensive help content for the bot."""
@@ -730,6 +745,7 @@ Email notifications for all features
 For more detailed help, visit the admin panel help page!
 """
 
+
 async def process_info_command(message, telegram_user_id, notification_client):
     """
     Process /info command using service layer through business logic.
@@ -773,7 +789,7 @@ async def process_info_command(message, telegram_user_id, notification_client):
             priority=MessagePriority.NORMAL,
             channels=["telegram"],
             recipient_id=str(message.chat.id),
-            data={"reply_to_message_id": message.message_id}
+            data={"reply_to_message_id": message.message_id},
         )
 
         # Send email if requested and user is verified
@@ -784,15 +800,13 @@ async def process_info_command(message, telegram_user_id, notification_client):
                 message=result.get("message", "No message"),
                 priority=MessagePriority.NORMAL,
                 channels=["email"],
-                email_receiver=user_email
+                email_receiver=user_email,
             )
 
     except Exception as e:
         _logger.exception("Error in info command")
-        return {
-            "status": "error",
-            "message": f"Error processing info command: {str(e)}"
-        }
+        return {"status": "error", "message": f"Error processing info command: {str(e)}"}
+
 
 async def process_register_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     try:
@@ -811,7 +825,7 @@ async def process_register_command(message, telegram_user_id, parsed: ParsedComm
             priority=MessagePriority.NORMAL,
             channels=["telegram"],
             recipient_id=str(message.chat.id),
-            data={"reply_to_message_id": message.message_id}
+            data={"reply_to_message_id": message.message_id},
         )
 
         # Send verification email if registration was successful
@@ -823,15 +837,13 @@ async def process_register_command(message, telegram_user_id, parsed: ParsedComm
                 message=f"Hello,\n\nThank you for registering your email with the Alkotrader Telegram bot.\n\nYour verification code is: {verification_info['code']}\n\nThis code is valid for 1 hour. If you did not request this, please ignore this email.\n\nBest regards,\nAlkotrader Team",
                 priority=MessagePriority.NORMAL,
                 channels=["email"],
-                email_receiver=verification_info["email"]
+                email_receiver=verification_info["email"],
             )
 
     except Exception as e:
         _logger.exception("Error in register command")
-        return {
-            "status": "error",
-            "message": f"Error processing register command: {str(e)}"
-        }
+        return {"status": "error", "message": f"Error processing register command: {str(e)}"}
+
 
 async def process_verify_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     try:
@@ -849,7 +861,7 @@ async def process_verify_command(message, telegram_user_id, parsed: ParsedComman
             channels=channels,
             recipient_id=str(message.chat.id),
             email_receiver=user_email if "email" in channels else None,
-            data={"reply_to_message_id": message.message_id}
+            data={"reply_to_message_id": message.message_id},
         )
     except Exception:
         _logger.exception("Error in verify command: ")
@@ -860,8 +872,9 @@ async def process_verify_command(message, telegram_user_id, parsed: ParsedComman
             priority=MessagePriority.CRITICAL,
             channels=["telegram"],
             recipient_id=str(message.chat.id),
-            data={"reply_to_message_id": message.message_id}
+            data={"reply_to_message_id": message.message_id},
         )
+
 
 async def process_request_approval_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     """Process /request_approval command"""
@@ -881,7 +894,7 @@ async def process_request_approval_command(message, telegram_user_id, parsed: Pa
                 priority=MessagePriority.NORMAL,
                 channels=["telegram"],
                 recipient_id=str(message.chat.id),
-                data={"reply_to_message_id": message.message_id}
+                data={"reply_to_message_id": message.message_id},
             )
 
             # Notify admins about the approval request
@@ -892,7 +905,7 @@ async def process_request_approval_command(message, telegram_user_id, parsed: Pa
                     message=f"User {result['user_id']} ({result['email']}) has requested approval for restricted features.",
                     priority=MessagePriority.HIGH,
                     channels=["telegram"],
-                    recipient_id=str(message.chat.id)  # Send to admin chat
+                    recipient_id=str(message.chat.id),  # Send to admin chat
                 )
         else:
             await notification_client.send_notification(
@@ -902,7 +915,7 @@ async def process_request_approval_command(message, telegram_user_id, parsed: Pa
                 priority=MessagePriority.NORMAL,
                 channels=["telegram"],
                 recipient_id=str(message.chat.id),
-                data={"reply_to_message_id": message.message_id}
+                data={"reply_to_message_id": message.message_id},
             )
 
     except Exception:
@@ -914,8 +927,9 @@ async def process_request_approval_command(message, telegram_user_id, parsed: Pa
             priority=MessagePriority.NORMAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
+            reply_to_message_id=message.message_id,
         )
+
 
 async def process_language_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     try:
@@ -934,7 +948,7 @@ async def process_language_command(message, telegram_user_id, parsed: ParsedComm
             channels=channels,
             recipient_id=str(message.chat.id),
             email_receiver=user_email if "email" in channels else None,
-            data={"reply_to_message_id": message.message_id}
+            data={"reply_to_message_id": message.message_id},
         )
     except Exception:
         _logger.exception("Error in language command: ")
@@ -945,8 +959,9 @@ async def process_language_command(message, telegram_user_id, parsed: ParsedComm
             priority=MessagePriority.CRITICAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
+            reply_to_message_id=message.message_id,
         )
+
 
 async def process_admin_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     try:
@@ -965,7 +980,7 @@ async def process_admin_command(message, telegram_user_id, parsed: ParsedCommand
             priority=MessagePriority.NORMAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
+            reply_to_message_id=message.message_id,
         )
 
         # Handle broadcast functionality
@@ -983,7 +998,7 @@ async def process_admin_command(message, telegram_user_id, parsed: ParsedCommand
                         message=broadcast_message,
                         priority=MessagePriority.NORMAL,
                         channels=["telegram"],
-                        recipient_id=str(user_id)
+                        recipient_id=str(user_id),
                     )
                 except Exception:
                     _logger.exception("Error sending broadcast to user %s:", user_id)
@@ -997,8 +1012,9 @@ async def process_admin_command(message, telegram_user_id, parsed: ParsedCommand
             priority=MessagePriority.CRITICAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
+            reply_to_message_id=message.message_id,
         )
+
 
 async def process_alerts_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     try:
@@ -1015,7 +1031,7 @@ async def process_alerts_command(message, telegram_user_id, parsed: ParsedComman
             priority=MessagePriority.NORMAL,
             channels=channels,
             telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
+            reply_to_message_id=message.message_id,
         )
     except Exception:
         _logger.exception("Error in alerts command: ")
@@ -1026,8 +1042,9 @@ async def process_alerts_command(message, telegram_user_id, parsed: ParsedComman
             priority=MessagePriority.CRITICAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
+            reply_to_message_id=message.message_id,
         )
+
 
 async def process_schedules_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     try:
@@ -1044,7 +1061,7 @@ async def process_schedules_command(message, telegram_user_id, parsed: ParsedCom
             priority=MessagePriority.NORMAL,
             channels=channels,
             telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
+            reply_to_message_id=message.message_id,
         )
     except Exception:
         _logger.exception("Error in schedules command: ")
@@ -1055,8 +1072,9 @@ async def process_schedules_command(message, telegram_user_id, parsed: ParsedCom
             priority=MessagePriority.CRITICAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
+            reply_to_message_id=message.message_id,
         )
+
 
 async def process_feedback_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     try:
@@ -1077,7 +1095,7 @@ async def process_feedback_command(message, telegram_user_id, parsed: ParsedComm
             priority=MessagePriority.NORMAL,
             channels=channels,
             telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
+            reply_to_message_id=message.message_id,
         )
     except Exception:
         _logger.exception("Error in feedback command: ")
@@ -1088,8 +1106,9 @@ async def process_feedback_command(message, telegram_user_id, parsed: ParsedComm
             priority=MessagePriority.CRITICAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
+            reply_to_message_id=message.message_id,
         )
+
 
 async def process_feature_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     """Process /feature command"""
@@ -1127,7 +1146,7 @@ async def process_screener_command(message, telegram_user_id, parsed: ParsedComm
                 telegram_message = _create_telegram_friendly_message(result["message"], "Screener Results")
 
                 # Send formatted message to Telegram
-                await message.answer(telegram_message, parse_mode='Markdown')
+                await message.answer(telegram_message, parse_mode="Markdown")
             else:
                 # Email sent confirmation
                 await message.answer(result["message"])
@@ -1154,7 +1173,7 @@ async def process_unknown_command(message, telegram_user_id, parsed: ParsedComma
             priority=MessagePriority.NORMAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
+            reply_to_message_id=message.message_id,
         )
     except Exception:
         _logger.exception("Error in unknown command handler: ")
@@ -1165,5 +1184,5 @@ async def process_unknown_command(message, telegram_user_id, parsed: ParsedComma
             priority=MessagePriority.CRITICAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
+            reply_to_message_id=message.message_id,
         )

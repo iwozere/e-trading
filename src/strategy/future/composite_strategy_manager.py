@@ -6,30 +6,34 @@ This module handles strategy orchestration and composite signal generation.
 
 import json
 import os
-from typing import Dict, List, Optional, Any
 from datetime import datetime
+from typing import Any, Dict, List
+
 import pandas as pd
 
-from src.strategy.future.strategy_core import (
-    BaseStrategy,
-    StrategySignal,
-    CompositeSignal,
-    SignalAggregator,
-    AggregationMethod,
-    MarketRegimeDetector
-)
-from src.strategy.future.multi_timeframe_engine import TimeframeSyncer, MultiTimeframeStrategy
-
 from src.notification.logger import setup_logger
+from src.strategy.future.multi_timeframe_engine import MultiTimeframeStrategy, TimeframeSyncer
+from src.strategy.future.strategy_core import (
+    AggregationMethod,
+    BaseStrategy,
+    CompositeSignal,
+    MarketRegimeDetector,
+    SignalAggregator,
+    StrategySignal,
+)
+
 logger = setup_logger(__name__)
 
 
 class StrategyComposer:
     """Orchestrates multiple strategies and aggregates their signals."""
 
-    def __init__(self, strategies: List[BaseStrategy],
-                 aggregation_method: AggregationMethod = AggregationMethod.WEIGHTED_VOTING,
-                 consensus_threshold: float = 0.6):
+    def __init__(
+        self,
+        strategies: List[BaseStrategy],
+        aggregation_method: AggregationMethod = AggregationMethod.WEIGHTED_VOTING,
+        consensus_threshold: float = 0.6,
+    ):
         """
         Initialize the strategy composer.
 
@@ -56,18 +60,25 @@ class StrategyComposer:
             try:
                 signal = strategy.generate_signal()
                 signals.append(signal)
-                logger.debug("Generated signal from %s: %s (confidence: %s)", strategy.name, signal.signal_type, signal.confidence)
+                logger.debug(
+                    "Generated signal from %s: %s (confidence: %s)",
+                    strategy.name,
+                    signal.signal_type,
+                    signal.confidence,
+                )
             except Exception as e:
                 logger.exception("Error generating signal from %s: ", strategy.name)
                 # Add a hold signal with zero confidence for failed strategies
-                signals.append(StrategySignal(
-                    strategy_name=strategy.name,
-                    signal_type="hold",
-                    confidence=0.0,
-                    weight=strategy.weight,
-                    timestamp=datetime.now(),
-                    metadata={"error": str(e)}
-                ))
+                signals.append(
+                    StrategySignal(
+                        strategy_name=strategy.name,
+                        signal_type="hold",
+                        confidence=0.0,
+                        weight=strategy.weight,
+                        timestamp=datetime.now(),
+                        metadata={"error": str(e)},
+                    )
+                )
 
         return self.aggregator.aggregate_signals(signals)
 
@@ -91,7 +102,7 @@ class StrategyComposer:
                     confidence=0.0,
                     weight=strategy.weight,
                     timestamp=datetime.now(),
-                    metadata={"error": str(e)}
+                    metadata={"error": str(e)},
                 )
         return signals
 
@@ -100,10 +111,7 @@ class StrategyComposer:
         if strategy_name not in self.performance_history:
             self.performance_history[strategy_name] = []
 
-        self.performance_history[strategy_name].append({
-            'timestamp': datetime.now(),
-            'metrics': performance_metrics
-        })
+        self.performance_history[strategy_name].append({"timestamp": datetime.now(), "metrics": performance_metrics})
 
     def get_strategy_performance(self, strategy_name: str, lookback_periods: int = 20) -> Dict[str, float]:
         """Get performance metrics for a strategy."""
@@ -116,8 +124,8 @@ class StrategyComposer:
 
         # Calculate average metrics
         metrics = {}
-        for key in history[0]['metrics'].keys():
-            values = [h['metrics'].get(key, 0) for h in history]
+        for key in history[0]["metrics"].keys():
+            values = [h["metrics"].get(key, 0) for h in history]
             metrics[key] = sum(values) / len(values)
 
         return metrics
@@ -151,18 +159,14 @@ class AdvancedStrategyFramework:
         """Load strategy configurations from files."""
         configs = {}
 
-        config_files = [
-            "composite_strategies.json",
-            "multi_timeframe.json",
-            "dynamic_switching.json"
-        ]
+        config_files = ["composite_strategies.json", "multi_timeframe.json", "dynamic_switching.json"]
 
         for config_file in config_files:
             file_path = os.path.join(self.config_path, config_file)
             if os.path.exists(file_path):
                 try:
-                    with open(file_path, 'r') as f:
-                        configs[config_file.replace('.json', '')] = json.load(f)
+                    with open(file_path) as f:
+                        configs[config_file.replace(".json", "")] = json.load(f)
                     logger.info("Loaded configuration from %s", config_file)
                 except Exception:
                     logger.exception("Error loading%s: ", config_file)
@@ -185,21 +189,16 @@ class AdvancedStrategyFramework:
                         sub_strategies.append(strategy)
 
                 # Create composer
-                aggregation_method = AggregationMethod(
-                    strategy_config.get("aggregation_method", "weighted_voting")
-                )
+                aggregation_method = AggregationMethod(strategy_config.get("aggregation_method", "weighted_voting"))
                 consensus_threshold = strategy_config.get("consensus_threshold", 0.6)
 
                 composer = StrategyComposer(
                     strategies=sub_strategies,
                     aggregation_method=aggregation_method,
-                    consensus_threshold=consensus_threshold
+                    consensus_threshold=consensus_threshold,
                 )
 
-                self.composite_strategies[strategy_name] = {
-                    "composer": composer,
-                    "config": strategy_config
-                }
+                self.composite_strategies[strategy_name] = {"composer": composer, "config": strategy_config}
 
                 logger.info("Initialized composite strategy: %s", strategy_name)
 
@@ -220,16 +219,12 @@ class AdvancedStrategyFramework:
                 syncer = TimeframeSyncer(primary_tf, secondary_tfs)
 
                 # Create multi-timeframe strategy
-                strategy = MultiTimeframeStrategy(
-                    name=strategy_name,
-                    syncer=syncer,
-                    config=strategy_config
-                )
+                strategy = MultiTimeframeStrategy(name=strategy_name, syncer=syncer, config=strategy_config)
 
                 self.multi_timeframe_strategies[strategy_name] = {
                     "strategy": strategy,
                     "syncer": syncer,
-                    "config": strategy_config
+                    "config": strategy_config,
                 }
 
                 logger.info("Initialized multi-timeframe strategy: %s", strategy_name)
@@ -243,7 +238,7 @@ class AdvancedStrategyFramework:
         self.dynamic_switching_config = config
         logger.info("Initialized dynamic strategy switching configuration")
 
-    def _create_strategy_from_config(self, config: Dict[str, Any]) -> Optional[BaseStrategy]:
+    def _create_strategy_from_config(self, config: Dict[str, Any]) -> BaseStrategy | None:
         """Create a strategy instance from configuration."""
         strategy_type = config.get("type")
         strategy_name = config.get("name", "unnamed")
@@ -265,6 +260,7 @@ class AdvancedStrategyFramework:
 
     def _create_rsi_momentum_strategy(self, name: str, weight: float, config: Dict) -> BaseStrategy:
         """Create RSI momentum strategy."""
+
         class RSIMomentumStrategy(BaseStrategy):
             def __init__(self, name, weight, params):
                 super().__init__(name, weight)
@@ -278,7 +274,7 @@ class AdvancedStrategyFramework:
                         confidence=0.0,
                         weight=self.weight,
                         timestamp=datetime.now(),
-                        metadata={"reason": "insufficient_data"}
+                        metadata={"reason": "insufficient_data"},
                     )
 
                 # Calculate RSI
@@ -286,7 +282,7 @@ class AdvancedStrategyFramework:
                 rsi_oversold = self.params.get("rsi_oversold", 30)
                 rsi_overbought = self.params.get("rsi_overbought", 70)
 
-                delta = self.data['close'].diff()
+                delta = self.data["close"].diff()
                 gain = (delta.where(delta > 0, 0)).rolling(window=rsi_period).mean()
                 loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_period).mean()
                 rs = gain / loss
@@ -311,13 +307,14 @@ class AdvancedStrategyFramework:
                     confidence=confidence,
                     weight=self.weight,
                     timestamp=datetime.now(),
-                    metadata={"rsi": current_rsi}
+                    metadata={"rsi": current_rsi},
                 )
 
         return RSIMomentumStrategy(name, weight, config.get("params", {}))
 
     def _create_supertrend_strategy(self, name: str, weight: float, config: Dict) -> BaseStrategy:
         """Create SuperTrend strategy."""
+
         class SuperTrendStrategy(BaseStrategy):
             def __init__(self, name, weight, params):
                 super().__init__(name, weight)
@@ -331,7 +328,7 @@ class AdvancedStrategyFramework:
                         confidence=0.0,
                         weight=self.weight,
                         timestamp=datetime.now(),
-                        metadata={"reason": "insufficient_data"}
+                        metadata={"reason": "insufficient_data"},
                     )
 
                 # Simplified SuperTrend calculation
@@ -339,18 +336,19 @@ class AdvancedStrategyFramework:
                 multiplier = self.params.get("multiplier", 3.0)
 
                 import numpy as np
-                high_low = self.data['high'] - self.data['low']
-                high_close = np.abs(self.data['high'] - self.data['close'].shift())
-                low_close = np.abs(self.data['low'] - self.data['close'].shift())
+
+                high_low = self.data["high"] - self.data["low"]
+                high_close = np.abs(self.data["high"] - self.data["close"].shift())
+                low_close = np.abs(self.data["low"] - self.data["close"].shift())
 
                 ranges = pd.concat([high_low, high_close, low_close], axis=1)
                 true_range = ranges.max(axis=1)
                 atr = true_range.rolling(atr_period).mean()
 
-                basic_upper = (self.data['high'] + self.data['low']) / 2 + multiplier * atr
-                basic_lower = (self.data['high'] + self.data['low']) / 2 - multiplier * atr
+                basic_upper = (self.data["high"] + self.data["low"]) / 2 + multiplier * atr
+                basic_lower = (self.data["high"] + self.data["low"]) / 2 - multiplier * atr
 
-                current_price = self.data['close'].iloc[-1]
+                current_price = self.data["close"].iloc[-1]
                 current_upper = basic_upper.iloc[-1]
                 current_lower = basic_lower.iloc[-1]
 
@@ -370,13 +368,14 @@ class AdvancedStrategyFramework:
                     confidence=confidence,
                     weight=self.weight,
                     timestamp=datetime.now(),
-                    metadata={"atr": atr.iloc[-1]}
+                    metadata={"atr": atr.iloc[-1]},
                 )
 
         return SuperTrendStrategy(name, weight, config.get("params", {}))
 
     def _create_bollinger_bands_strategy(self, name: str, weight: float, config: Dict) -> BaseStrategy:
         """Create Bollinger Bands strategy."""
+
         class BollingerBandsStrategy(BaseStrategy):
             def __init__(self, name, weight, params):
                 super().__init__(name, weight)
@@ -390,19 +389,19 @@ class AdvancedStrategyFramework:
                         confidence=0.0,
                         weight=self.weight,
                         timestamp=datetime.now(),
-                        metadata={"reason": "insufficient_data"}
+                        metadata={"reason": "insufficient_data"},
                     )
 
                 # Calculate Bollinger Bands
                 period = self.params.get("period", 20)
                 std_dev = self.params.get("std_dev", 2.0)
 
-                sma = self.data['close'].rolling(period).mean()
-                std = self.data['close'].rolling(period).std()
+                sma = self.data["close"].rolling(period).mean()
+                std = self.data["close"].rolling(period).std()
                 upper_band = sma + (std * std_dev)
                 lower_band = sma - (std * std_dev)
 
-                current_price = self.data['close'].iloc[-1]
+                current_price = self.data["close"].iloc[-1]
                 current_upper = upper_band.iloc[-1]
                 current_lower = lower_band.iloc[-1]
 
@@ -423,13 +422,14 @@ class AdvancedStrategyFramework:
                     confidence=confidence,
                     weight=self.weight,
                     timestamp=datetime.now(),
-                    metadata={"bb_position": (current_price - current_lower) / (current_upper - current_lower)}
+                    metadata={"bb_position": (current_price - current_lower) / (current_upper - current_lower)},
                 )
 
         return BollingerBandsStrategy(name, weight, config.get("params", {}))
 
     def _create_macd_strategy(self, name: str, weight: float, config: Dict) -> BaseStrategy:
         """Create MACD strategy."""
+
         class MACDStrategy(BaseStrategy):
             def __init__(self, name, weight, params):
                 super().__init__(name, weight)
@@ -443,7 +443,7 @@ class AdvancedStrategyFramework:
                         confidence=0.0,
                         weight=self.weight,
                         timestamp=datetime.now(),
-                        metadata={"reason": "insufficient_data"}
+                        metadata={"reason": "insufficient_data"},
                     )
 
                 # Calculate MACD
@@ -451,8 +451,8 @@ class AdvancedStrategyFramework:
                 slow_ema = self.params.get("slow_ema", 26)
                 signal_ema = self.params.get("signal_ema", 9)
 
-                ema_fast = self.data['close'].ewm(span=fast_ema).mean()
-                ema_slow = self.data['close'].ewm(span=slow_ema).mean()
+                ema_fast = self.data["close"].ewm(span=fast_ema).mean()
+                ema_slow = self.data["close"].ewm(span=slow_ema).mean()
                 macd_line = ema_fast - ema_slow
                 signal_line = macd_line.ewm(span=signal_ema).mean()
                 histogram = macd_line - signal_line
@@ -479,13 +479,14 @@ class AdvancedStrategyFramework:
                     confidence=confidence,
                     weight=self.weight,
                     timestamp=datetime.now(),
-                    metadata={"macd": current_macd, "signal": current_signal, "histogram": current_histogram}
+                    metadata={"macd": current_macd, "signal": current_signal, "histogram": current_histogram},
                 )
 
         return MACDStrategy(name, weight, config.get("params", {}))
 
     def _create_atr_breakout_strategy(self, name: str, weight: float, config: Dict) -> BaseStrategy:
         """Create ATR breakout strategy."""
+
         class ATRBreakoutStrategy(BaseStrategy):
             def __init__(self, name, weight, params):
                 super().__init__(name, weight)
@@ -499,7 +500,7 @@ class AdvancedStrategyFramework:
                         confidence=0.0,
                         weight=self.weight,
                         timestamp=datetime.now(),
-                        metadata={"reason": "insufficient_data"}
+                        metadata={"reason": "insufficient_data"},
                     )
 
                 # Calculate ATR
@@ -507,17 +508,18 @@ class AdvancedStrategyFramework:
                 breakout_multiplier = self.params.get("breakout_multiplier", 1.5)
 
                 import numpy as np
-                high_low = self.data['high'] - self.data['low']
-                high_close = np.abs(self.data['high'] - self.data['close'].shift())
-                low_close = np.abs(self.data['low'] - self.data['close'].shift())
+
+                high_low = self.data["high"] - self.data["low"]
+                high_close = np.abs(self.data["high"] - self.data["close"].shift())
+                low_close = np.abs(self.data["low"] - self.data["close"].shift())
 
                 ranges = pd.concat([high_low, high_close, low_close], axis=1)
                 true_range = ranges.max(axis=1)
                 atr = true_range.rolling(atr_period).mean()
 
                 current_atr = atr.iloc[-1]
-                current_price = self.data['close'].iloc[-1]
-                prev_price = self.data['close'].iloc[-2]
+                current_price = self.data["close"].iloc[-1]
+                prev_price = self.data["close"].iloc[-2]
 
                 breakout_threshold = current_atr * breakout_multiplier
                 price_change = abs(current_price - prev_price)
@@ -539,7 +541,11 @@ class AdvancedStrategyFramework:
                     confidence=confidence,
                     weight=self.weight,
                     timestamp=datetime.now(),
-                    metadata={"atr": current_atr, "price_change": price_change, "breakout_threshold": breakout_threshold}
+                    metadata={
+                        "atr": current_atr,
+                        "price_change": price_change,
+                        "breakout_threshold": breakout_threshold,
+                    },
                 )
 
         return ATRBreakoutStrategy(name, weight, config.get("params", {}))
@@ -584,7 +590,7 @@ class AdvancedStrategyFramework:
                 confidence=strategy.generate_signal().confidence,
                 contributing_strategies=[strategy_name],
                 timestamp=datetime.now(),
-                metadata={}
+                metadata={},
             )
 
         else:
@@ -594,7 +600,7 @@ class AdvancedStrategyFramework:
                 confidence=0.0,
                 contributing_strategies=[],
                 timestamp=datetime.now(),
-                metadata={"error": "strategy_not_found"}
+                metadata={"error": "strategy_not_found"},
             )
 
     def get_dynamic_strategy(self, data_feeds: Dict[str, pd.DataFrame]) -> str:
@@ -631,7 +637,7 @@ class AdvancedStrategyFramework:
                 confidence=0.0,
                 contributing_strategies=[],
                 timestamp=datetime.now(),
-                metadata={"error": str(e)}
+                metadata={"error": str(e)},
             )
 
     def update_performance(self, strategy_name: str, performance_metrics: Dict[str, float]):
@@ -639,10 +645,7 @@ class AdvancedStrategyFramework:
         if strategy_name not in self.performance_tracker:
             self.performance_tracker[strategy_name] = []
 
-        self.performance_tracker[strategy_name].append({
-            'timestamp': datetime.now(),
-            'metrics': performance_metrics
-        })
+        self.performance_tracker[strategy_name].append({"timestamp": datetime.now(), "metrics": performance_metrics})
 
     def get_strategy_performance(self, strategy_name: str, lookback_periods: int = 20) -> Dict[str, float]:
         """Get performance metrics for a strategy."""
@@ -655,8 +658,8 @@ class AdvancedStrategyFramework:
 
         # Calculate average metrics
         metrics = {}
-        for key in history[0]['metrics'].keys():
-            values = [h['metrics'].get(key, 0) for h in history]
+        for key in history[0]["metrics"].keys():
+            values = [h["metrics"].get(key, 0) for h in history]
             metrics[key] = sum(values) / len(values)
 
         return metrics

@@ -30,22 +30,22 @@ Examples:
 
 import argparse
 import sys
-import time
-from pathlib import Path
-from datetime import datetime, date
-from typing import Optional, Dict, Any, List
 import threading
+import time
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any, Dict, List
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
-from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
+from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.ml.pipeline.p04_short_squeeze.config.config_manager import ConfigManager
 from src.ml.pipeline.p04_short_squeeze.core.daily_deep_scan import create_daily_deep_scan
-from src.ml.pipeline.p04_short_squeeze.core.models import Candidate, StructuralMetrics, CandidateSource
+from src.ml.pipeline.p04_short_squeeze.core.models import Candidate, CandidateSource, StructuralMetrics
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -80,22 +80,29 @@ class ProgressTracker:
             eta_seconds = (self.total_items - processed) / rate if rate > 0 else 0
 
             return {
-                'total': self.total_items,
-                'completed': self.completed_items,
-                'failed': self.failed_items,
-                'processed': processed,
-                'progress_pct': progress_pct,
-                'elapsed_seconds': elapsed,
-                'rate_per_second': rate,
-                'eta_seconds': eta_seconds
+                "total": self.total_items,
+                "completed": self.completed_items,
+                "failed": self.failed_items,
+                "processed": processed,
+                "progress_pct": progress_pct,
+                "elapsed_seconds": elapsed,
+                "rate_per_second": rate,
+                "eta_seconds": eta_seconds,
             }
 
     def log_progress(self) -> None:
         """Log current progress."""
         stats = self.get_progress()
-        _logger.info("Progress: %d/%d (%.1f%%) - Success: %d, Failed: %d, Rate: %.2f/sec, ETA: %.0fs",
-                    stats['processed'], stats['total'], stats['progress_pct'],
-                    stats['completed'], stats['failed'], stats['rate_per_second'], stats['eta_seconds'])
+        _logger.info(
+            "Progress: %d/%d (%.1f%%) - Success: %d, Failed: %d, Rate: %.2f/sec, ETA: %.0fs",
+            stats["processed"],
+            stats["total"],
+            stats["progress_pct"],
+            stats["completed"],
+            stats["failed"],
+            stats["rate_per_second"],
+            stats["eta_seconds"],
+        )
 
 
 class DailyDeepScanRunner:
@@ -108,12 +115,12 @@ class DailyDeepScanRunner:
 
     def __init__(self):
         """Initialize the daily deep scan runner."""
-        self.config_manager: Optional[ConfigManager] = None
-        self.fmp_downloader: Optional[FMPDataDownloader] = None
-        self.finnhub_downloader: Optional[FinnhubDataDownloader] = None
-        self.start_time: Optional[datetime] = None
-        self.run_id: Optional[str] = None
-        self.progress_tracker: Optional[ProgressTracker] = None
+        self.config_manager: ConfigManager | None = None
+        self.fmp_downloader: FMPDataDownloader | None = None
+        self.finnhub_downloader: FinnhubDataDownloader | None = None
+        self.start_time: datetime | None = None
+        self.run_id: str | None = None
+        self.progress_tracker: ProgressTracker | None = None
 
     def parse_arguments(self) -> argparse.Namespace:
         """
@@ -125,74 +132,36 @@ class DailyDeepScanRunner:
         parser = argparse.ArgumentParser(
             description="Run daily deep scan for short squeeze detection",
             formatter_class=argparse.RawDescriptionHelpFormatter,
-            epilog=__doc__.split('Usage:')[1] if 'Usage:' in __doc__ else ""
+            epilog=__doc__.split("Usage:")[1] if "Usage:" in __doc__ else "",
         )
 
         parser.add_argument(
-            '--config', '-c',
+            "--config", "-c", type=str, help="Path to configuration file (default: uses default config location)"
+        )
+
+        parser.add_argument(
+            "--tickers",
             type=str,
-            help='Path to configuration file (default: uses default config location)'
+            help="Comma-separated list of specific tickers to scan (overrides database candidates)",
         )
 
-        parser.add_argument(
-            '--tickers',
-            type=str,
-            help='Comma-separated list of specific tickers to scan (overrides database candidates)'
-        )
+        parser.add_argument("--batch-size", type=int, help="Batch size for processing candidates (overrides config)")
 
-        parser.add_argument(
-            '--batch-size',
-            type=int,
-            help='Batch size for processing candidates (overrides config)'
-        )
+        parser.add_argument("--dry-run", action="store_true", help="Run without writing results to database")
 
-        parser.add_argument(
-            '--dry-run',
-            action='store_true',
-            help='Run without writing results to database'
-        )
+        parser.add_argument("--progress", action="store_true", help="Enable progress tracking and periodic updates")
 
-        parser.add_argument(
-            '--progress',
-            action='store_true',
-            help='Enable progress tracking and periodic updates'
-        )
+        parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
 
-        parser.add_argument(
-            '--verbose', '-v',
-            action='store_true',
-            help='Enable verbose logging'
-        )
+        parser.add_argument("--test-connection", action="store_true", help="Test API connections and exit")
 
-        parser.add_argument(
-            '--test-connection',
-            action='store_true',
-            help='Test API connections and exit'
-        )
+        parser.add_argument("--run-id", type=str, help="Custom run ID (default: auto-generated timestamp)")
 
-        parser.add_argument(
-            '--run-id',
-            type=str,
-            help='Custom run ID (default: auto-generated timestamp)'
-        )
+        parser.add_argument("--output-dir", type=str, help="Directory to save output reports (optional)")
 
-        parser.add_argument(
-            '--output-dir',
-            type=str,
-            help='Directory to save output reports (optional)'
-        )
+        parser.add_argument("--scan-date", type=str, help="Specific date to scan (YYYY-MM-DD format, default: today)")
 
-        parser.add_argument(
-            '--scan-date',
-            type=str,
-            help='Specific date to scan (YYYY-MM-DD format, default: today)'
-        )
-
-        parser.add_argument(
-            '--max-candidates',
-            type=int,
-            help='Maximum number of candidates to process (for testing)'
-        )
+        parser.add_argument("--max-candidates", type=int, help="Maximum number of candidates to process (for testing)")
 
         return parser.parse_args()
 
@@ -205,10 +174,11 @@ class DailyDeepScanRunner:
         """
         if verbose:
             import logging
+
             logging.getLogger().setLevel(logging.DEBUG)
             _logger.info("Verbose logging enabled")
 
-    def load_configuration(self, config_path: Optional[str]) -> bool:
+    def load_configuration(self, config_path: str | None) -> bool:
         """
         Load and validate configuration.
 
@@ -225,8 +195,11 @@ class DailyDeepScanRunner:
 
             _logger.info("Configuration loaded successfully")
             _logger.info("Run ID: %s", config.run_id)
-            _logger.info("Deep scan config: batch_size=%d, api_delay=%.2fs",
-                        config.deep_scan.batch_size, config.deep_scan.api_delay_seconds)
+            _logger.info(
+                "Deep scan config: batch_size=%d, api_delay=%.2fs",
+                config.deep_scan.batch_size,
+                config.deep_scan.api_delay_seconds,
+            )
 
             return True
 
@@ -257,15 +230,20 @@ class DailyDeepScanRunner:
             # Initialize Finnhub downloader (optional)
             try:
                 from config.donotshare.donotshare import FINNHUB_API_KEY
+
                 if FINNHUB_API_KEY:
                     self.finnhub_downloader = FinnhubDataDownloader(FINNHUB_API_KEY)
                     _logger.info("Finnhub API initialized with key from config")
                 else:
                     self.finnhub_downloader = None
-                    _logger.warning("Finnhub API key not found in config - sentiment and options data will be unavailable")
+                    _logger.warning(
+                        "Finnhub API key not found in config - sentiment and options data will be unavailable"
+                    )
             except ImportError:
                 self.finnhub_downloader = None
-                _logger.warning("Could not import Finnhub API key from config - sentiment and options data will be unavailable")
+                _logger.warning(
+                    "Could not import Finnhub API key from config - sentiment and options data will be unavailable"
+                )
             except Exception as e:
                 self.finnhub_downloader = None
                 _logger.warning("Failed to initialize Finnhub downloader: %s", e)
@@ -275,7 +253,7 @@ class DailyDeepScanRunner:
             _logger.exception("Failed to initialize data providers:")
             return False
 
-    def parse_scan_date(self, date_str: Optional[str]) -> date:
+    def parse_scan_date(self, date_str: str | None) -> date:
         """
         Parse scan date from string or use today.
 
@@ -287,7 +265,7 @@ class DailyDeepScanRunner:
         """
         if date_str:
             try:
-                return datetime.strptime(date_str, '%Y-%m-%d').date()
+                return datetime.strptime(date_str, "%Y-%m-%d").date()
             except ValueError:
                 _logger.warning("Invalid date format '%s', using today", date_str)
 
@@ -316,7 +294,7 @@ class DailyDeepScanRunner:
                 days_to_cover=0.0,
                 float_shares=1,
                 avg_volume_14d=1,
-                market_cap=1
+                market_cap=1,
             )
 
             candidate = Candidate(
@@ -324,7 +302,7 @@ class DailyDeepScanRunner:
                 screener_score=0.0,  # Manual candidates start with 0 score
                 structural_metrics=structural_metrics,
                 last_updated=datetime.now(),
-                source=CandidateSource.ADHOC
+                source=CandidateSource.ADHOC,
             )
 
             candidates.append(candidate)
@@ -332,7 +310,9 @@ class DailyDeepScanRunner:
         _logger.info("Created %d manual candidates from ticker list", len(candidates))
         return candidates
 
-    def load_candidates(self, manual_tickers: Optional[str], max_candidates: Optional[int]) -> Optional[List[Candidate]]:
+    def load_candidates(
+        self, manual_tickers: str | None, max_candidates: int | None
+    ) -> List[Candidate] | None:
         """
         Load candidates for deep scan.
 
@@ -346,7 +326,7 @@ class DailyDeepScanRunner:
         try:
             if manual_tickers:
                 # Use manual ticker list
-                ticker_list = [t.strip().upper() for t in manual_tickers.split(',') if t.strip()]
+                ticker_list = [t.strip().upper() for t in manual_tickers.split(",") if t.strip()]
                 if not ticker_list:
                     _logger.error("No valid tickers found in manual list")
                     return None
@@ -359,8 +339,7 @@ class DailyDeepScanRunner:
 
             # Apply max candidates limit if specified
             if candidates and max_candidates and len(candidates) > max_candidates:
-                _logger.info("Limiting candidates from %d to %d for testing",
-                           len(candidates), max_candidates)
+                _logger.info("Limiting candidates from %d to %d for testing", len(candidates), max_candidates)
                 candidates = candidates[:max_candidates]
 
             if candidates:
@@ -374,9 +353,14 @@ class DailyDeepScanRunner:
             _logger.exception("Failed to load candidates:")
             return None
 
-    def run_deep_scan(self, candidates: Optional[List[Candidate]], scan_date: date,
-                     batch_size: Optional[int], dry_run: bool = False,
-                     enable_progress: bool = False) -> Optional[Dict[str, Any]]:
+    def run_deep_scan(
+        self,
+        candidates: List[Candidate] | None,
+        scan_date: date,
+        batch_size: int | None,
+        dry_run: bool = False,
+        enable_progress: bool = False,
+    ) -> Dict[str, Any] | None:
         """
         Run the daily deep scan on candidates.
 
@@ -400,11 +384,7 @@ class DailyDeepScanRunner:
                 config.batch_size = batch_size
                 _logger.info("Using custom batch size: %d", batch_size)
 
-            deep_scan = create_daily_deep_scan(
-                self.fmp_downloader,
-                self.finnhub_downloader,
-                config
-            )
+            deep_scan = create_daily_deep_scan(self.fmp_downloader, self.finnhub_downloader, config)
 
             # Override database writes for dry run
             if dry_run:
@@ -437,12 +417,12 @@ class DailyDeepScanRunner:
             # Run the deep scan
             results = deep_scan.run_deep_scan(candidates)
 
-
             # --- SENTIMENT INTEGRATION BLOCK START ---
             # try to import sync wrapper of the async collector (adjust path if needed)
             try:
                 # if your collect_sentiment_async lives at src/common/sentiments/collect_sentiment_async.py
                 from src.common.sentiments.collect_sentiment_async import collect_sentiment_batch_sync
+
                 sentiment_available = True
             except Exception as _e:
                 _logger.warning("Sentiment module not available: %s. Skipping sentiment collection.", _e)
@@ -453,7 +433,9 @@ class DailyDeepScanRunner:
                 try:
                     # Extract tickers for this batch
                     batch_tickers = [c.ticker for c in candidates]
-                    _logger.info("Collecting sentiment for %d tickers: %s", len(batch_tickers), ", ".join(batch_tickers[:10]))
+                    _logger.info(
+                        "Collecting sentiment for %d tickers: %s", len(batch_tickers), ", ".join(batch_tickers[:10])
+                    )
                     # You can pass config options here (or None to use defaults)
                     try:
                         sentiment_cfg = config.sentiment._asdict() if hasattr(config, "sentiment") else None
@@ -461,7 +443,9 @@ class DailyDeepScanRunner:
                         sentiment_cfg = None
 
                     # Run sync wrapper (it will internally run async loop and return dict)
-                    sentiment_map = collect_sentiment_batch_sync(batch_tickers, lookback_hours=24, config=sentiment_cfg, history_lookup=None)
+                    sentiment_map = collect_sentiment_batch_sync(
+                        batch_tickers, lookback_hours=24, config=sentiment_cfg, history_lookup=None
+                    )
 
                     # Attach sentiment to candidate transient_metrics (or fallback to candidate._sentiment)
                     for c in candidates:
@@ -479,13 +463,29 @@ class DailyDeepScanRunner:
                         # Map dataclass-like object to expected fields
                         try:
                             # if feats is dataclass, attr names as in SentimentFeatures dataclass
-                            sent_norm = getattr(feats, "sentiment_normalized", None) or feats.get("sentiment_normalized") if isinstance(feats, dict) else None
-                            sent_raw = getattr(feats, "raw_payload", None) or (feats.get("raw_payload") if isinstance(feats, dict) else None)
-                            sent_score = getattr(feats, "sentiment_score_24h", None) or (feats.get("sentiment_score_24h") if isinstance(feats, dict) else None)
+                            sent_norm = (
+                                getattr(feats, "sentiment_normalized", None) or feats.get("sentiment_normalized")
+                                if isinstance(feats, dict)
+                                else None
+                            )
+                            sent_raw = getattr(feats, "raw_payload", None) or (
+                                feats.get("raw_payload") if isinstance(feats, dict) else None
+                            )
+                            sent_score = getattr(feats, "sentiment_score_24h", None) or (
+                                feats.get("sentiment_score_24h") if isinstance(feats, dict) else None
+                            )
 
                             if hasattr(c, "transient_metrics") and c.transient_metrics is not None:
-                                setattr(c.transient_metrics, "sentiment_24h", float(sent_norm) if sent_norm is not None else 0.5)
-                                setattr(c.transient_metrics, "sentiment_score_raw", float(sent_score) if sent_score is not None else 0.0)
+                                setattr(
+                                    c.transient_metrics,
+                                    "sentiment_24h",
+                                    float(sent_norm) if sent_norm is not None else 0.5,
+                                )
+                                setattr(
+                                    c.transient_metrics,
+                                    "sentiment_score_raw",
+                                    float(sent_score) if sent_score is not None else 0.0,
+                                )
                                 setattr(c.transient_metrics, "sentiment_payload", sent_raw)
                             else:
                                 # fallback: attach to candidate
@@ -493,12 +493,13 @@ class DailyDeepScanRunner:
                         except Exception as e:
                             _logger.debug("Failed attaching sentiment to candidate %s: %s", c.ticker, e)
 
-                    _logger.info("Sentiment collection done; attached to transient_metrics for %d candidates", len(candidates))
+                    _logger.info(
+                        "Sentiment collection done; attached to transient_metrics for %d candidates", len(candidates)
+                    )
 
                 except Exception:
                     _logger.exception("Sentiment collection failed, continuing without sentiments:")
             # --- SENTIMENT INTEGRATION BLOCK END ---
-
 
             # Restore original methods if they were patched
             if dry_run:
@@ -506,26 +507,26 @@ class DailyDeepScanRunner:
 
             # Convert results to dictionary for easier handling
             results_dict = {
-                'run_id': results.run_id,
-                'run_date': results.run_date.isoformat(),
-                'candidates_processed': results.candidates_processed,
-                'scored_candidates_count': len(results.scored_candidates),
-                'scored_candidates': [
+                "run_id": results.run_id,
+                "run_date": results.run_date.isoformat(),
+                "candidates_processed": results.candidates_processed,
+                "scored_candidates_count": len(results.scored_candidates),
+                "scored_candidates": [
                     {
-                        'ticker': sc.candidate.ticker,
-                        'squeeze_score': sc.squeeze_score,
-                        'screener_score': sc.candidate.screener_score,
-                        'volume_spike': sc.transient_metrics.volume_spike,
-                        'sentiment_24h': sc.transient_metrics.sentiment_24h,
-                        'call_put_ratio': sc.transient_metrics.call_put_ratio,
-                        'borrow_fee_pct': sc.transient_metrics.borrow_fee_pct,
-                        'source': sc.candidate.source.value,
-                        'alert_level': sc.alert_level
+                        "ticker": sc.candidate.ticker,
+                        "squeeze_score": sc.squeeze_score,
+                        "screener_score": sc.candidate.screener_score,
+                        "volume_spike": sc.transient_metrics.volume_spike,
+                        "sentiment_24h": sc.transient_metrics.sentiment_24h,
+                        "call_put_ratio": sc.transient_metrics.call_put_ratio,
+                        "borrow_fee_pct": sc.transient_metrics.borrow_fee_pct,
+                        "source": sc.candidate.source.value,
+                        "alert_level": sc.alert_level,
                     }
                     for sc in results.scored_candidates
                 ],
-                'data_quality_metrics': results.data_quality_metrics,
-                'runtime_metrics': results.runtime_metrics
+                "data_quality_metrics": results.data_quality_metrics,
+                "runtime_metrics": results.runtime_metrics,
             }
 
             _logger.info("Daily deep scan completed successfully")
@@ -541,7 +542,7 @@ class DailyDeepScanRunner:
             time.sleep(30)  # Log every 30 seconds
             if self.progress_tracker:
                 stats = self.progress_tracker.get_progress()
-                if stats['processed'] < stats['total']:
+                if stats["processed"] < stats["total"]:
                     self.progress_tracker.log_progress()
                 else:
                     break
@@ -554,63 +555,75 @@ class DailyDeepScanRunner:
             results: Deep scan results dictionary
         """
         try:
-            runtime_metrics = results.get('runtime_metrics', {})
-            data_quality_metrics = results.get('data_quality_metrics', {})
+            runtime_metrics = results.get("runtime_metrics", {})
+            data_quality_metrics = results.get("data_quality_metrics", {})
 
             _logger.info("=== DAILY DEEP SCAN PERFORMANCE REPORT ===")
-            _logger.info("Run ID: %s", results.get('run_id'))
-            _logger.info("Scan Date: %s", results.get('run_date'))
+            _logger.info("Run ID: %s", results.get("run_id"))
+            _logger.info("Scan Date: %s", results.get("run_date"))
 
             # Runtime metrics
-            duration = runtime_metrics.get('duration_seconds', 0)
-            candidates_per_sec = runtime_metrics.get('candidates_per_second', 0)
+            duration = runtime_metrics.get("duration_seconds", 0)
+            candidates_per_sec = runtime_metrics.get("candidates_per_second", 0)
             _logger.info("Runtime: %.2f seconds (%.2f candidates/sec)", duration, candidates_per_sec)
 
             # Scanning results
-            _logger.info("Candidates Processed: %d", results.get('candidates_processed', 0))
-            _logger.info("Scored Candidates: %d", results.get('scored_candidates_count', 0))
+            _logger.info("Candidates Processed: %d", results.get("candidates_processed", 0))
+            _logger.info("Scored Candidates: %d", results.get("scored_candidates_count", 0))
 
             # Data quality metrics
-            successful_scans = data_quality_metrics.get('successful_scans', 0)
-            failed_scans = data_quality_metrics.get('failed_scans', 0)
+            successful_scans = data_quality_metrics.get("successful_scans", 0)
+            failed_scans = data_quality_metrics.get("failed_scans", 0)
             total_candidates = successful_scans + failed_scans
 
             success_rate = (successful_scans / total_candidates * 100) if total_candidates > 0 else 0
-            _logger.info("Scan Success Rate: %.1f%% (%d/%d candidates)",
-                        success_rate, successful_scans, total_candidates)
+            _logger.info(
+                "Scan Success Rate: %.1f%% (%d/%d candidates)", success_rate, successful_scans, total_candidates
+            )
 
             # API call metrics
-            fmp_calls = data_quality_metrics.get('api_calls_fmp', 0)
-            finnhub_calls = data_quality_metrics.get('api_calls_finnhub', 0)
+            fmp_calls = data_quality_metrics.get("api_calls_fmp", 0)
+            finnhub_calls = data_quality_metrics.get("api_calls_finnhub", 0)
             _logger.info("API Calls: FMP=%d, Finnhub=%d", fmp_calls, finnhub_calls)
 
             # Data availability metrics
-            valid_volume = data_quality_metrics.get('valid_volume_data', 0)
-            valid_sentiment = data_quality_metrics.get('valid_sentiment_data', 0)
-            valid_options = data_quality_metrics.get('valid_options_data', 0)
-            valid_borrow = data_quality_metrics.get('valid_borrow_rates', 0)
-            valid_finra = data_quality_metrics.get('finra_data_available', 0)
+            valid_volume = data_quality_metrics.get("valid_volume_data", 0)
+            valid_sentiment = data_quality_metrics.get("valid_sentiment_data", 0)
+            valid_options = data_quality_metrics.get("valid_options_data", 0)
+            valid_borrow = data_quality_metrics.get("valid_borrow_rates", 0)
+            valid_finra = data_quality_metrics.get("finra_data_available", 0)
 
-            _logger.info("Data Availability: Volume=%d, Sentiment=%d, Options=%d, Borrow=%d, FINRA=%d",
-                        valid_volume, valid_sentiment, valid_options, valid_borrow, valid_finra)
+            _logger.info(
+                "Data Availability: Volume=%d, Sentiment=%d, Options=%d, Borrow=%d, FINRA=%d",
+                valid_volume,
+                valid_sentiment,
+                valid_options,
+                valid_borrow,
+                valid_finra,
+            )
 
             # Top scored candidates
-            scored_candidates = results.get('scored_candidates', [])
+            scored_candidates = results.get("scored_candidates", [])
             if scored_candidates:
                 # Sort by squeeze score
-                top_candidates = sorted(scored_candidates, key=lambda x: x['squeeze_score'], reverse=True)[:5]
+                top_candidates = sorted(scored_candidates, key=lambda x: x["squeeze_score"], reverse=True)[:5]
                 _logger.info("Top 5 Scored Candidates:")
                 for i, candidate in enumerate(top_candidates, 1):
-                    _logger.info("  %d. %s: squeeze=%.3f, volume_spike=%.2f, sentiment=%.2f",
-                               i, candidate['ticker'], candidate['squeeze_score'],
-                               candidate['volume_spike'], candidate['sentiment_24h'])
+                    _logger.info(
+                        "  %d. %s: squeeze=%.3f, volume_spike=%.2f, sentiment=%.2f",
+                        i,
+                        candidate["ticker"],
+                        candidate["squeeze_score"],
+                        candidate["volume_spike"],
+                        candidate["sentiment_24h"],
+                    )
 
             _logger.info("=== END PERFORMANCE REPORT ===")
 
         except Exception as e:
             _logger.warning("Failed to generate performance report: %s", e)
 
-    def save_output_report(self, results: Dict[str, Any], output_dir: Optional[str]) -> None:
+    def save_output_report(self, results: Dict[str, Any], output_dir: str | None) -> None:
         """
         Save output report to file if output directory is specified.
 
@@ -629,21 +642,21 @@ class DailyDeepScanRunner:
             output_path.mkdir(parents=True, exist_ok=True)
 
             # Save JSON report
-            run_id = results.get('run_id', 'unknown')
+            run_id = results.get("run_id", "unknown")
             json_file = output_path / f"daily_deep_scan_{run_id}.json"
 
-            with open(json_file, 'w', encoding='utf-8') as f:
+            with open(json_file, "w", encoding="utf-8") as f:
                 json.dump(results, f, indent=2, default=str)
 
             _logger.info("Output report saved to: %s", json_file)
 
             # Save CSV of scored candidates
-            scored_candidates = results.get('scored_candidates', [])
+            scored_candidates = results.get("scored_candidates", [])
             if scored_candidates:
                 import csv
 
                 csv_file = output_path / f"daily_deep_scan_candidates_{run_id}.csv"
-                with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+                with open(csv_file, "w", newline="", encoding="utf-8") as f:
                     writer = csv.DictWriter(f, fieldnames=scored_candidates[0].keys())
                     writer.writeheader()
                     writer.writerows(scored_candidates)
@@ -698,10 +711,7 @@ class DailyDeepScanRunner:
                 return 0
 
             # Run deep scan
-            results = self.run_deep_scan(
-                candidates, scan_date, args.batch_size,
-                args.dry_run, args.progress
-            )
+            results = self.run_deep_scan(candidates, scan_date, args.batch_size, args.dry_run, args.progress)
             if not results:
                 return 1
 

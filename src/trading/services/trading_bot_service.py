@@ -8,8 +8,9 @@ bot implementation and the domain layer.
 """
 
 from __future__ import annotations
-from typing import Any, Dict, List, Optional
+
 from datetime import datetime
+from typing import Any, Dict, List
 
 from src.data.db.services.trading_service import trading_service
 from src.notification.logger import setup_logger
@@ -32,7 +33,7 @@ class TradingBotService:
 
     # ---------- Bot Instance Methods ----------
 
-    def get_bot_instance(self, bot_id: str) -> Optional[Dict[str, Any]]:
+    def get_bot_instance(self, bot_id: str) -> Dict[str, Any] | None:
         """Get bot instance by ID."""
         try:
             return trading_service.get_bot_by_id(int(bot_id))
@@ -85,7 +86,7 @@ class TradingBotService:
             _logger.exception("Error updating trade %s:", trade_id)
             raise
 
-    def get_open_trades(self, bot_id: Optional[str] = None, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_open_trades(self, bot_id: str | None = None, symbol: str | None = None) -> List[Dict[str, Any]]:
         """Get open trades."""
         try:
             # The current trading service doesn't filter by bot_id directly
@@ -93,7 +94,7 @@ class TradingBotService:
             trades = trading_service.get_open_trades(symbol=symbol)
 
             if bot_id:
-                trades = [t for t in trades if t.get('bot_id') == bot_id]
+                trades = [t for t in trades if t.get("bot_id") == bot_id]
 
             return trades
         except Exception:
@@ -108,8 +109,8 @@ class TradingBotService:
         trade_type: str,
         symbol: str,
         direction: str,
-        opened_at: Optional[datetime] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        opened_at: datetime | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Ensure an open position exists."""
         try:
@@ -127,8 +128,8 @@ class TradingBotService:
 
     def get_open_positions(
         self,
-        bot_id: Optional[str] = None,
-        symbol: Optional[str] = None,
+        bot_id: str | None = None,
+        symbol: str | None = None,
     ) -> List[Dict[str, Any]]:
         """Get open positions."""
         try:
@@ -157,7 +158,7 @@ class TradingBotService:
 
     # ---------- Summary Methods ----------
 
-    def get_pnl_summary(self, bot_id: Optional[str] = None) -> Dict[str, Any]:
+    def get_pnl_summary(self, bot_id: str | None = None) -> Dict[str, Any]:
         """Get PnL summary."""
         try:
             return trading_service.get_pnl_summary(bot_id=bot_id)
@@ -167,7 +168,7 @@ class TradingBotService:
 
     # ---------- Additional Methods for Strategy Compatibility ----------
 
-    def get_trade_by_id(self, trade_id: str) -> Optional[Dict[str, Any]]:
+    def get_trade_by_id(self, trade_id: str) -> Dict[str, Any] | None:
         """Get trade by ID."""
         try:
             # The current trading service doesn't have a direct get_trade_by_id method

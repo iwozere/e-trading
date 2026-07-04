@@ -5,24 +5,25 @@ This module provides validation functions for OHLCV data, timestamps,
 and other data quality checks.
 """
 
-import pandas as pd
-from typing import Optional, List, Tuple, Dict, Any, Union
-from datetime import timedelta
 import logging
+from datetime import timedelta
+from typing import Any, Dict, List, Tuple, Union
+
+import pandas as pd
 
 _logger = logging.getLogger(__name__)
 
 
 def validate_ohlcv_data(
     df: pd.DataFrame,
-    required_columns: Optional[List[str]] = None,
+    required_columns: List[str] | None = None,
     min_data_points: int = 10,
     allow_duplicate_timestamps: bool = False,
     require_volume_data: bool = True,
     price_sanity_check: bool = True,
     max_price_change_pct: float = 50.0,
-    symbol: Optional[str] = None,
-    interval: Optional[str] = None
+    symbol: str | None = None,
+    interval: str | None = None,
 ) -> Tuple[bool, List[str]]:
     """
     Validate OHLCV data for quality and consistency.
@@ -42,7 +43,7 @@ def validate_ohlcv_data(
     errors = []
 
     if required_columns is None:
-        required_columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+        required_columns = ["timestamp", "open", "high", "low", "close", "volume"]
 
     # Check if DataFrame is empty
     if df.empty:
@@ -52,7 +53,7 @@ def validate_ohlcv_data(
     # Check required columns (handle both column and index cases)
     missing_columns = []
     for col in required_columns:
-        if col == 'timestamp':
+        if col == "timestamp":
             # Check if timestamp is either a column or the index
             if col not in df.columns and not isinstance(df.index, pd.DatetimeIndex):
                 missing_columns.append(col)
@@ -68,8 +69,8 @@ def validate_ohlcv_data(
         errors.append(f"Insufficient data points: {len(df)} < {min_data_points}")
 
     # Check for duplicate timestamps (handle both column and index cases)
-    if 'timestamp' in df.columns and not allow_duplicate_timestamps:
-        duplicate_timestamps = df['timestamp'].duplicated().sum()
+    if "timestamp" in df.columns and not allow_duplicate_timestamps:
+        duplicate_timestamps = df["timestamp"].duplicated().sum()
         if duplicate_timestamps > 0:
             errors.append(f"Found {duplicate_timestamps} duplicate timestamps")
     elif isinstance(df.index, pd.DatetimeIndex) and not allow_duplicate_timestamps:
@@ -85,10 +86,10 @@ def validate_ohlcv_data(
                 errors.append(f"Column '{col}' has {missing_count} missing values")
 
     # Check timestamp format and order (handle both column and index cases)
-    if 'timestamp' in df.columns:
+    if "timestamp" in df.columns:
         # Determine appropriate gap tolerance based on symbol, interval, and data frequency
-        gap_tolerance = _determine_smart_gap_tolerance(df['timestamp'], symbol, interval)
-        timestamp_errors = validate_timestamps(df['timestamp'], max_gap_hours=gap_tolerance)
+        gap_tolerance = _determine_smart_gap_tolerance(df["timestamp"], symbol, interval)
+        timestamp_errors = validate_timestamps(df["timestamp"], max_gap_hours=gap_tolerance)
         if timestamp_errors:
             errors.extend(timestamp_errors)
     elif isinstance(df.index, pd.DatetimeIndex):
@@ -99,14 +100,14 @@ def validate_ohlcv_data(
             errors.extend(timestamp_errors)
 
     # Check price data consistency
-    if price_sanity_check and all(col in df.columns for col in ['open', 'high', 'low', 'close']):
+    if price_sanity_check and all(col in df.columns for col in ["open", "high", "low", "close"]):
         price_errors = validate_price_consistency(df, max_price_change_pct)
         if price_errors:
             errors.extend(price_errors)
 
     # Check volume data
-    if require_volume_data and 'volume' in df.columns:
-        volume_errors = validate_volume_data(df['volume'])
+    if require_volume_data and "volume" in df.columns:
+        volume_errors = validate_volume_data(df["volume"])
         if volume_errors:
             errors.extend(volume_errors)
 
@@ -118,7 +119,7 @@ def validate_timestamps(
     check_order: bool = True,
     check_gaps: bool = True,
     max_gap_hours: int = 24,
-    timezone_aware: bool = False
+    timezone_aware: bool = False,
 ) -> List[str]:
     """
     Validate timestamp data for consistency and quality.
@@ -171,7 +172,9 @@ def validate_timestamps(
             if max_gap_hours == 24:
                 # Filter out weekend gaps (48-72 hours) for daily data
                 weekend_gaps = large_gaps[(large_gaps >= timedelta(hours=48)) & (large_gaps <= timedelta(hours=72))]
-                non_weekend_gaps = large_gaps[~((large_gaps >= timedelta(hours=48)) & (large_gaps <= timedelta(hours=72)))]
+                non_weekend_gaps = large_gaps[
+                    ~((large_gaps >= timedelta(hours=48)) & (large_gaps <= timedelta(hours=72)))
+                ]
 
                 if len(non_weekend_gaps) > 0:
                     errors.append(f"Found {len(non_weekend_gaps)} non-weekend gaps larger than {max_gap_hours} hours")
@@ -182,10 +185,7 @@ def validate_timestamps(
 
 
 def validate_price_consistency(
-    df: pd.DataFrame,
-    max_price_change_pct: float = 50.0,
-    min_price: float = 0.0001,
-    max_price: float = 1000000.0
+    df: pd.DataFrame, max_price_change_pct: float = 50.0, min_price: float = 0.0001, max_price: float = 1000000.0
 ) -> List[str]:
     """
     Validate price data for consistency and sanity.
@@ -202,7 +202,7 @@ def validate_price_consistency(
     errors = []
 
     # Check price ranges
-    for col in ['open', 'high', 'low', 'close']:
+    for col in ["open", "high", "low", "close"]:
         if col in df.columns:
             # Check for negative prices
             negative_prices = (df[col] < 0).sum()
@@ -218,24 +218,20 @@ def validate_price_consistency(
                 errors.append(f"Column '{col}' has {too_high} prices above {max_price}")
 
     # Check OHLC consistency
-    if all(col in df.columns for col in ['open', 'high', 'low', 'close']):
+    if all(col in df.columns for col in ["open", "high", "low", "close"]):
         # High should be >= open, close, low
-        invalid_high = ((df['high'] < df['open']) |
-                       (df['high'] < df['close']) |
-                       (df['high'] < df['low'])).sum()
+        invalid_high = ((df["high"] < df["open"]) | (df["high"] < df["close"]) | (df["high"] < df["low"])).sum()
         if invalid_high > 0:
             errors.append(f"Found {invalid_high} rows where high price is not the highest")
 
         # Low should be <= open, close, high
-        invalid_low = ((df['low'] > df['open']) |
-                      (df['low'] > df['close']) |
-                      (df['low'] > df['high'])).sum()
+        invalid_low = ((df["low"] > df["open"]) | (df["low"] > df["close"]) | (df["low"] > df["high"])).sum()
         if invalid_low > 0:
             errors.append(f"Found {invalid_low} rows where low price is not the lowest")
 
     # Check for extreme price changes
-    if 'close' in df.columns and len(df) > 1:
-        price_changes = df['close'].pct_change().dropna() * 100
+    if "close" in df.columns and len(df) > 1:
+        price_changes = df["close"].pct_change().dropna() * 100
         extreme_changes = price_changes[abs(price_changes) > max_price_change_pct]
         if len(extreme_changes) > 0:
             errors.append(f"Found {len(extreme_changes)} price changes > {max_price_change_pct}%")
@@ -272,11 +268,7 @@ def validate_volume_data(volumes: pd.Series) -> List[str]:
     return errors
 
 
-def validate_data_gaps(
-    timestamps: pd.Series,
-    expected_interval: str,
-    tolerance_minutes: int = 5
-) -> List[str]:
+def validate_data_gaps(timestamps: pd.Series, expected_interval: str, tolerance_minutes: int = 5) -> List[str]:
     """
     Validate that data follows expected interval with minimal gaps.
 
@@ -305,10 +297,8 @@ def validate_data_gaps(
 
     # Check actual gaps
     gaps = timestamps.diff().dropna()
-    expected_gaps = gaps[(gaps >= expected_gap - tolerance_gap) &
-                         (gaps <= expected_gap + tolerance_gap)]
-    unexpected_gaps = gaps[~((gaps >= expected_gap - tolerance_gap) &
-                             (gaps <= expected_gap + tolerance_gap))]
+    expected_gaps = gaps[(gaps >= expected_gap - tolerance_gap) & (gaps <= expected_gap + tolerance_gap)]
+    unexpected_gaps = gaps[~((gaps >= expected_gap - tolerance_gap) & (gaps <= expected_gap + tolerance_gap))]
 
     if len(unexpected_gaps) > 0:
         errors.append(f"Found {len(unexpected_gaps)} gaps that don't match expected interval {expected_interval}")
@@ -316,7 +306,7 @@ def validate_data_gaps(
     return errors
 
 
-def parse_interval_to_minutes(interval: str) -> Optional[int]:
+def parse_interval_to_minutes(interval: str) -> int | None:
     """
     Parse interval string to minutes.
 
@@ -328,27 +318,27 @@ def parse_interval_to_minutes(interval: str) -> Optional[int]:
     """
     interval = interval.lower()
 
-    if interval.endswith('m'):
+    if interval.endswith("m"):
         try:
             return int(interval[:-1])
         except ValueError:
             return None
-    elif interval.endswith('h'):
+    elif interval.endswith("h"):
         try:
             return int(interval[:-1]) * 60
         except ValueError:
             return None
-    elif interval.endswith('d'):
+    elif interval.endswith("d"):
         try:
             return int(interval[:-1]) * 24 * 60
         except ValueError:
             return None
-    elif interval.endswith('w'):
+    elif interval.endswith("w"):
         try:
             return int(interval[:-1]) * 7 * 24 * 60
         except ValueError:
             return None
-    elif interval.endswith('mo') or interval.endswith('m'):
+    elif interval.endswith("mo") or interval.endswith("m"):
         try:
             return int(interval[:-2]) * 30 * 24 * 60
         except ValueError:
@@ -357,10 +347,7 @@ def parse_interval_to_minutes(interval: str) -> Optional[int]:
         return None
 
 
-def get_data_quality_score(
-    df: pd.DataFrame,
-    required_columns: Optional[List[str]] = None
-) -> Dict[str, Any]:
+def get_data_quality_score(df: pd.DataFrame, required_columns: List[str] | None = None) -> Dict[str, Any]:
     """
     Calculate a comprehensive data quality score.
 
@@ -372,7 +359,7 @@ def get_data_quality_score(
         Dictionary with quality metrics and score
     """
     if required_columns is None:
-        required_columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+        required_columns = ["timestamp", "open", "high", "low", "close", "volume"]
 
     # Run validation
     is_valid, errors = validate_ohlcv_data(df, required_columns)
@@ -390,21 +377,19 @@ def get_data_quality_score(
     quality_score = (completeness + consistency_score) / 2
 
     return {
-        'is_valid': is_valid,
-        'quality_score': quality_score,
-        'completeness': completeness,
-        'consistency_score': consistency_score,
-        'total_rows': len(df),
-        'missing_cells': missing_cells,
-        'errors': errors,
-        'error_count': len(errors)
+        "is_valid": is_valid,
+        "quality_score": quality_score,
+        "completeness": completeness,
+        "consistency_score": consistency_score,
+        "total_rows": len(df),
+        "missing_cells": missing_cells,
+        "errors": errors,
+        "error_count": len(errors),
     }
 
 
 def _determine_smart_gap_tolerance(
-    timestamps: Union[pd.Series, pd.DatetimeIndex],
-    symbol: Optional[str] = None,
-    interval: Optional[str] = None
+    timestamps: Union[pd.Series, pd.DatetimeIndex], symbol: str | None = None, interval: str | None = None
 ) -> int:
     """
     Determine appropriate gap tolerance based on symbol type, interval, and timestamp frequency.
@@ -443,9 +428,9 @@ def _determine_smart_gap_tolerance(
     # Set tolerance based on asset type, interval, and frequency
     if is_crypto:
         # Crypto markets are 24/7, but allow 24h gaps for any timeframe < 1d
-        if interval in ['5m', '15m', '1h', '4h']:
+        if interval in ["5m", "15m", "1h", "4h"]:
             return 24  # Allow 24 hour gaps for intraday crypto
-        elif interval == '1d':
+        elif interval == "1d":
             return 24  # Allow 1 day gaps for daily crypto
         else:
             # Fallback based on frequency
@@ -457,11 +442,11 @@ def _determine_smart_gap_tolerance(
                 return 48
     else:
         # Stock markets have weekends and holidays
-        if interval in ['5m', '15m']:
+        if interval in ["5m", "15m"]:
             return 72  # Allow 3 days (weekend + holiday) for intraday stocks
-        elif interval in ['1h', '4h']:
+        elif interval in ["1h", "4h"]:
             return 168  # Allow 7 days for hourly stocks
-        elif interval == '1d':
+        elif interval == "1d":
             return 168  # Allow 7 days for daily stocks (weekends + holidays)
         else:
             # Fallback based on frequency
@@ -473,7 +458,7 @@ def _determine_smart_gap_tolerance(
                 return 336
 
 
-def _is_crypto_symbol(symbol: Optional[str]) -> bool:
+def _is_crypto_symbol(symbol: str | None) -> bool:
     """
     Determine if a symbol is a cryptocurrency.
 
@@ -488,8 +473,25 @@ def _is_crypto_symbol(symbol: Optional[str]) -> bool:
 
     # Common crypto patterns
     crypto_patterns = [
-        'BTC', 'ETH', 'LTC', 'XRP', 'ADA', 'DOT', 'LINK', 'UNI', 'AAVE', 'COMP',
-        'USDT', 'USDC', 'BUSD', 'DAI', 'TUSD', 'USDP', 'GUSD', 'FRAX', 'LUSD'
+        "BTC",
+        "ETH",
+        "LTC",
+        "XRP",
+        "ADA",
+        "DOT",
+        "LINK",
+        "UNI",
+        "AAVE",
+        "COMP",
+        "USDT",
+        "USDC",
+        "BUSD",
+        "DAI",
+        "TUSD",
+        "USDP",
+        "GUSD",
+        "FRAX",
+        "LUSD",
     ]
 
     symbol_upper = symbol.upper()
@@ -500,7 +502,7 @@ def _is_crypto_symbol(symbol: Optional[str]) -> bool:
             return True
 
     # Check if symbol ends with common crypto pairs
-    crypto_suffixes = ['USDT', 'USDC', 'BUSD', 'BTC', 'ETH', 'BNB']
+    crypto_suffixes = ["USDT", "USDC", "BUSD", "BTC", "ETH", "BNB"]
     for suffix in crypto_suffixes:
         if symbol_upper.endswith(suffix):
             return True

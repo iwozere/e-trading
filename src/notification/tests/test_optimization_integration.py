@@ -5,20 +5,22 @@ Simple integration test to verify that the database optimization components
 work correctly with real database operations.
 """
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.data.db.core.base import Base
 from src.data.db.models.model_notification import (
-    Message, MessageDeliveryStatus, MessagePriority, MessageStatus, DeliveryStatus
-)
-from src.notification.service.database_optimization import (
-    OptimizedMessageRepository,
-    OptimizedDeliveryStatusRepository
+    DeliveryStatus,
+    Message,
+    MessageDeliveryStatus,
+    MessagePriority,
+    MessageStatus,
 )
 from src.notification.docs.utilities.query_analyzer import QueryPerformanceMonitor
+from src.notification.service.database_optimization import OptimizedDeliveryStatusRepository, OptimizedMessageRepository
 
 
 @pytest.fixture(scope="session")
@@ -57,8 +59,8 @@ def sample_messages(test_session):
             recipient_id=f"user_{i}",
             content={"title": f"Test Message {i}", "body": f"This is test message {i}"},
             status=MessageStatus.PENDING.value,
-            created_at=datetime.now(timezone.utc) - timedelta(minutes=i),
-            scheduled_for=datetime.now(timezone.utc) - timedelta(minutes=i)
+            created_at=datetime.now(UTC) - timedelta(minutes=i),
+            scheduled_for=datetime.now(UTC) - timedelta(minutes=i),
         )
         test_session.add(message)
         messages.append(message)
@@ -78,9 +80,9 @@ def sample_delivery_statuses(test_session, sample_messages):
                 message_id=message.id,
                 channel=channel,
                 status=DeliveryStatus.DELIVERED.value if i % 2 == 0 else DeliveryStatus.FAILED.value,
-                delivered_at=datetime.now(timezone.utc) - timedelta(minutes=i),
+                delivered_at=datetime.now(UTC) - timedelta(minutes=i),
                 response_time_ms=100 + (i * 50),
-                created_at=datetime.now(timezone.utc) - timedelta(minutes=i)
+                created_at=datetime.now(UTC) - timedelta(minutes=i),
             )
             test_session.add(status)
             statuses.append(status)
@@ -96,7 +98,7 @@ class TestOptimizedRepositoryIntegration:
         """Test optimized pending messages query."""
         repo = OptimizedMessageRepository(test_session)
 
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
         pending_messages = repo.get_pending_messages_optimized(current_time, limit=10)
 
         # Should return all pending messages
@@ -111,13 +113,9 @@ class TestOptimizedRepositoryIntegration:
         repo = OptimizedMessageRepository(test_session)
 
         message_ids = [msg.id for msg in sample_messages[:3]]
-        processed_at = datetime.now(timezone.utc)
+        processed_at = datetime.now(UTC)
 
-        updated_count = repo.bulk_update_message_status(
-            message_ids,
-            MessageStatus.PROCESSING,
-            processed_at
-        )
+        updated_count = repo.bulk_update_message_status(message_ids, MessageStatus.PROCESSING, processed_at)
 
         assert updated_count == 3
 
@@ -131,8 +129,8 @@ class TestOptimizedRepositoryIntegration:
         """Test optimized message statistics query."""
         repo = OptimizedMessageRepository(test_session)
 
-        start_date = datetime.now(timezone.utc) - timedelta(days=1)
-        end_date = datetime.now(timezone.utc) + timedelta(hours=1)
+        start_date = datetime.now(UTC) - timedelta(days=1)
+        end_date = datetime.now(UTC) + timedelta(hours=1)
 
         stats = repo.get_message_statistics_optimized(start_date, end_date)
 
@@ -150,11 +148,7 @@ class TestOptimizedRepositoryIntegration:
         """Test optimized delivery history query."""
         repo = OptimizedDeliveryStatusRepository(test_session)
 
-        deliveries, total_count = repo.get_delivery_history_optimized(
-            channel="telegram",
-            limit=5,
-            offset=0
-        )
+        deliveries, total_count = repo.get_delivery_history_optimized(channel="telegram", limit=5, offset=0)
 
         # Should return telegram deliveries
         assert len(deliveries) > 0
@@ -167,8 +161,8 @@ class TestOptimizedRepositoryIntegration:
         """Test channel performance metrics query."""
         repo = OptimizedDeliveryStatusRepository(test_session)
 
-        start_date = datetime.now(timezone.utc) - timedelta(days=1)
-        end_date = datetime.now(timezone.utc) + timedelta(hours=1)
+        start_date = datetime.now(UTC) - timedelta(days=1)
+        end_date = datetime.now(UTC) + timedelta(hours=1)
 
         metrics = repo.get_channel_performance_metrics(start_date, end_date)
 
@@ -211,7 +205,7 @@ class TestQueryPerformanceMonitorIntegration:
         queries = [
             "SELECT * FROM msg_messages WHERE id = 123",
             "SELECT * FROM msg_messages WHERE id = 456",
-            "select * from msg_messages where id = 789"
+            "select * from msg_messages where id = 789",
         ]
 
         for query in queries:
@@ -245,7 +239,7 @@ class TestDatabaseOptimizationWorkflow:
         delivery_repo = OptimizedDeliveryStatusRepository(test_session)
 
         # Test message operations
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
         pending_messages = message_repo.get_pending_messages_optimized(current_time)
         assert len(pending_messages) > 0
 
@@ -255,8 +249,8 @@ class TestDatabaseOptimizationWorkflow:
         assert total > 0
 
         # Test performance metrics
-        start_date = datetime.now(timezone.utc) - timedelta(days=1)
-        end_date = datetime.now(timezone.utc) + timedelta(hours=1)
+        start_date = datetime.now(UTC) - timedelta(days=1)
+        end_date = datetime.now(UTC) + timedelta(hours=1)
 
         metrics = delivery_repo.get_channel_performance_metrics(start_date, end_date)
         assert len(metrics) > 0
@@ -267,7 +261,7 @@ class TestDatabaseOptimizationWorkflow:
         repo = OptimizedMessageRepository(test_session)
 
         # Perform some database operations
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
 
         # This should generate some query metrics if monitoring was enabled
         pending_messages = repo.get_pending_messages_optimized(current_time)

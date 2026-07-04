@@ -2,8 +2,8 @@ import os
 import sys
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 # Ensure repository root on path
 HERE = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../.."))
@@ -11,17 +11,17 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 # Import Base and ensure models are imported so tables are registered on metadata
-from src.data.db.core.base import Base  # noqa: E402
+import src.data.db.models.model_jobs  # noqa: F401,E402
+import src.data.db.models.model_notification  # noqa: F401,E402
+import src.data.db.models.model_short_squeeze  # noqa: F401,E402
+import src.data.db.models.model_system_health  # noqa: F401,E402
+import src.data.db.models.model_telegram  # noqa: F401,E402
+import src.data.db.models.model_trading  # noqa: F401,E402
 
 # Import model modules to populate Base.metadata
 import src.data.db.models.model_users  # noqa: F401,E402
-import src.data.db.models.model_trading  # noqa: F401,E402
-import src.data.db.models.model_jobs  # noqa: F401,E402
 import src.data.db.models.model_webui  # noqa: F401,E402
-import src.data.db.models.model_notification  # noqa: F401,E402
-import src.data.db.models.model_system_health  # noqa: F401,E402
-import src.data.db.models.model_telegram  # noqa: F401,E402
-import src.data.db.models.model_short_squeeze  # noqa: F401,E402
+from src.data.db.core.base import Base  # noqa: E402
 
 # this is the Alembic Config object, which provides access to the values within
 # the .ini file in use.

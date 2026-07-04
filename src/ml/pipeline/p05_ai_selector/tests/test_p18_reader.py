@@ -1,15 +1,13 @@
 """Tests for P18Reader."""
 
+import sys
 from datetime import date
 from pathlib import Path
-from unittest.mock import patch
-import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
-import pytest
 
 from src.ml.pipeline.p05_ai_selector.signals.p18_reader import P18Reader
 
@@ -30,10 +28,12 @@ class TestP18Reader:
         run_dir = tmp_path / "2026-06-14"
         run_dir.mkdir(parents=True)
 
-        signals_df = pd.DataFrame({
-            "ticker": ["AAPL", "MSFT", "LOW"],
-            "total_score": [80, 65, 40],
-        })
+        signals_df = pd.DataFrame(
+            {
+                "ticker": ["AAPL", "MSFT", "LOW"],
+                "total_score": [80, 65, 40],
+            }
+        )
         signals_df.to_csv(run_dir / "signals.csv", index=False)
 
         reader = P18Reader(results_base=tmp_path)
@@ -62,12 +62,8 @@ class TestP18Reader:
         run_dir = tmp_path / "2026-06-14"
         run_dir.mkdir()
 
-        pd.DataFrame({"ticker": ["AAPL"], "total_score": [70]}).to_csv(
-            run_dir / "signals.csv", index=False
-        )
-        pd.DataFrame({"ticker": ["MSFT", "GOOG"]}).to_csv(
-            run_dir / "consensus.csv", index=False
-        )
+        pd.DataFrame({"ticker": ["AAPL"], "total_score": [70]}).to_csv(run_dir / "signals.csv", index=False)
+        pd.DataFrame({"ticker": ["MSFT", "GOOG"]}).to_csv(run_dir / "consensus.csv", index=False)
 
         reader = P18Reader(results_base=tmp_path)
         result = reader.get_high_score_tickers(date(2026, 6, 14))
@@ -80,12 +76,8 @@ class TestP18Reader:
         run_dir = tmp_path / "2026-06-14"
         run_dir.mkdir()
 
-        pd.DataFrame({"ticker": ["AAPL"], "total_score": [70]}).to_csv(
-            run_dir / "signals.csv", index=False
-        )
-        pd.DataFrame({"ticker": ["TSLA", "NVDA"]}).to_csv(
-            run_dir / "form4_buys.csv", index=False
-        )
+        pd.DataFrame({"ticker": ["AAPL"], "total_score": [70]}).to_csv(run_dir / "signals.csv", index=False)
+        pd.DataFrame({"ticker": ["TSLA", "NVDA"]}).to_csv(run_dir / "form4_buys.csv", index=False)
 
         reader = P18Reader(results_base=tmp_path)
         result = reader.get_high_score_tickers(date(2026, 6, 14))
@@ -96,9 +88,7 @@ class TestP18Reader:
         """With no form4_buys.csv (today's P18 reality), form4_buy_tickers is empty."""
         run_dir = tmp_path / "2026-06-14"
         run_dir.mkdir()
-        pd.DataFrame({"ticker": ["AAPL"], "total_score": [70]}).to_csv(
-            run_dir / "signals.csv", index=False
-        )
+        pd.DataFrame({"ticker": ["AAPL"], "total_score": [70]}).to_csv(run_dir / "signals.csv", index=False)
 
         reader = P18Reader(results_base=tmp_path)
         result = reader.get_high_score_tickers(date(2026, 6, 14))

@@ -11,15 +11,15 @@ from __future__ import annotations
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.ml.pipeline.p20_kestrel.config import DATA_CACHE_PATH
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+from src.ml.pipeline.p20_kestrel.config import DATA_CACHE_PATH
 
 _kestrel = _KestrelService()
 get_active_tickers = _kestrel.get_active_tickers
@@ -38,8 +38,8 @@ _B1_MCAP_MAX = 10_000_000_000
 _B1_DAYS_MIN = 10
 _B1_DAYS_MAX = 90
 _CROWDING_SPIKE_THRESHOLD = 3.0  # mention_z20 > 3σ before T−10 → skip B1
-_B2_DAYS_MIN = 20   # post-spin entry window start
-_B2_DAYS_MAX = 60   # post-spin entry window end
+_B2_DAYS_MIN = 20  # post-spin entry window start
+_B2_DAYS_MAX = 60  # post-spin entry window end
 _B2_MCAP_MIN = 150_000_000  # smaller floor — spin-offs often start with smaller float
 
 
@@ -91,15 +91,17 @@ def screen_b1(as_of_date: date) -> List[Dict[str, Any]]:
             _logger.info("B1 crowding skip: %s (z=%.1f, T-%d)", ticker, crowding, days_out)
             continue
 
-        candidates.append({
-            "ticker": ticker,
-            "sleeve": _SLEEVE,
-            "sub_sleeve": "B1",
-            "event_type": event_type,
-            "event_date": event_date,
-            "days_out": days_out,
-            "mcap": mcap,
-        })
+        candidates.append(
+            {
+                "ticker": ticker,
+                "sleeve": _SLEEVE,
+                "sub_sleeve": "B1",
+                "event_type": event_type,
+                "event_date": event_date,
+                "days_out": days_out,
+                "mcap": mcap,
+            }
+        )
 
     return candidates
 
@@ -141,15 +143,17 @@ def screen_b2(as_of_date: date) -> List[Dict[str, Any]]:
             continue
 
         days_since_spin = (as_of_date - event_date).days
-        candidates.append({
-            "ticker": ticker,
-            "sleeve": _SLEEVE,
-            "sub_sleeve": "B2",
-            "event_type": "spinoff",
-            "event_date": event_date,
-            "days_since_spin": days_since_spin,
-            "mcap": mcap,
-        })
+        candidates.append(
+            {
+                "ticker": ticker,
+                "sleeve": _SLEEVE,
+                "sub_sleeve": "B2",
+                "event_type": "spinoff",
+                "event_date": event_date,
+                "days_since_spin": days_since_spin,
+                "mcap": mcap,
+            }
+        )
 
     return candidates
 
@@ -171,17 +175,19 @@ def screen_b3_activist(as_of_date: date) -> List[Dict[str, Any]]:
         activist_value = get_latest_signal(ticker, "activist_13d")
         has_activist = activist_value is not None and float(activist_value) > 0
         if has_activist:
-            candidates.append({
-                "ticker": ticker,
-                "sleeve": _SLEEVE,
-                "sub_sleeve": "B3",
-                "trigger": "activist_13d",
-            })
+            candidates.append(
+                {
+                    "ticker": ticker,
+                    "sleeve": _SLEEVE,
+                    "sub_sleeve": "B3",
+                    "trigger": "activist_13d",
+                }
+            )
 
     return candidates
 
 
-def _get_latest_index_changes_file(as_of_date: date) -> Optional[Path]:
+def _get_latest_index_changes_file(as_of_date: date) -> Path | None:
     """Find the most recent index changes cache file on or before as_of_date."""
     p = DATA_CACHE_PATH / "index_changes" / f"{as_of_date.isoformat()}.csv.gz"
     if p.exists():
@@ -235,21 +241,23 @@ def screen_b3_index(as_of_date: date) -> List[Dict[str, Any]]:
                 if not universe_row:
                     continue
 
-                candidates.append({
-                    "ticker": ticker,
-                    "sleeve": _SLEEVE,
-                    "sub_sleeve": "B3",
-                    "trigger": f"index_addition_{row['index_name']}",
-                    "event_date": event_date,
-                    "days_out": days_out,
-                })
+                candidates.append(
+                    {
+                        "ticker": ticker,
+                        "sleeve": _SLEEVE,
+                        "sub_sleeve": "B3",
+                        "trigger": f"index_addition_{row['index_name']}",
+                        "event_date": event_date,
+                        "days_out": days_out,
+                    }
+                )
         return candidates
     except Exception:
         _logger.exception("Failed to parse index changes file %s", file_path)
         return []
 
 
-def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
+def run(as_of_date: date | None = None) -> Dict[str, Any]:
     """
     Run Sleeve B screens and upsert candidates to watchlist.
 
@@ -269,15 +277,20 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
     all_candidates = b1 + b2 + b3_activist + b3_index
 
     for c in all_candidates:
-        upsert_watchlist({
-            "ticker": c["ticker"],
-            "sleeve": _SLEEVE,
-            "state": "screening",
-        })
+        upsert_watchlist(
+            {
+                "ticker": c["ticker"],
+                "sleeve": _SLEEVE,
+                "state": "screening",
+            }
+        )
 
     _logger.info(
         "Sleeve B: B1=%d FDA run-ups, B2=%d spin-offs, B3_act=%d activists, B3_idx=%d index-changes",
-        len(b1), len(b2), len(b3_activist), len(b3_index),
+        len(b1),
+        len(b2),
+        len(b3_activist),
+        len(b3_index),
     )
     return {
         "b1_fda_runups": len(b1),

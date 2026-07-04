@@ -5,8 +5,9 @@ This module contains migration scripts to add optimized indexes and constraints
 for better query performance in the notification service.
 """
 
-from typing import List, Dict, Any
-from sqlalchemy import text, MetaData
+from typing import Any, Dict, List
+
+from sqlalchemy import MetaData, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import ProgrammingError
 
@@ -45,7 +46,7 @@ class NotificationServiceMigrations:
             "partitions_created": [],
             "partitions_failed": [],
             "settings_applied": [],
-            "settings_failed": []
+            "settings_failed": [],
         }
 
         # Apply optimizations in order
@@ -69,105 +70,101 @@ class NotificationServiceMigrations:
                 "table": "msg_messages",
                 "columns": ["status", "scheduled_for", "priority", "id"],
                 "where": "status = 'PENDING'",
-                "description": "Optimized index for pending message queries with priority ordering"
+                "description": "Optimized index for pending message queries with priority ordering",
             },
             {
                 "name": "idx_msg_messages_recipient_created_desc",
                 "table": "msg_messages",
                 "columns": ["recipient_id", "created_at DESC", "id DESC"],
-                "description": "Index for user message history queries"
+                "description": "Index for user message history queries",
             },
             {
                 "name": "idx_msg_messages_type_status_created",
                 "table": "msg_messages",
                 "columns": ["message_type", "status", "created_at"],
-                "description": "Index for message type and status filtering"
+                "description": "Index for message type and status filtering",
             },
             {
                 "name": "idx_msg_messages_retry_failed",
                 "table": "msg_messages",
                 "columns": ["status", "retry_count", "max_retries", "processed_at"],
                 "where": "status = 'FAILED' AND retry_count < max_retries",
-                "description": "Index for failed messages eligible for retry"
+                "description": "Index for failed messages eligible for retry",
             },
             {
                 "name": "idx_msg_messages_cleanup",
                 "table": "msg_messages",
                 "columns": ["status", "created_at"],
                 "where": "status IN ('DELIVERED', 'CANCELLED')",
-                "description": "Index for cleanup operations on old messages"
+                "description": "Index for cleanup operations on old messages",
             },
-
             # Delivery status table - optimized for analytics and monitoring
             {
                 "name": "idx_msg_delivery_status_channel_created_desc",
                 "table": "msg_delivery_status",
                 "columns": ["channel", "created_at DESC", "id DESC"],
-                "description": "Index for channel-specific delivery history"
+                "description": "Index for channel-specific delivery history",
             },
             {
                 "name": "idx_msg_delivery_status_analytics",
                 "table": "msg_delivery_status",
                 "columns": ["status", "channel", "created_at", "response_time_ms"],
-                "description": "Composite index for analytics queries"
+                "description": "Composite index for analytics queries",
             },
             {
                 "name": "idx_msg_delivery_status_message_lookup",
                 "table": "msg_delivery_status",
                 "columns": ["message_id", "channel", "status"],
-                "description": "Index for message delivery status lookups"
+                "description": "Index for message delivery status lookups",
             },
             {
                 "name": "idx_msg_delivery_status_time_series",
                 "table": "msg_delivery_status",
                 "columns": ["created_at", "status", "channel"],
-                "description": "Index for time series analytics"
+                "description": "Index for time series analytics",
             },
             {
                 "name": "idx_msg_delivery_status_performance",
                 "table": "msg_delivery_status",
                 "columns": ["channel", "status", "response_time_ms"],
                 "where": "status = 'DELIVERED' AND response_time_ms IS NOT NULL",
-                "description": "Index for performance metrics calculation"
+                "description": "Index for performance metrics calculation",
             },
-
             # Rate limits table - optimized for token bucket operations
             {
                 "name": "idx_msg_rate_limits_refill_optimized",
                 "table": "msg_rate_limits",
                 "columns": ["last_refill", "tokens", "max_tokens"],
                 "where": "tokens < max_tokens",
-                "description": "Index for efficient token refill operations"
+                "description": "Index for efficient token refill operations",
             },
             {
                 "name": "idx_msg_rate_limits_user_channel_lookup",
                 "table": "msg_rate_limits",
                 "columns": ["user_id", "channel", "tokens", "last_refill"],
-                "description": "Index for rate limit checks"
+                "description": "Index for rate limit checks",
             },
-
             # Channel health table - optimized for monitoring
             {
                 "name": "idx_msg_channel_health_monitoring",
                 "table": "msg_channel_health",
                 "columns": ["status", "checked_at DESC", "channel"],
-                "description": "Index for health monitoring queries"
+                "description": "Index for health monitoring queries",
             },
             {
                 "name": "idx_msg_channel_health_failures",
                 "table": "msg_channel_health",
                 "columns": ["failure_count", "last_failure", "status"],
                 "where": "failure_count > 0",
-                "description": "Index for tracking channel failures"
+                "description": "Index for tracking channel failures",
             },
-
             # Channel configs table - optimized for configuration lookups
             {
                 "name": "idx_msg_channel_configs_enabled_lookup",
                 "table": "msg_channel_configs",
                 "columns": ["enabled", "channel", "updated_at"],
-                "description": "Index for enabled channel lookups"
-            }
+                "description": "Index for enabled channel lookups",
+            },
         ]
 
         # Create each index
@@ -178,10 +175,7 @@ class NotificationServiceMigrations:
                     results["indexes_created"].append(index_def["name"])
                     _logger.info("Created index: %s", index_def["name"])
                 except Exception as e:
-                    results["indexes_failed"].append({
-                        "name": index_def["name"],
-                        "error": str(e)
-                    })
+                    results["indexes_failed"].append({"name": index_def["name"], "error": str(e)})
                     _logger.error("Failed to create index %s: %s", index_def["name"], e)
 
     def _create_index(self, conn, index_def: Dict[str, Any]):
@@ -206,24 +200,22 @@ class NotificationServiceMigrations:
                 "name": "check_reasonable_retry_count",
                 "table": "msg_messages",
                 "constraint": "CHECK (retry_count <= 10)",
-                "description": "Prevent excessive retry attempts"
+                "description": "Prevent excessive retry attempts",
             },
-
             # Add check constraint for reasonable response times
             {
                 "name": "check_reasonable_response_time",
                 "table": "msg_delivery_status",
                 "constraint": "CHECK (response_time_ms IS NULL OR response_time_ms <= 300000)",
-                "description": "Prevent unreasonable response time values (max 5 minutes)"
+                "description": "Prevent unreasonable response time values (max 5 minutes)",
             },
-
             # Add check constraint for future scheduled times
             {
                 "name": "check_reasonable_schedule_time",
                 "table": "msg_messages",
                 "constraint": "CHECK (scheduled_for <= created_at + INTERVAL '30 days')",
-                "description": "Prevent scheduling messages too far in the future"
-            }
+                "description": "Prevent scheduling messages too far in the future",
+            },
         ]
 
         with self.engine.connect() as conn:
@@ -240,16 +232,10 @@ class NotificationServiceMigrations:
                     if "already exists" in str(e).lower():
                         _logger.info("Constraint %s already exists", constraint_def["name"])
                     else:
-                        results["constraints_failed"].append({
-                            "name": constraint_def["name"],
-                            "error": str(e)
-                        })
+                        results["constraints_failed"].append({"name": constraint_def["name"], "error": str(e)})
                         _logger.error("Failed to add constraint %s: %s", constraint_def["name"], e)
                 except Exception as e:
-                    results["constraints_failed"].append({
-                        "name": constraint_def["name"],
-                        "error": str(e)
-                    })
+                    results["constraints_failed"].append({"name": constraint_def["name"], "error": str(e)})
                     _logger.error("Failed to add constraint %s: %s", constraint_def["name"], e)
 
     def _create_table_partitions(self, results: Dict[str, Any]):
@@ -270,10 +256,12 @@ class NotificationServiceMigrations:
                 if result and result.size_bytes > 1024 * 1024 * 1024:  # > 1GB
                     _logger.info("Messages table is large (%s bytes), considering partitioning", result.size_bytes)
                     # For now, just log the recommendation
-                    results["partitions_created"].append({
-                        "table": "msg_messages",
-                        "recommendation": "Consider partitioning by created_at (monthly partitions)"
-                    })
+                    results["partitions_created"].append(
+                        {
+                            "table": "msg_messages",
+                            "recommendation": "Consider partitioning by created_at (monthly partitions)",
+                        }
+                    )
 
                 # Check delivery status table size
                 size_query = text("""
@@ -284,17 +272,20 @@ class NotificationServiceMigrations:
                 result = conn.execute(size_query).fetchone()
 
                 if result and result.size_bytes > 1024 * 1024 * 1024:  # > 1GB
-                    _logger.info("Delivery status table is large (%s bytes), considering partitioning", result.size_bytes)
-                    results["partitions_created"].append({
-                        "table": "msg_delivery_status",
-                        "recommendation": "Consider partitioning by created_at (monthly partitions)"
-                    })
+                    _logger.info(
+                        "Delivery status table is large (%s bytes), considering partitioning", result.size_bytes
+                    )
+                    results["partitions_created"].append(
+                        {
+                            "table": "msg_delivery_status",
+                            "recommendation": "Consider partitioning by created_at (monthly partitions)",
+                        }
+                    )
 
             except Exception as e:
-                results["partitions_failed"].append({
-                    "error": str(e),
-                    "description": "Failed to check table sizes for partitioning"
-                })
+                results["partitions_failed"].append(
+                    {"error": str(e), "description": "Failed to check table sizes for partitioning"}
+                )
                 _logger.exception("Failed to check table sizes:")
 
     def _apply_database_settings(self, results: Dict[str, Any]):
@@ -333,30 +324,27 @@ class NotificationServiceMigrations:
                     set_query = text(f"SET {setting_name} = :value")
                     conn.execute(set_query, {"value": setting_value})
 
-                    results["settings_applied"].append({
-                        "setting": setting_name,
-                        "old_value": current_value,
-                        "new_value": setting_value,
-                        "description": description
-                    })
+                    results["settings_applied"].append(
+                        {
+                            "setting": setting_name,
+                            "old_value": current_value,
+                            "new_value": setting_value,
+                            "description": description,
+                        }
+                    )
                     _logger.info("Applied setting %s: %s -> %s", setting_name, current_value, setting_value)
 
                 except Exception as e:
-                    results["settings_failed"].append({
-                        "setting": setting_name,
-                        "value": setting_value,
-                        "error": str(e)
-                    })
+                    results["settings_failed"].append(
+                        {"setting": setting_name, "value": setting_value, "error": str(e)}
+                    )
                     _logger.warning("Failed to apply setting %s: %s", setting_name, e)
 
     def create_monitoring_views(self) -> Dict[str, Any]:
         """Create database views for monitoring and analytics."""
         _logger.info("Creating monitoring views...")
 
-        results = {
-            "views_created": [],
-            "views_failed": []
-        }
+        results = {"views_created": [], "views_failed": []}
 
         views = [
             {
@@ -376,7 +364,7 @@ class NotificationServiceMigrations:
                 GROUP BY channel, status, DATE_TRUNC('hour', created_at)
                 ORDER BY hour DESC, channel, status
                 """,
-                "description": "Hourly delivery summary by channel and status"
+                "description": "Hourly delivery summary by channel and status",
             },
             {
                 "name": "v_msg_channel_health_summary",
@@ -409,7 +397,7 @@ class NotificationServiceMigrations:
                 ) ds ON ch.channel = ds.channel
                 ORDER BY ch.channel
                 """,
-                "description": "Channel health summary with recent delivery statistics"
+                "description": "Channel health summary with recent delivery statistics",
             },
             {
                 "name": "v_msg_user_activity",
@@ -430,24 +418,18 @@ class NotificationServiceMigrations:
                 HAVING COUNT(*) > 0
                 ORDER BY total_messages DESC
                 """,
-                "description": "User activity summary for the last 30 days"
-            }
+                "description": "User activity summary for the last 30 days",
+            },
         ]
 
         with self.engine.connect() as conn:
             for view_def in views:
                 try:
                     conn.execute(text(view_def["sql"]))
-                    results["views_created"].append({
-                        "name": view_def["name"],
-                        "description": view_def["description"]
-                    })
+                    results["views_created"].append({"name": view_def["name"], "description": view_def["description"]})
                     _logger.info("Created view: %s", view_def["name"])
                 except Exception as e:
-                    results["views_failed"].append({
-                        "name": view_def["name"],
-                        "error": str(e)
-                    })
+                    results["views_failed"].append({"name": view_def["name"], "error": str(e)})
                     _logger.error("Failed to create view %s: %s", view_def["name"], e)
 
         return results
@@ -456,12 +438,7 @@ class NotificationServiceMigrations:
         """Analyze current database performance."""
         _logger.info("Analyzing current database performance...")
 
-        analysis = {
-            "table_stats": {},
-            "index_stats": {},
-            "query_stats": {},
-            "recommendations": []
-        }
+        analysis = {"table_stats": {}, "index_stats": {}, "query_stats": {}, "recommendations": []}
 
         with self.engine.connect() as conn:
             try:
@@ -493,7 +470,7 @@ class NotificationServiceMigrations:
                         "live_tuples": row.live_tuples,
                         "dead_tuples": row.dead_tuples,
                         "last_vacuum": row.last_vacuum.isoformat() if row.last_vacuum else None,
-                        "last_analyze": row.last_analyze.isoformat() if row.last_analyze else None
+                        "last_analyze": row.last_analyze.isoformat() if row.last_analyze else None,
                     }
 
                 # Index statistics
@@ -516,12 +493,14 @@ class NotificationServiceMigrations:
                     if table_key not in analysis["index_stats"]:
                         analysis["index_stats"][table_key] = []
 
-                    analysis["index_stats"][table_key].append({
-                        "index_name": row.indexname,
-                        "scans": row.idx_scan,
-                        "tuples_read": row.idx_tup_read,
-                        "tuples_fetched": row.idx_tup_fetch
-                    })
+                    analysis["index_stats"][table_key].append(
+                        {
+                            "index_name": row.indexname,
+                            "scans": row.idx_scan,
+                            "tuples_read": row.idx_tup_read,
+                            "tuples_fetched": row.idx_tup_fetch,
+                        }
+                    )
 
                 # Generate recommendations
                 analysis["recommendations"] = self._generate_performance_recommendations(analysis)
@@ -550,9 +529,7 @@ class NotificationServiceMigrations:
         for table_key, indexes in analysis["index_stats"].items():
             for index_info in indexes:
                 if index_info["scans"] == 0 and not index_info["index_name"].endswith("_pkey"):
-                    recommendations.append(
-                        f"Index {index_info['index_name']} is unused. Consider dropping it."
-                    )
+                    recommendations.append(f"Index {index_info['index_name']} is unused. Consider dropping it.")
 
         return recommendations
 

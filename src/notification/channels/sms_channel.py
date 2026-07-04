@@ -5,18 +5,21 @@ SMS notification channel implementation with Twilio support.
 Provides a template for SMS providers with message length validation and delivery tracking.
 """
 
-from typing import Dict, Any, Optional
-from datetime import datetime, timezone
 import asyncio
+from datetime import UTC, datetime
+from typing import Any, Dict
+
 import aiohttp
 
 from src.notification.channels.base import (
-    NotificationChannel, DeliveryResult, ChannelHealth, MessageContent,
-    DeliveryStatus, ChannelHealthStatus
+    ChannelHealth,
+    ChannelHealthStatus,
+    DeliveryResult,
+    DeliveryStatus,
+    MessageContent,
+    NotificationChannel,
 )
-from src.notification.channels.config import (
-    ConfigValidator, CommonValidationRules, validate_phone
-)
+from src.notification.channels.config import CommonValidationRules, ConfigValidator, validate_phone
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -59,22 +62,16 @@ class SMSChannel(NotificationChannel):
             "provider",
             str,
             description="SMS provider (twilio, aws_sns, nexmo, messagebird)",
-            allowed_values=self.SUPPORTED_PROVIDERS
+            allowed_values=self.SUPPORTED_PROVIDERS,
         )
 
         # Common fields
         validator.optional_field(
-            "default_from_number",
-            str,
-            description="Default sender phone number",
-            custom_validator=validate_phone
+            "default_from_number", str, description="Default sender phone number", custom_validator=validate_phone
         )
 
         validator.optional_field(
-            "default_recipient",
-            str,
-            description="Default recipient phone number",
-            custom_validator=validate_phone
+            "default_recipient", str, description="Default recipient phone number", custom_validator=validate_phone
         )
 
         # Provider-specific configuration
@@ -90,26 +87,18 @@ class SMSChannel(NotificationChannel):
             self._add_messagebird_validation(validator)
 
         # SMS options
-        validator.optional_field(
-            "enable_delivery_reports",
-            bool,
-            description="Enable delivery status callbacks"
-        )
+        validator.optional_field("enable_delivery_reports", bool, description="Enable delivery status callbacks")
 
         validator.optional_field(
             "max_message_parts",
             int,
             description="Maximum number of SMS parts for long messages",
             min_value=1,
-            max_value=10
+            max_value=10,
         )
 
         validator.optional_field(
-            "validity_period_hours",
-            int,
-            description="Message validity period in hours",
-            min_value=1,
-            max_value=72
+            "validity_period_hours", int, description="Message validity period in hours", min_value=1, max_value=72
         )
 
         # Add common validation rules
@@ -130,83 +119,34 @@ class SMSChannel(NotificationChannel):
 
     def _add_twilio_validation(self, validator: ConfigValidator):
         """Add Twilio-specific validation rules."""
-        validator.require_field(
-            "account_sid",
-            str,
-            description="Twilio Account SID",
-            min_length=30,
-            max_length=40
-        )
+        validator.require_field("account_sid", str, description="Twilio Account SID", min_length=30, max_length=40)
 
-        validator.require_field(
-            "auth_token",
-            str,
-            description="Twilio Auth Token",
-            min_length=30,
-            max_length=40
-        )
+        validator.require_field("auth_token", str, description="Twilio Auth Token", min_length=30, max_length=40)
 
         validator.optional_field(
-            "messaging_service_sid",
-            str,
-            description="Twilio Messaging Service SID (alternative to from_number)"
+            "messaging_service_sid", str, description="Twilio Messaging Service SID (alternative to from_number)"
         )
 
     def _add_aws_sns_validation(self, validator: ConfigValidator):
         """Add AWS SNS-specific validation rules."""
-        validator.require_field(
-            "aws_access_key_id",
-            str,
-            description="AWS Access Key ID",
-            min_length=16,
-            max_length=32
-        )
+        validator.require_field("aws_access_key_id", str, description="AWS Access Key ID", min_length=16, max_length=32)
 
-        validator.require_field(
-            "aws_secret_access_key",
-            str,
-            description="AWS Secret Access Key",
-            min_length=20
-        )
+        validator.require_field("aws_secret_access_key", str, description="AWS Secret Access Key", min_length=20)
 
-        validator.require_field(
-            "aws_region",
-            str,
-            description="AWS Region",
-            min_length=2
-        )
+        validator.require_field("aws_region", str, description="AWS Region", min_length=2)
 
     def _add_nexmo_validation(self, validator: ConfigValidator):
         """Add Nexmo/Vonage-specific validation rules."""
-        validator.require_field(
-            "api_key",
-            str,
-            description="Nexmo API Key",
-            min_length=8
-        )
+        validator.require_field("api_key", str, description="Nexmo API Key", min_length=8)
 
-        validator.require_field(
-            "api_secret",
-            str,
-            description="Nexmo API Secret",
-            min_length=8
-        )
+        validator.require_field("api_secret", str, description="Nexmo API Secret", min_length=8)
 
     def _add_messagebird_validation(self, validator: ConfigValidator):
         """Add MessageBird-specific validation rules."""
-        validator.require_field(
-            "access_key",
-            str,
-            description="MessageBird Access Key",
-            min_length=20
-        )
+        validator.require_field("access_key", str, description="MessageBird Access Key", min_length=20)
 
     async def send_message(
-        self,
-        recipient: str,
-        content: MessageContent,
-        message_id: Optional[str] = None,
-        priority: str = "NORMAL"
+        self, recipient: str, content: MessageContent, message_id: str | None = None, priority: str = "NORMAL"
     ) -> DeliveryResult:
         """
         Send an SMS message.
@@ -220,7 +160,7 @@ class SMSChannel(NotificationChannel):
         Returns:
             DeliveryResult with delivery status and metadata
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         try:
             # Use recipient or fall back to default
@@ -242,7 +182,9 @@ class SMSChannel(NotificationChannel):
             message_parts = self._split_sms_message(content.text)
 
             if len(message_parts) > self.config["max_message_parts"]:
-                raise ValueError(f"Message too long: {len(message_parts)} parts (max: {self.config['max_message_parts']})")
+                raise ValueError(
+                    f"Message too long: {len(message_parts)} parts (max: {self.config['max_message_parts']})"
+                )
 
             # Send message(s) based on provider
             provider = self.config["provider"]
@@ -252,21 +194,15 @@ class SMSChannel(NotificationChannel):
                     to_number, from_number, messaging_service_sid, message_parts, message_id
                 )
             elif provider == "aws_sns":
-                result = await self._send_aws_sns_sms(
-                    to_number, message_parts, message_id
-                )
+                result = await self._send_aws_sns_sms(to_number, message_parts, message_id)
             elif provider == "nexmo":
-                result = await self._send_nexmo_sms(
-                    to_number, from_number, message_parts, message_id
-                )
+                result = await self._send_nexmo_sms(to_number, from_number, message_parts, message_id)
             elif provider == "messagebird":
-                result = await self._send_messagebird_sms(
-                    to_number, from_number, message_parts, message_id
-                )
+                result = await self._send_messagebird_sms(to_number, from_number, message_parts, message_id)
             else:
                 raise ValueError(f"Unsupported SMS provider: {provider}")
 
-            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
             result.response_time_ms = response_time
 
             return result
@@ -279,7 +215,7 @@ class SMSChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(UTC) - start_time).total_seconds() * 1000),
             )
 
         except Exception as e:
@@ -290,7 +226,7 @@ class SMSChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(UTC) - start_time).total_seconds() * 1000),
             )
 
     def _split_sms_message(self, text: str) -> list[str]:
@@ -318,7 +254,7 @@ class SMSChannel(NotificationChannel):
             # Find a good break point (space, punctuation)
             break_point = part_length
             for i in range(part_length - 1, max(0, part_length - 20), -1):
-                if text[i] in [' ', '.', ',', ';', '!', '?', '\n']:
+                if text[i] in [" ", ".", ",", ";", "!", "?", "\n"]:
                     break_point = i
                     break
 
@@ -330,10 +266,10 @@ class SMSChannel(NotificationChannel):
     async def _send_twilio_sms(
         self,
         to_number: str,
-        from_number: Optional[str],
-        messaging_service_sid: Optional[str],
+        from_number: str | None,
+        messaging_service_sid: str | None,
         message_parts: list[str],
-        message_id: Optional[str]
+        message_id: str | None,
     ) -> DeliveryResult:
         """Send SMS via Twilio API."""
         try:
@@ -349,7 +285,7 @@ class SMSChannel(NotificationChannel):
 
             headers = {
                 "Authorization": f"Basic {encoded_credentials}",
-                "Content-Type": "application/x-www-form-urlencoded"
+                "Content-Type": "application/x-www-form-urlencoded",
             }
 
             url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
@@ -359,10 +295,7 @@ class SMSChannel(NotificationChannel):
             async with aiohttp.ClientSession() as session:
                 for i, part in enumerate(message_parts):
                     # Prepare form data
-                    data = {
-                        "To": to_number,
-                        "Body": part
-                    }
+                    data = {"To": to_number, "Body": part}
 
                     if messaging_service_sid:
                         data["MessagingServiceSid"] = messaging_service_sid
@@ -395,65 +328,44 @@ class SMSChannel(NotificationChannel):
                     "from_number": from_number,
                     "messaging_service_sid": messaging_service_sid,
                     "message_parts": len(message_parts),
-                    "message_sids": sent_messages
-                }
+                    "message_sids": sent_messages,
+                },
             )
 
         except Exception as e:
-            return DeliveryResult(
-                success=False,
-                status=DeliveryStatus.FAILED,
-                error_message=f"Twilio error: {str(e)}"
-            )
+            return DeliveryResult(success=False, status=DeliveryStatus.FAILED, error_message=f"Twilio error: {str(e)}")
 
     async def _send_aws_sns_sms(
-        self,
-        to_number: str,
-        message_parts: list[str],
-        message_id: Optional[str]
+        self, to_number: str, message_parts: list[str], message_id: str | None
     ) -> DeliveryResult:
         """Send SMS via AWS SNS (placeholder implementation)."""
         # This is a template - implement actual AWS SNS integration
         _logger.warning("AWS SNS SMS implementation not yet available")
 
         return DeliveryResult(
-            success=False,
-            status=DeliveryStatus.FAILED,
-            error_message="AWS SNS SMS provider not implemented"
+            success=False, status=DeliveryStatus.FAILED, error_message="AWS SNS SMS provider not implemented"
         )
 
     async def _send_nexmo_sms(
-        self,
-        to_number: str,
-        from_number: Optional[str],
-        message_parts: list[str],
-        message_id: Optional[str]
+        self, to_number: str, from_number: str | None, message_parts: list[str], message_id: str | None
     ) -> DeliveryResult:
         """Send SMS via Nexmo/Vonage (placeholder implementation)."""
         # This is a template - implement actual Nexmo integration
         _logger.warning("Nexmo SMS implementation not yet available")
 
         return DeliveryResult(
-            success=False,
-            status=DeliveryStatus.FAILED,
-            error_message="Nexmo SMS provider not implemented"
+            success=False, status=DeliveryStatus.FAILED, error_message="Nexmo SMS provider not implemented"
         )
 
     async def _send_messagebird_sms(
-        self,
-        to_number: str,
-        from_number: Optional[str],
-        message_parts: list[str],
-        message_id: Optional[str]
+        self, to_number: str, from_number: str | None, message_parts: list[str], message_id: str | None
     ) -> DeliveryResult:
         """Send SMS via MessageBird (placeholder implementation)."""
         # This is a template - implement actual MessageBird integration
         _logger.warning("MessageBird SMS implementation not yet available")
 
         return DeliveryResult(
-            success=False,
-            status=DeliveryStatus.FAILED,
-            error_message="MessageBird SMS provider not implemented"
+            success=False, status=DeliveryStatus.FAILED, error_message="MessageBird SMS provider not implemented"
         )
 
     async def check_health(self) -> ChannelHealth:
@@ -463,7 +375,7 @@ class SMSChannel(NotificationChannel):
         Returns:
             ChannelHealth with current status and metrics
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         try:
             provider = self.config["provider"]
@@ -479,20 +391,20 @@ class SMSChannel(NotificationChannel):
             else:
                 raise ValueError(f"Unsupported provider: {provider}")
 
-            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
             health.response_time_ms = response_time
-            health.last_check = datetime.now(timezone.utc)
+            health.last_check = datetime.now(UTC)
 
             return health
 
         except Exception as e:
-            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
 
             return ChannelHealth(
                 status=ChannelHealthStatus.DOWN,
-                last_check=datetime.now(timezone.utc),
+                last_check=datetime.now(UTC),
                 response_time_ms=response_time,
-                error_message=f"Health check failed: {str(e)}"
+                error_message=f"Health check failed: {str(e)}",
             )
 
     async def _check_twilio_health(self) -> ChannelHealth:
@@ -506,9 +418,7 @@ class SMSChannel(NotificationChannel):
             credentials = f"{account_sid}:{auth_token}"
             encoded_credentials = base64.b64encode(credentials.encode()).decode()
 
-            headers = {
-                "Authorization": f"Basic {encoded_credentials}"
-            }
+            headers = {"Authorization": f"Basic {encoded_credentials}"}
 
             url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}.json"
 
@@ -519,51 +429,51 @@ class SMSChannel(NotificationChannel):
 
                         return ChannelHealth(
                             status=ChannelHealthStatus.HEALTHY,
-                            last_check=datetime.now(timezone.utc),
+                            last_check=datetime.now(UTC),
                             metadata={
                                 "provider": "twilio",
                                 "account_sid": account_sid,
                                 "account_status": account_info.get("status"),
-                                "account_type": account_info.get("type")
-                            }
+                                "account_type": account_info.get("type"),
+                            },
                         )
                     else:
                         error_text = await response.text()
                         return ChannelHealth(
                             status=ChannelHealthStatus.DOWN,
-                            last_check=datetime.now(timezone.utc),
-                            error_message=f"Twilio API error {response.status}: {error_text}"
+                            last_check=datetime.now(UTC),
+                            error_message=f"Twilio API error {response.status}: {error_text}",
                         )
 
         except Exception as e:
             return ChannelHealth(
                 status=ChannelHealthStatus.DOWN,
-                last_check=datetime.now(timezone.utc),
-                error_message=f"Twilio health check error: {str(e)}"
+                last_check=datetime.now(UTC),
+                error_message=f"Twilio health check error: {str(e)}",
             )
 
     async def _check_aws_sns_health(self) -> ChannelHealth:
         """Check AWS SNS health (placeholder)."""
         return ChannelHealth(
             status=ChannelHealthStatus.DOWN,
-            last_check=datetime.now(timezone.utc),
-            error_message="AWS SNS health check not implemented"
+            last_check=datetime.now(UTC),
+            error_message="AWS SNS health check not implemented",
         )
 
     async def _check_nexmo_health(self) -> ChannelHealth:
         """Check Nexmo health (placeholder)."""
         return ChannelHealth(
             status=ChannelHealthStatus.DOWN,
-            last_check=datetime.now(timezone.utc),
-            error_message="Nexmo health check not implemented"
+            last_check=datetime.now(UTC),
+            error_message="Nexmo health check not implemented",
         )
 
     async def _check_messagebird_health(self) -> ChannelHealth:
         """Check MessageBird health (placeholder)."""
         return ChannelHealth(
             status=ChannelHealthStatus.DOWN,
-            last_check=datetime.now(timezone.utc),
-            error_message="MessageBird health check not implemented"
+            last_check=datetime.now(UTC),
+            error_message="MessageBird health check not implemented",
         )
 
     def get_rate_limit(self) -> int:
@@ -596,7 +506,7 @@ class SMSChannel(NotificationChannel):
             "formatting": False,  # Limited formatting in SMS
             "read_receipts": False,  # Not supported in SMS
             "bulk_sending": True,
-            "scheduling": False  # Would need provider-specific implementation
+            "scheduling": False,  # Would need provider-specific implementation
         }
 
         return supported_features.get(feature, False)
@@ -627,17 +537,18 @@ class SMSChannel(NotificationChannel):
         if content.html and not text:
             # Simple HTML to text conversion
             import re
-            text = re.sub(r'<[^>]+>', '', content.html)
-            text = text.replace('&nbsp;', ' ').replace('&amp;', '&')
-            text = text.replace('&lt;', '<').replace('&gt;', '>')
+
+            text = re.sub(r"<[^>]+>", "", content.html)
+            text = text.replace("&nbsp;", " ").replace("&amp;", "&")
+            text = text.replace("&lt;", "<").replace("&gt;", ">")
 
         # Remove excessive whitespace
-        text = re.sub(r'\s+', ' ', text).strip()
+        text = re.sub(r"\s+", " ", text).strip()
 
         return MessageContent(
             text=text,
             subject=None,  # SMS doesn't have subjects
-            html=None,     # SMS doesn't support HTML
+            html=None,  # SMS doesn't support HTML
             attachments=None,  # SMS doesn't support attachments
-            metadata=content.metadata
+            metadata=content.metadata,
         )

@@ -5,10 +5,12 @@ JSON type handling for SQLAlchemy models.
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import JSON, TypeDecorator
 
+
 class JsonType(TypeDecorator):
     """
     Platform-independent JSON type with PostgreSQL-specific JSONB support.
     """
+
     impl = JSON
     cache_ok = True
 
@@ -17,7 +19,7 @@ class JsonType(TypeDecorator):
         self._is_jsonb = None
 
     def load_dialect_impl(self, dialect):
-        if dialect.name == 'postgresql':
+        if dialect.name == "postgresql":
             self._is_jsonb = True
             return dialect.type_descriptor(JSONB())
         self._is_jsonb = False
@@ -34,7 +36,7 @@ class JsonType(TypeDecorator):
     def __hash__(self):
         """Make the type hashable for SQLAlchemy's type caching"""
         # Hash based on class since all instances are functionally identical
-        return hash('JsonType')
+        return hash("JsonType")
 
     def __str__(self):
         return "JSONB" if self._is_jsonb else "JSON"

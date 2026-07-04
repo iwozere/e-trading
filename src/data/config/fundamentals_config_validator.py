@@ -7,10 +7,11 @@ it contains valid provider sequences, TTL settings, and field priorities.
 
 import json
 import logging
-from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 _logger = logging.getLogger(__name__)
+
 
 class FundamentalsConfigValidator:
     """
@@ -20,32 +21,52 @@ class FundamentalsConfigValidator:
     def __init__(self):
         """Initialize the configuration validator."""
         self.required_sections = [
-            'provider_sequences',
-            'refresh_intervals',
-            'field_priorities',
-            'provider_settings',
-            'combination_strategies',
-            'cache_settings',
-            'data_validation'
+            "provider_sequences",
+            "refresh_intervals",
+            "field_priorities",
+            "provider_settings",
+            "combination_strategies",
+            "cache_settings",
+            "data_validation",
         ]
 
         self.valid_data_types = [
-            'statements', 'ratios', 'profile', 'profiles', 'calendar', 'dividends',
-            'splits', 'insider_trading', 'analyst_estimates'
+            "statements",
+            "ratios",
+            "profile",
+            "profiles",
+            "calendar",
+            "dividends",
+            "splits",
+            "insider_trading",
+            "analyst_estimates",
         ]
 
         # Support both full names and shorthand codes
         self.valid_providers = [
             # Shorthand codes (preferred)
-            'fmp', 'yf', 'av', 'td', 'fh', 'pg', 'bnc', 'cg',
+            "fmp",
+            "yf",
+            "av",
+            "td",
+            "fh",
+            "pg",
+            "bnc",
+            "cg",
             # Full names (legacy support)
-            'yahoo', 'yfinance', 'alpha_vantage', 'twelvedata', 'ibkr',
-            'polygon', 'finnhub', 'tiingo', 'binance', 'coingecko'
+            "yahoo",
+            "yfinance",
+            "alpha_vantage",
+            "twelvedata",
+            "ibkr",
+            "polygon",
+            "finnhub",
+            "tiingo",
+            "binance",
+            "coingecko",
         ]
 
-        self.valid_combination_strategies = [
-            'priority_based', 'quality_based', 'consensus'
-        ]
+        self.valid_combination_strategies = ["priority_based", "quality_based", "consensus"]
 
     def validate_config(self, config: Dict[str, Any]) -> Tuple[bool, List[str]]:
         """
@@ -68,13 +89,13 @@ class FundamentalsConfigValidator:
             return False, errors
 
         # Validate each section
-        errors.extend(self._validate_provider_sequences(config.get('provider_sequences', {})))
-        errors.extend(self._validate_refresh_intervals(config.get('refresh_intervals', {})))
-        errors.extend(self._validate_field_priorities(config.get('field_priorities', {})))
-        errors.extend(self._validate_provider_settings(config.get('provider_settings', {})))
-        errors.extend(self._validate_combination_strategies(config.get('combination_strategies', {})))
-        errors.extend(self._validate_cache_settings(config.get('cache_settings', {})))
-        errors.extend(self._validate_data_validation(config.get('data_validation', {})))
+        errors.extend(self._validate_provider_sequences(config.get("provider_sequences", {})))
+        errors.extend(self._validate_refresh_intervals(config.get("refresh_intervals", {})))
+        errors.extend(self._validate_field_priorities(config.get("field_priorities", {})))
+        errors.extend(self._validate_provider_settings(config.get("provider_settings", {})))
+        errors.extend(self._validate_combination_strategies(config.get("combination_strategies", {})))
+        errors.extend(self._validate_cache_settings(config.get("cache_settings", {})))
+        errors.extend(self._validate_data_validation(config.get("data_validation", {})))
 
         return len(errors) == 0, errors
 
@@ -172,17 +193,17 @@ class FundamentalsConfigValidator:
                 continue
 
             # Check required fields
-            required_fields = ['name', 'priority', 'data_quality', 'reliability']
+            required_fields = ["name", "priority", "data_quality", "reliability"]
             for field in required_fields:
                 if field not in config:
                     errors.append(f"Missing required field {field} for provider {provider}")
 
             # Validate priority is integer
-            if 'priority' in config and not isinstance(config['priority'], int):
+            if "priority" in config and not isinstance(config["priority"], int):
                 errors.append(f"Priority for {provider} must be an integer")
 
             # Validate quality scores are between 1-5
-            for score_field in ['data_quality', 'reliability']:
+            for score_field in ["data_quality", "reliability"]:
                 if score_field in config:
                     score = config[score_field]
                     if not isinstance(score, (int, float)) or not (1 <= score <= 5):
@@ -218,14 +239,14 @@ class FundamentalsConfigValidator:
             return errors
 
         # Validate default_ttl_days
-        if 'default_ttl_days' in settings:
-            ttl = settings['default_ttl_days']
+        if "default_ttl_days" in settings:
+            ttl = settings["default_ttl_days"]
             if not isinstance(ttl, (int, float)) or ttl <= 0:
                 errors.append("default_ttl_days must be a positive number")
 
         # Validate max_cache_age_days
-        if 'max_cache_age_days' in settings:
-            max_age = settings['max_cache_age_days']
+        if "max_cache_age_days" in settings:
+            max_age = settings["max_cache_age_days"]
             if not isinstance(max_age, (int, float)) or max_age <= 0:
                 errors.append("max_cache_age_days must be a positive number")
 
@@ -240,8 +261,8 @@ class FundamentalsConfigValidator:
             return errors
 
         # Validate min_quality_score
-        if 'min_quality_score' in validation:
-            score = validation['min_quality_score']
+        if "min_quality_score" in validation:
+            score = validation["min_quality_score"]
             if not isinstance(score, (int, float)) or not (0 <= score <= 1):
                 errors.append("min_quality_score must be between 0 and 1")
 
@@ -253,7 +274,7 @@ class FundamentalsConfigValidator:
             return False
 
         # Must end with 'd' for days
-        if not interval_str.endswith('d'):
+        if not interval_str.endswith("d"):
             return False
 
         # Must have numeric prefix
@@ -274,7 +295,7 @@ class FundamentalsConfigValidator:
             Tuple of (is_valid, list_of_errors)
         """
         try:
-            with open(config_path, 'r') as f:
+            with open(config_path) as f:
                 config = json.load(f)
 
             return self.validate_config(config)
@@ -287,7 +308,7 @@ class FundamentalsConfigValidator:
             return False, [f"Error reading configuration file: {e}"]
 
 
-def validate_fundamentals_config(config_path: Optional[str] = None) -> Tuple[bool, List[str]]:
+def validate_fundamentals_config(config_path: str | None = None) -> Tuple[bool, List[str]]:
     """
     Validate fundamentals configuration file.
 
@@ -301,7 +322,7 @@ def validate_fundamentals_config(config_path: Optional[str] = None) -> Tuple[boo
         # Default path relative to project root
         current_dir = Path(__file__).parent
         project_root = current_dir.parent.parent.parent
-        config_path = project_root / 'config' / 'data' / 'fundamentals.json'
+        config_path = project_root / "config" / "data" / "fundamentals.json"
 
     validator = FundamentalsConfigValidator()
     return validator.validate_config_file(str(config_path))

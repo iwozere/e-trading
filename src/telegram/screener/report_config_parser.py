@@ -11,8 +11,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 import json
-from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass
+from typing import Any, Dict, List, Tuple
+
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -23,24 +24,35 @@ SUPPORTED_PERIODS = ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "
 SUPPORTED_INTERVALS = ["1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"]
 SUPPORTED_PROVIDERS = ["yahoo", "alpha_vantage", "polygon", "binance", "twelvedata", "fmp", "finnhub"]
 SUPPORTED_INDICATORS = ["RSI", "MACD", "BollingerBands", "SMA", "EMA", "ADX", "ATR", "Stochastic", "WilliamsR"]
-SUPPORTED_FUNDAMENTAL_INDICATORS = ["PE", "PB", "ROE", "ROA", "DebtEquity", "CurrentRatio", "EPS", "Revenue", "ProfitMargin"]
+SUPPORTED_FUNDAMENTAL_INDICATORS = [
+    "PE",
+    "PB",
+    "ROE",
+    "ROA",
+    "DebtEquity",
+    "CurrentRatio",
+    "EPS",
+    "Revenue",
+    "ProfitMargin",
+]
 
 
 @dataclass
 class ReportConfig:
     """Configuration for a report."""
+
     report_type: str
     tickers: List[str]
     period: str = "2y"
     interval: str = "1d"
     provider: str = "yahoo"
-    indicators: Optional[List[str]] = None
-    fundamental_indicators: Optional[List[str]] = None
+    indicators: List[str] | None = None
+    fundamental_indicators: List[str] | None = None
     email: bool = False
     include_chart: bool = True
     include_fundamentals: bool = True
     include_technicals: bool = True
-    custom_analysis: Optional[Dict[str, Any]] = None
+    custom_analysis: Dict[str, Any] | None = None
 
 
 class ReportConfigParser:
@@ -69,7 +81,9 @@ class ReportConfigParser:
         if "report_type" not in config:
             errors.append("Missing required field: report_type")
         elif config["report_type"] not in SUPPORTED_REPORT_TYPES:
-            errors.append(f"Unsupported report_type: {config['report_type']}. Must be one of: {', '.join(SUPPORTED_REPORT_TYPES)}")
+            errors.append(
+                f"Unsupported report_type: {config['report_type']}. Must be one of: {', '.join(SUPPORTED_REPORT_TYPES)}"
+            )
 
         if "tickers" not in config:
             errors.append("Missing required field: tickers")
@@ -81,10 +95,14 @@ class ReportConfigParser:
             errors.append(f"Unsupported period: {config['period']}. Must be one of: {', '.join(SUPPORTED_PERIODS)}")
 
         if "interval" in config and config["interval"] not in SUPPORTED_INTERVALS:
-            errors.append(f"Unsupported interval: {config['interval']}. Must be one of: {', '.join(SUPPORTED_INTERVALS)}")
+            errors.append(
+                f"Unsupported interval: {config['interval']}. Must be one of: {', '.join(SUPPORTED_INTERVALS)}"
+            )
 
         if "provider" in config and config["provider"] not in SUPPORTED_PROVIDERS:
-            errors.append(f"Unsupported provider: {config['provider']}. Must be one of: {', '.join(SUPPORTED_PROVIDERS)}")
+            errors.append(
+                f"Unsupported provider: {config['provider']}. Must be one of: {', '.join(SUPPORTED_PROVIDERS)}"
+            )
 
         if "indicators" in config:
             if not isinstance(config["indicators"], list):
@@ -94,7 +112,9 @@ class ReportConfigParser:
                     # Convert to uppercase for case-insensitive comparison
                     indicator_upper = indicator.upper()
                     if indicator_upper not in [ind.upper() for ind in SUPPORTED_INDICATORS]:
-                        errors.append(f"Unsupported indicator: {indicator}. Must be one of: {', '.join(SUPPORTED_INDICATORS)}")
+                        errors.append(
+                            f"Unsupported indicator: {indicator}. Must be one of: {', '.join(SUPPORTED_INDICATORS)}"
+                        )
 
         if "fundamental_indicators" in config:
             if not isinstance(config["fundamental_indicators"], list):
@@ -104,7 +124,9 @@ class ReportConfigParser:
                     # Convert to uppercase for case-insensitive comparison
                     indicator_upper = indicator.upper()
                     if indicator_upper not in [ind.upper() for ind in SUPPORTED_FUNDAMENTAL_INDICATORS]:
-                        errors.append(f"Unsupported fundamental indicator: {indicator}. Must be one of: {', '.join(SUPPORTED_FUNDAMENTAL_INDICATORS)}")
+                        errors.append(
+                            f"Unsupported fundamental indicator: {indicator}. Must be one of: {', '.join(SUPPORTED_FUNDAMENTAL_INDICATORS)}"
+                        )
 
         if "email" in config and not isinstance(config["email"], bool):
             errors.append("email must be a boolean")
@@ -121,7 +143,7 @@ class ReportConfigParser:
         return len(errors) == 0, errors
 
     @staticmethod
-    def parse_report_config(config_json: str) -> Optional[ReportConfig]:
+    def parse_report_config(config_json: str) -> ReportConfig | None:
         """
         Parse a report configuration JSON string into a ReportConfig object.
 
@@ -146,7 +168,7 @@ class ReportConfigParser:
                 include_chart=config.get("include_chart", True),
                 include_fundamentals=config.get("include_fundamentals", True),
                 include_technicals=config.get("include_technicals", True),
-                custom_analysis=config.get("custom_analysis")
+                custom_analysis=config.get("custom_analysis"),
             )
         except Exception as e:
             _logger.exception("Error parsing report config: %s", e)
@@ -172,7 +194,7 @@ class ReportConfigParser:
                 "period": config.get("period", "2y"),
                 "interval": config.get("interval", "1d"),
                 "provider": config.get("provider", "yahoo"),
-                "email": config.get("email", False)
+                "email": config.get("email", False),
             }
 
             # Add indicators summary
@@ -223,7 +245,7 @@ class ReportConfigParser:
             "email": kwargs.get("email", False),
             "include_chart": kwargs.get("include_chart", True),
             "include_fundamentals": kwargs.get("include_fundamentals", True),
-            "include_technicals": kwargs.get("include_technicals", True)
+            "include_technicals": kwargs.get("include_technicals", True),
         }
 
         return json.dumps(config, indent=2)
@@ -237,46 +259,55 @@ class ReportConfigParser:
             Dictionary of example configurations
         """
         return {
-            "basic_analysis": json.dumps({
-                "report_type": "analysis",
-                "tickers": ["AAPL", "MSFT"],
-                "period": "1y",
-                "interval": "1d",
-                "provider": "yahoo",
-                "indicators": ["RSI", "MACD"],
-                "email": True
-            }, indent=2),
-
-            "technical_analysis": json.dumps({
-                "report_type": "analysis",
-                "tickers": ["TSLA"],
-                "period": "6mo",
-                "interval": "1h",
-                "provider": "yahoo",
-                "indicators": ["RSI", "MACD", "BollingerBands", "SMA"],
-                "include_fundamentals": False,
-                "email": False
-            }, indent=2),
-
-            "fundamental_analysis": json.dumps({
-                "report_type": "analysis",
-                "tickers": ["AAPL", "GOOGL", "MSFT"],
-                "period": "2y",
-                "interval": "1d",
-                "provider": "yahoo",
-                "fundamental_indicators": ["PE", "PB", "ROE", "ROA", "DebtEquity"],
-                "include_technicals": False,
-                "email": True
-            }, indent=2),
-
-            "crypto_analysis": json.dumps({
-                "report_type": "analysis",
-                "tickers": ["BTCUSDT", "ETHUSDT"],
-                "period": "3mo",
-                "interval": "4h",
-                "provider": "yf",
-                "indicators": ["RSI", "MACD", "BollingerBands"],
-                "include_fundamentals": False,
-                "email": True
-            }, indent=2)
+            "basic_analysis": json.dumps(
+                {
+                    "report_type": "analysis",
+                    "tickers": ["AAPL", "MSFT"],
+                    "period": "1y",
+                    "interval": "1d",
+                    "provider": "yahoo",
+                    "indicators": ["RSI", "MACD"],
+                    "email": True,
+                },
+                indent=2,
+            ),
+            "technical_analysis": json.dumps(
+                {
+                    "report_type": "analysis",
+                    "tickers": ["TSLA"],
+                    "period": "6mo",
+                    "interval": "1h",
+                    "provider": "yahoo",
+                    "indicators": ["RSI", "MACD", "BollingerBands", "SMA"],
+                    "include_fundamentals": False,
+                    "email": False,
+                },
+                indent=2,
+            ),
+            "fundamental_analysis": json.dumps(
+                {
+                    "report_type": "analysis",
+                    "tickers": ["AAPL", "GOOGL", "MSFT"],
+                    "period": "2y",
+                    "interval": "1d",
+                    "provider": "yahoo",
+                    "fundamental_indicators": ["PE", "PB", "ROE", "ROA", "DebtEquity"],
+                    "include_technicals": False,
+                    "email": True,
+                },
+                indent=2,
+            ),
+            "crypto_analysis": json.dumps(
+                {
+                    "report_type": "analysis",
+                    "tickers": ["BTCUSDT", "ETHUSDT"],
+                    "period": "3mo",
+                    "interval": "4h",
+                    "provider": "yf",
+                    "indicators": ["RSI", "MACD", "BollingerBands"],
+                    "include_fundamentals": False,
+                    "email": True,
+                },
+                indent=2,
+            ),
         }

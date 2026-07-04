@@ -15,10 +15,10 @@ from src.ml.pipeline.p20_kestrel.screening.sleeve_b import (
     screen_b3_index,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _catalyst(ticker="DRUG", event_type="pdufa", days_out=30):
     event_date = date.today() + timedelta(days=days_out)
@@ -46,15 +46,13 @@ def _spinoff(ticker="SPINCO", days_ago=35):
 # B1: FDA run-up
 # ---------------------------------------------------------------------------
 
+
 def test_b1_returns_fda_candidate():
     """Standard PDUFA 30 days out with valid mcap is a B1 candidate."""
     with (
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window",
-              return_value=[_catalyst()]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
-              return_value=_universe()),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal",
-              return_value=None),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window", return_value=[_catalyst()]),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row", return_value=_universe()),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal", return_value=None),
     ):
         result = screen_b1(date.today())
 
@@ -66,10 +64,11 @@ def test_b1_returns_fda_candidate():
 def test_b1_excludes_non_fda_event_type():
     """Non-FDA event types (e.g. earnings) are excluded from B1."""
     with (
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window",
-              return_value=[_catalyst(event_type="earnings")]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
-              return_value=_universe()),
+        patch(
+            "src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window",
+            return_value=[_catalyst(event_type="earnings")],
+        ),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row", return_value=_universe()),
     ):
         result = screen_b1(date.today())
 
@@ -79,10 +78,11 @@ def test_b1_excludes_non_fda_event_type():
 def test_b1_excludes_mcap_too_large():
     """Mcap above $10B cap is excluded."""
     with (
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window",
-              return_value=[_catalyst()]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
-              return_value=_universe(mcap=15_000_000_000)),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window", return_value=[_catalyst()]),
+        patch(
+            "src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
+            return_value=_universe(mcap=15_000_000_000),
+        ),
     ):
         result = screen_b1(date.today())
 
@@ -92,10 +92,10 @@ def test_b1_excludes_mcap_too_large():
 def test_b1_excludes_mcap_too_small():
     """Mcap below $300M floor is excluded."""
     with (
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window",
-              return_value=[_catalyst()]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
-              return_value=_universe(mcap=100_000_000)),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window", return_value=[_catalyst()]),
+        patch(
+            "src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row", return_value=_universe(mcap=100_000_000)
+        ),
     ):
         result = screen_b1(date.today())
 
@@ -105,12 +105,12 @@ def test_b1_excludes_mcap_too_small():
 def test_b1_crowding_spike_skips_near_event():
     """Crowding z-score > 3 causes skip anywhere in the entry window."""
     with (
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window",
-              return_value=[_catalyst(days_out=15)]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
-              return_value=_universe()),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal",
-              return_value=3.5),
+        patch(
+            "src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window",
+            return_value=[_catalyst(days_out=15)],
+        ),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row", return_value=_universe()),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal", return_value=3.5),
     ):
         result = screen_b1(date.today())
 
@@ -120,12 +120,12 @@ def test_b1_crowding_spike_skips_near_event():
 def test_b1_no_crowding_data_does_not_skip():
     """Missing crowding signal (None) does not cause skip."""
     with (
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window",
-              return_value=[_catalyst(days_out=15)]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
-              return_value=_universe()),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal",
-              return_value=None),
+        patch(
+            "src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window",
+            return_value=[_catalyst(days_out=15)],
+        ),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row", return_value=_universe()),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal", return_value=None),
     ):
         result = screen_b1(date.today())
 
@@ -135,12 +135,12 @@ def test_b1_no_crowding_data_does_not_skip():
 def test_b1_excludes_inside_t10():
     """Candidates closer than T-10 are outside the entry window."""
     with (
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window",
-              return_value=[_catalyst(days_out=5)]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
-              return_value=_universe()),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal",
-              return_value=None),
+        patch(
+            "src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window",
+            return_value=[_catalyst(days_out=5)],
+        ),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row", return_value=_universe()),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal", return_value=None),
     ):
         result = screen_b1(date.today())
 
@@ -151,13 +151,15 @@ def test_b1_excludes_inside_t10():
 # B2: Spin-offs
 # ---------------------------------------------------------------------------
 
+
 def test_b2_returns_spinoff_in_window():
     """Spin-off 35 days ago with valid mcap is a B2 candidate."""
     with (
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_past_spinoffs",
-              return_value=[_spinoff()]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
-              return_value=_universe(ticker="SPINCO", mcap=300_000_000)),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_past_spinoffs", return_value=[_spinoff()]),
+        patch(
+            "src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
+            return_value=_universe(ticker="SPINCO", mcap=300_000_000),
+        ),
     ):
         result = screen_b2(date.today())
 
@@ -170,10 +172,11 @@ def test_b2_returns_spinoff_in_window():
 def test_b2_excludes_micro_cap():
     """Spin-off below $150M mcap floor is excluded."""
     with (
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_past_spinoffs",
-              return_value=[_spinoff()]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
-              return_value=_universe(ticker="SPINCO", mcap=100_000_000)),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_past_spinoffs", return_value=[_spinoff()]),
+        patch(
+            "src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
+            return_value=_universe(ticker="SPINCO", mcap=100_000_000),
+        ),
     ):
         result = screen_b2(date.today())
 
@@ -183,10 +186,8 @@ def test_b2_excludes_micro_cap():
 def test_b2_excludes_unknown_ticker():
     """Spin-off ticker not in k20_universe is excluded."""
     with (
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_past_spinoffs",
-              return_value=[_spinoff()]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
-              return_value=None),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_past_spinoffs", return_value=[_spinoff()]),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row", return_value=None),
     ):
         result = screen_b2(date.today())
 
@@ -195,8 +196,7 @@ def test_b2_excludes_unknown_ticker():
 
 def test_b2_empty_when_no_spinoffs():
     """No spin-offs in window produces empty result."""
-    with patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_past_spinoffs",
-               return_value=[]):
+    with patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_past_spinoffs", return_value=[]):
         result = screen_b2(date.today())
 
     assert result == []
@@ -206,13 +206,12 @@ def test_b2_empty_when_no_spinoffs():
 # B3: Activist
 # ---------------------------------------------------------------------------
 
+
 def test_b3_returns_activist_ticker():
     """Ticker with activist_13d signal > 0 is a B3 candidate."""
     with (
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_active_tickers",
-              return_value=["TRGT"]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal",
-              return_value=1.0),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_active_tickers", return_value=["TRGT"]),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal", return_value=1.0),
     ):
         result = screen_b3_activist(date.today())
 
@@ -224,10 +223,8 @@ def test_b3_returns_activist_ticker():
 def test_b3_excludes_zero_signal():
     """Activist signal of 0 is not a B3 candidate."""
     with (
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_active_tickers",
-              return_value=["TRGT"]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal",
-              return_value=0.0),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_active_tickers", return_value=["TRGT"]),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal", return_value=0.0),
     ):
         result = screen_b3_activist(date.today())
 
@@ -237,10 +234,8 @@ def test_b3_excludes_zero_signal():
 def test_b3_excludes_none_signal():
     """Missing activist signal produces no B3 candidates."""
     with (
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_active_tickers",
-              return_value=["TRGT"]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal",
-              return_value=None),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_active_tickers", return_value=["TRGT"]),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_latest_signal", return_value=None),
     ):
         result = screen_b3_activist(date.today())
 
@@ -251,33 +246,36 @@ def test_b3_index_returns_additions():
     """B3 index screen returns valid index addition candidates in the entry window."""
     import pandas as pd
 
-    fake_df = pd.DataFrame([
-        {
-            "date": (date.today() + timedelta(days=10)).isoformat(),
-            "index_name": "SP500",
-            "Added_Ticker": "KKR",
-            "Added_Security": "KKR & Co. Inc.",
-            "Removed_Ticker": "CMA",
-            "Removed_Security": "Comerica",
-            "Reason": "Market capitalization change"
-        },
-        {
-            "date": (date.today() - timedelta(days=20)).isoformat(),  # outside window
-            "index_name": "NASDAQ100",
-            "Added_Ticker": "LRCX",
-            "Added_Security": "Lam Research",
-            "Removed_Ticker": "",
-            "Removed_Security": "",
-            "Reason": "Quarterly reconstitution"
-        }
-    ])
+    fake_df = pd.DataFrame(
+        [
+            {
+                "date": (date.today() + timedelta(days=10)).isoformat(),
+                "index_name": "SP500",
+                "Added_Ticker": "KKR",
+                "Added_Security": "KKR & Co. Inc.",
+                "Removed_Ticker": "CMA",
+                "Removed_Security": "Comerica",
+                "Reason": "Market capitalization change",
+            },
+            {
+                "date": (date.today() - timedelta(days=20)).isoformat(),  # outside window
+                "index_name": "NASDAQ100",
+                "Added_Ticker": "LRCX",
+                "Added_Security": "Lam Research",
+                "Removed_Ticker": "",
+                "Removed_Security": "",
+                "Reason": "Quarterly reconstitution",
+            },
+        ]
+    )
 
     with (
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b._get_latest_index_changes_file",
-              return_value=Path("dummy_path.csv.gz")),
+        patch(
+            "src.ml.pipeline.p20_kestrel.screening.sleeve_b._get_latest_index_changes_file",
+            return_value=Path("dummy_path.csv.gz"),
+        ),
         patch("pandas.read_csv", return_value=fake_df),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
-              return_value=_universe(ticker="KKR")),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row", return_value=_universe(ticker="KKR")),
     ):
         result = screen_b3_index(date.today())
 

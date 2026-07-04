@@ -23,13 +23,13 @@ Classes:
 import os
 import time
 from datetime import datetime, timedelta
-from typing import Any, List, Optional, cast
+from typing import Any, List, cast
 
 import pandas as pd
 
 from src.data.downloader.base_data_downloader import BaseDataDownloader
-from src.notification.logger import setup_logger
 from src.model.schemas import Fundamentals, OptionalFundamentals
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -39,6 +39,7 @@ try:
     from alpaca.data.requests import StockBarsRequest
     from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
     from alpaca.trading.client import TradingClient
+
     ALPACA_AVAILABLE = True
 except ImportError:
     # Annotate as Any so Pyright does not flag usages below as "None not callable".
@@ -95,8 +96,7 @@ class AlpacaDataDownloader(BaseDataDownloader):
     >>> fundamentals = downloader.get_fundamentals("AAPL")
     """
 
-    def __init__(self, api_key: Optional[str] = None, secret_key: Optional[str] = None,
-                 base_url: Optional[str] = None):
+    def __init__(self, api_key: str | None = None, secret_key: str | None = None, base_url: str | None = None):
         """
         Initialize Alpaca data downloader.
 
@@ -108,14 +108,12 @@ class AlpacaDataDownloader(BaseDataDownloader):
         super().__init__()
 
         if not ALPACA_AVAILABLE:
-            raise ImportError(
-                "alpaca-py package is required. Install with: pip install alpaca-py"
-            )
+            raise ImportError("alpaca-py package is required. Install with: pip install alpaca-py")
 
         # Get API credentials from parameter or config
-        self.api_key = api_key or self._get_config_value('ALPACA_API_KEY', 'ALPACA_API_KEY')
-        self.secret_key = secret_key or self._get_config_value('ALPACA_SECRET_KEY', 'ALPACA_SECRET_KEY')
-        self.base_url = base_url or os.getenv('ALPACA_BASE_URL', 'https://paper-api.alpaca.markets')
+        self.api_key = api_key or self._get_config_value("ALPACA_API_KEY", "ALPACA_API_KEY")
+        self.secret_key = secret_key or self._get_config_value("ALPACA_SECRET_KEY", "ALPACA_SECRET_KEY")
+        self.base_url = base_url or os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
 
         if not self.api_key or not self.secret_key:
             raise ValueError(
@@ -127,16 +125,13 @@ class AlpacaDataDownloader(BaseDataDownloader):
         # Note: alpaca-py separates data and trading clients
         try:
             # Data client for historical market data (no base_url needed)
-            self.data_client = StockHistoricalDataClient(
-                api_key=self.api_key,
-                secret_key=self.secret_key
-            )
+            self.data_client = StockHistoricalDataClient(api_key=self.api_key, secret_key=self.secret_key)
 
             # Trading client for account/asset information
             self.trading_client = TradingClient(
                 api_key=self.api_key,
                 secret_key=self.secret_key,
-                paper=True  # Default to paper trading for safety
+                paper=True,  # Default to paper trading for safety
             )
 
             _logger.info("Alpaca API clients initialized successfully")
@@ -146,12 +141,12 @@ class AlpacaDataDownloader(BaseDataDownloader):
 
         # Interval mapping from standard to Alpaca format (alpaca-py)
         self.interval_mapping = {
-            '1m': TimeFrame.Minute,
-            '5m': TimeFrame(5, TimeFrameUnit.Minute),
-            '15m': TimeFrame(15, TimeFrameUnit.Minute),
-            '30m': TimeFrame(30, TimeFrameUnit.Minute),
-            '1h': TimeFrame.Hour,
-            '1d': TimeFrame.Day
+            "1m": TimeFrame.Minute,
+            "5m": TimeFrame(5, TimeFrameUnit.Minute),
+            "15m": TimeFrame(15, TimeFrameUnit.Minute),
+            "30m": TimeFrame(30, TimeFrameUnit.Minute),
+            "1h": TimeFrame.Hour,
+            "1d": TimeFrame.Day,
         }
 
     def get_provider_name(self) -> str:
@@ -167,8 +162,7 @@ class AlpacaDataDownloader(BaseDataDownloader):
         """
         return list(self.interval_mapping.keys())
 
-    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime,
-                  end_date: datetime, **kwargs) -> pd.DataFrame:
+    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> pd.DataFrame:
         """
         Download historical OHLCV data for a given symbol from Alpaca.
 
@@ -191,34 +185,36 @@ class AlpacaDataDownloader(BaseDataDownloader):
             raise ValueError(f"Unsupported interval: {interval}. Supported: {self.get_supported_intervals()}")
 
         try:
-            _logger.debug("Downloading %s data for %s from %s to %s",
-                         interval, symbol, start_date.date(), end_date.date())
+            _logger.debug(
+                "Downloading %s data for %s from %s to %s", interval, symbol, start_date.date(), end_date.date()
+            )
 
             # Get Alpaca timeframe
             timeframe = self.interval_mapping[interval]
 
             # Additional parameters
-            adjustment = kwargs.get('adjustment', 'raw')
-            user_limit = kwargs.get('limit', None)
+            adjustment = kwargs.get("adjustment", "raw")
+            user_limit = kwargs.get("limit", None)
 
             # Check if user wants chunking (default behavior) or single request
-            enable_chunking = kwargs.get('enable_chunking', True)
+            enable_chunking = kwargs.get("enable_chunking", True)
 
             if not enable_chunking and user_limit:
                 # Single request with user-specified limit
-                return self._download_single_chunk(symbol, timeframe, start_date, end_date,
-                                                 adjustment, min(user_limit, 10000))
+                return self._download_single_chunk(
+                    symbol, timeframe, start_date, end_date, adjustment, min(user_limit, 10000)
+                )
             else:
                 # Download in chunks to get all data
-                return self._download_with_chunking(symbol, timeframe, start_date, end_date,
-                                                  adjustment, user_limit)
+                return self._download_with_chunking(symbol, timeframe, start_date, end_date, adjustment, user_limit)
 
         except Exception:
             _logger.exception("Error downloading data for %s:", symbol)
             raise
 
-    def _download_single_chunk(self, symbol: str, timeframe, start_date: datetime,
-                              end_date: datetime, adjustment: str, limit: int) -> pd.DataFrame:
+    def _download_single_chunk(
+        self, symbol: str, timeframe, start_date: datetime, end_date: datetime, adjustment: str, limit: int
+    ) -> pd.DataFrame:
         """
         Download data in a single API request (legacy behavior).
 
@@ -240,7 +236,7 @@ class AlpacaDataDownloader(BaseDataDownloader):
             start=start_date,
             end=end_date,
             limit=limit,
-            adjustment=adjustment
+            adjustment=adjustment,
         )
 
         # Get bars using the new data client
@@ -254,8 +250,15 @@ class AlpacaDataDownloader(BaseDataDownloader):
 
         return self._convert_bars_to_dataframe(bars, symbol, start_date, end_date)
 
-    def _download_with_chunking(self, symbol: str, timeframe, start_date: datetime,
-                               end_date: datetime, adjustment: str, user_limit: Optional[int]) -> pd.DataFrame:
+    def _download_with_chunking(
+        self,
+        symbol: str,
+        timeframe,
+        start_date: datetime,
+        end_date: datetime,
+        adjustment: str,
+        user_limit: int | None,
+    ) -> pd.DataFrame:
         """
         Download data in chunks to handle large date ranges.
 
@@ -275,8 +278,7 @@ class AlpacaDataDownloader(BaseDataDownloader):
         chunk_limit = 10000  # Alpaca's free tier limit
         total_downloaded = 0
 
-        _logger.debug("Starting chunked download for %s from %s to %s",
-                     symbol, start_date.date(), end_date.date())
+        _logger.debug("Starting chunked download for %s from %s to %s", symbol, start_date.date(), end_date.date())
 
         while current_start < end_date:
             # Check if we've hit user limit
@@ -290,8 +292,13 @@ class AlpacaDataDownloader(BaseDataDownloader):
                 remaining = user_limit - total_downloaded
                 current_limit = min(chunk_limit, remaining)
 
-            _logger.debug("Downloading chunk for %s: %s to %s (limit: %d)",
-                         symbol, current_start.date(), end_date.date(), current_limit)
+            _logger.debug(
+                "Downloading chunk for %s: %s to %s (limit: %d)",
+                symbol,
+                current_start.date(),
+                end_date.date(),
+                current_limit,
+            )
 
             try:
                 # Create request using alpaca-py
@@ -301,7 +308,7 @@ class AlpacaDataDownloader(BaseDataDownloader):
                     start=current_start,
                     end=end_date,
                     limit=current_limit,
-                    adjustment=adjustment
+                    adjustment=adjustment,
                 )
 
                 # Get bars using the new data client
@@ -324,12 +331,12 @@ class AlpacaDataDownloader(BaseDataDownloader):
 
                 for bar in bars_dict:
                     bar_data = {
-                        'timestamp': bar.timestamp,
-                        'open': float(bar.open),
-                        'high': float(bar.high),
-                        'low': float(bar.low),
-                        'close': float(bar.close),
-                        'volume': int(bar.volume)
+                        "timestamp": bar.timestamp,
+                        "open": float(bar.open),
+                        "high": float(bar.high),
+                        "low": float(bar.low),
+                        "close": float(bar.close),
+                        "volume": int(bar.volume),
                     }
                     chunk_data.append(bar_data)
                     last_timestamp = bar.timestamp
@@ -341,19 +348,22 @@ class AlpacaDataDownloader(BaseDataDownloader):
                 all_data.extend(chunk_data)
                 total_downloaded += len(chunk_data)
 
-                _logger.debug("Downloaded %d bars for %s (total: %d)",
-                             len(chunk_data), symbol, total_downloaded)
+                _logger.debug("Downloaded %d bars for %s (total: %d)", len(chunk_data), symbol, total_downloaded)
 
                 # If we got less than the limit, we've reached the end
                 if len(chunk_data) < current_limit:
-                    _logger.debug("Received partial chunk (%d < %d), reached end of data for %s",
-                                 len(chunk_data), current_limit, symbol)
+                    _logger.debug(
+                        "Received partial chunk (%d < %d), reached end of data for %s",
+                        len(chunk_data),
+                        current_limit,
+                        symbol,
+                    )
                     break
 
                 # Move to next chunk starting from the last timestamp + 1 minute
                 if last_timestamp:
                     # Convert to datetime and add 1 minute for next chunk
-                    if hasattr(last_timestamp, 'to_pydatetime'):
+                    if hasattr(last_timestamp, "to_pydatetime"):
                         current_start = last_timestamp.to_pydatetime() + timedelta(minutes=1)
                     else:
                         current_start = pd.to_datetime(last_timestamp) + timedelta(minutes=1)
@@ -368,8 +378,7 @@ class AlpacaDataDownloader(BaseDataDownloader):
                 time.sleep(0.1)
 
             except Exception as e:
-                _logger.warning("Error downloading chunk for %s from %s: %s",
-                               symbol, current_start.date(), str(e))
+                _logger.warning("Error downloading chunk for %s from %s: %s", symbol, current_start.date(), str(e))
                 break
 
         if not all_data:
@@ -380,31 +389,30 @@ class AlpacaDataDownloader(BaseDataDownloader):
         df = pd.DataFrame(all_data)
 
         # Ensure timestamp is timezone-naive and set as index
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
-        if df['timestamp'].dt.tz is not None:
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        if df["timestamp"].dt.tz is not None:
             # tz_convert(None) converts to UTC first, then removes tz info —
             # the correct approach for tz-aware → tz-naive UTC conversion.
             # tz_localize(None) would just drop the label without converting.
-            df['timestamp'] = df['timestamp'].dt.tz_convert(None)
+            df["timestamp"] = df["timestamp"].dt.tz_convert(None)
 
         # Filter data to ensure it starts from the requested start_date (UTC).
         # cast() needed because pandas stubs infer a wide union from boolean indexing.
-        mask = (df['timestamp'] >= start_date) & (df['timestamp'] <= end_date)
+        mask = (df["timestamp"] >= start_date) & (df["timestamp"] <= end_date)
         df = cast(pd.DataFrame, df.loc[mask])
 
         # Remove duplicates and sort
-        df = df.drop_duplicates(subset=['timestamp'])
-        df.set_index('timestamp', inplace=True)
+        df = df.drop_duplicates(subset=["timestamp"])
+        df.set_index("timestamp", inplace=True)
         df.sort_index(inplace=True)
 
-        min_ts = str(df.index.min()) if len(df) > 0 else 'N/A'
-        max_ts = str(df.index.max()) if len(df) > 0 else 'N/A'
+        min_ts = str(df.index.min()) if len(df) > 0 else "N/A"
+        max_ts = str(df.index.max()) if len(df) > 0 else "N/A"
         _logger.debug("Final dataset for %s: %d rows from %s to %s", symbol, len(df), min_ts, max_ts)
 
         return df
 
-    def _convert_bars_to_dataframe(self, bars, symbol: str, start_date: datetime,
-                                  end_date: datetime) -> pd.DataFrame:
+    def _convert_bars_to_dataframe(self, bars, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """
         Convert Alpaca bars to DataFrame (alpaca-py format).
 
@@ -425,14 +433,16 @@ class AlpacaDataDownloader(BaseDataDownloader):
         # In alpaca-py, bar attributes are: timestamp, open, high, low, close, volume
         data = []
         for bar in bars:
-            data.append({
-                'timestamp': bar.timestamp,
-                'open': float(bar.open),
-                'high': float(bar.high),
-                'low': float(bar.low),
-                'close': float(bar.close),
-                'volume': int(bar.volume)
-            })
+            data.append(
+                {
+                    "timestamp": bar.timestamp,
+                    "open": float(bar.open),
+                    "high": float(bar.high),
+                    "low": float(bar.low),
+                    "close": float(bar.close),
+                    "volume": int(bar.volume),
+                }
+            )
 
         if not data:
             _logger.warning("No bars data for %s", symbol)
@@ -441,19 +451,19 @@ class AlpacaDataDownloader(BaseDataDownloader):
         df = pd.DataFrame(data)
 
         # Ensure timestamp is timezone-naive and set as index
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
-        if df['timestamp'].dt.tz is not None:
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        if df["timestamp"].dt.tz is not None:
             # tz_convert(None) converts to UTC first, then removes tz info —
             # the correct approach for tz-aware → tz-naive UTC conversion.
             # tz_localize(None) would just drop the label without converting.
-            df['timestamp'] = df['timestamp'].dt.tz_convert(None)
+            df["timestamp"] = df["timestamp"].dt.tz_convert(None)
 
         # Filter data to ensure it starts from the requested start_date (UTC).
         # cast() required — pandas stubs infer a wide union from boolean indexing.
-        df = cast(pd.DataFrame, df[df['timestamp'] >= start_date])
-        df = cast(pd.DataFrame, df[df['timestamp'] <= end_date])
+        df = cast(pd.DataFrame, df[df["timestamp"] >= start_date])
+        df = cast(pd.DataFrame, df[df["timestamp"] <= end_date])
 
-        df.set_index('timestamp', inplace=True)
+        df.set_index("timestamp", inplace=True)
         df.sort_index(inplace=True)
 
         _logger.debug("Downloaded %d rows for %s", len(df), symbol)
@@ -490,9 +500,9 @@ class AlpacaDataDownloader(BaseDataDownloader):
             # In a full implementation, you would call Alpaca's fundamentals API
             fundamentals = Fundamentals(
                 symbol=symbol,
-                company_name=getattr(asset, 'name', symbol),
-                sector=getattr(asset, 'sector', None),
-                industry=getattr(asset, 'industry', None),
+                company_name=getattr(asset, "name", symbol),
+                sector=getattr(asset, "sector", None),
+                industry=getattr(asset, "industry", None),
                 market_cap=None,
                 pe_ratio=None,
                 dividend_yield=None,

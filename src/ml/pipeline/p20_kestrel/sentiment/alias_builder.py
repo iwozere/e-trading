@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
@@ -50,8 +50,8 @@ def normalize_alias(text: str) -> str:
 
 def _build_aliases_for_ticker(
     ticker: str,
-    company_name: Optional[str],
-    edgar_name: Optional[str],
+    company_name: str | None,
+    edgar_name: str | None,
 ) -> List[Dict[str, Any]]:
     """
     Generate alias rows for one ticker from available name sources.
@@ -73,12 +73,14 @@ def _build_aliases_for_ticker(
             return
         seen.add(alias_text)
         normalized = normalize_alias(alias_text)
-        rows.append({
-            "ticker": ticker,
-            "alias": alias_text,
-            "alias_type": alias_type,
-            "normalized_alias": normalized,
-        })
+        rows.append(
+            {
+                "ticker": ticker,
+                "alias": alias_text,
+                "alias_type": alias_type,
+                "normalized_alias": normalized,
+            }
+        )
 
     if company_name:
         _add(company_name, "legal_name")
@@ -96,7 +98,7 @@ def _build_aliases_for_ticker(
     return rows
 
 
-async def _fetch_company_names(tickers: List[str]) -> Dict[str, Optional[str]]:
+async def _fetch_company_names(tickers: List[str]) -> Dict[str, str | None]:
     """
     Fetch company names for all tickers concurrently using Yahoo only.
 
@@ -106,9 +108,10 @@ async def _fetch_company_names(tickers: List[str]) -> Dict[str, Optional[str]]:
     universe_loader (so most lookups are instant cache hits).
     """
     import asyncio
+
     from src.common.fundamentals import get_fundamentals_unified
 
-    async def _one(ticker: str) -> tuple[str, Optional[str]]:
+    async def _one(ticker: str) -> tuple[str, str | None]:
         try:
             fund = await get_fundamentals_unified(ticker, provider="yf")
             name = getattr(fund, "company_name", None) or getattr(fund, "name", None)
@@ -117,9 +120,9 @@ async def _fetch_company_names(tickers: List[str]) -> Dict[str, Optional[str]]:
             return ticker, None
 
     _BATCH = 50
-    names: Dict[str, Optional[str]] = {}
+    names: Dict[str, str | None] = {}
     for i in range(0, len(tickers), _BATCH):
-        batch = tickers[i: i + _BATCH]
+        batch = tickers[i : i + _BATCH]
         results = await asyncio.gather(*(_one(t) for t in batch), return_exceptions=True)
         for r in results:
             if isinstance(r, tuple):

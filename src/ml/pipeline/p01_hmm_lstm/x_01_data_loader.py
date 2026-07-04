@@ -13,22 +13,25 @@ Features:
 - Error handling for failed downloads
 """
 
-import pandas as pd
-import numpy as np
-import yaml
-from pathlib import Path
-from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import yaml
 
 # Add project root to path to import common utilities
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
-from src.common import get_ohlcv, analyze_period_interval
-from src.notification.logger import setup_logger
+from src.common import analyze_period_interval, get_ohlcv
 from src.data.downloader.data_downloader_factory import DataDownloaderFactory
+from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
+
 
 class DataLoader:
     def __init__(self, config_path: str = "config/pipeline/p01.yaml"):
@@ -40,7 +43,7 @@ class DataLoader:
         """
         self.config_path = Path(config_path)
         self.config = self._load_config()
-        self.data_dir = Path(self.config['paths']['data_raw'])
+        self.data_dir = Path(self.config["paths"]["data_raw"])
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
     def _load_config(self) -> dict:
@@ -48,7 +51,7 @@ class DataLoader:
         if not self.config_path.exists():
             raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
 
-        with open(self.config_path, 'r') as f:
+        with open(self.config_path) as f:
             config = yaml.safe_load(f)
 
         _logger.info("Loaded configuration from %s", self.config_path)
@@ -92,20 +95,15 @@ class DataLoader:
         """
         try:
             # Calculate date range
-            period = self.config['data']['period']
-            provider = self.config['data']['provider']
+            period = self.config["data"]["period"]
+            provider = self.config["data"]["provider"]
 
             start_date, end_date = analyze_period_interval(period, timeframe)
 
             _logger.info("Downloading %s %s from %s to %s", symbol, timeframe, start_date, end_date)
 
             # Download data using common utility
-            df = get_ohlcv(
-                ticker=symbol,
-                interval=timeframe,
-                period=period,
-                provider=provider
-            )
+            df = get_ohlcv(ticker=symbol, interval=timeframe, period=period, provider=provider)
 
             if df.empty:
                 raise ValueError(f"No data returned for {symbol} {timeframe}")
@@ -115,14 +113,20 @@ class DataLoader:
             filepath = self.data_dir / filename
 
             # Add log_return column if not present
-            if 'log_return' not in df.columns:
-                df['log_return'] = (df['close'] / df['close'].shift(1)).apply(lambda x: 0 if x <= 0 else x).pipe(lambda x: x.apply(lambda y: 0 if y == 0 else np.log(y)))
+            if "log_return" not in df.columns:
+                df["log_return"] = (
+                    (df["close"] / df["close"].shift(1))
+                    .apply(lambda x: 0 if x <= 0 else x)
+                    .pipe(lambda x: x.apply(lambda y: 0 if y == 0 else np.log(y)))
+                )
 
             # Save to CSV
             df.to_csv(filepath, index=False)
 
             _logger.info("[OK] Successfully saved %s %s to %s", symbol, timeframe, filepath)
-            _logger.info("  Data shape: %s, Date range: %s to %s", df.shape, df['timestamp'].min(), df['timestamp'].max())
+            _logger.info(
+                "  Data shape: %s, Date range: %s to %s", df.shape, df["timestamp"].min(), df["timestamp"].max()
+            )
 
             return symbol, timeframe, True, str(filepath)
 
@@ -145,39 +149,49 @@ class DataLoader:
         """
         try:
             # Calculate date range
-            period = self.config['data']['period']
+            period = self.config["data"]["period"]
 
             start_date, end_date = analyze_period_interval(period, timeframe)
 
             # Map provider name to provider code
             provider_code = self._map_provider_name_to_code(provider)
-            _logger.info("Downloading %s %s from %s provider (mapped to %s) (%s to %s)",
-                        symbol, timeframe, provider, provider_code, start_date, end_date)
+            _logger.info(
+                "Downloading %s %s from %s provider (mapped to %s) (%s to %s)",
+                symbol,
+                timeframe,
+                provider,
+                provider_code,
+                start_date,
+                end_date,
+            )
 
             # Download data using common utility with specific provider
-            df = get_ohlcv(
-                ticker=symbol,
-                interval=timeframe,
-                period=period,
-                provider=provider_code
-            )
+            df = get_ohlcv(ticker=symbol, interval=timeframe, period=period, provider=provider_code)
 
             if df.empty:
                 raise ValueError(f"No data returned for {symbol} {timeframe} from {provider}")
 
             # Generate filename with provider prefix and save
-            filename = f"{provider}_{symbol}_{timeframe}_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv"
+            filename = (
+                f"{provider}_{symbol}_{timeframe}_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv"
+            )
             filepath = self.data_dir / filename
 
             # Add log_return column if not present
-            if 'log_return' not in df.columns:
-                df['log_return'] = (df['close'] / df['close'].shift(1)).apply(lambda x: 0 if x <= 0 else x).pipe(lambda x: x.apply(lambda y: 0 if y == 0 else np.log(y)))
+            if "log_return" not in df.columns:
+                df["log_return"] = (
+                    (df["close"] / df["close"].shift(1))
+                    .apply(lambda x: 0 if x <= 0 else x)
+                    .pipe(lambda x: x.apply(lambda y: 0 if y == 0 else np.log(y)))
+                )
 
             # Save to CSV
             df.to_csv(filepath, index=False)
 
             _logger.info("[OK] Successfully saved %s %s from %s to %s", symbol, timeframe, provider, filepath)
-            _logger.info("  Data shape: %s, Date range: %s to %s", df.shape, df['timestamp'].min(), df['timestamp'].max())
+            _logger.info(
+                "  Data shape: %s, Date range: %s to %s", df.shape, df["timestamp"].min(), df["timestamp"].max()
+            )
 
             return symbol, timeframe, provider, True, str(filepath)
 
@@ -197,7 +211,7 @@ class DataLoader:
             dict: Summary of download results
         """
         # Check for multi-provider configuration
-        if 'data_sources' in self.config:
+        if "data_sources" in self.config:
             return self._download_all_multi_provider(max_workers)
         else:
             # Fallback to legacy configuration
@@ -207,31 +221,25 @@ class DataLoader:
         """
         Download data using the new multi-provider configuration.
         """
-        data_sources = self.config['data_sources']
+        data_sources = self.config["data_sources"]
 
         _logger.info("Starting multi-provider data download")
 
-        results = {
-            'total': 0,
-            'successful': [],
-            'failed': [],
-            'overall_success': True,
-            'providers': {}
-        }
+        results = {"total": 0, "successful": [], "failed": [], "overall_success": True, "providers": {}}
 
         for provider, config in data_sources.items():
             _logger.info("Processing provider: %s", provider)
-            symbols = config.get('symbols', [])
-            timeframes = config.get('timeframes', [])
+            symbols = config.get("symbols", [])
+            timeframes = config.get("timeframes", [])
 
             provider_results = {
-                'total': len(symbols) * len(timeframes),
-                'successful': [],
-                'failed': [],
-                'success': True
+                "total": len(symbols) * len(timeframes),
+                "successful": [],
+                "failed": [],
+                "success": True,
             }
 
-            results['total'] += provider_results['total']
+            results["total"] += provider_results["total"]
 
             # Create download tasks for this provider
             tasks = []
@@ -242,7 +250,11 @@ class DataLoader:
             # Download in parallel for this provider
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 future_to_task = {
-                    executor.submit(self.download_symbol_timeframe_multi_provider, symbol, timeframe, provider): (symbol, timeframe, provider)
+                    executor.submit(self.download_symbol_timeframe_multi_provider, symbol, timeframe, provider): (
+                        symbol,
+                        timeframe,
+                        provider,
+                    )
                     for symbol, timeframe, provider in tasks
                 }
 
@@ -251,42 +263,45 @@ class DataLoader:
                     try:
                         result = future.result()
                         if result[2]:  # success
-                            provider_results['successful'].append(result)
-                            results['successful'].append(result)
+                            provider_results["successful"].append(result)
+                            results["successful"].append(result)
                             _logger.info("✓ Downloaded %s %s from %s", symbol, timeframe, provider)
                         else:
-                            provider_results['failed'].append(result)
-                            results['failed'].append(result)
-                            _logger.error("✗ Failed to download %s %s from %s: %s", symbol, timeframe, provider, result[3])
-                            provider_results['success'] = False
-                            results['overall_success'] = False
+                            provider_results["failed"].append(result)
+                            results["failed"].append(result)
+                            _logger.error(
+                                "✗ Failed to download %s %s from %s: %s", symbol, timeframe, provider, result[3]
+                            )
+                            provider_results["success"] = False
+                            results["overall_success"] = False
                     except Exception as e:
                         error_result = (symbol, timeframe, provider, False, str(e))
-                        provider_results['failed'].append(error_result)
-                        results['failed'].append(error_result)
+                        provider_results["failed"].append(error_result)
+                        results["failed"].append(error_result)
                         _logger.exception("✗ Exception downloading %s %s from %s: ", symbol, timeframe, provider)
-                        provider_results['success'] = False
-                        results['overall_success'] = False
+                        provider_results["success"] = False
+                        results["overall_success"] = False
 
-            results['providers'][provider] = provider_results
+            results["providers"][provider] = provider_results
 
         # Log summary
-        _logger.info("\n%s", "="*50)
+        _logger.info("\n%s", "=" * 50)
         _logger.info("Multi-Provider Data Download Summary:")
-        _logger.info("  Total: %d", results['total'])
-        _logger.info("  Successful: %d", len(results['successful']))
-        _logger.info("  Failed: %d", len(results['failed']))
-        _logger.info("  Overall success: %s", results['overall_success'])
+        _logger.info("  Total: %d", results["total"])
+        _logger.info("  Successful: %d", len(results["successful"]))
+        _logger.info("  Failed: %d", len(results["failed"]))
+        _logger.info("  Overall success: %s", results["overall_success"])
 
-        for provider, provider_results in results['providers'].items():
-            _logger.info("  %s: %d/%d successful", provider,
-                        len(provider_results['successful']), provider_results['total'])
+        for provider, provider_results in results["providers"].items():
+            _logger.info(
+                "  %s: %d/%d successful", provider, len(provider_results["successful"]), provider_results["total"]
+            )
 
-        _logger.info("%s", "="*50)
+        _logger.info("%s", "=" * 50)
 
-        if results['failed']:
+        if results["failed"]:
             _logger.error("Failed downloads:")
-            for failure in results['failed']:
+            for failure in results["failed"]:
                 # Handle both tuple format (multi-provider) and dict format (legacy)
                 if isinstance(failure, tuple):
                     # Multi-provider format: (symbol, timeframe, provider, success, error)
@@ -294,7 +309,7 @@ class DataLoader:
                     _logger.error("  %s %s (%s): %s", symbol, timeframe, provider, error)
                 else:
                     # Legacy format: dict with 'symbol', 'timeframe', 'error' keys
-                    _logger.error("  %s %s: %s", failure['symbol'], failure['timeframe'], failure['error'])
+                    _logger.error("  %s %s: %s", failure["symbol"], failure["timeframe"], failure["error"])
 
         return results
 
@@ -302,26 +317,26 @@ class DataLoader:
         """
         Download data using the legacy configuration format.
         """
-        symbols = self.config['symbols']
-        timeframes = self.config['timeframes']
+        symbols = self.config["symbols"]
+        timeframes = self.config["timeframes"]
 
         # Create list of all symbol-timeframe combinations
         tasks = [(symbol, tf) for symbol in symbols for tf in timeframes]
 
-        _logger.info("Starting download for %d symbols x %d timeframes = %d files (legacy mode)", len(symbols), len(timeframes), len(tasks))
+        _logger.info(
+            "Starting download for %d symbols x %d timeframes = %d files (legacy mode)",
+            len(symbols),
+            len(timeframes),
+            len(tasks),
+        )
 
-        results = {
-            'successful': [],
-            'failed': [],
-            'total': len(tasks)
-        }
+        results = {"successful": [], "failed": [], "total": len(tasks)}
 
         # Download in parallel
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all tasks
             future_to_task = {
-                executor.submit(self.download_symbol_timeframe, symbol, tf): (symbol, tf)
-                for symbol, tf in tasks
+                executor.submit(self.download_symbol_timeframe, symbol, tf): (symbol, tf) for symbol, tf in tasks
             }
 
             # Process completed tasks
@@ -329,29 +344,21 @@ class DataLoader:
                 symbol, timeframe, success, result = future.result()
 
                 if success:
-                    results['successful'].append({
-                        'symbol': symbol,
-                        'timeframe': timeframe,
-                        'filepath': result
-                    })
+                    results["successful"].append({"symbol": symbol, "timeframe": timeframe, "filepath": result})
                 else:
-                    results['failed'].append({
-                        'symbol': symbol,
-                        'timeframe': timeframe,
-                        'error': result
-                    })
+                    results["failed"].append({"symbol": symbol, "timeframe": timeframe, "error": result})
 
         # Log summary
-        _logger.info("\n%s", "="*50)
+        _logger.info("\n%s", "=" * 50)
         _logger.info("Download Summary (Legacy):")
-        _logger.info("  Total: %d", results['total'])
-        _logger.info("  Successful: %d", len(results['successful']))
-        _logger.info("  Failed: %d", len(results['failed']))
-        _logger.info("%s", "="*50)
+        _logger.info("  Total: %d", results["total"])
+        _logger.info("  Successful: %d", len(results["successful"]))
+        _logger.info("  Failed: %d", len(results["failed"]))
+        _logger.info("%s", "=" * 50)
 
-        if results['failed']:
+        if results["failed"]:
             _logger.warning("Failed downloads:")
-            for failure in results['failed']:
+            for failure in results["failed"]:
                 # Handle both tuple format (multi-provider) and dict format (legacy)
                 if isinstance(failure, tuple):
                     # Multi-provider format: (symbol, timeframe, provider, success, error)
@@ -359,7 +366,7 @@ class DataLoader:
                     _logger.warning("  %s %s (%s): %s", symbol, timeframe, provider, error)
                 else:
                     # Legacy format: dict with 'symbol', 'timeframe', 'error' keys
-                    _logger.warning("  %s %s: %s", failure['symbol'], failure['timeframe'], failure['error'])
+                    _logger.warning("  %s %s: %s", failure["symbol"], failure["timeframe"], failure["error"])
 
         return results
 
@@ -382,35 +389,33 @@ class DataLoader:
             df = pd.read_csv(filepath)
 
             # Required columns
-            required_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+            required_cols = ["timestamp", "open", "high", "low", "close", "volume"]
             missing_cols = [col for col in required_cols if col not in df.columns]
 
             # Basic checks
             checks = {
-                'filepath': str(filepath),
-                'shape': df.shape,
-                'missing_columns': missing_cols,
-                'null_values': df[required_cols].isnull().sum().to_dict() if not missing_cols else {},
-                'date_range': (df['timestamp'].min(), df['timestamp'].max()) if 'timestamp' in df.columns else None,
-                'duplicate_timestamps': df['timestamp'].duplicated().sum() if 'timestamp' in df.columns else 0,
-                'zero_volume_count': (df['volume'] == 0).sum() if 'volume' in df.columns else 0,
-                'invalid_ohlc': 0  # Count of rows where high < low or close outside [low, high]
+                "filepath": str(filepath),
+                "shape": df.shape,
+                "missing_columns": missing_cols,
+                "null_values": df[required_cols].isnull().sum().to_dict() if not missing_cols else {},
+                "date_range": (df["timestamp"].min(), df["timestamp"].max()) if "timestamp" in df.columns else None,
+                "duplicate_timestamps": df["timestamp"].duplicated().sum() if "timestamp" in df.columns else 0,
+                "zero_volume_count": (df["volume"] == 0).sum() if "volume" in df.columns else 0,
+                "invalid_ohlc": 0,  # Count of rows where high < low or close outside [low, high]
             }
 
             # Check OHLC validity
             if not missing_cols:
-                invalid_high_low = (df['high'] < df['low']).sum()
-                invalid_close_high = (df['close'] > df['high']).sum()
-                invalid_close_low = (df['close'] < df['low']).sum()
-                checks['invalid_ohlc'] = invalid_high_low + invalid_close_high + invalid_close_low
+                invalid_high_low = (df["high"] < df["low"]).sum()
+                invalid_close_high = (df["close"] > df["high"]).sum()
+                invalid_close_low = (df["close"] < df["low"]).sum()
+                checks["invalid_ohlc"] = invalid_high_low + invalid_close_high + invalid_close_low
 
             return checks
 
         except Exception as e:
-            return {
-                'filepath': str(filepath),
-                'error': str(e)
-            }
+            return {"filepath": str(filepath), "error": str(e)}
+
 
 def main():
     """Main function to run data loader."""
@@ -422,7 +427,7 @@ def main():
 
         # Verify data quality for successful downloads
         _logger.info("\nVerifying data quality...")
-        for item in results['successful']:
+        for item in results["successful"]:
             # Handle both tuple format (multi-provider) and dict format (legacy)
             if isinstance(item, tuple):
                 # Multi-provider format: (symbol, timeframe, provider, success, filepath)
@@ -430,31 +435,32 @@ def main():
                 filepath = Path(filepath)
             else:
                 # Legacy format: dict with 'filepath' key
-                filepath = Path(item['filepath'])
+                filepath = Path(item["filepath"])
 
             quality = loader.verify_data_quality(filepath)
 
-            if 'error' in quality:
-                _logger.error("Quality check failed for %s: %s", filepath, quality['error'])
+            if "error" in quality:
+                _logger.error("Quality check failed for %s: %s", filepath, quality["error"])
             else:
                 issues = []
-                if quality['missing_columns']:
+                if quality["missing_columns"]:
                     issues.append(f"Missing columns: {quality['missing_columns']}")
-                if quality['duplicate_timestamps'] > 0:
+                if quality["duplicate_timestamps"] > 0:
                     issues.append(f"Duplicate timestamps: {quality['duplicate_timestamps']}")
-                if quality['invalid_ohlc'] > 0:
+                if quality["invalid_ohlc"] > 0:
                     issues.append(f"Invalid OHLC: {quality['invalid_ohlc']}")
 
                 if issues:
-                    _logger.warning("%s: %s", filepath.name, ', '.join(issues))
+                    _logger.warning("%s: %s", filepath.name, ", ".join(issues))
                 else:
-                    _logger.info("[OK] %s: Quality OK - %d rows", filepath.name, quality['shape'][0])
+                    _logger.info("[OK] %s: Quality OK - %d rows", filepath.name, quality["shape"][0])
 
         _logger.info("Data loading completed!")
 
     except Exception:
         _logger.exception("Data loading failed")
         raise
+
 
 if __name__ == "__main__":
     main()

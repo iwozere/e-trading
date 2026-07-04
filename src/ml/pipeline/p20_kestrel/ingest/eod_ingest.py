@@ -12,7 +12,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
@@ -35,7 +35,7 @@ _logger = setup_logger(__name__)
 
 _JOB_NAME = "ingest_eod"
 _OHLCV_LOOKBACK_DAYS = 730  # 2 years
-_EOD_COMPUTE_WORKERS = 4    # parallel TALib compute threads (matches Pi 4 core count)
+_EOD_COMPUTE_WORKERS = 4  # parallel TALib compute threads (matches Pi 4 core count)
 
 
 def _compute_signals_for_ticker(
@@ -64,7 +64,7 @@ def _compute_signals_for_ticker(
 
     rows: List[Dict[str, Any]] = []
 
-    def _signal(signal_type: str, value: Optional[float]) -> None:
+    def _signal(signal_type: str, value: float | None) -> None:
         if value is None or (isinstance(value, float) and np.isnan(value)):
             return
         rows.append({"ticker": ticker, "date": as_of_date, "signal_type": signal_type, "value": round(value, 6)})
@@ -93,19 +93,19 @@ def _compute_signals_for_ticker(
         # Dollar ADV 20d
         dv = close * volume
         if len(dv) >= 20:
-            _signal("adv_20d", float(dv.iloc[-20:].mean()))
+            _signal("adv_20d", dv.iloc[-20:].mean())
 
         # Momentum returns
         if len(close) >= 63:
-            _signal("return_3m", float(close.pct_change(63, fill_method=None).iloc[-1]))
+            _signal("return_3m", close.pct_change(63, fill_method=None).iloc[-1])
         if len(close) >= 126:
-            _signal("return_6m", float(close.pct_change(126, fill_method=None).iloc[-1]))
+            _signal("return_6m", close.pct_change(126, fill_method=None).iloc[-1])
 
         # SMA-50 slope: rising if recent 5-day mean > prior 5-day mean
         if ta.sma_fast is not None and len(close) >= 60:
             sma_series: pd.Series = close.rolling(50).mean()  # type: ignore[assignment]
-            recent_5 = float(sma_series.iloc[-5:].mean())
-            prior_5 = float(sma_series.iloc[-10:-5].mean())
+            recent_5 = sma_series.iloc[-5:].mean()
+            prior_5 = sma_series.iloc[-10:-5].mean()
             _signal("sma_50_rising", 1.0 if recent_5 > prior_5 else 0.0)
 
     except Exception:
@@ -156,7 +156,7 @@ def _process_ticker(
         return ticker, [], False
 
 
-def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
+def run(as_of_date: date | None = None) -> Dict[str, Any]:
     """
     Ingest EOD data for all active universe tickers into k20_signals.
 
@@ -205,7 +205,8 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
 
         _logger.info(
             "Computing signals for %d tickers using %d workers",
-            len(tickers), _EOD_COMPUTE_WORKERS,
+            len(tickers),
+            _EOD_COMPUTE_WORKERS,
         )
         with ThreadPoolExecutor(max_workers=_EOD_COMPUTE_WORKERS) as pool:
             for _ticker, rows, ok in pool.map(worker, tickers):
@@ -219,7 +220,9 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
         upserted = upsert_signals(all_signal_rows)
         _logger.info(
             "EOD ingest done: %d tickers ok, %d failed, %d signals upserted",
-            tickers_ok, tickers_failed, upserted,
+            tickers_ok,
+            tickers_failed,
+            upserted,
         )
         finish_job_run(_JOB_NAME, target_date, status="ok", rows_out=upserted)
         return {"tickers_ok": tickers_ok, "tickers_failed": tickers_failed, "signals_upserted": upserted}

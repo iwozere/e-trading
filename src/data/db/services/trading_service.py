@@ -15,11 +15,13 @@ Core functionality:
 """
 
 from __future__ import annotations
-from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime, timezone
 
-from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
+from datetime import UTC, datetime
+from typing import Any, Dict, List, Tuple
+
+from src.data.db.services.base_service import BaseDBService, handle_db_error, with_uow
 from src.trading.services.bot_config_validator import validate_database_bot_record
+
 
 # ---------- DTO helpers ----------
 def _bot_to_dict(b) -> Dict[str, Any]:
@@ -39,6 +41,7 @@ def _bot_to_dict(b) -> Dict[str, Any]:
         "created_at": b.created_at,
         "updated_at": b.updated_at,
     }
+
 
 def _trade_to_dict(t) -> Dict[str, Any]:
     return {
@@ -68,6 +71,7 @@ def _trade_to_dict(t) -> Dict[str, Any]:
         "position_id": t.position_id,
     }
 
+
 def _position_to_dict(p) -> Dict[str, Any]:
     return {
         "id": p.id,
@@ -83,6 +87,7 @@ def _position_to_dict(p) -> Dict[str, Any]:
         "status": p.status,
         "extra_metadata": p.extra_metadata,
     }
+
 
 def _metric_to_dict(m) -> Dict[str, Any]:
     return {
@@ -125,20 +130,22 @@ class TradingService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_bot_by_id(self, bot_id: int) -> Optional[Dict[str, Any]]:
+    def get_bot_by_id(self, bot_id: int) -> Dict[str, Any] | None:
         """Get a specific bot by ID."""
         from src.data.db.models.model_trading import BotInstance
+
         bot = self.repos.s.get(BotInstance, bot_id)
         return self._bot_to_dict(bot) if bot else None
 
     @with_uow
     @handle_db_error
-    def get_enabled_bots(self, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_enabled_bots(self, user_id: int | None = None) -> List[Dict[str, Any]]:
         """Get all enabled bots, optionally filtered by user."""
         from sqlalchemy import select
+
         from src.data.db.models.model_trading import BotInstance
 
-        query = select(BotInstance).where(BotInstance.status != 'disabled')
+        query = select(BotInstance).where(BotInstance.status != "disabled")
         if user_id:
             query = query.where(BotInstance.user_id == user_id)
 
@@ -147,9 +154,10 @@ class TradingService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_bots_by_status(self, status: str, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_bots_by_status(self, status: str, user_id: int | None = None) -> List[Dict[str, Any]]:
         """Get bots by status, optionally filtered by user."""
         from sqlalchemy import select
+
         from src.data.db.models.model_trading import BotInstance
 
         query = select(BotInstance).where(BotInstance.status == status)
@@ -161,8 +169,9 @@ class TradingService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def update_bot_status(self, bot_id: int, status: str, error_message: Optional[str] = None,
-                         started_at: Optional[datetime] = None) -> bool:
+    def update_bot_status(
+        self, bot_id: int, status: str, error_message: str | None = None, started_at: datetime | None = None
+    ) -> bool:
         """
         Update bot status and optionally increment error count.
 
@@ -173,9 +182,10 @@ class TradingService(BaseDBService):
             started_at: Optional timestamp when bot was started (used with 'running' status)
         """
         from sqlalchemy import update
+
         from src.data.db.models.model_trading import BotInstance
 
-        update_data = {"status": status, "updated_at": datetime.now(timezone.utc)}
+        update_data = {"status": status, "updated_at": datetime.now(UTC)}
 
         # Set started_at timestamp when bot starts running
         if status == "running" and started_at:
@@ -188,40 +198,31 @@ class TradingService(BaseDBService):
                 error_count = (bot.error_count or 0) + 1
                 metadata = bot.extra_metadata or {}
                 metadata["last_error"] = error_message
-                metadata["last_error_time"] = datetime.now(timezone.utc).isoformat()
+                metadata["last_error_time"] = datetime.now(UTC).isoformat()
 
-                update_data.update({
-                    "error_count": error_count,
-                    "extra_metadata": metadata
-                })
+                update_data.update({"error_count": error_count, "extra_metadata": metadata})
 
-        result = self.repos.s.execute(
-            update(BotInstance)
-            .where(BotInstance.id == bot_id)
-            .values(**update_data)
-        )
+        result = self.repos.s.execute(update(BotInstance).where(BotInstance.id == bot_id).values(**update_data))
         return result.rowcount > 0
 
     @with_uow
     @handle_db_error
-    def update_bot_performance(self, bot_id: int, current_balance: Optional[float] = None,
-            total_pnl: Optional[float] = None) -> bool:
+    def update_bot_performance(
+        self, bot_id: int, current_balance: float | None = None, total_pnl: float | None = None
+    ) -> bool:
         """Update bot performance metrics."""
         from sqlalchemy import update
+
         from src.data.db.models.model_trading import BotInstance
 
-        update_data = {"updated_at": datetime.now(timezone.utc)}
+        update_data = {"updated_at": datetime.now(UTC)}
 
         if current_balance is not None:
             update_data["current_balance"] = current_balance
         if total_pnl is not None:
             update_data["total_pnl"] = total_pnl
 
-        result = self.repos.s.execute(
-            update(BotInstance)
-            .where(BotInstance.id == bot_id)
-            .values(**update_data)
-        )
+        result = self.repos.s.execute(update(BotInstance).where(BotInstance.id == bot_id).values(**update_data))
         return result.rowcount > 0
 
     @with_uow
@@ -242,14 +243,14 @@ class TradingService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_open_trades(self, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_open_trades(self, symbol: str | None = None) -> List[Dict[str, Any]]:
         """Get open trades, optionally filtered by symbol."""
         rows = self.repos.trades.open_trades(symbol)
         return [self._trade_to_dict(t) for t in rows]
 
     @with_uow
     @handle_db_error
-    def get_pnl_summary(self, bot_id: Optional[str] = None) -> Dict[str, Any]:
+    def get_pnl_summary(self, bot_id: str | None = None) -> Dict[str, Any]:
         """Get PnL summary, optionally filtered by bot."""
         agg = self.repos.trades.pnl_summary(bot_id)
         return {
@@ -266,8 +267,8 @@ class TradingService(BaseDBService):
         trade_type: str,
         symbol: str,
         direction: str,
-        opened_at: Optional[datetime] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        opened_at: datetime | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Ensure an open position exists."""
         row = self.repos.positions.ensure_open(
@@ -289,7 +290,7 @@ class TradingService(BaseDBService):
         action: str,
         qty: float,
         price: float,
-        ts: Optional[datetime] = None,
+        ts: datetime | None = None,
         close_when_flat: bool = True,
     ) -> Dict[str, Any]:
         """Apply a fill to a position."""
@@ -305,14 +306,14 @@ class TradingService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def close_if_flat(self, position_id: str, ts: Optional[datetime] = None) -> Dict[str, Any]:
+    def close_if_flat(self, position_id: str, ts: datetime | None = None) -> Dict[str, Any]:
         """Close a position if it's flat."""
         row = self.repos.positions.close_if_flat(position_id=position_id, ts=ts)
         return self._position_to_dict(row)
 
     @with_uow
     @handle_db_error
-    def mark_closed(self, position_id: str, ts: Optional[datetime] = None) -> Dict[str, Any]:
+    def mark_closed(self, position_id: str, ts: datetime | None = None) -> Dict[str, Any]:
         """Mark a position as closed."""
         row = self.repos.positions.mark_closed(position_id=position_id, ts=ts)
         return self._position_to_dict(row)
@@ -322,8 +323,8 @@ class TradingService(BaseDBService):
     def get_open_positions(
         self,
         *,
-        bot_id: Optional[str] = None,
-        symbol: Optional[str] = None,
+        bot_id: str | None = None,
+        symbol: str | None = None,
     ) -> List[Dict[str, Any]]:
         """Get open positions, optionally filtered by bot and symbol."""
         rows = self.repos.positions.open_positions(bot_id=bot_id, symbol=symbol)
@@ -366,7 +367,9 @@ class TradingService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def validate_all_bot_configurations(self, user_id: Optional[int] = None) -> Dict[int, Tuple[bool, List[str], List[str]]]:
+    def validate_all_bot_configurations(
+        self, user_id: int | None = None
+    ) -> Dict[int, Tuple[bool, List[str], List[str]]]:
         """
         Validate configurations for all bots, optionally filtered by user.
 
@@ -415,4 +418,5 @@ def get_bot_configuration_schema() -> Dict[str, Any]:
         Dictionary describing the expected configuration structure
     """
     from src.trading.services.schema_validator import _schema_validator
+
     return _schema_validator.load_schema("bot_config.yaml")

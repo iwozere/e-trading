@@ -11,26 +11,26 @@ It uses the models trained in pipeline p03_cnn_xgboost to make predictions on mu
 The strategy integrates these predictions to make trading decisions with proper risk management.
 """
 
+import json
+import pickle
 import sys
+import warnings
 from pathlib import Path
 from typing import Dict, List
-import warnings
 
+import backtrader as bt
 import numpy as np
 import torch
 import torch.nn as nn
-import backtrader as bt
-import json
-import pickle
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[2]
 sys.path.append(str(project_root))
 
-from src.strategy.base_strategy import BaseStrategy
 from src.notification.logger import setup_logger
+from src.strategy.base_strategy import BaseStrategy
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 _logger = setup_logger(__name__)
 
@@ -42,12 +42,14 @@ class CNN1D(nn.Module):
     This matches the CNN architecture used in pipeline p03_cnn_xgboost.
     """
 
-    def __init__(self,
-                 input_channels: int = 5,
-                 sequence_length: int = 120,
-                 num_filters: List[int] = [32, 64, 128],
-                 kernel_sizes: List[int] = [3, 5, 7],
-                 dropout_rate: float = 0.3) -> None:
+    def __init__(
+        self,
+        input_channels: int = 5,
+        sequence_length: int = 120,
+        num_filters: List[int] = [32, 64, 128],
+        kernel_sizes: List[int] = [3, 5, 7],
+        dropout_rate: float = 0.3,
+    ) -> None:
         """
         Initialize the 1D CNN architecture.
 
@@ -58,7 +60,7 @@ class CNN1D(nn.Module):
             kernel_sizes: List of kernel sizes for each convolutional layer
             dropout_rate: Dropout rate for regularization
         """
-        super(CNN1D, self).__init__()
+        super().__init__()
 
         self.input_channels = input_channels
         self.sequence_length = sequence_length
@@ -68,12 +70,14 @@ class CNN1D(nn.Module):
         in_channels = input_channels
 
         for i, (filters, kernel_size) in enumerate(zip(num_filters, kernel_sizes)):
-            layers.extend([
-                nn.Conv1d(in_channels, filters, kernel_size, padding=kernel_size//2),
-                nn.BatchNorm1d(filters),
-                nn.ReLU(),
-                nn.Dropout(dropout_rate)
-            ])
+            layers.extend(
+                [
+                    nn.Conv1d(in_channels, filters, kernel_size, padding=kernel_size // 2),
+                    nn.BatchNorm1d(filters),
+                    nn.ReLU(),
+                    nn.Dropout(dropout_rate),
+                ]
+            )
             in_channels = filters
 
         self.conv_layers = nn.Sequential(*layers)
@@ -150,16 +154,16 @@ class CNNXGBoostStrategy(BaseStrategy):
     """
 
     params = (
-        ('prediction_threshold', 0.6),  # Minimum confidence for trading signals
-        ('direction_weight', 0.4),      # Weight for direction prediction
-        ('volatility_weight', 0.2),     # Weight for volatility prediction
-        ('trend_weight', 0.2),          # Weight for trend prediction
-        ('magnitude_weight', 0.2),      # Weight for magnitude prediction
-        ('sequence_length', 120),       # CNN sequence length
-        ('cnn_input_channels', 5),      # OHLCV features
-        ('cnn_num_filters', [32, 64, 128]),
-        ('cnn_kernel_sizes', [3, 5, 7]),
-        ('cnn_dropout_rate', 0.3),
+        ("prediction_threshold", 0.6),  # Minimum confidence for trading signals
+        ("direction_weight", 0.4),  # Weight for direction prediction
+        ("volatility_weight", 0.2),  # Weight for volatility prediction
+        ("trend_weight", 0.2),  # Weight for trend prediction
+        ("magnitude_weight", 0.2),  # Weight for magnitude prediction
+        ("sequence_length", 120),  # CNN sequence length
+        ("cnn_input_channels", 5),  # OHLCV features
+        ("cnn_num_filters", [32, 64, 128]),
+        ("cnn_kernel_sizes", [3, 5, 7]),
+        ("cnn_dropout_rate", 0.3),
     )
 
     def __init__(self):
@@ -167,23 +171,23 @@ class CNNXGBoostStrategy(BaseStrategy):
         super().__init__()
 
         # Strategy parameters
-        self.prediction_threshold = self.config.get('prediction_threshold', 0.6)
-        self.direction_weight = self.config.get('direction_weight', 0.4)
-        self.volatility_weight = self.config.get('volatility_weight', 0.2)
-        self.trend_weight = self.config.get('trend_weight', 0.2)
-        self.magnitude_weight = self.config.get('magnitude_weight', 0.2)
+        self.prediction_threshold = self.config.get("prediction_threshold", 0.6)
+        self.direction_weight = self.config.get("direction_weight", 0.4)
+        self.volatility_weight = self.config.get("volatility_weight", 0.2)
+        self.trend_weight = self.config.get("trend_weight", 0.2)
+        self.magnitude_weight = self.config.get("magnitude_weight", 0.2)
 
         # Model parameters
-        self.sequence_length = self.config.get('sequence_length', 120)
-        self.cnn_input_channels = self.config.get('cnn_input_channels', 5)
-        self.cnn_num_filters = self.config.get('cnn_num_filters', [32, 64, 128])
-        self.cnn_kernel_sizes = self.config.get('cnn_kernel_sizes', [3, 5, 7])
-        self.cnn_dropout_rate = self.config.get('cnn_dropout_rate', 0.3)
+        self.sequence_length = self.config.get("sequence_length", 120)
+        self.cnn_input_channels = self.config.get("cnn_input_channels", 5)
+        self.cnn_num_filters = self.config.get("cnn_num_filters", [32, 64, 128])
+        self.cnn_kernel_sizes = self.config.get("cnn_kernel_sizes", [3, 5, 7])
+        self.cnn_dropout_rate = self.config.get("cnn_dropout_rate", 0.3)
 
         # Exit parameters (configured for classification scale)
-        self.profit_target = self.config.get('profit_target', 0.02)  # 2% profit target
-        self.stop_loss = self.config.get('stop_loss', 0.01)  # 1% stop loss
-        self.trailing_stop = self.config.get('trailing_stop', 0.005)  # 0.5% trailing stop
+        self.profit_target = self.config.get("profit_target", 0.02)  # 2% profit target
+        self.stop_loss = self.config.get("stop_loss", 0.01)  # 1% stop loss
+        self.trailing_stop = self.config.get("trailing_stop", 0.005)  # 0.5% trailing stop
 
         # Model components
         self.cnn_model = None
@@ -208,12 +212,12 @@ class CNNXGBoostStrategy(BaseStrategy):
         """Load CNN and XGBoost models from pipeline p03_cnn_xgboost."""
         try:
             # Load CNN model
-            cnn_model_path = self.config.get('cnn_model_path')
+            cnn_model_path = self.config.get("cnn_model_path")
             if cnn_model_path and Path(cnn_model_path).exists():
                 self._load_cnn_model(cnn_model_path)
 
             # Load XGBoost models
-            xgb_models_dir = self.config.get('xgb_models_dir')
+            xgb_models_dir = self.config.get("xgb_models_dir")
             if xgb_models_dir and Path(xgb_models_dir).exists():
                 self._load_xgb_models(xgb_models_dir)
 
@@ -227,28 +231,28 @@ class CNNXGBoostStrategy(BaseStrategy):
         """Load CNN model from saved checkpoint."""
         try:
             # Load model configuration
-            config_path = model_path.replace('.pth', '_config.json')
+            config_path = model_path.replace(".pth", "_config.json")
             if Path(config_path).exists():
-                with open(config_path, 'r') as f:
+                with open(config_path) as f:
                     config = json.load(f)
 
                 # Create model with saved configuration
                 self.cnn_model = CNN1D(
-                    input_channels=config.get('input_channels', 5),
-                    sequence_length=config.get('sequence_length', 120),
-                    num_filters=config.get('num_filters', [32, 64, 128]),
-                    kernel_sizes=config.get('kernel_sizes', [3, 5, 7]),
-                    dropout_rate=config.get('dropout_rate', 0.3)
+                    input_channels=config.get("input_channels", 5),
+                    sequence_length=config.get("sequence_length", 120),
+                    num_filters=config.get("num_filters", [32, 64, 128]),
+                    kernel_sizes=config.get("kernel_sizes", [3, 5, 7]),
+                    dropout_rate=config.get("dropout_rate", 0.3),
                 )
 
                 # Load model weights
-                self.cnn_model.load_state_dict(torch.load(model_path, map_location='cpu'))
+                self.cnn_model.load_state_dict(torch.load(model_path, map_location="cpu"))
                 self.cnn_model.eval()
 
                 # Load scaler
-                scaler_path = model_path.replace('.pth', '_scaler.pkl')
+                scaler_path = model_path.replace(".pth", "_scaler.pkl")
                 if Path(scaler_path).exists():
-                    with open(scaler_path, 'rb') as f:
+                    with open(scaler_path, "rb") as f:
                         self.cnn_scaler = pickle.load(f)
 
                 _logger.info("CNN model loaded from %s", model_path)
@@ -265,13 +269,13 @@ class CNNXGBoostStrategy(BaseStrategy):
             for target in self.targets:
                 model_path = models_dir / f"{target}_model.pkl"
                 if model_path.exists():
-                    with open(model_path, 'rb') as f:
+                    with open(model_path, "rb") as f:
                         self.xgb_models[target] = pickle.load(f)
 
                     # Load scaler if available
                     scaler_path = models_dir / f"{target}_scaler.pkl"
                     if scaler_path.exists():
-                        with open(scaler_path, 'rb') as f:
+                        with open(scaler_path, "rb") as f:
                             self.xgb_scalers[target] = pickle.load(f)
 
                     _logger.info("XGBoost model loaded for %s", target)
@@ -284,38 +288,33 @@ class CNNXGBoostStrategy(BaseStrategy):
         """Initialize technical indicators."""
         try:
             # Use optimized parameters if available, otherwise use defaults
-            params = self.config.get('optimized_indicators', {})
+            params = self.config.get("optimized_indicators", {})
 
             # Set default parameters if optimized_indicators is None
             if not params:
                 params = {
-                    'rsi_period': 14,
-                    'bb_period': 20,
-                    'bb_std': 2.0,
-                    'macd_fast': 12,
-                    'macd_slow': 26,
-                    'macd_signal': 9
+                    "rsi_period": 14,
+                    "bb_period": 20,
+                    "bb_std": 2.0,
+                    "macd_fast": 12,
+                    "macd_slow": 26,
+                    "macd_signal": 9,
                 }
 
             # RSI
-            self.rsi = bt.indicators.RSI(
-                self.data.close,
-                period=params.get('rsi_period', 14)
-            )
+            self.rsi = bt.indicators.RSI(self.data.close, period=params.get("rsi_period", 14))
 
             # Bollinger Bands
             self.bb = bt.indicators.BollingerBands(
-                self.data.close,
-                period=params.get('bb_period', 20),
-                devfactor=params.get('bb_std', 2.0)
+                self.data.close, period=params.get("bb_period", 20), devfactor=params.get("bb_std", 2.0)
             )
 
             # MACD
             self.macd = bt.indicators.MACD(
                 self.data.close,
-                period_me1=params.get('macd_fast', 12),
-                period_me2=params.get('macd_slow', 26),
-                period_signal=params.get('macd_signal', 9)
+                period_me1=params.get("macd_fast", 12),
+                period_me2=params.get("macd_slow", 26),
+                period_signal=params.get("macd_signal", 9),
             )
 
             # Moving averages
@@ -341,13 +340,9 @@ class CNNXGBoostStrategy(BaseStrategy):
             # Get recent OHLCV data
             ohlcv_data = []
             for i in range(-self.sequence_length + 1, 1):
-                ohlcv_data.append([
-                    self.data.open[i],
-                    self.data.high[i],
-                    self.data.low[i],
-                    self.data.close[i],
-                    self.data.volume[i]
-                ])
+                ohlcv_data.append(
+                    [self.data.open[i], self.data.high[i], self.data.low[i], self.data.close[i], self.data.volume[i]]
+                )
 
             # Convert to numpy array and reshape for CNN
             ohlcv_array = np.array(ohlcv_data, dtype=np.float32)
@@ -397,7 +392,9 @@ class CNNXGBoostStrategy(BaseStrategy):
             # MACD
             features.append(self.macd.macd[0] if not np.isnan(self.macd.macd[0]) else 0)
             features.append(self.macd.signal[0] if not np.isnan(self.macd.signal[0]) else 0)
-            features.append(self.macd.macd[0] - self.macd.signal[0] if not np.isnan(self.macd.macd[0] - self.macd.signal[0]) else 0)
+            features.append(
+                self.macd.macd[0] - self.macd.signal[0] if not np.isnan(self.macd.macd[0] - self.macd.signal[0]) else 0
+            )
 
             # Bollinger Bands
             features.append(self.bb.lines.top[0] if not np.isnan(self.bb.lines.top[0]) else self.data.close[0])
@@ -436,8 +433,8 @@ class CNNXGBoostStrategy(BaseStrategy):
 
             # Additional price-based features (matching pipeline)
             features.append(self.data.close[0] / self.data.open[0] - 1)  # Current bar return
-            features.append(self.data.high[0] / self.data.low[0] - 1)    # High-low ratio
-            features.append(self.data.close[0] / self.data.open[0])      # Close-open ratio
+            features.append(self.data.high[0] / self.data.low[0] - 1)  # High-low ratio
+            features.append(self.data.close[0] / self.data.open[0])  # Close-open ratio
 
             # Momentum features (simplified)
             features.append(0.0)  # Placeholder for momentum
@@ -500,23 +497,23 @@ class CNNXGBoostStrategy(BaseStrategy):
             signal_strength = 0.0
 
             # Direction prediction (most important)
-            if 'target_direction' in predictions:
-                direction_signal = predictions['target_direction'] - 0.5  # Center around 0
+            if "target_direction" in predictions:
+                direction_signal = predictions["target_direction"] - 0.5  # Center around 0
                 signal_strength += self.direction_weight * direction_signal
 
             # Volatility prediction
-            if 'target_volatility' in predictions:
-                volatility_signal = predictions['target_volatility'] - 0.5
+            if "target_volatility" in predictions:
+                volatility_signal = predictions["target_volatility"] - 0.5
                 signal_strength += self.volatility_weight * volatility_signal
 
             # Trend prediction
-            if 'target_trend' in predictions:
-                trend_signal = predictions['target_trend'] - 0.5
+            if "target_trend" in predictions:
+                trend_signal = predictions["target_trend"] - 0.5
                 signal_strength += self.trend_weight * trend_signal
 
             # Magnitude prediction
-            if 'target_magnitude' in predictions:
-                magnitude_signal = predictions['target_magnitude'] - 0.5
+            if "target_magnitude" in predictions:
+                magnitude_signal = predictions["target_magnitude"] - 0.5
                 signal_strength += self.magnitude_weight * magnitude_signal
 
             return signal_strength
@@ -538,8 +535,12 @@ class CNNXGBoostStrategy(BaseStrategy):
 
             # Long signal
             if signal_strength > self.prediction_threshold:
-                _logger.info("LONG signal - Signal Strength: %.3f, Confidence: %.3f, Price: %.4f",
-                            signal_strength, confidence, self.data.close[0])
+                _logger.info(
+                    "LONG signal - Signal Strength: %.3f, Confidence: %.3f, Price: %.4f",
+                    signal_strength,
+                    confidence,
+                    self.data.close[0],
+                )
 
                 # Calculate position size
                 position_size = self._calculate_position_size(confidence, risk_multiplier)
@@ -548,12 +549,16 @@ class CNNXGBoostStrategy(BaseStrategy):
                 self.buy(size=position_size)
 
                 # Set stop loss and take profit
-                self._set_exit_orders(position_size, 'long')
+                self._set_exit_orders(position_size, "long")
 
             # Short signal
             elif signal_strength < -self.prediction_threshold:
-                _logger.info("SHORT signal - Signal Strength: %.3f, Confidence: %.3f, Price: %.4f",
-                            signal_strength, confidence, self.data.close[0])
+                _logger.info(
+                    "SHORT signal - Signal Strength: %.3f, Confidence: %.3f, Price: %.4f",
+                    signal_strength,
+                    confidence,
+                    self.data.close[0],
+                )
 
                 # Calculate position size
                 position_size = self._calculate_position_size(confidence, risk_multiplier)
@@ -562,7 +567,7 @@ class CNNXGBoostStrategy(BaseStrategy):
                 self.sell(size=position_size)
 
                 # Set stop loss and take profit
-                self._set_exit_orders(position_size, 'short')
+                self._set_exit_orders(position_size, "short")
 
         except Exception:
             _logger.exception("Error in entry signal check:")
@@ -586,7 +591,7 @@ class CNNXGBoostStrategy(BaseStrategy):
                     exit_reason = "signal_reversal"
 
                 # 2. Direction prediction changes
-                elif 'target_direction' in predictions and predictions['target_direction'] < 0.3:
+                elif "target_direction" in predictions and predictions["target_direction"] < 0.3:
                     exit_signal = True
                     exit_reason = "direction_change"
 
@@ -602,7 +607,7 @@ class CNNXGBoostStrategy(BaseStrategy):
                     exit_reason = "signal_reversal"
 
                 # 2. Direction prediction changes
-                elif 'target_direction' in predictions and predictions['target_direction'] > 0.7:
+                elif "target_direction" in predictions and predictions["target_direction"] > 0.7:
                     exit_signal = True
                     exit_reason = "direction_change"
 
@@ -613,8 +618,12 @@ class CNNXGBoostStrategy(BaseStrategy):
 
             # Execute exit if signal detected
             if exit_signal:
-                _logger.info("EXIT signal - Reason: %s, Signal Strength: %.3f, Price: %.4f",
-                            exit_reason, signal_strength, self.data.close[0])
+                _logger.info(
+                    "EXIT signal - Reason: %s, Signal Strength: %.3f, Price: %.4f",
+                    exit_reason,
+                    signal_strength,
+                    self.data.close[0],
+                )
                 self.close()
 
         except Exception:
@@ -635,9 +644,14 @@ class CNNXGBoostStrategy(BaseStrategy):
 
                 # Log predictions occasionally
                 if len(self.data) % 50 == 0:
-                                    _logger.debug("Predictions - Direction: %.3f, Volatility: %.3f, Trend: %.3f, Magnitude: %.3f, Signal: %.3f",
-                             predictions.get('target_direction', 0), predictions.get('target_volatility', 0),
-                             predictions.get('target_trend', 0), predictions.get('target_magnitude', 0), signal_strength)
+                    _logger.debug(
+                        "Predictions - Direction: %.3f, Volatility: %.3f, Trend: %.3f, Magnitude: %.3f, Signal: %.3f",
+                        predictions.get("target_direction", 0),
+                        predictions.get("target_volatility", 0),
+                        predictions.get("target_trend", 0),
+                        predictions.get("target_magnitude", 0),
+                        signal_strength,
+                    )
 
                 # Check for exit signals first
                 self._check_exit_signals(predictions, signal_strength)
@@ -653,7 +667,7 @@ class CNNXGBoostStrategy(BaseStrategy):
         try:
             current_price = self.data.close[0]
 
-            if position_type == 'long':
+            if position_type == "long":
                 # Stop loss
                 stop_price = current_price * (1 - self.stop_loss)
                 self.sell(exectype=bt.Order.Stop, price=stop_price, size=position_size)
@@ -662,7 +676,7 @@ class CNNXGBoostStrategy(BaseStrategy):
                 profit_price = current_price * (1 + self.profit_target)
                 self.sell(exectype=bt.Order.Limit, price=profit_price, size=position_size)
 
-            elif position_type == 'short':
+            elif position_type == "short":
                 # Stop loss
                 stop_price = current_price * (1 + self.stop_loss)
                 self.buy(exectype=bt.Order.Stop, price=stop_price, size=position_size)
@@ -678,17 +692,17 @@ class CNNXGBoostStrategy(BaseStrategy):
         """Calculate position size based on confidence and risk."""
         try:
             # Base position size
-            base_size = self.config.get('base_position_size', 0.1)
+            base_size = self.config.get("base_position_size", 0.1)
 
             # Adjust based on confidence and risk multiplier
             adjusted_size = base_size * confidence * risk_multiplier
 
             # Apply position size limits
-            min_size = self.config.get('min_position_size', 0.01)
-            max_size = self.config.get('max_position_size', 0.5)
+            min_size = self.config.get("min_position_size", 0.01)
+            max_size = self.config.get("max_position_size", 0.5)
 
             return max(min_size, min(max_size, adjusted_size))
 
         except Exception:
             _logger.exception("Error calculating position size:")
-            return self.config.get('base_position_size', 0.1)
+            return self.config.get("base_position_size", 0.1)

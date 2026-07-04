@@ -7,9 +7,9 @@ yielded empty results and left P18's Form 4 / 13D-G / 13F-today paths dead. Thes
 tests lock the correct field mapping in place.
 """
 
+import sys
 from datetime import date
 from pathlib import Path
-import sys
 from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -26,10 +26,12 @@ def _hit(ciks, names, adsh, doc="doc.xml", **extra) -> dict:
 
 # ── 13F index / 13F-today ───────────────────────────────────────────────────
 
+
 def test_get_new_13f_today_parses_real_schema(tmp_path):
     dl = EdgarDownloader(cache_dir=tmp_path)
-    hits = [_hit(["0001234567"], ["Acme Capital  (CIK 0001234567)"],
-                 "0001234567-24-000001", period_ending="2024-03-31")]
+    hits = [
+        _hit(["0001234567"], ["Acme Capital  (CIK 0001234567)"], "0001234567-24-000001", period_ending="2024-03-31")
+    ]
     with patch.object(dl, "_efts_search", return_value=hits):
         df = dl.get_new_13f_filings_today(as_of_date=date(2024, 5, 15))
     row = df.iloc[0]
@@ -41,8 +43,9 @@ def test_get_new_13f_today_parses_real_schema(tmp_path):
 
 def test_download_13f_index_parses_real_schema(tmp_path):
     dl = EdgarDownloader(cache_dir=tmp_path)
-    hits = [_hit(["0001234567"], ["Acme Capital  (CIK 0001234567)"],
-                 "0001234567-24-000001", period_ending="2024-03-31")]
+    hits = [
+        _hit(["0001234567"], ["Acme Capital  (CIK 0001234567)"], "0001234567-24-000001", period_ending="2024-03-31")
+    ]
     with patch.object(dl, "_efts_search", return_value=hits):
         df = dl.download_13f_index(2024, 1, force=True)
     assert df.iloc[0]["cik"] == "1234567"
@@ -51,10 +54,14 @@ def test_download_13f_index_parses_real_schema(tmp_path):
 
 # ── 13D/G ───────────────────────────────────────────────────────────────────
 
+
 def test_download_13dg_parses_real_schema(tmp_path):
     dl = EdgarDownloader(cache_dir=tmp_path)
-    hits = [_hit(["0000814052"], ["TELEFONICA S A  (TEF, TEFOF)  (CIK 0000814052)"],
-                 "0001493152-24-019672", form="SC 13D/A")]
+    hits = [
+        _hit(
+            ["0000814052"], ["TELEFONICA S A  (TEF, TEFOF)  (CIK 0000814052)"], "0001493152-24-019672", form="SC 13D/A"
+        )
+    ]
     with patch.object(dl, "_efts_search", return_value=hits):
         df = dl.download_13dg_filings(as_of_date=date(2024, 5, 15), force=True)
     row = df.iloc[0]
@@ -66,15 +73,18 @@ def test_download_13dg_parses_real_schema(tmp_path):
 
 # ── Form 4 (adsh + _id primary document) ────────────────────────────────────
 
+
 def test_download_form4_uses_adsh_and_id_primary_doc(tmp_path):
     dl = EdgarDownloader(cache_dir=tmp_path)
     hit = {
         "_id": "0002001011-24-000052:edgardoc.xml",
         "_source": {
-            "ciks": ["0001649903", "0000886163"],   # reporting owner + issuer
+            "ciks": ["0001649903", "0000886163"],  # reporting owner + issuer
             "adsh": "0002001011-24-000052",
-            "display_names": ["Korenberg Matthew E  (CIK 0001649903)",
-                              "LIGAND PHARMACEUTICALS INC  (LGND)  (CIK 0000886163)"],
+            "display_names": [
+                "Korenberg Matthew E  (CIK 0001649903)",
+                "LIGAND PHARMACEUTICALS INC  (LGND)  (CIK 0000886163)",
+            ],
         },
     }
     captured = {}
@@ -86,13 +96,20 @@ def test_download_form4_uses_adsh_and_id_primary_doc(tmp_path):
         return "<ownershipDocument/>"
 
     sale_row = {
-        "ticker": "LGND", "issuer_cik": "886163", "insider_name": "Korenberg",
-        "transaction_code": "S", "shares": 100, "price_per_share": 10.0,
-        "total_value_usd": 1000.0, "filed_date": "2024-05-15",
+        "ticker": "LGND",
+        "issuer_cik": "886163",
+        "insider_name": "Korenberg",
+        "transaction_code": "S",
+        "shares": 100,
+        "price_per_share": 10.0,
+        "total_value_usd": 1000.0,
+        "filed_date": "2024-05-15",
     }
-    with patch.object(dl, "_efts_search", return_value=[hit]), \
-         patch.object(dl, "_fetch_filing_xml", side_effect=fake_fetch), \
-         patch("src.data.downloader.edgar_downloader._parse_form4_xml", return_value=[sale_row]):
+    with (
+        patch.object(dl, "_efts_search", return_value=[hit]),
+        patch.object(dl, "_fetch_filing_xml", side_effect=fake_fetch),
+        patch("src.data.downloader.edgar_downloader._parse_form4_xml", return_value=[sale_row]),
+    ):
         df = dl.download_form4_filings(as_of_date=date(2024, 5, 15), force=True)
 
     # Accession comes from adsh (dashes stripped); CIK from ciks[0]; the EFTS _id
@@ -106,8 +123,7 @@ def test_download_form4_uses_adsh_and_id_primary_doc(tmp_path):
 def test_download_form4_skips_hits_without_accession(tmp_path):
     dl = EdgarDownloader(cache_dir=tmp_path)
     hit = {"_id": ":x.xml", "_source": {"ciks": ["0000111000"], "adsh": ""}}
-    with patch.object(dl, "_efts_search", return_value=[hit]), \
-         patch.object(dl, "_fetch_filing_xml") as fetch:
+    with patch.object(dl, "_efts_search", return_value=[hit]), patch.object(dl, "_fetch_filing_xml") as fetch:
         df = dl.download_form4_filings(as_of_date=date(2024, 5, 15), force=True)
     fetch.assert_not_called()
     assert df.empty

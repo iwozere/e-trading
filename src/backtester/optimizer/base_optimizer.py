@@ -6,17 +6,17 @@ It contains common functionality for data handling, result analysis, file operat
 and optimization workflows.
 """
 
-import sys
-from pathlib import Path
-from typing import Dict, List, Any
-import warnings
-
-import numpy as np
-import pandas as pd
-import backtrader as bt
-import optuna
 import json
+import sys
+import warnings
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List
+
+import backtrader as bt
+import numpy as np
+import optuna
+import pandas as pd
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[3]
@@ -25,7 +25,7 @@ sys.path.append(str(project_root))
 from src.notification.logger import setup_logger
 from src.util.config import load_config
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 _logger = setup_logger(__name__)
 
@@ -55,19 +55,19 @@ class BaseOptimizer:
         self.config = self._load_config()
 
         # Set up directories
-        self.data_dir = Path(self.config.get('data', {}).get('data_dir', 'data/raw'))
-        self.output_dir = Path(self.config.get('output', {}).get('results_dir', 'results'))
+        self.data_dir = Path(self.config.get("data", {}).get("data_dir", "data/raw"))
+        self.output_dir = Path(self.config.get("output", {}).get("results_dir", "results"))
 
         # Create output directory
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Strategy parameters
-        self.strategy_params = self.config.get('strategy', {})
-        self.optimization_params = self.config.get('optimization', {})
+        self.strategy_params = self.config.get("strategy", {})
+        self.optimization_params = self.config.get("optimization", {})
 
         # Trading parameters
-        self.initial_cash = self.config.get('trading_parameters', {}).get('initial_cash', 100000)
-        self.commission = self.config.get('trading_parameters', {}).get('commission', 0.001)
+        self.initial_cash = self.config.get("trading_parameters", {}).get("initial_cash", 100000)
+        self.commission = self.config.get("trading_parameters", {}).get("commission", 0.001)
 
         _logger.info("Base optimizer initialized with config: %s", config_path)
 
@@ -105,17 +105,17 @@ class BaseOptimizer:
             df = pd.read_csv(data_file)
 
             # Ensure datetime column exists
-            if 'timestamp' in df.columns:
-                datetime_col = 'timestamp'
-            elif 'datetime' in df.columns:
-                datetime_col = 'datetime'
+            if "timestamp" in df.columns:
+                datetime_col = "timestamp"
+            elif "datetime" in df.columns:
+                datetime_col = "datetime"
             else:
                 # Assume first column is datetime
                 datetime_col = df.columns[0]
 
             # Convert to datetime and set as index
-            df['datetime'] = pd.to_datetime(df[datetime_col], utc=True)
-            df.set_index('datetime', inplace=True)
+            df["datetime"] = pd.to_datetime(df[datetime_col], utc=True)
+            df.set_index("datetime", inplace=True)
 
             # Ensure the index is timezone-naive for Backtrader compatibility
             df.index = df.index.tz_localize(None)
@@ -124,16 +124,16 @@ class BaseOptimizer:
             df.index = pd.to_datetime(df.index)
 
             # Filter by date range if specified
-            if 'start_date' in self.config.get('data', {}):
-                start_date = pd.to_datetime(self.config['data']['start_date'], utc=True)
+            if "start_date" in self.config.get("data", {}):
+                start_date = pd.to_datetime(self.config["data"]["start_date"], utc=True)
                 df = df[df.index >= start_date]
 
-            if 'end_date' in self.config.get('data', {}):
-                end_date = pd.to_datetime(self.config['data']['end_date'], utc=True)
+            if "end_date" in self.config.get("data", {}):
+                end_date = pd.to_datetime(self.config["data"]["end_date"], utc=True)
                 df = df[df.index <= end_date]
 
             # Ensure required columns exist
-            required_columns = ['open', 'high', 'low', 'close', 'volume']
+            required_columns = ["open", "high", "low", "close", "volume"]
             for col in required_columns:
                 if col not in df.columns:
                     raise ValueError(f"Required column '{col}' not found in data")
@@ -144,8 +144,7 @@ class BaseOptimizer:
             if len(df) < 50:
                 raise ValueError(f"Insufficient data: {len(df)} rows (minimum 50 required)")
 
-            _logger.info("Prepared data: %s rows from %s to %s",
-                        len(df), df.index[0], df.index[-1])
+            _logger.info("Prepared data: %s rows from %s to %s", len(df), df.index[0], df.index[-1])
 
             # Debug: Check index type
             _logger.debug("Index type: %s, dtype: %s", type(df.index), df.index.dtype)
@@ -156,7 +155,9 @@ class BaseOptimizer:
             _logger.exception("Error preparing data:")
             raise
 
-    def _create_backtrader_engine(self, df: pd.DataFrame, strategy_class, strategy_config: Dict[str, Any]) -> bt.Cerebro:
+    def _create_backtrader_engine(
+        self, df: pd.DataFrame, strategy_class, strategy_config: Dict[str, Any]
+    ) -> bt.Cerebro:
         """
         Create Backtrader engine with data and strategy.
 
@@ -176,21 +177,21 @@ class BaseOptimizer:
             # Reset index to make datetime a column instead of index to avoid Backtrader issues
             df_copy = df.copy(deep=True)
             df_copy = df_copy.reset_index()
-            df_copy = df_copy.rename(columns={'datetime': 'timestamp'})
-            df_copy['timestamp'] = pd.to_datetime(df_copy['timestamp'])
+            df_copy = df_copy.rename(columns={"datetime": "timestamp"})
+            df_copy["timestamp"] = pd.to_datetime(df_copy["timestamp"])
 
             # Add data feed
             data = bt.feeds.PandasData(
                 dataname=df_copy,
                 datetime=0,  # 0 indicates datetime is in column 0 (timestamp)
-                open=1,      # open is now column 1
-                high=2,      # high is now column 2
-                low=3,       # low is now column 3
-                close=4,     # close is now column 4
-                volume=5,    # volume is now column 5
+                open=1,  # open is now column 1
+                high=2,  # high is now column 2
+                low=3,  # low is now column 3
+                close=4,  # close is now column 4
+                volume=5,  # volume is now column 5
                 openinterest=None,
                 fromdate=df.index[0],
-                todate=df.index[-1]
+                todate=df.index[-1],
             )
             cerebro.adddata(data)
 
@@ -198,10 +199,10 @@ class BaseOptimizer:
             cerebro.addstrategy(strategy_class, strategy_config=strategy_config)
 
             # Add analyzers
-            cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
-            cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
-            cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
-            cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
+            cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name="sharpe")
+            cerebro.addanalyzer(bt.analyzers.DrawDown, _name="drawdown")
+            cerebro.addanalyzer(bt.analyzers.Returns, _name="returns")
+            cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name="trades")
 
             # Set initial cash
             cerebro.broker.setcash(self.initial_cash)
@@ -236,32 +237,32 @@ class BaseOptimizer:
             # Calculate metrics
             final_value = cerebro.broker.getvalue()
             total_return = (final_value - self.initial_cash) / self.initial_cash
-            max_drawdown = drawdown.get('max', {}).get('drawdown', 0) / 100
+            max_drawdown = drawdown.get("max", {}).get("drawdown", 0) / 100
 
             # Extract trade statistics
-            total_trades = trades.get('total', {}).get('total', 0)
-            won_trades = trades.get('won', {}).get('total', 0)
-            lost_trades = trades.get('lost', {}).get('total', 0)
+            total_trades = trades.get("total", {}).get("total", 0)
+            won_trades = trades.get("won", {}).get("total", 0)
+            lost_trades = trades.get("lost", {}).get("total", 0)
             win_rate = won_trades / total_trades if total_trades > 0 else 0
 
             # Calculate Sharpe ratio
-            sharpe = sharpe_ratio.get('sharperatio', 0)
+            sharpe = sharpe_ratio.get("sharperatio", 0)
             if sharpe is None:
                 sharpe = 0
 
             # Compile results
             backtest_results = {
-                'initial_cash': self.initial_cash,
-                'final_value': final_value,
-                'total_return': total_return,
-                'sharpe_ratio': sharpe,
-                'max_drawdown': max_drawdown,
-                'total_trades': total_trades,
-                'won_trades': won_trades,
-                'lost_trades': lost_trades,
-                'win_rate': win_rate,
-                'equity_curve': getattr(strategy, 'equity_curve', []),
-                'equity_dates': getattr(strategy, 'equity_dates', [])
+                "initial_cash": self.initial_cash,
+                "final_value": final_value,
+                "total_return": total_return,
+                "sharpe_ratio": sharpe,
+                "max_drawdown": max_drawdown,
+                "total_trades": total_trades,
+                "won_trades": won_trades,
+                "lost_trades": lost_trades,
+                "win_rate": win_rate,
+                "equity_curve": getattr(strategy, "equity_curve", []),
+                "equity_dates": getattr(strategy, "equity_dates", []),
             }
 
             return backtest_results
@@ -270,7 +271,7 @@ class BaseOptimizer:
             _logger.exception("Error extracting backtest results:")
             raise
 
-    def _create_optuna_study(self, direction: str = 'minimize') -> optuna.Study:
+    def _create_optuna_study(self, direction: str = "minimize") -> optuna.Study:
         """
         Create Optuna study for optimization.
 
@@ -281,10 +282,7 @@ class BaseOptimizer:
             Optuna Study instance
         """
         try:
-            study = optuna.create_study(
-                direction=direction,
-                sampler=optuna.samplers.TPESampler(seed=42)
-            )
+            study = optuna.create_study(direction=direction, sampler=optuna.samplers.TPESampler(seed=42))
             return study
 
         except Exception:
@@ -306,33 +304,33 @@ class BaseOptimizer:
                 return {}
 
             # Extract key metrics
-            returns = [r.get('total_return', 0) for r in results]
-            sharpes = [r.get('sharpe_ratio', 0) for r in results]
-            drawdowns = [r.get('max_drawdown', 0) for r in results]
-            trade_counts = [r.get('total_trades', 0) for r in results]
-            win_rates = [r.get('win_rate', 0) for r in results]
+            returns = [r.get("total_return", 0) for r in results]
+            sharpes = [r.get("sharpe_ratio", 0) for r in results]
+            drawdowns = [r.get("max_drawdown", 0) for r in results]
+            trade_counts = [r.get("total_trades", 0) for r in results]
+            win_rates = [r.get("win_rate", 0) for r in results]
 
             # Calculate statistics
             summary = {
-                'total_combinations': len(results),
-                'successful_combinations': len([r for r in returns if not np.isnan(r)]),
-                'average_return': np.mean(returns),
-                'median_return': np.median(returns),
-                'best_return': np.max(returns),
-                'worst_return': np.min(returns),
-                'return_std': np.std(returns),
-                'average_sharpe': np.mean(sharpes),
-                'median_sharpe': np.median(sharpes),
-                'best_sharpe': np.max(sharpes),
-                'worst_sharpe': np.min(sharpes),
-                'average_drawdown': np.mean(drawdowns),
-                'median_drawdown': np.median(drawdowns),
-                'worst_drawdown': np.max(drawdowns),
-                'average_trades': np.mean(trade_counts),
-                'average_win_rate': np.mean(win_rates),
-                'profitable_combinations': len([r for r in returns if r > 0]),
-                'profitable_rate': len([r for r in returns if r > 0]) / len(returns),
-                'results': results
+                "total_combinations": len(results),
+                "successful_combinations": len([r for r in returns if not np.isnan(r)]),
+                "average_return": np.mean(returns),
+                "median_return": np.median(returns),
+                "best_return": np.max(returns),
+                "worst_return": np.min(returns),
+                "return_std": np.std(returns),
+                "average_sharpe": np.mean(sharpes),
+                "median_sharpe": np.median(sharpes),
+                "best_sharpe": np.max(sharpes),
+                "worst_sharpe": np.min(sharpes),
+                "average_drawdown": np.mean(drawdowns),
+                "median_drawdown": np.median(drawdowns),
+                "worst_drawdown": np.max(drawdowns),
+                "average_trades": np.mean(trade_counts),
+                "average_win_rate": np.mean(win_rates),
+                "profitable_combinations": len([r for r in returns if r > 0]),
+                "profitable_rate": len([r for r in returns if r > 0]) / len(returns),
+                "results": results,
             }
 
             return summary
@@ -355,12 +353,12 @@ class BaseOptimizer:
 
             # Save detailed results
             results_file = self.output_dir / f"{prefix}_{timestamp}.json"
-            with open(results_file, 'w') as f:
+            with open(results_file, "w") as f:
                 json.dump(results, f, indent=2, default=str)
 
             # Save summary
             summary_file = self.output_dir / f"{prefix}_summary_{timestamp}.json"
-            with open(summary_file, 'w') as f:
+            with open(summary_file, "w") as f:
                 json.dump(summary, f, indent=2, default=str)
 
             # Generate performance report
@@ -371,8 +369,9 @@ class BaseOptimizer:
         except Exception:
             _logger.exception("Error saving results:")
 
-    def _generate_performance_report(self, results: List[Dict[str, Any]], summary: Dict[str, Any],
-                                   timestamp: str, prefix: str = "results"):
+    def _generate_performance_report(
+        self, results: List[Dict[str, Any]], summary: Dict[str, Any], timestamp: str, prefix: str = "results"
+    ):
         """
         Generate performance report.
 
@@ -385,7 +384,7 @@ class BaseOptimizer:
         try:
             report_file = self.output_dir / f"{prefix}_performance_report_{timestamp}.txt"
 
-            with open(report_file, 'w') as f:
+            with open(report_file, "w") as f:
                 f.write(f"{prefix.replace('_', ' ').title()} Backtesting and Optimization Report\n")
                 f.write("=" * 60 + "\n\n")
 
@@ -412,7 +411,9 @@ class BaseOptimizer:
 
                 f.write(f"Average Trades: {summary.get('average_trades', 0):.1f}\n")
                 f.write(f"Average Win Rate: {summary.get('average_win_rate', 0):.2%}\n")
-                f.write(f"Profitable Combinations: {summary.get('profitable_combinations', 0)}/{summary.get('total_combinations', 0)} ({summary.get('profitable_rate', 0):.2%})\n\n")
+                f.write(
+                    f"Profitable Combinations: {summary.get('profitable_combinations', 0)}/{summary.get('total_combinations', 0)} ({summary.get('profitable_rate', 0):.2%})\n\n"
+                )
 
             _logger.info("Performance report generated: %s", report_file)
 
@@ -497,14 +498,11 @@ class BaseOptimizer:
                         # Run backtest with default parameters
                         default_params = self.strategy_params.copy()
                         results = {
-                            'final_results': self.run_backtest(combination, default_params),
-                            'best_params': default_params
+                            "final_results": self.run_backtest(combination, default_params),
+                            "best_params": default_params,
                         }
 
-                    all_results.append({
-                        'combination': combination,
-                        'results': results
-                    })
+                    all_results.append({"combination": combination, "results": results})
 
                 except Exception:
                     _logger.exception("Error processing combination:")

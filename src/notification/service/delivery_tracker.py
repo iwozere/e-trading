@@ -6,22 +6,23 @@ Supports multi-channel delivery tracking with detailed status information.
 """
 
 import asyncio
-from typing import Dict, Any, List, Optional, Callable
-from datetime import datetime, timedelta, timezone
-from dataclasses import dataclass, field
-from enum import Enum
 import threading
 import uuid
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any, Callable, Dict, List
 
 from src.data.db.models.model_notification import MessagePriority
-from src.notification.service.message_queue import QueuedMessage
 from src.notification.logger import setup_logger
+from src.notification.service.message_queue import QueuedMessage
 
 _logger = setup_logger(__name__)
 
 
 class DeliveryStatus(Enum):
     """Delivery status for individual channel attempts."""
+
     PENDING = "PENDING"
     SENDING = "SENDING"
     DELIVERED = "DELIVERED"
@@ -33,6 +34,7 @@ class DeliveryStatus(Enum):
 
 class DeliveryResult(Enum):
     """Overall delivery result for a message."""
+
     SUCCESS = "SUCCESS"
     PARTIAL_SUCCESS = "PARTIAL_SUCCESS"
     FAILED = "FAILED"
@@ -48,10 +50,10 @@ class ChannelDeliveryAttempt:
     channel: str
     status: DeliveryStatus
     started_at: datetime
-    completed_at: Optional[datetime] = None
-    response_time_ms: Optional[int] = None
-    external_id: Optional[str] = None
-    error_message: Optional[str] = None
+    completed_at: datetime | None = None
+    response_time_ms: int | None = None
+    external_id: str | None = None
+    error_message: str | None = None
     retry_count: int = 0
 
     def __post_init__(self):
@@ -60,7 +62,7 @@ class ChannelDeliveryAttempt:
             self.attempt_id = str(uuid.uuid4())
 
     @property
-    def duration_ms(self) -> Optional[int]:
+    def duration_ms(self) -> int | None:
         """Get attempt duration in milliseconds."""
         if self.completed_at and self.started_at:
             delta = self.completed_at - self.started_at
@@ -70,11 +72,7 @@ class ChannelDeliveryAttempt:
     @property
     def is_completed(self) -> bool:
         """Check if attempt is completed (success or failure)."""
-        return self.status in [
-            DeliveryStatus.DELIVERED,
-            DeliveryStatus.FAILED,
-            DeliveryStatus.PERMANENTLY_FAILED
-        ]
+        return self.status in [DeliveryStatus.DELIVERED, DeliveryStatus.FAILED, DeliveryStatus.PERMANENTLY_FAILED]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for storage/serialization."""
@@ -89,7 +87,7 @@ class ChannelDeliveryAttempt:
             "external_id": self.external_id,
             "error_message": self.error_message,
             "retry_count": self.retry_count,
-            "duration_ms": self.duration_ms
+            "duration_ms": self.duration_ms,
         }
 
 
@@ -109,7 +107,7 @@ class MessageDeliveryStatus:
 
     # Overall status
     overall_status: DeliveryResult = DeliveryResult.PENDING
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
     # Callbacks for status updates
     status_callbacks: List[Callable] = field(default_factory=list)
@@ -123,7 +121,7 @@ class MessageDeliveryStatus:
         self.channel_attempts[channel].append(attempt)
         self._update_overall_status()
 
-    def get_latest_attempt(self, channel: str) -> Optional[ChannelDeliveryAttempt]:
+    def get_latest_attempt(self, channel: str) -> ChannelDeliveryAttempt | None:
         """Get the latest delivery attempt for a channel."""
         attempts = self.channel_attempts.get(channel, [])
         return attempts[-1] if attempts else None
@@ -140,10 +138,7 @@ class MessageDeliveryStatus:
         """Get list of channels that failed delivery."""
         failed = []
         for channel, attempts in self.channel_attempts.items():
-            if attempts and attempts[-1].status in [
-                DeliveryStatus.FAILED,
-                DeliveryStatus.PERMANENTLY_FAILED
-            ]:
+            if attempts and attempts[-1].status in [DeliveryStatus.FAILED, DeliveryStatus.PERMANENTLY_FAILED]:
                 failed.append(channel)
         return failed
 
@@ -156,7 +151,7 @@ class MessageDeliveryStatus:
                 DeliveryStatus.PENDING,
                 DeliveryStatus.SENDING,
                 DeliveryStatus.RATE_LIMITED,
-                DeliveryStatus.RETRYING
+                DeliveryStatus.RETRYING,
             ]:
                 pending.append(channel)
         return pending
@@ -171,44 +166,42 @@ class MessageDeliveryStatus:
             # All channels delivered successfully
             self.overall_status = DeliveryResult.SUCCESS
             if not self.completed_at:
-                self.completed_at = datetime.now(timezone.utc)
+                self.completed_at = datetime.now(UTC)
         elif len(successful_channels) > 0 and len(pending_channels) == 0:
             # Some channels succeeded, some failed, none pending
             self.overall_status = DeliveryResult.PARTIAL_SUCCESS
             if not self.completed_at:
-                self.completed_at = datetime.now(timezone.utc)
+                self.completed_at = datetime.now(UTC)
         elif len(pending_channels) == 0 and len(successful_channels) == 0:
             # All channels failed
             self.overall_status = DeliveryResult.FAILED
             if not self.completed_at:
-                self.completed_at = datetime.now(timezone.utc)
+                self.completed_at = datetime.now(UTC)
         else:
             # Still have pending channels
             self.overall_status = DeliveryResult.PENDING
 
-    def get_total_response_time_ms(self) -> Optional[int]:
+    def get_total_response_time_ms(self) -> int | None:
         """Get total response time across all successful deliveries."""
         total_time = 0
         successful_count = 0
 
         for attempts in self.channel_attempts.values():
             for attempt in attempts:
-                if (attempt.status == DeliveryStatus.DELIVERED and
-                    attempt.response_time_ms is not None):
+                if attempt.status == DeliveryStatus.DELIVERED and attempt.response_time_ms is not None:
                     total_time += attempt.response_time_ms
                     successful_count += 1
 
         return total_time if successful_count > 0 else None
 
-    def get_average_response_time_ms(self) -> Optional[float]:
+    def get_average_response_time_ms(self) -> float | None:
         """Get average response time across all successful deliveries."""
         total_time = 0
         successful_count = 0
 
         for attempts in self.channel_attempts.values():
             for attempt in attempts:
-                if (attempt.status == DeliveryStatus.DELIVERED and
-                    attempt.response_time_ms is not None):
+                if attempt.status == DeliveryStatus.DELIVERED and attempt.response_time_ms is not None:
                     total_time += attempt.response_time_ms
                     successful_count += 1
 
@@ -248,7 +241,7 @@ class MessageDeliveryStatus:
             "channel_attempts": {
                 channel: [attempt.to_dict() for attempt in attempts]
                 for channel, attempts in self.channel_attempts.items()
-            }
+            },
         }
 
 
@@ -267,8 +260,8 @@ class DeliveryStats:
     failed_attempts: int = 0
 
     avg_response_time_ms: float = 0.0
-    min_response_time_ms: Optional[int] = None
-    max_response_time_ms: Optional[int] = None
+    min_response_time_ms: int | None = None
+    max_response_time_ms: int | None = None
 
     # Per-channel statistics
     channel_stats: Dict[str, Dict[str, Any]] = field(default_factory=dict)
@@ -309,7 +302,9 @@ class DeliveryStats:
                             self.max_response_time_ms = max(self.max_response_time_ms, attempt.response_time_ms)
 
                             # Update running average
-                            total_time = self.avg_response_time_ms * (self.successful_attempts - 1) + attempt.response_time_ms
+                            total_time = (
+                                self.avg_response_time_ms * (self.successful_attempts - 1) + attempt.response_time_ms
+                            )
                             self.avg_response_time_ms = total_time / self.successful_attempts
 
                 elif attempt.is_completed:
@@ -322,7 +317,7 @@ class DeliveryStats:
                         "total_attempts": 0,
                         "successful_attempts": 0,
                         "failed_attempts": 0,
-                        "avg_response_time_ms": 0.0
+                        "avg_response_time_ms": 0.0,
                     }
 
                 ch_stats = self.channel_stats[channel]
@@ -332,9 +327,10 @@ class DeliveryStats:
                     ch_stats["successful_attempts"] += 1
                     if attempt.response_time_ms is not None:
                         # Update channel average response time
-                        total_time = (ch_stats["avg_response_time_ms"] *
-                                    (ch_stats["successful_attempts"] - 1) +
-                                    attempt.response_time_ms)
+                        total_time = (
+                            ch_stats["avg_response_time_ms"] * (ch_stats["successful_attempts"] - 1)
+                            + attempt.response_time_ms
+                        )
                         ch_stats["avg_response_time_ms"] = total_time / ch_stats["successful_attempts"]
                 elif attempt.is_completed:
                     ch_stats["failed_attempts"] += 1
@@ -347,7 +343,7 @@ class DeliveryStats:
                 "successful_deliveries": 0,
                 "failed_deliveries": 0,
                 "partial_deliveries": 0,
-                "avg_response_time_ms": 0.0
+                "avg_response_time_ms": 0.0,
             }
 
         pr_stats = self.priority_stats[priority]
@@ -363,12 +359,11 @@ class DeliveryStats:
         # Update priority average response time
         avg_time = delivery_status.get_average_response_time_ms()
         if avg_time is not None:
-            successful_count = (pr_stats["successful_deliveries"] +
-                              pr_stats["partial_deliveries"])
+            successful_count = pr_stats["successful_deliveries"] + pr_stats["partial_deliveries"]
             if successful_count == 1:
                 pr_stats["avg_response_time_ms"] = avg_time
             else:
-                total_time = (pr_stats["avg_response_time_ms"] * (successful_count - 1) + avg_time)
+                total_time = pr_stats["avg_response_time_ms"] * (successful_count - 1) + avg_time
                 pr_stats["avg_response_time_ms"] = total_time / successful_count
 
 
@@ -400,7 +395,7 @@ class DeliveryTracker:
         self._cleanup_interval_hours = 1
 
         # Background tasks
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
         self._running = False
 
     async def start_tracking(self, message: QueuedMessage) -> MessageDeliveryStatus:
@@ -419,7 +414,7 @@ class DeliveryTracker:
             priority=message.priority,
             channels=message.channels.copy(),
             recipient_id=message.recipient_id,
-            created_at=message.created_at
+            created_at=message.created_at,
         )
 
         with self._lock:
@@ -428,18 +423,11 @@ class DeliveryTracker:
         # Persist to database
         await self._save_delivery_status(delivery_status)
 
-        self._logger.info(
-            "Started tracking delivery for message %s (channels: %s)",
-            message.id, message.channels
-        )
+        self._logger.info("Started tracking delivery for message %s (channels: %s)", message.id, message.channels)
 
         return delivery_status
 
-    async def start_channel_attempt(
-        self,
-        message_id: int,
-        channel: str
-    ) -> Optional[ChannelDeliveryAttempt]:
+    async def start_channel_attempt(self, message_id: int, channel: str) -> ChannelDeliveryAttempt | None:
         """
         Start a delivery attempt for a specific channel.
 
@@ -468,7 +456,7 @@ class DeliveryTracker:
                 message_id=message_id,
                 channel=channel,
                 status=DeliveryStatus.SENDING,
-                started_at=datetime.now(timezone.utc)
+                started_at=datetime.now(UTC),
             )
 
             # Get retry count from previous attempts
@@ -482,7 +470,10 @@ class DeliveryTracker:
 
         self._logger.debug(
             "Started delivery attempt %s for message %s on channel %s (retry: %d)",
-            attempt.attempt_id, message_id, channel, attempt.retry_count
+            attempt.attempt_id,
+            message_id,
+            channel,
+            attempt.retry_count,
         )
 
         return attempt
@@ -491,9 +482,9 @@ class DeliveryTracker:
         self,
         attempt_id: str,
         status: DeliveryStatus,
-        response_time_ms: Optional[int] = None,
-        external_id: Optional[str] = None,
-        error_message: Optional[str] = None
+        response_time_ms: int | None = None,
+        external_id: str | None = None,
+        error_message: str | None = None,
     ) -> bool:
         """
         Complete a delivery attempt.
@@ -531,7 +522,7 @@ class DeliveryTracker:
 
         # Update attempt
         attempt.status = status
-        attempt.completed_at = datetime.now(timezone.utc)
+        attempt.completed_at = datetime.now(UTC)
         attempt.response_time_ms = response_time_ms
         attempt.external_id = external_id
         attempt.error_message = error_message
@@ -553,12 +544,15 @@ class DeliveryTracker:
 
         self._logger.info(
             "Completed delivery attempt %s for message %s: %s (response_time: %sms)",
-            attempt_id, attempt.message_id, status.value, response_time_ms
+            attempt_id,
+            attempt.message_id,
+            status.value,
+            response_time_ms,
         )
 
         return True
 
-    async def get_delivery_status(self, message_id: int) -> Optional[MessageDeliveryStatus]:
+    async def get_delivery_status(self, message_id: int) -> MessageDeliveryStatus | None:
         """
         Get delivery status for a message.
 
@@ -579,11 +573,11 @@ class DeliveryTracker:
 
     async def get_delivery_history(
         self,
-        recipient_id: Optional[str] = None,
-        channel: Optional[str] = None,
-        status: Optional[DeliveryResult] = None,
-        since: Optional[datetime] = None,
-        limit: int = 100
+        recipient_id: str | None = None,
+        channel: str | None = None,
+        status: DeliveryResult | None = None,
+        since: datetime | None = None,
+        limit: int = 100,
     ) -> List[MessageDeliveryStatus]:
         """
         Get delivery history with filtering.
@@ -624,11 +618,7 @@ class DeliveryTracker:
         results.sort(key=lambda d: d.created_at, reverse=True)
         return results[:limit]
 
-    def get_statistics(
-        self,
-        since: Optional[datetime] = None,
-        channel: Optional[str] = None
-    ) -> Dict[str, Any]:
+    def get_statistics(self, since: datetime | None = None, channel: str | None = None) -> Dict[str, Any]:
         """
         Get delivery statistics.
 
@@ -649,21 +639,19 @@ class DeliveryTracker:
             "partial_deliveries": self._stats.partial_deliveries,
             "pending_deliveries": self._stats.pending_deliveries,
             "success_rate": (
-                self._stats.successful_deliveries / self._stats.total_messages
-                if self._stats.total_messages > 0 else 0
+                self._stats.successful_deliveries / self._stats.total_messages if self._stats.total_messages > 0 else 0
             ),
             "total_attempts": self._stats.total_attempts,
             "successful_attempts": self._stats.successful_attempts,
             "failed_attempts": self._stats.failed_attempts,
             "attempt_success_rate": (
-                self._stats.successful_attempts / self._stats.total_attempts
-                if self._stats.total_attempts > 0 else 0
+                self._stats.successful_attempts / self._stats.total_attempts if self._stats.total_attempts > 0 else 0
             ),
             "avg_response_time_ms": self._stats.avg_response_time_ms,
             "min_response_time_ms": self._stats.min_response_time_ms,
             "max_response_time_ms": self._stats.max_response_time_ms,
             "channel_statistics": self._stats.channel_stats,
-            "priority_statistics": self._stats.priority_stats
+            "priority_statistics": self._stats.priority_stats,
         }
 
         # Filter by channel if requested
@@ -696,7 +684,7 @@ class DeliveryTracker:
             self._logger.debug(
                 "Delivery status updated for message %s: %s",
                 delivery_status.message_id,
-                delivery_status.overall_status.value
+                delivery_status.overall_status.value,
             )
         except Exception as e:
             self._logger.error("Failed to save delivery status for message %s: %s", delivery_status.message_id, e)
@@ -708,12 +696,15 @@ class DeliveryTracker:
             # In a full implementation, this would save to msg_delivery_status table
             self._logger.debug(
                 "Delivery attempt saved: %s for message %s on channel %s: %s",
-                attempt.attempt_id, attempt.message_id, attempt.channel, attempt.status.value
+                attempt.attempt_id,
+                attempt.message_id,
+                attempt.channel,
+                attempt.status.value,
             )
         except Exception as e:
             self._logger.error("Failed to save delivery attempt %s: %s", attempt.attempt_id, e)
 
-    async def _load_delivery_status(self, message_id: int) -> Optional[MessageDeliveryStatus]:
+    async def _load_delivery_status(self, message_id: int) -> MessageDeliveryStatus | None:
         """Load delivery status from database."""
         try:
             # For now, return None since we don't have database persistence
@@ -761,15 +752,17 @@ class DeliveryTracker:
 
     async def _cleanup_completed_deliveries(self):
         """Clean up completed deliveries from memory."""
-        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=24)  # Keep 24 hours in memory
+        cutoff_time = datetime.now(UTC) - timedelta(hours=24)  # Keep 24 hours in memory
 
         with self._lock:
             completed_ids = []
 
             for msg_id, delivery_status in self._active_deliveries.items():
-                if (delivery_status.overall_status != DeliveryResult.PENDING and
-                    delivery_status.completed_at and
-                    delivery_status.completed_at < cutoff_time):
+                if (
+                    delivery_status.overall_status != DeliveryResult.PENDING
+                    and delivery_status.completed_at
+                    and delivery_status.completed_at < cutoff_time
+                ):
                     completed_ids.append(msg_id)
 
             # Remove completed deliveries

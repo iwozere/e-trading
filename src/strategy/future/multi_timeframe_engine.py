@@ -4,12 +4,13 @@ Multi-Timeframe Engine Module
 This module handles data aggregation and timeframe synchronization for multi-timeframe strategies.
 """
 
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Any
 from datetime import datetime
-from src.notification.logger import setup_logger
+from typing import Any, Dict, List
 
+import numpy as np
+import pandas as pd
+
+from src.notification.logger import setup_logger
 from src.strategy.future.strategy_core import BaseStrategy, StrategySignal
 
 logger = setup_logger(__name__)
@@ -49,13 +50,11 @@ class TimeframeSyncer:
         """
         if target_timeframe not in self.data_feeds:
             # Resample the input data to target timeframe
-            resampled = data.resample(target_timeframe).agg({
-                'open': 'first',
-                'high': 'max',
-                'low': 'min',
-                'close': 'last',
-                'volume': 'sum'
-            }).dropna()
+            resampled = (
+                data.resample(target_timeframe)
+                .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+                .dropna()
+            )
             return resampled
         else:
             return self.data_feeds[target_timeframe]
@@ -137,20 +136,20 @@ class MultiTimeframeStrategy(BaseStrategy):
         multiplier = params.get("multiplier", 3.0)
 
         # Calculate ATR
-        high_low = data['high'] - data['low']
-        high_close = np.abs(data['high'] - data['close'].shift())
-        low_close = np.abs(data['low'] - data['close'].shift())
+        high_low = data["high"] - data["low"]
+        high_close = np.abs(data["high"] - data["close"].shift())
+        low_close = np.abs(data["low"] - data["close"].shift())
 
         ranges = pd.concat([high_low, high_close, low_close], axis=1)
         true_range = ranges.max(axis=1)
         atr = true_range.rolling(atr_period).mean()
 
         # Calculate SuperTrend
-        basic_upper = (data['high'] + data['low']) / 2 + multiplier * atr
-        basic_lower = (data['high'] + data['low']) / 2 - multiplier * atr
+        basic_upper = (data["high"] + data["low"]) / 2 + multiplier * atr
+        basic_lower = (data["high"] + data["low"]) / 2 - multiplier * atr
 
         # Determine trend
-        current_price = data['close'].iloc[-1]
+        current_price = data["close"].iloc[-1]
         current_upper = basic_upper.iloc[-1]
         current_lower = basic_lower.iloc[-1]
 
@@ -166,8 +165,8 @@ class MultiTimeframeStrategy(BaseStrategy):
         fast_ema = params.get("fast_ema", 12)
         slow_ema = params.get("slow_ema", 26)
 
-        ema_fast = data['close'].ewm(span=fast_ema).mean()
-        ema_slow = data['close'].ewm(span=slow_ema).mean()
+        ema_fast = data["close"].ewm(span=fast_ema).mean()
+        ema_slow = data["close"].ewm(span=slow_ema).mean()
 
         current_fast = ema_fast.iloc[-1]
         current_slow = ema_slow.iloc[-1]
@@ -196,7 +195,7 @@ class MultiTimeframeStrategy(BaseStrategy):
                 confidence=0.0,
                 weight=self.weight,
                 timestamp=datetime.now(),
-                metadata={"reason": "no_entry_timeframe_data"}
+                metadata={"reason": "no_entry_timeframe_data"},
             )
 
         data = self.syncer.data_feeds[entry_timeframe]
@@ -213,7 +212,7 @@ class MultiTimeframeStrategy(BaseStrategy):
                     confidence=0.0,
                     weight=self.weight,
                     timestamp=datetime.now(),
-                    metadata={"reason": "no_trend_direction"}
+                    metadata={"reason": "no_trend_direction"},
                 )
 
         # Generate entry signal
@@ -228,7 +227,7 @@ class MultiTimeframeStrategy(BaseStrategy):
                 confidence=0.0,
                 weight=self.weight,
                 timestamp=datetime.now(),
-                metadata={"reason": "unknown_method"}
+                metadata={"reason": "unknown_method"},
             )
 
     def _generate_rsi_volume_signal(self, data: pd.DataFrame, params: Dict, trend_direction: str) -> StrategySignal:
@@ -239,15 +238,15 @@ class MultiTimeframeStrategy(BaseStrategy):
         volume_threshold = params.get("volume_threshold", 1.5)
 
         # Calculate RSI
-        delta = data['close'].diff()
+        delta = data["close"].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=rsi_period).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_period).mean()
         rs = gain / loss
         rsi = 100 - (100 / (1 + rs))
 
         # Calculate volume ratio
-        avg_volume = data['volume'].rolling(20).mean()
-        current_volume = data['volume'].iloc[-1]
+        avg_volume = data["volume"].rolling(20).mean()
+        current_volume = data["volume"].iloc[-1]
         volume_ratio = current_volume / avg_volume.iloc[-1] if avg_volume.iloc[-1] > 0 else 1.0
 
         current_rsi = rsi.iloc[-1]
@@ -258,7 +257,9 @@ class MultiTimeframeStrategy(BaseStrategy):
             confidence = min(1.0, (rsi_oversold - current_rsi) / rsi_oversold * volume_ratio / volume_threshold)
         elif trend_direction == "bearish" and current_rsi > rsi_overbought and volume_ratio > volume_threshold:
             signal_type = "sell"
-            confidence = min(1.0, (current_rsi - rsi_overbought) / (100 - rsi_overbought) * volume_ratio / volume_threshold)
+            confidence = min(
+                1.0, (current_rsi - rsi_overbought) / (100 - rsi_overbought) * volume_ratio / volume_threshold
+            )
         else:
             signal_type = "hold"
             confidence = 0.0
@@ -269,11 +270,7 @@ class MultiTimeframeStrategy(BaseStrategy):
             confidence=confidence,
             weight=self.weight,
             timestamp=datetime.now(),
-            metadata={
-                "rsi": current_rsi,
-                "volume_ratio": volume_ratio,
-                "trend_direction": trend_direction
-            }
+            metadata={"rsi": current_rsi, "volume_ratio": volume_ratio, "trend_direction": trend_direction},
         )
 
     def _generate_atr_breakout_signal(self, data: pd.DataFrame, params: Dict, trend_direction: str) -> StrategySignal:
@@ -282,9 +279,9 @@ class MultiTimeframeStrategy(BaseStrategy):
         breakout_multiplier = params.get("breakout_multiplier", 1.5)
 
         # Calculate ATR
-        high_low = data['high'] - data['low']
-        high_close = np.abs(data['high'] - data['close'].shift())
-        low_close = np.abs(data['low'] - data['close'].shift())
+        high_low = data["high"] - data["low"]
+        high_close = np.abs(data["high"] - data["close"].shift())
+        low_close = np.abs(data["low"] - data["close"].shift())
 
         ranges = pd.concat([high_low, high_close, low_close], axis=1)
         true_range = ranges.max(axis=1)
@@ -292,8 +289,8 @@ class MultiTimeframeStrategy(BaseStrategy):
 
         # Calculate breakout levels
         current_atr = atr.iloc[-1]
-        current_price = data['close'].iloc[-1]
-        prev_price = data['close'].iloc[-2]
+        current_price = data["close"].iloc[-1]
+        prev_price = data["close"].iloc[-2]
 
         breakout_threshold = current_atr * breakout_multiplier
         price_change = abs(current_price - prev_price)
@@ -319,6 +316,6 @@ class MultiTimeframeStrategy(BaseStrategy):
                 "atr": current_atr,
                 "price_change": price_change,
                 "breakout_threshold": breakout_threshold,
-                "trend_direction": trend_direction
-            }
+                "trend_direction": trend_direction,
+            },
         )

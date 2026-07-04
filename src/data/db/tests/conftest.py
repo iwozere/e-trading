@@ -2,10 +2,10 @@ import os
 import sys
 import uuid
 from pathlib import Path
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
 
 import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
 
 # Ensure repository root is on sys.path so `config` package can be imported
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -25,8 +25,11 @@ if not TEST_DB_URL:
 
     if pg_user and pg_pass:
         from urllib.parse import quote_plus
+
         TEST_DB_URL = f"postgresql+psycopg2://{pg_user}:{quote_plus(pg_pass)}@{pg_host}:{pg_port}/{pg_db}"
-        print(f"⚠️  TEST_DB_URL constructed from env vars: postgresql+psycopg2://{pg_user}:***@{pg_host}:{pg_port}/{pg_db}")
+        print(
+            f"⚠️  TEST_DB_URL constructed from env vars: postgresql+psycopg2://{pg_user}:***@{pg_host}:{pg_port}/{pg_db}"
+        )
     else:
         print("❌  ERROR: TEST_DB_URL not set and cannot construct from POSTGRES_* env vars")
         print("❌  Tests require a PostgreSQL test database!")
@@ -40,6 +43,7 @@ DB_URL = TEST_DB_URL
 # if psycopg2 is not available, skip DB tests (keeps test suite friendly when DB driver missing)
 try:
     import psycopg2  # noqa: F401
+
     _HAS_PG = True
 except Exception:
     _HAS_PG = False
@@ -81,17 +85,17 @@ def tmp_schema(engine):
 
         # import models to register them on Base.metadata
         # we import lazily here so tests can be discovered without immediately requiring DB
-        from src.data.db.core.base import Base  # noqa: E402
+        import src.data.db.models.model_jobs as _mj  # noqa: F401,E402
+        import src.data.db.models.model_notification as _mn  # noqa: F401,E402
+        import src.data.db.models.model_short_squeeze as _mss  # noqa: F401,E402
+        import src.data.db.models.model_system_health as _ms  # noqa: F401,E402
+        import src.data.db.models.model_telegram as _mtg  # noqa: F401,E402
+        import src.data.db.models.model_trading as _mt  # noqa: F401,E402
 
         # Import all model modules so they are registered on Base.metadata
         import src.data.db.models.model_users as _mu  # noqa: F401,E402
-        import src.data.db.models.model_trading as _mt  # noqa: F401,E402
-        import src.data.db.models.model_jobs as _mj  # noqa: F401,E402
         import src.data.db.models.model_webui as _mw  # noqa: F401,E402
-        import src.data.db.models.model_notification as _mn  # noqa: F401,E402
-        import src.data.db.models.model_system_health as _ms  # noqa: F401,E402
-        import src.data.db.models.model_telegram as _mtg  # noqa: F401,E402
-        import src.data.db.models.model_short_squeeze as _mss  # noqa: F401,E402
+        from src.data.db.core.base import Base  # noqa: E402
 
         # Create the tables in order based on dependencies
         tables_to_create = [
@@ -121,7 +125,7 @@ def tmp_schema(engine):
             "telegram_settings",
             "telegram_feedbacks",
             "telegram_command_audits",
-            "telegram_broadcast_logs"
+            "telegram_broadcast_logs",
         ]
 
         tables_dict = {t.name: t for t in Base.metadata.tables.values()}

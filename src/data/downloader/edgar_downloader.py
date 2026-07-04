@@ -27,18 +27,18 @@ Classes:
 import gzip
 import json
 import re
+import sys
 import time
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
-import sys
+from typing import Any, Dict, List, Union
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-import requests
 import pandas as pd
+import requests
 
 from src.data.downloader.base_data_downloader import BaseDataDownloader
 from src.notification.logger import setup_logger
@@ -56,6 +56,7 @@ _COMPANY_FACTS_URL_TEMPLATE = "https://data.sec.gov/api/xbrl/companyfacts/CIK{ci
 _SUBMISSIONS_URL_TEMPLATE = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
 _EDGAR_ARCHIVES_BASE = "https://www.sec.gov/Archives/edgar/data"
 _EDGAR_EFTS_SEARCH = "https://efts.sec.gov/LATEST/search-index"
+
 
 class EftsUnavailableError(Exception):
     """Raised when the EDGAR EFTS search endpoint fails before returning any results."""
@@ -109,7 +110,7 @@ class EdgarDownloader(BaseDataDownloader):
 
     def __init__(
         self,
-        cache_dir: Optional[Union[str, Path]] = None,
+        cache_dir: Union[str, Path] | None = None,
         user_agent: str = "e-trading-research akossyrev@gmail.com",
     ):
         """
@@ -223,7 +224,7 @@ class EdgarDownloader(BaseDataDownloader):
     # companyfacts
     # ------------------------------------------------------------------
 
-    def download_company_facts(self, cik: Union[int, str], force: bool = False) -> Optional[Path]:
+    def download_company_facts(self, cik: Union[int, str], force: bool = False) -> Path | None:
         """
         Download the XBRL company facts JSON for a single CIK.
 
@@ -254,7 +255,7 @@ class EdgarDownloader(BaseDataDownloader):
 
     def download_all_company_facts(
         self,
-        cik_list: Optional[List[Union[int, str]]] = None,
+        cik_list: List[Union[int, str]] | None = None,
         force: bool = False,
         max_errors: int = 50,
     ) -> Dict[str, Any]:
@@ -286,7 +287,7 @@ class EdgarDownloader(BaseDataDownloader):
         self,
         cik: Union[int, str],
         force_refresh: bool = False,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Load company facts JSON for a given CIK from the local cache.
 
@@ -309,7 +310,7 @@ class EdgarDownloader(BaseDataDownloader):
     # submissions (8-K tracking)
     # ------------------------------------------------------------------
 
-    def download_submissions(self, cik: Union[int, str], force: bool = False) -> Optional[Path]:
+    def download_submissions(self, cik: Union[int, str], force: bool = False) -> Path | None:
         """
         Download the submissions JSON for a single CIK.
 
@@ -345,7 +346,7 @@ class EdgarDownloader(BaseDataDownloader):
 
     def download_all_submissions(
         self,
-        cik_list: Optional[List[Union[int, str]]] = None,
+        cik_list: List[Union[int, str]] | None = None,
         force: bool = False,
         max_errors: int = 50,
     ) -> Dict[str, Any]:
@@ -366,7 +367,7 @@ class EdgarDownloader(BaseDataDownloader):
         """
         resolved = self._resolve_cik_list(cik_list, label="submissions")
 
-        def _download_submissions_fn(cik: Union[int, str], force: bool = False) -> Optional[Path]:
+        def _download_submissions_fn(cik: Union[int, str], force: bool = False) -> Path | None:
             return self.download_submissions(cik, force=force)
 
         return self._bulk_download(
@@ -382,7 +383,7 @@ class EdgarDownloader(BaseDataDownloader):
         self,
         cik: Union[int, str],
         force_refresh: bool = False,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Load submissions JSON for a given CIK from the local cache.
 
@@ -404,8 +405,8 @@ class EdgarDownloader(BaseDataDownloader):
     def get_recent_filings(
         self,
         cik: Union[int, str],
-        form_type: Optional[str] = None,
-        since: Optional[datetime] = None,
+        form_type: str | None = None,
+        since: datetime | None = None,
         force_refresh: bool = False,
     ) -> List[Dict[str, Any]]:
         """
@@ -441,19 +442,14 @@ class EdgarDownloader(BaseDataDownloader):
         if n == 0:
             return []
 
-        filings: List[Dict[str, Any]] = [
-            {k: recent[k][i] for k in keys} for i in range(n)
-        ]
+        filings: List[Dict[str, Any]] = [{k: recent[k][i] for k in keys} for i in range(n)]
 
         if form_type is not None:
             filings = [f for f in filings if f.get("form") == form_type]
 
         if since is not None:
             since_naive = since.replace(tzinfo=None) if since.tzinfo else since
-            filings = [
-                f for f in filings
-                if _parse_filing_date(f.get("filingDate", "")) >= since_naive
-            ]
+            filings = [f for f in filings if _parse_filing_date(f.get("filingDate", "")) >= since_naive]
 
         return filings
 
@@ -494,13 +490,15 @@ class EdgarDownloader(BaseDataDownloader):
         records = []
         for hit in hits:
             src = hit.get("_source", {})
-            records.append({
-                "cik": _efts_first_cik(src) or None,
-                "institution_name": _efts_company(src),
-                "accession_number": str(src.get("adsh", "")),
-                "filed_date": src.get("file_date", ""),
-                "period_of_report": src.get("period_ending", ""),
-            })
+            records.append(
+                {
+                    "cik": _efts_first_cik(src) or None,
+                    "institution_name": _efts_company(src),
+                    "accession_number": str(src.get("adsh", "")),
+                    "filed_date": src.get("file_date", ""),
+                    "period_of_report": src.get("period_ending", ""),
+                }
+            )
 
         df = pd.DataFrame(records).dropna(subset=["cik"])
         df["cik"] = df["cik"].astype(str)
@@ -518,7 +516,7 @@ class EdgarDownloader(BaseDataDownloader):
         quarter: int,
         institution_name: str = "",
         force: bool = False,
-    ) -> Optional[Path]:
+    ) -> Path | None:
         """
         Download, parse, and cache the holdings infotable for one 13F-HR filing.
 
@@ -565,7 +563,10 @@ class EdgarDownloader(BaseDataDownloader):
         df.to_csv(dest, index=False, compression="gzip")
         _logger.debug(
             "Cached 13F holdings for CIK %010d: %d positions, $%.0fM total → %s",
-            cik_int, len(df), total_value / 1_000_000, dest,
+            cik_int,
+            len(df),
+            total_value / 1_000_000,
+            dest,
         )
         return dest
 
@@ -605,17 +606,19 @@ class EdgarDownloader(BaseDataDownloader):
 
         records = []
         for info in root.findall(".//infoTable"):
-            records.append({
-                "cik": cik,
-                "institution_name": institution_name,
-                "quarter": quarter,
-                "name_of_issuer": _xml_text(info, "nameOfIssuer"),
-                "cusip": _xml_text(info, "cusip"),
-                "value_usd": _safe_int(_xml_text(info, "value")) * 1000,
-                "shares": _safe_int(_xml_text(info, ".//sshPrnamt")),
-                "investment_discretion": _xml_text(info, "investmentDiscretion"),
-                "put_call": _xml_text(info, "putCall"),
-            })
+            records.append(
+                {
+                    "cik": cik,
+                    "institution_name": institution_name,
+                    "quarter": quarter,
+                    "name_of_issuer": _xml_text(info, "nameOfIssuer"),
+                    "cusip": _xml_text(info, "cusip"),
+                    "value_usd": _safe_int(_xml_text(info, "value")) * 1000,
+                    "shares": _safe_int(_xml_text(info, ".//sshPrnamt")),
+                    "investment_discretion": _xml_text(info, "investmentDiscretion"),
+                    "put_call": _xml_text(info, "putCall"),
+                }
+            )
 
         if not records:
             return pd.DataFrame()
@@ -628,7 +631,7 @@ class EdgarDownloader(BaseDataDownloader):
         year: int,
         quarter: int,
         force_refresh: bool = False,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """
         Load cached 13F holdings for a CIK and quarter from CSV.gz.
 
@@ -661,7 +664,7 @@ class EdgarDownloader(BaseDataDownloader):
 
         return pd.read_csv(path, compression="gzip")
 
-    def get_new_13f_filings_today(self, as_of_date: Optional[date] = None) -> pd.DataFrame:
+    def get_new_13f_filings_today(self, as_of_date: date | None = None) -> pd.DataFrame:
         """
         Return 13F-HR filings submitted on a given date (default: today).
 
@@ -701,7 +704,7 @@ class EdgarDownloader(BaseDataDownloader):
 
     def download_form4_filings(
         self,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
         force: bool = False,
     ) -> pd.DataFrame:
         """
@@ -756,8 +759,14 @@ class EdgarDownloader(BaseDataDownloader):
                 records.append(row)
 
         _FORM4_COLS = [
-            "ticker", "issuer_cik", "insider_name", "transaction_code",
-            "shares", "price_per_share", "total_value_usd", "filed_date",
+            "ticker",
+            "issuer_cik",
+            "insider_name",
+            "transaction_code",
+            "shares",
+            "price_per_share",
+            "total_value_usd",
+            "filed_date",
         ]
         df = pd.DataFrame(records, columns=_FORM4_COLS) if records else pd.DataFrame(columns=_FORM4_COLS)  # type: ignore[arg-type]
 
@@ -768,7 +777,7 @@ class EdgarDownloader(BaseDataDownloader):
 
     def download_13dg_filings(
         self,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
         force: bool = False,
     ) -> pd.DataFrame:
         """
@@ -814,13 +823,15 @@ class EdgarDownloader(BaseDataDownloader):
                 continue
             # Accession number lives in the filename stem: edgar/data/{cik}/XXXXXXXXXX-YY-NNNNNN.txt
             acc_no = Path(filename).stem
-            records.append({
-                "cik": cik_str.strip(),
-                "entity_name": entity_name.strip(),
-                "accession_number": acc_no,
-                "filed_date": filed_date,
-                "form_type": form_type,
-            })
+            records.append(
+                {
+                    "cik": cik_str.strip(),
+                    "entity_name": entity_name.strip(),
+                    "accession_number": acc_no,
+                    "filed_date": filed_date,
+                    "form_type": form_type,
+                }
+            )
 
         _13DG_COLS = ["cik", "entity_name", "accession_number", "filed_date", "form_type"]
         df = pd.DataFrame(records, columns=_13DG_COLS) if records else pd.DataFrame(columns=_13DG_COLS)  # type: ignore[arg-type]
@@ -831,7 +842,7 @@ class EdgarDownloader(BaseDataDownloader):
 
     def download_8k_filings(
         self,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
         force: bool = False,
     ) -> pd.DataFrame:
         """
@@ -877,18 +888,19 @@ class EdgarDownloader(BaseDataDownloader):
             acc = str(src.get("adsh", ""))
             if not cik_str or not acc:
                 continue
-            records.append({
-                "cik": cik_str,
-                "company": _efts_company(src),
-                "accession_number": acc,
-                "items": _normalize_8k_items(src.get("items")),
-                "description": str(src.get("file_description", "") or src.get("file_type", "")),
-                "filed_date": str(src.get("file_date", "") or date_str),
-                "primary_document": _primary_doc_from_efts_id(str(hit.get("_id", ""))),
-            })
+            records.append(
+                {
+                    "cik": cik_str,
+                    "company": _efts_company(src),
+                    "accession_number": acc,
+                    "items": _normalize_8k_items(src.get("items")),
+                    "description": str(src.get("file_description", "") or src.get("file_type", "")),
+                    "filed_date": str(src.get("file_date", "") or date_str),
+                    "primary_document": _primary_doc_from_efts_id(str(hit.get("_id", ""))),
+                }
+            )
 
-        _8K_COLS = ["cik", "company", "accession_number", "items",
-                    "description", "filed_date", "primary_document"]
+        _8K_COLS = ["cik", "company", "accession_number", "items", "description", "filed_date", "primary_document"]
         df = pd.DataFrame(records, columns=_8K_COLS) if records else pd.DataFrame(columns=_8K_COLS)  # type: ignore[arg-type]
         dest.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(dest, index=False, compression="gzip")
@@ -936,7 +948,7 @@ class EdgarDownloader(BaseDataDownloader):
         self,
         cik: Union[int, str],
         settlement_date: date,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Return the best shares-outstanding fact for a CIK on or before a given date.
 
@@ -979,11 +991,7 @@ class EdgarDownloader(BaseDataDownloader):
         today = datetime.now().date()
         current_quarter = (today.month - 1) // 3 + 1
         is_current = year == today.year and quarter == current_quarter
-        cache_stale = (
-            is_current
-            and dest.exists()
-            and (time.time() - dest.stat().st_mtime) > 86400
-        )
+        cache_stale = is_current and dest.exists() and (time.time() - dest.stat().st_mtime) > 86400
 
         if not dest.exists() or force or cache_stale:
             url = _EDGAR_FULL_INDEX_URL.format(year=year, quarter=quarter)
@@ -1025,7 +1033,7 @@ class EdgarDownloader(BaseDataDownloader):
                 "enddt": end_dt,
                 "from": offset,
             }
-            last_exc: Optional[Exception] = None
+            last_exc: Exception | None = None
             data: Dict[str, Any] = {}
             for attempt in range(3):
                 try:
@@ -1044,17 +1052,24 @@ class EdgarDownloader(BaseDataDownloader):
                     status = getattr(getattr(exc, "response", None), "status_code", None)
                     if status is not None and status < 500:
                         break  # 4xx — retrying won't help
-                    backoff = 2 ** attempt
+                    backoff = 2**attempt
                     _logger.warning(
                         "EFTS attempt %d/3 failed (forms=%s start=%s status=%s) — retrying in %ds",
-                        attempt + 1, forms, start_dt, status, backoff,
+                        attempt + 1,
+                        forms,
+                        start_dt,
+                        status,
+                        backoff,
                     )
                     time.sleep(backoff)
 
             if last_exc is not None:
                 _logger.exception(
                     "EFTS search failed after 3 attempts (forms=%s start=%s end=%s offset=%d)",
-                    forms, start_dt, end_dt, offset,
+                    forms,
+                    start_dt,
+                    end_dt,
+                    offset,
                     exc_info=last_exc,
                 )
                 if not all_hits:
@@ -1075,8 +1090,8 @@ class EdgarDownloader(BaseDataDownloader):
         self,
         cik_int: int,
         acc_norm: str,
-        candidate_names: Optional[List[str]] = None,
-    ) -> Optional[str]:
+        candidate_names: List[str] | None = None,
+    ) -> str | None:
         """
         Try candidate filenames inside an EDGAR filing folder and return XML text.
 
@@ -1110,14 +1125,18 @@ class EdgarDownloader(BaseDataDownloader):
                         break  # file does not exist; try next candidate name
                     if resp.status_code == 503:
                         sleep_sec = 30 * (attempt + 1)
-                        _logger.warning("EDGAR rate-limited (503) for %s, sleeping %ds (attempt %d/3)", url, sleep_sec, attempt + 1)
+                        _logger.warning(
+                            "EDGAR rate-limited (503) for %s, sleeping %ds (attempt %d/3)", url, sleep_sec, attempt + 1
+                        )
                         time.sleep(sleep_sec)
                         continue  # retry same URL
                     _logger.warning("Unexpected status %d for %s", resp.status_code, url)
                     break
                 except Exception as e:
                     sleep_sec = 15 * (attempt + 1)
-                    _logger.warning("Network error fetching %s (attempt %d/3), sleeping %ds: %s", url, attempt + 1, sleep_sec, e)
+                    _logger.warning(
+                        "Network error fetching %s (attempt %d/3), sleeping %ds: %s", url, attempt + 1, sleep_sec, e
+                    )
                     time.sleep(sleep_sec)
 
         # Fallback: fetch the filing index HTML and look for any .xml link.
@@ -1149,13 +1168,24 @@ class EdgarDownloader(BaseDataDownloader):
                                 break
                             if resp.status_code == 503:
                                 sleep_sec = 30 * (attempt + 1)
-                                _logger.warning("EDGAR rate-limited (503) for %s, sleeping %ds (attempt %d/3)", url, sleep_sec, attempt + 1)
+                                _logger.warning(
+                                    "EDGAR rate-limited (503) for %s, sleeping %ds (attempt %d/3)",
+                                    url,
+                                    sleep_sec,
+                                    attempt + 1,
+                                )
                                 time.sleep(sleep_sec)
                                 continue
                             break
                         except Exception as e:
                             sleep_sec = 15 * (attempt + 1)
-                            _logger.warning("Network error fetching %s (attempt %d/3), sleeping %ds: %s", url, attempt + 1, sleep_sec, e)
+                            _logger.warning(
+                                "Network error fetching %s (attempt %d/3), sleeping %ds: %s",
+                                url,
+                                attempt + 1,
+                                sleep_sec,
+                                e,
+                            )
                             time.sleep(sleep_sec)
 
             index_url = f"{_EDGAR_ARCHIVES_BASE}/{path_cik}/{acc_norm}/{acc_norm}-index.htm"
@@ -1168,9 +1198,12 @@ class EdgarDownloader(BaseDataDownloader):
 
                 if resp.status_code == 200:
                     import re as _re
+
                     xml_files = re.findall(r'href="([^"]+\.xml)"', resp.text, _re.IGNORECASE)
-                    infotable_candidates = [f for f in xml_files if any(kw in f.lower() for kw in ("form", "info", "table"))]
-                    for xml_file in (infotable_candidates or xml_files):
+                    infotable_candidates = [
+                        f for f in xml_files if any(kw in f.lower() for kw in ("form", "info", "table"))
+                    ]
+                    for xml_file in infotable_candidates or xml_files:
                         xml_url = f"{_EDGAR_ARCHIVES_BASE}/{path_cik}/{acc_norm}/{xml_file}"
                         r2 = self._session.get(xml_url, timeout=30)
                         self._last_request_time = time.monotonic()
@@ -1183,7 +1216,7 @@ class EdgarDownloader(BaseDataDownloader):
 
     def _resolve_cik_list(
         self,
-        cik_list: Optional[List[Union[int, str]]],
+        cik_list: List[Union[int, str]] | None,
         label: str = "",
     ) -> List[int]:
         """Resolve an optional CIK list to a concrete list of ints."""
@@ -1227,7 +1260,11 @@ class EdgarDownloader(BaseDataDownloader):
             if i % 100 == 0:
                 _logger.info(
                     "Progress: %d/%d — downloaded=%d skipped=%d errors=%d",
-                    i, total, downloaded, skipped, errors,
+                    i,
+                    total,
+                    downloaded,
+                    skipped,
+                    errors,
                 )
 
         summary: Dict[str, Any] = {
@@ -1238,11 +1275,14 @@ class EdgarDownloader(BaseDataDownloader):
         }
         _logger.info(
             "Bulk download complete: downloaded=%d skipped=%d errors=%d / %d total",
-            downloaded, skipped, errors, total,
+            downloaded,
+            skipped,
+            errors,
+            total,
         )
         return summary
 
-    def _fetch(self, url: str, cik_int: int, label: str) -> Optional[Any]:
+    def _fetch(self, url: str, cik_int: int, label: str) -> Any | None:
         """Rate-limited GET with standard error handling. Returns parsed JSON or None."""
         try:
             return self._get(url)
@@ -1292,10 +1332,11 @@ class EdgarDownloader(BaseDataDownloader):
 # Module-level helpers
 # ---------------------------------------------------------------------------
 
+
 def _pick_best_shares_fact(
     cf_json: Dict[str, Any],
     settlement_date: date,
-) -> Optional[Dict[str, Any]]:
+) -> Dict[str, Any] | None:
     """
     Select the most recent shares-outstanding fact from EDGAR company facts JSON
     whose end date is on or before settlement_date.
@@ -1311,7 +1352,7 @@ def _pick_best_shares_fact(
         or None if no match found.
     """
     facts = cf_json.get("facts", {})
-    best: Optional[tuple] = None  # (end_date, value, fact_name, unit_name)
+    best: tuple | None = None  # (end_date, value, fact_name, unit_name)
     for space, fname in _SHARES_FACT_CANDIDATES:
         fact_obj = facts.get(space, {}).get(fname)
         if not fact_obj:
@@ -1410,16 +1451,18 @@ def _parse_form4_xml(xml_content: str, filed_date: str) -> List[Dict[str, Any]]:
         except ValueError:
             price = 0.0
 
-        rows.append({
-            "ticker": ticker,
-            "issuer_cik": issuer_cik,
-            "insider_name": insider_name,
-            "transaction_code": code,
-            "shares": shares,
-            "price_per_share": price,
-            "total_value_usd": shares * price,
-            "filed_date": filed_date,
-        })
+        rows.append(
+            {
+                "ticker": ticker,
+                "issuer_cik": issuer_cik,
+                "insider_name": insider_name,
+                "transaction_code": code,
+                "shares": shares,
+                "price_per_share": price,
+                "total_value_usd": shares * price,
+                "filed_date": filed_date,
+            }
+        )
 
     return rows
 
@@ -1528,13 +1571,17 @@ if __name__ == "__main__":
 
     elif args.command == "facts":
         summary = dl.download_all_company_facts(
-            cik_list=args.cik or None, force=args.force, max_errors=args.max_errors,
+            cik_list=args.cik or None,
+            force=args.force,
+            max_errors=args.max_errors,
         )
         print(f"__SCHEDULER_RESULT__:{json.dumps({'success': True, **summary})}")
 
     elif args.command == "submissions":
         summary = dl.download_all_submissions(
-            cik_list=args.cik or None, force=args.force, max_errors=args.max_errors,
+            cik_list=args.cik or None,
+            force=args.force,
+            max_errors=args.max_errors,
         )
         print(f"__SCHEDULER_RESULT__:{json.dumps({'success': True, **summary})}")
 

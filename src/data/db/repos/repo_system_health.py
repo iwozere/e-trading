@@ -6,11 +6,12 @@ Provides data access methods for monitoring all subsystems including notificatio
 telegram bot, API services, web UI, trading components, and system resources.
 """
 
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta, timezone
-from sqlalchemy.orm import Session
+from datetime import UTC, datetime, timedelta
+from typing import Any, Dict, List
+
 from sqlalchemy import and_, text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from src.data.db.models.model_system_health import SystemHealth, SystemHealthStatus
 from src.notification.logger import setup_logger
@@ -54,8 +55,8 @@ class SystemHealthRepository:
             Exception: For other database errors
         """
         try:
-            system = health_data.get('system')
-            component = health_data.get('component')
+            system = health_data.get("system")
+            component = health_data.get("component")
 
             if not system:
                 raise ValueError("System name is required")
@@ -65,36 +66,36 @@ class SystemHealthRepository:
 
             if existing:
                 # Update existing record
-                existing.status = health_data.get('status', existing.status)
-                existing.last_success = health_data.get('last_success', existing.last_success)
-                existing.last_failure = health_data.get('last_failure', existing.last_failure)
-                existing.failure_count = health_data.get('failure_count', existing.failure_count)
-                existing.avg_response_time_ms = health_data.get('avg_response_time_ms', existing.avg_response_time_ms)
-                existing.error_message = health_data.get('error_message', existing.error_message)
-                existing.metadata = health_data.get('metadata', existing.metadata)
-                existing.checked_at = health_data.get('checked_at', datetime.now(timezone.utc))
+                existing.status = health_data.get("status", existing.status)
+                existing.last_success = health_data.get("last_success", existing.last_success)
+                existing.last_failure = health_data.get("last_failure", existing.last_failure)
+                existing.failure_count = health_data.get("failure_count", existing.failure_count)
+                existing.avg_response_time_ms = health_data.get("avg_response_time_ms", existing.avg_response_time_ms)
+                existing.error_message = health_data.get("error_message", existing.error_message)
+                existing.metadata = health_data.get("metadata", existing.metadata)
+                existing.checked_at = health_data.get("checked_at", datetime.now(UTC))
 
                 self.session.flush()
-                _logger.debug("Updated system health for %s.%s", system, component or 'main')
+                _logger.debug("Updated system health for %s.%s", system, component or "main")
                 return existing
             else:
                 # Create new record
                 health_record = SystemHealth(
                     system=system,
                     component=component,
-                    status=health_data.get('status', SystemHealthStatus.UNKNOWN.value),
-                    last_success=health_data.get('last_success'),
-                    last_failure=health_data.get('last_failure'),
-                    failure_count=health_data.get('failure_count', 0),
-                    avg_response_time_ms=health_data.get('avg_response_time_ms'),
-                    error_message=health_data.get('error_message'),
-                    metadata=health_data.get('metadata'),
-                    checked_at=health_data.get('checked_at', datetime.now(timezone.utc))
+                    status=health_data.get("status", SystemHealthStatus.UNKNOWN.value),
+                    last_success=health_data.get("last_success"),
+                    last_failure=health_data.get("last_failure"),
+                    failure_count=health_data.get("failure_count", 0),
+                    avg_response_time_ms=health_data.get("avg_response_time_ms"),
+                    error_message=health_data.get("error_message"),
+                    metadata=health_data.get("metadata"),
+                    checked_at=health_data.get("checked_at", datetime.now(UTC)),
                 )
 
                 self.session.add(health_record)
                 self.session.flush()
-                _logger.debug("Created system health record for %s.%s", system, component or 'main')
+                _logger.debug("Created system health record for %s.%s", system, component or "main")
                 return health_record
 
         except IntegrityError:
@@ -104,7 +105,7 @@ class SystemHealthRepository:
             _logger.exception("Error creating/updating system health:")
             raise
 
-    def get_system_health(self, system: str, component: Optional[str] = None) -> Optional[SystemHealth]:
+    def get_system_health(self, system: str, component: str | None = None) -> SystemHealth | None:
         """
         Get system health by system and component name.
 
@@ -126,10 +127,10 @@ class SystemHealthRepository:
 
     def list_system_health(
         self,
-        system: Optional[str] = None,
-        status: Optional[SystemHealthStatus] = None,
+        system: str | None = None,
+        status: SystemHealthStatus | None = None,
         include_stale: bool = True,
-        stale_threshold_minutes: int = 10
+        stale_threshold_minutes: int = 10,
     ) -> List[SystemHealth]:
         """
         List system health records with optional filtering.
@@ -152,7 +153,7 @@ class SystemHealthRepository:
             query = query.filter(SystemHealth.status == status.value)
 
         if not include_stale:
-            stale_cutoff = datetime.now(timezone.utc) - timedelta(minutes=stale_threshold_minutes)
+            stale_cutoff = datetime.now(UTC) - timedelta(minutes=stale_threshold_minutes)
             query = query.filter(SystemHealth.checked_at >= stale_cutoff)
 
         return query.order_by(SystemHealth.system, SystemHealth.component).all()
@@ -201,12 +202,12 @@ class SystemHealthRepository:
         Returns:
             List of SystemHealth objects with non-healthy status
         """
-        return self.session.query(SystemHealth).filter(
-            SystemHealth.status != SystemHealthStatus.HEALTHY.value
-        ).order_by(
-            SystemHealth.system,
-            SystemHealth.component
-        ).all()
+        return (
+            self.session.query(SystemHealth)
+            .filter(SystemHealth.status != SystemHealthStatus.HEALTHY.value)
+            .order_by(SystemHealth.system, SystemHealth.component)
+            .all()
+        )
 
     def get_notification_channels_health(self) -> List[SystemHealth]:
         """
@@ -215,11 +216,14 @@ class SystemHealthRepository:
         Returns:
             List of SystemHealth objects for notification system components
         """
-        return self.session.query(SystemHealth).filter(
-            SystemHealth.system == 'notification'
-        ).order_by(SystemHealth.component).all()
+        return (
+            self.session.query(SystemHealth)
+            .filter(SystemHealth.system == "notification")
+            .order_by(SystemHealth.component)
+            .all()
+        )
 
-    def get_notification_channel_health(self, channel: str) -> Optional[SystemHealth]:
+    def get_notification_channel_health(self, channel: str) -> SystemHealth | None:
         """
         Get health status for a specific notification channel (backward compatibility).
 
@@ -229,21 +233,20 @@ class SystemHealthRepository:
         Returns:
             SystemHealth object if found, None otherwise
         """
-        return self.session.query(SystemHealth).filter(
-            and_(
-                SystemHealth.system == 'notification',
-                SystemHealth.component == channel
-            )
-        ).first()
+        return (
+            self.session.query(SystemHealth)
+            .filter(and_(SystemHealth.system == "notification", SystemHealth.component == channel))
+            .first()
+        )
 
     def update_system_status(
         self,
         system: str,
-        component: Optional[str],
+        component: str | None,
         status: SystemHealthStatus,
-        response_time_ms: Optional[int] = None,
-        error_message: Optional[str] = None,
-        metadata: Optional[str] = None
+        response_time_ms: int | None = None,
+        error_message: str | None = None,
+        metadata: str | None = None,
     ) -> SystemHealth:
         """
         Update system health status with automatic failure counting and timestamps.
@@ -264,34 +267,31 @@ class SystemHealthRepository:
         if not health_record:
             # Create new record if it doesn't exist
             health_data = {
-                'system': system,
-                'component': component,
-                'status': status.value,
-                'failure_count': 1 if status != SystemHealthStatus.HEALTHY else 0,
-                'avg_response_time_ms': response_time_ms,
-                'error_message': error_message,
-                'metadata': metadata
+                "system": system,
+                "component": component,
+                "status": status.value,
+                "failure_count": 1 if status != SystemHealthStatus.HEALTHY else 0,
+                "avg_response_time_ms": response_time_ms,
+                "error_message": error_message,
+                "metadata": metadata,
             }
 
             if status == SystemHealthStatus.HEALTHY:
-                health_data['last_success'] = datetime.now(timezone.utc)
+                health_data["last_success"] = datetime.now(UTC)
             else:
-                health_data['last_failure'] = datetime.now(timezone.utc)
+                health_data["last_failure"] = datetime.now(UTC)
 
             return self.create_or_update_system_health(health_data)
 
         # Update existing record using the model's method
         health_record.update_health_status(
-            status=status,
-            response_time_ms=response_time_ms,
-            error_message=error_message,
-            metadata=metadata
+            status=status, response_time_ms=response_time_ms, error_message=error_message, metadata=metadata
         )
 
         self.session.flush()
         return health_record
 
-    def delete_system_health(self, system: str, component: Optional[str] = None) -> bool:
+    def delete_system_health(self, system: str, component: str | None = None) -> bool:
         """
         Delete a system health record.
 
@@ -307,7 +307,7 @@ class SystemHealthRepository:
         if health_record:
             self.session.delete(health_record)
             self.session.flush()
-            _logger.info("Deleted system health record for %s.%s", system, component or 'main')
+            _logger.info("Deleted system health record for %s.%s", system, component or "main")
             return True
 
         return False
@@ -322,11 +322,9 @@ class SystemHealthRepository:
         Returns:
             Number of records deleted
         """
-        stale_cutoff = datetime.now(timezone.utc) - timedelta(hours=stale_threshold_hours)
+        stale_cutoff = datetime.now(UTC) - timedelta(hours=stale_threshold_hours)
 
-        deleted_count = self.session.query(SystemHealth).filter(
-            SystemHealth.checked_at < stale_cutoff
-        ).delete()
+        deleted_count = self.session.query(SystemHealth).filter(SystemHealth.checked_at < stale_cutoff).delete()
 
         self.session.flush()
         _logger.info("Cleaned up %d stale system health records", deleted_count)

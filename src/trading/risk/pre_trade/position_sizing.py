@@ -6,9 +6,9 @@ Implements position sizing algorithms:
 - Fixed Fractional
 """
 
-
 _KELLY_FRACTION = 0.25  # Fractional Kelly multiplier (quarter-Kelly is common in practice)
-_KELLY_MAX = 0.20       # Hard cap: never risk more than 20% of capital on one trade
+_KELLY_MAX = 0.20  # Hard cap: never risk more than 20% of capital on one trade
+
 
 def kelly_criterion(win_prob: float, win_loss_ratio: float) -> float:
     """
@@ -27,6 +27,7 @@ def kelly_criterion(win_prob: float, win_loss_ratio: float) -> float:
     full_kelly = win_prob - (1 - win_prob) / win_loss_ratio
     capped = min(max(0.0, full_kelly) * _KELLY_FRACTION, _KELLY_MAX)
     return capped
+
 
 def fixed_fractional(
     account_equity: float,

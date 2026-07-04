@@ -6,10 +6,10 @@ Integrates with the project's notification system to send alerts via:
 - Email (with CSV attachments)
 """
 
-from pathlib import Path
-from typing import Optional
-import pandas as pd
 import asyncio
+from pathlib import Path
+
+import pandas as pd
 
 from src.notification.logger import setup_logger
 from src.notification.service.client import NotificationServiceClient
@@ -25,7 +25,7 @@ class EMPS2AlertSender:
     - src.notification.service.client.NotificationServiceClient
     """
 
-    def __init__(self, user_id: Optional[str] = None):
+    def __init__(self, user_id: str | None = None):
         """Initialize alert sender with NotificationServiceClient."""
         self.client = None
         self.user_id = user_id
@@ -38,10 +38,7 @@ class EMPS2AlertSender:
             _logger.warning("Notification service client not available", exc_info=True)
 
     def send_phase2_alert(
-        self,
-        phase2_df: pd.DataFrame,
-        phase2_csv_path: Optional[Path] = None,
-        sentiment_csv_path: Optional[Path] = None
+        self, phase2_df: pd.DataFrame, phase2_csv_path: Path | None = None, sentiment_csv_path: Path | None = None
     ) -> None:
         """
         Send alert for Phase 2 transitions.
@@ -59,14 +56,14 @@ class EMPS2AlertSender:
             return
 
         count = len(phase2_df)
-        top_tickers = phase2_df['ticker'].head(10).tolist()
+        top_tickers = phase2_df["ticker"].head(10).tolist()
 
         # Build message
         title = f"🔥 EMPS2 Phase 2 Alert - {count} Hot Candidate{'s' if count > 1 else ''}"
-        message = f"""Detected {count} ticker{'s' if count > 1 else ''} transitioning to Phase 2 (Early Public Signal)
+        message = f"""Detected {count} ticker{"s" if count > 1 else ""} transitioning to Phase 2 (Early Public Signal)
 
 Top candidates:
-{', '.join(top_tickers)}
+{", ".join(top_tickers)}
 
 These tickers showed persistent accumulation (5+ days) and are now showing:
 - Volume acceleration (Z-Score >3.0)
@@ -90,31 +87,23 @@ See attached CSV for full details."""
         # as delivered before the other service can process it.
         try:
             # 1. Send Telegram alert (handled by Telegram Bot)
-            asyncio.run(self._send_async_notification(
-                title=title,
-                message=message,
-                attachments=attachments,
-                channels=['telegram']
-            ))
+            asyncio.run(
+                self._send_async_notification(
+                    title=title, message=message, attachments=attachments, channels=["telegram"]
+                )
+            )
 
             # 2. Send Email alert (handled by Notification Service)
-            asyncio.run(self._send_async_notification(
-                title=title,
-                message=message,
-                attachments=attachments,
-                channels=['email']
-            ))
+            asyncio.run(
+                self._send_async_notification(title=title, message=message, attachments=attachments, channels=["email"])
+            )
 
             _logger.info("Sent Phase 2 alerts for %d candidates (Telegram + Email)", count)
         except Exception:
             _logger.exception("Failed to send Phase 2 alerts")
 
     async def _send_async_notification(
-        self,
-        title: str,
-        message: str,
-        attachments: Optional[dict] = None,
-        channels: Optional[list] = None
+        self, title: str, message: str, attachments: dict | None = None, channels: list | None = None
     ) -> None:
         """
         Send async notification via notification service.
@@ -134,16 +123,12 @@ See attached CSV for full details."""
                 channels=channels,
                 recipient_id=self.user_id,
                 attachments=attachments,
-                source="emps2_pipeline"
+                source="emps2_pipeline",
             )
         finally:
             await self.client.close()
 
-    def send_phase1_alert(
-        self,
-        phase1_df: pd.DataFrame,
-        phase1_csv_path: Optional[Path] = None
-    ) -> None:
+    def send_phase1_alert(self, phase1_df: pd.DataFrame, phase1_csv_path: Path | None = None) -> None:
         """
         Send alert for Phase 1 watchlist (optional).
 
@@ -160,14 +145,14 @@ See attached CSV for full details."""
             return
 
         count = len(phase1_df)
-        top_tickers = phase1_df['ticker'].head(10).tolist()
+        top_tickers = phase1_df["ticker"].head(10).tolist()
 
         # Build message
         title = f"📊 EMPS2 Phase 1 Watchlist - {count} Candidate{'s' if count > 1 else ''}"
-        message = f"""Detected {count} ticker{'s' if count > 1 else ''} in Phase 1 (Quiet Accumulation)
+        message = f"""Detected {count} ticker{"s" if count > 1 else ""} in Phase 1 (Quiet Accumulation)
 
 Top candidates:
-{', '.join(top_tickers)}
+{", ".join(top_tickers)}
 
 These tickers appeared 5+ times in the last 10 days, showing persistent accumulation patterns.
 
@@ -184,20 +169,16 @@ Watchlist updated. See attached CSV for full details."""
         # Send notification via Telegram and Email separately
         try:
             # 1. Send Telegram alert
-            asyncio.run(self._send_async_notification(
-                title=title,
-                message=message,
-                attachments=attachments,
-                channels=['telegram']
-            ))
+            asyncio.run(
+                self._send_async_notification(
+                    title=title, message=message, attachments=attachments, channels=["telegram"]
+                )
+            )
 
             # 2. Send Email alert
-            asyncio.run(self._send_async_notification(
-                title=title,
-                message=message,
-                attachments=attachments,
-                channels=['email']
-            ))
+            asyncio.run(
+                self._send_async_notification(title=title, message=message, attachments=attachments, channels=["email"])
+            )
 
             _logger.info("Sent Phase 1 alerts for %d candidates (Telegram + Email)", count)
         except Exception:

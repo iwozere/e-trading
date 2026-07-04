@@ -12,21 +12,19 @@ Requirements addressed:
 - 8.5: Perform cleanup operations during low-traffic periods
 """
 
-import json
-import gzip
 import asyncio
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, List, Optional, Tuple
-from pathlib import Path
+import gzip
+import json
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
-from sqlalchemy.orm import Session
 from sqlalchemy import and_, func
+from sqlalchemy.orm import Session
 
-from src.data.db.models.model_notification import (
-    Message, MessageDeliveryStatus, MessageStatus
-)
+from src.data.db.models.model_notification import Message, MessageDeliveryStatus, MessageStatus
 from src.data.db.repos.repo_notification import NotificationRepository
 from src.notification.logger import setup_logger
 
@@ -35,6 +33,7 @@ _logger = setup_logger(__name__)
 
 class ArchivalStatus(str, Enum):
     """Archival status enumeration."""
+
     ACTIVE = "ACTIVE"
     ARCHIVED = "ARCHIVED"
     DELETED = "DELETED"
@@ -43,6 +42,7 @@ class ArchivalStatus(str, Enum):
 @dataclass
 class ArchivalPolicy:
     """Configuration for archival policies."""
+
     # Days to keep active messages before archiving
     archive_after_days: int = 30
 
@@ -75,6 +75,7 @@ class ArchivalPolicy:
 @dataclass
 class ArchivalStats:
     """Statistics from archival operations."""
+
     messages_archived: int = 0
     messages_deleted: int = 0
     failed_messages_cleaned: int = 0
@@ -91,7 +92,7 @@ class ArchivalStats:
 class MessageArchivalService:
     """Service for archiving and cleaning up notification messages."""
 
-    def __init__(self, session: Session, policy: Optional[ArchivalPolicy] = None):
+    def __init__(self, session: Session, policy: ArchivalPolicy | None = None):
         """
         Initialize the archival service.
 
@@ -107,10 +108,13 @@ class MessageArchivalService:
         self.archive_path = Path(self.policy.archive_path)
         self.archive_path.mkdir(parents=True, exist_ok=True)
 
-        _logger.info("Initialized archival service with policy: archive_after=%d days, delete_after=%d days",
-                    self.policy.archive_after_days, self.policy.delete_after_days)
+        _logger.info(
+            "Initialized archival service with policy: archive_after=%d days, delete_after=%d days",
+            self.policy.archive_after_days,
+            self.policy.delete_after_days,
+        )
 
-    def is_low_traffic_period(self, current_time: Optional[datetime] = None) -> bool:
+    def is_low_traffic_period(self, current_time: datetime | None = None) -> bool:
         """
         Check if current time is within low traffic period.
 
@@ -121,7 +125,7 @@ class MessageArchivalService:
             True if within low traffic period
         """
         if current_time is None:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
 
         current_hour = current_time.hour
         start_hour = self.policy.low_traffic_start_hour
@@ -144,17 +148,20 @@ class MessageArchivalService:
         Returns:
             List of messages ready for archival
         """
-        return self.session.query(Message).filter(
-            and_(
-                Message.created_at < cutoff_date,
-                Message.status.in_([
-                    MessageStatus.DELIVERED.value,
-                    MessageStatus.CANCELLED.value
-                ]),
-                # Only archive messages that don't have a custom archival status
-                # (we'll add this field to track archival status)
+        return (
+            self.session.query(Message)
+            .filter(
+                and_(
+                    Message.created_at < cutoff_date,
+                    Message.status.in_([MessageStatus.DELIVERED.value, MessageStatus.CANCELLED.value]),
+                    # Only archive messages that don't have a custom archival status
+                    # (we'll add this field to track archival status)
+                )
             )
-        ).order_by(Message.created_at).limit(limit).all()
+            .order_by(Message.created_at)
+            .limit(limit)
+            .all()
+        )
 
     def get_archived_messages_for_deletion(self, cutoff_date: datetime, limit: int) -> List[Dict[str, Any]]:
         """
@@ -176,18 +183,20 @@ class MessageArchivalService:
                 # Parse filename to get date
                 try:
                     # Expected format: messages_YYYYMMDD_HHMMSS.json.gz
-                    parts = archive_file.stem.split('_')
+                    parts = archive_file.stem.split("_")
                     if len(parts) >= 3:
                         date_str = parts[1]
-                        time_str = parts[2].split('.')[0]  # Remove .json extension
+                        time_str = parts[2].split(".")[0]  # Remove .json extension
                         archive_date = datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
 
                         if archive_date < cutoff_date:
-                            archived_files.append({
-                                'file_path': str(archive_file),
-                                'archive_date': archive_date,
-                                'size_bytes': archive_file.stat().st_size
-                            })
+                            archived_files.append(
+                                {
+                                    "file_path": str(archive_file),
+                                    "archive_date": archive_date,
+                                    "size_bytes": archive_file.stat().st_size,
+                                }
+                            )
 
                             if len(archived_files) >= limit:
                                 break
@@ -198,7 +207,7 @@ class MessageArchivalService:
         except Exception:
             _logger.exception("Error scanning archive files:")
 
-        return sorted(archived_files, key=lambda x: x['archive_date'])
+        return sorted(archived_files, key=lambda x: x["archive_date"])
 
     def get_failed_messages_for_cleanup(self, cutoff_date: datetime, limit: int) -> List[Message]:
         """
@@ -211,13 +220,19 @@ class MessageArchivalService:
         Returns:
             List of failed messages ready for cleanup
         """
-        return self.session.query(Message).filter(
-            and_(
-                Message.created_at < cutoff_date,
-                Message.status == MessageStatus.FAILED.value,
-                Message.retry_count >= Message.max_retries
+        return (
+            self.session.query(Message)
+            .filter(
+                and_(
+                    Message.created_at < cutoff_date,
+                    Message.status == MessageStatus.FAILED.value,
+                    Message.retry_count >= Message.max_retries,
+                )
             )
-        ).order_by(Message.created_at).limit(limit).all()
+            .order_by(Message.created_at)
+            .limit(limit)
+            .all()
+        )
 
     def archive_message(self, message: Message) -> Dict[str, Any]:
         """
@@ -232,39 +247,41 @@ class MessageArchivalService:
         try:
             # Create archive data structure
             archive_data = {
-                'id': message.id,
-                'message_type': message.message_type,
-                'priority': message.priority,
-                'channels': message.channels,
-                'recipient_id': message.recipient_id,
-                'template_name': message.template_name,
-                'content': message.content,
-                'metadata': message.message_metadata,
-                'created_at': message.created_at.isoformat() if message.created_at else None,
-                'scheduled_for': message.scheduled_for.isoformat() if message.scheduled_for else None,
-                'status': message.status,
-                'retry_count': message.retry_count,
-                'max_retries': message.max_retries,
-                'last_error': message.last_error,
-                'processed_at': message.processed_at.isoformat() if message.processed_at else None,
-                'archived_at': datetime.now(timezone.utc).isoformat()
+                "id": message.id,
+                "message_type": message.message_type,
+                "priority": message.priority,
+                "channels": message.channels,
+                "recipient_id": message.recipient_id,
+                "template_name": message.template_name,
+                "content": message.content,
+                "metadata": message.message_metadata,
+                "created_at": message.created_at.isoformat() if message.created_at else None,
+                "scheduled_for": message.scheduled_for.isoformat() if message.scheduled_for else None,
+                "status": message.status,
+                "retry_count": message.retry_count,
+                "max_retries": message.max_retries,
+                "last_error": message.last_error,
+                "processed_at": message.processed_at.isoformat() if message.processed_at else None,
+                "archived_at": datetime.now(UTC).isoformat(),
             }
 
             # Include delivery status information
             delivery_statuses = self.repo.delivery_status.get_delivery_statuses_by_message(message.id)
-            archive_data['delivery_statuses'] = []
+            archive_data["delivery_statuses"] = []
 
             for ds in delivery_statuses:
-                archive_data['delivery_statuses'].append({
-                    'id': ds.id,
-                    'channel': ds.channel,
-                    'status': ds.status,
-                    'delivered_at': ds.delivered_at.isoformat() if ds.delivered_at else None,
-                    'response_time_ms': ds.response_time_ms,
-                    'error_message': ds.error_message,
-                    'external_id': ds.external_id,
-                    'created_at': ds.created_at.isoformat() if ds.created_at else None
-                })
+                archive_data["delivery_statuses"].append(
+                    {
+                        "id": ds.id,
+                        "channel": ds.channel,
+                        "status": ds.status,
+                        "delivered_at": ds.delivered_at.isoformat() if ds.delivered_at else None,
+                        "response_time_ms": ds.response_time_ms,
+                        "error_message": ds.error_message,
+                        "external_id": ds.external_id,
+                        "created_at": ds.created_at.isoformat() if ds.created_at else None,
+                    }
+                )
 
             return archive_data
 
@@ -287,35 +304,34 @@ class MessageArchivalService:
 
         try:
             # Create filename with timestamp
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
             filename = f"messages_{timestamp}.json.gz"
             file_path = self.archive_path / filename
 
             # Prepare data for archival
             archive_batch = {
-                'archived_at': datetime.now(timezone.utc).isoformat(),
-                'message_count': len(archived_messages),
-                'messages': archived_messages
+                "archived_at": datetime.now(UTC).isoformat(),
+                "message_count": len(archived_messages),
+                "messages": archived_messages,
             }
 
             # Serialize and compress
             json_data = json.dumps(archive_batch, indent=2, ensure_ascii=False)
-            json_bytes = json_data.encode('utf-8')
+            json_bytes = json_data.encode("utf-8")
 
             if self.policy.compress_archives:
-                with gzip.open(file_path, 'wt', encoding='utf-8', compresslevel=self.policy.compression_level) as f:
+                with gzip.open(file_path, "wt", encoding="utf-8", compresslevel=self.policy.compression_level) as f:
                     f.write(json_data)
                 bytes_written = file_path.stat().st_size
             else:
                 # Save as uncompressed JSON
                 uncompressed_path = self.archive_path / f"messages_{timestamp}.json"
-                with open(uncompressed_path, 'w', encoding='utf-8') as f:
+                with open(uncompressed_path, "w", encoding="utf-8") as f:
                     f.write(json_data)
                 bytes_written = len(json_bytes)
                 file_path = uncompressed_path
 
-            _logger.info("Archived %d messages to %s (%d bytes)",
-                        len(archived_messages), file_path, bytes_written)
+            _logger.info("Archived %d messages to %s (%d bytes)", len(archived_messages), file_path, bytes_written)
 
             return str(file_path), bytes_written
 
@@ -347,7 +363,7 @@ class MessageArchivalService:
             _logger.error("Error deleting archived file %s: %s", file_path, e)
             raise
 
-    def archive_messages_batch(self, current_time: Optional[datetime] = None) -> ArchivalStats:
+    def archive_messages_batch(self, current_time: datetime | None = None) -> ArchivalStats:
         """
         Archive a batch of old messages.
 
@@ -358,7 +374,7 @@ class MessageArchivalService:
             Statistics from the archival operation
         """
         if current_time is None:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
 
         stats = ArchivalStats()
         start_time = current_time
@@ -369,16 +385,16 @@ class MessageArchivalService:
 
             # Get messages to archive
             messages_to_archive = self.get_messages_for_archival(
-                cutoff_date,
-                min(self.policy.batch_size, self.policy.max_messages_per_run)
+                cutoff_date, min(self.policy.batch_size, self.policy.max_messages_per_run)
             )
 
             if not messages_to_archive:
                 _logger.info("No messages found for archival")
                 return stats
 
-            _logger.info("Found %d messages for archival (older than %s)",
-                        len(messages_to_archive), cutoff_date.isoformat())
+            _logger.info(
+                "Found %d messages for archival (older than %s)", len(messages_to_archive), cutoff_date.isoformat()
+            )
 
             # Archive messages in batches
             archived_data = []
@@ -427,14 +443,18 @@ class MessageArchivalService:
             self.session.rollback()
 
         finally:
-            stats.duration_seconds = (datetime.now(timezone.utc) - start_time).total_seconds()
+            stats.duration_seconds = (datetime.now(UTC) - start_time).total_seconds()
 
-        _logger.info("Archival batch completed: %d messages archived, %d bytes, %.2f seconds",
-                    stats.messages_archived, stats.bytes_archived, stats.duration_seconds)
+        _logger.info(
+            "Archival batch completed: %d messages archived, %d bytes, %.2f seconds",
+            stats.messages_archived,
+            stats.bytes_archived,
+            stats.duration_seconds,
+        )
 
         return stats
 
-    def cleanup_archived_messages_batch(self, current_time: Optional[datetime] = None) -> ArchivalStats:
+    def cleanup_archived_messages_batch(self, current_time: datetime | None = None) -> ArchivalStats:
         """
         Clean up old archived messages.
 
@@ -445,7 +465,7 @@ class MessageArchivalService:
             Statistics from the cleanup operation
         """
         if current_time is None:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
 
         stats = ArchivalStats()
         start_time = current_time
@@ -455,22 +475,20 @@ class MessageArchivalService:
             cutoff_date = current_time - timedelta(days=self.policy.delete_after_days)
 
             # Get archived files to delete
-            archived_files = self.get_archived_messages_for_deletion(
-                cutoff_date,
-                self.policy.max_messages_per_run
-            )
+            archived_files = self.get_archived_messages_for_deletion(cutoff_date, self.policy.max_messages_per_run)
 
             if not archived_files:
                 _logger.info("No archived files found for deletion")
                 return stats
 
-            _logger.info("Found %d archived files for deletion (older than %s)",
-                        len(archived_files), cutoff_date.isoformat())
+            _logger.info(
+                "Found %d archived files for deletion (older than %s)", len(archived_files), cutoff_date.isoformat()
+            )
 
             # Delete archived files
             for file_info in archived_files:
                 try:
-                    bytes_freed = self.delete_archived_file(file_info['file_path'])
+                    bytes_freed = self.delete_archived_file(file_info["file_path"])
                     stats.bytes_freed += bytes_freed
                     stats.messages_deleted += 1  # Each file represents a batch
 
@@ -485,14 +503,18 @@ class MessageArchivalService:
             stats.errors.append(error_msg)
 
         finally:
-            stats.duration_seconds = (datetime.now(timezone.utc) - start_time).total_seconds()
+            stats.duration_seconds = (datetime.now(UTC) - start_time).total_seconds()
 
-        _logger.info("Archived cleanup completed: %d files deleted, %d bytes freed, %.2f seconds",
-                    stats.messages_deleted, stats.bytes_freed, stats.duration_seconds)
+        _logger.info(
+            "Archived cleanup completed: %d files deleted, %d bytes freed, %.2f seconds",
+            stats.messages_deleted,
+            stats.bytes_freed,
+            stats.duration_seconds,
+        )
 
         return stats
 
-    def cleanup_failed_messages_batch(self, current_time: Optional[datetime] = None) -> ArchivalStats:
+    def cleanup_failed_messages_batch(self, current_time: datetime | None = None) -> ArchivalStats:
         """
         Clean up old failed messages.
 
@@ -503,7 +525,7 @@ class MessageArchivalService:
             Statistics from the cleanup operation
         """
         if current_time is None:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
 
         stats = ArchivalStats()
         start_time = current_time
@@ -514,16 +536,16 @@ class MessageArchivalService:
 
             # Get failed messages to clean up
             failed_messages = self.get_failed_messages_for_cleanup(
-                cutoff_date,
-                min(self.policy.batch_size, self.policy.max_messages_per_run)
+                cutoff_date, min(self.policy.batch_size, self.policy.max_messages_per_run)
             )
 
             if not failed_messages:
                 _logger.info("No failed messages found for cleanup")
                 return stats
 
-            _logger.info("Found %d failed messages for cleanup (older than %s)",
-                        len(failed_messages), cutoff_date.isoformat())
+            _logger.info(
+                "Found %d failed messages for cleanup (older than %s)", len(failed_messages), cutoff_date.isoformat()
+            )
 
             # Delete failed messages
             message_ids = [msg.id for msg in failed_messages]
@@ -540,10 +562,13 @@ class MessageArchivalService:
             self.session.rollback()
 
         finally:
-            stats.duration_seconds = (datetime.now(timezone.utc) - start_time).total_seconds()
+            stats.duration_seconds = (datetime.now(UTC) - start_time).total_seconds()
 
-        _logger.info("Failed message cleanup completed: %d messages deleted, %.2f seconds",
-                    stats.failed_messages_cleaned, stats.duration_seconds)
+        _logger.info(
+            "Failed message cleanup completed: %d messages deleted, %.2f seconds",
+            stats.failed_messages_cleaned,
+            stats.duration_seconds,
+        )
 
         return stats
 
@@ -562,17 +587,20 @@ class MessageArchivalService:
 
         try:
             # Delete delivery statuses first (cascade should handle this, but be explicit)
-            delivery_deleted = self.session.query(MessageDeliveryStatus).filter(
-                MessageDeliveryStatus.message_id.in_(message_ids)
-            ).delete(synchronize_session=False)
+            delivery_deleted = (
+                self.session.query(MessageDeliveryStatus)
+                .filter(MessageDeliveryStatus.message_id.in_(message_ids))
+                .delete(synchronize_session=False)
+            )
 
             # Delete messages
-            messages_deleted = self.session.query(Message).filter(
-                Message.id.in_(message_ids)
-            ).delete(synchronize_session=False)
+            messages_deleted = (
+                self.session.query(Message).filter(Message.id.in_(message_ids)).delete(synchronize_session=False)
+            )
 
-            _logger.info("Deleted %d messages and %d delivery statuses from database",
-                        messages_deleted, delivery_deleted)
+            _logger.info(
+                "Deleted %d messages and %d delivery statuses from database", messages_deleted, delivery_deleted
+            )
 
             return messages_deleted
 
@@ -580,7 +608,7 @@ class MessageArchivalService:
             _logger.exception("Error deleting messages from database:")
             raise
 
-    def run_full_archival_cycle(self, current_time: Optional[datetime] = None) -> Dict[str, ArchivalStats]:
+    def run_full_archival_cycle(self, current_time: datetime | None = None) -> Dict[str, ArchivalStats]:
         """
         Run a complete archival cycle including archiving, cleanup, and failed message cleanup.
 
@@ -591,7 +619,7 @@ class MessageArchivalService:
             Dictionary with statistics from each operation
         """
         if current_time is None:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
 
         results = {}
 
@@ -605,23 +633,27 @@ class MessageArchivalService:
         try:
             # 1. Archive old messages
             _logger.info("Step 1: Archiving old messages")
-            results['archival'] = self.archive_messages_batch(current_time)
+            results["archival"] = self.archive_messages_batch(current_time)
 
             # 2. Clean up old archived files
             _logger.info("Step 2: Cleaning up old archived files")
-            results['archived_cleanup'] = self.cleanup_archived_messages_batch(current_time)
+            results["archived_cleanup"] = self.cleanup_archived_messages_batch(current_time)
 
             # 3. Clean up old failed messages
             _logger.info("Step 3: Cleaning up old failed messages")
-            results['failed_cleanup'] = self.cleanup_failed_messages_batch(current_time)
+            results["failed_cleanup"] = self.cleanup_failed_messages_batch(current_time)
 
             # Log summary
-            total_archived = results.get('archival', ArchivalStats()).messages_archived
-            total_deleted = results.get('archived_cleanup', ArchivalStats()).messages_deleted
-            total_failed_cleaned = results.get('failed_cleanup', ArchivalStats()).failed_messages_cleaned
+            total_archived = results.get("archival", ArchivalStats()).messages_archived
+            total_deleted = results.get("archived_cleanup", ArchivalStats()).messages_deleted
+            total_failed_cleaned = results.get("failed_cleanup", ArchivalStats()).failed_messages_cleaned
 
-            _logger.info("Full archival cycle completed: %d archived, %d deleted, %d failed cleaned",
-                        total_archived, total_deleted, total_failed_cleaned)
+            _logger.info(
+                "Full archival cycle completed: %d archived, %d deleted, %d failed cleaned",
+                total_archived,
+                total_deleted,
+                total_failed_cleaned,
+            )
 
         except Exception:
             _logger.exception("Error in full archival cycle:")
@@ -637,7 +669,7 @@ class MessageArchivalService:
             Dictionary with archival statistics
         """
         try:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
 
             # Count messages by age and status
             archive_cutoff = current_time - timedelta(days=self.policy.archive_after_days)
@@ -645,21 +677,31 @@ class MessageArchivalService:
             failed_cutoff = current_time - timedelta(days=self.policy.failed_message_retention_days)
 
             # Messages ready for archival
-            messages_for_archival = self.session.query(func.count(Message.id)).filter(
-                and_(
-                    Message.created_at < archive_cutoff,
-                    Message.status.in_([MessageStatus.DELIVERED.value, MessageStatus.CANCELLED.value])
+            messages_for_archival = (
+                self.session.query(func.count(Message.id))
+                .filter(
+                    and_(
+                        Message.created_at < archive_cutoff,
+                        Message.status.in_([MessageStatus.DELIVERED.value, MessageStatus.CANCELLED.value]),
+                    )
                 )
-            ).scalar() or 0
+                .scalar()
+                or 0
+            )
 
             # Failed messages ready for cleanup
-            failed_for_cleanup = self.session.query(func.count(Message.id)).filter(
-                and_(
-                    Message.created_at < failed_cutoff,
-                    Message.status == MessageStatus.FAILED.value,
-                    Message.retry_count >= Message.max_retries
+            failed_for_cleanup = (
+                self.session.query(func.count(Message.id))
+                .filter(
+                    and_(
+                        Message.created_at < failed_cutoff,
+                        Message.status == MessageStatus.FAILED.value,
+                        Message.retry_count >= Message.max_retries,
+                    )
                 )
-            ).scalar() or 0
+                .scalar()
+                or 0
+            )
 
             # Count archived files
             archived_files = list(self.archive_path.glob("*.json.gz"))
@@ -671,22 +713,22 @@ class MessageArchivalService:
             old_archived_files = self.get_archived_messages_for_deletion(delete_cutoff, 1000)
 
             return {
-                'policy': {
-                    'archive_after_days': self.policy.archive_after_days,
-                    'delete_after_days': self.policy.delete_after_days,
-                    'failed_message_retention_days': self.policy.failed_message_retention_days,
-                    'low_traffic_hours': f"{self.policy.low_traffic_start_hour:02d}:00-{self.policy.low_traffic_end_hour:02d}:00"
+                "policy": {
+                    "archive_after_days": self.policy.archive_after_days,
+                    "delete_after_days": self.policy.delete_after_days,
+                    "failed_message_retention_days": self.policy.failed_message_retention_days,
+                    "low_traffic_hours": f"{self.policy.low_traffic_start_hour:02d}:00-{self.policy.low_traffic_end_hour:02d}:00",
                 },
-                'current_status': {
-                    'messages_ready_for_archival': messages_for_archival,
-                    'failed_messages_ready_for_cleanup': failed_for_cleanup,
-                    'archived_files_count': len(archived_files),
-                    'total_archive_size_bytes': total_archive_size,
-                    'old_archived_files_count': len(old_archived_files),
-                    'is_low_traffic_period': self.is_low_traffic_period(current_time)
+                "current_status": {
+                    "messages_ready_for_archival": messages_for_archival,
+                    "failed_messages_ready_for_cleanup": failed_for_cleanup,
+                    "archived_files_count": len(archived_files),
+                    "total_archive_size_bytes": total_archive_size,
+                    "old_archived_files_count": len(old_archived_files),
+                    "is_low_traffic_period": self.is_low_traffic_period(current_time),
                 },
-                'archive_path': str(self.archive_path),
-                'last_checked': current_time.isoformat()
+                "archive_path": str(self.archive_path),
+                "last_checked": current_time.isoformat(),
             }
 
         except Exception:
@@ -704,7 +746,7 @@ class MessageArchivalService:
 
         while True:
             try:
-                current_time = datetime.now(timezone.utc)
+                current_time = datetime.now(UTC)
 
                 # Only run during low traffic periods
                 if self.is_low_traffic_period(current_time):
@@ -744,22 +786,22 @@ class RetentionPolicyManager:
     def _load_default_policies(self):
         """Load default retention policies."""
         self._policies = {
-            'default': ArchivalPolicy(),
-            'high_priority': ArchivalPolicy(
+            "default": ArchivalPolicy(),
+            "high_priority": ArchivalPolicy(
                 archive_after_days=60,  # Keep high priority messages longer
                 delete_after_days=730,  # 2 years
-                failed_message_retention_days=180  # 6 months
+                failed_message_retention_days=180,  # 6 months
             ),
-            'system_alerts': ArchivalPolicy(
+            "system_alerts": ArchivalPolicy(
                 archive_after_days=90,  # Keep system alerts longer
                 delete_after_days=1095,  # 3 years
-                failed_message_retention_days=365  # 1 year
+                failed_message_retention_days=365,  # 1 year
             ),
-            'user_notifications': ArchivalPolicy(
+            "user_notifications": ArchivalPolicy(
                 archive_after_days=14,  # Archive user notifications quickly
                 delete_after_days=180,  # 6 months
-                failed_message_retention_days=30  # 1 month
-            )
+                failed_message_retention_days=30,  # 1 month
+            ),
         }
 
     def get_policy(self, message_type: str = None, priority: str = None) -> ArchivalPolicy:
@@ -774,14 +816,14 @@ class RetentionPolicyManager:
             Appropriate archival policy
         """
         # Determine policy based on message characteristics
-        if priority in ['HIGH', 'CRITICAL']:
-            return self._policies.get('high_priority', self._policies['default'])
-        elif message_type and 'alert' in message_type.lower():
-            return self._policies.get('system_alerts', self._policies['default'])
-        elif message_type and 'user' in message_type.lower():
-            return self._policies.get('user_notifications', self._policies['default'])
+        if priority in ["HIGH", "CRITICAL"]:
+            return self._policies.get("high_priority", self._policies["default"])
+        elif message_type and "alert" in message_type.lower():
+            return self._policies.get("system_alerts", self._policies["default"])
+        elif message_type and "user" in message_type.lower():
+            return self._policies.get("user_notifications", self._policies["default"])
         else:
-            return self._policies['default']
+            return self._policies["default"]
 
     def update_policy(self, policy_name: str, policy: ArchivalPolicy):
         """
@@ -807,7 +849,7 @@ class RetentionPolicyManager:
 class ScheduledCleanupService:
     """Service for scheduled cleanup operations during low-traffic periods."""
 
-    def __init__(self, session: Session, policy_manager: Optional[RetentionPolicyManager] = None):
+    def __init__(self, session: Session, policy_manager: RetentionPolicyManager | None = None):
         """
         Initialize the scheduled cleanup service.
 
@@ -821,7 +863,7 @@ class ScheduledCleanupService:
         self._running = False
         self._cleanup_tasks = []
 
-    def is_cleanup_time(self, current_time: Optional[datetime] = None) -> bool:
+    def is_cleanup_time(self, current_time: datetime | None = None) -> bool:
         """
         Check if it's time to run cleanup operations.
 
@@ -832,7 +874,7 @@ class ScheduledCleanupService:
             True if cleanup should run
         """
         if current_time is None:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
 
         # Run cleanup during low traffic hours
         return self.archival_service.is_low_traffic_period(current_time)
@@ -847,16 +889,16 @@ class ScheduledCleanupService:
             interval_hours: Hours between executions
         """
         task_info = {
-            'name': task_name,
-            'function': task_func,
-            'interval_hours': interval_hours,
-            'last_run': None,
-            'next_run': datetime.now(timezone.utc)
+            "name": task_name,
+            "function": task_func,
+            "interval_hours": interval_hours,
+            "last_run": None,
+            "next_run": datetime.now(UTC),
         }
         self._cleanup_tasks.append(task_info)
         _logger.info("Scheduled cleanup task '%s' with %d hour interval", task_name, interval_hours)
 
-    def run_cleanup_cycle(self, current_time: Optional[datetime] = None) -> Dict[str, Any]:
+    def run_cleanup_cycle(self, current_time: datetime | None = None) -> Dict[str, Any]:
         """
         Run a cleanup cycle for all scheduled tasks.
 
@@ -867,7 +909,7 @@ class ScheduledCleanupService:
             Dictionary with results from each task
         """
         if current_time is None:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
 
         results = {}
 
@@ -880,27 +922,29 @@ class ScheduledCleanupService:
         for task in self._cleanup_tasks:
             try:
                 # Check if task is due
-                if current_time >= task['next_run']:
-                    _logger.info("Running cleanup task: %s", task['name'])
+                if current_time >= task["next_run"]:
+                    _logger.info("Running cleanup task: %s", task["name"])
 
                     # Execute task
-                    result = task['function'](current_time)
-                    results[task['name']] = result
+                    result = task["function"](current_time)
+                    results[task["name"]] = result
 
                     # Update task timing
-                    task['last_run'] = current_time
-                    task['next_run'] = current_time + timedelta(hours=task['interval_hours'])
+                    task["last_run"] = current_time
+                    task["next_run"] = current_time + timedelta(hours=task["interval_hours"])
 
-                    _logger.info("Completed cleanup task '%s', next run: %s",
-                                task['name'], task['next_run'].isoformat())
+                    _logger.info(
+                        "Completed cleanup task '%s', next run: %s", task["name"], task["next_run"].isoformat()
+                    )
                 else:
-                    _logger.debug("Cleanup task '%s' not due yet (next run: %s)",
-                                 task['name'], task['next_run'].isoformat())
+                    _logger.debug(
+                        "Cleanup task '%s' not due yet (next run: %s)", task["name"], task["next_run"].isoformat()
+                    )
 
             except Exception as e:
                 error_msg = f"Error in cleanup task '{task['name']}': {e}"
                 _logger.error(error_msg)
-                results[task['name']] = {'error': error_msg}
+                results[task["name"]] = {"error": error_msg}
 
         return results
 
@@ -913,22 +957,16 @@ class ScheduledCleanupService:
         self._running = True
 
         # Schedule default cleanup tasks
-        self.schedule_cleanup_task(
-            'message_archival',
-            self.archival_service.archive_messages_batch,
-            interval_hours=24
-        )
+        self.schedule_cleanup_task("message_archival", self.archival_service.archive_messages_batch, interval_hours=24)
 
         self.schedule_cleanup_task(
-            'archived_cleanup',
+            "archived_cleanup",
             self.archival_service.cleanup_archived_messages_batch,
-            interval_hours=168  # Weekly
+            interval_hours=168,  # Weekly
         )
 
         self.schedule_cleanup_task(
-            'failed_message_cleanup',
-            self.archival_service.cleanup_failed_messages_batch,
-            interval_hours=24
+            "failed_message_cleanup", self.archival_service.cleanup_failed_messages_batch, interval_hours=24
         )
 
         _logger.info("Started scheduled cleanup service with %d tasks", len(self._cleanup_tasks))
@@ -945,23 +983,25 @@ class ScheduledCleanupService:
         Returns:
             Dictionary with cleanup status information
         """
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
 
         task_status = []
         for task in self._cleanup_tasks:
-            task_status.append({
-                'name': task['name'],
-                'interval_hours': task['interval_hours'],
-                'last_run': task['last_run'].isoformat() if task['last_run'] else None,
-                'next_run': task['next_run'].isoformat(),
-                'overdue': current_time > task['next_run']
-            })
+            task_status.append(
+                {
+                    "name": task["name"],
+                    "interval_hours": task["interval_hours"],
+                    "last_run": task["last_run"].isoformat() if task["last_run"] else None,
+                    "next_run": task["next_run"].isoformat(),
+                    "overdue": current_time > task["next_run"],
+                }
+            )
 
         return {
-            'running': self._running,
-            'is_cleanup_time': self.is_cleanup_time(current_time),
-            'tasks': task_status,
-            'current_time': current_time.isoformat()
+            "running": self._running,
+            "is_cleanup_time": self.is_cleanup_time(current_time),
+            "tasks": task_status,
+            "current_time": current_time.isoformat(),
         }
 
     async def run_cleanup_daemon(self, check_interval_minutes: int = 60):
@@ -975,7 +1015,7 @@ class ScheduledCleanupService:
 
         while self._running:
             try:
-                current_time = datetime.now(timezone.utc)
+                current_time = datetime.now(UTC)
                 results = self.run_cleanup_cycle(current_time)
 
                 if results:
@@ -992,7 +1032,8 @@ class ScheduledCleanupService:
 
 # Utility functions for archival operations
 
-def create_archival_service(session: Session, policy: Optional[ArchivalPolicy] = None) -> MessageArchivalService:
+
+def create_archival_service(session: Session, policy: ArchivalPolicy | None = None) -> MessageArchivalService:
     """
     Create a message archival service instance.
 
@@ -1032,7 +1073,7 @@ def create_scheduled_cleanup_service(session: Session) -> ScheduledCleanupServic
     return ScheduledCleanupService(session)
 
 
-def run_manual_archival(session: Session, policy: Optional[ArchivalPolicy] = None) -> Dict[str, ArchivalStats]:
+def run_manual_archival(session: Session, policy: ArchivalPolicy | None = None) -> Dict[str, ArchivalStats]:
     """
     Run manual archival operation.
 

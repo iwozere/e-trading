@@ -13,10 +13,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.channels import (
-    load_all_channels, channel_registry, MessageContent,
-    ConfigValidationError
-)
+from src.notification.channels import ConfigValidationError, MessageContent, channel_registry, load_all_channels
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -32,7 +29,7 @@ async def test_plugin_loading():
         print(f"✓ Loaded {len(loaded_plugins)} plugins: {list(loaded_plugins.keys())}")
 
         # Check if test plugin was loaded
-        if 'test_plugin' in loaded_plugins:
+        if "test_plugin" in loaded_plugins:
             print("✓ Test plugin loaded successfully")
         else:
             print("✗ Test plugin not found")
@@ -59,7 +56,7 @@ async def test_channel_configuration():
             "simulate_delay_ms": 50,
             "failure_rate": 0.1,
             "max_message_length": 500,
-            "rate_limit_per_minute": 50
+            "rate_limit_per_minute": 50,
         }
 
         channel = channel_registry.get_channel("test_plugin", valid_config)
@@ -69,7 +66,7 @@ async def test_channel_configuration():
         try:
             invalid_config = {
                 "simulate_delay_ms": -100,  # Invalid negative value
-                "failure_rate": 2.0,        # Invalid rate > 1.0
+                "failure_rate": 2.0,  # Invalid rate > 1.0
             }
 
             channel_registry.get_channel("test_plugin", invalid_config)
@@ -95,16 +92,13 @@ async def test_message_delivery():
         config = {
             "simulate_delay_ms": 10,
             "failure_rate": 0.0,  # No failures for this test
-            "max_message_length": 100
+            "max_message_length": 100,
         }
 
         channel = channel_registry.get_channel("test_plugin", config)
 
         # Test simple message
-        content = MessageContent(
-            text="Hello, this is a test message!",
-            subject="Test Subject"
-        )
+        content = MessageContent(text="Hello, this is a test message!", subject="Test Subject")
 
         result = await channel.send_message("test_recipient", content, "msg_001", "HIGH")
 
@@ -118,7 +112,8 @@ async def test_message_delivery():
 
         # Test message splitting
         long_content = MessageContent(
-            text="This is a very long message that should be split into multiple parts because it exceeds the maximum length configured for the test channel. " * 3
+            text="This is a very long message that should be split into multiple parts because it exceeds the maximum length configured for the test channel. "
+            * 3
         )
 
         parts = channel.split_long_message(long_content)

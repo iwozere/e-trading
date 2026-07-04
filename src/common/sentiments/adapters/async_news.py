@@ -12,28 +12,29 @@ Features:
 - Source credibility weighting and bias detection
 - Rate limit handling for various news APIs
 """
+
 import asyncio
-import aiohttp
 import os
-from typing import List, Dict, Optional, Any
-from pathlib import Path
 import sys
 import time
-from datetime import datetime, timedelta, timezone
-from urllib.parse import urlparse
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List
+
+import aiohttp
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
 from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
 from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
+from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
 from src.data.downloader.newsapi_data_downloader import NewsAPIDataDownloader
 
 
@@ -45,10 +46,17 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
     sentiment analysis, and source credibility weighting.
     """
 
-    def __init__(self, name: str = "news", session: Optional[aiohttp.ClientSession] = None,
-                 concurrency: int = 3, rate_limit_delay: float = 1.0, max_retries: int = 3,
-                 finnhub_token: Optional[str] = None, alpha_vantage_token: Optional[str] = None,
-                 newsapi_token: Optional[str] = None):
+    def __init__(
+        self,
+        name: str = "news",
+        session: aiohttp.ClientSession | None = None,
+        concurrency: int = 3,
+        rate_limit_delay: float = 1.0,
+        max_retries: int = 3,
+        finnhub_token: str | None = None,
+        alpha_vantage_token: str | None = None,
+        newsapi_token: str | None = None,
+    ):
         super().__init__(name, concurrency, rate_limit_delay)
         self._provided_session = session is not None
         self._session = session
@@ -57,9 +65,9 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
         self._analyzer = HeuristicSentimentAnalyzer()
 
         # API tokens
-        self.finnhub_token = finnhub_token or os.getenv('FINNHUB_API_KEY')
-        self.alpha_vantage_token = alpha_vantage_token or os.getenv('ALPHA_VANTAGE_API_KEY')
-        self.newsapi_token = newsapi_token or os.getenv('NEWSAPI_API_KEY')
+        self.finnhub_token = finnhub_token or os.getenv("FINNHUB_API_KEY")
+        self.alpha_vantage_token = alpha_vantage_token or os.getenv("ALPHA_VANTAGE_API_KEY")
+        self.newsapi_token = newsapi_token or os.getenv("NEWSAPI_API_KEY")
 
         # Rate limiting per API
         self.finnhub_rate_limit = 60  # requests per minute
@@ -72,7 +80,6 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
         self.finnhub_downloader = FinnhubDataDownloader(api_key=self.finnhub_token)
         self.av_downloader = AlphaVantageDataDownloader(api_key=self.alpha_vantage_token)
         self.newsapi_downloader = NewsAPIDataDownloader(api_key=self.newsapi_token)
-
 
         # Bias detection keywords
         self.bias_indicators = self._analyzer.config.get("bias_indicators", {})
@@ -89,17 +96,13 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
         """Check if we're within rate limits for specific API."""
         current_time = time.time()
 
-        if api == 'finnhub':
-            self._finnhub_requests = [
-                req_time for req_time in self._finnhub_requests
-                if current_time - req_time < 60
-            ]
+        if api == "finnhub":
+            self._finnhub_requests = [req_time for req_time in self._finnhub_requests if current_time - req_time < 60]
             return len(self._finnhub_requests) < self.finnhub_rate_limit
 
-        elif api == 'alpha_vantage':
+        elif api == "alpha_vantage":
             self._alpha_vantage_requests = [
-                req_time for req_time in self._alpha_vantage_requests
-                if current_time - req_time < 60
+                req_time for req_time in self._alpha_vantage_requests if current_time - req_time < 60
             ]
             return len(self._alpha_vantage_requests) < self.alpha_vantage_rate_limit
 
@@ -109,13 +112,14 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
         """Record a new API request for rate limiting."""
         current_time = time.time()
 
-        if api == 'finnhub':
+        if api == "finnhub":
             self._finnhub_requests.append(current_time)
-        elif api == 'alpha_vantage':
+        elif api == "alpha_vantage":
             self._alpha_vantage_requests.append(current_time)
 
-    async def _get_with_retry(self, url: str, params: Optional[dict] = None,
-                             api: str = 'generic', timeout: int = 30) -> Optional[dict]:
+    async def _get_with_retry(
+        self, url: str, params: dict | None = None, api: str = "generic", timeout: int = 30
+    ) -> dict | None:
         """Make HTTP request with exponential backoff retry logic."""
         if not self._session:
             self._session = aiohttp.ClientSession()
@@ -125,7 +129,7 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
         for attempt in range(self.max_retries + 1):
             # Check rate limits before making request
             if not self._check_rate_limit(api):
-                wait_time = 60 if api != 'newsapi' else 3600  # Wait 1 hour for NewsAPI
+                wait_time = 60 if api != "newsapi" else 3600  # Wait 1 hour for NewsAPI
                 _logger.warning("%s rate limit reached, waiting %d seconds", api, wait_time)
                 await asyncio.sleep(min(wait_time, 60))  # Cap wait time for this attempt
 
@@ -139,9 +143,14 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
 
                         if resp.status == 429:
                             # Rate limited
-                            backoff_delay = self.rate_limit_delay * (2 ** attempt)
-                            _logger.warning("%s 429 rate limit (attempt %d/%d) - sleeping %.2fs",
-                                          api, attempt + 1, self.max_retries + 1, backoff_delay)
+                            backoff_delay = self.rate_limit_delay * (2**attempt)
+                            _logger.warning(
+                                "%s 429 rate limit (attempt %d/%d) - sleeping %.2fs",
+                                api,
+                                attempt + 1,
+                                self.max_retries + 1,
+                                backoff_delay,
+                            )
                             await asyncio.sleep(backoff_delay)
 
                             if attempt < self.max_retries:
@@ -151,7 +160,7 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
                                     request_info=resp.request_info,
                                     history=resp.history,
                                     status=resp.status,
-                                    message="Rate limit exceeded after retries"
+                                    message="Rate limit exceeded after retries",
                                 )
 
                         if resp.status == 401:
@@ -160,15 +169,21 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
                                 request_info=resp.request_info,
                                 history=resp.history,
                                 status=resp.status,
-                                message="Authentication failed"
+                                message="Authentication failed",
                             )
 
                         if resp.status >= 500:
                             # Server error - retry with backoff
                             if attempt < self.max_retries:
-                                backoff_delay = self.rate_limit_delay * (2 ** attempt)
-                                _logger.warning("%s server error %d (attempt %d/%d) - retrying in %.2fs",
-                                              api, resp.status, attempt + 1, self.max_retries + 1, backoff_delay)
+                                backoff_delay = self.rate_limit_delay * (2**attempt)
+                                _logger.warning(
+                                    "%s server error %d (attempt %d/%d) - retrying in %.2fs",
+                                    api,
+                                    resp.status,
+                                    attempt + 1,
+                                    self.max_retries + 1,
+                                    backoff_delay,
+                                )
                                 await asyncio.sleep(backoff_delay)
                                 continue
 
@@ -181,23 +196,36 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
 
                         return data
 
-                except asyncio.TimeoutError as e:
+                except TimeoutError as e:
                     last_exception = e
                     if attempt < self.max_retries:
-                        backoff_delay = self.rate_limit_delay * (2 ** attempt)
-                        _logger.warning("%s timeout (attempt %d/%d) - retrying in %.2fs",
-                                      api, attempt + 1, self.max_retries + 1, backoff_delay)
+                        backoff_delay = self.rate_limit_delay * (2**attempt)
+                        _logger.warning(
+                            "%s timeout (attempt %d/%d) - retrying in %.2fs",
+                            api,
+                            attempt + 1,
+                            self.max_retries + 1,
+                            backoff_delay,
+                        )
                         await asyncio.sleep(backoff_delay)
                         continue
 
                 except (aiohttp.ClientError, aiohttp.ClientResponseError) as e:
                     last_exception = e
-                    if attempt < self.max_retries and not isinstance(e, aiohttp.ClientResponseError) or (
-                        isinstance(e, aiohttp.ClientResponseError) and e.status >= 500
+                    if (
+                        attempt < self.max_retries
+                        and not isinstance(e, aiohttp.ClientResponseError)
+                        or (isinstance(e, aiohttp.ClientResponseError) and e.status >= 500)
                     ):
-                        backoff_delay = self.rate_limit_delay * (2 ** attempt)
-                        _logger.warning("%s client error (attempt %d/%d) - retrying in %.2fs: %s",
-                                      api, attempt + 1, self.max_retries + 1, backoff_delay, e)
+                        backoff_delay = self.rate_limit_delay * (2**attempt)
+                        _logger.warning(
+                            "%s client error (attempt %d/%d) - retrying in %.2fs: %s",
+                            api,
+                            attempt + 1,
+                            self.max_retries + 1,
+                            backoff_delay,
+                            e,
+                        )
                         await asyncio.sleep(backoff_delay)
                         continue
                     else:
@@ -206,10 +234,9 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
 
                 except Exception as e:
                     last_exception = e
-                    _logger.debug("%s unexpected error (attempt %d/%d): %s",
-                                api, attempt + 1, self.max_retries + 1, e)
+                    _logger.debug("%s unexpected error (attempt %d/%d): %s", api, attempt + 1, self.max_retries + 1, e)
                     if attempt < self.max_retries:
-                        backoff_delay = self.rate_limit_delay * (2 ** attempt)
+                        backoff_delay = self.rate_limit_delay * (2**attempt)
                         await asyncio.sleep(backoff_delay)
                         continue
                     break
@@ -218,23 +245,24 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
         self._consecutive_failures += 1
         if last_exception:
             self._update_health_failure(last_exception)
-            _logger.error("%s request failed after %d attempts: %s %s",
-                         api, self.max_retries + 1, url, last_exception)
+            _logger.error("%s request failed after %d attempts: %s %s", api, self.max_retries + 1, url, last_exception)
 
         return None
 
-    async def _fetch_finnhub_news(self, ticker: str, since_ts: Optional[int] = None, limit: int = 50) -> List[Dict[str, Any]]:
+    async def _fetch_finnhub_news(
+        self, ticker: str, since_ts: int | None = None, limit: int = 50
+    ) -> List[Dict[str, Any]]:
         """Fetch news from Finnhub API via downloader."""
         if not self.finnhub_token:
             return []
 
         try:
             # Calculate date range
-            to_date = datetime.now().strftime('%Y-%m-%d')
+            to_date = datetime.now().strftime("%Y-%m-%d")
             if since_ts:
-                from_date = datetime.fromtimestamp(since_ts).strftime('%Y-%m-%d')
+                from_date = datetime.fromtimestamp(since_ts).strftime("%Y-%m-%d")
             else:
-                from_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+                from_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
 
             data = await self.finnhub_downloader.get_company_news(ticker, from_date, to_date)
             if not data:
@@ -243,16 +271,18 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
             articles = []
             for article in data[:limit]:
                 try:
-                    articles.append({
-                        'id': f"finnhub_{article.get('id', '')}",
-                        'title': article.get('headline', ''),
-                        'content': article.get('summary', ''),
-                        'url': article.get('url', ''),
-                        'source': article.get('source', 'finnhub'),
-                        'published_at': datetime.fromtimestamp(article.get('datetime', 0)).isoformat(),
-                        'credibility': self._get_source_credibility(article.get('url', '')),
-                        'provider': 'finnhub'
-                    })
+                    articles.append(
+                        {
+                            "id": f"finnhub_{article.get('id', '')}",
+                            "title": article.get("headline", ""),
+                            "content": article.get("summary", ""),
+                            "url": article.get("url", ""),
+                            "source": article.get("source", "finnhub"),
+                            "published_at": datetime.fromtimestamp(article.get("datetime", 0)).isoformat(),
+                            "credibility": self._get_source_credibility(article.get("url", "")),
+                            "provider": "finnhub",
+                        }
+                    )
                 except Exception as e:
                     _logger.debug("Error processing Finnhub article: %s", e)
                     continue
@@ -263,7 +293,9 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
             _logger.warning("Failed to fetch Finnhub news for %s: %s", ticker, e)
             return []
 
-    async def _fetch_alpha_vantage_news(self, ticker: str, since_ts: Optional[int] = None, limit: int = 50) -> List[Dict[str, Any]]:
+    async def _fetch_alpha_vantage_news(
+        self, ticker: str, since_ts: int | None = None, limit: int = 50
+    ) -> List[Dict[str, Any]]:
         """Fetch news from Alpha Vantage API via downloader."""
         if not self.alpha_vantage_token:
             return []
@@ -271,7 +303,7 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
         try:
             time_from = None
             if since_ts:
-                time_from = datetime.fromtimestamp(since_ts).strftime('%Y%m%dT%H%M')
+                time_from = datetime.fromtimestamp(since_ts).strftime("%Y%m%dT%H%M")
 
             data = await self.av_downloader.get_news_articles(ticker, time_from=time_from, limit=limit)
             if not data:
@@ -282,25 +314,27 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
                 try:
                     # Extract ticker-specific sentiment if available
                     ticker_sentiment = None
-                    if 'ticker_sentiment' in article:
-                        for ts in article['ticker_sentiment']:
-                            if ts.get('ticker', '').upper() == ticker.upper():
+                    if "ticker_sentiment" in article:
+                        for ts in article["ticker_sentiment"]:
+                            if ts.get("ticker", "").upper() == ticker.upper():
                                 ticker_sentiment = ts
                                 break
 
-                    articles.append({
-                        'id': f"av_{hash(article.get('url', ''))}",
-                        'title': article.get('title', ''),
-                        'content': article.get('summary', ''),
-                        'url': article.get('url', ''),
-                        'source': ', '.join(article.get('authors', [])) or 'alpha_vantage',
-                        'published_at': article.get('time_published', ''),
-                        'credibility': self._get_source_credibility(article.get('url', '')),
-                        'overall_sentiment': article.get('overall_sentiment_label', ''),
-                        'overall_sentiment_score': float(article.get('overall_sentiment_score', 0)),
-                        'ticker_sentiment': ticker_sentiment,
-                        'provider': 'alpha_vantage'
-                    })
+                    articles.append(
+                        {
+                            "id": f"av_{hash(article.get('url', ''))}",
+                            "title": article.get("title", ""),
+                            "content": article.get("summary", ""),
+                            "url": article.get("url", ""),
+                            "source": ", ".join(article.get("authors", [])) or "alpha_vantage",
+                            "published_at": article.get("time_published", ""),
+                            "credibility": self._get_source_credibility(article.get("url", "")),
+                            "overall_sentiment": article.get("overall_sentiment_label", ""),
+                            "overall_sentiment_score": float(article.get("overall_sentiment_score", 0)),
+                            "ticker_sentiment": ticker_sentiment,
+                            "provider": "alpha_vantage",
+                        }
+                    )
                 except Exception as e:
                     _logger.debug("Error processing Alpha Vantage article: %s", e)
                     continue
@@ -311,7 +345,9 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
             _logger.warning("Failed to fetch Alpha Vantage news for %s: %s", ticker, e)
             return []
 
-    async def _fetch_newsapi_news(self, ticker: str, since_ts: Optional[int] = None, limit: int = 50) -> List[Dict[str, Any]]:
+    async def _fetch_newsapi_news(
+        self, ticker: str, since_ts: int | None = None, limit: int = 50
+    ) -> List[Dict[str, Any]]:
         """Fetch news from NewsAPI."""
         if not self.newsapi_token:
             return []
@@ -323,30 +359,28 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
             # Add time filter if provided
             from_date = None
             if since_ts:
-                from_date = datetime.fromtimestamp(since_ts).strftime('%Y-%m-%d')
+                from_date = datetime.fromtimestamp(since_ts).strftime("%Y-%m-%d")
 
-            data = await self.newsapi_downloader.get_everything(
-                query=query,
-                from_date=from_date,
-                page_size=limit
-            )
+            data = await self.newsapi_downloader.get_everything(query=query, from_date=from_date, page_size=limit)
             if not data:
                 return []
 
             articles = []
             for article in data[:limit]:
                 try:
-                    articles.append({
-                        'id': f"newsapi_{hash(article.get('url', ''))}",
-                        'title': article.get('title', ''),
-                        'content': article.get('description', '') or article.get('content', ''),
-                        'url': article.get('url', ''),
-                        'source': article.get('source', {}).get('name', 'newsapi'),
-                        'published_at': article.get('publishedAt', ''),
-                        'credibility': self._get_source_credibility(article.get('url', '')),
-                        'author': article.get('author', ''),
-                        'provider': 'newsapi'
-                    })
+                    articles.append(
+                        {
+                            "id": f"newsapi_{hash(article.get('url', ''))}",
+                            "title": article.get("title", ""),
+                            "content": article.get("description", "") or article.get("content", ""),
+                            "url": article.get("url", ""),
+                            "source": article.get("source", {}).get("name", "newsapi"),
+                            "published_at": article.get("publishedAt", ""),
+                            "credibility": self._get_source_credibility(article.get("url", "")),
+                            "author": article.get("author", ""),
+                            "provider": "newsapi",
+                        }
+                    )
                 except Exception as e:
                     _logger.debug("Error processing NewsAPI article: %s", e)
                     continue
@@ -357,7 +391,9 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
             _logger.warning("Failed to fetch NewsAPI news for %s: %s", ticker, e)
             return []
 
-    async def fetch_messages(self, ticker: str, since_ts: Optional[int] = None, limit: int = 200) -> List[Dict[str, Any]]:
+    async def fetch_messages(
+        self, ticker: str, since_ts: int | None = None, limit: int = 200
+    ) -> List[Dict[str, Any]]:
         """
         Fetch individual news articles for a ticker.
 
@@ -408,23 +444,24 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
             unique_articles = []
 
             for article in all_articles:
-                url = article.get('url', '')
+                url = article.get("url", "")
                 if url and url not in seen_urls:
                     seen_urls.add(url)
                     unique_articles.append(article)
 
             # Sort by published date (newest first) and limit
-            unique_articles.sort(key=lambda x: x.get('published_at', ''), reverse=True)
+            unique_articles.sort(key=lambda x: x.get("published_at", ""), reverse=True)
             final_articles = unique_articles[:limit]
 
             # Add bias detection
             for article in final_articles:
-                title = article.get('title', '')
-                content = article.get('content', '')
-                article['bias_indicators'] = self._detect_bias(title, content)
+                title = article.get("title", "")
+                content = article.get("content", "")
+                article["bias_indicators"] = self._detect_bias(title, content)
 
-            _logger.debug("Fetched %d news articles for ticker %s from %d sources",
-                         len(final_articles), symbol, len(tasks))
+            _logger.debug(
+                "Fetched %d news articles for ticker %s from %d sources", len(final_articles), symbol, len(tasks)
+            )
             return final_articles
 
         except Exception as e:
@@ -432,7 +469,7 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
             self._update_health_failure(e)
             raise
 
-    async def fetch_summary(self, ticker: str, since_ts: Optional[int] = None) -> Dict[str, Any]:
+    async def fetch_summary(self, ticker: str, since_ts: int | None = None) -> Dict[str, Any]:
         """
         Fetch aggregated sentiment summary for a ticker from news sources.
 
@@ -459,20 +496,55 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
 
             # Define sentiment keywords for financial news
             bullish_keywords = (
-                "surge", "rally", "gain", "rise", "up", "positive", "growth", "profit",
-                "beat", "exceed", "outperform", "strong", "robust", "bullish", "upgrade",
-                "buy", "target", "optimistic", "confident", "breakthrough", "success"
+                "surge",
+                "rally",
+                "gain",
+                "rise",
+                "up",
+                "positive",
+                "growth",
+                "profit",
+                "beat",
+                "exceed",
+                "outperform",
+                "strong",
+                "robust",
+                "bullish",
+                "upgrade",
+                "buy",
+                "target",
+                "optimistic",
+                "confident",
+                "breakthrough",
+                "success",
             )
             bearish_keywords = (
-                "fall", "drop", "decline", "down", "negative", "loss", "miss", "weak",
-                "underperform", "bearish", "downgrade", "sell", "concern", "worry",
-                "risk", "challenge", "struggle", "disappointing", "cut", "reduce"
+                "fall",
+                "drop",
+                "decline",
+                "down",
+                "negative",
+                "loss",
+                "miss",
+                "weak",
+                "underperform",
+                "bearish",
+                "downgrade",
+                "sell",
+                "concern",
+                "worry",
+                "risk",
+                "challenge",
+                "struggle",
+                "disappointing",
+                "cut",
+                "reduce",
             )
 
             for article in articles:
                 try:
-                    title = (article.get('title', '') or '').lower()
-                    content = (article.get('content', '') or '').lower()
+                    title = (article.get("title", "") or "").lower()
+                    content = (article.get("content", "") or "").lower()
                     text = f"{title} {content}"
 
                     if not text.strip():
@@ -480,25 +552,25 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
                         continue
 
                     # Track credibility
-                    credibility = article.get('credibility', 0.5)
+                    credibility = article.get("credibility", 0.5)
                     total_credibility += credibility
 
                     # Track source distribution
-                    source = article.get('source', 'unknown')
+                    source = article.get("source", "unknown")
                     source_distribution[source] = source_distribution.get(source, 0) + 1
 
                     # Track bias indicators
-                    bias_indicators = article.get('bias_indicators', {})
+                    bias_indicators = article.get("bias_indicators", {})
                     for bias_type, detected in bias_indicators.items():
                         if detected:
                             bias_counts[bias_type] = bias_counts.get(bias_type, 0) + 1
 
                     # Use Alpha Vantage sentiment if available
-                    if article.get('provider') == 'alpha_vantage':
-                        av_sentiment = article.get('overall_sentiment', '').lower()
-                        if av_sentiment == 'bullish':
+                    if article.get("provider") == "alpha_vantage":
+                        av_sentiment = article.get("overall_sentiment", "").lower()
+                        if av_sentiment == "bullish":
                             bullish += 1
-                        elif av_sentiment == 'bearish':
+                        elif av_sentiment == "bearish":
                             bearish += 1
                         else:
                             neutral += 1
@@ -545,11 +617,16 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
                 "source_distribution": dict(top_sources),
                 "bias_indicators": bias_counts,
                 "provider": "news",
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
-            _logger.debug("Generated news summary for ticker %s: %d articles, score %.3f, credibility %.2f",
-                         ticker, total_articles, score, avg_credibility)
+            _logger.debug(
+                "Generated news summary for ticker %s: %d articles, score %.3f, credibility %.2f",
+                ticker,
+                total_articles,
+                score,
+                avg_credibility,
+            )
             return summary
 
         except Exception as e:

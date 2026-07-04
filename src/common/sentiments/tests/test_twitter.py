@@ -1,5 +1,4 @@
 import asyncio
-import aiohttp
 import sys
 import time
 from pathlib import Path
@@ -9,10 +8,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.common.sentiments.adapters.async_twitter import AsyncTwitterAdapter
-import config.donotshare.donotshare as secrets
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 async def test_twitter(ticker="AAPL"):
     print(f"Testing Twitter adapter for: {ticker}")
@@ -42,9 +41,11 @@ async def test_twitter(ticker="AAPL"):
     except Exception as e:
         print(f"ERROR: {e}")
         import traceback
+
         traceback.print_exc()
     finally:
         await adapter.close()
+
 
 if __name__ == "__main__":
     asyncio.run(test_twitter())

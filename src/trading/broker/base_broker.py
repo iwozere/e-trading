@@ -28,32 +28,41 @@ Backtrader Integration:
 - Use ``wrap_broker_for_cerebro(core)`` which returns a ``bt.broker.BrokerBase`` adapter; do not pass ``BaseBroker`` to ``cerebro.setbroker`` directly.
 """
 
-from abc import ABC, abstractmethod
-
-from src.trading.broker.backtrader_availability import BACKTRADER_AVAILABLE
-from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime, timezone
 import asyncio
-import random
 import math
+import random
+from abc import ABC, abstractmethod
+from datetime import UTC, datetime
+from typing import Any, Dict, List, Tuple
 
 from src.notification.logger import setup_logger
+
+# Backtrader adapters — extracted to their own module.  Re-exported here so
+# existing imports of `BacktraderOrderAdapter` etc. from this module still work.
+from src.trading.broker.backtrader_adapters import (  # noqa: F401
+    BacktraderCreatedInfo,
+    BacktraderExecutedInfo,
+    BacktraderOrderAdapter,
+    BacktraderPortfolioAdapter,
+    BacktraderPositionAdapter,
+)
+from src.trading.broker.backtrader_availability import BACKTRADER_AVAILABLE
 
 # Domain models — imported from models.py so this file stays focused on the
 # abstract broker interface.  Re-exported here for backward compatibility with
 # all call sites that do `from src.trading.broker.base_broker import Order, ...`.
 from src.trading.broker.models import (  # noqa: F401
-    TradingMode, OrderStatus, OrderType, OrderSide,
-    PaperTradingMode, ExecutionQuality,
-    PaperTradingConfig, ExecutionMetrics,
-    Order, Position, Portfolio,
-)
-
-# Backtrader adapters — extracted to their own module.  Re-exported here so
-# existing imports of `BacktraderOrderAdapter` etc. from this module still work.
-from src.trading.broker.backtrader_adapters import (  # noqa: F401
-    BacktraderOrderAdapter, BacktraderExecutedInfo, BacktraderCreatedInfo,
-    BacktraderPositionAdapter, BacktraderPortfolioAdapter,
+    ExecutionMetrics,
+    ExecutionQuality,
+    Order,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    PaperTradingConfig,
+    PaperTradingMode,
+    Portfolio,
+    Position,
+    TradingMode,
 )
 
 _logger = setup_logger(__name__)
@@ -106,16 +115,21 @@ class PositionNotificationManager:
     """
 
     def __init__(self, config: Dict[str, Any], notification_client=None):
-        self.notifications_config = config.get('notifications', {})
-        self.position_opened_enabled = self.notifications_config.get('position_opened', True)
-        self.position_closed_enabled = self.notifications_config.get('position_closed', True)
-        self.email_enabled = self.notifications_config.get('email_enabled', True)
-        self.telegram_enabled = self.notifications_config.get('telegram_enabled', True)
-        self.error_notifications = self.notifications_config.get('error_notifications', True)
+        self.notifications_config = config.get("notifications", {})
+        self.position_opened_enabled = self.notifications_config.get("position_opened", True)
+        self.position_closed_enabled = self.notifications_config.get("position_closed", True)
+        self.email_enabled = self.notifications_config.get("email_enabled", True)
+        self.telegram_enabled = self.notifications_config.get("telegram_enabled", True)
+        self.error_notifications = self.notifications_config.get("error_notifications", True)
         self.notification_client = notification_client
 
-        _logger.info("Position notifications initialized - Opened: %s, Closed: %s, Email: %s, Telegram: %s",
-                    self.position_opened_enabled, self.position_closed_enabled, self.email_enabled, self.telegram_enabled)
+        _logger.info(
+            "Position notifications initialized - Opened: %s, Closed: %s, Email: %s, Telegram: %s",
+            self.position_opened_enabled,
+            self.position_closed_enabled,
+            self.email_enabled,
+            self.telegram_enabled,
+        )
 
     async def notify_position_opened(self, position_data: Dict[str, Any]):
         """Send notifications when position is opened."""
@@ -150,7 +164,7 @@ class PositionNotificationManager:
     def _format_position_opened_message(self, data: Dict[str, Any]) -> str:
         """Format position opened notification message."""
         emoji = "🟢"
-        mode_emoji = "📄" if data.get('trading_mode') == 'paper' else "💰"
+        mode_emoji = "📄" if data.get("trading_mode") == "paper" else "💰"
 
         return (
             f"{emoji} Position Opened - {mode_emoji} {data.get('trading_mode', 'UNKNOWN').upper()}\n\n"
@@ -168,8 +182,8 @@ class PositionNotificationManager:
     def _format_position_closed_message(self, data: Dict[str, Any]) -> str:
         """Format position closed notification message."""
         emoji = "🔴"
-        mode_emoji = "📄" if data.get('trading_mode') == 'paper' else "💰"
-        pnl = data.get('pnl', 0)
+        mode_emoji = "📄" if data.get("trading_mode") == "paper" else "💰"
+        pnl = data.get("pnl", 0)
         pnl_emoji = "📈" if pnl >= 0 else "📉"
 
         return (
@@ -209,7 +223,7 @@ class PositionNotificationManager:
                     channels.append("telegram")
 
                 if channels:
-                    from src.notification.service.client import MessageType, MessagePriority
+                    from src.notification.service.client import MessagePriority, MessageType
 
                     success = await self.notification_client.send_notification(
                         notification_type=MessageType.SYSTEM,
@@ -218,7 +232,7 @@ class PositionNotificationManager:
                         priority=MessagePriority.NORMAL,
                         source="trading_broker",
                         channels=channels,
-                        recipient_id="trading_system"
+                        recipient_id="trading_system",
                     )
 
                     if success:
@@ -264,40 +278,40 @@ class BaseBroker(ABC):
         self._backtrader_mode = False
 
         self.config = config
-        self.name = config.get('name', 'unknown')
+        self.name = config.get("name", "unknown")
         self.is_connected = False
         self._logger = setup_logger(f"{__name__}.{self.__class__.__name__}")
 
         # Trading mode configuration
-        self.trading_mode = TradingMode(config.get('trading_mode', 'paper'))
-        self.paper_trading_enabled = (self.trading_mode == TradingMode.PAPER)
+        self.trading_mode = TradingMode(config.get("trading_mode", "paper"))
+        self.paper_trading_enabled = self.trading_mode == TradingMode.PAPER
 
         # Paper trading configuration
-        paper_config = config.get('paper_trading_config', {})
+        paper_config = config.get("paper_trading_config", {})
         self.paper_trading_config = PaperTradingConfig(
-            mode=PaperTradingMode(paper_config.get('mode', 'realistic')),
-            initial_balance=paper_config.get('initial_balance', 10000.0),
-            commission_rate=paper_config.get('commission_rate', 0.001),
-            slippage_model=paper_config.get('slippage_model', 'linear'),
-            base_slippage=paper_config.get('base_slippage', 0.0005),
-            latency_simulation=paper_config.get('latency_simulation', True),
-            min_latency_ms=paper_config.get('min_latency_ms', 10),
-            max_latency_ms=paper_config.get('max_latency_ms', 100),
-            market_impact_enabled=paper_config.get('market_impact_enabled', True),
-            market_impact_factor=paper_config.get('market_impact_factor', 0.0001),
-            realistic_fills=paper_config.get('realistic_fills', True),
-            partial_fill_probability=paper_config.get('partial_fill_probability', 0.1),
-            reject_probability=paper_config.get('reject_probability', 0.01),
-            enable_execution_quality=paper_config.get('enable_execution_quality', True)
+            mode=PaperTradingMode(paper_config.get("mode", "realistic")),
+            initial_balance=paper_config.get("initial_balance", 10000.0),
+            commission_rate=paper_config.get("commission_rate", 0.001),
+            slippage_model=paper_config.get("slippage_model", "linear"),
+            base_slippage=paper_config.get("base_slippage", 0.0005),
+            latency_simulation=paper_config.get("latency_simulation", True),
+            min_latency_ms=paper_config.get("min_latency_ms", 10),
+            max_latency_ms=paper_config.get("max_latency_ms", 100),
+            market_impact_enabled=paper_config.get("market_impact_enabled", True),
+            market_impact_factor=paper_config.get("market_impact_factor", 0.0001),
+            realistic_fills=paper_config.get("realistic_fills", True),
+            partial_fill_probability=paper_config.get("partial_fill_probability", 0.1),
+            reject_probability=paper_config.get("reject_probability", 0.01),
+            enable_execution_quality=paper_config.get("enable_execution_quality", True),
         )
 
         # Notification manager
         self.notification_manager = PositionNotificationManager(config, notification_client)
 
         # Backtrader-specific configuration
-        backtrader_config = config.get('backtrader_config', {})
-        self.backtrader_auto_process = backtrader_config.get('auto_process_orders', True)
-        self.backtrader_notification_buffer = backtrader_config.get('notification_buffer_size', 100)
+        backtrader_config = config.get("backtrader_config", {})
+        self.backtrader_auto_process = backtrader_config.get("auto_process_orders", True)
+        self.backtrader_notification_buffer = backtrader_config.get("notification_buffer_size", 100)
 
         # Current bar prices: populated by update_market_price() on every bar
         # (typically called by BacktraderBrokerBridge.next() or buy()/sell())
@@ -312,20 +326,25 @@ class BaseBroker(ABC):
             ExecutionQuality.EXCELLENT: 0,
             ExecutionQuality.GOOD: 0,
             ExecutionQuality.FAIR: 0,
-            ExecutionQuality.POOR: 0
+            ExecutionQuality.POOR: 0,
         }
 
         # Paper trading state (if enabled)
         if self.paper_trading_enabled:
             self.paper_orders: Dict[str, Order] = {}
             self.paper_positions: Dict[str, Position] = {}
-            self.paper_portfolio: Optional[Portfolio] = None
+            self.paper_portfolio: Portfolio | None = None
             self.paper_trade_history: List[Dict[str, Any]] = []
             self.market_data_cache: Dict[str, Dict[str, Any]] = {}
             self._initialize_paper_portfolio()
 
-        self._logger.info("Base broker initialized - Mode: %s, Broker: %s, Paper Trading: %s, Backtrader: %s",
-                          self.trading_mode.value, self.name, self.paper_trading_enabled, self._backtrader_mode)
+        self._logger.info(
+            "Base broker initialized - Mode: %s, Broker: %s, Paper Trading: %s, Backtrader: %s",
+            self.trading_mode.value,
+            self.name,
+            self.paper_trading_enabled,
+            self._backtrader_mode,
+        )
 
     def _initialize_paper_portfolio(self) -> None:
         """Initialize paper trading portfolio with starting balance."""
@@ -340,9 +359,9 @@ class BaseBroker(ABC):
             positions={},
             unrealized_pnl=0.0,
             realized_pnl=0.0,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             paper_trading=True,
-            initial_balance=config.initial_balance
+            initial_balance=config.initial_balance,
         )
 
         self._logger.info("Initialized paper trading portfolio with $%.2f", config.initial_balance)
@@ -370,7 +389,7 @@ class BaseBroker(ABC):
         pass
 
     @abstractmethod
-    async def get_order_status(self, order_id: str) -> Optional[Order]:
+    async def get_order_status(self, order_id: str) -> Order | None:
         """Get order status."""
         pass
 
@@ -452,10 +471,7 @@ class BaseBroker(ABC):
         if not self.paper_trading_enabled or not self.paper_trading_config.latency_simulation:
             return
 
-        latency_ms = random.randint(
-            self.paper_trading_config.min_latency_ms,
-            self.paper_trading_config.max_latency_ms
-        )
+        latency_ms = random.randint(self.paper_trading_config.min_latency_ms, self.paper_trading_config.max_latency_ms)
         await asyncio.sleep(latency_ms / 1000.0)
 
     def calculate_slippage(self, order: Order, market_price: float) -> float:
@@ -504,8 +520,9 @@ class BaseBroker(ABC):
         else:  # > 1.0%
             return ExecutionQuality.POOR
 
-    def record_execution_metrics(self, order: Order, executed_price: float,
-                               executed_quantity: float, latency_ms: int) -> Optional[ExecutionMetrics]:
+    def record_execution_metrics(
+        self, order: Order, executed_price: float, executed_quantity: float, latency_ms: int
+    ) -> ExecutionMetrics | None:
         """Record execution metrics for paper trading analysis."""
         if not self.paper_trading_enabled or not self.paper_trading_config.enable_execution_quality:
             return None
@@ -538,9 +555,9 @@ class BaseBroker(ABC):
             latency_ms=latency_ms,
             execution_quality=execution_quality,
             market_impact_bps=market_impact_bps,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             broker_name=self.name,
-            simulation_mode=self.paper_trading_config.mode
+            simulation_mode=self.paper_trading_config.mode,
         )
 
         # Update statistics
@@ -570,8 +587,7 @@ class BaseBroker(ABC):
         avg_latency = sum(m.latency_ms for m in self.execution_metrics) / total_executions
 
         quality_distribution = {
-            quality.value: (count / total_executions) * 100
-            for quality, count in self.execution_quality_stats.items()
+            quality.value: (count / total_executions) * 100 for quality, count in self.execution_quality_stats.items()
         }
 
         return {
@@ -582,7 +598,7 @@ class BaseBroker(ABC):
             "paper_trading_mode": self.paper_trading_config.mode.value,
             "broker_name": self.name,
             "trading_mode": self.trading_mode.value,
-            "report_timestamp": datetime.now(timezone.utc).isoformat()
+            "report_timestamp": datetime.now(UTC).isoformat(),
         }
 
     async def validate_order(self, order: Order) -> Tuple[bool, str]:
@@ -608,8 +624,8 @@ class BaseBroker(ABC):
     async def notify_position_event(self, event_type: str, position_data: Dict[str, Any]):
         """Send position event notifications."""
         try:
-            position_data['trading_mode'] = self.trading_mode.value
-            position_data['broker_name'] = self.name
+            position_data["trading_mode"] = self.trading_mode.value
+            position_data["broker_name"] = self.name
 
             if event_type == "opened":
                 await self.notification_manager.notify_position_opened(position_data)
@@ -623,11 +639,11 @@ class BaseBroker(ABC):
         """Send error notifications."""
         try:
             error_data = {
-                'error_message': error_message,
-                'trading_mode': self.trading_mode.value,
-                'broker_name': self.name,
-                'timestamp': datetime.now(timezone.utc),
-                **(context or {})
+                "error_message": error_message,
+                "trading_mode": self.trading_mode.value,
+                "broker_name": self.name,
+                "timestamp": datetime.now(UTC),
+                **(context or {}),
             }
 
             await self.notification_manager.notify_error(error_data)
@@ -638,37 +654,52 @@ class BaseBroker(ABC):
     def get_status(self) -> Dict[str, Any]:
         """Get comprehensive broker status."""
         status = {
-            'broker_name': self.name,
-            'trading_mode': self.trading_mode.value,
-            'paper_trading_enabled': self.paper_trading_enabled,
-            'is_connected': self.is_connected,
-            'timestamp': datetime.now(timezone.utc).isoformat()
+            "broker_name": self.name,
+            "trading_mode": self.trading_mode.value,
+            "paper_trading_enabled": self.paper_trading_enabled,
+            "is_connected": self.is_connected,
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         if self.paper_trading_enabled:
-            status.update({
-                'paper_trading_config': {
-                    'mode': self.paper_trading_config.mode.value,
-                    'initial_balance': self.paper_trading_config.initial_balance,
-                    'commission_rate': self.paper_trading_config.commission_rate
-                },
-                'execution_stats': {
-                    'total_executions': self.total_executions,
-                    'quality_distribution': {
-                        quality.value: count
-                        for quality, count in self.execution_quality_stats.items()
-                    }
+            status.update(
+                {
+                    "paper_trading_config": {
+                        "mode": self.paper_trading_config.mode.value,
+                        "initial_balance": self.paper_trading_config.initial_balance,
+                        "commission_rate": self.paper_trading_config.commission_rate,
+                    },
+                    "execution_stats": {
+                        "total_executions": self.total_executions,
+                        "quality_distribution": {
+                            quality.value: count for quality, count in self.execution_quality_stats.items()
+                        },
+                    },
                 }
-            })
+            )
 
         return status
 
     # Backtrader Interface Adapter Methods
     # These methods are only available when inheriting from bt.Broker
 
-    def buy(self, owner=None, data=None, size=None, price=None, plimit=None,
-            exectype=None, valid=None, tradeid=0, oco=None, trailamount=None,
-            trailpercent=None, parent=None, transmit=True, **kwargs):
+    def buy(
+        self,
+        owner=None,
+        data=None,
+        size=None,
+        price=None,
+        plimit=None,
+        exectype=None,
+        valid=None,
+        tradeid=0,
+        oco=None,
+        trailamount=None,
+        trailpercent=None,
+        parent=None,
+        transmit=True,
+        **kwargs,
+    ):
         """
         Backtrader buy method adapter.
 
@@ -696,18 +727,39 @@ class BaseBroker(ABC):
         """
         return self._create_bt_order(
             OrderSide.BUY,
-            owner=owner, data=data, size=size, price=price, plimit=plimit,
-            exectype=exectype, valid=valid, tradeid=tradeid, oco=oco,
-            trailamount=trailamount, trailpercent=trailpercent,
-            parent=parent, transmit=transmit, **kwargs
+            owner=owner,
+            data=data,
+            size=size,
+            price=price,
+            plimit=plimit,
+            exectype=exectype,
+            valid=valid,
+            tradeid=tradeid,
+            oco=oco,
+            trailamount=trailamount,
+            trailpercent=trailpercent,
+            parent=parent,
+            transmit=transmit,
+            **kwargs,
         )
 
     def _create_bt_order(
         self,
         side: OrderSide,
-        owner=None, data=None, size=None, price=None, plimit=None,
-        exectype=None, valid=None, tradeid=0, oco=None, trailamount=None,
-        trailpercent=None, parent=None, transmit=True, **kwargs
+        owner=None,
+        data=None,
+        size=None,
+        price=None,
+        plimit=None,
+        exectype=None,
+        valid=None,
+        tradeid=0,
+        oco=None,
+        trailamount=None,
+        trailpercent=None,
+        parent=None,
+        transmit=True,
+        **kwargs,
     ) -> Order:
         """
         Shared implementation for backtrader ``buy()`` / ``sell()`` adapters.
@@ -757,18 +809,18 @@ class BaseBroker(ABC):
                 order_type=OrderType.MARKET,
                 quantity=0.0,
                 status=OrderStatus.REJECTED,
-                metadata={'error': error_msg}
+                metadata={"error": error_msg},
             )
 
         # Convert backtrader exectype to our OrderType
         order_type = self._convert_bt_exectype_to_order_type(exectype)
 
         # Get symbol from data feed
-        symbol = getattr(data, '_name', 'UNKNOWN') if data else 'UNKNOWN'
+        symbol = getattr(data, "_name", "UNKNOWN") if data else "UNKNOWN"
 
         # Capture the current bar close price so that _get_simulated_market_price()
         # returns a real price instead of the hardcoded $100 placeholder.
-        if data is not None and hasattr(data, 'close'):
+        if data is not None and hasattr(data, "close"):
             try:
                 self.update_market_price(symbol, float(data.close[0]))
             except (IndexError, TypeError, AttributeError):
@@ -784,16 +836,16 @@ class BaseBroker(ABC):
             stop_price=float(plimit) if plimit else None,
             time_in_force=self._convert_bt_valid_to_tif(valid),
             metadata={
-                'backtrader_owner': owner,
-                'backtrader_data': data,
-                'tradeid': tradeid,
-                'oco': oco,
-                'trailamount': trailamount,
-                'trailpercent': trailpercent,
-                'parent': parent,
-                'transmit': transmit,
-                **kwargs
-            }
+                "backtrader_owner": owner,
+                "backtrader_data": data,
+                "tradeid": tradeid,
+                "oco": oco,
+                "trailamount": trailamount,
+                "trailpercent": trailpercent,
+                "parent": parent,
+                "transmit": transmit,
+                **kwargs,
+            },
         )
 
         try:
@@ -803,7 +855,10 @@ class BaseBroker(ABC):
                 order.status = OrderStatus.PENDING
                 self._logger.info(
                     "Backtrader %s order created: %s %s @ %s",
-                    side_str, size, symbol, price or "MARKET",
+                    side_str,
+                    size,
+                    symbol,
+                    price or "MARKET",
                 )
                 return order
             else:
@@ -811,7 +866,10 @@ class BaseBroker(ABC):
                 order.status = OrderStatus.QUEUED
                 self._logger.info(
                     "Backtrader %s order queued: %s %s @ %s",
-                    side_str, size, symbol, price or "MARKET",
+                    side_str,
+                    size,
+                    symbol,
+                    price or "MARKET",
                 )
                 return order
 
@@ -849,7 +907,7 @@ class BaseBroker(ABC):
             return "GTC"  # Good Till Cancelled
 
         # Handle different backtrader validity types
-        if hasattr(valid, 'days'):
+        if hasattr(valid, "days"):
             # It's a timedelta or similar
             return "GTD"  # Good Till Date
         elif isinstance(valid, (int, float)):
@@ -858,9 +916,23 @@ class BaseBroker(ABC):
         else:
             return "GTC"
 
-    def sell(self, owner=None, data=None, size=None, price=None, plimit=None,
-             exectype=None, valid=None, tradeid=0, oco=None, trailamount=None,
-             trailpercent=None, parent=None, transmit=True, **kwargs):
+    def sell(
+        self,
+        owner=None,
+        data=None,
+        size=None,
+        price=None,
+        plimit=None,
+        exectype=None,
+        valid=None,
+        tradeid=0,
+        oco=None,
+        trailamount=None,
+        trailpercent=None,
+        parent=None,
+        transmit=True,
+        **kwargs,
+    ):
         """
         Backtrader sell method adapter.
 
@@ -888,10 +960,20 @@ class BaseBroker(ABC):
         """
         return self._create_bt_order(
             OrderSide.SELL,
-            owner=owner, data=data, size=size, price=price, plimit=plimit,
-            exectype=exectype, valid=valid, tradeid=tradeid, oco=oco,
-            trailamount=trailamount, trailpercent=trailpercent,
-            parent=parent, transmit=transmit, **kwargs
+            owner=owner,
+            data=data,
+            size=size,
+            price=price,
+            plimit=plimit,
+            exectype=exectype,
+            valid=valid,
+            tradeid=tradeid,
+            oco=oco,
+            trailamount=trailamount,
+            trailpercent=trailpercent,
+            parent=parent,
+            transmit=transmit,
+            **kwargs,
         )
 
     def cancel(self, order):
@@ -914,10 +996,10 @@ class BaseBroker(ABC):
 
         try:
             # Extract order ID from the order object
-            if hasattr(order, 'order_id'):
+            if hasattr(order, "order_id"):
                 # It's our Order object
                 order_id = order.order_id
-            elif hasattr(order, 'ref'):
+            elif hasattr(order, "ref"):
                 # It's a backtrader order object
                 order_id = str(order.ref)
             else:
@@ -961,8 +1043,7 @@ class BaseBroker(ABC):
             # Return notifications from the queue
             if self._bt_notification_queue:
                 order = self._bt_notification_queue.pop(0)
-                self._logger.debug("Backtrader notification: order %s status %s",
-                                 order.order_id, order.status.value)
+                self._logger.debug("Backtrader notification: order %s status %s", order.order_id, order.status.value)
                 return BacktraderOrderAdapter(order)
 
             # No notifications available
@@ -1031,8 +1112,7 @@ class BaseBroker(ABC):
             # Simulate execution latency if enabled
             if self.paper_trading_config.latency_simulation:
                 latency_ms = random.randint(
-                    self.paper_trading_config.min_latency_ms,
-                    self.paper_trading_config.max_latency_ms
+                    self.paper_trading_config.min_latency_ms, self.paper_trading_config.max_latency_ms
                 )
             else:
                 latency_ms = 0
@@ -1073,9 +1153,11 @@ class BaseBroker(ABC):
             # whose price condition is NOT met is never mis-tagged as
             # PARTIALLY_FILLED just because the random roll happened to pass.
             executed_quantity = order.quantity
-            if (should_execute and
-                self.paper_trading_config.realistic_fills and
-                random.random() < self.paper_trading_config.partial_fill_probability):
+            if (
+                should_execute
+                and self.paper_trading_config.realistic_fills
+                and random.random() < self.paper_trading_config.partial_fill_probability
+            ):
                 executed_quantity = order.quantity * random.uniform(0.5, 0.9)
                 order.status = OrderStatus.PARTIALLY_FILLED
             elif should_execute:
@@ -1090,8 +1172,13 @@ class BaseBroker(ABC):
                 commission = executed_quantity * executed_price * self.paper_trading_config.commission_rate
                 order.commission += commission
 
-                self._logger.info("Backtrader paper order executed: %s %s @ %s (commission: %s)",
-                                executed_quantity, order.symbol, executed_price, commission)
+                self._logger.info(
+                    "Backtrader paper order executed: %s %s @ %s (commission: %s)",
+                    executed_quantity,
+                    order.symbol,
+                    executed_price,
+                    commission,
+                )
 
                 # Record execution metrics
                 self.record_execution_metrics(order, executed_price, executed_quantity, latency_ms)
@@ -1179,8 +1266,7 @@ class BaseBroker(ABC):
 
                 if order.side == OrderSide.BUY:
                     # Add to position
-                    total_cost = (position.quantity * position.average_price +
-                                executed_qty * executed_price)
+                    total_cost = position.quantity * position.average_price + executed_qty * executed_price
                     total_qty = position.quantity + executed_qty
                     position.average_price = total_cost / total_qty if total_qty > 0 else 0
                     position.quantity = total_qty
@@ -1205,7 +1291,7 @@ class BaseBroker(ABC):
                         market_value=executed_qty * executed_price,
                         unrealized_pnl=0.0,
                         paper_trading=True,
-                        commission_paid=commission
+                        commission_paid=commission,
                     )
                     self.paper_portfolio.positions[symbol] = position
                 else:
@@ -1219,12 +1305,11 @@ class BaseBroker(ABC):
                         market_value=-(executed_qty * executed_price),
                         unrealized_pnl=0.0,
                         paper_trading=True,
-                        commission_paid=commission
+                        commission_paid=commission,
                     )
                     self.paper_portfolio.positions[symbol] = position
                     self._logger.debug(
-                        "Short position opened for %s: qty=%.6f @ %.4f",
-                        symbol, executed_qty, executed_price
+                        "Short position opened for %s: qty=%.6f @ %.4f", symbol, executed_qty, executed_price
                     )
 
             # Update portfolio totals
@@ -1273,6 +1358,7 @@ class BaseBroker(ABC):
             # Validate price for limit orders
             if BACKTRADER_AVAILABLE:
                 import backtrader as bt
+
                 if exectype == bt.Order.Limit and (price is None or price <= 0):
                     return False, f"Invalid price for limit order: {price}. Price must be positive."
 

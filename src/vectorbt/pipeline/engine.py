@@ -1,23 +1,18 @@
-import vectorbt as vbt
-import pandas as pd
-import numpy as np
 import operator
-from typing import Dict, Any, List, Union, Optional
-from src.shared.indicators.adapters import RSI, BBANDS, EMA, SMA, ATR, ADX
+from typing import Any, Dict, List, Union
+
+import pandas as pd
+
 from src.notification.logger import setup_logger
+from src.shared.indicators.adapters import ADX, ATR, BBANDS, EMA, RSI, SMA
 
 _logger = setup_logger(__name__, use_multiprocessing=True)
 
+
 class IndicatorRegistry:
     """Registry mapping strings to indicator implementation classes."""
-    MAPPING = {
-        "RSI": RSI,
-        "BBANDS": BBANDS,
-        "EMA": EMA,
-        "SMA": SMA,
-        "ATR": ATR,
-        "ADX": ADX
-    }
+
+    MAPPING = {"RSI": RSI, "BBANDS": BBANDS, "EMA": EMA, "SMA": SMA, "ATR": ATR, "ADX": ADX}
 
     @classmethod
     def get(cls, indicator_type: str):
@@ -25,8 +20,10 @@ class IndicatorRegistry:
             raise ValueError(f"Unknown indicator type: {indicator_type}")
         return cls.MAPPING[indicator_type]
 
+
 class IndicatorResult:
     """Wrapper for indicator results to handle data and parameters uniformly."""
+
     def __init__(self, data: Any, params: Dict[str, Any]):
         self.data = data
         self.params = params
@@ -60,6 +57,7 @@ class IndicatorResult:
         except (AttributeError, TypeError):
             raise KeyError(f"Field '{field}' not found in indicator result or parameters")
 
+
 class LogicEvaluator:
     """Evaluates nested logic trees for entry and exit signals."""
 
@@ -69,11 +67,13 @@ class LogicEvaluator:
         "<=": operator.le,
         ">=": operator.ge,
         "==": operator.eq,
-        "!=": operator.ne
+        "!=": operator.ne,
     }
 
     @classmethod
-    def evaluate(cls, node: Union[Dict[str, Any], List[Any]], results: Dict[str, IndicatorResult], close: pd.DataFrame) -> pd.DataFrame:
+    def evaluate(
+        cls, node: Union[Dict[str, Any], List[Any]], results: Dict[str, IndicatorResult], close: pd.DataFrame
+    ) -> pd.DataFrame:
         """
         Recursively evaluate a logic node.
 
@@ -135,6 +135,7 @@ class LogicEvaluator:
 
         return op_func(left_val, right_val)
 
+
 class StrategyEngine:
     """Coordinates indicator calculation and logic evaluation based on JSON config."""
 
@@ -152,11 +153,11 @@ class StrategyEngine:
             params: Parameters from Optuna trial
         """
         # Ensure we have a Close series for base operations
-        if 'column' in data.columns.names and 'Close' in data.columns.get_level_values('column'):
-            close = data.xs('Close', level='column', axis=1)
-            high = data.xs('High', level='column', axis=1)
-            low = data.xs('Low', level='column', axis=1)
-            open_px = data.xs('Open', level='column', axis=1)
+        if "column" in data.columns.names and "Close" in data.columns.get_level_values("column"):
+            close = data.xs("Close", level="column", axis=1)
+            high = data.xs("High", level="column", axis=1)
+            low = data.xs("Low", level="column", axis=1)
+            open_px = data.xs("Open", level="column", axis=1)
         else:
             # Fallback if only Close is provided
             close = data
@@ -170,13 +171,13 @@ class StrategyEngine:
         for ind_id, ind_cfg in self.indicators_config.items():
             ind_type = ind_cfg["type"]
             impl = IndicatorRegistry.get(ind_type)
-            target_tf = ind_cfg.get("timeframe") # e.g. "1h"
+            target_tf = ind_cfg.get("timeframe")  # e.g. "1h"
 
             # Prepare data for this indicator (MTF Resampling if needed)
             if target_tf:
                 # Map 'm' to 'min' to avoid pandas deprecation warnings
-                if target_tf.endswith('m') and not target_tf.endswith('min'):
-                    target_tf = target_tf.replace('m', 'min')
+                if target_tf.endswith("m") and not target_tf.endswith("min"):
+                    target_tf = target_tf.replace("m", "min")
 
                 _logger.debug(f"Resampling {ind_id} to {target_tf}")
                 # Use vbt resampling to aggregate
@@ -204,14 +205,19 @@ class StrategyEngine:
             # Compute and wrap
             try:
                 import inspect
+
                 sig = inspect.signature(impl.compute)
 
                 # Map OHLC components based on signature
                 compute_args = {}
-                if 'high' in sig.parameters: compute_args['high'] = calc_high
-                if 'low' in sig.parameters: compute_args['low'] = calc_low
-                if 'close' in sig.parameters: compute_args['close'] = calc_close
-                if 'open_px' in sig.parameters: compute_args['open_px'] = calc_high # fallback or use actual
+                if "high" in sig.parameters:
+                    compute_args["high"] = calc_high
+                if "low" in sig.parameters:
+                    compute_args["low"] = calc_low
+                if "close" in sig.parameters:
+                    compute_args["close"] = calc_close
+                if "open_px" in sig.parameters:
+                    compute_args["open_px"] = calc_high  # fallback or use actual
 
                 # Add other window/optuna params
                 for k, v in ind_params.items():
@@ -249,7 +255,7 @@ class StrategyEngine:
                 "entries": signals.get("long_entry"),
                 "exits": signals.get("long_exit"),
                 "short_entries": signals.get("short_entry"),
-                "short_exits": signals.get("short_exits")
+                "short_exits": signals.get("short_exits"),
             },
-            "results": results
+            "results": results,
         }

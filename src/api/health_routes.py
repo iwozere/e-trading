@@ -11,26 +11,25 @@ Consolidates:
 - Channel ownership and queue status
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from typing import Dict, Any
-from datetime import datetime, timezone
-from pathlib import Path
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, HTTPException
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.api.auth import get_current_user
-from src.data.db.models.model_users import User
-from src.api.services.telegram_health_service import TelegramHealthService
 from src.api.services.notification_health_service import NotificationHealthService
-from src.notification.logger import setup_logger
+from src.api.services.telegram_health_service import TelegramHealthService
+from src.data.db.models.model_notification import Message
+from src.data.db.models.model_users import User
 
 # For database connectivity check
 from src.data.db.services.database_service import get_database_service
-from src.data.db.models.model_notification import Message
-from src.data.db.services.health_monitoring_service import HealthMonitoringService
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -63,20 +62,20 @@ async def health_check():
 
         return {
             "status": "healthy",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "database": "connected",
             "api": "operational",
-            "total_messages": message_count
+            "total_messages": message_count,
         }
 
     except Exception as e:
         _logger.exception("Health check failed:")
         return {
             "status": "unhealthy",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "error": str(e),
             "api": "operational",
-            "database": "unavailable"
+            "database": "unavailable",
         }
 
 
@@ -99,29 +98,22 @@ async def get_channels_health(current_user: User = Depends(get_current_user)):
         notification_health = notification_health_service.get_health_status()
 
         # Determine overall health
-        all_healthy = (
-            telegram_health["status"] == "healthy" and
-            notification_health["status"] == "healthy"
-        )
+        all_healthy = telegram_health["status"] == "healthy" and notification_health["status"] == "healthy"
 
         return {
             "status": "healthy" if all_healthy else "degraded",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "services": {
-                "telegram_bot": telegram_health,
-                "notification_service": notification_health
-            },
+            "timestamp": datetime.now(UTC).isoformat(),
+            "services": {"telegram_bot": telegram_health, "notification_service": notification_health},
             "summary": {
                 "all_services_healthy": all_healthy,
                 "total_pending_messages": (
-                    telegram_health["queue"]["pending"] +
-                    notification_health["queue"]["pending"]
+                    telegram_health["queue"]["pending"] + notification_health["queue"]["pending"]
                 ),
                 "channel_ownership": {
                     "telegram_bot": ["telegram"],
-                    "notification_service": notification_health["channels"]["owned"]
-                }
-            }
+                    "notification_service": notification_health["channels"]["owned"],
+                },
+            },
         }
 
     except Exception:

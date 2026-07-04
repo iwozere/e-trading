@@ -10,13 +10,13 @@ from pathlib import Path
 from typing import Any, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.screeners.ibkr_screener_service import IBKRScreenerService
 from src.screeners.discovery.base import IDiscoveryProvider
-
+from src.screeners.ibkr_screener_service import IBKRScreenerService
 
 # ---------------------------------------------------------------------------
 # Minimal stubs
 # ---------------------------------------------------------------------------
+
 
 class _FakeDiscovery(IDiscoveryProvider):
     """Returns a fixed list of symbols."""
@@ -33,6 +33,7 @@ class _FakeDownloader:
 
     def get_ohlcv(self, symbol: str, interval: str, start_date: Any, end_date: Any) -> Any:
         import pandas as pd
+
         return pd.DataFrame()
 
 
@@ -43,6 +44,7 @@ class _FakeStrategy:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestSignalFingerprint(unittest.TestCase):
     """Tests for _signal_fingerprint()."""
@@ -124,10 +126,12 @@ class TestSignalDeduplication(unittest.IsolatedAsyncioTestCase):
         notifier.notify_signals = AsyncMock()
         service.notifier = notifier
 
-        results = iter([
-            {"symbol": "AAPL", "signal": "buy", "price": 150.0},
-            {"symbol": "AAPL", "signal": "buy", "price": 155.0},  # price changed
-        ])
+        results = iter(
+            [
+                {"symbol": "AAPL", "signal": "buy", "price": 150.0},
+                {"symbol": "AAPL", "signal": "buy", "price": 155.0},  # price changed
+            ]
+        )
 
         with patch.object(service, "_process_symbol", new=AsyncMock(side_effect=lambda s: next(results))):
             await service.run_once()
@@ -157,9 +161,7 @@ class TestResultsDir(unittest.TestCase):
             discovery_providers=[],
             downloader=_FakeDownloader(),  # type: ignore[arg-type]
         )
-        self.assertTrue(str(service.results_dir).endswith(
-            str(Path("results") / "screeners" / "ibkr")
-        ))
+        self.assertTrue(str(service.results_dir).endswith(str(Path("results") / "screeners" / "ibkr")))
 
 
 class TestDownloaderInjection(unittest.TestCase):

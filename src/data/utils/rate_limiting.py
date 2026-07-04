@@ -5,10 +5,10 @@ This module provides rate limiting functionality to ensure compliance
 with API rate limits across different data providers.
 """
 
-import time
-import threading
-from typing import Dict, Optional, Any
 import logging
+import threading
+import time
+from typing import Any, Dict
 
 _logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class RateLimiter:
         requests_per_minute: int = 600,
         burst_size: int = 5,
         backoff_factor: float = 2.0,
-        max_backoff: float = 60.0
+        max_backoff: float = 60.0,
     ):
         """
         Initialize rate limiter.
@@ -59,7 +59,7 @@ class RateLimiter:
         self._total_delays = 0
         self._total_failures = 0
 
-    def acquire(self, timeout: Optional[float] = None) -> bool:
+    def acquire(self, timeout: float | None = None) -> bool:
         """
         Acquire permission to make a request.
 
@@ -129,7 +129,7 @@ class RateLimiter:
 
         # Apply backoff if we've had recent failures
         if self._consecutive_failures > 0:
-            backoff_delay = base_delay * (self.backoff_factor ** self._consecutive_failures)
+            backoff_delay = base_delay * (self.backoff_factor**self._consecutive_failures)
             backoff_delay = min(backoff_delay, self.max_backoff)
             return max(base_delay, backoff_delay)
 
@@ -141,7 +141,7 @@ class RateLimiter:
             self._consecutive_failures = 0
             self._last_failure_time = None
 
-    def record_failure(self, error: Optional[Exception] = None):
+    def record_failure(self, error: Exception | None = None):
         """Record a failed request."""
         with self._lock:
             self._consecutive_failures += 1
@@ -149,10 +149,7 @@ class RateLimiter:
             self._total_failures += 1
 
             if error:
-                _logger.warning(
-                    "Request failed (consecutive failures: %d): %s",
-                    self._consecutive_failures, error
-                )
+                _logger.warning("Request failed (consecutive failures: %d): %s", self._consecutive_failures, error)
 
     def wait_if_needed(self):
         """Wait if necessary to comply with rate limits."""
@@ -169,14 +166,14 @@ class RateLimiter:
         """Get rate limiter statistics."""
         with self._lock:
             return {
-                'total_requests': self._total_requests,
-                'total_delays': self._total_delays,
-                'total_failures': self._total_failures,
-                'consecutive_failures': self._consecutive_failures,
-                'current_second_requests': len(self._second_requests),
-                'current_minute_requests': len(self._minute_requests),
-                'requests_per_second': self.requests_per_second,
-                'requests_per_minute': self.requests_per_minute
+                "total_requests": self._total_requests,
+                "total_delays": self._total_delays,
+                "total_failures": self._total_failures,
+                "consecutive_failures": self._consecutive_failures,
+                "current_second_requests": len(self._second_requests),
+                "current_minute_requests": len(self._minute_requests),
+                "requests_per_second": self.requests_per_second,
+                "requests_per_minute": self.requests_per_minute,
             }
 
     def reset_stats(self):
@@ -222,27 +219,21 @@ class ProviderRateLimiter:
         """Create a default rate limiter for a provider."""
         # Default limits based on common provider restrictions
         defaults = {
-            'binance': (10, 1200),      # 10 req/s, 1200 req/min
-            'yahoo': (100, 2000),       # 100 req/s, 2000 req/min
-            'alpha_vantage': (1, 5),    # 1 req/s, 5 req/min (free tier)
-            'finnhub': (1, 60),         # 1 req/s, 60 req/min (free tier)
-            'polygon': (1, 5),          # 1 req/s, 5 req/min (free tier)
-            'twelve_data': (8, 800),    # 8 req/s, 800 req/min (free tier)
-            'fmp': (5, 300),            # 5 req/s, 300 req/min (free tier)
-            'coingecko': (1, 50),       # 1 req/s, 50 req/min (free tier)
-            'ibkr': (10, 100),          # 10 req/s, 100 req/min
+            "binance": (10, 1200),  # 10 req/s, 1200 req/min
+            "yahoo": (100, 2000),  # 100 req/s, 2000 req/min
+            "alpha_vantage": (1, 5),  # 1 req/s, 5 req/min (free tier)
+            "finnhub": (1, 60),  # 1 req/s, 60 req/min (free tier)
+            "polygon": (1, 5),  # 1 req/s, 5 req/min (free tier)
+            "twelve_data": (8, 800),  # 8 req/s, 800 req/min (free tier)
+            "fmp": (5, 300),  # 5 req/s, 300 req/min (free tier)
+            "coingecko": (1, 50),  # 1 req/s, 50 req/min (free tier)
+            "ibkr": (10, 100),  # 10 req/s, 100 req/min
         }
 
         req_per_sec, req_per_min = defaults.get(provider, (10, 600))
         return RateLimiter(req_per_sec, req_per_min)
 
-    def configure_provider(
-        self,
-        provider: str,
-        requests_per_second: int,
-        requests_per_minute: int,
-        **kwargs
-    ):
+    def configure_provider(self, provider: str, requests_per_second: int, requests_per_minute: int, **kwargs):
         """
         Configure rate limits for a specific provider.
 
@@ -254,18 +245,13 @@ class ProviderRateLimiter:
         """
         with self._lock:
             self._limiters[provider] = RateLimiter(
-                requests_per_second=requests_per_second,
-                requests_per_minute=requests_per_minute,
-                **kwargs
+                requests_per_second=requests_per_second, requests_per_minute=requests_per_minute, **kwargs
             )
 
     def get_all_stats(self) -> Dict[str, Dict[str, Any]]:
         """Get statistics for all providers."""
         with self._lock:
-            return {
-                provider: limiter.get_stats()
-                for provider, limiter in self._limiters.items()
-            }
+            return {provider: limiter.get_stats() for provider, limiter in self._limiters.items()}
 
     def reset_all_stats(self):
         """Reset statistics for all providers."""
@@ -289,7 +275,7 @@ class AdaptiveRateLimiter(RateLimiter):
         min_requests_per_second: int = 1,
         adaptation_factor: float = 0.8,
         recovery_factor: float = 1.1,
-        **kwargs
+        **kwargs,
     ):
         """
         Initialize adaptive rate limiter.
@@ -311,23 +297,22 @@ class AdaptiveRateLimiter(RateLimiter):
         self._original_requests_per_second = requests_per_second
         self._original_requests_per_minute = requests_per_minute
 
-    def record_failure(self, error: Optional[Exception] = None):
+    def record_failure(self, error: Exception | None = None):
         """Record a failed request and adapt rate limits."""
         super().record_failure(error)
 
         # Reduce rate limits on failure
         self.requests_per_second = max(
-            self.min_requests_per_second,
-            int(self.requests_per_second * self.adaptation_factor)
+            self.min_requests_per_second, int(self.requests_per_second * self.adaptation_factor)
         )
         self.requests_per_minute = max(
-            self.min_requests_per_second * 60,
-            int(self.requests_per_minute * self.adaptation_factor)
+            self.min_requests_per_second * 60, int(self.requests_per_minute * self.adaptation_factor)
         )
 
         _logger.info(
             "Adapted rate limits after failure: %d req/s, %d req/min",
-            self.requests_per_second, self.requests_per_minute
+            self.requests_per_second,
+            self.requests_per_minute,
         )
 
     def record_success(self):
@@ -337,12 +322,10 @@ class AdaptiveRateLimiter(RateLimiter):
         # Gradually recover rate limits on success
         if self._consecutive_failures == 0:
             self.requests_per_second = min(
-                self._original_requests_per_second,
-                int(self.requests_per_second * self.recovery_factor)
+                self._original_requests_per_second, int(self.requests_per_second * self.recovery_factor)
             )
             self.requests_per_minute = min(
-                self._original_requests_per_minute,
-                int(self.requests_per_minute * self.recovery_factor)
+                self._original_requests_per_minute, int(self.requests_per_minute * self.recovery_factor)
             )
 
     def reset_to_original_limits(self):
@@ -362,16 +345,9 @@ def get_provider_limiter(provider: str) -> RateLimiter:
     return _provider_limiter.get_limiter(provider)
 
 
-def configure_provider_limits(
-    provider: str,
-    requests_per_second: int,
-    requests_per_minute: int,
-    **kwargs
-):
+def configure_provider_limits(provider: str, requests_per_second: int, requests_per_minute: int, **kwargs):
     """Configure rate limits for a specific provider."""
-    _provider_limiter.configure_provider(
-        provider, requests_per_second, requests_per_minute, **kwargs
-    )
+    _provider_limiter.configure_provider(provider, requests_per_second, requests_per_minute, **kwargs)
 
 
 def get_all_provider_stats() -> Dict[str, Dict[str, Any]]:

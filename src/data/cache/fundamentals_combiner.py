@@ -14,28 +14,32 @@ Configuration is loaded from config/data/fundamentals.json and provides:
 
 import json
 import os
-from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any, Dict, List
 
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
+
 
 @dataclass
 class ProviderData:
     """Container for provider-specific fundamentals data."""
+
     provider: str
     data: Dict[str, Any]
     quality_score: float
     timestamp: datetime
     priority: int
 
+
 class FundamentalsCombiner:
     """
     Combines fundamentals data from multiple providers using configurable strategies.
     """
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: str | None = None):
         """
         Initialize the fundamentals combiner with configuration-based settings.
 
@@ -44,27 +48,27 @@ class FundamentalsCombiner:
         """
         self.config = self._load_configuration(config_path)
         self.provider_priorities = self._build_provider_priorities()
-        self.provider_sequences = self.config.get('provider_sequences', {})
-        self.field_priorities = self.config.get('field_priorities', {})
-        self.combination_strategies = self.config.get('combination_strategies', {})
-        self.cache_settings = self.config.get('cache_settings', {})
-        self.data_validation = self.config.get('data_validation', {})
+        self.provider_sequences = self.config.get("provider_sequences", {})
+        self.field_priorities = self.config.get("field_priorities", {})
+        self.combination_strategies = self.config.get("combination_strategies", {})
+        self.cache_settings = self.config.get("cache_settings", {})
+        self.data_validation = self.config.get("data_validation", {})
 
         # Field-specific validation rules
         self.field_validators = {
-            'market_cap': self._validate_positive_number,
-            'pe_ratio': self._validate_pe_ratio,
-            'pb_ratio': self._validate_positive_number,
-            'dividend_yield': self._validate_percentage,
-            'revenue': self._validate_positive_number,
-            'net_income': self._validate_number,
-            'total_debt': self._validate_positive_number,
-            'cash': self._validate_positive_number,
-            'shares_outstanding': self._validate_positive_number,
-            'book_value': self._validate_positive_number
+            "market_cap": self._validate_positive_number,
+            "pe_ratio": self._validate_pe_ratio,
+            "pb_ratio": self._validate_positive_number,
+            "dividend_yield": self._validate_percentage,
+            "revenue": self._validate_positive_number,
+            "net_income": self._validate_number,
+            "total_debt": self._validate_positive_number,
+            "cash": self._validate_positive_number,
+            "shares_outstanding": self._validate_positive_number,
+            "book_value": self._validate_positive_number,
         }
 
-    def _load_configuration(self, config_path: Optional[str] = None) -> Dict[str, Any]:
+    def _load_configuration(self, config_path: str | None = None) -> Dict[str, Any]:
         """
         Load fundamentals configuration from JSON file with validation.
 
@@ -78,14 +82,15 @@ class FundamentalsCombiner:
             # Default path relative to project root
             current_dir = os.path.dirname(os.path.abspath(__file__))
             project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
-            config_path = os.path.join(project_root, 'config', 'data', 'fundamentals.json')
+            config_path = os.path.join(project_root, "config", "data", "fundamentals.json")
 
         try:
-            with open(config_path, 'r') as f:
+            with open(config_path) as f:
                 config = json.load(f)
 
             # Validate configuration
             from src.data.config.fundamentals_config_validator import validate_fundamentals_config
+
             is_valid, errors = validate_fundamentals_config(config_path)
 
             if not is_valid:
@@ -111,22 +116,15 @@ class FundamentalsCombiner:
     def _get_default_config(self) -> Dict[str, Any]:
         """Get default configuration when file loading fails."""
         return {
-            'provider_sequences': {
-                'statements': ['alpha_vantage', 'yahoo', 'twelvedata', 'fmp'],
-                'ratios': ['finnhub', 'yahoo', 'alpha_vantage', 'twelvedata', 'fmp'],
-                'profile': ['finnhub', 'yahoo', 'alpha_vantage', 'twelvedata', 'fmp']
+            "provider_sequences": {
+                "statements": ["alpha_vantage", "yahoo", "twelvedata", "fmp"],
+                "ratios": ["finnhub", "yahoo", "alpha_vantage", "twelvedata", "fmp"],
+                "profile": ["finnhub", "yahoo", "alpha_vantage", "twelvedata", "fmp"],
             },
-            'field_priorities': {},
-            'combination_strategies': {
-                'priority_based': {'default': True}
-            },
-            'cache_settings': {
-                'default_ttl_days': 7
-            },
-            'data_validation': {
-                'enabled': True,
-                'min_quality_score': 0.8
-            }
+            "field_priorities": {},
+            "combination_strategies": {"priority_based": {"default": True}},
+            "cache_settings": {"default_ttl_days": 7},
+            "data_validation": {"enabled": True, "min_quality_score": 0.8},
         }
 
     def _build_provider_priorities(self) -> Dict[str, int]:
@@ -137,24 +135,24 @@ class FundamentalsCombiner:
             Dictionary mapping provider names to priority numbers (lower = higher priority)
         """
         priorities = {}
-        provider_settings = self.config.get('provider_settings', {})
+        provider_settings = self.config.get("provider_settings", {})
 
         for provider, settings in provider_settings.items():
-            priorities[provider] = settings.get('priority', 999)
+            priorities[provider] = settings.get("priority", 999)
 
         # Fallback to default priorities if not configured
         if not priorities:
             priorities = {
-                'finnhub': 1,
-                'yahoo': 2,
-                'alpha_vantage': 3,
-                'twelvedata': 4,
-                'fmp': 5,
-                'ibkr': 6,
-                'polygon': 7,
-                'tiingo': 8,
-                'binance': 9,
-                'coingecko': 10
+                "finnhub": 1,
+                "yahoo": 2,
+                "alpha_vantage": 3,
+                "twelvedata": 4,
+                "fmp": 5,
+                "ibkr": 6,
+                "polygon": 7,
+                "tiingo": 8,
+                "binance": 9,
+                "coingecko": 10,
             }
 
         return priorities
@@ -169,7 +167,7 @@ class FundamentalsCombiner:
         Returns:
             List of providers in priority order
         """
-        return self.provider_sequences.get(data_type, ['fmp', 'yfinance', 'alpha_vantage'])
+        return self.provider_sequences.get(data_type, ["fmp", "yfinance", "alpha_vantage"])
 
     def get_field_provider_priority(self, field_path: str) -> List[str]:
         """
@@ -183,18 +181,18 @@ class FundamentalsCombiner:
         """
         # Navigate through nested field priorities
         current = self.field_priorities
-        for part in field_path.split('.'):
+        for part in field_path.split("."):
             if isinstance(current, dict) and part in current:
                 current = current[part]
             else:
                 # Fall back to general provider sequence
-                return self.get_provider_sequence('ratios' if 'ratio' in field_path.lower() else 'profile')
+                return self.get_provider_sequence("ratios" if "ratio" in field_path.lower() else "profile")
 
         if isinstance(current, list):
             return current
         else:
             # Fall back to general provider sequence
-            return self.get_provider_sequence('ratios' if 'ratio' in field_path.lower() else 'profile')
+            return self.get_provider_sequence("ratios" if "ratio" in field_path.lower() else "profile")
 
     def get_ttl_for_data_type(self, data_type: str) -> int:
         """
@@ -206,19 +204,20 @@ class FundamentalsCombiner:
         Returns:
             TTL in days
         """
-        refresh_intervals = self.config.get('refresh_intervals', {})
-        interval_str = refresh_intervals.get(data_type, '7d')
+        refresh_intervals = self.config.get("refresh_intervals", {})
+        interval_str = refresh_intervals.get(data_type, "7d")
 
         # Parse interval string (e.g., '7d', '14d', '90d')
-        if interval_str.endswith('d'):
+        if interval_str.endswith("d"):
             return int(interval_str[:-1])
-        elif interval_str.endswith('h'):
+        elif interval_str.endswith("h"):
             return int(interval_str[:-1]) / 24
         else:
             return 7  # Default to 7 days
 
-    def combine_snapshots(self, provider_data: Dict[str, Dict[str, Any]],
-                         strategy: str = "priority_based", data_type: str = "general") -> Dict[str, Any]:
+    def combine_snapshots(
+        self, provider_data: Dict[str, Dict[str, Any]], strategy: str = "priority_based", data_type: str = "general"
+    ) -> Dict[str, Any]:
         """
         Combine fundamentals data from multiple providers.
 
@@ -236,13 +235,15 @@ class FundamentalsCombiner:
         providers = []
         for provider, data in provider_data.items():
             if data:  # Skip empty data
-                providers.append(ProviderData(
-                    provider=provider,
-                    data=data,
-                    quality_score=self._calculate_data_quality(data),
-                    timestamp=datetime.now(),  # Could be extracted from data if available
-                    priority=self.provider_priorities.get(provider, 999)
-                ))
+                providers.append(
+                    ProviderData(
+                        provider=provider,
+                        data=data,
+                        quality_score=self._calculate_data_quality(data),
+                        timestamp=datetime.now(),  # Could be extracted from data if available
+                        priority=self.provider_priorities.get(provider, 999),
+                    )
+                )
 
         if not providers:
             return {}
@@ -278,7 +279,7 @@ class FundamentalsCombiner:
         for field in all_fields:
             best_value = None
             best_provider = None
-            best_priority = float('inf')
+            best_priority = float("inf")
 
             # Get field-specific provider priority
             field_priority_list = self.get_field_provider_priority(field)
@@ -304,15 +305,18 @@ class FundamentalsCombiner:
                 field_sources[field] = best_provider
 
         # Add metadata about data sources
-        combined['_metadata'] = {
-            'combination_strategy': 'priority_based',
-            'field_sources': field_sources,
-            'providers_used': [p.provider for p in providers],
-            'combination_timestamp': datetime.now().isoformat()
+        combined["_metadata"] = {
+            "combination_strategy": "priority_based",
+            "field_sources": field_sources,
+            "providers_used": [p.provider for p in providers],
+            "combination_timestamp": datetime.now().isoformat(),
         }
 
-        _logger.debug("Combined fundamentals using priority-based strategy: %d fields from %d providers",
-                     len(combined), len(providers))
+        _logger.debug(
+            "Combined fundamentals using priority-based strategy: %d fields from %d providers",
+            len(combined),
+            len(providers),
+        )
 
         return combined
 
@@ -341,8 +345,10 @@ class FundamentalsCombiner:
                     if value is not None and self._is_valid_field_value(field, value):
                         # Use quality score as tiebreaker, then priority
                         quality_score = provider.quality_score
-                        if quality_score > best_quality or (quality_score == best_quality and
-                                                          provider.priority < self.provider_priorities.get(best_provider, 999)):
+                        if quality_score > best_quality or (
+                            quality_score == best_quality
+                            and provider.priority < self.provider_priorities.get(best_provider, 999)
+                        ):
                             best_value = value
                             best_provider = provider.provider
                             best_quality = quality_score
@@ -352,15 +358,18 @@ class FundamentalsCombiner:
                 field_sources[field] = best_provider
 
         # Add metadata
-        combined['_metadata'] = {
-            'combination_strategy': 'quality_based',
-            'field_sources': field_sources,
-            'providers_used': [p.provider for p in providers],
-            'combination_timestamp': datetime.now().isoformat()
+        combined["_metadata"] = {
+            "combination_strategy": "quality_based",
+            "field_sources": field_sources,
+            "providers_used": [p.provider for p in providers],
+            "combination_timestamp": datetime.now().isoformat(),
         }
 
-        _logger.debug("Combined fundamentals using quality-based strategy: %d fields from %d providers",
-                     len(combined), len(providers))
+        _logger.debug(
+            "Combined fundamentals using quality-based strategy: %d fields from %d providers",
+            len(combined),
+            len(providers),
+        )
 
         return combined
 
@@ -397,7 +406,7 @@ class FundamentalsCombiner:
                 consensus_value = self._calculate_consensus_value(values, providers_with_field)
                 if consensus_value is not None:
                     combined[field] = consensus_value
-                    field_sources[field] = 'consensus'
+                    field_sources[field] = "consensus"
                     continue
 
             # Fall back to highest priority provider
@@ -406,15 +415,16 @@ class FundamentalsCombiner:
             field_sources[field] = best_provider.provider
 
         # Add metadata
-        combined['_metadata'] = {
-            'combination_strategy': 'consensus',
-            'field_sources': field_sources,
-            'providers_used': [p.provider for p in providers],
-            'combination_timestamp': datetime.now().isoformat()
+        combined["_metadata"] = {
+            "combination_strategy": "consensus",
+            "field_sources": field_sources,
+            "providers_used": [p.provider for p in providers],
+            "combination_timestamp": datetime.now().isoformat(),
         }
 
-        _logger.debug("Combined fundamentals using consensus strategy: %d fields from %d providers",
-                     len(combined), len(providers))
+        _logger.debug(
+            "Combined fundamentals using consensus strategy: %d fields from %d providers", len(combined), len(providers)
+        )
 
         return combined
 
@@ -433,16 +443,16 @@ class FundamentalsCombiner:
 
         # Define important fields and their weights
         important_fields = {
-            'market_cap': 0.15,
-            'pe_ratio': 0.12,
-            'pb_ratio': 0.12,
-            'dividend_yield': 0.08,
-            'revenue': 0.10,
-            'net_income': 0.10,
-            'total_debt': 0.08,
-            'cash': 0.08,
-            'shares_outstanding': 0.08,
-            'book_value': 0.09
+            "market_cap": 0.15,
+            "pe_ratio": 0.12,
+            "pb_ratio": 0.12,
+            "dividend_yield": 0.08,
+            "revenue": 0.10,
+            "net_income": 0.10,
+            "total_debt": 0.08,
+            "cash": 0.08,
+            "shares_outstanding": 0.08,
+            "book_value": 0.09,
         }
 
         score = 0.0
@@ -481,13 +491,23 @@ class FundamentalsCombiner:
     def _is_numeric_field(self, field: str) -> bool:
         """Check if a field is numeric."""
         numeric_fields = {
-            'market_cap', 'pe_ratio', 'pb_ratio', 'dividend_yield',
-            'revenue', 'net_income', 'total_debt', 'cash',
-            'shares_outstanding', 'book_value', 'eps', 'roe', 'roa'
+            "market_cap",
+            "pe_ratio",
+            "pb_ratio",
+            "dividend_yield",
+            "revenue",
+            "net_income",
+            "total_debt",
+            "cash",
+            "shares_outstanding",
+            "book_value",
+            "eps",
+            "roe",
+            "roa",
         }
         return field in numeric_fields
 
-    def _calculate_consensus_value(self, values: List[Any], providers: List[ProviderData]) -> Optional[Any]:
+    def _calculate_consensus_value(self, values: List[Any], providers: List[ProviderData]) -> Any | None:
         """
         Calculate consensus value for numeric fields.
 
@@ -563,7 +583,8 @@ class FundamentalsCombiner:
 # Global combiner instance
 _fundamentals_combiner = None
 
-def get_fundamentals_combiner(config_path: Optional[str] = None) -> FundamentalsCombiner:
+
+def get_fundamentals_combiner(config_path: str | None = None) -> FundamentalsCombiner:
     """
     Get the global fundamentals combiner instance.
 

@@ -4,19 +4,20 @@ Unit tests for Support/Resistance Indicator
 Tests swing detection, support/resistance calculation, and edge cases.
 """
 
+import sys
 import unittest
 from pathlib import Path
-import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
+from datetime import datetime, timedelta
+
 import backtrader as bt
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
 
-from src.indicators.support_resistance_indicator import SupportResistanceIndicator, SupportResistance
+from src.indicators.support_resistance_indicator import SupportResistance, SupportResistanceIndicator
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -74,11 +75,13 @@ class TestSupportResistanceIndicator(unittest.TestCase):
 
             def next(self):
                 if len(self.data) >= 20:
-                    results.append({
-                        'resistance': self.sr.lines.resistance[0],
-                        'support': self.sr.lines.support[0],
-                        'close': self.data.close[0]
-                    })
+                    results.append(
+                        {
+                            "resistance": self.sr.lines.resistance[0],
+                            "support": self.sr.lines.support[0],
+                            "close": self.data.close[0],
+                        }
+                    )
 
         self.cerebro.addstrategy(TestStrategy)
         data = bt.feeds.PandasData(dataname=self._create_swing_data())
@@ -90,8 +93,8 @@ class TestSupportResistanceIndicator(unittest.TestCase):
         self.assertGreater(len(results), 0, "Should have S/R values")
 
         # At least some bars should have valid resistance/support
-        valid_resistance = sum(1 for r in results if not np.isnan(r['resistance']))
-        valid_support = sum(1 for r in results if not np.isnan(r['support']))
+        valid_resistance = sum(1 for r in results if not np.isnan(r["resistance"]))
+        valid_support = sum(1 for r in results if not np.isnan(r["support"]))
 
         _logger.info(f"Valid resistance: {valid_resistance}/{len(results)}")
         _logger.info(f"Valid support: {valid_support}/{len(results)}")
@@ -112,11 +115,9 @@ class TestSupportResistanceIndicator(unittest.TestCase):
                 if len(self.data) >= 30:
                     resistance = self.sr.lines.resistance[0]
                     close = self.data.close[0]
-                    results.append({
-                        'resistance': resistance,
-                        'close': close,
-                        'valid': np.isnan(resistance) or resistance > close
-                    })
+                    results.append(
+                        {"resistance": resistance, "close": close, "valid": np.isnan(resistance) or resistance > close}
+                    )
 
         self.cerebro.addstrategy(TestStrategy)
         data = bt.feeds.PandasData(dataname=self._create_swing_data())
@@ -125,7 +126,7 @@ class TestSupportResistanceIndicator(unittest.TestCase):
         self.cerebro.run()
 
         # All valid resistances should be above price
-        invalid = [r for r in results if not r['valid']]
+        invalid = [r for r in results if not r["valid"]]
 
         if invalid:
             _logger.error(f"Found {len(invalid)} invalid resistances")
@@ -147,11 +148,7 @@ class TestSupportResistanceIndicator(unittest.TestCase):
                 if len(self.data) >= 30:
                     support = self.sr.lines.support[0]
                     close = self.data.close[0]
-                    results.append({
-                        'support': support,
-                        'close': close,
-                        'valid': np.isnan(support) or support < close
-                    })
+                    results.append({"support": support, "close": close, "valid": np.isnan(support) or support < close})
 
         self.cerebro.addstrategy(TestStrategy)
         data = bt.feeds.PandasData(dataname=self._create_swing_data())
@@ -160,7 +157,7 @@ class TestSupportResistanceIndicator(unittest.TestCase):
         self.cerebro.run()
 
         # All valid supports should be below price
-        invalid = [r for r in results if not r['valid']]
+        invalid = [r for r in results if not r["valid"]]
 
         if invalid:
             _logger.error(f"Found {len(invalid)} invalid supports")
@@ -225,8 +222,7 @@ class TestSupportResistanceIndicator(unittest.TestCase):
             late_avg = np.mean(resistances[-5:])
 
             _logger.info(f"Uptrend: early resistance avg={early_avg:.2f}, late avg={late_avg:.2f}")
-            self.assertGreater(late_avg, early_avg,
-                             "Resistances should increase during uptrend")
+            self.assertGreater(late_avg, early_avg, "Resistances should increase during uptrend")
 
     def test_downtrend_support_updates(self):
         """Test that support updates during downtrend"""
@@ -255,8 +251,7 @@ class TestSupportResistanceIndicator(unittest.TestCase):
             late_avg = np.mean(supports[-5:])
 
             _logger.info(f"Downtrend: early support avg={early_avg:.2f}, late avg={late_avg:.2f}")
-            self.assertLess(late_avg, early_avg,
-                           "Supports should decrease during downtrend")
+            self.assertLess(late_avg, early_avg, "Supports should decrease during downtrend")
 
     def test_flat_market_handling(self):
         """Test S/R indicator handles flat market"""
@@ -293,15 +288,10 @@ class TestSupportResistanceIndicator(unittest.TestCase):
         open_price = close + np.random.randn(100)
         volume = np.random.randint(1000000, 10000000, 100)
 
-        df = pd.DataFrame({
-            'datetime': dates,
-            'open': open_price,
-            'high': high,
-            'low': low,
-            'close': close,
-            'volume': volume
-        })
-        df.set_index('datetime', inplace=True)
+        df = pd.DataFrame(
+            {"datetime": dates, "open": open_price, "high": high, "low": low, "close": close, "volume": volume}
+        )
+        df.set_index("datetime", inplace=True)
 
         return df
 
@@ -320,15 +310,10 @@ class TestSupportResistanceIndicator(unittest.TestCase):
         open_price = close + np.random.randn(100) * 0.5
         volume = np.random.randint(1000000, 10000000, 100)
 
-        df = pd.DataFrame({
-            'datetime': dates,
-            'open': open_price,
-            'high': high,
-            'low': low,
-            'close': close,
-            'volume': volume
-        })
-        df.set_index('datetime', inplace=True)
+        df = pd.DataFrame(
+            {"datetime": dates, "open": open_price, "high": high, "low": low, "close": close, "volume": volume}
+        )
+        df.set_index("datetime", inplace=True)
 
         return df
 
@@ -342,15 +327,10 @@ class TestSupportResistanceIndicator(unittest.TestCase):
         open_price = close - np.random.rand(100) * 0.5
         volume = np.random.randint(1000000, 10000000, 100)
 
-        df = pd.DataFrame({
-            'datetime': dates,
-            'open': open_price,
-            'high': high,
-            'low': low,
-            'close': close,
-            'volume': volume
-        })
-        df.set_index('datetime', inplace=True)
+        df = pd.DataFrame(
+            {"datetime": dates, "open": open_price, "high": high, "low": low, "close": close, "volume": volume}
+        )
+        df.set_index("datetime", inplace=True)
 
         return df
 
@@ -364,15 +344,10 @@ class TestSupportResistanceIndicator(unittest.TestCase):
         open_price = close + np.random.rand(100) * 0.5
         volume = np.random.randint(1000000, 10000000, 100)
 
-        df = pd.DataFrame({
-            'datetime': dates,
-            'open': open_price,
-            'high': high,
-            'low': low,
-            'close': close,
-            'volume': volume
-        })
-        df.set_index('datetime', inplace=True)
+        df = pd.DataFrame(
+            {"datetime": dates, "open": open_price, "high": high, "low": low, "close": close, "volume": volume}
+        )
+        df.set_index("datetime", inplace=True)
 
         return df
 
@@ -386,18 +361,13 @@ class TestSupportResistanceIndicator(unittest.TestCase):
         open_price = close
         volume = np.random.randint(1000000, 10000000, 100)
 
-        df = pd.DataFrame({
-            'datetime': dates,
-            'open': open_price,
-            'high': high,
-            'low': low,
-            'close': close,
-            'volume': volume
-        })
-        df.set_index('datetime', inplace=True)
+        df = pd.DataFrame(
+            {"datetime": dates, "open": open_price, "high": high, "low": low, "close": close, "volume": volume}
+        )
+        df.set_index("datetime", inplace=True)
 
         return df
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

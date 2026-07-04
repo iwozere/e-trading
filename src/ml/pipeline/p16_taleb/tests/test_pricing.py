@@ -8,19 +8,17 @@ known analytical values from options theory.
 import sys
 from pathlib import Path
 
-import pytest
-
 # Make p16_taleb/src/ importable
 _pipeline_dir = Path(__file__).resolve().parents[1]
 if str(_pipeline_dir) not in sys.path:
     sys.path.insert(0, str(_pipeline_dir))
 
-from src.pricing import bs_put_price, bs_greeks, skew_adjusted_sigma
-
+from src.pricing import bs_greeks, bs_put_price, skew_adjusted_sigma
 
 # ---------------------------------------------------------------------------
 # Black-Scholes put price
 # ---------------------------------------------------------------------------
+
 
 class TestBsPutPrice:
     def test_atm_put_known_value(self):
@@ -33,9 +31,7 @@ class TestBsPutPrice:
         """
         S, K, T, r, sigma = 100.0, 100.0, 90 / 252, 0.04, 0.20
         price = bs_put_price(S, K, T, r, sigma)
-        assert 0.038 * S <= price <= 0.045 * S, (
-            f"ATM put price {price:.4f} outside expected range [3.8%, 4.5%] of S"
-        )
+        assert 0.038 * S <= price <= 0.045 * S, f"ATM put price {price:.4f} outside expected range [3.8%, 4.5%] of S"
 
     def test_deep_otm_is_cheap(self):
         """A 30% OTM put should cost much less than a 10% OTM put."""
@@ -82,6 +78,7 @@ class TestBsPutPrice:
 # Greeks
 # ---------------------------------------------------------------------------
 
+
 class TestBsGreeks:
     def _greeks(self, S=100.0, K=85.0, T=90 / 365, r=0.04, sigma=0.20):
         return bs_greeks(S, K, T, r, sigma)
@@ -122,6 +119,7 @@ class TestBsGreeks:
 # ---------------------------------------------------------------------------
 # Skew model
 # ---------------------------------------------------------------------------
+
 
 class TestSkewAdjustedSigma:
     def test_zero_otm_returns_base_sigma(self):

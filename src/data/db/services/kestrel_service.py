@@ -9,7 +9,7 @@ so that P20 modules can import them by name and tests can patch them per-module.
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from src.data.db.services.base_service import BaseDBService, with_uow
 
@@ -32,7 +32,7 @@ class KestrelService(BaseDBService):
         return self.repos.kestrel.get_active_tickers()
 
     @with_uow
-    def get_universe_row(self, ticker: str) -> Optional[Dict[str, Any]]:
+    def get_universe_row(self, ticker: str) -> Dict[str, Any] | None:
         """Return a single universe row as a dict, or None."""
         return self.repos.kestrel.get_universe_row(ticker)
 
@@ -55,8 +55,8 @@ class KestrelService(BaseDBService):
         self,
         ticker: str,
         signal_type: str,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> List[Dict[str, Any]]:
         """Return signal rows for a ticker/type over an optional date range."""
         return self.repos.kestrel.get_signals(ticker, signal_type, start_date, end_date)
@@ -67,7 +67,7 @@ class KestrelService(BaseDBService):
         return self.repos.kestrel.get_signals_for_date(ticker, on_date)
 
     @with_uow
-    def get_latest_signal(self, ticker: str, signal_type: str) -> Optional[float]:
+    def get_latest_signal(self, ticker: str, signal_type: str) -> float | None:
         """Return the most recent value for a (ticker, signal_type) pair."""
         return self.repos.kestrel.get_latest_signal(ticker, signal_type)
 
@@ -81,7 +81,7 @@ class KestrelService(BaseDBService):
         return self.repos.kestrel.upsert_sentiment(rows)
 
     @with_uow
-    def get_latest_sentiment(self, ticker: str, source: str) -> Optional[Dict[str, Any]]:
+    def get_latest_sentiment(self, ticker: str, source: str) -> Dict[str, Any] | None:
         """Return the most recent sentiment row for a (ticker, source) pair."""
         return self.repos.kestrel.get_latest_sentiment(ticker, source)
 
@@ -90,8 +90,8 @@ class KestrelService(BaseDBService):
         self,
         ticker: str,
         source: str,
-        start: Optional[date] = None,
-        end: Optional[date] = None,
+        start: date | None = None,
+        end: date | None = None,
         days: int = 30,
     ) -> List[Dict[str, Any]]:
         """Return sentiment history. Date range takes precedence over days limit."""
@@ -136,7 +136,7 @@ class KestrelService(BaseDBService):
     # ------------------------------------------------------------------
 
     @with_uow
-    def get_llm_run_cached(self, task_type: str, input_ref: str) -> Optional[Dict[str, Any]]:
+    def get_llm_run_cached(self, task_type: str, input_ref: str) -> Dict[str, Any] | None:
         """Return a previously cached LLM output, or None if not found."""
         return self.repos.kestrel.get_llm_run_cached(task_type, input_ref)
 
@@ -165,9 +165,7 @@ class KestrelService(BaseDBService):
         self.repos.kestrel.upsert_watchlist(row)
 
     @with_uow
-    def get_watchlist(
-        self, state: Optional[str] = None, sleeve: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    def get_watchlist(self, state: str | None = None, sleeve: str | None = None) -> List[Dict[str, Any]]:
         """Return watchlist rows, optionally filtered by state and sleeve."""
         return self.repos.kestrel.get_watchlist(state, sleeve)
 
@@ -229,14 +227,14 @@ class KestrelService(BaseDBService):
         job: str,
         run_date: date,
         status: str,
-        rows_out: Optional[int] = None,
-        error: Optional[str] = None,
+        rows_out: int | None = None,
+        error: str | None = None,
     ) -> None:
         """Mark a job as finished (ok/failed/skipped)."""
         self.repos.kestrel.finish_job_run(job, run_date, status, rows_out, error)
 
     @with_uow
-    def get_job_run(self, job: str, run_date: date) -> Optional[str]:
+    def get_job_run(self, job: str, run_date: date) -> str | None:
         """Return the status of a job run, or None if no row exists."""
         return self.repos.kestrel.get_job_run(job, run_date)
 
@@ -248,15 +246,15 @@ class KestrelService(BaseDBService):
     def log_alert(
         self,
         trigger: str,
-        ticker: Optional[str] = None,
-        payload: Optional[dict] = None,
-        channel: Optional[str] = None,
+        ticker: str | None = None,
+        payload: dict | None = None,
+        channel: str | None = None,
     ) -> None:
         """Append an entry to the alerts log."""
         self.repos.kestrel.log_alert(trigger, ticker, payload, channel)
 
     @with_uow
-    def get_today_alerts(self, trigger: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_today_alerts(self, trigger: str | None = None) -> List[Dict[str, Any]]:
         """Return alerts logged today, optionally filtered by trigger."""
         return self.repos.kestrel.get_today_alerts(trigger)
 

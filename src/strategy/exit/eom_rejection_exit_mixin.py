@@ -44,11 +44,11 @@ Configuration Example (New architecture):
     }
 """
 
-from typing import Any, Dict, Optional, List
 import math
+from typing import Any, Dict, List
 
-from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
+from src.strategy.exit.base_exit_mixin import BaseExitMixin
 
 _logger = setup_logger(__name__)
 
@@ -59,7 +59,7 @@ class EOMRejectionExitMixin(BaseExitMixin):
     New Architecture only.
     """
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
         self._exit_reason = ""
@@ -90,18 +90,10 @@ class EOMRejectionExitMixin(BaseExitMixin):
             {
                 "type": "SupportResistance",
                 "params": {"lookback_bars": res_lookback},
-                "fields_mapping": {"resistance": "exit_resistance", "support": "exit_support"}
+                "fields_mapping": {"resistance": "exit_resistance", "support": "exit_support"},
             },
-            {
-                "type": "EOM",
-                "params": {"timeperiod": eom_period},
-                "fields_mapping": {"eom": "exit_eom"}
-            },
-            {
-                "type": "RSI",
-                "params": {"timeperiod": rsi_period},
-                "fields_mapping": {"rsi": "exit_rsi"}
-            }
+            {"type": "EOM", "params": {"timeperiod": eom_period}, "fields_mapping": {"eom": "exit_eom"}},
+            {"type": "RSI", "params": {"timeperiod": rsi_period}, "fields_mapping": {"rsi": "exit_rsi"}},
         ]
 
     def _init_indicators(self):
@@ -113,16 +105,14 @@ class EOMRejectionExitMixin(BaseExitMixin):
         periods = [
             self.get_param("eom_period", 14),
             self.get_param("rsi_period", 14),
-            self.get_param("resistance_lookback", 2) * 5
+            self.get_param("resistance_lookback", 2) * 5,
         ]
         return max(periods)
 
     def are_indicators_ready(self) -> bool:
         """Check if required indicators exist in the strategy registry."""
-        required = [
-            'exit_resistance', 'exit_eom', 'exit_rsi'
-        ]
-        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
+        required = ["exit_resistance", "exit_eom", "exit_rsi"]
+        return all(alias in getattr(self.strategy, "indicators", {}) for alias in required)
 
     def should_exit(self) -> bool:
         """Determines if the mixin should exit a position."""
@@ -139,15 +129,15 @@ class EOMRejectionExitMixin(BaseExitMixin):
             high = self.strategy.data.high[0]
 
             # Unified Indicator Access
-            resistance = self.get_indicator('exit_resistance')
-            eom = self.get_indicator('exit_eom')
-            eom_prev = self.get_indicator_prev('exit_eom', 1)
-            rsi = self.get_indicator('exit_rsi')
-            rsi_prev = self.get_indicator_prev('exit_rsi', 1)
+            resistance = self.get_indicator("exit_resistance")
+            eom = self.get_indicator("exit_eom")
+            eom_prev = self.get_indicator_prev("exit_eom", 1)
+            rsi = self.get_indicator("exit_rsi")
+            rsi_prev = self.get_indicator_prev("exit_rsi", 1)
 
             # Get parameters
-            resistance_threshold = self._resolve_param('resistance_threshold', 'x_resistance_threshold', 0.995)
-            rsi_overbought = self._resolve_param('rsi_overbought', 'x_rsi_overbought', 60)
+            resistance_threshold = self._resolve_param("resistance_threshold", "x_resistance_threshold", 0.995)
+            rsi_overbought = self._resolve_param("rsi_overbought", "x_rsi_overbought", 60)
 
             # Check if resistance is valid (not NaN)
             if math.isnan(resistance):

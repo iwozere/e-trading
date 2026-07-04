@@ -6,15 +6,13 @@ responses and error simulation for comprehensive testing.
 """
 
 import asyncio
-from typing import Any, Dict, Optional
-from unittest.mock import Mock
 import time
+from typing import Any, Dict
+from unittest.mock import Mock
 
-from src.indicators.models import (
-    IndicatorBatchConfig, IndicatorResultSet,
-    IndicatorValue, TickerIndicatorsRequest
-)
+from src.indicators.models import IndicatorBatchConfig, IndicatorResultSet, IndicatorValue, TickerIndicatorsRequest
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
 
 
@@ -28,11 +26,7 @@ class IndicatorServiceMock:
     def __init__(self):
         """Initialize mock with default data and call tracking."""
         self.call_log = []
-        self.adapters = {
-            "ta-lib": Mock(),
-            "pandas-ta": Mock(),
-            "fundamentals": Mock()
-        }
+        self.adapters = {"ta-lib": Mock(), "pandas-ta": Mock(), "fundamentals": Mock()}
 
         # Configuration for mock behavior
         self.should_raise_errors = {}
@@ -46,44 +40,39 @@ class IndicatorServiceMock:
                     "RSI": IndicatorValue(name="RSI", value=65.5),
                     "MACD": IndicatorValue(name="MACD", value=1.23),
                     "SMA": IndicatorValue(name="SMA", value=150.25),
-                    "BollingerBands": IndicatorValue(name="BollingerBands", value=155.0)
+                    "BollingerBands": IndicatorValue(name="BollingerBands", value=155.0),
                 },
                 "fundamental": {
                     "PE": IndicatorValue(name="PE", value=25.4),
-                    "MarketCap": IndicatorValue(name="MarketCap", value=2500000000000)
-                }
+                    "MarketCap": IndicatorValue(name="MarketCap", value=2500000000000),
+                },
             },
             "TSLA": {
                 "technical": {
                     "RSI": IndicatorValue(name="RSI", value=45.2),
                     "MACD": IndicatorValue(name="MACD", value=-0.87),
                     "SMA": IndicatorValue(name="SMA", value=245.75),
-                    "BollingerBands": IndicatorValue(name="BollingerBands", value=250.0)
+                    "BollingerBands": IndicatorValue(name="BollingerBands", value=250.0),
                 },
                 "fundamental": {
                     "PE": IndicatorValue(name="PE", value=65.8),
-                    "MarketCap": IndicatorValue(name="MarketCap", value=800000000000)
-                }
+                    "MarketCap": IndicatorValue(name="MarketCap", value=800000000000),
+                },
             },
             "BTCUSDT": {
                 "technical": {
                     "RSI": IndicatorValue(name="RSI", value=55.8),
                     "MACD": IndicatorValue(name="MACD", value=2.45),
                     "SMA": IndicatorValue(name="SMA", value=45000.0),
-                    "BollingerBands": IndicatorValue(name="BollingerBands", value=46000.0)
+                    "BollingerBands": IndicatorValue(name="BollingerBands", value=46000.0),
                 },
-                "fundamental": {}  # Crypto typically has limited fundamental data
-            }
+                "fundamental": {},  # Crypto typically has limited fundamental data
+            },
         }
 
     def _log_call(self, method_name: str, *args, **kwargs):
         """Log method calls for verification in tests."""
-        self.call_log.append({
-            "method": method_name,
-            "args": args,
-            "kwargs": kwargs,
-            "timestamp": time.time()
-        })
+        self.call_log.append({"method": method_name, "args": args, "kwargs": kwargs, "timestamp": time.time()})
         _logger.debug("Mock call: %s(*%s, **%s)", method_name, args, kwargs)
 
     async def _check_error_config(self, method_name: str):
@@ -132,11 +121,9 @@ class IndicatorServiceMock:
                     "RSI": IndicatorValue(name="RSI", value=50.0),
                     "MACD": IndicatorValue(name="MACD", value=0.0),
                     "SMA": IndicatorValue(name="SMA", value=100.0),
-                    "BollingerBands": IndicatorValue(name="BollingerBands", value=105.0)
+                    "BollingerBands": IndicatorValue(name="BollingerBands", value=105.0),
                 },
-                "fundamental": {
-                    "PE": IndicatorValue(name="PE", value=20.0)
-                }
+                "fundamental": {"PE": IndicatorValue(name="PE", value=20.0)},
             }
 
         # Filter indicators based on request
@@ -159,9 +146,7 @@ class IndicatorServiceMock:
                     fundamental_indicators[indicator_name] = default_value
 
         result = IndicatorResultSet(
-            ticker=req.ticker,
-            technical=technical_indicators,
-            fundamental=fundamental_indicators
+            ticker=req.ticker, technical=technical_indicators, fundamental=fundamental_indicators
         )
 
         return self._get_custom_response("compute_for_ticker", result)
@@ -190,11 +175,11 @@ class IndicatorServiceMock:
         import pandas as pd
 
         # Create a mock result DataFrame based on input
-        result_df = df.copy() if hasattr(df, 'copy') else pd.DataFrame()
+        result_df = df.copy() if hasattr(df, "copy") else pd.DataFrame()
 
         # Add mock indicator columns based on config
         for spec in config.indicators:
-            if hasattr(spec, 'output'):
+            if hasattr(spec, "output"):
                 if isinstance(spec.output, dict):
                     for output_key, column_name in spec.output.items():
                         result_df[column_name] = 50.0  # Mock value
@@ -209,8 +194,20 @@ class IndicatorServiceMock:
 
         # Mock support for common indicators
         supported_indicators = [
-            "RSI", "MACD", "SMA", "EMA", "BollingerBands", "PE", "MarketCap",
-            "STOCH", "ADX", "CCI", "ROC", "MFI", "WILLR", "ATR"
+            "RSI",
+            "MACD",
+            "SMA",
+            "EMA",
+            "BollingerBands",
+            "PE",
+            "MarketCap",
+            "STOCH",
+            "ADX",
+            "CCI",
+            "ROC",
+            "MFI",
+            "WILLR",
+            "ATR",
         ]
 
         return indicator_name.upper() in [ind.upper() for ind in supported_indicators]
@@ -252,7 +249,7 @@ class IndicatorServiceMock:
         """Get the number of times a method was called."""
         return len([call for call in self.call_log if call["method"] == method_name])
 
-    def get_last_call(self, method_name: str) -> Optional[Dict[str, Any]]:
+    def get_last_call(self, method_name: str) -> Dict[str, Any] | None:
         """Get the last call to a specific method."""
         calls = [call for call in self.call_log if call["method"] == method_name]
         return calls[-1] if calls else None
@@ -260,19 +257,15 @@ class IndicatorServiceMock:
     def was_called_with(self, method_name: str, *args, **kwargs) -> bool:
         """Check if a method was called with specific arguments."""
         for call in self.call_log:
-            if (call["method"] == method_name and
-                call["args"] == args and
-                call["kwargs"] == kwargs):
+            if call["method"] == method_name and call["args"] == args and call["kwargs"] == kwargs:
                 return True
         return False
 
-    def add_ticker_data(self, ticker: str, technical: Dict[str, IndicatorValue] = None,
-                       fundamental: Dict[str, IndicatorValue] = None):
+    def add_ticker_data(
+        self, ticker: str, technical: Dict[str, IndicatorValue] = None, fundamental: Dict[str, IndicatorValue] = None
+    ):
         """Add mock data for a specific ticker."""
-        self.default_indicators[ticker.upper()] = {
-            "technical": technical or {},
-            "fundamental": fundamental or {}
-        }
+        self.default_indicators[ticker.upper()] = {"technical": technical or {}, "fundamental": fundamental or {}}
 
     def simulate_api_error(self, method_name: str = "compute_for_ticker"):
         """Simulate common API errors."""
@@ -311,26 +304,24 @@ class AsyncMockIndicatorService:
         """Simple mock implementation for compute_for_ticker."""
         return IndicatorResultSet(
             ticker=req.ticker,
-            technical={
-                "RSI": IndicatorValue(name="RSI", value=65.5),
-                "MACD": IndicatorValue(name="MACD", value=1.23)
-            },
-            fundamental={
-                "PE": IndicatorValue(name="PE", value=25.4)
-            }
+            technical={"RSI": IndicatorValue(name="RSI", value=65.5), "MACD": IndicatorValue(name="MACD", value=1.23)},
+            fundamental={"PE": IndicatorValue(name="PE", value=25.4)},
         )
 
     async def mock_compute(self, df, config: IndicatorBatchConfig, fund_params: Dict[str, Any] = None):
         """Simple mock implementation for compute."""
         import pandas as pd
+
         return pd.DataFrame({"mock_indicator": [50.0, 51.0, 52.0]})
 
 
 # Factory functions for easy test setup
 
+
 def create_telegram_service_mock():
     """Create a new TelegramServiceMock instance."""
     from tests.mocks.telegram_service_mock import TelegramServiceMock
+
     return TelegramServiceMock()
 
 
@@ -347,8 +338,7 @@ def create_business_logic_with_mocks():
     indicator_service_mock = create_indicator_service_mock()
 
     business_logic = TelegramBusinessLogic(
-        telegram_service=telegram_service_mock,
-        indicator_service=indicator_service_mock
+        telegram_service=telegram_service_mock, indicator_service=indicator_service_mock
     )
 
     return business_logic, telegram_service_mock, indicator_service_mock

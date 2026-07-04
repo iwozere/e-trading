@@ -18,18 +18,19 @@ Features:
 """
 
 from __future__ import annotations
+
 import asyncio
-from dataclasses import dataclass, asdict
-from typing import List, Dict, Optional, Callable, Any, Union
-from datetime import datetime, timedelta, timezone
-import math
 import json
-from pathlib import Path
+import math
 import os
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Any, Callable, Dict, List, Union
 
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 # -------------------------
 # Dataclass for output
@@ -42,17 +43,18 @@ class SentimentFeatures:
     This dataclass provides a standardized format for sentiment analysis output
     that can be easily serialized to JSON or converted to dictionaries.
     """
+
     ticker: str
     mentions_24h: int
     unique_authors_24h: int
-    mentions_growth_7d: Optional[float]
-    positive_ratio_24h: Optional[float]
-    sentiment_score_24h: float       # -1..+1
-    sentiment_normalized: float     # 0..1 mapped for scoring
+    mentions_growth_7d: float | None
+    positive_ratio_24h: float | None
+    sentiment_score_24h: float  # -1..+1
+    sentiment_normalized: float  # 0..1 mapped for scoring
     virality_index: float
-    bot_pct: float                  # 0..1
-    data_quality: Dict[str, str]    # provider -> 'ok'|'partial'|'missing'|'hf_disabled'|'hf_failed'
-    raw_payload: Dict[str, Any]     # raw provider payloads for audit
+    bot_pct: float  # 0..1
+    data_quality: Dict[str, str]  # provider -> 'ok'|'partial'|'missing'|'hf_disabled'|'hf_failed'
+    raw_payload: Dict[str, Any]  # raw provider payloads for audit
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary format."""
@@ -78,7 +80,7 @@ def _load_config_from_env() -> Dict[str, Any]:
         "twitter": os.getenv("SENTIMENT_TWITTER_ENABLED", "false").lower() == "true",
         "finnhub": os.getenv("SENTIMENT_FINNHUB_ENABLED", "true").lower() == "true",
         "reddit_pushshift": os.getenv("SENTIMENT_PUSHSHIFT_ENABLED", "false").lower() == "true",
-        "hf_enabled": os.getenv("SENTIMENT_HF_ENABLED", "false").lower() == "true"
+        "hf_enabled": os.getenv("SENTIMENT_HF_ENABLED", "false").lower() == "true",
     }
 
     # Timing settings
@@ -90,13 +92,13 @@ def _load_config_from_env() -> Dict[str, Any]:
     config["hf"] = {
         "model_name": os.getenv("SENTIMENT_HF_MODEL", "cardiffnlp/twitter-roberta-base-sentiment"),
         "device": int(os.getenv("SENTIMENT_HF_DEVICE", "-1")),
-        "max_workers": int(os.getenv("SENTIMENT_HF_WORKERS", "1"))
+        "max_workers": int(os.getenv("SENTIMENT_HF_WORKERS", "1")),
     }
 
     # Batching settings
     config["batching"] = {
         "concurrency": int(os.getenv("SENTIMENT_CONCURRENCY", "8")),
-        "rate_limit_delay_sec": float(os.getenv("SENTIMENT_RATE_DELAY", "0.3"))
+        "rate_limit_delay_sec": float(os.getenv("SENTIMENT_RATE_DELAY", "0.3")),
     }
 
     # Provider weights
@@ -107,7 +109,7 @@ def _load_config_from_env() -> Dict[str, Any]:
         "finnhub": float(os.getenv("SENTIMENT_WEIGHT_FINNHUB", "0.2")),
         "twitter": float(os.getenv("SENTIMENT_WEIGHT_TWITTER", "0.1")),
         "discord": float(os.getenv("SENTIMENT_WEIGHT_DISCORD", "0.1")),
-        "heuristic_vs_hf": float(os.getenv("SENTIMENT_WEIGHT_HF", "0.5"))
+        "heuristic_vs_hf": float(os.getenv("SENTIMENT_WEIGHT_HF", "0.5")),
     }
 
     # Heuristic settings
@@ -117,7 +119,7 @@ def _load_config_from_env() -> Dict[str, Any]:
     config["heuristic"] = {
         "positive_tokens": [t.strip() for t in positive_tokens.split(",") if t.strip()],
         "negative_tokens": [t.strip() for t in negative_tokens.split(",") if t.strip()],
-        "engagement_weight_formula": os.getenv("SENTIMENT_ENGAGEMENT_FORMULA", "sqrt")
+        "engagement_weight_formula": os.getenv("SENTIMENT_ENGAGEMENT_FORMULA", "sqrt"),
     }
 
     # Caching settings
@@ -131,10 +133,11 @@ def _load_config_from_env() -> Dict[str, Any]:
         "memory_ttl": int(os.getenv("SENTIMENT_CACHE_MEMORY_TTL", "3600")),
         "redis_ttl": int(os.getenv("SENTIMENT_CACHE_REDIS_TTL", "7200")),
         "warming_enabled": os.getenv("SENTIMENT_CACHE_WARMING", "true").lower() == "true",
-        "cleanup_interval": int(os.getenv("SENTIMENT_CACHE_CLEANUP_INTERVAL", "300"))
+        "cleanup_interval": int(os.getenv("SENTIMENT_CACHE_CLEANUP_INTERVAL", "300")),
     }
 
     return config
+
 
 DEFAULT_CONFIG = {
     "providers": {
@@ -147,20 +150,13 @@ DEFAULT_CONFIG = {
         "finnhub": True,
         "reddit_pushshift": False,
         "apewisdom": True,
-        "hf_enabled": False
+        "hf_enabled": False,
     },
     "lookback_hours": 24,
     "min_mentions_for_hf": 20,
     "min_mentions_for_confident_signal": 5,
-    "hf": {
-        "model_name": "cardiffnlp/twitter-roberta-base-sentiment",
-        "device": -1,
-        "max_workers": 1
-    },
-    "batching": {
-        "concurrency": 8,
-        "rate_limit_delay_sec": 0.3
-    },
+    "hf": {"model_name": "cardiffnlp/twitter-roberta-base-sentiment", "device": -1, "max_workers": 1},
+    "batching": {"concurrency": 8, "rate_limit_delay_sec": 0.3},
     "weights": {
         "stocktwits": 0.2,
         "reddit": 0.2,
@@ -170,12 +166,12 @@ DEFAULT_CONFIG = {
         "discord": 0.1,
         "twitter": 0.1,
         "apewisdom": 0.2,
-        "heuristic_vs_hf": 0.5
+        "heuristic_vs_hf": 0.5,
     },
     "heuristic": {
-        "positive_tokens": ["moon","🚀","diamond","buy","long","hold","to the moon","rocket"],
-        "negative_tokens": ["short","sell","dump","bankrupt","bagholder","paper hands","bag"],
-        "engagement_weight_formula": "sqrt"  # 'sqrt' or 'linear'
+        "positive_tokens": ["moon", "🚀", "diamond", "buy", "long", "hold", "to the moon", "rocket"],
+        "negative_tokens": ["short", "sell", "dump", "bankrupt", "bagholder", "paper hands", "bag"],
+        "engagement_weight_formula": "sqrt",  # 'sqrt' or 'linear'
     },
     "caching": {
         "redis_enabled": True,
@@ -185,11 +181,12 @@ DEFAULT_CONFIG = {
         "redis_password": None,
         "memory_max_size": 1000,
         "memory_ttl": 3600,  # 1 hour
-        "redis_ttl": 7200,   # 2 hours
+        "redis_ttl": 7200,  # 2 hours
         "warming_enabled": True,
-        "cleanup_interval": 300  # 5 minutes
-    }
+        "cleanup_interval": 300,  # 5 minutes
+    },
 }
+
 
 def get_default_config() -> Dict[str, Any]:
     """
@@ -213,6 +210,7 @@ def get_default_config() -> Dict[str, Any]:
         _logger.debug("Could not load environment config: %s", e)
 
     return config
+
 
 def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -290,6 +288,7 @@ def token_polarity(text: str, pos_tokens: List[str], neg_tokens: List[str]) -> i
         return -1
     return 0
 
+
 def compute_engagement(m: Dict[str, Any]) -> float:
     """
     Compute raw engagement score from message metrics.
@@ -306,6 +305,7 @@ def compute_engagement(m: Dict[str, Any]) -> float:
     # engagement formula: likes + 2*replies + 1.5*retweets
     return float(likes + 2 * replies + 1.5 * retweets)
 
+
 def message_weight(engagement: float, engagement_weight_formula: str = "sqrt") -> float:
     """
     Calculate message weight based on engagement score.
@@ -321,7 +321,8 @@ def message_weight(engagement: float, engagement_weight_formula: str = "sqrt") -
         return math.sqrt(engagement + 1.0)
     return max(1.0, engagement)
 
-def combine_scores(heuristic: float, hf: Optional[float], hf_weight: float) -> float:
+
+def combine_scores(heuristic: float, hf: float | None, hf_weight: float) -> float:
     """
     Combine heuristic and HuggingFace sentiment scores.
 
@@ -337,6 +338,7 @@ def combine_scores(heuristic: float, hf: Optional[float], hf_weight: float) -> f
         return heuristic
     return hf_weight * hf + (1.0 - hf_weight) * heuristic
 
+
 # -------------------------
 # Adapter initialization
 # -------------------------
@@ -344,6 +346,7 @@ def _initialize_adapters(manager, config: Dict[str, Any]) -> None:
     """Initialize and register adapters with the manager."""
     try:
         from src.common.sentiments.adapters.adapter_manager import register_default_adapters
+
         register_default_adapters()
 
         # Register and add all enabled adapters
@@ -352,21 +355,24 @@ def _initialize_adapters(manager, config: Dict[str, Any]) -> None:
                 # Get default config for this adapter type if available
                 adapter_config = {
                     "concurrency": config["batching"]["concurrency"],
-                    "rate_limit_delay": config["batching"]["rate_limit_delay_sec"]
+                    "rate_limit_delay": config["batching"]["rate_limit_delay_sec"],
                 }
 
                 # Special handling for HuggingFace
                 if provider == "huggingface":
-                    adapter_config.update({
-                        "model_name": config["hf"]["model_name"],
-                        "device": config["hf"]["device"],
-                        "max_workers": config["hf"]["max_workers"]
-                    })
+                    adapter_config.update(
+                        {
+                            "model_name": config["hf"]["model_name"],
+                            "device": config["hf"]["device"],
+                            "max_workers": config["hf"]["max_workers"],
+                        }
+                    )
 
                 manager.add_adapter(provider, adapter_config)
 
     except Exception as e:
         _logger.warning("Could not initialize some adapters: %s", e)
+
 
 # -------------------------
 # Cache integration
@@ -374,7 +380,7 @@ def _initialize_adapters(manager, config: Dict[str, Any]) -> None:
 def _initialize_cache(config: Dict[str, Any]):
     """Initialize cache manager with configuration."""
     try:
-        from src.common.sentiments.caching.cache_manager import CacheManager, CacheConfig
+        from src.common.sentiments.caching.cache_manager import CacheConfig, CacheManager
 
         # Create cache config from sentiment config
         cache_config = CacheConfig(
@@ -385,7 +391,7 @@ def _initialize_cache(config: Dict[str, Any]):
             redis_password=config.get("caching", {}).get("redis_password"),
             memory_max_size=config.get("caching", {}).get("memory_max_size", 1000),
             memory_default_ttl=config.get("caching", {}).get("memory_ttl", 3600),
-            redis_default_ttl=config.get("caching", {}).get("redis_ttl", 7200)
+            redis_default_ttl=config.get("caching", {}).get("redis_ttl", 7200),
         )
 
         return CacheManager(cache_config)
@@ -393,16 +399,17 @@ def _initialize_cache(config: Dict[str, Any]):
         _logger.warning("Could not initialize cache manager: %s", e)
         return None
 
+
 # -------------------------
 # Core async collector
 # -------------------------
 async def collect_sentiment_batch(
     tickers: List[str],
-    lookback_hours: Optional[int] = None,
-    config: Optional[Dict[str, Any]] = None,
-    history_lookup: Optional[Callable[[str], Optional[float]]] = None,
-    output_format: str = "dataclass"
-) -> Union[Dict[str, Optional[SentimentFeatures]], Dict[str, Optional[Dict[str, Any]]], str]:
+    lookback_hours: int | None = None,
+    config: Dict[str, Any] | None = None,
+    history_lookup: Callable[[str], float | None] | None = None,
+    output_format: str = "dataclass",
+) -> Union[Dict[str, SentimentFeatures | None], Dict[str, Dict[str, Any] | None], str]:
     """
     Collect sentiment features for a list of tickers concurrently.
 
@@ -450,6 +457,7 @@ async def collect_sentiment_batch(
 
     # Initialize adapter manager and cache
     from src.common.sentiments.adapters.adapter_manager import get_adapter_manager
+
     manager = get_adapter_manager()
     cache_manager = _initialize_cache(config)
 
@@ -470,11 +478,13 @@ async def collect_sentiment_batch(
 
         # Initialize cache key strategy
         from src.common.sentiments.caching.cache_manager import CacheKeyStrategy
+
         cache_keys = CacheKeyStrategy()
         config_hash = cache_keys.config_hash(config)
 
         # Initialize performance optimization (needed for decorator below)
         from src.common.sentiments.performance.performance_profiler import PerformanceProfiler
+
         profiler = PerformanceProfiler()
 
         # Extract configuration values
@@ -488,7 +498,7 @@ async def collect_sentiment_batch(
         sem = asyncio.Semaphore(concurrency)
 
         @profiler.time_function("process_one_ticker")
-        async def process_one_ticker(ticker: str) -> Optional[SentimentFeatures]:
+        async def process_one_ticker(ticker: str) -> SentimentFeatures | None:
             """Process sentiment analysis for a single ticker."""
             async with sem:
                 tk = ticker.upper().strip()
@@ -499,7 +509,7 @@ async def collect_sentiment_batch(
                 raw_payload: Dict[str, Any] = {}
 
                 try:
-                    since_ts = int((datetime.now(timezone.utc) - timedelta(hours=lookback)).timestamp())
+                    since_ts = int((datetime.now(UTC) - timedelta(hours=lookback)).timestamp())
 
                     # Check cache for aggregated result first
                     aggregated_cache_key = cache_keys.aggregated_sentiment_key(tk, lookback, config_hash)
@@ -511,7 +521,9 @@ async def collect_sentiment_batch(
 
                     # Collect summaries from available adapters dynamically
                     summaries = {}
-                    active_providers = [p for p, enabled in config["providers"].items() if enabled and p != "hf_enabled"]
+                    active_providers = [
+                        p for p, enabled in config["providers"].items() if enabled and p != "hf_enabled"
+                    ]
 
                     async def fetch_one_summary(provider):
                         try:
@@ -525,10 +537,9 @@ async def collect_sentiment_batch(
                                 try:
                                     # Add timeout to prevent one slow adapter from hanging the whole process
                                     summary = await asyncio.wait_for(
-                                        manager.fetch_summary_from_adapter(provider, tk, since_ts),
-                                        timeout=180.0
+                                        manager.fetch_summary_from_adapter(provider, tk, since_ts), timeout=180.0
                                     )
-                                except asyncio.TimeoutError:
+                                except TimeoutError:
                                     _logger.warning("%s summary timed out for %s", provider.capitalize(), tk)
                                     summary = {"error": "timeout", "mentions": 0, "sentiment_score": 0.0}
 
@@ -590,10 +601,11 @@ async def collect_sentiment_batch(
                     bot_pct = 0.0
                     virality_index = 0.0
 
-                    if (total_mentions >= min_mentions_hf and
-                        "huggingface" in available_adapters and
-                        config["providers"].get("hf_enabled", False)):
-
+                    if (
+                        total_mentions >= min_mentions_hf
+                        and "huggingface" in available_adapters
+                        and config["providers"].get("hf_enabled", False)
+                    ):
                         try:
                             # Fetch detailed messages for HF analysis
                             all_messages = []
@@ -623,7 +635,12 @@ async def collect_sentiment_batch(
                                     _logger.debug("Cache hit for HF predictions: %s", tk)
                                 else:
                                     # Process with HuggingFace
-                                    enhanced_sentiment, positive_ratio, bot_pct, virality_index = await _process_messages_with_hf(
+                                    (
+                                        enhanced_sentiment,
+                                        positive_ratio,
+                                        bot_pct,
+                                        virality_index,
+                                    ) = await _process_messages_with_hf(
                                         all_messages, manager, heuristic_config, weights.get("heuristic_vs_hf", 0.5)
                                     )
                                     # Cache HF results
@@ -668,7 +685,7 @@ async def collect_sentiment_batch(
                         virality_index=float(virality_index),
                         bot_pct=float(bot_pct),
                         data_quality=data_quality,
-                        raw_payload=raw_payload
+                        raw_payload=raw_payload,
                     )
 
                     # Cache the final aggregated result
@@ -683,6 +700,7 @@ async def collect_sentiment_batch(
 
         # Initialize batch optimizer
         from src.common.sentiments.performance.batch_optimizer import BatchOptimizer
+
         batch_optimizer = BatchOptimizer()
 
         # Process tickers in optimized batches
@@ -692,7 +710,7 @@ async def collect_sentiment_batch(
         ticker_batches = batch_optimizer.create_batches(tickers, "sentiment_collection")
 
         # Process batches in parallel
-        async def process_ticker_batch(ticker_batch: List[str]) -> List[Optional[SentimentFeatures]]:
+        async def process_ticker_batch(ticker_batch: List[str]) -> List[SentimentFeatures | None]:
             """Process a batch of tickers."""
             batch_tasks = [asyncio.create_task(process_one_ticker(ticker)) for ticker in ticker_batch]
             return await asyncio.gather(*batch_tasks, return_exceptions=True)
@@ -708,7 +726,7 @@ async def collect_sentiment_batch(
                 results.extend(batch_result)
 
         # Compile results
-        output: Dict[str, Optional[SentimentFeatures]] = {}
+        output: Dict[str, SentimentFeatures | None] = {}
         for ticker, result in zip(tickers, results):
             if isinstance(result, Exception):
                 _logger.error("Exception processing ticker %s: %s", ticker, result)
@@ -739,18 +757,19 @@ async def collect_sentiment_batch(
                 cache_manager._metrics.report_metrics()
 
         # Report performance metrics
-        if 'profiler' in locals():
+        if "profiler" in locals():
             profiler.auto_report()
 
         # Report batch optimization stats
-        if 'batch_optimizer' in locals():
+        if "batch_optimizer" in locals():
             perf_summary = batch_optimizer.get_performance_summary()
             if perf_summary:
                 _logger.info("Batch processing summary: %s", perf_summary)
 
 
-async def _process_messages_with_hf(messages: List[Dict[str, Any]], manager, heuristic_config: Dict[str, Any],
-                                   hf_weight: float) -> tuple[float, Optional[float], float, float]:
+async def _process_messages_with_hf(
+    messages: List[Dict[str, Any]], manager, heuristic_config: Dict[str, Any], hf_weight: float
+) -> tuple[float, float | None, float, float]:
     """Process messages with HuggingFace sentiment analysis."""
     if not messages:
         return 0.0, None, 0.0, 0.0
@@ -825,7 +844,9 @@ async def _process_messages_with_hf(messages: List[Dict[str, Any]], manager, heu
 
     # Calculate final metrics
     final_sentiment = weighted_sentiment_sum / total_weight if total_weight > 0 else 0.0
-    positive_ratio = positive_count / (positive_count + negative_count) if (positive_count + negative_count) > 0 else None
+    positive_ratio = (
+        positive_count / (positive_count + negative_count) if (positive_count + negative_count) > 0 else None
+    )
     bot_percentage = bot_count / len(message_data) if message_data else 0.0
     virality_index = virality_sum / max(1.0, math.sqrt(len(message_data)))
 
@@ -835,7 +856,9 @@ async def _process_messages_with_hf(messages: List[Dict[str, Any]], manager, heu
 # -------------------------
 # Sync wrapper for convenience
 # -------------------------
-def collect_sentiment_batch_sync(*args, **kwargs) -> Union[Dict[str, Optional[SentimentFeatures]], Dict[str, Optional[Dict[str, Any]]], str]:
+def collect_sentiment_batch_sync(
+    *args, **kwargs
+) -> Union[Dict[str, SentimentFeatures | None], Dict[str, Dict[str, Any] | None], str]:
     """
     Sync wrapper for callers that don't use asyncio.
 
@@ -880,10 +903,7 @@ if __name__ == "__main__":
 
     # 4. Run collection
     results = collect_sentiment_batch_sync(
-        tickers=test_tickers,
-        lookback_hours=24,
-        config=cfg,
-        output_format="dataclass"
+        tickers=test_tickers, lookback_hours=24, config=cfg, output_format="dataclass"
     )
 
     # 5. Print summary
@@ -891,7 +911,9 @@ if __name__ == "__main__":
     for ticker, features in results.items():
         if features:
             print(f"\n[{ticker}]")
-            print(f"  Sentiment Score: {features.sentiment_score_24h:.4f} (Normalized: {features.sentiment_normalized:.4f})")
+            print(
+                f"  Sentiment Score: {features.sentiment_score_24h:.4f} (Normalized: {features.sentiment_normalized:.4f})"
+            )
             print(f"  Total Mentions: {features.mentions_24h}")
             print(f"  Virality Index: {features.virality_index:.2f}")
             print(f"  Data Quality: {features.data_quality}")

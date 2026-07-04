@@ -14,6 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
 import click
+
 from src.common.health_monitor import get_health_monitor
 from src.notification.logger import setup_logger
 
@@ -27,8 +28,8 @@ def cli():
 
 
 @cli.command()
-@click.option('--system', help='Check specific system only')
-@click.option('--json-output', is_flag=True, help='Output in JSON format')
+@click.option("--system", help="Check specific system only")
+@click.option("--json-output", is_flag=True, help="Output in JSON format")
 async def check(system, json_output):
     """Check system health."""
     try:
@@ -43,7 +44,7 @@ async def check(system, json_output):
                     "status": result.status.value,
                     "response_time_ms": result.response_time_ms,
                     "error_message": result.error_message,
-                    "metadata": result.metadata
+                    "metadata": result.metadata,
                 }
                 click.echo(json.dumps(output, indent=2))
             else:
@@ -61,14 +62,16 @@ async def check(system, json_output):
             if json_output:
                 output = []
                 for result in results:
-                    output.append({
-                        "system": result.system,
-                        "component": result.component,
-                        "status": result.status.value,
-                        "response_time_ms": result.response_time_ms,
-                        "error_message": result.error_message,
-                        "metadata": result.metadata
-                    })
+                    output.append(
+                        {
+                            "system": result.system,
+                            "component": result.component,
+                            "status": result.status.value,
+                            "response_time_ms": result.response_time_ms,
+                            "error_message": result.error_message,
+                            "metadata": result.metadata,
+                        }
+                    )
                 click.echo(json.dumps(output, indent=2))
             else:
                 click.echo("System Health Status:")
@@ -78,8 +81,13 @@ async def check(system, json_output):
                     if result.component:
                         system_name += f".{result.component}"
 
-                    status_color = "green" if result.status.value == "HEALTHY" else \
-                                  "yellow" if result.status.value == "DEGRADED" else "red"
+                    status_color = (
+                        "green"
+                        if result.status.value == "HEALTHY"
+                        else "yellow"
+                        if result.status.value == "DEGRADED"
+                        else "red"
+                    )
 
                     click.echo(f"{system_name:<20} {click.style(result.status.value, fg=status_color)}")
                     if result.error_message:
@@ -93,7 +101,7 @@ async def check(system, json_output):
 
 
 @cli.command()
-@click.option('--json-output', is_flag=True, help='Output in JSON format')
+@click.option("--json-output", is_flag=True, help="Output in JSON format")
 async def summary(json_output):
     """Get health summary from database."""
     try:
@@ -103,11 +111,13 @@ async def summary(json_output):
         if json_output:
             click.echo(json.dumps(summary, indent=2))
         else:
-            click.echo(f"Overall Status: {click.style(summary['overall_status'], fg='green' if summary['overall_status'] == 'HEALTHY' else 'red')}")
+            click.echo(
+                f"Overall Status: {click.style(summary['overall_status'], fg='green' if summary['overall_status'] == 'HEALTHY' else 'red')}"
+            )
             click.echo(f"Timestamp: {summary['timestamp']}")
             click.echo()
 
-            stats = summary['statistics']
+            stats = summary["statistics"]
             click.echo("Statistics:")
             click.echo(f"  Total Systems: {stats['total_systems']}")
             click.echo(f"  Healthy: {click.style(str(stats['healthy_systems']), fg='green')}")
@@ -117,14 +127,19 @@ async def summary(json_output):
             click.echo()
 
             click.echo("Systems:")
-            for system_name, system_data in summary['systems'].items():
-                status_color = "green" if system_data['status'] == "HEALTHY" else \
-                              "yellow" if system_data['status'] == "DEGRADED" else "red"
+            for system_name, system_data in summary["systems"].items():
+                status_color = (
+                    "green"
+                    if system_data["status"] == "HEALTHY"
+                    else "yellow"
+                    if system_data["status"] == "DEGRADED"
+                    else "red"
+                )
 
                 click.echo(f"  {system_name:<25} {click.style(system_data['status'], fg=status_color)}")
-                if system_data['error_message']:
+                if system_data["error_message"]:
                     click.echo(f"    Error: {system_data['error_message']}")
-                if system_data['avg_response_time_ms']:
+                if system_data["avg_response_time_ms"]:
                     click.echo(f"    Avg Response: {system_data['avg_response_time_ms']}ms")
 
     except Exception as e:
@@ -133,7 +148,7 @@ async def summary(json_output):
 
 
 @cli.command()
-@click.option('--interval', default=60, help='Check interval in seconds')
+@click.option("--interval", default=60, help="Check interval in seconds")
 async def monitor(interval):
     """Start continuous health monitoring."""
     try:
@@ -155,7 +170,9 @@ async def monitor(interval):
 async def migrate():
     """Run the database migration from channel health to system health."""
     try:
-        from src.data.db.migrations.convert_channel_health_to_system_health import migrate_channel_health_to_system_health
+        from src.data.db.migrations.convert_channel_health_to_system_health import (
+            migrate_channel_health_to_system_health,
+        )
 
         click.echo("Running migration from msg_channel_health to msg_system_health...")
         migrate_channel_health_to_system_health()
@@ -186,8 +203,10 @@ async def rollback():
 
 def async_command(f):
     """Decorator to run async commands."""
+
     def wrapper(*args, **kwargs):
         return asyncio.run(f(*args, **kwargs))
+
     return wrapper
 
 
@@ -199,5 +218,5 @@ migrate = async_command(migrate)
 rollback = async_command(rollback)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

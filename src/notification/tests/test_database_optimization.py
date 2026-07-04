@@ -5,26 +5,19 @@ Tests for the database optimization, query analysis, and migration components
 of the notification service.
 """
 
-import pytest
+from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock, patch
-from datetime import datetime, timedelta, timezone
 
+import pytest
+
+from src.data.db.models.model_notification import MessageStatus
+from src.notification.docs.utilities.database_migrations import NotificationServiceMigrations
+from src.notification.docs.utilities.query_analyzer import DatabaseHealthChecker, QueryPerformanceMonitor, query_timer
 from src.notification.service.database_optimization import (
-    OptimizedMessageRepository,
     OptimizedDeliveryStatusRepository,
+    OptimizedMessageRepository,
+    analyze_query_performance,
     create_optimized_indexes,
-    analyze_query_performance
-)
-from src.notification.docs.utilities.query_analyzer import (
-    QueryPerformanceMonitor,
-    DatabaseHealthChecker,
-    query_timer
-)
-from src.notification.docs.utilities.database_migrations import (
-    NotificationServiceMigrations
-)
-from src.data.db.models.model_notification import (
-    MessageStatus
 )
 
 
@@ -49,12 +42,12 @@ class TestOptimizedMessageRepository:
 
     def test_get_pending_messages_optimized(self, repository, mock_session):
         """Test optimized pending messages query."""
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
 
         # Mock return data
         mock_messages = [
             Mock(id=1, priority="HIGH", scheduled_for=current_time),
-            Mock(id=2, priority="NORMAL", scheduled_for=current_time)
+            Mock(id=2, priority="NORMAL", scheduled_for=current_time),
         ]
         mock_session.all.return_value = mock_messages
 
@@ -72,7 +65,7 @@ class TestOptimizedMessageRepository:
         """Test bulk message status update."""
         message_ids = [1, 2, 3]
         status = MessageStatus.PROCESSING
-        processed_at = datetime.now(timezone.utc)
+        processed_at = datetime.now(UTC)
 
         # Mock update result
         mock_session.query.return_value.filter.return_value.update.return_value = 3
@@ -100,12 +93,12 @@ class TestOptimizedMessageRepository:
 
     def test_get_message_statistics_optimized(self, repository, mock_session):
         """Test optimized message statistics query."""
-        start_date = datetime.now(timezone.utc) - timedelta(days=7)
-        end_date = datetime.now(timezone.utc)
+        start_date = datetime.now(UTC) - timedelta(days=7)
+        end_date = datetime.now(UTC)
 
         # Mock aggregation result
         mock_row = Mock()
-        mock_row.time_period = datetime.now(timezone.utc)
+        mock_row.time_period = datetime.now(UTC)
         mock_row.status = "DELIVERED"
         mock_row.priority = "NORMAL"
         mock_row.message_count = 10
@@ -148,10 +141,7 @@ class TestOptimizedDeliveryStatusRepository:
         """Test optimized delivery history query."""
         # Test with user filter (requires join)
         deliveries, total = repository.get_delivery_history_optimized(
-            user_id="user123",
-            channel="telegram",
-            limit=10,
-            offset=0
+            user_id="user123", channel="telegram", limit=10, offset=0
         )
 
         # Verify join was used for user filter
@@ -161,11 +151,7 @@ class TestOptimizedDeliveryStatusRepository:
 
     def test_get_delivery_history_without_user_filter(self, repository, mock_session):
         """Test delivery history query without user filter."""
-        deliveries, total = repository.get_delivery_history_optimized(
-            channel="email",
-            limit=10,
-            offset=0
-        )
+        deliveries, total = repository.get_delivery_history_optimized(channel="email", limit=10, offset=0)
 
         # Verify no join was used
         assert mock_session.query.called
@@ -173,8 +159,8 @@ class TestOptimizedDeliveryStatusRepository:
 
     def test_get_channel_performance_metrics(self, repository, mock_session):
         """Test channel performance metrics query."""
-        start_date = datetime.now(timezone.utc) - timedelta(days=1)
-        end_date = datetime.now(timezone.utc)
+        start_date = datetime.now(UTC) - timedelta(days=1)
+        end_date = datetime.now(UTC)
 
         # Mock aggregation result
         mock_row = Mock()
@@ -224,7 +210,7 @@ class TestQueryPerformanceMonitor:
 
     def test_slow_query_detection(self, monitor):
         """Test slow query detection and logging."""
-        with patch('src.notification.service.query_analyzer._logger') as mock_logger:
+        with patch("src.notification.service.query_analyzer._logger") as mock_logger:
             query_text = "SELECT * FROM msg_messages"
 
             # Record slow query
@@ -238,7 +224,7 @@ class TestQueryPerformanceMonitor:
         queries = [
             "SELECT * FROM msg_messages WHERE id = 123",
             "SELECT * FROM msg_messages WHERE id = 456",
-            "select * from msg_messages where id = 789"
+            "select * from msg_messages where id = 789",
         ]
 
         # Record executions
@@ -264,10 +250,11 @@ class TestQueryPerformanceMonitor:
 
     def test_query_timer_context_manager(self):
         """Test query timer context manager."""
-        with patch('src.notification.service.query_analyzer._logger') as mock_logger:
+        with patch("src.notification.service.query_analyzer._logger") as mock_logger:
             with query_timer("test_operation") as result:
                 # Simulate some work
                 import time
+
                 time.sleep(0.01)
 
             assert "execution_time" in result
@@ -340,7 +327,7 @@ class TestDatabaseHealthChecker:
         mock_rows = [
             Mock(state="active", connection_count=10),
             Mock(state="idle", connection_count=50),
-            Mock(state="idle in transaction", connection_count=5)
+            Mock(state="idle in transaction", connection_count=5),
         ]
 
         mock_session.execute.return_value = mock_rows
@@ -374,11 +361,12 @@ class TestNotificationServiceMigrations:
 
     def test_apply_all_optimizations(self, migrations):
         """Test applying all database optimizations."""
-        with patch.object(migrations, '_create_optimized_indexes') as mock_indexes, \
-             patch.object(migrations, '_add_performance_constraints') as mock_constraints, \
-             patch.object(migrations, '_create_table_partitions') as mock_partitions, \
-             patch.object(migrations, '_apply_database_settings') as mock_settings:
-
+        with (
+            patch.object(migrations, "_create_optimized_indexes") as mock_indexes,
+            patch.object(migrations, "_add_performance_constraints") as mock_constraints,
+            patch.object(migrations, "_create_table_partitions") as mock_partitions,
+            patch.object(migrations, "_apply_database_settings") as mock_settings,
+        ):
             # Call method
             result = migrations.apply_all_optimizations()
 
@@ -421,8 +409,8 @@ class TestNotificationServiceMigrations:
         table_row.deletes = 10
         table_row.live_tuples = 990
         table_row.dead_tuples = 110
-        table_row.last_vacuum = datetime.now(timezone.utc)
-        table_row.last_analyze = datetime.now(timezone.utc)
+        table_row.last_vacuum = datetime.now(UTC)
+        table_row.last_analyze = datetime.now(UTC)
 
         # Mock index stats
         index_row = Mock()
@@ -435,7 +423,7 @@ class TestNotificationServiceMigrations:
 
         mock_conn.execute.side_effect = [
             [table_row],  # Table stats query
-            [index_row]   # Index stats query
+            [index_row],  # Index stats query
         ]
 
         # Call method
@@ -457,9 +445,10 @@ class TestIntegrationScenarios:
         mock_engine = Mock()
         mock_session = Mock()
 
-        with patch('src.notification.service.database_optimization.create_optimized_indexes') as mock_create_indexes, \
-             patch('src.notification.service.database_optimization.analyze_query_performance') as mock_analyze:
-
+        with (
+            patch("src.notification.service.database_optimization.create_optimized_indexes") as mock_create_indexes,
+            patch("src.notification.service.database_optimization.analyze_query_performance") as mock_analyze,
+        ):
             # Mock successful operations
             mock_create_indexes.return_value = None
             mock_analyze.return_value = {"recommendations": []}
@@ -482,7 +471,7 @@ class TestIntegrationScenarios:
         assert monitor.monitoring_enabled
 
         # Test disabling monitoring
-        with patch('sqlalchemy.event.remove') as mock_remove:
+        with patch("sqlalchemy.event.remove") as mock_remove:
             monitor.disable_monitoring(mock_engine)
             assert not monitor.monitoring_enabled
 

@@ -3,18 +3,19 @@ Alert Module for P10 EMPS3
 Phase 1.5 / Pre-Breakout Notifications
 """
 
-from pathlib import Path
-from typing import Optional
-import pandas as pd
 import asyncio
+from pathlib import Path
+
+import pandas as pd
 
 from src.notification.logger import setup_logger
 from src.notification.service.client import NotificationServiceClient
 
 _logger = setup_logger(__name__)
 
+
 class EMPS3AlertSender:
-    def __init__(self, user_id: Optional[str] = None):
+    def __init__(self, user_id: str | None = None):
         self.client = None
         self.user_id = user_id
         try:
@@ -23,11 +24,7 @@ class EMPS3AlertSender:
         except Exception:
             _logger.warning("Notification service client not available", exc_info=True)
 
-    def send_phase1_5_alert(
-        self,
-        phase1_5_df: pd.DataFrame,
-        csv_path: Optional[Path] = None
-    ) -> None:
+    def send_phase1_5_alert(self, phase1_5_df: pd.DataFrame, csv_path: Path | None = None) -> None:
         if phase1_5_df.empty:
             return
 
@@ -36,12 +33,12 @@ class EMPS3AlertSender:
             return
 
         count = len(phase1_5_df)
-        top_tickers = phase1_5_df['ticker'].head(10).tolist()
+        top_tickers = phase1_5_df["ticker"].head(10).tolist()
 
         title = f"⚠️ EMPS3 Phase 1.5 Alert - {count} Early Warning Candidate{'s' if count > 1 else ''}"
-        message = f"""Detected {count} ticker{'s' if count > 1 else ''} hitting Phase 1.5 (Early Warning)
+        message = f"""Detected {count} ticker{"s" if count > 1 else ""} hitting Phase 1.5 (Early Warning)
 
-Top candidates: {', '.join(top_tickers)}
+Top candidates: {", ".join(top_tickers)}
 
 These tickers appeared 3+ times in the last 5 days with:
 - ATR trending downwards
@@ -75,8 +72,8 @@ See attached CSV."""
             title=title,
             message=message,
             priority="high",
-            channels=['telegram', 'email'],
+            channels=["telegram", "email"],
             recipient_id=self.user_id,
             attachments=attachments or None,
-            source="emps3_pipeline"
+            source="emps3_pipeline",
         )

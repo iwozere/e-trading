@@ -1,6 +1,8 @@
-import pytest
 import time
 from unittest.mock import Mock
+
+import pytest
+
 
 @pytest.fixture
 def mock_telegram_service():
@@ -22,7 +24,7 @@ def mock_telegram_service():
             "sent_time": sent_time,
             "verified": False,
             "language": language,
-            "is_admin": is_admin
+            "is_admin": is_admin,
         }
 
     def mock_get_user_status(telegram_user_id):
@@ -43,7 +45,7 @@ def mock_telegram_service():
             "ticker": ticker,
             "price": price,
             "condition": condition,
-            "active": 1
+            "active": 1,
         }
         return alert_id
 
@@ -73,7 +75,7 @@ def mock_telegram_service():
             "indicators": indicators,
             "interval": interval,
             "provider": provider,
-            "active": 1
+            "active": 1,
         }
         return schedule_id
 
@@ -130,6 +132,7 @@ def mock_telegram_service():
 
     return mock_service
 
+
 def test_user_crud(mock_telegram_service):
     telegram_user_id = "testuser"
     email = "test@example.com"
@@ -142,6 +145,7 @@ def test_user_crud(mock_telegram_service):
     assert mock_telegram_service.verify_code(telegram_user_id, code)
     status = mock_telegram_service.get_user_status(telegram_user_id)
     assert status["verified"]
+
 
 def test_alerts_crud(mock_telegram_service):
     user_id = "user1"
@@ -162,6 +166,7 @@ def test_alerts_crud(mock_telegram_service):
     mock_telegram_service.delete_alert(alert_id)
     assert mock_telegram_service.get_alert(alert_id) is None
 
+
 def test_schedules_crud(mock_telegram_service):
     user_id = "user2"
     ticker = "BTCUSDT"
@@ -171,7 +176,9 @@ def test_schedules_crud(mock_telegram_service):
     indicators = "RSI,MACD"
     interval = "1d"
     provider = "bnc"
-    schedule_id = mock_telegram_service.add_schedule(user_id, ticker, scheduled_time, period, email, indicators, interval, provider)
+    schedule_id = mock_telegram_service.add_schedule(
+        user_id, ticker, scheduled_time, period, email, indicators, interval, provider
+    )
     schedule = mock_telegram_service.get_schedule(schedule_id)
     assert schedule["ticker"] == ticker
     assert schedule["scheduled_time"] == scheduled_time
@@ -189,6 +196,7 @@ def test_schedules_crud(mock_telegram_service):
     mock_telegram_service.delete_schedule(schedule_id)
     assert mock_telegram_service.get_schedule(schedule_id) is None
 
+
 def test_user_language_and_admin(mock_telegram_service):
     telegram_user_id = "adminuser"
     email = "admin@example.com"
@@ -201,9 +209,12 @@ def test_user_language_and_admin(mock_telegram_service):
     assert status["language"] == "ru"
     assert status["is_admin"] is True
     # Register as non-admin
-    mock_telegram_service.set_user_email("normaluser", "normal@example.com", "111111", sent_time, language="en", is_admin=False)
+    mock_telegram_service.set_user_email(
+        "normaluser", "normal@example.com", "111111", sent_time, language="en", is_admin=False
+    )
     status = mock_telegram_service.get_user_status("normaluser")
     assert status["is_admin"] is False
+
 
 def test_settings_and_limits(mock_telegram_service):
     # Test global settings

@@ -4,16 +4,18 @@ Unit Tests for Delivery History API
 Unit tests that don't require database setup.
 """
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.service.main import app
 from fastapi.testclient import TestClient
+
+from src.notification.service.main import app
 
 
 class TestDeliveryHistoryValidation:
@@ -126,8 +128,8 @@ class TestDeliveryHistoryLogic:
                 "limit": 50,
                 "offset": 10,
                 "order_by": "created_at",
-                "order_desc": True
-            }
+                "order_desc": True,
+            },
         )
 
         # Should fail due to no database, but validates parameter parsing
@@ -151,10 +153,23 @@ class TestDeliveryHistoryLogic:
         """Test CSV export header structure."""
         # Test that CSV export would have correct headers
         expected_headers = [
-            "message_id", "message_type", "priority", "channels", "recipient_id",
-            "template_name", "created_at", "scheduled_for", "status", "retry_count",
-            "delivery_id", "delivery_channel", "delivery_status", "delivered_at",
-            "response_time_ms", "error_message", "external_id"
+            "message_id",
+            "message_type",
+            "priority",
+            "channels",
+            "recipient_id",
+            "template_name",
+            "created_at",
+            "scheduled_for",
+            "status",
+            "retry_count",
+            "delivery_id",
+            "delivery_channel",
+            "delivery_status",
+            "delivered_at",
+            "response_time_ms",
+            "error_message",
+            "external_id",
         ]
 
         # This is a structural test - we verify the expected CSV headers
@@ -167,15 +182,33 @@ class TestDeliveryHistoryLogic:
         """Test JSON export data structure."""
         # Test that JSON export would have correct structure
         expected_message_fields = [
-            "message_id", "message_type", "priority", "channels", "recipient_id",
-            "template_name", "content", "metadata", "created_at", "scheduled_for",
-            "status", "retry_count", "max_retries", "last_error", "processed_at",
-            "deliveries"
+            "message_id",
+            "message_type",
+            "priority",
+            "channels",
+            "recipient_id",
+            "template_name",
+            "content",
+            "metadata",
+            "created_at",
+            "scheduled_for",
+            "status",
+            "retry_count",
+            "max_retries",
+            "last_error",
+            "processed_at",
+            "deliveries",
         ]
 
         expected_delivery_fields = [
-            "delivery_id", "channel", "status", "delivered_at", "response_time_ms",
-            "error_message", "external_id", "created_at"
+            "delivery_id",
+            "channel",
+            "status",
+            "delivered_at",
+            "response_time_ms",
+            "error_message",
+            "external_id",
+            "created_at",
         ]
 
         # Structural validation

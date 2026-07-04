@@ -12,8 +12,8 @@ IMPORTANT: This test uses isolated test database fixtures, NOT production databa
 """
 
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -21,7 +21,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.db.repos.repo_trading import TradingBotsRepo, TradingTradesRepo, TradingPositionsRepo, TradingMetricsRepo
+from src.data.db.repos.repo_trading import TradingBotsRepo, TradingMetricsRepo, TradingTradesRepo
 
 
 class TestDatabaseIntegration:
@@ -43,39 +43,36 @@ class TestDatabaseIntegration:
         # Test data
         bot_id = "test_bot_001"
         symbol = "BTCUSDT"
-        entry_time = datetime.now(timezone.utc)
+        entry_time = datetime.now(UTC)
 
         # Create bot instance first
         bot_data = {
-            'id': bot_id,
-            'type': 'paper',
-            'config_file': 'test_config.json',
-            'status': 'running',
-            'current_balance': 10000.0,
+            "id": bot_id,
+            "type": "paper",
+            "config_file": "test_config.json",
+            "status": "running",
+            "current_balance": 10000.0,
         }
         bot_instance = bots_repo.create(bot_data)
         db_session.flush()
 
         # Create trade
         trade_data = {
-            'bot_id': bot_id,
-            'trade_type': 'paper',
-            'strategy_name': 'TestStrategy',
-            'entry_logic_name': 'RSIEntry',
-            'exit_logic_name': 'ATRExit',
-            'symbol': symbol,
-            'interval': '1h',
-            'entry_time': entry_time,
-            'buy_order_created': entry_time,
-            'entry_price': 50000.0,
-            'entry_value': 1000.0,
-            'size': 0.02,
-            'direction': 'long',
-            'status': 'open',
-            'extra_metadata': {
-                'test': True,
-                'paper_trading': True
-            }
+            "bot_id": bot_id,
+            "trade_type": "paper",
+            "strategy_name": "TestStrategy",
+            "entry_logic_name": "RSIEntry",
+            "exit_logic_name": "ATRExit",
+            "symbol": symbol,
+            "interval": "1h",
+            "entry_time": entry_time,
+            "buy_order_created": entry_time,
+            "entry_price": 50000.0,
+            "entry_value": 1000.0,
+            "size": 0.02,
+            "direction": "long",
+            "status": "open",
+            "extra_metadata": {"test": True, "paper_trading": True},
         }
 
         trade = trades_repo.create(trade_data)
@@ -89,19 +86,19 @@ class TestDatabaseIntegration:
         print(f"✅ Retrieved trade: {retrieved_trade.symbol} @ {retrieved_trade.entry_price}")
 
         # Update trade
-        exit_time = datetime.now(timezone.utc) + timedelta(hours=1)
+        exit_time = datetime.now(UTC) + timedelta(hours=1)
         update_data = {
-            'exit_time': exit_time,
-            'sell_order_created': exit_time,
-            'sell_order_closed': exit_time,
-            'exit_price': 51000.0,
-            'exit_value': 1020.0,
-            'commission': 1.0,
-            'gross_pnl': 20.0,
-            'net_pnl': 19.0,
-            'pnl_percentage': 1.9,
-            'exit_reason': 'take_profit',
-            'status': 'closed'
+            "exit_time": exit_time,
+            "sell_order_created": exit_time,
+            "sell_order_closed": exit_time,
+            "exit_price": 51000.0,
+            "exit_value": 1020.0,
+            "commission": 1.0,
+            "gross_pnl": 20.0,
+            "net_pnl": 19.0,
+            "pnl_percentage": 1.9,
+            "exit_reason": "take_profit",
+            "status": "closed",
         }
 
         trades_repo.update(trade.id, update_data)
@@ -120,16 +117,13 @@ class TestDatabaseIntegration:
 
         # Create bot instance
         bot_data = {
-            'id': bot_id,
-            'type': 'paper',
-            'config_file': 'test_config.json',
-            'status': 'running',
-            'current_balance': 1000.0,
-            'total_pnl': 50.0,
-            'extra_metadata': {
-                'trading_pair': 'BTCUSDT',
-                'strategy': 'TestStrategy'
-            }
+            "id": bot_id,
+            "type": "paper",
+            "config_file": "test_config.json",
+            "status": "running",
+            "current_balance": 1000.0,
+            "total_pnl": 50.0,
+            "extra_metadata": {"trading_pair": "BTCUSDT", "strategy": "TestStrategy"},
         }
 
         bot_instance = bots_repo.create(bot_data)
@@ -139,15 +133,15 @@ class TestDatabaseIntegration:
         # Get bot instance
         retrieved_bot = bots_repo.get_by_id(bot_id)
         assert retrieved_bot is not None
-        assert retrieved_bot.type == 'paper'
+        assert retrieved_bot.type == "paper"
         print(f"✅ Retrieved bot: {retrieved_bot.type} - {retrieved_bot.status}")
 
         # Update bot instance
         update_data = {
-            'status': 'stopped',
-            'current_balance': 1050.0,
-            'total_pnl': 60.0,
-            'last_heartbeat': datetime.now(timezone.utc)
+            "status": "stopped",
+            "current_balance": 1050.0,
+            "total_pnl": 60.0,
+            "last_heartbeat": datetime.now(UTC),
         }
 
         bots_repo.update(bot_id, update_data)
@@ -165,30 +159,30 @@ class TestDatabaseIntegration:
         # Create bot first
         bot_id = "test_metrics_001"
         bot_data = {
-            'id': bot_id,
-            'type': 'paper',
-            'config_file': 'test_config.json',
-            'status': 'running',
+            "id": bot_id,
+            "type": "paper",
+            "config_file": "test_config.json",
+            "status": "running",
         }
         bots_repo.create(bot_data)
         db_session.flush()
 
         # Create performance metrics
         metrics_data = {
-            'bot_id': bot_id,
-            'trade_type': 'paper',
-            'symbol': 'BTCUSDT',
-            'interval': '1h',
-            'entry_logic_name': 'RSIEntry',
-            'exit_logic_name': 'ATRExit',
-            'metrics': {
-                'sharpe_ratio': 1.5,
-                'win_rate': 65.0,
-                'profit_factor': 1.8,
-                'max_drawdown': -5.2,
-                'total_trades': 100,
-                'total_pnl': 150.0
-            }
+            "bot_id": bot_id,
+            "trade_type": "paper",
+            "symbol": "BTCUSDT",
+            "interval": "1h",
+            "entry_logic_name": "RSIEntry",
+            "exit_logic_name": "ATRExit",
+            "metrics": {
+                "sharpe_ratio": 1.5,
+                "win_rate": 65.0,
+                "profit_factor": 1.8,
+                "max_drawdown": -5.2,
+                "total_trades": 100,
+                "total_pnl": 150.0,
+            },
         }
 
         metrics = metrics_repo.create(metrics_data)
@@ -198,7 +192,7 @@ class TestDatabaseIntegration:
         # Get metrics
         retrieved_metrics = metrics_repo.get_by_id(metrics.id)
         assert retrieved_metrics is not None
-        assert retrieved_metrics.metrics['sharpe_ratio'] == 1.5
+        assert retrieved_metrics.metrics["sharpe_ratio"] == 1.5
         print(f"✅ Retrieved metrics: {retrieved_metrics.metrics['sharpe_ratio']}")
 
     def test_restart_recovery(self, db_session):
@@ -211,31 +205,31 @@ class TestDatabaseIntegration:
         symbol = "ETHUSDT"
 
         bot_data = {
-            'id': bot_id,
-            'type': 'paper',
-            'config_file': 'test_config.json',
-            'status': 'running',
+            "id": bot_id,
+            "type": "paper",
+            "config_file": "test_config.json",
+            "status": "running",
         }
         bots_repo.create(bot_data)
         db_session.flush()
 
         # Create an open trade
         trade_data = {
-            'bot_id': bot_id,
-            'trade_type': 'paper',
-            'strategy_name': 'RestartTestStrategy',
-            'entry_logic_name': 'RSIEntry',
-            'exit_logic_name': 'ATRExit',
-            'symbol': symbol,
-            'interval': '1h',
-            'entry_time': datetime.now(timezone.utc),
-            'buy_order_created': datetime.now(timezone.utc),
-            'entry_price': 3000.0,
-            'entry_value': 600.0,
-            'size': 0.2,
-            'direction': 'long',
-            'status': 'open',
-            'extra_metadata': {'restart_test': True}
+            "bot_id": bot_id,
+            "trade_type": "paper",
+            "strategy_name": "RestartTestStrategy",
+            "entry_logic_name": "RSIEntry",
+            "exit_logic_name": "ATRExit",
+            "symbol": symbol,
+            "interval": "1h",
+            "entry_time": datetime.now(UTC),
+            "buy_order_created": datetime.now(UTC),
+            "entry_price": 3000.0,
+            "entry_value": 600.0,
+            "size": 0.2,
+            "direction": "long",
+            "status": "open",
+            "extra_metadata": {"restart_test": True},
         }
 
         trade = trades_repo.create(trade_data)
@@ -245,7 +239,7 @@ class TestDatabaseIntegration:
         # Simulate bot restart - load open positions
         # This would normally use a method like get_open_trades_by_bot
         all_trades = trades_repo.get_all()
-        open_trades = [t for t in all_trades if t.bot_id == bot_id and t.status == 'open']
+        open_trades = [t for t in all_trades if t.bot_id == bot_id and t.status == "open"]
 
         assert len(open_trades) == 1
         print(f"✅ Found {len(open_trades)} open trade on restart")
@@ -253,7 +247,7 @@ class TestDatabaseIntegration:
         # Verify trade details
         open_trade = open_trades[0]
         assert open_trade.symbol == symbol
-        assert open_trade.status == 'open'
+        assert open_trade.status == "open"
         print(f"✅ Open trade details: {open_trade.symbol} @ {open_trade.entry_price}")
 
 

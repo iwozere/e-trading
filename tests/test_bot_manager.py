@@ -13,6 +13,7 @@ How to run:
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 import src.trading.trading_bot as bot_manager
 
 
@@ -30,9 +31,7 @@ def test_start_and_stop_bot(mock_thread, mock_import_module):
     DummyBot = MagicMock()
     DummyBot.return_value.trade_history = ["trade1", "trade2"]
     mock_import_module.return_value = MagicMock()
-    mock_import_module.return_value.__getattr__.side_effect = lambda name: (
-        DummyBot if name == "DummyBot" else None
-    )
+    mock_import_module.return_value.__getattr__.side_effect = lambda name: DummyBot if name == "DummyBot" else None
     # Patch getattr to return DummyBot
     with patch("src.management.bot_manager.getattr", return_value=DummyBot):
         bot_id = bot_manager.start_bot("dummy", {"foo": "bar"}, bot_id="testbot")

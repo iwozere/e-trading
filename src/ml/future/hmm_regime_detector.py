@@ -46,24 +46,25 @@ Required Input Data Format:
     column is calculated automatically by the script.
 """
 
-import pandas as pd
+import json
+import logging
+import warnings
+from pathlib import Path
+
+import joblib
+import matplotlib.pyplot as plt
 import numpy as np
+import optuna
+import pandas as pd
 from hmmlearn.hmm import GaussianHMM
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
-import joblib
-import optuna
-import matplotlib.pyplot as plt
-from pathlib import Path
 from tqdm import tqdm
-import logging
-import warnings
-import json
 
 # --- Suppress verbose logging and warnings for a cleaner output ---
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 warnings.filterwarnings("ignore", category=FutureWarning)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 def load_and_preprocess_data(file_path: Path) -> tuple[np.ndarray | None, pd.DataFrame | None]:
@@ -75,19 +76,19 @@ def load_and_preprocess_data(file_path: Path) -> tuple[np.ndarray | None, pd.Dat
     try:
         df = pd.read_csv(file_path)
         # The script now only requires these basic columns.
-        required_cols = ['timestamp', 'close', 'volume']
+        required_cols = ["timestamp", "close", "volume"]
         if not all(col in df.columns for col in required_cols):
             logging.warning(f"Skipping {file_path.name}: Missing one of required columns: {required_cols}.")
             return None, None
 
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
-        df.set_index('timestamp', inplace=True)
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        df.set_index("timestamp", inplace=True)
 
         # --- KEY CHANGE: Calculate log_return directly in the script ---
-        df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+        df["log_return"] = np.log(df["close"] / df["close"].shift(1))
 
         # Select features for the HMM
-        features_df = df[['log_return', 'volume']].copy()
+        features_df = df[["log_return", "volume"]].copy()
         # Drop rows with NaN values (specifically the first row due to log_return calculation)
         features_df.dropna(inplace=True)
 
@@ -105,13 +106,14 @@ def load_and_preprocess_data(file_path: Path) -> tuple[np.ndarray | None, pd.Dat
         logging.error(f"Failed to load or preprocess {file_path.name}: {e}")
         return None, None
 
+
 def find_best_hyperparameters(trial: optuna.trial.Trial, X_train: np.ndarray) -> float:
     """Optuna objective function for a 3-state HMM."""
     params = {
-        'covariance_type': trial.suggest_categorical("covariance_type", ["full", "diag", "tied", "spherical"]),
-        'n_iter': trial.suggest_int("n_iter", 50, 300),
-        'tol': trial.suggest_float("tol", 1e-4, 1e-2, log=True),
-        'params': trial.suggest_categorical("params", ["stmc", "tmc", "mc"])
+        "covariance_type": trial.suggest_categorical("covariance_type", ["full", "diag", "tied", "spherical"]),
+        "n_iter": trial.suggest_int("n_iter", 50, 300),
+        "tol": trial.suggest_float("tol", 1e-4, 1e-2, log=True),
+        "params": trial.suggest_categorical("params", ["stmc", "tmc", "mc"]),
     }
 
     model = GaussianHMM(n_components=3, random_state=42, **params)
@@ -119,14 +121,16 @@ def find_best_hyperparameters(trial: optuna.trial.Trial, X_train: np.ndarray) ->
     try:
         model.fit(X_train)
         preds = model.predict(X_train)
-        if len(np.unique(preds)) < 2: return -1.0
+        if len(np.unique(preds)) < 2:
+            return -1.0
         return silhouette_score(X_train, preds)
     except (ValueError, np.linalg.LinAlgError):
-        return float('-inf')
+        return float("-inf")
+
 
 def map_regimes_to_market_conditions(df: pd.DataFrame) -> dict:
     """Interprets HMM regimes by analyzing the mean 'log_return' for each state."""
-    mean_log_returns = df.groupby('hmm_regime')['log_return'].mean()
+    mean_log_returns = df.groupby("hmm_regime")["log_return"].mean()
 
     bull_regime = mean_log_returns.idxmax()
     bear_regime = mean_log_returns.idxmin()
@@ -137,42 +141,40 @@ def map_regimes_to_market_conditions(df: pd.DataFrame) -> dict:
         sorted_regimes = mean_log_returns.sort_values().index
         bear_regime, sideways_regime, bull_regime = sorted_regimes[0], sorted_regimes[1], sorted_regimes[2]
 
-    return {
-        bull_regime: ('Bull', 'green'),
-        bear_regime: ('Bear', 'red'),
-        sideways_regime: ('Sideways', 'black')
-    }
+    return {bull_regime: ("Bull", "green"), bear_regime: ("Bear", "red"), sideways_regime: ("Sideways", "black")}
+
 
 def plot_colored_prices_and_states(df: pd.DataFrame, regime_map: dict, title: str, save_path: Path):
     """Plots and saves the closing price colored by market regime."""
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(60, 9), sharex=True, gridspec_kw={'height_ratios': [3, 1]})
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(60, 9), sharex=True, gridspec_kw={"height_ratios": [3, 1]})
 
     ax1.set_title(title)
     for regime, (label, color) in regime_map.items():
-        subset = df[df['hmm_regime'] == regime]
-        ax1.scatter(subset.index, subset['close'], color=color, label=f'{label} Market', s=5, alpha=0.7)
+        subset = df[df["hmm_regime"] == regime]
+        ax1.scatter(subset.index, subset["close"], color=color, label=f"{label} Market", s=5, alpha=0.7)
     ax1.set_ylabel("Close Price")
     ax1.legend()
-    ax1.grid(True, which='major', linestyle='--', alpha=0.6)
+    ax1.grid(True, which="major", linestyle="--", alpha=0.6)
 
     ax2.set_title("HMM Regime Sequence")
     for regime, (_, color) in regime_map.items():
-        subset = df[df['hmm_regime'] == regime]
-        ax2.scatter(subset.index, subset['hmm_regime'], color=color, s=15)
+        subset = df[df["hmm_regime"] == regime]
+        ax2.scatter(subset.index, subset["hmm_regime"], color=color, s=15)
     ax2.set_ylabel("HMM Regime")
     ax2.set_xlabel("Date")
     ax2.set_yticks(list(regime_map.keys()))
-    ax2.grid(True, which='major', linestyle='--', alpha=0.6)
+    ax2.grid(True, which="major", linestyle="--", alpha=0.6)
 
     plt.tight_layout()
     plt.savefig(save_path)
     plt.close(fig)
 
+
 def process_file(file_path: Path, output_dir: Path):
     """Runs the full HMM pipeline for a single data file."""
     try:
         filename_stem = file_path.stem
-        tokens = filename_stem.split('_')
+        tokens = filename_stem.split("_")
         symbol = tokens[0]
         timeframe = tokens[1]
     except ValueError:
@@ -182,7 +184,8 @@ def process_file(file_path: Path, output_dir: Path):
     logging.info(f"Processing {symbol.upper()} ({timeframe})...")
 
     X_scaled, df = load_and_preprocess_data(file_path)
-    if X_scaled is None or df is None: return
+    if X_scaled is None or df is None:
+        return
 
     logging.info("Starting hyperparameter optimization...")
     study = optuna.create_study(direction="maximize")
@@ -204,12 +207,12 @@ def process_file(file_path: Path, output_dir: Path):
 
     # 2. Save the best hyperparameters to a JSON file
     json_path = output_dir / f"{base_filename}.json"
-    with open(json_path, 'w') as f:
+    with open(json_path, "w") as f:
         json.dump(best_params, f, indent=4)
     logging.info(f"Saved hyperparameters to {json_path}")
 
     # 3. Predict, interpret, and save the plot
-    df['hmm_regime'] = final_model.predict(X_scaled)
+    df["hmm_regime"] = final_model.predict(X_scaled)
     regime_map = map_regimes_to_market_conditions(df)
 
     plot_title = f"{symbol.upper()} ({timeframe}) Price Colored by HMM-Identified Market Regime"
@@ -218,7 +221,7 @@ def process_file(file_path: Path, output_dir: Path):
     logging.info(f"Saved plot to {plot_path}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     project_root = Path(__file__).resolve().parents[3]
     data_dir = project_root / "data"
     output_dir = project_root / "src" / "strategy" / "ml" / "hmm"

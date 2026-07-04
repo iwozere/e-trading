@@ -13,27 +13,26 @@ No Backtrader runtime required. Strategy and indicator objects are lightweight m
 
 import sys
 from pathlib import Path
-import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.strategy.entry.rsi_bb_entry_mixin import RSIBBEntryMixin
-from src.strategy.entry.rsi_or_bb_entry_mixin import RSIOrBBEntryMixin
-from src.strategy.entry.rsi_bb_volume_entry_mixin import RSIBBVolumeEntryMixin
-from src.strategy.entry.rsi_ichimoku_entry_mixin import RSIIchimokuEntryMixin
-from src.strategy.entry.rsi_volume_supertrend_entry_mixin import RSIVolumeSupertrendEntryMixin
 from src.strategy.entry.bb_volume_supertrend_entry_mixin import BBVolumeSupertrendEntryMixin
 from src.strategy.entry.eom_breakout_entry_mixin import EOMBreakoutEntryMixin
-from src.strategy.entry.eom_pullback_entry_mixin import EOMPullbackEntryMixin
 from src.strategy.entry.eom_macd_breakout_entry_mixin import EOMMAcdBreakoutEntryMixin
+from src.strategy.entry.eom_pullback_entry_mixin import EOMPullbackEntryMixin
 from src.strategy.entry.hmm_lstm_entry_mixin import HMMLSTMEntryMixin
-
+from src.strategy.entry.rsi_bb_entry_mixin import RSIBBEntryMixin
+from src.strategy.entry.rsi_bb_volume_entry_mixin import RSIBBVolumeEntryMixin
+from src.strategy.entry.rsi_ichimoku_entry_mixin import RSIIchimokuEntryMixin
+from src.strategy.entry.rsi_or_bb_entry_mixin import RSIOrBBEntryMixin
+from src.strategy.entry.rsi_volume_supertrend_entry_mixin import RSIVolumeSupertrendEntryMixin
 
 # ---------------------------------------------------------------------------
 # Test infrastructure
 # ---------------------------------------------------------------------------
+
 
 class MockLine:
     """Mimics a Backtrader indicator line: supports [0] (current) and [-n] (history)."""
@@ -58,8 +57,7 @@ class MockLine:
 class MockData:
     """Minimal Backtrader data feed mock."""
 
-    def __init__(self, close=100.0, volume=2000.0, open_=95.0, low=90.0, high=110.0,
-                 prev_close=98.0):
+    def __init__(self, close=100.0, volume=2000.0, open_=95.0, low=90.0, high=110.0, prev_close=98.0):
         self.close = MockLine(close, neg1=prev_close)
         self.volume = MockLine(volume)
         self.open = MockLine(open_)
@@ -89,8 +87,8 @@ def _attach(mixin, indicators: dict, data=None) -> None:
 # RSIBBEntryMixin  (RSI AND BB)
 # ---------------------------------------------------------------------------
 
-class TestRSIBBEntryMixin:
 
+class TestRSIBBEntryMixin:
     def _mixin(self):
         return RSIBBEntryMixin()
 
@@ -110,29 +108,41 @@ class TestRSIBBEntryMixin:
 
     def test_entry_when_rsi_oversold_and_price_below_bb(self):
         mixin = self._mixin()
-        _attach(mixin, {
-            'entry_rsi':       MockLine(25.0, neg1=28.0),
-            'entry_bb_lower':  MockLine(102.0),
-            'entry_bb_middle': MockLine(115.0),
-        }, data=MockData(close=100.0))  # price (100) <= bb_lower (102)
+        _attach(
+            mixin,
+            {
+                "entry_rsi": MockLine(25.0, neg1=28.0),
+                "entry_bb_lower": MockLine(102.0),
+                "entry_bb_middle": MockLine(115.0),
+            },
+            data=MockData(close=100.0),
+        )  # price (100) <= bb_lower (102)
         assert mixin.should_enter() is True
 
     def test_no_entry_when_rsi_not_oversold(self):
         mixin = self._mixin()
-        _attach(mixin, {
-            'entry_rsi':       MockLine(45.0, neg1=48.0),  # above oversold=30
-            'entry_bb_lower':  MockLine(102.0),
-            'entry_bb_middle': MockLine(115.0),
-        }, data=MockData(close=100.0))
+        _attach(
+            mixin,
+            {
+                "entry_rsi": MockLine(45.0, neg1=48.0),  # above oversold=30
+                "entry_bb_lower": MockLine(102.0),
+                "entry_bb_middle": MockLine(115.0),
+            },
+            data=MockData(close=100.0),
+        )
         assert mixin.should_enter() is False
 
     def test_no_entry_when_price_above_bb_lower(self):
         mixin = self._mixin()
-        _attach(mixin, {
-            'entry_rsi':       MockLine(25.0, neg1=28.0),
-            'entry_bb_lower':  MockLine(90.0),   # price (100) > bb_lower (90)
-            'entry_bb_middle': MockLine(110.0),
-        }, data=MockData(close=100.0))
+        _attach(
+            mixin,
+            {
+                "entry_rsi": MockLine(25.0, neg1=28.0),
+                "entry_bb_lower": MockLine(90.0),  # price (100) > bb_lower (90)
+                "entry_bb_middle": MockLine(110.0),
+            },
+            data=MockData(close=100.0),
+        )
         assert mixin.should_enter() is False
 
 
@@ -140,8 +150,8 @@ class TestRSIBBEntryMixin:
 # RSIOrBBEntryMixin  (RSI OR BB)
 # ---------------------------------------------------------------------------
 
-class TestRSIOrBBEntryMixin:
 
+class TestRSIOrBBEntryMixin:
     def _mixin(self):
         return RSIOrBBEntryMixin()
 
@@ -159,29 +169,41 @@ class TestRSIOrBBEntryMixin:
 
     def test_entry_when_only_rsi_oversold(self):
         mixin = self._mixin()
-        _attach(mixin, {
-            'entry_rsi':       MockLine(25.0, neg1=28.0),
-            'entry_bb_lower':  MockLine(85.0),   # price (100) > bb_lower → BB false
-            'entry_bb_middle': MockLine(110.0),
-        }, data=MockData(close=100.0))
+        _attach(
+            mixin,
+            {
+                "entry_rsi": MockLine(25.0, neg1=28.0),
+                "entry_bb_lower": MockLine(85.0),  # price (100) > bb_lower → BB false
+                "entry_bb_middle": MockLine(110.0),
+            },
+            data=MockData(close=100.0),
+        )
         assert mixin.should_enter() is True  # RSI condition alone is enough
 
     def test_entry_when_only_price_below_bb(self):
         mixin = self._mixin()
-        _attach(mixin, {
-            'entry_rsi':       MockLine(50.0, neg1=52.0),  # not oversold
-            'entry_bb_lower':  MockLine(105.0),  # price (100) <= bb_lower → BB true
-            'entry_bb_middle': MockLine(120.0),
-        }, data=MockData(close=100.0))
+        _attach(
+            mixin,
+            {
+                "entry_rsi": MockLine(50.0, neg1=52.0),  # not oversold
+                "entry_bb_lower": MockLine(105.0),  # price (100) <= bb_lower → BB true
+                "entry_bb_middle": MockLine(120.0),
+            },
+            data=MockData(close=100.0),
+        )
         assert mixin.should_enter() is True  # BB condition alone is enough
 
     def test_no_entry_when_neither_condition_met(self):
         mixin = self._mixin()
-        _attach(mixin, {
-            'entry_rsi':       MockLine(50.0, neg1=52.0),
-            'entry_bb_lower':  MockLine(85.0),
-            'entry_bb_middle': MockLine(105.0),
-        }, data=MockData(close=100.0))
+        _attach(
+            mixin,
+            {
+                "entry_rsi": MockLine(50.0, neg1=52.0),
+                "entry_bb_lower": MockLine(85.0),
+                "entry_bb_middle": MockLine(105.0),
+            },
+            data=MockData(close=100.0),
+        )
         assert mixin.should_enter() is False
 
 
@@ -189,8 +211,8 @@ class TestRSIOrBBEntryMixin:
 # RSIBBVolumeEntryMixin  (RSI AND BB AND Volume)
 # ---------------------------------------------------------------------------
 
-class TestRSIBBVolumeEntryMixin:
 
+class TestRSIBBVolumeEntryMixin:
     def _mixin(self):
         return RSIBBVolumeEntryMixin()
 
@@ -205,21 +227,29 @@ class TestRSIBBVolumeEntryMixin:
 
     def test_entry_on_happy_path(self):
         mixin = self._mixin()
-        _attach(mixin, {
-            'entry_rsi':      MockLine(25.0),
-            'entry_bb_lower': MockLine(102.0),
-            'entry_volume_ma': MockLine(1000.0),
-        }, data=MockData(close=100.0, volume=1200.0))
+        _attach(
+            mixin,
+            {
+                "entry_rsi": MockLine(25.0),
+                "entry_bb_lower": MockLine(102.0),
+                "entry_volume_ma": MockLine(1000.0),
+            },
+            data=MockData(close=100.0, volume=1200.0),
+        )
         # RSI<=30, price(100)<=bb_lower(102), volume(1200) > vol_ma(1000)*1.1(1100)
         assert mixin.should_enter() is True
 
     def test_no_entry_when_volume_insufficient(self):
         mixin = self._mixin()
-        _attach(mixin, {
-            'entry_rsi':      MockLine(25.0),
-            'entry_bb_lower': MockLine(102.0),
-            'entry_volume_ma': MockLine(2000.0),  # needs >2200, but volume=1200
-        }, data=MockData(close=100.0, volume=1200.0))
+        _attach(
+            mixin,
+            {
+                "entry_rsi": MockLine(25.0),
+                "entry_bb_lower": MockLine(102.0),
+                "entry_volume_ma": MockLine(2000.0),  # needs >2200, but volume=1200
+            },
+            data=MockData(close=100.0, volume=1200.0),
+        )
         assert mixin.should_enter() is False
 
     def test_minimum_lookback_positive(self):
@@ -230,8 +260,8 @@ class TestRSIBBVolumeEntryMixin:
 # RSIIchimokuEntryMixin  (Price > kumo AND RSI oversold AND tenkan crossover)
 # ---------------------------------------------------------------------------
 
-class TestRSIIchimokuEntryMixin:
 
+class TestRSIIchimokuEntryMixin:
     def _mixin(self):
         return RSIIchimokuEntryMixin()
 
@@ -248,33 +278,45 @@ class TestRSIIchimokuEntryMixin:
     def test_entry_on_happy_path(self):
         mixin = self._mixin()
         # Conditions: price(100) > kumo_top(80), RSI(25)<=30, crossover (prev_price(95)<=prev_tenkan(96), price(100)>tenkan(99))
-        _attach(mixin, {
-            'entry_rsi':                MockLine(25.0),
-            'entry_ichimoku_tenkan':    MockLine(99.0, neg1=96.0),
-            'entry_ichimoku_senkou_a':  MockLine(0.0, neg26=75.0),  # kumo 26 bars back
-            'entry_ichimoku_senkou_b':  MockLine(0.0, neg26=80.0),
-        }, data=MockData(close=100.0, prev_close=95.0))
+        _attach(
+            mixin,
+            {
+                "entry_rsi": MockLine(25.0),
+                "entry_ichimoku_tenkan": MockLine(99.0, neg1=96.0),
+                "entry_ichimoku_senkou_a": MockLine(0.0, neg26=75.0),  # kumo 26 bars back
+                "entry_ichimoku_senkou_b": MockLine(0.0, neg26=80.0),
+            },
+            data=MockData(close=100.0, prev_close=95.0),
+        )
         assert mixin.should_enter() is True
 
     def test_no_entry_when_price_inside_kumo(self):
         mixin = self._mixin()
         # kumo_top = max(75, 120) = 120; price=100 < 120 → should not enter
-        _attach(mixin, {
-            'entry_rsi':                MockLine(25.0),
-            'entry_ichimoku_tenkan':    MockLine(99.0, neg1=96.0),
-            'entry_ichimoku_senkou_a':  MockLine(0.0, neg26=75.0),
-            'entry_ichimoku_senkou_b':  MockLine(0.0, neg26=120.0),
-        }, data=MockData(close=100.0, prev_close=95.0))
+        _attach(
+            mixin,
+            {
+                "entry_rsi": MockLine(25.0),
+                "entry_ichimoku_tenkan": MockLine(99.0, neg1=96.0),
+                "entry_ichimoku_senkou_a": MockLine(0.0, neg26=75.0),
+                "entry_ichimoku_senkou_b": MockLine(0.0, neg26=120.0),
+            },
+            data=MockData(close=100.0, prev_close=95.0),
+        )
         assert mixin.should_enter() is False
 
     def test_no_entry_when_rsi_not_oversold(self):
         mixin = self._mixin()
-        _attach(mixin, {
-            'entry_rsi':                MockLine(55.0),  # not oversold
-            'entry_ichimoku_tenkan':    MockLine(99.0, neg1=96.0),
-            'entry_ichimoku_senkou_a':  MockLine(0.0, neg26=75.0),
-            'entry_ichimoku_senkou_b':  MockLine(0.0, neg26=80.0),
-        }, data=MockData(close=100.0, prev_close=95.0))
+        _attach(
+            mixin,
+            {
+                "entry_rsi": MockLine(55.0),  # not oversold
+                "entry_ichimoku_tenkan": MockLine(99.0, neg1=96.0),
+                "entry_ichimoku_senkou_a": MockLine(0.0, neg26=75.0),
+                "entry_ichimoku_senkou_b": MockLine(0.0, neg26=80.0),
+            },
+            data=MockData(close=100.0, prev_close=95.0),
+        )
         assert mixin.should_enter() is False
 
     def test_minimum_lookback_positive(self):
@@ -285,8 +327,8 @@ class TestRSIIchimokuEntryMixin:
 # RSIVolumeSupertrendEntryMixin  (RSI AND Volume AND Supertrend=uptrend)
 # ---------------------------------------------------------------------------
 
-class TestRSIVolumeSupertrendEntryMixin:
 
+class TestRSIVolumeSupertrendEntryMixin:
     def _mixin(self):
         return RSIVolumeSupertrendEntryMixin()
 
@@ -302,29 +344,41 @@ class TestRSIVolumeSupertrendEntryMixin:
     def test_entry_on_happy_path(self):
         mixin = self._mixin()
         # RSI(25)<=30, volume(3000)>vol_ma(1000)*1.5, supertrend=1 (uptrend)
-        _attach(mixin, {
-            'entry_rsi':                  MockLine(25.0),
-            'entry_volume_ma':            MockLine(1000.0),
-            'entry_supertrend_direction': MockLine(1),
-        }, data=MockData(volume=3000.0))
+        _attach(
+            mixin,
+            {
+                "entry_rsi": MockLine(25.0),
+                "entry_volume_ma": MockLine(1000.0),
+                "entry_supertrend_direction": MockLine(1),
+            },
+            data=MockData(volume=3000.0),
+        )
         assert mixin.should_enter() is True
 
     def test_no_entry_when_downtrend(self):
         mixin = self._mixin()
-        _attach(mixin, {
-            'entry_rsi':                  MockLine(25.0),
-            'entry_volume_ma':            MockLine(1000.0),
-            'entry_supertrend_direction': MockLine(-1),  # downtrend
-        }, data=MockData(volume=3000.0))
+        _attach(
+            mixin,
+            {
+                "entry_rsi": MockLine(25.0),
+                "entry_volume_ma": MockLine(1000.0),
+                "entry_supertrend_direction": MockLine(-1),  # downtrend
+            },
+            data=MockData(volume=3000.0),
+        )
         assert mixin.should_enter() is False
 
     def test_no_entry_when_rsi_not_oversold(self):
         mixin = self._mixin()
-        _attach(mixin, {
-            'entry_rsi':                  MockLine(50.0),
-            'entry_volume_ma':            MockLine(1000.0),
-            'entry_supertrend_direction': MockLine(1),
-        }, data=MockData(volume=3000.0))
+        _attach(
+            mixin,
+            {
+                "entry_rsi": MockLine(50.0),
+                "entry_volume_ma": MockLine(1000.0),
+                "entry_supertrend_direction": MockLine(1),
+            },
+            data=MockData(volume=3000.0),
+        )
         assert mixin.should_enter() is False
 
     def test_minimum_lookback_positive(self):
@@ -335,8 +389,8 @@ class TestRSIVolumeSupertrendEntryMixin:
 # BBVolumeSupertrendEntryMixin  (BB AND Volume AND Supertrend=uptrend)
 # ---------------------------------------------------------------------------
 
-class TestBBVolumeSupertrendEntryMixin:
 
+class TestBBVolumeSupertrendEntryMixin:
     def _mixin(self):
         return BBVolumeSupertrendEntryMixin()
 
@@ -352,29 +406,41 @@ class TestBBVolumeSupertrendEntryMixin:
     def test_entry_on_happy_path(self):
         mixin = self._mixin()
         # price(100)<=bb_lower(102), volume(2000)>vol_ma(1000)*1.1, supertrend=1
-        _attach(mixin, {
-            'entry_bb_lower':             MockLine(102.0),
-            'entry_volume_ma':            MockLine(1000.0),
-            'entry_supertrend_direction': MockLine(1),
-        }, data=MockData(close=100.0, volume=2000.0))
+        _attach(
+            mixin,
+            {
+                "entry_bb_lower": MockLine(102.0),
+                "entry_volume_ma": MockLine(1000.0),
+                "entry_supertrend_direction": MockLine(1),
+            },
+            data=MockData(close=100.0, volume=2000.0),
+        )
         assert mixin.should_enter() is True
 
     def test_no_entry_when_price_above_bb(self):
         mixin = self._mixin()
-        _attach(mixin, {
-            'entry_bb_lower':             MockLine(90.0),  # price(100) > bb_lower(90)
-            'entry_volume_ma':            MockLine(1000.0),
-            'entry_supertrend_direction': MockLine(1),
-        }, data=MockData(close=100.0, volume=2000.0))
+        _attach(
+            mixin,
+            {
+                "entry_bb_lower": MockLine(90.0),  # price(100) > bb_lower(90)
+                "entry_volume_ma": MockLine(1000.0),
+                "entry_supertrend_direction": MockLine(1),
+            },
+            data=MockData(close=100.0, volume=2000.0),
+        )
         assert mixin.should_enter() is False
 
     def test_no_entry_when_downtrend(self):
         mixin = self._mixin()
-        _attach(mixin, {
-            'entry_bb_lower':             MockLine(102.0),
-            'entry_volume_ma':            MockLine(1000.0),
-            'entry_supertrend_direction': MockLine(-1),
-        }, data=MockData(close=100.0, volume=2000.0))
+        _attach(
+            mixin,
+            {
+                "entry_bb_lower": MockLine(102.0),
+                "entry_volume_ma": MockLine(1000.0),
+                "entry_supertrend_direction": MockLine(-1),
+            },
+            data=MockData(close=100.0, volume=2000.0),
+        )
         assert mixin.should_enter() is False
 
     def test_minimum_lookback_positive(self):
@@ -385,8 +451,8 @@ class TestBBVolumeSupertrendEntryMixin:
 # EOMBreakoutEntryMixin  (Breakout + EOM + Volume + RSI not overbought)
 # ---------------------------------------------------------------------------
 
-class TestEOMBreakoutEntryMixin:
 
+class TestEOMBreakoutEntryMixin:
     def _mixin(self):
         return EOMBreakoutEntryMixin(params={"use_atr_filter": False})
 
@@ -405,46 +471,62 @@ class TestEOMBreakoutEntryMixin:
         resistance = 98.0
         breakout_threshold = 0.002
         close = resistance * (1 + breakout_threshold) + 0.5  # clearly above breakout level
-        _attach(mixin, {
-            'entry_resistance':  MockLine(resistance),
-            'entry_eom':         MockLine(0.5, neg1=0.3),   # EOM>0 and rising
-            'entry_volume_sma':  MockLine(1000.0),
-            'entry_rsi':         MockLine(50.0),             # not overbought (<70)
-        }, data=MockData(close=close, volume=1500.0))
+        _attach(
+            mixin,
+            {
+                "entry_resistance": MockLine(resistance),
+                "entry_eom": MockLine(0.5, neg1=0.3),  # EOM>0 and rising
+                "entry_volume_sma": MockLine(1000.0),
+                "entry_rsi": MockLine(50.0),  # not overbought (<70)
+            },
+            data=MockData(close=close, volume=1500.0),
+        )
         assert mixin.should_enter() is True
 
     def test_no_entry_when_no_breakout(self):
         mixin = self._mixin()
-        _attach(mixin, {
-            'entry_resistance':  MockLine(100.0),
-            'entry_eom':         MockLine(0.5, neg1=0.3),
-            'entry_volume_sma':  MockLine(1000.0),
-            'entry_rsi':         MockLine(50.0),
-        }, data=MockData(close=95.0, volume=1500.0))  # no breakout
+        _attach(
+            mixin,
+            {
+                "entry_resistance": MockLine(100.0),
+                "entry_eom": MockLine(0.5, neg1=0.3),
+                "entry_volume_sma": MockLine(1000.0),
+                "entry_rsi": MockLine(50.0),
+            },
+            data=MockData(close=95.0, volume=1500.0),
+        )  # no breakout
         assert mixin.should_enter() is False
 
     def test_no_entry_when_eom_negative(self):
         mixin = self._mixin()
         resistance = 98.0
         close = resistance * 1.003 + 0.5
-        _attach(mixin, {
-            'entry_resistance':  MockLine(resistance),
-            'entry_eom':         MockLine(-0.1, neg1=0.3),  # EOM negative → not bullish
-            'entry_volume_sma':  MockLine(1000.0),
-            'entry_rsi':         MockLine(50.0),
-        }, data=MockData(close=close, volume=1500.0))
+        _attach(
+            mixin,
+            {
+                "entry_resistance": MockLine(resistance),
+                "entry_eom": MockLine(-0.1, neg1=0.3),  # EOM negative → not bullish
+                "entry_volume_sma": MockLine(1000.0),
+                "entry_rsi": MockLine(50.0),
+            },
+            data=MockData(close=close, volume=1500.0),
+        )
         assert mixin.should_enter() is False
 
     def test_no_entry_when_rsi_overbought(self):
         mixin = self._mixin()
         resistance = 98.0
         close = resistance * 1.003 + 0.5
-        _attach(mixin, {
-            'entry_resistance':  MockLine(resistance),
-            'entry_eom':         MockLine(0.5, neg1=0.3),
-            'entry_volume_sma':  MockLine(1000.0),
-            'entry_rsi':         MockLine(75.0),  # overbought
-        }, data=MockData(close=close, volume=1500.0))
+        _attach(
+            mixin,
+            {
+                "entry_resistance": MockLine(resistance),
+                "entry_eom": MockLine(0.5, neg1=0.3),
+                "entry_volume_sma": MockLine(1000.0),
+                "entry_rsi": MockLine(75.0),  # overbought
+            },
+            data=MockData(close=close, volume=1500.0),
+        )
         assert mixin.should_enter() is False
 
     def test_minimum_lookback_positive(self):
@@ -455,8 +537,8 @@ class TestEOMBreakoutEntryMixin:
 # EOMPullbackEntryMixin  (Support bounce + EOM cross-up + RSI recovery + ATR)
 # ---------------------------------------------------------------------------
 
-class TestEOMPullbackEntryMixin:
 
+class TestEOMPullbackEntryMixin:
     def _mixin(self):
         return EOMPullbackEntryMixin()
 
@@ -476,37 +558,49 @@ class TestEOMPullbackEntryMixin:
         # low(91) <= support*(1+0.005)=90.45 — fails! Need low <= support_level
         # support_level = 90 * 1.005 = 90.45 → low must be <= 90.45
         low = 90.0
-        _attach(mixin, {
-            'entry_support':  MockLine(support),
-            'entry_eom':      MockLine(0.1, neg1=-0.05),  # crosses above 0
-            'entry_rsi':      MockLine(35.0, neg1=33.0),  # oversold(<40) and rising
-            'entry_atr':      MockLine(2.0),
-            'entry_atr_sma':  MockLine(1.5),              # atr(2)>atr_sma(1.5)*0.9
-        }, data=MockData(close=95.0, open_=89.0, low=low))  # close>open (reversal candle)
+        _attach(
+            mixin,
+            {
+                "entry_support": MockLine(support),
+                "entry_eom": MockLine(0.1, neg1=-0.05),  # crosses above 0
+                "entry_rsi": MockLine(35.0, neg1=33.0),  # oversold(<40) and rising
+                "entry_atr": MockLine(2.0),
+                "entry_atr_sma": MockLine(1.5),  # atr(2)>atr_sma(1.5)*0.9
+            },
+            data=MockData(close=95.0, open_=89.0, low=low),
+        )  # close>open (reversal candle)
         assert mixin.should_enter() is True
 
     def test_no_entry_when_eom_not_crossing_up(self):
         mixin = self._mixin()
         support = 90.0
-        _attach(mixin, {
-            'entry_support':  MockLine(support),
-            'entry_eom':      MockLine(0.1, neg1=0.2),   # already positive — no cross
-            'entry_rsi':      MockLine(35.0, neg1=33.0),
-            'entry_atr':      MockLine(2.0),
-            'entry_atr_sma':  MockLine(1.5),
-        }, data=MockData(close=95.0, open_=89.0, low=90.0))
+        _attach(
+            mixin,
+            {
+                "entry_support": MockLine(support),
+                "entry_eom": MockLine(0.1, neg1=0.2),  # already positive — no cross
+                "entry_rsi": MockLine(35.0, neg1=33.0),
+                "entry_atr": MockLine(2.0),
+                "entry_atr_sma": MockLine(1.5),
+            },
+            data=MockData(close=95.0, open_=89.0, low=90.0),
+        )
         assert mixin.should_enter() is False
 
     def test_no_entry_when_rsi_falling(self):
         mixin = self._mixin()
         support = 90.0
-        _attach(mixin, {
-            'entry_support':  MockLine(support),
-            'entry_eom':      MockLine(0.1, neg1=-0.05),
-            'entry_rsi':      MockLine(35.0, neg1=38.0),  # falling (35 < 38)
-            'entry_atr':      MockLine(2.0),
-            'entry_atr_sma':  MockLine(1.5),
-        }, data=MockData(close=95.0, open_=89.0, low=90.0))
+        _attach(
+            mixin,
+            {
+                "entry_support": MockLine(support),
+                "entry_eom": MockLine(0.1, neg1=-0.05),
+                "entry_rsi": MockLine(35.0, neg1=38.0),  # falling (35 < 38)
+                "entry_atr": MockLine(2.0),
+                "entry_atr_sma": MockLine(1.5),
+            },
+            data=MockData(close=95.0, open_=89.0, low=90.0),
+        )
         assert mixin.should_enter() is False
 
     def test_minimum_lookback_positive(self):
@@ -517,8 +611,8 @@ class TestEOMPullbackEntryMixin:
 # EOMMAcdBreakoutEntryMixin  (MACD crossover + near resistance + EOM>0 + volume)
 # ---------------------------------------------------------------------------
 
-class TestEOMMAcdBreakoutEntryMixin:
 
+class TestEOMMAcdBreakoutEntryMixin:
     def _mixin(self):
         return EOMMAcdBreakoutEntryMixin()
 
@@ -537,41 +631,53 @@ class TestEOMMAcdBreakoutEntryMixin:
         resistance = 100.0
         # near resistance: close in [100*0.995=99.5, 100*1.002=100.2]
         close = 100.0
-        _attach(mixin, {
-            'entry_resistance':   MockLine(resistance),
-            'entry_macd':         MockLine(0.5, neg1=-0.1),     # MACD crossover above signal
-            'entry_macd_signal':  MockLine(0.3, neg1=0.0),      # was equal/below
-            'entry_macd_hist':    MockLine(0.2, neg1=0.1),      # histogram rising
-            'entry_eom':          MockLine(0.3),                 # EOM positive
-            'entry_volume_sma':   MockLine(1000.0),
-        }, data=MockData(close=close, volume=900.0))  # volume(900)>=vol_floor(0.8*1000=800)
+        _attach(
+            mixin,
+            {
+                "entry_resistance": MockLine(resistance),
+                "entry_macd": MockLine(0.5, neg1=-0.1),  # MACD crossover above signal
+                "entry_macd_signal": MockLine(0.3, neg1=0.0),  # was equal/below
+                "entry_macd_hist": MockLine(0.2, neg1=0.1),  # histogram rising
+                "entry_eom": MockLine(0.3),  # EOM positive
+                "entry_volume_sma": MockLine(1000.0),
+            },
+            data=MockData(close=close, volume=900.0),
+        )  # volume(900)>=vol_floor(0.8*1000=800)
         assert mixin.should_enter() is True
 
     def test_no_entry_when_no_macd_crossover(self):
         mixin = self._mixin()
         resistance = 100.0
-        _attach(mixin, {
-            'entry_resistance':   MockLine(resistance),
-            'entry_macd':         MockLine(0.5, neg1=0.6),   # MACD above signal but wasn't crossing (prev also above)
-            'entry_macd_signal':  MockLine(0.3, neg1=0.2),
-            'entry_macd_hist':    MockLine(0.2, neg1=0.1),
-            'entry_eom':          MockLine(0.3),
-            'entry_volume_sma':   MockLine(1000.0),
-        }, data=MockData(close=100.0, volume=900.0))
+        _attach(
+            mixin,
+            {
+                "entry_resistance": MockLine(resistance),
+                "entry_macd": MockLine(0.5, neg1=0.6),  # MACD above signal but wasn't crossing (prev also above)
+                "entry_macd_signal": MockLine(0.3, neg1=0.2),
+                "entry_macd_hist": MockLine(0.2, neg1=0.1),
+                "entry_eom": MockLine(0.3),
+                "entry_volume_sma": MockLine(1000.0),
+            },
+            data=MockData(close=100.0, volume=900.0),
+        )
         # macd_prev(0.6) > macd_signal_prev(0.2) → already crossed, not a fresh crossover
         assert mixin.should_enter() is False
 
     def test_no_entry_when_price_not_near_resistance(self):
         mixin = self._mixin()
         resistance = 100.0
-        _attach(mixin, {
-            'entry_resistance':   MockLine(resistance),
-            'entry_macd':         MockLine(0.5, neg1=-0.1),
-            'entry_macd_signal':  MockLine(0.3, neg1=0.0),
-            'entry_macd_hist':    MockLine(0.2, neg1=0.1),
-            'entry_eom':          MockLine(0.3),
-            'entry_volume_sma':   MockLine(1000.0),
-        }, data=MockData(close=85.0, volume=900.0))  # far from resistance
+        _attach(
+            mixin,
+            {
+                "entry_resistance": MockLine(resistance),
+                "entry_macd": MockLine(0.5, neg1=-0.1),
+                "entry_macd_signal": MockLine(0.3, neg1=0.0),
+                "entry_macd_hist": MockLine(0.2, neg1=0.1),
+                "entry_eom": MockLine(0.3),
+                "entry_volume_sma": MockLine(1000.0),
+            },
+            data=MockData(close=85.0, volume=900.0),
+        )  # far from resistance
         assert mixin.should_enter() is False
 
     def test_minimum_lookback_positive(self):
@@ -582,8 +688,8 @@ class TestEOMMAcdBreakoutEntryMixin:
 # HMMLSTMEntryMixin  (ML-model based — graceful fallback when models absent)
 # ---------------------------------------------------------------------------
 
-class TestHMMLSTMEntryMixin:
 
+class TestHMMLSTMEntryMixin:
     def test_default_params_keys(self):
         params = HMMLSTMEntryMixin.get_default_params()
         assert "prediction_threshold" in params

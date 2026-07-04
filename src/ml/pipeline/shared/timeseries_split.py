@@ -23,7 +23,7 @@ structurally impossible for pipelines to diverge on leakage-safety.
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, Type, Union
+from typing import Tuple, Type, Union
 
 import numpy as np
 import pandas as pd
@@ -66,13 +66,16 @@ def split_timeseries(
         ``(X_train, X_val, y_train, y_val)`` — all with the same dtype as inputs.
     """
     X_train, X_val, y_train, y_val = train_test_split(
-        X, y,
+        X,
+        y,
         test_size=test_size,
         shuffle=False,  # preserve temporal order — must never be True for time-series
     )
     _logger.debug(
         "split_timeseries: train=%d rows, val=%d rows (test_size=%.2f)",
-        len(X_train), len(X_val), test_size,
+        len(X_train),
+        len(X_val),
+        test_size,
     )
     return X_train, X_val, y_train, y_val
 
@@ -96,10 +99,7 @@ def fit_scaler(
     """
     cls = _SCALER_MAP.get(scaler_type.lower())
     if cls is None:
-        raise ValueError(
-            f"Unknown scaler_type '{scaler_type}'. "
-            f"Supported: {list(_SCALER_MAP)}"
-        )
+        raise ValueError(f"Unknown scaler_type '{scaler_type}'. Supported: {list(_SCALER_MAP)}")
     scaler = cls()
     scaler.fit(X_train)
     _logger.debug("fit_scaler: fitted %s on %d samples", scaler_type, len(X_train))
@@ -134,7 +134,7 @@ def split_and_scale(
     *,
     test_size: float = 0.2,
     scaler_type: str = "standard",
-    fitted_scaler: Optional[TransformerMixin] = None,
+    fitted_scaler: TransformerMixin | None = None,
 ) -> Tuple[
     Union[pd.DataFrame, np.ndarray],
     Union[pd.DataFrame, np.ndarray],

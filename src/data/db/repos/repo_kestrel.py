@@ -8,10 +8,11 @@ within the current Unit-of-Work; the surrounding service commits on success.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, date, datetime, timedelta
+from typing import Any, Dict, List
 
-from sqlalchemy import extract, func as sa_func, select, update
+from sqlalchemy import extract, select, update
+from sqlalchemy import func as sa_func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -55,16 +56,12 @@ class KestrelRepo:
 
     def get_active_tickers(self) -> List[str]:
         """Return all tickers with status='active'."""
-        rows = self.session.execute(
-            select(K20Universe.ticker).where(K20Universe.status == "active")
-        ).scalars().all()
+        rows = self.session.execute(select(K20Universe.ticker).where(K20Universe.status == "active")).scalars().all()
         return list(rows)
 
-    def get_universe_row(self, ticker: str) -> Optional[Dict[str, Any]]:
+    def get_universe_row(self, ticker: str) -> Dict[str, Any] | None:
         """Return a single universe row as a dict, or None."""
-        row = self.session.execute(
-            select(K20Universe).where(K20Universe.ticker == ticker)
-        ).scalars().first()
+        row = self.session.execute(select(K20Universe).where(K20Universe.ticker == ticker)).scalars().first()
         if row is None:
             return None
         return {c.key: getattr(row, c.key) for c in K20Universe.__table__.columns}
@@ -74,9 +71,7 @@ class KestrelRepo:
         if not tickers:
             return 0
         result = self.session.execute(
-            update(K20Universe)
-            .where(K20Universe.ticker.in_(tickers))
-            .values(status="delisted")
+            update(K20Universe).where(K20Universe.ticker.in_(tickers)).values(status="delisted")
         )
         return result.rowcount
 
@@ -100,13 +95,11 @@ class KestrelRepo:
         self,
         ticker: str,
         signal_type: str,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> List[Dict[str, Any]]:
         """Return signal rows for a ticker/type over an optional date range."""
-        q = select(K20Signal).where(
-            K20Signal.ticker == ticker, K20Signal.signal_type == signal_type
-        )
+        q = select(K20Signal).where(K20Signal.ticker == ticker, K20Signal.signal_type == signal_type)
         if start_date:
             q = q.where(K20Signal.date >= start_date)
         if end_date:
@@ -118,24 +111,22 @@ class KestrelRepo:
     def get_signals_for_date(self, ticker: str, on_date: date) -> Dict[str, float]:
         """Return all signals for a ticker on a date as {signal_type: value}."""
         rows = self.session.execute(
-            select(K20Signal.signal_type, K20Signal.value).where(
-                K20Signal.ticker == ticker, K20Signal.date == on_date
-            )
+            select(K20Signal.signal_type, K20Signal.value).where(K20Signal.ticker == ticker, K20Signal.date == on_date)
         ).all()
-        return {
-            str(signal_type): float(value)
-            for signal_type, value in rows
-            if value is not None
-        }
+        return {str(signal_type): float(value) for signal_type, value in rows if value is not None}
 
-    def get_latest_signal(self, ticker: str, signal_type: str) -> Optional[float]:
+    def get_latest_signal(self, ticker: str, signal_type: str) -> float | None:
         """Return the most recent value for a (ticker, signal_type) pair."""
-        row = self.session.execute(
-            select(K20Signal.value)
-            .where(K20Signal.ticker == ticker, K20Signal.signal_type == signal_type)
-            .order_by(K20Signal.date.desc())
-            .limit(1)
-        ).scalars().first()
+        row = (
+            self.session.execute(
+                select(K20Signal.value)
+                .where(K20Signal.ticker == ticker, K20Signal.signal_type == signal_type)
+                .order_by(K20Signal.date.desc())
+                .limit(1)
+            )
+            .scalars()
+            .first()
+        )
         return float(row) if row is not None else None
 
     # ------------------------------------------------------------------
@@ -147,8 +138,15 @@ class KestrelRepo:
         if not rows:
             return 0
         update_cols = [
-            "mentions", "avg_tone", "tone_std", "pos_score", "neg_score",
-            "bullish_ratio", "top_domains", "mention_z20", "tone_z20",
+            "mentions",
+            "avg_tone",
+            "tone_std",
+            "pos_score",
+            "neg_score",
+            "bullish_ratio",
+            "top_domains",
+            "mention_z20",
+            "tone_z20",
         ]
         stmt = pg_insert(K20SentimentDaily).values(rows)
         stmt = stmt.on_conflict_do_update(
@@ -158,14 +156,18 @@ class KestrelRepo:
         self.session.execute(stmt)
         return len(rows)
 
-    def get_latest_sentiment(self, ticker: str, source: str) -> Optional[Dict[str, Any]]:
+    def get_latest_sentiment(self, ticker: str, source: str) -> Dict[str, Any] | None:
         """Return the most recent sentiment row for a (ticker, source) pair."""
-        row = self.session.execute(
-            select(K20SentimentDaily)
-            .where(K20SentimentDaily.ticker == ticker, K20SentimentDaily.source == source)
-            .order_by(K20SentimentDaily.date.desc())
-            .limit(1)
-        ).scalars().first()
+        row = (
+            self.session.execute(
+                select(K20SentimentDaily)
+                .where(K20SentimentDaily.ticker == ticker, K20SentimentDaily.source == source)
+                .order_by(K20SentimentDaily.date.desc())
+                .limit(1)
+            )
+            .scalars()
+            .first()
+        )
         if row is None:
             return None
         return {c.key: getattr(row, c.key) for c in K20SentimentDaily.__table__.columns}
@@ -174,8 +176,8 @@ class KestrelRepo:
         self,
         ticker: str,
         source: str,
-        start: Optional[date] = None,
-        end: Optional[date] = None,
+        start: date | None = None,
+        end: date | None = None,
         days: int = 30,
     ) -> List[Dict[str, Any]]:
         """Return sentiment history. date range takes precedence over days limit."""
@@ -191,10 +193,7 @@ class KestrelRepo:
         if start is None and end is None:
             q = q.limit(days)
         rows = self.session.execute(q).scalars().all()
-        return [
-            {c.key: getattr(r, c.key) for c in K20SentimentDaily.__table__.columns}
-            for r in reversed(rows)
-        ]
+        return [{c.key: getattr(r, c.key) for c in K20SentimentDaily.__table__.columns} for r in reversed(rows)]
 
     # ------------------------------------------------------------------
     # Catalysts
@@ -202,13 +201,17 @@ class KestrelRepo:
 
     def upsert_catalyst(self, row: Dict[str, Any]) -> int:
         """Upsert a catalyst (natural key: ticker, event_type, event_date). Returns id."""
-        existing = self.session.execute(
-            select(K20Catalyst).where(
-                K20Catalyst.ticker == row["ticker"],
-                K20Catalyst.event_type == row["event_type"],
-                K20Catalyst.event_date == row.get("event_date"),
+        existing = (
+            self.session.execute(
+                select(K20Catalyst).where(
+                    K20Catalyst.ticker == row["ticker"],
+                    K20Catalyst.event_type == row["event_type"],
+                    K20Catalyst.event_date == row.get("event_date"),
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if existing:
             for k, v in row.items():
                 if k != "id":
@@ -224,44 +227,56 @@ class KestrelRepo:
         """Return upcoming catalyst events for a ticker within a horizon."""
         today = date.today()
         cutoff = today + timedelta(days=days_ahead)
-        rows = self.session.execute(
-            select(K20Catalyst)
-            .where(
-                K20Catalyst.ticker == ticker,
-                K20Catalyst.event_date >= today,
-                K20Catalyst.event_date <= cutoff,
-                K20Catalyst.state.in_(["upcoming", "date_changed"]),
+        rows = (
+            self.session.execute(
+                select(K20Catalyst)
+                .where(
+                    K20Catalyst.ticker == ticker,
+                    K20Catalyst.event_date >= today,
+                    K20Catalyst.event_date <= cutoff,
+                    K20Catalyst.state.in_(["upcoming", "date_changed"]),
+                )
+                .order_by(K20Catalyst.event_date)
             )
-            .order_by(K20Catalyst.event_date)
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [{c.key: getattr(r, c.key) for c in K20Catalyst.__table__.columns} for r in rows]
 
     def get_catalysts_in_window(self, days_ahead: int = 5) -> List[Dict[str, Any]]:
         """Return all upcoming catalysts for any ticker within days_ahead days."""
         today = date.today()
         cutoff = today + timedelta(days=days_ahead)
-        rows = self.session.execute(
-            select(K20Catalyst)
-            .where(
-                K20Catalyst.event_date.between(today, cutoff),
-                K20Catalyst.state.in_(["upcoming", "date_changed"]),
+        rows = (
+            self.session.execute(
+                select(K20Catalyst)
+                .where(
+                    K20Catalyst.event_date.between(today, cutoff),
+                    K20Catalyst.state.in_(["upcoming", "date_changed"]),
+                )
+                .order_by(K20Catalyst.event_date, K20Catalyst.ticker)
             )
-            .order_by(K20Catalyst.event_date, K20Catalyst.ticker)
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [{c.key: getattr(r, c.key) for c in K20Catalyst.__table__.columns} for r in rows]
 
     def get_all_upcoming_catalysts(self, days_ahead: int = 15) -> List[Dict[str, Any]]:
         """Return upcoming catalysts for ALL tickers within days_ahead days."""
         today = date.today()
         cutoff = today + timedelta(days=days_ahead)
-        rows = self.session.execute(
-            select(K20Catalyst)
-            .where(
-                K20Catalyst.event_date.between(today, cutoff),
-                K20Catalyst.state.in_(["upcoming", "date_changed"]),
+        rows = (
+            self.session.execute(
+                select(K20Catalyst)
+                .where(
+                    K20Catalyst.event_date.between(today, cutoff),
+                    K20Catalyst.state.in_(["upcoming", "date_changed"]),
+                )
+                .order_by(K20Catalyst.event_date)
             )
-            .order_by(K20Catalyst.event_date)
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [{c.key: getattr(r, c.key) for c in K20Catalyst.__table__.columns} for r in rows]
 
     def get_past_spinoffs(self, days_min: int = 20, days_max: int = 60) -> List[Dict[str, Any]]:
@@ -269,14 +284,18 @@ class KestrelRepo:
         today = date.today()
         window_start = today - timedelta(days=days_max)
         window_end = today - timedelta(days=days_min)
-        rows = self.session.execute(
-            select(K20Catalyst)
-            .where(
-                K20Catalyst.event_type == "spinoff",
-                K20Catalyst.event_date.between(window_start, window_end),
+        rows = (
+            self.session.execute(
+                select(K20Catalyst)
+                .where(
+                    K20Catalyst.event_type == "spinoff",
+                    K20Catalyst.event_date.between(window_start, window_end),
+                )
+                .order_by(K20Catalyst.event_date)
             )
-            .order_by(K20Catalyst.event_date)
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [{c.key: getattr(r, c.key) for c in K20Catalyst.__table__.columns} for r in rows]
 
     def stamp_catalyst_alert(self, catalyst_id: int, column: str) -> None:
@@ -285,23 +304,25 @@ class KestrelRepo:
         if column not in allowed:
             raise ValueError("column must be one of %s" % allowed)
         self.session.execute(
-            update(K20Catalyst)
-            .where(K20Catalyst.id == catalyst_id)
-            .values(**{column: datetime.now(timezone.utc)})
+            update(K20Catalyst).where(K20Catalyst.id == catalyst_id).values(**{column: datetime.now(UTC)})
         )
 
     # ------------------------------------------------------------------
     # LLM runs
     # ------------------------------------------------------------------
 
-    def get_llm_run_cached(self, task_type: str, input_ref: str) -> Optional[Dict[str, Any]]:
+    def get_llm_run_cached(self, task_type: str, input_ref: str) -> Dict[str, Any] | None:
         """Return a previously cached LLM output, or None if not found."""
-        row = self.session.execute(
-            select(K20LLMRun).where(
-                K20LLMRun.task_type == task_type,
-                K20LLMRun.input_ref == input_ref,
+        row = (
+            self.session.execute(
+                select(K20LLMRun).where(
+                    K20LLMRun.task_type == task_type,
+                    K20LLMRun.input_ref == input_ref,
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if row is None:
             return None
         return {c.key: getattr(row, c.key) for c in K20LLMRun.__table__.columns}
@@ -321,12 +342,16 @@ class KestrelRepo:
 
     def get_pending_llm_runs(self, task_type: str, limit: int = 50) -> List[Dict[str, Any]]:
         """Return LLM runs with no output yet (verdict IS NULL)."""
-        rows = self.session.execute(
-            select(K20LLMRun)
-            .where(K20LLMRun.task_type == task_type, K20LLMRun.verdict.is_(None))
-            .order_by(K20LLMRun.ts)
-            .limit(limit)
-        ).scalars().all()
+        rows = (
+            self.session.execute(
+                select(K20LLMRun)
+                .where(K20LLMRun.task_type == task_type, K20LLMRun.verdict.is_(None))
+                .order_by(K20LLMRun.ts)
+                .limit(limit)
+            )
+            .scalars()
+            .all()
+        )
         return [{c.key: getattr(r, c.key) for c in K20LLMRun.__table__.columns} for r in rows]
 
     def get_llm_monthly_spend(self) -> float:
@@ -354,9 +379,7 @@ class KestrelRepo:
         )
         self.session.execute(stmt)
 
-    def get_watchlist(
-        self, state: Optional[str] = None, sleeve: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    def get_watchlist(self, state: str | None = None, sleeve: str | None = None) -> List[Dict[str, Any]]:
         """Return watchlist rows, optionally filtered by state and sleeve."""
         q = select(K20Watchlist)
         if state:
@@ -369,11 +392,11 @@ class KestrelRepo:
 
     def get_watchlist_tickers(self) -> List[str]:
         """Return all tickers on the watchlist that are not rejected/expired."""
-        rows = self.session.execute(
-            select(K20Watchlist.ticker).where(
-                K20Watchlist.state.notin_(["rejected", "expired"])
-            )
-        ).scalars().all()
+        rows = (
+            self.session.execute(select(K20Watchlist.ticker).where(K20Watchlist.state.notin_(["rejected", "expired"])))
+            .scalars()
+            .all()
+        )
         return list(set(rows))
 
     # ------------------------------------------------------------------
@@ -389,16 +412,12 @@ class KestrelRepo:
 
     def get_open_positions(self) -> List[Dict[str, Any]]:
         """Return all open positions."""
-        rows = self.session.execute(
-            select(K20Position).where(K20Position.status == "open")
-        ).scalars().all()
+        rows = self.session.execute(select(K20Position).where(K20Position.status == "open")).scalars().all()
         return [{c.key: getattr(r, c.key) for c in K20Position.__table__.columns} for r in rows]
 
     def update_position(self, position_id: int, updates: Dict[str, Any]) -> None:
         """Update fields on an existing position by id."""
-        self.session.execute(
-            update(K20Position).where(K20Position.id == position_id).values(**updates)
-        )
+        self.session.execute(update(K20Position).where(K20Position.id == position_id).values(**updates))
 
     # ------------------------------------------------------------------
     # Request budget
@@ -406,16 +425,20 @@ class KestrelRepo:
 
     def get_or_create_budget(self, source: str, run_date: date, quota: int) -> Dict[str, Any]:
         """Return today's budget row, creating it with used=0 if absent."""
-        stmt = pg_insert(K20RequestBudget).values(
-            source=source, date=run_date, quota=quota, used=0
-        ).on_conflict_do_nothing()
+        stmt = (
+            pg_insert(K20RequestBudget)
+            .values(source=source, date=run_date, quota=quota, used=0)
+            .on_conflict_do_nothing()
+        )
         self.session.execute(stmt)
         self.session.flush()
-        row = self.session.execute(
-            select(K20RequestBudget).where(
-                K20RequestBudget.source == source, K20RequestBudget.date == run_date
+        row = (
+            self.session.execute(
+                select(K20RequestBudget).where(K20RequestBudget.source == source, K20RequestBudget.date == run_date)
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         return {c.key: getattr(row, c.key) for c in K20RequestBudget.__table__.columns}
 
     def increment_budget_used(self, source: str, run_date: date, amount: int = 1) -> int:
@@ -426,11 +449,15 @@ class KestrelRepo:
             .values(used=K20RequestBudget.used + amount)
         )
         self.session.flush()
-        row = self.session.execute(
-            select(K20RequestBudget.used).where(
-                K20RequestBudget.source == source, K20RequestBudget.date == run_date
+        row = (
+            self.session.execute(
+                select(K20RequestBudget.used).where(
+                    K20RequestBudget.source == source, K20RequestBudget.date == run_date
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         return int(row or 0)
 
     def update_budget_notes(self, source: str, run_date: date, notes: dict) -> None:
@@ -447,12 +474,18 @@ class KestrelRepo:
 
     def start_job_run(self, job: str, run_date: date) -> None:
         """Mark a job as running (upsert; overwrites a previous failed/skipped row)."""
-        stmt = pg_insert(K20JobRun).values(
-            job=job, run_date=run_date, status="running",
-            started_at=datetime.now(timezone.utc),
-        ).on_conflict_do_update(
-            index_elements=["job", "run_date"],
-            set_={"status": "running", "started_at": datetime.now(timezone.utc), "error": None},
+        stmt = (
+            pg_insert(K20JobRun)
+            .values(
+                job=job,
+                run_date=run_date,
+                status="running",
+                started_at=datetime.now(UTC),
+            )
+            .on_conflict_do_update(
+                index_elements=["job", "run_date"],
+                set_={"status": "running", "started_at": datetime.now(UTC), "error": None},
+            )
         )
         self.session.execute(stmt)
 
@@ -461,8 +494,8 @@ class KestrelRepo:
         job: str,
         run_date: date,
         status: str,
-        rows_out: Optional[int] = None,
-        error: Optional[str] = None,
+        rows_out: int | None = None,
+        error: str | None = None,
     ) -> None:
         """Mark a job as finished (ok/failed/skipped)."""
         self.session.execute(
@@ -470,19 +503,19 @@ class KestrelRepo:
             .where(K20JobRun.job == job, K20JobRun.run_date == run_date)
             .values(
                 status=status,
-                finished_at=datetime.now(timezone.utc),
+                finished_at=datetime.now(UTC),
                 rows_out=rows_out,
                 error=error,
             )
         )
 
-    def get_job_run(self, job: str, run_date: date) -> Optional[str]:
+    def get_job_run(self, job: str, run_date: date) -> str | None:
         """Return the status of a job run, or None if no row exists."""
-        row = self.session.execute(
-            select(K20JobRun.status).where(
-                K20JobRun.job == job, K20JobRun.run_date == run_date
-            )
-        ).scalars().first()
+        row = (
+            self.session.execute(select(K20JobRun.status).where(K20JobRun.job == job, K20JobRun.run_date == run_date))
+            .scalars()
+            .first()
+        )
         return row
 
     # ------------------------------------------------------------------
@@ -492,20 +525,25 @@ class KestrelRepo:
     def log_alert(
         self,
         trigger: str,
-        ticker: Optional[str] = None,
-        payload: Optional[dict] = None,
-        channel: Optional[str] = None,
+        ticker: str | None = None,
+        payload: dict | None = None,
+        channel: str | None = None,
     ) -> None:
         """Append an entry to the alerts log."""
-        self.session.add(K20AlertsLog(
-            ticker=ticker, trigger=trigger, payload=payload, channel=channel,
-        ))
+        self.session.add(
+            K20AlertsLog(
+                ticker=ticker,
+                trigger=trigger,
+                payload=payload,
+                channel=channel,
+            )
+        )
 
-    def get_today_alerts(self, trigger: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_today_alerts(self, trigger: str | None = None) -> List[Dict[str, Any]]:
         """Return alerts logged today, optionally filtered by trigger."""
         today = date.today()
         q = select(K20AlertsLog).where(
-            K20AlertsLog.ts >= datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc)
+            K20AlertsLog.ts >= datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC)
         )
         if trigger:
             q = q.where(K20AlertsLog.trigger == trigger)
@@ -545,7 +583,4 @@ class KestrelRepo:
     def get_blocklist(self) -> List[Dict[str, Any]]:
         """Return all alias blocklist entries."""
         rows = self.session.execute(select(K20AliasBlocklist)).scalars().all()
-        return [
-            {"alias": r.alias, "ticker": r.ticker, "match_policy": r.match_policy}
-            for r in rows
-        ]
+        return [{"alias": r.alias, "ticker": r.ticker, "match_policy": r.match_policy} for r in rows]

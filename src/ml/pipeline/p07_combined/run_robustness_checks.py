@@ -1,6 +1,7 @@
 import sys
-import pandas as pd
 from pathlib import Path
+
+import pandas as pd
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -12,18 +13,19 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
+
 def main():
     pipeline = P07Pipeline()
 
     candidates_path = PROJECT_ROOT / "results" / "p07_combined" / "p07_robustness_candidates.csv"
-    
+
     if not candidates_path.exists():
         _logger.error(f"Candidates file not found: {candidates_path}")
         return
 
     _logger.info(f"Loading robustness candidates from {candidates_path}")
     df = pd.read_csv(candidates_path)
-    
+
     if df.empty:
         _logger.warning("No candidates found in the CSV.")
         return
@@ -37,6 +39,7 @@ def main():
             _logger.info(f"=== Completed Robustness Check for {ticker} {timeframe} ===")
         except Exception as e:
             _logger.error(f"Failed robustness check for {ticker} {timeframe}: {e}", exc_info=True)
+
 
 if __name__ == "__main__":
     main()

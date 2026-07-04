@@ -11,9 +11,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
 import pytest
-from tests.fixtures.service_fixtures import (
-    setup_indicator_data_in_mock
-)
+
+from tests.fixtures.service_fixtures import setup_indicator_data_in_mock
 
 
 class TestTelegramIndicatorIntegration:
@@ -29,15 +28,12 @@ class TestTelegramIndicatorIntegration:
             indicator_service_mock,
             "AAPL",
             technical_indicators={"RSI": 65.5, "MACD": 1.23},
-            fundamental_indicators={"PE": 25.4}
+            fundamental_indicators={"PE": 25.4},
         )
 
         # Test the method
         result = await business_logic.calculate_indicators_for_ticker(
-            ticker="AAPL",
-            indicators=["RSI", "MACD", "PE"],
-            timeframe="1d",
-            period="1y"
+            ticker="AAPL", indicators=["RSI", "MACD", "PE"], timeframe="1d", period="1y"
         )
 
         # Verify results
@@ -59,10 +55,7 @@ class TestTelegramIndicatorIntegration:
         indicator_service_mock.configure_error("compute_for_ticker", Exception("API key missing"))
 
         # Test the method
-        result = await business_logic.calculate_indicators_for_ticker(
-            ticker="AAPL",
-            indicators=["RSI"]
-        )
+        result = await business_logic.calculate_indicators_for_ticker(ticker="AAPL", indicators=["RSI"])
 
         # Verify error handling
         assert result["status"] == "error"
@@ -80,7 +73,7 @@ class TestTelegramIndicatorIntegration:
             "indicators": "RSI,MACD,SMA",
             "interval": "1h",
             "period": "6mo",
-            "provider": "yahoo"
+            "provider": "yahoo",
         }
 
         request = business_logic.convert_telegram_indicator_request(telegram_params)
@@ -113,9 +106,7 @@ class TestTelegramIndicatorIntegration:
         """Test conversion with default values using service mocks."""
         business_logic, _, _ = business_logic_with_mocks
 
-        telegram_params = {
-            "ticker": "BTC"
-        }
+        telegram_params = {"ticker": "BTC"}
 
         request = business_logic.convert_telegram_indicator_request(telegram_params)
 

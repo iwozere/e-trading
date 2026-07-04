@@ -29,9 +29,7 @@ def load_btc_data2():
 
 
 def holt_winters_smoothing(series):
-    model = ExponentialSmoothing(
-        series, trend="add", seasonal="add", seasonal_periods=365
-    )
+    model = ExponentialSmoothing(series, trend="add", seasonal="add", seasonal_periods=365)
     fit = model.fit(optimized=True)
     fitted = fit.fittedvalues
     deseasonalized = series / fitted
@@ -51,7 +49,7 @@ def create_sequences(data, window):
 # -------------------------------
 class Helformer(nn.Module):
     def __init__(self, input_dim, hidden_dim, n_heads, num_layers, dropout):
-        super(Helformer, self).__init__()
+        super().__init__()
         self.input_proj = nn.Linear(1, input_dim)
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=input_dim,
@@ -316,7 +314,7 @@ def test_minimal_pipeline():
             loss = criterion(preds, yb)
             loss.backward()
             optimizer.step()
-        print(f"Epoch {epoch+1}, Loss: {loss.item()}")
+        print(f"Epoch {epoch + 1}, Loss: {loss.item()}")
 
     print("Minimal pipeline ran successfully.")
     return True
@@ -344,8 +342,7 @@ def main():
             best_params = params
         return loss
 
-    from optuna.visualization import (plot_optimization_history,
-                                      plot_param_importances)
+    from optuna.visualization import plot_optimization_history, plot_param_importances
 
     study = optuna.create_study(direction="minimize")
     study.optimize(optuna_objective, n_trials=20, n_jobs=1)

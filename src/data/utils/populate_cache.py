@@ -39,7 +39,8 @@ sys.path.append(str(PROJECT_ROOT))
 import argparse
 import json
 from datetime import datetime, timedelta
-from typing import List, Set, Dict, Optional, Tuple
+from typing import Dict, List, Set, Tuple
+
 import pandas as pd
 
 from src.data.data_manager import DataManager
@@ -94,7 +95,7 @@ class CachePopulator:
             return tickers
 
         for ticker_dir in self.ohlcv_dir.iterdir():
-            if ticker_dir.is_dir() and not ticker_dir.name.startswith('_'):
+            if ticker_dir.is_dir() and not ticker_dir.name.startswith("_"):
                 tickers.add(ticker_dir.name)
 
         _logger.info("Discovered %d existing tickers in cache: %s", len(tickers), sorted(tickers))
@@ -133,25 +134,27 @@ class CachePopulator:
 
         # Check metadata for mock provider and date coverage
         try:
-            with open(metadata_file, 'r') as f:
+            with open(metadata_file) as f:
                 metadata = json.load(f)
 
             # Check if provider is mock
-            provider = metadata.get('data_source', '').lower()
-            if provider == 'mock':
+            provider = metadata.get("data_source", "").lower()
+            if provider == "mock":
                 _logger.info("Found mock data for %s %s %d - marking for redownload", ticker, interval, year)
                 return False
 
             # Also check provider_info.name if available
-            provider_info = metadata.get('provider_info', {})
-            provider_name = provider_info.get('name', '').lower()
-            if provider_name == 'mock':
-                _logger.info("Found mock provider in provider_info for %s %s %d - marking for redownload", ticker, interval, year)
+            provider_info = metadata.get("provider_info", {})
+            provider_name = provider_info.get("name", "").lower()
+            if provider_name == "mock":
+                _logger.info(
+                    "Found mock provider in provider_info for %s %s %d - marking for redownload", ticker, interval, year
+                )
                 return False
 
             # Check date coverage - ensure data covers most of the year
-            start_date_str = metadata.get('start_date')
-            end_date_str = metadata.get('end_date')
+            start_date_str = metadata.get("start_date")
+            end_date_str = metadata.get("end_date")
 
             if start_date_str and end_date_str:
                 try:
@@ -162,7 +165,7 @@ class CachePopulator:
                     # Define acceptable date ranges for the year based on interval
                     # Intraday data (1m, 5m, 15m, 30m, 1h) often has limited historical availability
                     # Daily data should have full year coverage
-                    if interval in ['1m', '5m', '15m', '30m', '1h']:
+                    if interval in ["1m", "5m", "15m", "30m", "1h"]:
                         # For intraday data, be very lenient - many providers only have 1-3 months
                         # Some providers like FMP may only provide recent months for intraday data
                         # Start can be as late as October for historical years
@@ -188,31 +191,41 @@ class CachePopulator:
 
                     # Check if data coverage is adequate
                     if start_date > year_start_threshold:
-                        _logger.info("Data for %s %s %d starts too late (%s) - marking for redownload",
-                                   ticker, interval, year, start_date.date())
+                        _logger.info(
+                            "Data for %s %s %d starts too late (%s) - marking for redownload",
+                            ticker,
+                            interval,
+                            year,
+                            start_date.date(),
+                        )
                         return False
 
                     if end_date < year_end_threshold:
-                        _logger.info("Data for %s %s %d ends too early (%s) - marking for redownload",
-                                   ticker, interval, year, end_date.date())
+                        _logger.info(
+                            "Data for %s %s %d ends too early (%s) - marking for redownload",
+                            ticker,
+                            interval,
+                            year,
+                            end_date.date(),
+                        )
                         return False
 
                     # Check minimum number of data points for the year
-                    file_info = metadata.get('file_info', {})
-                    rows = file_info.get('rows', 0)
+                    file_info = metadata.get("file_info", {})
+                    rows = file_info.get("rows", 0)
 
                     # Define minimum expected rows based on interval
                     # Adjust expectations based on typical provider limitations
                     min_rows_by_interval = {
-                        '1m': 10000,    # ~10k minutes (very limited historical intraday)
-                        '5m': 2000,     # ~2k 5-minute periods (very limited historical intraday)
-                        '15m': 700,     # ~700 15-minute periods (very limited historical intraday)
-                        '30m': 350,     # ~350 30-minute periods (very limited historical intraday)
-                        '1h': 175,      # ~175 hours (very limited historical intraday)
-                        '4h': 400,      # ~400 4-hour periods in a trading year
-                        '1d': 250,      # ~250 trading days in a year
-                        '1w': 52,       # 52 weeks in a year
-                        '1M': 12        # 12 months in a year
+                        "1m": 10000,  # ~10k minutes (very limited historical intraday)
+                        "5m": 2000,  # ~2k 5-minute periods (very limited historical intraday)
+                        "15m": 700,  # ~700 15-minute periods (very limited historical intraday)
+                        "30m": 350,  # ~350 30-minute periods (very limited historical intraday)
+                        "1h": 175,  # ~175 hours (very limited historical intraday)
+                        "4h": 400,  # ~400 4-hour periods in a trading year
+                        "1d": 250,  # ~250 trading days in a year
+                        "1w": 52,  # 52 weeks in a year
+                        "1M": 12,  # 12 months in a year
                     }
 
                     min_rows = min_rows_by_interval.get(interval, 100)
@@ -226,12 +239,25 @@ class CachePopulator:
                         min_rows = int(min_rows * 0.7)  # Allow 30% tolerance for historical years
 
                     if rows < min_rows:
-                        _logger.info("Data for %s %s %d has too few rows (%d < %d) - marking for redownload",
-                                   ticker, interval, year, rows, min_rows)
+                        _logger.info(
+                            "Data for %s %s %d has too few rows (%d < %d) - marking for redownload",
+                            ticker,
+                            interval,
+                            year,
+                            rows,
+                            min_rows,
+                        )
                         return False
 
-                    _logger.debug("Data for %s %s %d is valid: %s to %s (%d rows)",
-                                ticker, interval, year, start_date.date(), end_date.date(), rows)
+                    _logger.debug(
+                        "Data for %s %s %d is valid: %s to %s (%d rows)",
+                        ticker,
+                        interval,
+                        year,
+                        start_date.date(),
+                        end_date.date(),
+                        rows,
+                    )
                     return True
 
                 except (ValueError, TypeError) as e:
@@ -241,12 +267,13 @@ class CachePopulator:
                 _logger.warning("Missing date information in metadata for %s %s %d", ticker, interval, year)
                 return False
 
-        except (json.JSONDecodeError, KeyError, IOError) as e:
+        except (OSError, json.JSONDecodeError, KeyError) as e:
             _logger.warning("Error reading metadata for %s %s %d: %s", ticker, interval, year, e)
             return False
 
-    def analyze_missing_data(self, ticker: str, intervals: List[str],
-                           start_date: datetime, end_date: datetime) -> Dict[str, List[int]]:
+    def analyze_missing_data(
+        self, ticker: str, intervals: List[str], start_date: datetime, end_date: datetime
+    ) -> Dict[str, List[int]]:
         """
         Analyze what data is missing for a ticker across intervals.
 
@@ -313,8 +340,9 @@ class CachePopulator:
 
         return year_start, year_end
 
-    def populate_missing_data(self, ticker: str, interval: str, missing_years: List[int],
-                            start_date: datetime, end_date: datetime) -> bool:
+    def populate_missing_data(
+        self, ticker: str, interval: str, missing_years: List[int], start_date: datetime, end_date: datetime
+    ) -> bool:
         """
         Populate missing data for a ticker/interval/years combination.
 
@@ -334,8 +362,14 @@ class CachePopulator:
             try:
                 year_start, year_end = self.get_year_date_range(year, start_date, end_date)
 
-                _logger.info("Populating %s %s for year %d (%s to %s)",
-                           ticker, interval, year, year_start.date(), year_end.date())
+                _logger.info(
+                    "Populating %s %s for year %d (%s to %s)",
+                    ticker,
+                    interval,
+                    year,
+                    year_start.date(),
+                    year_end.date(),
+                )
 
                 # Use DataManager to get data (this will cache it automatically)
                 data = self.data_manager.get_ohlcv(
@@ -343,12 +377,11 @@ class CachePopulator:
                     timeframe=interval,
                     start_date=year_start,
                     end_date=year_end,
-                    force_refresh=True  # Force download even if some data exists
+                    force_refresh=True,  # Force download even if some data exists
                 )
 
                 if data is not None and not data.empty:
-                    _logger.info("✅ Successfully populated %s %s %d: %d rows",
-                               ticker, interval, year, len(data))
+                    _logger.info("✅ Successfully populated %s %s %d: %d rows", ticker, interval, year, len(data))
                 else:
                     _logger.warning("⚠️ No data returned for %s %s %d", ticker, interval, year)
 
@@ -359,8 +392,9 @@ class CachePopulator:
 
         return success
 
-    def populate_ticker(self, ticker: str, intervals: List[str],
-                       start_date: datetime, end_date: datetime) -> Dict[str, bool]:
+    def populate_ticker(
+        self, ticker: str, intervals: List[str], start_date: datetime, end_date: datetime
+    ) -> Dict[str, bool]:
         """
         Populate all missing data for a single ticker.
 
@@ -386,11 +420,9 @@ class CachePopulator:
         for interval in intervals:
             if interval in missing_data:
                 missing_years = missing_data[interval]
-                _logger.info("%s %s: Missing %d years: %s", ticker, interval,
-                           len(missing_years), missing_years)
+                _logger.info("%s %s: Missing %d years: %s", ticker, interval, len(missing_years), missing_years)
 
-                success = self.populate_missing_data(ticker, interval, missing_years,
-                                                   start_date, end_date)
+                success = self.populate_missing_data(ticker, interval, missing_years, start_date, end_date)
                 results[interval] = success
             else:
                 _logger.info("✅ %s %s: Already cached", ticker, interval)
@@ -398,10 +430,13 @@ class CachePopulator:
 
         return results
 
-    def populate_cache(self, tickers: Optional[List[str]] = None,
-                      intervals: Optional[List[str]] = None,
-                      start_date: datetime = None,
-                      end_date: datetime = None) -> Dict[str, Dict[str, bool]]:
+    def populate_cache(
+        self,
+        tickers: List[str] | None = None,
+        intervals: List[str] | None = None,
+        start_date: datetime = None,
+        end_date: datetime = None,
+    ) -> Dict[str, Dict[str, bool]]:
         """
         Main method to populate cache data.
 
@@ -448,8 +483,7 @@ class CachePopulator:
 
                 # Summary for this ticker
                 successful_intervals = sum(1 for success in ticker_results.values() if success)
-                _logger.info("✅ %s: %d/%d intervals successful",
-                           ticker, successful_intervals, len(intervals))
+                _logger.info("✅ %s: %d/%d intervals successful", ticker, successful_intervals, len(intervals))
 
             except Exception as e:
                 _logger.error("❌ Failed to process ticker %s: %s", ticker, e)
@@ -476,13 +510,13 @@ class CachePopulator:
             successful_operations += successful_intervals
 
             status = "✅" if successful_intervals == total_intervals else "⚠️"
-            _logger.info("%s %s: %d/%d intervals successful",
-                       status, ticker, successful_intervals, total_intervals)
+            _logger.info("%s %s: %d/%d intervals successful", status, ticker, successful_intervals, total_intervals)
 
         success_rate = (successful_operations / total_operations * 100) if total_operations > 0 else 0
         _logger.info("-" * 60)
-        _logger.info("Overall: %d/%d operations successful (%.1f%%)",
-                   successful_operations, total_operations, success_rate)
+        _logger.info(
+            "Overall: %d/%d operations successful (%.1f%%)", successful_operations, total_operations, success_rate
+        )
         _logger.info("=" * 60)
 
 
@@ -512,40 +546,33 @@ Examples:
 
   # Full date range
   python src/data/cache/populate_cache.py --tickers AAPL --start-date 2020-01-01 --end-date 2023-12-31
-        """
+        """,
     )
 
     parser.add_argument(
         "--tickers",
         type=str,
-        help="Comma-separated list of tickers to populate (default: discover from existing cache)"
+        help="Comma-separated list of tickers to populate (default: discover from existing cache)",
     )
 
     parser.add_argument(
         "--intervals",
         type=str,
         default="5m,15m,30m,1h,4h,1d",
-        help="Comma-separated list of intervals to populate (default: 5m,15m,30m,1h,4h,1d)"
+        help="Comma-separated list of intervals to populate (default: 5m,15m,30m,1h,4h,1d)",
     )
 
     parser.add_argument(
         "--start-date",
         type=parse_date,
         default=datetime(2020, 1, 1),
-        help="Start date for data population (YYYY-MM-DD, default: 2020-01-01)"
+        help="Start date for data population (YYYY-MM-DD, default: 2020-01-01)",
     )
 
-    parser.add_argument(
-        "--end-date",
-        type=parse_date,
-        help="End date for data population (YYYY-MM-DD, default: today)"
-    )
+    parser.add_argument("--end-date", type=parse_date, help="End date for data population (YYYY-MM-DD, default: today)")
 
     parser.add_argument(
-        "--cache-dir",
-        type=str,
-        default=DATA_CACHE_DIR,
-        help=f"Cache directory path (default: {DATA_CACHE_DIR})"
+        "--cache-dir", type=str, default=DATA_CACHE_DIR, help=f"Cache directory path (default: {DATA_CACHE_DIR})"
     )
 
     args = parser.parse_args()
@@ -563,17 +590,13 @@ Examples:
     # Run population
     try:
         results = populator.populate_cache(
-            tickers=tickers,
-            intervals=intervals,
-            start_date=args.start_date,
-            end_date=args.end_date
+            tickers=tickers, intervals=intervals, start_date=args.start_date, end_date=args.end_date
         )
 
         # Exit with appropriate code
         total_operations = sum(len(ticker_results) for ticker_results in results.values())
         successful_operations = sum(
-            sum(1 for success in ticker_results.values() if success)
-            for ticker_results in results.values()
+            sum(1 for success in ticker_results.values() if success) for ticker_results in results.values()
         )
 
         if successful_operations == total_operations:

@@ -6,10 +6,11 @@ Validates trading bot configurations using YAML-defined JSON schemas.
 Provides structured error reporting and human-readable messages.
 """
 
-import yaml
-from pathlib import Path
-from typing import Dict, Any, List, Tuple
 from functools import lru_cache
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+import yaml
 from jsonschema import Draft7Validator, ValidationError
 
 from src.notification.logger import setup_logger
@@ -57,7 +58,7 @@ class SchemaValidator:
             raise FileNotFoundError(f"Schema file not found: {schema_path}")
 
         try:
-            with open(schema_path, 'r', encoding='utf-8') as f:
+            with open(schema_path, encoding="utf-8") as f:
                 schema = yaml.safe_load(f)
 
             _logger.debug("Loaded schema: %s", schema_name)
@@ -211,17 +212,16 @@ class SchemaValidator:
 
         # Check notification channels are enabled if notifications requested
         notifications = config.get("notifications", {})
-        has_notification_types = any([
-            notifications.get("position_opened"),
-            notifications.get("position_closed"),
-            notifications.get("error_notifications"),
-            notifications.get("daily_summary")
-        ])
+        has_notification_types = any(
+            [
+                notifications.get("position_opened"),
+                notifications.get("position_closed"),
+                notifications.get("error_notifications"),
+                notifications.get("daily_summary"),
+            ]
+        )
 
-        has_channels = any([
-            notifications.get("email_enabled"),
-            notifications.get("telegram_enabled")
-        ])
+        has_channels = any([notifications.get("email_enabled"), notifications.get("telegram_enabled")])
 
         if has_notification_types and not has_channels:
             warnings.append("Notifications enabled but no delivery channels (email/telegram) are enabled")
@@ -255,12 +255,7 @@ class SchemaValidator:
         else:
             summary = f"Configuration invalid: {len(errors)} error(s), {len(warnings)} warning(s)"
 
-        return {
-            'valid': is_valid,
-            'errors': errors,
-            'warnings': warnings,
-            'summary': summary
-        }
+        return {"valid": is_valid, "errors": errors, "warnings": warnings, "summary": summary}
 
 
 # Global schema validator instance
@@ -298,12 +293,7 @@ if __name__ == "__main__":
     # Test configuration
     test_config = {
         "symbol": "BTCUSDT",
-        "broker": {
-            "type": "backtrader",
-            "trading_mode": "paper",
-            "cash": 10000.0,
-            "commission": 0.001
-        },
+        "broker": {"type": "backtrader", "trading_mode": "paper", "cash": 10000.0, "commission": 0.001},
         "data": {
             "data_source": "file",
             "file_path": "c:/dev/cursor/e-trading/data/_full/BTCUSDT_1h_20220101_20250707.csv",
@@ -315,7 +305,7 @@ if __name__ == "__main__":
             "high_col": "high",
             "low_col": "low",
             "close_col": "close",
-            "volume_col": "volume"
+            "volume_col": "volume",
         },
         "strategy": {
             "type": "CustomStrategy",
@@ -328,53 +318,46 @@ if __name__ == "__main__":
                         "entry_e_rsi_period": 22,
                         "entry_e_vol_ma_period": 32,
                         "entry_e_min_volume_ratio": 1.17,
-                        "entry_e_rsi_oversold": 38
-                    }
+                        "entry_e_rsi_oversold": 38,
+                    },
                 },
                 "exit_logic": {
                     "name": "ATRExitMixin",
-                    "params": {
-                        "exit_x_atr_period": 9,
-                        "exit_x_tp_multiplier": 5,
-                        "exit_x_sl_multiplier": 2.27
-                    }
+                    "params": {"exit_x_atr_period": 9, "exit_x_tp_multiplier": 5, "exit_x_sl_multiplier": 2.27},
                 },
-                "position_size": 0.1
-            }
+                "position_size": 0.1,
+            },
         },
-        "trading": {
-            "position_size": 0.1,
-            "max_positions": 1
-        },
+        "trading": {"position_size": 0.1, "max_positions": 1},
         "risk_management": {
             "max_position_size": 1000.0,
             "stop_loss_pct": 3.0,
             "take_profit_pct": 6.0,
             "max_daily_loss": 200.0,
-            "max_daily_trades": 5
+            "max_daily_trades": 5,
         },
         "notifications": {
             "position_opened": True,
             "position_closed": True,
             "email_enabled": False,
             "telegram_enabled": True,
-            "error_notifications": True
-        }
+            "error_notifications": True,
+        },
     }
 
     # Validate
     result = validate_bot_configuration_detailed(test_config)
 
-    print(result['summary'])
+    print(result["summary"])
     print()
 
-    if result['errors']:
+    if result["errors"]:
         print("Errors:")
-        for error in result['errors']:
+        for error in result["errors"]:
             print(f"  - {error}")
         print()
 
-    if result['warnings']:
+    if result["warnings"]:
         print("Warnings:")
-        for warning in result['warnings']:
+        for warning in result["warnings"]:
             print(f"  - {warning}")

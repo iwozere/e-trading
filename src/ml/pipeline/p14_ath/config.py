@@ -5,8 +5,9 @@ Configuration dataclasses for the Sequential ATH & Drawdown Analysis pipeline.
 """
 
 from dataclasses import dataclass, field
-from typing import List
 from pathlib import Path
+from typing import List
+
 
 @dataclass
 class ATHPipelineConfig:
@@ -16,7 +17,9 @@ class ATHPipelineConfig:
 
     # Analysis parameters
     lookback_years: int = 15
-    tickers: List[str] = field(default_factory=lambda: ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "SPY", "QQQ"])
+    tickers: List[str] = field(
+        default_factory=lambda: ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "SPY", "QQQ"]
+    )
 
     # Output settings
     results_dir: Path = field(default_factory=lambda: Path("results/p14_ath"))

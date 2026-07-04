@@ -12,7 +12,7 @@ import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
@@ -20,8 +20,8 @@ sys.path.append(str(PROJECT_ROOT))
 import pandas as pd
 
 from src.common.fundamentals import get_fundamentals_unified
-from src.ml.pipeline.p20_kestrel.config import NASDAQ_TICKERS_CSV, UNIVERSE_MIN_MCAP_USD
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+from src.ml.pipeline.p20_kestrel.config import NASDAQ_TICKERS_CSV, UNIVERSE_MIN_MCAP_USD
 
 _kestrel = _KestrelService()
 get_active_tickers = _kestrel.get_active_tickers
@@ -45,8 +45,7 @@ def _load_nasdaq_csv() -> pd.DataFrame:
     path = Path(str(NASDAQ_TICKERS_CSV))
     if not path.exists():
         raise FileNotFoundError(
-            "Nasdaq ticker CSV not found at %s. "
-            "Download from Nasdaq screener or configure NASDAQ_TICKERS_CSV." % path
+            "Nasdaq ticker CSV not found at %s. Download from Nasdaq screener or configure NASDAQ_TICKERS_CSV." % path
         )
     df = pd.read_csv(path, dtype=str)
     rename = {
@@ -69,9 +68,9 @@ def _load_nasdaq_csv() -> pd.DataFrame:
 # Tickers that are pure uppercase alpha, 1–5 chars.
 # Excludes: warrants (ABCDW), rights (ABCDR), units (ABCDU), slash-forms (BRK/B),
 # preferred (ABC-A), test issues (ZZZ^), and anything with digits.
-_STOCK_TICKER_RE = re.compile(r'^[A-Z]{1,5}$')
+_STOCK_TICKER_RE = re.compile(r"^[A-Z]{1,5}$")
 # Five-char tickers ending in W/R/U are almost always warrants, rights, or units.
-_WARRANT_SUFFIX_RE = re.compile(r'^[A-Z]{4}[WRU]$')
+_WARRANT_SUFFIX_RE = re.compile(r"^[A-Z]{4}[WRU]$")
 
 
 def _is_stock_ticker(ticker: str) -> bool:
@@ -79,7 +78,7 @@ def _is_stock_ticker(ticker: str) -> bool:
     return bool(_STOCK_TICKER_RE.match(ticker)) and not bool(_WARRANT_SUFFIX_RE.match(ticker))
 
 
-def _parse_mcap(raw: Any) -> Optional[float]:
+def _parse_mcap(raw: Any) -> float | None:
     """Convert a market-cap string like '1.2B' or '450M' to a float in USD."""
     if raw is None or (isinstance(raw, float) and pd.isna(raw)) or raw == "":
         return None
@@ -97,11 +96,11 @@ def _parse_mcap(raw: Any) -> Optional[float]:
         return None
 
 
-_FUNDAMENTALS_WORKERS = 1      # concurrent Yahoo fetch threads
-_PROGRESS_LOG_EVERY = 500      # progress log interval (tickers)
+_FUNDAMENTALS_WORKERS = 1  # concurrent Yahoo fetch threads
+_PROGRESS_LOG_EVERY = 500  # progress log interval (tickers)
 
 
-def _fetch_fundamentals_for_ticker(ticker: str) -> Optional[Any]:
+def _fetch_fundamentals_for_ticker(ticker: str) -> Any | None:
     """Fetch fundamentals for one ticker using Yahoo only; return None on failure.
 
     Yahoo is used exclusively here: FMP/Polygon/TwelveData all hit free-tier
@@ -118,10 +117,10 @@ def _fetch_fundamentals_for_ticker(ticker: str) -> Optional[Any]:
         return None
 
 
-_RETRY_COOLDOWN_SECONDS = 300   # 5-minute global wait before the retry pass
+_RETRY_COOLDOWN_SECONDS = 300  # 5-minute global wait before the retry pass
 
 
-def _fetch_all_fundamentals(tickers: List[str]) -> List[Optional[Any]]:
+def _fetch_all_fundamentals(tickers: List[str]) -> List[Any | None]:
     """
     Fetch fundamentals for all tickers in two passes.
 
@@ -140,7 +139,7 @@ def _fetch_all_fundamentals(tickers: List[str]) -> List[Optional[Any]]:
     total = len(tickers)
 
     # ── Pass 1 ────────────────────────────────────────────────────────────
-    results: List[Optional[Any]] = [None] * total
+    results: List[Any | None] = [None] * total
     with ThreadPoolExecutor(max_workers=_FUNDAMENTALS_WORKERS) as pool:
         for i, fund in enumerate(pool.map(_fetch_fundamentals_for_ticker, tickers)):
             results[i] = fund
@@ -152,7 +151,9 @@ def _fetch_all_fundamentals(tickers: List[str]) -> List[Optional[Any]]:
     ok_count = total - len(failed_indices)
     _logger.info(
         "Pass 1 complete: %d/%d succeeded, %d to retry",
-        ok_count, total, len(failed_indices),
+        ok_count,
+        total,
+        len(failed_indices),
     )
 
     if not failed_indices:
@@ -180,10 +181,10 @@ def _fetch_all_fundamentals(tickers: List[str]) -> List[Optional[Any]]:
 
     _logger.info(
         "Pass 2 complete: recovered %d/%d previously-failed tickers",
-        recovered, len(failed_indices),
+        recovered,
+        len(failed_indices),
     )
     return results
-
 
 
 def run() -> Dict[str, Any]:
@@ -201,14 +202,11 @@ def run() -> Dict[str, Any]:
     # --- Pre-filter 1: ticker format (drop warrants, rights, units, test issues) ---
     before = len(df)
     df = df[df["ticker"].apply(_is_stock_ticker)]
-    _logger.info("Ticker format filter: %d → %d (removed %d non-equity symbols)",
-                 before, len(df), before - len(df))
+    _logger.info("Ticker format filter: %d → %d (removed %d non-equity symbols)", before, len(df), before - len(df))
 
     # --- Pre-filter 2: market cap floor when the CSV carries mcap data ---
     if "mcap_raw" in df.columns:
-        mcap_vals = pd.Series(
-            [_parse_mcap(v) for v in df["mcap_raw"]], index=df.index, dtype=object
-        )
+        mcap_vals = pd.Series([_parse_mcap(v) for v in df["mcap_raw"]], index=df.index, dtype=object)
         below_floor = mcap_vals.notna() & (mcap_vals.astype(float) < UNIVERSE_MIN_MCAP_USD)
         if below_floor.any():
             _logger.info("Mcap filter (<$%.0f): removed %d tickers", UNIVERSE_MIN_MCAP_USD, int(below_floor.sum()))
@@ -217,7 +215,8 @@ def run() -> Dict[str, Any]:
     tickers_list = df["ticker"].tolist()
     _logger.info(
         "Fetching fundamentals for %d tickers (%d worker threads)",
-        len(tickers_list), _FUNDAMENTALS_WORKERS,
+        len(tickers_list),
+        _FUNDAMENTALS_WORKERS,
     )
     all_funds = _fetch_all_fundamentals(tickers_list)
 
@@ -236,13 +235,15 @@ def run() -> Dict[str, Any]:
         }
 
         if fund is not None:
-            universe_row.update({
-                "revenue_yoy_growth": getattr(fund, "revenue_yoy_growth", None),
-                "gross_margin": getattr(fund, "gross_margin", None),
-                "net_debt_ebitda": getattr(fund, "net_debt_ebitda", None),
-                "interest_coverage": getattr(fund, "interest_coverage", None),
-                "mcap": getattr(fund, "market_cap", None) or mcap,
-            })
+            universe_row.update(
+                {
+                    "revenue_yoy_growth": getattr(fund, "revenue_yoy_growth", None),
+                    "gross_margin": getattr(fund, "gross_margin", None),
+                    "net_debt_ebitda": getattr(fund, "net_debt_ebitda", None),
+                    "interest_coverage": getattr(fund, "interest_coverage", None),
+                    "mcap": getattr(fund, "market_cap", None) or mcap,
+                }
+            )
 
         rows.append(universe_row)
 

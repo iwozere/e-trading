@@ -7,22 +7,22 @@ response time analysis, trend analysis, and performance comparisons.
 
 import asyncio
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.notification.logger import setup_logger
 from src.notification.service.analytics import (
+    ChannelStats,
     NotificationAnalytics,
     TimeGranularity,
-    ChannelStats,
-    UserStats,
     TrendAnalysis,
-    notification_analytics
+    UserStats,
+    notification_analytics,
 )
-from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -44,9 +44,9 @@ async def test_delivery_rates():
         print(f"  Avg response time: {rates['overall_statistics']['average_response_time_ms']}ms")
 
         # Test channel-specific rates
-        if rates['channel_rates']:
+        if rates["channel_rates"]:
             print("✓ Channel-specific rates:")
-            for channel, stats in rates['channel_rates'].items():
+            for channel, stats in rates["channel_rates"].items():
                 print(f"  {channel}: {stats['success_rate']:.2%} success rate")
 
         # Test with channel filter
@@ -75,7 +75,7 @@ async def test_response_time_analysis():
         analysis = await analytics.get_response_time_analysis(days=30)
 
         print("✓ Response time analysis completed:")
-        stats = analysis['statistics']
+        stats = analysis["statistics"]
         print(f"  Count: {stats['count']}")
         print(f"  Average: {stats['average_ms']:.1f}ms")
         print(f"  Median: {stats['median_ms']:.1f}ms")
@@ -84,21 +84,19 @@ async def test_response_time_analysis():
         print(f"  Std Dev: {stats['std_deviation_ms']:.1f}ms")
 
         # Test percentiles
-        if analysis['percentiles']:
+        if analysis["percentiles"]:
             print("✓ Percentiles calculated:")
-            for percentile, value in analysis['percentiles'].items():
+            for percentile, value in analysis["percentiles"].items():
                 print(f"  {percentile}: {value}ms")
 
         # Test channel breakdown
-        if analysis['channel_breakdown']:
+        if analysis["channel_breakdown"]:
             print("✓ Channel breakdown:")
-            for channel, breakdown in analysis['channel_breakdown'].items():
+            for channel, breakdown in analysis["channel_breakdown"].items():
                 print(f"  {channel}: {breakdown['average_ms']:.1f}ms avg")
 
         # Test with channel filter
-        telegram_analysis = await analytics.get_response_time_analysis(
-            channel="telegram", days=7
-        )
+        telegram_analysis = await analytics.get_response_time_analysis(channel="telegram", days=7)
         print("✓ Telegram response time analysis completed")
 
         return True
@@ -116,10 +114,7 @@ async def test_aggregated_statistics():
         analytics = NotificationAnalytics()
 
         # Test daily aggregation
-        daily_stats = await analytics.get_aggregated_statistics(
-            granularity=TimeGranularity.DAILY,
-            days=7
-        )
+        daily_stats = await analytics.get_aggregated_statistics(granularity=TimeGranularity.DAILY, days=7)
 
         print("✓ Daily aggregation completed:")
         print(f"  Granularity: {daily_stats['granularity']}")
@@ -127,28 +122,20 @@ async def test_aggregated_statistics():
         print(f"  Avg messages per period: {daily_stats['summary']['avg_messages_per_period']:.1f}")
 
         # Test weekly aggregation
-        weekly_stats = await analytics.get_aggregated_statistics(
-            granularity=TimeGranularity.WEEKLY,
-            days=30
-        )
+        weekly_stats = await analytics.get_aggregated_statistics(granularity=TimeGranularity.WEEKLY, days=30)
 
         print("✓ Weekly aggregation completed:")
         print(f"  Total periods: {weekly_stats['summary']['total_periods']}")
 
         # Test monthly aggregation
-        monthly_stats = await analytics.get_aggregated_statistics(
-            granularity=TimeGranularity.MONTHLY,
-            days=90
-        )
+        monthly_stats = await analytics.get_aggregated_statistics(granularity=TimeGranularity.MONTHLY, days=90)
 
         print("✓ Monthly aggregation completed:")
         print(f"  Total periods: {monthly_stats['summary']['total_periods']}")
 
         # Test with channel filter
         channel_stats = await analytics.get_aggregated_statistics(
-            granularity=TimeGranularity.DAILY,
-            days=7,
-            channel="telegram"
+            granularity=TimeGranularity.DAILY, days=7, channel="telegram"
         )
 
         print("✓ Channel-filtered aggregation completed")
@@ -168,10 +155,7 @@ async def test_trend_analysis():
         analytics = NotificationAnalytics()
 
         # Test success rate trend
-        success_trend = await analytics.get_trend_analysis(
-            metric="success_rate",
-            days=30
-        )
+        success_trend = await analytics.get_trend_analysis(metric="success_rate", days=30)
 
         print("✓ Success rate trend analysis:")
         print(f"  Metric: {success_trend.metric_name}")
@@ -182,31 +166,21 @@ async def test_trend_analysis():
         print(f"  Std Dev: {success_trend.std_deviation:.3f}")
 
         # Test response time trend
-        response_trend = await analytics.get_trend_analysis(
-            metric="response_time",
-            days=30
-        )
+        response_trend = await analytics.get_trend_analysis(metric="response_time", days=30)
 
         print("✓ Response time trend analysis:")
         print(f"  Direction: {response_trend.trend_direction}")
         print(f"  Change: {response_trend.change_percentage:.1f}%")
 
         # Test message count trend
-        message_trend = await analytics.get_trend_analysis(
-            metric="message_count",
-            days=30
-        )
+        message_trend = await analytics.get_trend_analysis(metric="message_count", days=30)
 
         print("✓ Message count trend analysis:")
         print(f"  Direction: {message_trend.trend_direction}")
         print(f"  Data points: {len(message_trend.time_series)}")
 
         # Test with channel filter
-        channel_trend = await analytics.get_trend_analysis(
-            metric="success_rate",
-            days=14,
-            channel="telegram"
-        )
+        channel_trend = await analytics.get_trend_analysis(metric="success_rate", days=14, channel="telegram")
 
         print("✓ Channel-specific trend analysis completed")
 
@@ -232,26 +206,26 @@ async def test_channel_performance_comparison():
         print(f"  Channels analyzed: {len(comparison['channel_comparisons'])}")
 
         # Show channel comparisons
-        for channel, data in comparison['channel_comparisons'].items():
-            stats = data['statistics']
-            score = data['performance_score']
+        for channel, data in comparison["channel_comparisons"].items():
+            stats = data["statistics"]
+            score = data["performance_score"]
             print(f"  {channel}:")
             print(f"    Performance score: {score:.3f}")
             print(f"    Success rate: {stats.get('success_rate', 0):.2%}")
             print(f"    Avg response time: {stats.get('avg_response_time_ms', 0):.1f}ms")
 
         # Show rankings
-        rankings = comparison['rankings']
+        rankings = comparison["rankings"]
         print("✓ Performance rankings:")
-        for i, ranking in enumerate(rankings['by_performance'][:3], 1):
+        for i, ranking in enumerate(rankings["by_performance"][:3], 1):
             print(f"  {i}. {ranking['channel']}: {ranking['score']:.3f}")
 
         print("✓ Success rate rankings:")
-        for i, (channel, rate) in enumerate(rankings['by_success_rate'][:3], 1):
+        for i, (channel, rate) in enumerate(rankings["by_success_rate"][:3], 1):
             print(f"  {i}. {channel}: {rate:.2%}")
 
         print("✓ Response time rankings (fastest first):")
-        for i, (channel, time_ms) in enumerate(rankings['by_response_time'][:3], 1):
+        for i, (channel, time_ms) in enumerate(rankings["by_response_time"][:3], 1):
             print(f"  {i}. {channel}: {time_ms:.1f}ms")
 
         return True
@@ -268,10 +242,7 @@ async def test_data_structures():
     try:
         # Test ChannelStats
         channel_stats = ChannelStats(
-            channel="telegram",
-            total_messages=100,
-            successful_deliveries=90,
-            failed_deliveries=10
+            channel="telegram", total_messages=100, successful_deliveries=90, failed_deliveries=10
         )
         channel_stats.calculate_rates()
 
@@ -286,11 +257,7 @@ async def test_data_structures():
         print("✓ ChannelStats to_dict() works")
 
         # Test UserStats
-        user_stats = UserStats(
-            user_id="test_user",
-            total_messages=50,
-            successful_deliveries=45
-        )
+        user_stats = UserStats(user_id="test_user", total_messages=50, successful_deliveries=45)
 
         # Add channel stats
         user_stats.channel_stats["telegram"] = channel_stats
@@ -311,8 +278,7 @@ async def test_data_structures():
         from src.notification.service.analytics import TimeSeriesPoint
 
         time_series = [
-            TimeSeriesPoint(datetime.now(timezone.utc) - timedelta(days=i), 0.8 + i * 0.01)
-            for i in range(10)
+            TimeSeriesPoint(datetime.now(UTC) - timedelta(days=i), 0.8 + i * 0.01) for i in range(10)
         ]
 
         trend = TrendAnalysis(
@@ -325,7 +291,7 @@ async def test_data_structures():
             median=0.84,
             std_deviation=0.03,
             min_value=0.80,
-            max_value=0.89
+            max_value=0.89,
         )
 
         print("✓ TrendAnalysis created:")
@@ -362,7 +328,7 @@ async def test_global_analytics_instance():
         tasks = [
             notification_analytics.get_delivery_rates(days=1),
             notification_analytics.get_response_time_analysis(days=1),
-            notification_analytics.get_aggregated_statistics(days=1)
+            notification_analytics.get_aggregated_statistics(days=1),
         ]
 
         results = await asyncio.gather(*tasks)
@@ -462,7 +428,7 @@ async def run_all_tests():
         status = "✅ PASS" if result else "❌ FAIL"
         print(f"{status:<8} {test_name}")
 
-    print(f"\nOverall: {passed}/{total} tests passed ({passed/total*100:.1f}%)")
+    print(f"\nOverall: {passed}/{total} tests passed ({passed / total * 100:.1f}%)")
 
     if passed == total:
         print("🎉 All analytics tests passed!")

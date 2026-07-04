@@ -1,7 +1,8 @@
-import pandas as pd
+
 import numpy as np
-from typing import Optional
+import pandas as pd
 from numba import njit
+
 
 @njit
 def _find_first_barrier_hit(prices, start_idx, tpl_bars, barrier_up, barrier_down):
@@ -16,12 +17,9 @@ def _find_first_barrier_hit(prices, start_idx, tpl_bars, barrier_up, barrier_dow
             return -1
     return 0
 
+
 def get_triple_barrier_labels(
-    ohlcv: pd.DataFrame,
-    pt_mult: float = 2.0,
-    sl_mult: float = 1.0,
-    tpl_bars: int = 12,
-    atr_period: int = 14
+    ohlcv: pd.DataFrame, pt_mult: float = 2.0, sl_mult: float = 1.0, tpl_bars: int = 12, atr_period: int = 14
 ) -> pd.Series:
     """
     Implements Triple Barrier Method for labeling.
@@ -35,15 +33,16 @@ def get_triple_barrier_labels(
     # Using TA-Lib for parity but keeping manual fallback for visibility
     try:
         import talib
-        atr = talib.ATR(ohlcv['high'], ohlcv['low'], ohlcv['close'], timeperiod=atr_period)
+
+        atr = talib.ATR(ohlcv["high"], ohlcv["low"], ohlcv["close"], timeperiod=atr_period)
     except ImportError:
-        high_low = ohlcv['high'] - ohlcv['low']
-        high_close = np.abs(ohlcv['high'] - ohlcv['close'].shift(1))
-        low_close = np.abs(ohlcv['low'] - ohlcv['close'].shift(1))
+        high_low = ohlcv["high"] - ohlcv["low"]
+        high_close = np.abs(ohlcv["high"] - ohlcv["close"].shift(1))
+        low_close = np.abs(ohlcv["low"] - ohlcv["close"].shift(1))
         tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
         atr = tr.rolling(window=atr_period).mean()
 
-    prices = ohlcv['close'].values
+    prices = ohlcv["close"].values
     atr_values = atr.values
     labels_arr = np.zeros(len(prices))
 

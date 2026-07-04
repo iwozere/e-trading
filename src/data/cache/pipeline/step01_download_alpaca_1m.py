@@ -35,11 +35,12 @@ sys.path.append(str(PROJECT_ROOT))
 import argparse
 import time
 from datetime import datetime, timedelta
-from typing import List, Set, Optional, Tuple, Dict, Any
+from typing import Any, Dict, List, Set, Tuple
+
 import pandas as pd
 
-from src.notification.logger import setup_logger
 from src.data.downloader.alpaca_data_downloader import AlpacaDataDownloader
+from src.notification.logger import setup_logger
 
 try:
     from config.donotshare.donotshare import DATA_CACHE_DIR
@@ -74,14 +75,14 @@ class AlpacaPipelineDownloader:
 
         # Pipeline statistics
         self.stats = {
-            'total_tickers': 0,
-            'successful_tickers': [],
-            'failed_tickers': [],
-            'skipped_tickers': [],
-            'total_rows_downloaded': 0,
-            'total_api_calls': 0,
-            'processing_time': 0,
-            'errors': {}
+            "total_tickers": 0,
+            "successful_tickers": [],
+            "failed_tickers": [],
+            "skipped_tickers": [],
+            "total_rows_downloaded": 0,
+            "total_api_calls": 0,
+            "processing_time": 0,
+            "errors": {},
         }
 
         # Initialize Alpaca downloader
@@ -106,7 +107,7 @@ class AlpacaPipelineDownloader:
             return tickers
 
         for ticker_dir in self.ohlcv_dir.iterdir():
-            if ticker_dir.is_dir() and not ticker_dir.name.startswith('_'):
+            if ticker_dir.is_dir() and not ticker_dir.name.startswith("_"):
                 # Include all tickers (let Alpaca API determine what's supported)
                 ticker = ticker_dir.name.upper()
                 tickers.add(ticker)
@@ -114,7 +115,7 @@ class AlpacaPipelineDownloader:
         _logger.info("Discovered %d tickers in cache: %s", len(tickers), sorted(tickers))
         return tickers
 
-    def get_existing_data_info(self, ticker: str) -> Optional[Tuple[datetime, datetime, int]]:
+    def get_existing_data_info(self, ticker: str) -> Tuple[datetime, datetime, int] | None:
         """
         Get information about existing 1m data file (supports both .csv and .csv.gz).
 
@@ -142,8 +143,8 @@ class AlpacaPipelineDownloader:
             # Read data based on file type
             if is_gzipped:
                 # Read gzipped file
-                df_head = pd.read_csv(data_file, compression='gzip', nrows=1)
-                df_full = pd.read_csv(data_file, compression='gzip')
+                df_head = pd.read_csv(data_file, compression="gzip", nrows=1)
+                df_full = pd.read_csv(data_file, compression="gzip")
                 df_tail = df_full.tail(1)
             else:
                 # Read regular CSV file
@@ -155,15 +156,20 @@ class AlpacaPipelineDownloader:
                 return None
 
             # Get date range
-            start_date = pd.to_datetime(df_head['timestamp'].iloc[0])
-            end_date = pd.to_datetime(df_tail['timestamp'].iloc[0])
+            start_date = pd.to_datetime(df_head["timestamp"].iloc[0])
+            end_date = pd.to_datetime(df_tail["timestamp"].iloc[0])
 
             # Get total row count
             row_count = len(df_full)
 
-            _logger.debug("Existing data for %s: %s to %s (%d rows) [%s]",
-                         ticker, start_date.date(), end_date.date(), row_count,
-                         "gzipped" if is_gzipped else "uncompressed")
+            _logger.debug(
+                "Existing data for %s: %s to %s (%d rows) [%s]",
+                ticker,
+                start_date.date(),
+                end_date.date(),
+                row_count,
+                "gzipped" if is_gzipped else "uncompressed",
+            )
 
             return start_date, end_date, row_count
 
@@ -171,8 +177,9 @@ class AlpacaPipelineDownloader:
             _logger.warning("Error reading existing data for %s: %s", ticker, e)
             return None
 
-    def calculate_download_ranges(self, ticker: str, target_start: datetime,
-                                target_end: datetime) -> List[Tuple[datetime, datetime]]:
+    def calculate_download_ranges(
+        self, ticker: str, target_start: datetime, target_end: datetime
+    ) -> List[Tuple[datetime, datetime]]:
         """
         Calculate date ranges that need to be downloaded.
         Focus on filling gaps before and after existing data.
@@ -198,15 +205,13 @@ class AlpacaPipelineDownloader:
         if target_start < existing_start:
             gap_end = existing_start - timedelta(minutes=1)
             ranges_to_download.append((target_start, gap_end))
-            _logger.debug("Gap before existing data for %s: %s to %s",
-                         ticker, target_start.date(), gap_end.date())
+            _logger.debug("Gap before existing data for %s: %s to %s", ticker, target_start.date(), gap_end.date())
 
         # Check if we need data after existing end (fill gap after)
         if target_end > existing_end:
             gap_start = existing_end + timedelta(minutes=1)
             ranges_to_download.append((gap_start, target_end))
-            _logger.debug("Gap after existing data for %s: %s to %s",
-                         ticker, gap_start.date(), target_end.date())
+            _logger.debug("Gap after existing data for %s: %s to %s", ticker, gap_start.date(), target_end.date())
 
         if not ranges_to_download:
             _logger.info("No gaps found for %s, data is up to date", ticker)
@@ -215,8 +220,7 @@ class AlpacaPipelineDownloader:
 
         return ranges_to_download
 
-    def download_ticker_data(self, ticker: str, start_date: datetime,
-                           end_date: datetime) -> Optional[pd.DataFrame]:
+    def download_ticker_data(self, ticker: str, start_date: datetime, end_date: datetime) -> pd.DataFrame | None:
         """
         Download 1-minute data for a single ticker.
 
@@ -229,11 +233,10 @@ class AlpacaPipelineDownloader:
             DataFrame with OHLCV data or None if failed
         """
         try:
-            _logger.info("Downloading 1m data for %s from %s to %s",
-                        ticker, start_date.date(), end_date.date())
+            _logger.info("Downloading 1m data for %s from %s to %s", ticker, start_date.date(), end_date.date())
 
             # Track API calls
-            self.stats['total_api_calls'] += 1
+            self.stats["total_api_calls"] += 1
 
             # Download data using the new Alpaca downloader
             df = self.downloader.get_ohlcv(ticker, "1m", start_date, end_date)
@@ -243,14 +246,14 @@ class AlpacaPipelineDownloader:
                 return None
 
             # Ensure proper column names and format
-            if 'timestamp' not in df.columns:
+            if "timestamp" not in df.columns:
                 df.reset_index(inplace=True)
                 if df.index.name:
-                    df.rename(columns={df.index.name: 'timestamp'}, inplace=True)
+                    df.rename(columns={df.index.name: "timestamp"}, inplace=True)
 
             # Ensure timestamp column exists
-            if 'timestamp' not in df.columns and df.index.name is None:
-                df['timestamp'] = df.index
+            if "timestamp" not in df.columns and df.index.name is None:
+                df["timestamp"] = df.index
 
             _logger.info("Downloaded %d rows for %s", len(df), ticker)
             return df
@@ -261,18 +264,17 @@ class AlpacaPipelineDownloader:
 
             # Categorize errors for pipeline statistics
             if "not found" in error_msg.lower() or "invalid symbol" in error_msg.lower():
-                self.stats['errors'][ticker] = "Symbol not found (likely crypto/forex)"
+                self.stats["errors"][ticker] = "Symbol not found (likely crypto/forex)"
             elif "rate limit" in error_msg.lower():
-                self.stats['errors'][ticker] = "Rate limit exceeded"
+                self.stats["errors"][ticker] = "Rate limit exceeded"
             elif "authentication" in error_msg.lower():
-                self.stats['errors'][ticker] = "Authentication error"
+                self.stats["errors"][ticker] = "Authentication error"
             else:
-                self.stats['errors'][ticker] = f"API error: {error_msg}"
+                self.stats["errors"][ticker] = f"API error: {error_msg}"
 
             return None
 
-    def save_ticker_data(self, ticker: str, new_data: pd.DataFrame,
-                        append_mode: bool = False) -> bool:
+    def save_ticker_data(self, ticker: str, new_data: pd.DataFrame, append_mode: bool = False) -> bool:
         """
         Save ticker data as gzipped CSV file.
 
@@ -294,27 +296,27 @@ class AlpacaPipelineDownloader:
             if append_mode and (csv_gz_file.exists() or csv_file.exists()):
                 # Load existing data and merge
                 if csv_gz_file.exists():
-                    existing_df = pd.read_csv(csv_gz_file, compression='gzip')
+                    existing_df = pd.read_csv(csv_gz_file, compression="gzip")
                     _logger.debug("Loading existing gzipped data for %s", ticker)
                 else:
                     existing_df = pd.read_csv(csv_file)
                     _logger.debug("Loading existing uncompressed data for %s", ticker)
 
-                existing_df['timestamp'] = pd.to_datetime(existing_df['timestamp'])
+                existing_df["timestamp"] = pd.to_datetime(existing_df["timestamp"])
 
                 # Ensure new data has timestamp column
-                if 'timestamp' not in new_data.columns:
+                if "timestamp" not in new_data.columns:
                     new_data.reset_index(inplace=True)
 
-                new_data['timestamp'] = pd.to_datetime(new_data['timestamp'])
+                new_data["timestamp"] = pd.to_datetime(new_data["timestamp"])
 
                 # Combine and remove duplicates
                 combined_df = pd.concat([existing_df, new_data], ignore_index=True)
-                combined_df = combined_df.drop_duplicates(subset=['timestamp'])
-                combined_df = combined_df.sort_values('timestamp').reset_index(drop=True)
+                combined_df = combined_df.drop_duplicates(subset=["timestamp"])
+                combined_df = combined_df.sort_values("timestamp").reset_index(drop=True)
 
                 # Save combined data as gzipped CSV
-                combined_df.to_csv(csv_gz_file, index=False, compression='gzip')
+                combined_df.to_csv(csv_gz_file, index=False, compression="gzip")
 
                 # Remove old uncompressed file if it exists
                 if csv_file.exists():
@@ -324,10 +326,10 @@ class AlpacaPipelineDownloader:
                 _logger.info("Merged and saved %d total rows to %s (gzipped)", len(combined_df), csv_gz_file)
             else:
                 # Save new data only as gzipped CSV
-                if 'timestamp' not in new_data.columns:
+                if "timestamp" not in new_data.columns:
                     new_data.reset_index(inplace=True)
 
-                new_data.to_csv(csv_gz_file, index=False, compression='gzip')
+                new_data.to_csv(csv_gz_file, index=False, compression="gzip")
 
                 # Remove old uncompressed file if it exists
                 if csv_file.exists():
@@ -342,8 +344,9 @@ class AlpacaPipelineDownloader:
             _logger.exception("Error saving data for %s:", ticker)
             return False
 
-    def process_ticker(self, ticker: str, start_date: datetime, end_date: datetime,
-                      force_refresh: bool = False) -> Dict[str, Any]:
+    def process_ticker(
+        self, ticker: str, start_date: datetime, end_date: datetime, force_refresh: bool = False
+    ) -> Dict[str, Any]:
         """
         Process a single ticker with enhanced error handling and statistics.
 
@@ -357,13 +360,13 @@ class AlpacaPipelineDownloader:
             Dictionary with processing results
         """
         result = {
-            'ticker': ticker,
-            'success': False,
-            'rows_downloaded': 0,
-            'ranges_processed': 0,
-            'action': 'unknown',
-            'error': None,
-            'processing_time': 0
+            "ticker": ticker,
+            "success": False,
+            "rows_downloaded": 0,
+            "ranges_processed": 0,
+            "action": "unknown",
+            "error": None,
+            "processing_time": 0,
         }
 
         start_time = time.time()
@@ -377,11 +380,7 @@ class AlpacaPipelineDownloader:
                 download_ranges = self.calculate_download_ranges(ticker, start_date, end_date)
 
             if not download_ranges:
-                result.update({
-                    'success': True,
-                    'action': 'up_to_date',
-                    'processing_time': time.time() - start_time
-                })
+                result.update({"success": True, "action": "up_to_date", "processing_time": time.time() - start_time})
                 return result
 
             total_new_rows = 0
@@ -398,40 +397,38 @@ class AlpacaPipelineDownloader:
 
                     if success:
                         total_new_rows += len(data)
-                        self.stats['total_rows_downloaded'] += len(data)
+                        self.stats["total_rows_downloaded"] += len(data)
                     else:
                         all_success = False
                         break
                 else:
-                    _logger.warning("No data for %s in range %s to %s",
-                                  ticker, range_start.date(), range_end.date())
+                    _logger.warning("No data for %s in range %s to %s", ticker, range_start.date(), range_end.date())
 
                 # Rate limiting - Alpaca allows 200 requests per minute
                 time.sleep(0.3)  # ~200 requests per minute
 
-            result.update({
-                'success': all_success,
-                'rows_downloaded': total_new_rows,
-                'ranges_processed': len(download_ranges),
-                'action': 'updated' if total_new_rows > 0 else 'no_data',
-                'processing_time': time.time() - start_time
-            })
+            result.update(
+                {
+                    "success": all_success,
+                    "rows_downloaded": total_new_rows,
+                    "ranges_processed": len(download_ranges),
+                    "action": "updated" if total_new_rows > 0 else "no_data",
+                    "processing_time": time.time() - start_time,
+                }
+            )
 
         except Exception as e:
             error_msg = str(e)
-            result.update({
-                'success': False,
-                'error': error_msg,
-                'processing_time': time.time() - start_time
-            })
+            result.update({"success": False, "error": error_msg, "processing_time": time.time() - start_time})
 
             # Store error for statistics
-            self.stats['errors'][ticker] = error_msg
+            self.stats["errors"][ticker] = error_msg
 
         return result
 
-    def download_all_tickers(self, tickers: List[str], start_date: datetime,
-                           end_date: datetime, force_refresh: bool = False) -> Dict[str, Any]:
+    def download_all_tickers(
+        self, tickers: List[str], start_date: datetime, end_date: datetime, force_refresh: bool = False
+    ) -> Dict[str, Any]:
         """
         Download 1-minute data for all specified tickers with enhanced pipeline statistics.
 
@@ -445,7 +442,7 @@ class AlpacaPipelineDownloader:
             Dictionary with comprehensive pipeline results
         """
         pipeline_start_time = time.time()
-        self.stats['total_tickers'] = len(tickers)
+        self.stats["total_tickers"] = len(tickers)
 
         _logger.info("=" * 60)
         _logger.info("PIPELINE STEP 1: ALPACA 1M DATA DOWNLOAD")
@@ -464,31 +461,28 @@ class AlpacaPipelineDownloader:
             results[ticker] = result
 
             # Update statistics
-            if result['success']:
-                if result['action'] == 'up_to_date':
-                    self.stats['skipped_tickers'].append(ticker)
+            if result["success"]:
+                if result["action"] == "up_to_date":
+                    self.stats["skipped_tickers"].append(ticker)
                     _logger.info("✅ %s: Up to date", ticker)
-                elif result['action'] == 'updated':
-                    self.stats['successful_tickers'].append(ticker)
-                    _logger.info("✅ %s: Downloaded %d new rows", ticker, result['rows_downloaded'])
+                elif result["action"] == "updated":
+                    self.stats["successful_tickers"].append(ticker)
+                    _logger.info("✅ %s: Downloaded %d new rows", ticker, result["rows_downloaded"])
                 else:
-                    self.stats['successful_tickers'].append(ticker)
+                    self.stats["successful_tickers"].append(ticker)
                     _logger.info("✅ %s: Processed successfully", ticker)
             else:
-                self.stats['failed_tickers'].append(ticker)
-                error = result.get('error', 'Unknown error')
+                self.stats["failed_tickers"].append(ticker)
+                error = result.get("error", "Unknown error")
                 _logger.error("❌ %s: %s", ticker, error)
 
         # Calculate final statistics
-        self.stats['processing_time'] = time.time() - pipeline_start_time
+        self.stats["processing_time"] = time.time() - pipeline_start_time
 
         # Print comprehensive pipeline summary
         self.print_pipeline_summary()
 
-        return {
-            'results': results,
-            'statistics': self.stats
-        }
+        return {"results": results, "statistics": self.stats}
 
     def print_pipeline_summary(self):
         """Print comprehensive pipeline summary with statistics."""
@@ -497,10 +491,10 @@ class AlpacaPipelineDownloader:
         _logger.info("=" * 80)
 
         # Overall statistics
-        total = self.stats['total_tickers']
-        successful = len(self.stats['successful_tickers'])
-        skipped = len(self.stats['skipped_tickers'])
-        failed = len(self.stats['failed_tickers'])
+        total = self.stats["total_tickers"]
+        successful = len(self.stats["successful_tickers"])
+        skipped = len(self.stats["skipped_tickers"])
+        failed = len(self.stats["failed_tickers"])
 
         _logger.info("📊 PROCESSING STATISTICS:")
         _logger.info("   Total tickers processed: %d", total)
@@ -510,32 +504,33 @@ class AlpacaPipelineDownloader:
         _logger.info("   📈 Success rate: %.1f%%", (successful + skipped) / total * 100 if total > 0 else 0)
 
         _logger.info("\n📈 DATA STATISTICS:")
-        _logger.info("   Total rows downloaded: %d", self.stats['total_rows_downloaded'])
-        _logger.info("   Total API calls made: %d", self.stats['total_api_calls'])
-        _logger.info("   Processing time: %.1f seconds", self.stats['processing_time'])
+        _logger.info("   Total rows downloaded: %d", self.stats["total_rows_downloaded"])
+        _logger.info("   Total API calls made: %d", self.stats["total_api_calls"])
+        _logger.info("   Processing time: %.1f seconds", self.stats["processing_time"])
 
         # Successful tickers
-        if self.stats['successful_tickers']:
-            _logger.info("\n✅ SUCCESSFULLY UPDATED TICKERS (%d):", len(self.stats['successful_tickers']))
-            for ticker in sorted(self.stats['successful_tickers']):
+        if self.stats["successful_tickers"]:
+            _logger.info("\n✅ SUCCESSFULLY UPDATED TICKERS (%d):", len(self.stats["successful_tickers"]))
+            for ticker in sorted(self.stats["successful_tickers"]):
                 _logger.info("   %s", ticker)
 
         # Up-to-date tickers
-        if self.stats['skipped_tickers']:
-            _logger.info("\n⏭️  UP-TO-DATE TICKERS (%d):", len(self.stats['skipped_tickers']))
-            for ticker in sorted(self.stats['skipped_tickers']):
+        if self.stats["skipped_tickers"]:
+            _logger.info("\n⏭️  UP-TO-DATE TICKERS (%d):", len(self.stats["skipped_tickers"]))
+            for ticker in sorted(self.stats["skipped_tickers"]):
                 _logger.info("   %s", ticker)
 
         # Failed tickers with reasons
-        if self.stats['failed_tickers']:
-            _logger.info("\n❌ FAILED TICKERS (%d):", len(self.stats['failed_tickers']))
-            for ticker in sorted(self.stats['failed_tickers']):
-                error = self.stats['errors'].get(ticker, 'Unknown error')
+        if self.stats["failed_tickers"]:
+            _logger.info("\n❌ FAILED TICKERS (%d):", len(self.stats["failed_tickers"]))
+            for ticker in sorted(self.stats["failed_tickers"]):
+                error = self.stats["errors"].get(ticker, "Unknown error")
                 _logger.info("   %s: %s", ticker, error)
 
             # Categorize failures
-            crypto_failures = [t for t, e in self.stats['errors'].items()
-                             if "not found" in e.lower() or "crypto" in e.lower()]
+            crypto_failures = [
+                t for t, e in self.stats["errors"].items() if "not found" in e.lower() or "crypto" in e.lower()
+            ]
             if crypto_failures:
                 _logger.info("\n🔍 LIKELY CRYPTO/FOREX TICKERS (not supported by Alpaca):")
                 for ticker in sorted(crypto_failures):
@@ -577,40 +572,33 @@ Environment Variables Required:
   ALPACA_API_KEY - Your Alpaca API key
   ALPACA_SECRET_KEY - Your Alpaca secret key
   ALPACA_BASE_URL - Alpaca base URL (optional, defaults to paper trading)
-        """
+        """,
     )
 
     parser.add_argument(
-        "--tickers",
-        type=str,
-        help="Comma-separated list of tickers to download (default: discover from cache)"
+        "--tickers", type=str, help="Comma-separated list of tickers to download (default: discover from cache)"
     )
 
     parser.add_argument(
         "--start-date",
         type=parse_date,
         default=datetime(2020, 1, 1),
-        help="Start date for data download (YYYY-MM-DD, default: 2020-01-01 UTC)"
+        help="Start date for data download (YYYY-MM-DD, default: 2020-01-01 UTC)",
     )
 
     parser.add_argument(
         "--end-date",
         type=parse_date,
         default=datetime.now().replace(hour=0, minute=0, second=0, microsecond=0),
-        help="End date for data download (YYYY-MM-DD, default: today's midnight, includes all of yesterday)"
+        help="End date for data download (YYYY-MM-DD, default: today's midnight, includes all of yesterday)",
     )
 
     parser.add_argument(
-        "--cache-dir",
-        type=str,
-        default=DATA_CACHE_DIR,
-        help=f"Cache directory path (default: {DATA_CACHE_DIR})"
+        "--cache-dir", type=str, default=DATA_CACHE_DIR, help=f"Cache directory path (default: {DATA_CACHE_DIR})"
     )
 
     parser.add_argument(
-        "--force-refresh",
-        action="store_true",
-        help="Force refresh: re-download all data (ignore existing files)"
+        "--force-refresh", action="store_true", help="Force refresh: re-download all data (ignore existing files)"
     )
 
     args = parser.parse_args()
@@ -631,16 +619,14 @@ Environment Variables Required:
             tickers = sorted(discovered_tickers)
 
         # Run pipeline step 1
-        pipeline_results = downloader.download_all_tickers(
-            tickers, args.start_date, args.end_date, args.force_refresh
-        )
+        pipeline_results = downloader.download_all_tickers(tickers, args.start_date, args.end_date, args.force_refresh)
 
         # Exit with appropriate code based on results
-        stats = pipeline_results['statistics']
-        if len(stats['failed_tickers']) == 0:
+        stats = pipeline_results["statistics"]
+        if len(stats["failed_tickers"]) == 0:
             _logger.info("Pipeline Step 1 completed successfully - all tickers processed")
             sys.exit(0)
-        elif len(stats['successful_tickers']) + len(stats['skipped_tickers']) > 0:
+        elif len(stats["successful_tickers"]) + len(stats["skipped_tickers"]) > 0:
             _logger.warning("Pipeline Step 1 completed with some failures")
             sys.exit(0)  # Continue pipeline even with some failures
         else:

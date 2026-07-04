@@ -33,6 +33,7 @@ def send_push(title: str, message: str) -> bool:
     """
     try:
         from src.notification.service.client import NotificationServiceClient
+
         client = NotificationServiceClient()
         asyncio.run(client.send_to_admins(title=title, message=message))
         return True

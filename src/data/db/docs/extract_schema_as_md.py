@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Dump ONLY reconstructed DDL (from PRAGMAs) to Markdown.
 
@@ -23,8 +22,8 @@ import sqlite3
 from collections import defaultdict
 from typing import Dict, List
 
-
 # ---------- SQLite helpers ----------
+
 
 def mk_conn(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
@@ -74,6 +73,7 @@ def pragma_index_xinfo(conn: sqlite3.Connection, index: str) -> List[sqlite3.Row
 
 # ---------- Reconstruction ----------
 
+
 def reconstruct_create_table(conn: sqlite3.Connection, table: str) -> str:
     cols = pragma_table_info(conn, table)
     if not cols:
@@ -86,7 +86,7 @@ def reconstruct_create_table(conn: sqlite3.Connection, table: str) -> str:
 
     # Build column lines
     col_lines: List[str] = []
-    inline_pk_allowed = (len(pk_cols) == 1)
+    inline_pk_allowed = len(pk_cols) == 1
     pk_name_inline = pk_cols[0][0] if inline_pk_allowed else None
 
     for c in sorted(cols, key=lambda r: r["cid"]):
@@ -166,7 +166,7 @@ def reconstruct_indexes(conn: sqlite3.Connection, table: str) -> List[str]:
         xinfo = pragma_index_xinfo(conn, name)
         # retain only key columns (xinfo.key == 1)
         key_rows = [r for r in xinfo if ("key" in r.keys() and int(r["key"]) == 1)]
-        key_rows.sort(key=lambda r: (r["seqno"] if r["seqno"] is not None else 0))
+        key_rows.sort(key=lambda r: r["seqno"] if r["seqno"] is not None else 0)
 
         parts: List[str] = []
         incomplete_expr = False
@@ -200,6 +200,7 @@ def get_row_count(conn: sqlite3.Connection, table: str) -> int | None:
 
 # ---------- Markdown emission ----------
 
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Dump reconstructed SQLite DDL (from PRAGMAs) to Markdown.")
     ap.add_argument("--db", default="db/trading.db", help="Path to SQLite database (default: db/trading.db)")
@@ -213,7 +214,7 @@ def main() -> None:
 
     conn = mk_conn(abs_db)
     try:
-        now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat() + "Z"
+        now = dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat() + "Z"
         sqlite_ver = conn.execute("SELECT sqlite_version() AS v").fetchone()["v"]
 
         tables = get_tables(conn)

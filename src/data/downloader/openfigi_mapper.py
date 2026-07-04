@@ -19,11 +19,11 @@ Classes:
 """
 
 import json
-import time
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
 import sys
+import time
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Dict, List, Union
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
@@ -60,8 +60,8 @@ class OpenFigiMapper(BaseDataDownloader):
 
     def __init__(
         self,
-        cache_dir: Optional[Union[str, Path]] = None,
-        api_key: Optional[str] = None,
+        cache_dir: Union[str, Path] | None = None,
+        api_key: str | None = None,
     ):
         """
         Initialize the OpenFIGI mapper.
@@ -87,7 +87,7 @@ class OpenFigiMapper(BaseDataDownloader):
             _logger.debug("OpenFIGI: using free tier (25 req/min)")
 
         self._last_request_time: float = 0.0
-        self._cache: Optional[Dict[str, Optional[str]]] = None
+        self._cache: Dict[str, str | None] | None = None
 
     # ------------------------------------------------------------------
     # BaseDataDownloader interface
@@ -122,7 +122,7 @@ class OpenFigiMapper(BaseDataDownloader):
         self,
         cusips: List[str],
         force_refresh: bool = False,
-    ) -> Dict[str, Optional[str]]:
+    ) -> Dict[str, str | None]:
         """
         Resolve a list of CUSIPs to ticker symbols.
 
@@ -167,7 +167,7 @@ class OpenFigiMapper(BaseDataDownloader):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _load_cache(self) -> Dict[str, Optional[str]]:
+    def _load_cache(self) -> Dict[str, str | None]:
         """Load the cache dict from CSV.gz."""
         if self._cache is not None:
             return self._cache
@@ -175,22 +175,21 @@ class OpenFigiMapper(BaseDataDownloader):
             self._cache = {}
             return self._cache
         df = pd.read_csv(self._cache_file, compression="gzip", dtype=str).fillna("")
-        mapping: Dict[str, Optional[str]] = {}
+        mapping: Dict[str, str | None] = {}
         for cusip, ticker in zip(df["cusip"].tolist(), df["ticker"].tolist()):
             mapping[str(cusip)] = str(ticker) if ticker else None
         self._cache = mapping
         _logger.debug("Loaded %d CUSIPs from cache %s", len(self._cache), self._cache_file)
         return self._cache
 
-    def _save_cache(self, new_mappings: Dict[str, Optional[str]]) -> None:
+    def _save_cache(self, new_mappings: Dict[str, str | None]) -> None:
         """Append new mappings to the CSV.gz cache."""
         if not new_mappings:
             return
 
-        resolved_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        resolved_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         rows = [
-            {"cusip": cusip, "ticker": ticker, "resolved_at": resolved_at}
-            for cusip, ticker in new_mappings.items()
+            {"cusip": cusip, "ticker": ticker, "resolved_at": resolved_at} for cusip, ticker in new_mappings.items()
         ]
 
         new_df = pd.DataFrame(rows)
@@ -206,17 +205,17 @@ class OpenFigiMapper(BaseDataDownloader):
         combined.to_csv(self._cache_file, index=False, compression="gzip")
         _logger.info("Saved %d new CUSIP mappings to %s (total: %d)", len(new_df), self._cache_file, len(combined))
 
-    def _fetch_all(self, cusips: List[str]) -> Dict[str, Optional[str]]:
+    def _fetch_all(self, cusips: List[str]) -> Dict[str, str | None]:
         """Batch-fetch all CUSIPs from OpenFIGI in chunks of 100."""
-        result: Dict[str, Optional[str]] = {}
+        result: Dict[str, str | None] = {}
         for i in range(0, len(cusips), _BATCH_SIZE):
-            batch = cusips[i: i + _BATCH_SIZE]
+            batch = cusips[i : i + _BATCH_SIZE]
             batch_result = self._fetch_batch(batch)
             result.update(batch_result)
             _logger.debug("OpenFIGI: resolved %d/%d CUSIPs", i + len(batch), len(cusips))
         return result
 
-    def _fetch_batch(self, cusips: List[str]) -> Dict[str, Optional[str]]:
+    def _fetch_batch(self, cusips: List[str]) -> Dict[str, str | None]:
         """
         POST up to 100 CUSIPs to OpenFIGI and return resolved tickers.
 
@@ -255,7 +254,7 @@ class OpenFigiMapper(BaseDataDownloader):
             _logger.exception("OpenFIGI request failed")
             return {c: None for c in cusips}
 
-        result: Dict[str, Optional[str]] = {}
+        result: Dict[str, str | None] = {}
         for cusip, item in zip(cusips, items):
             data = item.get("data", [])
             if not data:

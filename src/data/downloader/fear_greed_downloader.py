@@ -29,10 +29,10 @@ Classes:
 
 import io
 import json
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
 import sys
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Union
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
@@ -50,9 +50,7 @@ try:
 except ImportError:
     DATA_CACHE_DIR = "c:/data-cache"
 
-_ARCHIVE_URL = (
-    "https://raw.githubusercontent.com/whit3rabbit/fear-greed-data/main/fear-greed.csv"
-)
+_ARCHIVE_URL = "https://raw.githubusercontent.com/whit3rabbit/fear-greed-data/main/fear-greed.csv"
 _CNN_BASE_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
 _CNN_ARCHIVE_START = "2021-02-01"
 
@@ -85,7 +83,7 @@ class FearGreedDownloader(BaseDataDownloader):
 
     def __init__(
         self,
-        cache_dir: Optional[Union[str, Path]] = None,
+        cache_dir: Union[str, Path] | None = None,
         request_timeout: int = 30,
     ):
         """
@@ -102,9 +100,11 @@ class FearGreedDownloader(BaseDataDownloader):
         self._fg_file = self._fg_dir / "cnn_fear_greed.csv.gz"
         self._timeout = request_timeout
         self._session = requests.Session()
-        self._session.headers.update({
-            "User-Agent": "Mozilla/5.0 (compatible; e-trading-research; akossyrev@gmail.com)",
-        })
+        self._session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (compatible; e-trading-research; akossyrev@gmail.com)",
+            }
+        )
 
     # ------------------------------------------------------------------
     # BaseDataDownloader interface
@@ -147,7 +147,7 @@ class FearGreedDownloader(BaseDataDownloader):
     # Main entry points
     # ------------------------------------------------------------------
 
-    def download(self, full_rebuild: bool = False) -> Optional[Path]:
+    def download(self, full_rebuild: bool = False) -> Path | None:
         """
         Download and cache the Fear & Greed index.
 
@@ -188,7 +188,7 @@ class FearGreedDownloader(BaseDataDownloader):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _build_full_history(self) -> Optional[Path]:
+    def _build_full_history(self) -> Path | None:
         """
         Full rebuild: download archive CSV + full CNN history, merge, and save.
 
@@ -206,7 +206,7 @@ class FearGreedDownloader(BaseDataDownloader):
         combined = pd.concat(parts, ignore_index=True)
         return self._normalise_and_save(combined, mode="full rebuild")
 
-    def _append_recent(self) -> Optional[Path]:
+    def _append_recent(self) -> Path | None:
         """
         Incremental update: load cache and append rows newer than last date.
 
@@ -214,9 +214,7 @@ class FearGreedDownloader(BaseDataDownloader):
             Path to ``cnn_fear_greed.csv.gz``, or None on failure.
         """
         try:
-            existing = pd.read_csv(
-                self._fg_file, index_col=0, parse_dates=True, compression="gzip"
-            )
+            existing = pd.read_csv(self._fg_file, index_col=0, parse_dates=True, compression="gzip")
         except Exception:
             _logger.exception("Failed to read existing cache — falling back to full rebuild")
             return self._build_full_history()
@@ -237,7 +235,7 @@ class FearGreedDownloader(BaseDataDownloader):
         combined = pd.concat([existing_reset, fresh], ignore_index=True)
         return self._normalise_and_save(combined, mode="incremental")
 
-    def _normalise_and_save(self, df: pd.DataFrame, mode: str) -> Optional[Path]:
+    def _normalise_and_save(self, df: pd.DataFrame, mode: str) -> Path | None:
         """
         Deduplicate, sort, ensure label column, set DatetimeIndex, and save.
 
@@ -281,7 +279,7 @@ class FearGreedDownloader(BaseDataDownloader):
             _logger.exception("Failed to normalise and save Fear & Greed data")
             return None
 
-    def _fetch_cnn(self, start_date: str) -> Optional[pd.DataFrame]:
+    def _fetch_cnn(self, start_date: str) -> pd.DataFrame | None:
         """
         Fetch Fear & Greed historical data from the CNN production API.
 
@@ -318,7 +316,7 @@ class FearGreedDownloader(BaseDataDownloader):
             _logger.exception("Failed to parse CNN Fear & Greed response")
             return None
 
-    def _fetch_archive(self) -> Optional[pd.DataFrame]:
+    def _fetch_archive(self) -> pd.DataFrame | None:
         """
         Download the community archive CSV (2011–2021) from GitHub.
 
@@ -344,11 +342,17 @@ class FearGreedDownloader(BaseDataDownloader):
                 low = col.lower().strip()
                 if low in ("date", "datetime", "timestamp", "time"):
                     col_map[col] = "date"
-                elif low in ("score", "value", "fear_greed", "fear_greed_score",
-                             "fear_greed_value", "fng_value", "fear greed"):
+                elif low in (
+                    "score",
+                    "value",
+                    "fear_greed",
+                    "fear_greed_score",
+                    "fear_greed_value",
+                    "fng_value",
+                    "fear greed",
+                ):
                     col_map[col] = "fear_greed_score"
-                elif low in ("rating", "label", "category",
-                             "fear_greed_category", "fng_classification"):
+                elif low in ("rating", "label", "category", "fear_greed_category", "fng_classification"):
                     col_map[col] = "label"
             if col_map:
                 df = df.rename(columns=col_map)
@@ -377,22 +381,25 @@ class FearGreedDownloader(BaseDataDownloader):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Download CNN Fear & Greed Index data to local cache."
-    )
+    parser = argparse.ArgumentParser(description="Download CNN Fear & Greed Index data to local cache.")
     parser.add_argument(
-        "--cache-dir", type=str, default=None,
+        "--cache-dir",
+        type=str,
+        default=None,
         help=f"Cache root directory (default: {DATA_CACHE_DIR})",
     )
     parser.add_argument(
-        "--timeout", type=int, default=30,
+        "--timeout",
+        type=int,
+        default=30,
         help="HTTP request timeout in seconds (default: 30)",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     p_dl = subparsers.add_parser("download", help="Download / update Fear & Greed data")
     p_dl.add_argument(
-        "--full-rebuild", action="store_true",
+        "--full-rebuild",
+        action="store_true",
         help="Re-download archive + full CNN history and overwrite cache (use on Fridays)",
     )
 
@@ -407,6 +414,6 @@ if __name__ == "__main__":
             "path": str(directory) if directory else None,
             "rows": rows,
             "full_rebuild": args.full_rebuild,
-            "downloaded_at": datetime.now(timezone.utc).isoformat(),
+            "downloaded_at": datetime.now(UTC).isoformat(),
         }
         print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")

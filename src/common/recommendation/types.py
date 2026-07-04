@@ -6,11 +6,11 @@ Eventually, these types should be moved here to avoid circular dependencies.
 """
 
 from src.indicators.models import (
-    Recommendation,
-    RecommendationType,
+    CompositeRecommendation,
     IndicatorCategory,
     IndicatorSet,
-    CompositeRecommendation,
+    Recommendation,
+    RecommendationType,
 )
 
 __all__ = [

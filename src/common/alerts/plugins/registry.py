@@ -1,11 +1,14 @@
-import os
 import importlib
 import inspect
-from typing import Dict, Optional
+import os
+from typing import Dict
+
 from src.notification.logger import setup_logger
+
 from .base import SignalPlugin
 
 _logger = setup_logger(__name__)
+
 
 class PluginRegistry:
     """
@@ -22,12 +25,12 @@ class PluginRegistry:
         try:
             # We assume plugins are in the same directory as this file
             dir_path = os.path.dirname(os.path.abspath(__file__))
-            
+
             for file in os.listdir(dir_path):
-                if file.endswith('.py') and not file.startswith('__') and file not in ('base.py', 'registry.py'):
+                if file.endswith(".py") and not file.startswith("__") and file not in ("base.py", "registry.py"):
                     module_name = file[:-3]
                     full_module_name = f"{package_path}.{module_name}"
-                    
+
                     try:
                         module = importlib.import_module(full_module_name)
                         for _, obj in inspect.getmembers(module):
@@ -44,11 +47,11 @@ class PluginRegistry:
         """Register a plugin instance manually."""
         if plugin.name in self._plugins:
             _logger.warning("Plugin with name %s is already registered, overwriting.", plugin.name)
-        
+
         self._plugins[plugin.name] = plugin
         _logger.info("Successfully registered SignalPlugin: %s", plugin.name)
 
-    def get_plugin(self, name: str) -> Optional[SignalPlugin]:
+    def get_plugin(self, name: str) -> SignalPlugin | None:
         """Retrieve a specific plugin instance."""
         return self._plugins.get(name)
 
@@ -58,6 +61,7 @@ class PluginRegistry:
         which can be injected into the main AlertSchemaValidator.
         """
         return {name: plugin.schema() for name, plugin in self._plugins.items()}
+
 
 # Global singleton registry instance
 registry = PluginRegistry()

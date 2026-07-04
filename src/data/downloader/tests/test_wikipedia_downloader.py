@@ -2,10 +2,9 @@
 Tests for WikipediaDownloader.
 """
 
-from datetime import date
-from io import StringIO
-from pathlib import Path
 import sys
+from datetime import date
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -29,28 +28,32 @@ def test_download_index_changes(downloader):
     """Verify Wikipedia parsing, merging, cleaning, and caching."""
     # Mock S&P 500 HTML table
     # S&P table uses MultiIndex columns for Added/Removed Tickers
-    sp_columns = pd.MultiIndex.from_tuples([
-        ("Effective Date", "Effective Date"),
-        ("Added", "Ticker"),
-        ("Added", "Security"),
-        ("Removed", "Ticker"),
-        ("Removed", "Security"),
-        ("Reason", "Reason"),
-    ])
+    sp_columns = pd.MultiIndex.from_tuples(
+        [
+            ("Effective Date", "Effective Date"),
+            ("Added", "Ticker"),
+            ("Added", "Security"),
+            ("Removed", "Ticker"),
+            ("Removed", "Security"),
+            ("Reason", "Reason"),
+        ]
+    )
     sp_data = [
         ["June 30, 2026", "KKR", "KKR & Co.", "CMA", "Comerica", "Market cap change"],
     ]
     df_sp = pd.DataFrame(sp_data, columns=sp_columns)
 
     # Mock Nasdaq-100 HTML table
-    nd_columns = pd.MultiIndex.from_tuples([
-        ("Date", "Date"),
-        ("Added", "Ticker"),
-        ("Added", "Security"),
-        ("Removed", "Ticker"),
-        ("Removed", "Security"),
-        ("Reason", "Reason"),
-    ])
+    nd_columns = pd.MultiIndex.from_tuples(
+        [
+            ("Date", "Date"),
+            ("Added", "Ticker"),
+            ("Added", "Security"),
+            ("Removed", "Ticker"),
+            ("Removed", "Security"),
+            ("Reason", "Reason"),
+        ]
+    )
     nd_data = [
         ["June 22, 2026", "LRCX", "Lam Research", "", "", "Quarterly reconstitution"],
     ]
@@ -68,10 +71,13 @@ def test_download_index_changes(downloader):
 
     with (
         patch("requests.get", side_effect=[response_sp, response_nd]),
-        patch("pandas.read_html", side_effect=[
-            [None, df_sp], # First tables list for S&P 500
-            [None, None, None, None, None, None, df_nd] # Tables list for Nasdaq-100 (Table 6)
-        ])
+        patch(
+            "pandas.read_html",
+            side_effect=[
+                [None, df_sp],  # First tables list for S&P 500
+                [None, None, None, None, None, None, df_nd],  # Tables list for Nasdaq-100 (Table 6)
+            ],
+        ),
     ):
         result = downloader.download_index_changes(date(2026, 7, 3))
 
@@ -83,7 +89,15 @@ def test_download_index_changes(downloader):
     cached_df = pd.read_csv(expected_cache)
 
     assert len(cached_df) == 2
-    assert list(cached_df.columns) == ["date", "index_name", "Added_Ticker", "Added_Security", "Removed_Ticker", "Removed_Security", "Reason"]
+    assert list(cached_df.columns) == [
+        "date",
+        "index_name",
+        "Added_Ticker",
+        "Added_Security",
+        "Removed_Ticker",
+        "Removed_Security",
+        "Reason",
+    ]
     assert cached_df.loc[0, "date"] == "2026-06-30"
     assert cached_df.loc[0, "index_name"] == "SP500"
     assert cached_df.loc[0, "Added_Ticker"] == "KKR"

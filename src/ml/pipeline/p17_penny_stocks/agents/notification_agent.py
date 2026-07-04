@@ -12,17 +12,17 @@ Any failure here is logged and swallowed: notifications must never abort the
 pipeline, whose results are already written to disk by the reporting agent.
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.ml.pipeline.p17_penny_stocks.config import P17AlertConfig
 from src.ml.pipeline.p17_penny_stocks.models.candidate import Candidate
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -89,19 +89,21 @@ class NotificationAgent:
 
         subject = self._subject(picks)
         try:
-            NotificationService().create_message({
-                "message_type": "REPORT",
-                "channels": ["email"],
-                "recipient_id": str(self.user_id),
-                "content": {
-                    "title": subject,
-                    "message": self.format_text(picks, self.target_date),
-                    "html": self.format_html(picks, self.target_date),
-                    "source": "p17_penny_stocks",
-                },
-                "priority": "NORMAL",
-                "message_metadata": {"source": "p17_penny_stocks"},
-            })
+            NotificationService().create_message(
+                {
+                    "message_type": "REPORT",
+                    "channels": ["email"],
+                    "recipient_id": str(self.user_id),
+                    "content": {
+                        "title": subject,
+                        "message": self.format_text(picks, self.target_date),
+                        "html": self.format_html(picks, self.target_date),
+                        "source": "p17_penny_stocks",
+                    },
+                    "priority": "NORMAL",
+                    "message_metadata": {"source": "p17_penny_stocks"},
+                }
+            )
             _logger.info("Queued P17 Tier A/B email (%d picks) for user %s", len(picks), self.user_id)
             return {"emailed": len(picks)}
         except Exception:
@@ -121,7 +123,7 @@ class NotificationAgent:
         out: List[str] = []
         for sig in c.catalyst_signals[:3]:
             # e.g. "catalyst_material_agreement_2026-06-25" -> "material agreement (2026-06-25)"
-            body = sig[len("catalyst_"):] if sig.startswith("catalyst_") else sig
+            body = sig[len("catalyst_") :] if sig.startswith("catalyst_") else sig
             parts = body.rsplit("_", 1)
             if len(parts) == 2 and parts[1].count("-") == 2:
                 out.append(f"{parts[0].replace('_', ' ')} ({parts[1]})")
@@ -138,10 +140,7 @@ class NotificationAgent:
             "",
         ]
         for i, c in enumerate(picks, 1):
-            lines.append(
-                f"{i}. {c.ticker} ({c.company_name or 'n/a'}) — Tier {c.tier} | "
-                f"score {c.final_score:.1f}"
-            )
+            lines.append(f"{i}. {c.ticker} ({c.company_name or 'n/a'}) — Tier {c.tier} | score {c.final_score:.1f}")
             lines.append(
                 f"     price ${c.price:.2f} | rvol {c.relative_volume:.1f}x | "
                 f"catalyst {c.catalyst_score:.0f} | sector {c.sector or 'n/a'}"
@@ -170,7 +169,7 @@ class NotificationAgent:
             <tr style="border-bottom:1px solid #eee;">
               <td style="padding:8px 10px;text-align:right;color:#888;">{i}</td>
               <td style="padding:8px 10px;font-weight:600;">{c.ticker}</td>
-              <td style="padding:8px 10px;color:#444;">{c.company_name or '—'}</td>
+              <td style="padding:8px 10px;color:#444;">{c.company_name or "—"}</td>
               <td style="padding:8px 10px;text-align:center;">
                 <span style="background:{colour};color:#fff;border-radius:4px;
                   padding:2px 8px;font-size:12px;font-weight:600;">{c.tier}</span>
@@ -198,7 +197,7 @@ class NotificationAgent:
               <th style="padding:8px 10px;">Catalyst signals</th>
             </tr>
           </thead>
-          <tbody>{''.join(rows)}</tbody>
+          <tbody>{"".join(rows)}</tbody>
         </table>"""
 
         return f"""

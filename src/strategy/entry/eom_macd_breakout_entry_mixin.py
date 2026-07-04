@@ -15,11 +15,11 @@ Conditions (all must be true):
 4. Volume expansion: Volume >= volume_threshold * Volume_SMA
 """
 
-from typing import Any, Dict, Optional, List
 import math
+from typing import Any, Dict, List
 
-from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 from src.notification.logger import setup_logger
+from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 
 _logger = setup_logger(__name__)
 
@@ -30,7 +30,7 @@ class EOMMAcdBreakoutEntryMixin(BaseEntryMixin):
     New Architecture only.
     """
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
 
@@ -67,24 +67,24 @@ class EOMMAcdBreakoutEntryMixin(BaseEntryMixin):
             {
                 "type": "SupportResistance",
                 "params": {"lookback_bars": res_lookback},
-                "fields_mapping": {"resistance": "entry_resistance", "support": "entry_support"}
+                "fields_mapping": {"resistance": "entry_resistance", "support": "entry_support"},
             },
             {
                 "type": "MACD",
                 "params": {"fastperiod": macd_fast, "slowperiod": macd_slow, "signalperiod": macd_signal},
-                "fields_mapping": {"macd": "entry_macd", "macdsignal": "entry_macd_signal", "macdhist": "entry_macd_hist"}
+                "fields_mapping": {
+                    "macd": "entry_macd",
+                    "macdsignal": "entry_macd_signal",
+                    "macdhist": "entry_macd_hist",
+                },
             },
-            {
-                "type": "EOM",
-                "params": {"timeperiod": eom_period},
-                "fields_mapping": {"eom": "entry_eom"}
-            },
+            {"type": "EOM", "params": {"timeperiod": eom_period}, "fields_mapping": {"eom": "entry_eom"}},
             {
                 "type": "SMA",
                 "params": {"timeperiod": vol_sma_period},
                 "data_field": "volume",
-                "fields_mapping": {"sma": "entry_volume_sma"}
-            }
+                "fields_mapping": {"sma": "entry_volume_sma"},
+            },
         ]
 
     def _init_indicators(self):
@@ -97,17 +97,21 @@ class EOMMAcdBreakoutEntryMixin(BaseEntryMixin):
             self.get_param("macd_slow", 26) + self.get_param("macd_signal", 9),
             self.get_param("eom_period", 14),
             self.get_param("vol_sma_period", 20),
-            self.get_param("resistance_lookback", 2) * 5
+            self.get_param("resistance_lookback", 2) * 5,
         ]
         return max(periods)
 
     def are_indicators_ready(self) -> bool:
         """Check if required indicators exist in the strategy registry."""
         required = [
-            'entry_resistance', 'entry_macd', 'entry_macd_signal',
-            'entry_macd_hist', 'entry_eom', 'entry_volume_sma'
+            "entry_resistance",
+            "entry_macd",
+            "entry_macd_signal",
+            "entry_macd_hist",
+            "entry_eom",
+            "entry_volume_sma",
         ]
-        indicators = getattr(self.strategy, 'indicators', {})
+        indicators = getattr(self.strategy, "indicators", {})
         missing = [alias for alias in required if alias not in indicators]
 
         if missing:
@@ -127,15 +131,15 @@ class EOMMAcdBreakoutEntryMixin(BaseEntryMixin):
             volume = self.strategy.data.volume[0]
 
             # Unified Indicator Access
-            resistance = self.get_indicator('entry_resistance')
-            macd = self.get_indicator('entry_macd')
-            macd_prev = self.get_indicator_prev('entry_macd', 1)
-            macd_signal = self.get_indicator('entry_macd_signal')
-            macd_signal_prev = self.get_indicator_prev('entry_macd_signal', 1)
-            macd_hist = self.get_indicator('entry_macd_hist')
-            macd_hist_prev = self.get_indicator_prev('entry_macd_hist', 1)
-            eom = self.get_indicator('entry_eom')
-            volume_sma = self.get_indicator('entry_volume_sma')
+            resistance = self.get_indicator("entry_resistance")
+            macd = self.get_indicator("entry_macd")
+            macd_prev = self.get_indicator_prev("entry_macd", 1)
+            macd_signal = self.get_indicator("entry_macd_signal")
+            macd_signal_prev = self.get_indicator_prev("entry_macd_signal", 1)
+            macd_hist = self.get_indicator("entry_macd_hist")
+            macd_hist_prev = self.get_indicator_prev("entry_macd_hist", 1)
+            eom = self.get_indicator("entry_eom")
+            volume_sma = self.get_indicator("entry_volume_sma")
 
             # Get parameters
             resistance_range_low = self._resolve_param("resistance_range_low", "e_resistance_range_low", 0.995)

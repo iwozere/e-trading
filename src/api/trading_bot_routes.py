@@ -6,36 +6,35 @@ FastAPI routes for managing trading bots through the web UI.
 Provides CRUD operations for bot configurations and status management.
 """
 
-from fastapi import APIRouter, HTTPException, Request, status, Depends
-from pydantic import BaseModel, Field
-from typing import Dict, Any, List, Optional
+import sys
 from datetime import datetime
 from pathlib import Path
-import sys
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.db.services.trading_service import trading_service
-from src.trading.services.bot_config_validator import (
-    validate_database_bot_record
-)
-from src.web_ui.config.trading_bot_config import (
-    get_entry_mixin_parameters,
-    get_exit_mixin_parameters,
-    get_available_entry_mixins,
-    get_available_exit_mixins,
-    parameter_definition_to_dict,
-    BROKER_TYPES,
-    TRADING_MODES,
-    DATA_SOURCES,
-    INTERVALS,
-    SYMBOLS
-)
 from src.api.auth import get_current_user
 from src.data.db.models.model_users import User
+from src.data.db.services.trading_service import trading_service
 from src.notification.logger import setup_logger
+from src.trading.services.bot_config_validator import validate_database_bot_record
+from src.web_ui.config.trading_bot_config import (
+    BROKER_TYPES,
+    DATA_SOURCES,
+    INTERVALS,
+    SYMBOLS,
+    TRADING_MODES,
+    get_available_entry_mixins,
+    get_available_exit_mixins,
+    get_entry_mixin_parameters,
+    get_exit_mixin_parameters,
+    parameter_definition_to_dict,
+)
 
 _logger = setup_logger(__name__)
 
@@ -46,9 +45,10 @@ router = APIRouter(prefix="/api/trading", tags=["trading-bots"])
 # Pydantic models for request/response
 class BotConfigRequest(BaseModel):
     """Request model for bot configuration."""
+
     name: str = Field(..., description="Bot name")
     symbol: str = Field(..., description="Trading symbol")
-    description: Optional[str] = Field(None, description="Bot description")
+    description: str | None = Field(None, description="Bot description")
     enabled: bool = Field(True, description="Whether bot is enabled")
     broker: Dict[str, Any] = Field(..., description="Broker configuration")
     strategy: Dict[str, Any] = Field(..., description="Strategy configuration")
@@ -60,36 +60,40 @@ class BotConfigRequest(BaseModel):
 
 class BotStatusRequest(BaseModel):
     """Request model for bot status update."""
+
     action: str = Field(..., description="Action to perform", pattern="^(start|stop|restart)$")
 
 
 class BotResponse(BaseModel):
     """Response model for bot operations."""
+
     success: bool
-    bot: Optional[Dict[str, Any]] = None
-    bots: Optional[List[Dict[str, Any]]] = None
-    count: Optional[int] = None
-    message: Optional[str] = None
-    error: Optional[str] = None
-    details: Optional[str] = None
-    validation_errors: Optional[List[str]] = None
-    validation_warnings: Optional[List[str]] = None
+    bot: Dict[str, Any] | None = None
+    bots: List[Dict[str, Any]] | None = None
+    count: int | None = None
+    message: str | None = None
+    error: str | None = None
+    details: str | None = None
+    validation_errors: List[str] | None = None
+    validation_warnings: List[str] | None = None
 
 
 class ConfigOptionsResponse(BaseModel):
     """Response model for configuration options."""
+
     success: bool
-    options: Optional[Dict[str, Any]] = None
-    entry_mixins: Optional[List[Dict[str, Any]]] = None
-    exit_mixins: Optional[List[Dict[str, Any]]] = None
-    error: Optional[str] = None
+    options: Dict[str, Any] | None = None
+    entry_mixins: List[Dict[str, Any]] | None = None
+    exit_mixins: List[Dict[str, Any]] | None = None
+    error: str | None = None
 
 
 class ValidationResponse(BaseModel):
     """Response model for validation results."""
+
     success: bool
-    validation: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    validation: Dict[str, Any] | None = None
+    error: str | None = None
 
 
 @router.get("/bots", response_model=BotResponse)
@@ -109,30 +113,25 @@ async def get_trading_bots(current_user: User = Depends(get_current_user)):
         # Add additional status information
         for bot in bots:
             # Calculate runtime if bot is running
-            if bot['status'] == 'running' and bot['started_at']:
-                runtime_seconds = (datetime.now() - bot['started_at']).total_seconds()
-                bot['runtime_hours'] = round(runtime_seconds / 3600, 1)
+            if bot["status"] == "running" and bot["started_at"]:
+                runtime_seconds = (datetime.now() - bot["started_at"]).total_seconds()
+                bot["runtime_hours"] = round(runtime_seconds / 3600, 1)
             else:
-                bot['runtime_hours'] = 0
+                bot["runtime_hours"] = 0
 
             # Format currency values
-            if bot['current_balance']:
-                bot['current_balance_formatted'] = f"${bot['current_balance']:,.2f}"
-            if bot['total_pnl']:
-                bot['total_pnl_formatted'] = f"${bot['total_pnl']:+,.2f}"
-                bot['pnl_color'] = 'green' if bot['total_pnl'] >= 0 else 'red'
+            if bot["current_balance"]:
+                bot["current_balance_formatted"] = f"${bot['current_balance']:,.2f}"
+            if bot["total_pnl"]:
+                bot["total_pnl_formatted"] = f"${bot['total_pnl']:+,.2f}"
+                bot["pnl_color"] = "green" if bot["total_pnl"] >= 0 else "red"
 
-        return BotResponse(
-            success=True,
-            bots=bots,
-            count=len(bots)
-        )
+        return BotResponse(success=True, bots=bots, count=len(bots))
 
     except Exception as e:
         _logger.exception("Error getting trading bots")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve trading bots: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to retrieve trading bots: {str(e)}"
         )
 
 
@@ -160,35 +159,29 @@ async def get_trading_bot(
         bot = trading_service.get_bot_by_id(bot_id)
 
         if not bot:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Bot not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bot not found")
 
         # Verify ownership
-        if bot['user_id'] != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied"
-            )
+        if bot["user_id"] != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
         # Enrich with live state from in-process StrategyManager (best-effort)
         manager = getattr(request.app.state, "strategy_manager", None)
         if manager is not None:
             try:
-                bot['live_state'] = manager.get_strategy_status(bot_id)
+                bot["live_state"] = manager.get_strategy_status(bot_id)
             except Exception:
                 _logger.debug("Could not fetch live state for bot %s", bot_id)
-                bot['live_state'] = None
+                bot["live_state"] = None
         else:
-            bot['live_state'] = None
+            bot["live_state"] = None
 
         # Enrich with active positions from DB
         try:
-            bot['active_positions'] = trading_service.get_open_positions(bot_id=bot_id)
+            bot["active_positions"] = trading_service.get_open_positions(bot_id=bot_id)
         except Exception:
             _logger.debug("Could not fetch active positions for bot %s", bot_id)
-            bot['active_positions'] = []
+            bot["active_positions"] = []
 
         return BotResponse(success=True, bot=bot)
 
@@ -197,16 +190,12 @@ async def get_trading_bot(
     except Exception as e:
         _logger.exception("Error getting trading bot %s", bot_id)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve trading bot: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to retrieve trading bot: {str(e)}"
         )
 
 
 @router.post("/bots", response_model=BotResponse)
-async def create_trading_bot(
-    config: BotConfigRequest,
-    current_user: User = Depends(get_current_user)
-):
+async def create_trading_bot(config: BotConfigRequest, current_user: User = Depends(get_current_user)):
     """
     Create a new trading bot.
 
@@ -218,70 +207,58 @@ async def create_trading_bot(
         config_dict = config.dict()
 
         # Generate bot ID if not provided
-        if 'id' not in config_dict:
-            config_dict['id'] = f"bot_{user_id}_{int(datetime.now().timestamp())}"
+        if "id" not in config_dict:
+            config_dict["id"] = f"bot_{user_id}_{int(datetime.now().timestamp())}"
 
         # Validate configuration
         bot_record = {
-            'id': None,  # Will be auto-generated by database
-            'user_id': user_id,
-            'type': config_dict.get('broker', {}).get('trading_mode', 'paper'),
-            'status': 'stopped',
-            'config': config_dict,
-            'description': config_dict.get('description', ''),
-            'started_at': None,
-            'last_heartbeat': None,
-            'error_count': 0,
-            'current_balance': None,
-            'total_pnl': None,
-            'extra_metadata': None,
-            'created_at': datetime.now().isoformat(),
-            'updated_at': None
+            "id": None,  # Will be auto-generated by database
+            "user_id": user_id,
+            "type": config_dict.get("broker", {}).get("trading_mode", "paper"),
+            "status": "stopped",
+            "config": config_dict,
+            "description": config_dict.get("description", ""),
+            "started_at": None,
+            "last_heartbeat": None,
+            "error_count": 0,
+            "current_balance": None,
+            "total_pnl": None,
+            "extra_metadata": None,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": None,
         }
 
         is_valid, errors, warnings = validate_database_bot_record(bot_record)
 
         if not is_valid:
             return BotResponse(
-                success=False,
-                error="Invalid bot configuration",
-                validation_errors=errors,
-                validation_warnings=warnings
+                success=False, error="Invalid bot configuration", validation_errors=errors, validation_warnings=warnings
             )
 
         # Create bot in database
         bot_data = {
-            'user_id': user_id,
-            'type': config_dict.get('broker', {}).get('trading_mode', 'paper'),
-            'status': 'stopped',
-            'config': config_dict,
-            'description': config_dict.get('description', '')
+            "user_id": user_id,
+            "type": config_dict.get("broker", {}).get("trading_mode", "paper"),
+            "status": "stopped",
+            "config": config_dict,
+            "description": config_dict.get("description", ""),
         }
 
         result = trading_service.upsert_bot(bot_data)
 
-        _logger.info("Created trading bot: %s for user %s", config_dict.get('name'), user_id)
+        _logger.info("Created trading bot: %s for user %s", config_dict.get("name"), user_id)
 
-        return BotResponse(
-            success=True,
-            bot=result,
-            validation_warnings=warnings
-        )
+        return BotResponse(success=True, bot=result, validation_warnings=warnings)
 
     except Exception as e:
         _logger.exception("Error creating trading bot")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create trading bot: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create trading bot: {str(e)}"
         )
 
 
 @router.put("/bots/{bot_id}", response_model=BotResponse)
-async def update_trading_bot(
-    bot_id: str,
-    config: BotConfigRequest,
-    current_user: User = Depends(get_current_user)
-):
+async def update_trading_bot(bot_id: str, config: BotConfigRequest, current_user: User = Depends(get_current_user)):
     """
     Update an existing trading bot configuration.
 
@@ -298,72 +275,58 @@ async def update_trading_bot(
         # Get existing bot to verify ownership
         existing_bot = trading_service.get_bot_by_id(bot_id)
         if not existing_bot:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Bot not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bot not found")
 
-        if existing_bot['user_id'] != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied"
-            )
+        if existing_bot["user_id"] != user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
         # Validate new configuration
         bot_record = {
-            'id': bot_id,
-            'user_id': user_id,
-            'type': config_dict.get('broker', {}).get('trading_mode', 'paper'),
-            'status': existing_bot['status'],  # Keep current status
-            'config': config_dict,
-            'description': config_dict.get('description', ''),
-            'started_at': existing_bot['started_at'],
-            'last_heartbeat': existing_bot['last_heartbeat'],
-            'error_count': existing_bot['error_count'],
-            'current_balance': existing_bot['current_balance'],
-            'total_pnl': existing_bot['total_pnl'],
-            'extra_metadata': existing_bot['extra_metadata'],
-            'created_at': existing_bot['created_at'],
-            'updated_at': datetime.now().isoformat()
+            "id": bot_id,
+            "user_id": user_id,
+            "type": config_dict.get("broker", {}).get("trading_mode", "paper"),
+            "status": existing_bot["status"],  # Keep current status
+            "config": config_dict,
+            "description": config_dict.get("description", ""),
+            "started_at": existing_bot["started_at"],
+            "last_heartbeat": existing_bot["last_heartbeat"],
+            "error_count": existing_bot["error_count"],
+            "current_balance": existing_bot["current_balance"],
+            "total_pnl": existing_bot["total_pnl"],
+            "extra_metadata": existing_bot["extra_metadata"],
+            "created_at": existing_bot["created_at"],
+            "updated_at": datetime.now().isoformat(),
         }
 
         is_valid, errors, warnings = validate_database_bot_record(bot_record)
 
         if not is_valid:
             return BotResponse(
-                success=False,
-                error="Invalid bot configuration",
-                validation_errors=errors,
-                validation_warnings=warnings
+                success=False, error="Invalid bot configuration", validation_errors=errors, validation_warnings=warnings
             )
 
         # Update bot in database
         bot_data = {
-            'id': bot_id,
-            'user_id': user_id,
-            'type': config_dict.get('broker', {}).get('trading_mode', 'paper'),
-            'status': existing_bot['status'],
-            'config': config_dict,
-            'description': config_dict.get('description', '')
+            "id": bot_id,
+            "user_id": user_id,
+            "type": config_dict.get("broker", {}).get("trading_mode", "paper"),
+            "status": existing_bot["status"],
+            "config": config_dict,
+            "description": config_dict.get("description", ""),
         }
 
         result = trading_service.upsert_bot(bot_data)
 
         _logger.info("Updated trading bot %s for user %s", bot_id, user_id)
 
-        return BotResponse(
-            success=True,
-            bot=result,
-            validation_warnings=warnings
-        )
+        return BotResponse(success=True, bot=result, validation_warnings=warnings)
 
     except HTTPException:
         raise
     except Exception as e:
         _logger.exception("Error updating trading bot %s", bot_id)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update trading bot: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update trading bot: {str(e)}"
         )
 
 
@@ -396,45 +359,30 @@ async def update_bot_status(
         # Verify bot ownership
         bot = trading_service.get_bot_by_id(bot_id)
         if not bot:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Bot not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bot not found")
 
-        if bot['user_id'] != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied"
-            )
+        if bot["user_id"] != user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
         # --- Step 1: write intent to DB -----------------------------------------
         # StrategyManager.start_db_polling() picks this up on its next cycle.
         # This guarantees the action survives a process restart.
         db_success = False
-        if action == 'start':
-            if bot['status'] == 'running':
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Bot is already running"
-                )
-            db_success = trading_service.update_bot_status(bot_id, 'starting')
+        if action == "start":
+            if bot["status"] == "running":
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bot is already running")
+            db_success = trading_service.update_bot_status(bot_id, "starting")
 
-        elif action == 'stop':
-            if bot['status'] == 'stopped':
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Bot is already stopped"
-                )
-            db_success = trading_service.update_bot_status(bot_id, 'stopping')
+        elif action == "stop":
+            if bot["status"] == "stopped":
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bot is already stopped")
+            db_success = trading_service.update_bot_status(bot_id, "stopping")
 
-        elif action == 'restart':
-            db_success = trading_service.update_bot_status(bot_id, 'restarting')
+        elif action == "restart":
+            db_success = trading_service.update_bot_status(bot_id, "restarting")
 
         if not db_success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to {action} bot"
-            )
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to {action} bot")
 
         # --- Step 2: direct manager call (best-effort) --------------------------
         # When the StrategyManager runs in the same process, call it directly
@@ -444,37 +392,33 @@ async def update_bot_status(
         manager_confirmed = False
         if manager is not None:
             try:
-                if action == 'start':
+                if action == "start":
                     # Ensure the instance is registered before starting
                     if bot_id not in manager.strategy_instances:
                         si_config = manager._db_bot_to_strategy_config(bot)
                         manager.instance_service.create_instance(bot_id, si_config)
                     manager_confirmed = await manager.start_strategy(bot_id)
-                elif action == 'stop':
+                elif action == "stop":
                     manager_confirmed = await manager.stop_strategy(bot_id)
-                elif action == 'restart':
+                elif action == "restart":
                     manager_confirmed = await manager.restart_strategy(bot_id)
             except Exception:
                 _logger.warning(
-                    "Direct manager call failed for bot %s action=%s; "
-                    "DB polling will handle it on the next cycle",
-                    bot_id, action
+                    "Direct manager call failed for bot %s action=%s; DB polling will handle it on the next cycle",
+                    bot_id,
+                    action,
                 )
 
         confirmation = "confirmed live" if manager_confirmed else "queued via DB polling"
         _logger.info("Bot %s action=%s by user %s (%s)", bot_id, action, user_id, confirmation)
-        return BotResponse(
-            success=True,
-            message=f'Bot {action} initiated successfully ({confirmation})'
-        )
+        return BotResponse(success=True, message=f"Bot {action} initiated successfully ({confirmation})")
 
     except HTTPException:
         raise
     except Exception as e:
         _logger.exception("Error updating bot %s status", bot_id)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update bot status: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update bot status: {str(e)}"
         )
 
 
@@ -495,47 +439,31 @@ async def delete_trading_bot(bot_id: str, current_user: User = Depends(get_curre
         # Verify bot ownership
         bot = trading_service.get_bot_by_id(bot_id)
         if not bot:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Bot not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bot not found")
 
-        if bot['user_id'] != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied"
-            )
+        if bot["user_id"] != user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
         # Don't allow deletion of running bots
-        if bot['status'] == 'running':
+        if bot["status"] == "running":
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete running bot. Stop it first."
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete running bot. Stop it first."
             )
 
         # Mark bot as disabled instead of actual deletion
-        success = trading_service.update_bot_status(bot_id, 'disabled')
+        success = trading_service.update_bot_status(bot_id, "disabled")
 
         if success:
             _logger.info("Bot %s deleted by user %s", bot_id, user_id)
-            return BotResponse(
-                success=True,
-                message='Bot deleted successfully'
-            )
+            return BotResponse(success=True, message="Bot deleted successfully")
         else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to delete bot"
-            )
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete bot")
 
     except HTTPException:
         raise
     except Exception as e:
         _logger.exception("Error deleting bot %s", bot_id)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete bot: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete bot: {str(e)}")
 
 
 @router.get("/config/mixins", response_model=ConfigOptionsResponse)
@@ -552,26 +480,21 @@ async def get_mixin_configurations():
 
         # Add parameter definitions for each mixin
         for mixin in entry_mixins:
-            mixin_name = mixin['value']
+            mixin_name = mixin["value"]
             params = get_entry_mixin_parameters(mixin_name)
-            mixin['parameters'] = [parameter_definition_to_dict(p) for p in params]
+            mixin["parameters"] = [parameter_definition_to_dict(p) for p in params]
 
         for mixin in exit_mixins:
-            mixin_name = mixin['value']
+            mixin_name = mixin["value"]
             params = get_exit_mixin_parameters(mixin_name)
-            mixin['parameters'] = [parameter_definition_to_dict(p) for p in params]
+            mixin["parameters"] = [parameter_definition_to_dict(p) for p in params]
 
-        return ConfigOptionsResponse(
-            success=True,
-            entry_mixins=entry_mixins,
-            exit_mixins=exit_mixins
-        )
+        return ConfigOptionsResponse(success=True, entry_mixins=entry_mixins, exit_mixins=exit_mixins)
 
     except Exception as e:
         _logger.exception("Error getting mixin configurations")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get mixin configurations: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get mixin configurations: {str(e)}"
         )
 
 
@@ -587,29 +510,26 @@ async def get_configuration_options():
         return ConfigOptionsResponse(
             success=True,
             options={
-                'broker_types': BROKER_TYPES,
-                'trading_modes': TRADING_MODES,
-                'data_sources': DATA_SOURCES,
-                'intervals': INTERVALS,
-                'symbols': SYMBOLS,
-                'entry_mixins': get_available_entry_mixins(),
-                'exit_mixins': get_available_exit_mixins()
-            }
+                "broker_types": BROKER_TYPES,
+                "trading_modes": TRADING_MODES,
+                "data_sources": DATA_SOURCES,
+                "intervals": INTERVALS,
+                "symbols": SYMBOLS,
+                "entry_mixins": get_available_entry_mixins(),
+                "exit_mixins": get_available_exit_mixins(),
+            },
         )
 
     except Exception as e:
         _logger.exception("Error getting configuration options")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get configuration options: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get configuration options: {str(e)}"
         )
 
 
 @router.post("/bots/{bot_id}/validate", response_model=ValidationResponse)
 async def validate_bot_configuration(
-    bot_id: str,
-    config: BotConfigRequest,
-    current_user: User = Depends(get_current_user)
+    bot_id: str, config: BotConfigRequest, current_user: User = Depends(get_current_user)
 ):
     """
     Validate a bot configuration without saving.
@@ -627,36 +547,30 @@ async def validate_bot_configuration(
 
         # Create validation record
         bot_record = {
-            'id': bot_id if bot_id and bot_id != '0' else None,
-            'user_id': user_id,
-            'type': config_dict.get('broker', {}).get('trading_mode', 'paper'),
-            'status': 'stopped',
-            'config': config_dict,
-            'description': config_dict.get('description', ''),
-            'started_at': None,
-            'last_heartbeat': None,
-            'error_count': 0,
-            'current_balance': None,
-            'total_pnl': None,
-            'extra_metadata': None,
-            'created_at': datetime.now().isoformat(),
-            'updated_at': None
+            "id": bot_id if bot_id and bot_id != "0" else None,
+            "user_id": user_id,
+            "type": config_dict.get("broker", {}).get("trading_mode", "paper"),
+            "status": "stopped",
+            "config": config_dict,
+            "description": config_dict.get("description", ""),
+            "started_at": None,
+            "last_heartbeat": None,
+            "error_count": 0,
+            "current_balance": None,
+            "total_pnl": None,
+            "extra_metadata": None,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": None,
         }
 
         is_valid, errors, warnings = validate_database_bot_record(bot_record)
 
         return ValidationResponse(
-            success=True,
-            validation={
-                'is_valid': is_valid,
-                'errors': errors,
-                'warnings': warnings
-            }
+            success=True, validation={"is_valid": is_valid, "errors": errors, "warnings": warnings}
         )
 
     except Exception as e:
         _logger.exception("Error validating bot configuration")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to validate configuration: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to validate configuration: {str(e)}"
         )

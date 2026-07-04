@@ -3,10 +3,15 @@ Volatility Scaling Module
 
 Implements volatility-adjusted position sizing.
 """
-import numpy as np
+
 from typing import List
 
-def volatility_scaled_position(account_equity: float, target_vol: float, returns: List[float], min_size: float = 0.0, max_size: float = None) -> float:
+import numpy as np
+
+
+def volatility_scaled_position(
+    account_equity: float, target_vol: float, returns: List[float], min_size: float = 0.0, max_size: float = None
+) -> float:
     """
     Calculate position size based on target volatility.
     Args:
@@ -27,4 +32,4 @@ def volatility_scaled_position(account_equity: float, target_vol: float, returns
     if max_size is not None:
         position_size = min(position_size, max_size)
     position_size = max(position_size, min_size)
-    return position_size 
+    return position_size

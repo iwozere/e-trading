@@ -12,11 +12,12 @@ Features:
 - Generates descriptive filenames (Logic + Symbol + Timeframe).
 """
 
-import json
 import argparse
+import json
 import re
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict
+
 
 def clean_mixin_name(name: str) -> str:
     """
@@ -30,8 +31,9 @@ def clean_mixin_name(name: str) -> str:
     name = name.replace("Entry", "").replace("Exit", "")
 
     # Convert CamelCase to kebab-case
-    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1-\2', name)
-    return re.sub('([a-z0-9])([A-Z])', r'\1-\2', s1).lower()
+    s1 = re.sub("(.)([A-Z][a-z]+)", r"\1-\2", name)
+    return re.sub("([a-z0-9])([A-Z])", r"\1-\2", s1).lower()
+
 
 def transform_params(params: Dict[str, Any], prefix: str) -> Dict[str, Any]:
     """
@@ -52,6 +54,7 @@ def transform_params(params: Dict[str, Any], prefix: str) -> Dict[str, Any]:
             new_params[new_key] = value
 
     return new_params
+
 
 def generate_filename(data: Dict[str, Any], entry_name: str, exit_name: str) -> str:
     """
@@ -76,14 +79,15 @@ def generate_filename(data: Dict[str, Any], entry_name: str, exit_name: str) -> 
 
     return f"strategy-{entry_short}+{exit_short}-{symbol}-{timeframe}.json"
 
-def convert_optimization_result(input_path: str, output_dir: str, manual_name: Optional[str] = None):
+
+def convert_optimization_result(input_path: str, output_dir: str, manual_name: str | None = None):
     try:
         input_file = Path(input_path)
         if not input_file.exists():
             print(f"Error: Input file not found: {input_path}")
             return
 
-        with open(input_file, 'r') as f:
+        with open(input_file) as f:
             data = json.load(f)
 
         best_params = data.get("best_params", {})
@@ -106,17 +110,11 @@ def convert_optimization_result(input_path: str, output_dir: str, manual_name: O
             "strategy": {
                 "type": "CustomStrategy",
                 "parameters": {
-                    "entry_logic": {
-                        "name": entry_name,
-                        "params": entry_params
-                    },
-                    "exit_logic": {
-                        "name": exit_name,
-                        "params": exit_params
-                    },
+                    "entry_logic": {"name": entry_name, "params": entry_params},
+                    "exit_logic": {"name": exit_name, "params": exit_params},
                     "use_talib": best_params.get("use_talib", False),
-                    "position_size": best_params.get("position_size", 0.1)
-                }
+                    "position_size": best_params.get("position_size", 0.1),
+                },
             }
         }
 
@@ -133,7 +131,7 @@ def convert_optimization_result(input_path: str, output_dir: str, manual_name: O
         # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(strategy_config, f, indent=4)
 
         print(f"✅ Successfully created strategy config: {output_path}")
@@ -142,17 +140,13 @@ def convert_optimization_result(input_path: str, output_dir: str, manual_name: O
         print(f"❌ Error converting file: {e}")
 
 
-
-
-
-
 # You can paste the path to your input file here to run the script directly
 DEFAULT_INPUT_FILE = r"results/optimization-jan-2026/4h/LTCUSDT_4h_20250101_20251111_RSIBBEntryMixin_MACrossoverExitMixin_20260127_154136.json"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert optimization results to strategy config")
     # Make input_file optional in CLI
-    parser.add_argument("input_file", nargs='?', help="Path to optimization result JSON file")
+    parser.add_argument("input_file", nargs="?", help="Path to optimization result JSON file")
     parser.add_argument("--output-dir", default="config/contracts/instances/strategies", help="Output directory")
     parser.add_argument("--name", help="Manual output filename (optional)")
 

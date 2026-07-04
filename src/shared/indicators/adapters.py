@@ -23,14 +23,18 @@ functionally consistent — any parameter change in one must be mirrored in the
 other to avoid silent divergence in strategy signals.
 """
 
-import talib
+from typing import Dict, Union
+
 import numpy as np
 import pandas as pd
-from typing import Union, Dict
+import talib
+
 
 class RSI:
     @staticmethod
-    def compute(close: Union[pd.Series, pd.DataFrame, np.ndarray], window: int) -> Union[pd.Series, pd.DataFrame, np.ndarray]:
+    def compute(
+        close: Union[pd.Series, pd.DataFrame, np.ndarray], window: int
+    ) -> Union[pd.Series, pd.DataFrame, np.ndarray]:
         """
         Compute Relative Strength Index (RSI).
         Handles Series, DataFrame, and numpy arrays (1D/2D).
@@ -47,9 +51,12 @@ class RSI:
         # Assume Series
         return pd.Series(talib.RSI(close.values, timeperiod=window), index=close.index)
 
+
 class BBANDS:
     @staticmethod
-    def compute(close: Union[pd.Series, pd.DataFrame, np.ndarray], window: int, nbdevup: float, nbdevdn: float) -> Union[pd.DataFrame, Dict[str, Union[pd.DataFrame, np.ndarray]]]:
+    def compute(
+        close: Union[pd.Series, pd.DataFrame, np.ndarray], window: int, nbdevup: float, nbdevdn: float
+    ) -> Union[pd.DataFrame, Dict[str, Union[pd.DataFrame, np.ndarray]]]:
         """
         Compute Bollinger Bands.
         Handles Series, DataFrame, and numpy arrays.
@@ -59,39 +66,28 @@ class BBANDS:
             upper = close.apply(lambda x: talib.BBANDS(x.values, window, nbdevup, nbdevdn, 0)[0])
             middle = close.apply(lambda x: talib.BBANDS(x.values, window, nbdevup, nbdevdn, 0)[1])
             lower = close.apply(lambda x: talib.BBANDS(x.values, window, nbdevup, nbdevdn, 0)[2])
-            return {
-                'upperband': upper,
-                'middleband': middle,
-                'lowerband': lower
-            }
+            return {"upperband": upper, "middleband": middle, "lowerband": lower}
         elif isinstance(close, np.ndarray):
             if close.ndim == 1:
                 u, m, l = talib.BBANDS(close, window, nbdevup, nbdevdn, 0)
-                return {'upperband': u, 'middleband': m, 'lowerband': l}
+                return {"upperband": u, "middleband": m, "lowerband": l}
             else:
                 # 2D array
                 u = np.apply_along_axis(lambda x: talib.BBANDS(x, window, nbdevup, nbdevdn, 0)[0], 0, close)
                 m = np.apply_along_axis(lambda x: talib.BBANDS(x, window, nbdevup, nbdevdn, 0)[1], 0, close)
                 l = np.apply_along_axis(lambda x: talib.BBANDS(x, window, nbdevup, nbdevdn, 0)[2], 0, close)
-                return {'upperband': u, 'middleband': m, 'lowerband': l}
+                return {"upperband": u, "middleband": m, "lowerband": l}
 
         # Assume Series
-        upper, middle, lower = talib.BBANDS(
-            close.values,
-            timeperiod=window,
-            nbdevup=nbdevup,
-            nbdevdn=nbdevdn,
-            matype=0
-        )
-        return pd.DataFrame({
-            'upperband': upper,
-            'middleband': middle,
-            'lowerband': lower
-        }, index=close.index)
+        upper, middle, lower = talib.BBANDS(close.values, timeperiod=window, nbdevup=nbdevup, nbdevdn=nbdevdn, matype=0)
+        return pd.DataFrame({"upperband": upper, "middleband": middle, "lowerband": lower}, index=close.index)
+
 
 class SMA:
     @staticmethod
-    def compute(close: Union[pd.Series, pd.DataFrame, np.ndarray], window: int) -> Union[pd.Series, pd.DataFrame, np.ndarray]:
+    def compute(
+        close: Union[pd.Series, pd.DataFrame, np.ndarray], window: int
+    ) -> Union[pd.Series, pd.DataFrame, np.ndarray]:
         if isinstance(close, pd.DataFrame):
             return close.apply(lambda x: talib.SMA(x.values, timeperiod=window))
         elif isinstance(close, np.ndarray):
@@ -100,9 +96,12 @@ class SMA:
             return np.apply_along_axis(lambda x: talib.SMA(x, timeperiod=window), 0, close)
         return pd.Series(talib.SMA(close.values, timeperiod=window), index=close.index)
 
+
 class EMA:
     @staticmethod
-    def compute(close: Union[pd.Series, pd.DataFrame, np.ndarray], window: int) -> Union[pd.Series, pd.DataFrame, np.ndarray]:
+    def compute(
+        close: Union[pd.Series, pd.DataFrame, np.ndarray], window: int
+    ) -> Union[pd.Series, pd.DataFrame, np.ndarray]:
         if isinstance(close, pd.DataFrame):
             return close.apply(lambda x: talib.EMA(x.values, timeperiod=window))
         elif isinstance(close, np.ndarray):
@@ -111,9 +110,15 @@ class EMA:
             return np.apply_along_axis(lambda x: talib.EMA(x, timeperiod=window), 0, close)
         return pd.Series(talib.EMA(close.values, timeperiod=window), index=close.index)
 
+
 class ADX:
     @staticmethod
-    def compute(high: Union[pd.Series, pd.DataFrame], low: Union[pd.Series, pd.DataFrame], close: Union[pd.Series, pd.DataFrame], window: int) -> Union[pd.Series, pd.DataFrame]:
+    def compute(
+        high: Union[pd.Series, pd.DataFrame],
+        low: Union[pd.Series, pd.DataFrame],
+        close: Union[pd.Series, pd.DataFrame],
+        window: int,
+    ) -> Union[pd.Series, pd.DataFrame]:
         """
         Compute Average Directional Index (ADX).
         """
@@ -125,14 +130,17 @@ class ADX:
             return pd.DataFrame(res, index=close.index)
 
         # Assume Series
-        return pd.Series(
-            talib.ADX(high.values, low.values, close.values, timeperiod=window),
-            index=close.index
-        )
+        return pd.Series(talib.ADX(high.values, low.values, close.values, timeperiod=window), index=close.index)
+
 
 class ATR:
     @staticmethod
-    def compute(high: Union[pd.Series, pd.DataFrame], low: Union[pd.Series, pd.DataFrame], close: Union[pd.Series, pd.DataFrame], window: int) -> Union[pd.Series, pd.DataFrame]:
+    def compute(
+        high: Union[pd.Series, pd.DataFrame],
+        low: Union[pd.Series, pd.DataFrame],
+        close: Union[pd.Series, pd.DataFrame],
+        window: int,
+    ) -> Union[pd.Series, pd.DataFrame]:
         """
         Compute Average True Range (ATR).
         Handles multi-symbol DataFrames.
@@ -144,7 +152,4 @@ class ATR:
             return pd.DataFrame(res, index=close.index)
 
         # Assume Series
-        return pd.Series(
-            talib.ATR(high.values, low.values, close.values, timeperiod=window),
-            index=close.index
-        )
+        return pd.Series(talib.ATR(high.values, low.values, close.values, timeperiod=window), index=close.index)

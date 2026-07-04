@@ -7,10 +7,10 @@ signal layer of the pipeline — these filings arrive within 2 business days
 of the transaction, independent of the quarterly 13F cadence.
 """
 
+import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import List, Optional
-import sys
+from typing import List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
@@ -33,7 +33,7 @@ class Form4Monitor:
 
     def __init__(
         self,
-        edgar_downloader: Optional[EdgarDownloader] = None,
+        edgar_downloader: EdgarDownloader | None = None,
         min_sale_value_usd: int = 500_000,
     ):
         """
@@ -47,7 +47,7 @@ class Form4Monitor:
 
     def get_significant_sells(
         self,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
         force_refresh: bool = False,
     ) -> pd.DataFrame:
         """
@@ -75,14 +75,16 @@ class Form4Monitor:
 
         _logger.info(
             "Form 4 monitor: %d significant sell transactions on %s (≥$%s)",
-            len(significant), target, f"{self._min_value:,}",
+            len(significant),
+            target,
+            f"{self._min_value:,}",
         )
         return significant
 
     def get_13dg_drops(
         self,
         watchlist_tickers: List[str],
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
         force_refresh: bool = False,
     ) -> pd.DataFrame:
         """

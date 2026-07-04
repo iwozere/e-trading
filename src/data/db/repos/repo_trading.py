@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
-from datetime import timezone, datetime
 from typing import Sequence
-from sqlalchemy import select, func, update
+
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from src.data.db.models.model_trading import BotInstance, PerformanceMetric, Trade, Position
+from src.data.db.models.model_trading import BotInstance, PerformanceMetric, Position, Trade
 
-UTC = timezone.utc
+UTC = UTC
+
 
 def _ensure_bot(s: Session, status: str = "stopped", bot_id: int | None = None):
     if bot_id:
@@ -19,11 +21,14 @@ def _ensure_bot(s: Session, status: str = "stopped", bot_id: int | None = None):
     b = BotInstance(status=status)
     if bot_id:
         b.id = bot_id
-    s.add(b); s.flush()
+    s.add(b)
+    s.flush()
     return b
+
 
 def _uuid() -> str:
     return str(uuid.uuid4())
+
 
 def _dec(x: float | Decimal | None) -> Decimal:
     if x is None:
@@ -46,15 +51,12 @@ class BotsRepo:
             return obj
 
         obj = BotInstance(**bot)
-        self.s.add(obj); self.s.flush()
+        self.s.add(obj)
+        self.s.flush()
         return obj
 
     def heartbeat(self, bot_id: int) -> None:
-        self.s.execute(
-            update(BotInstance)
-            .where(BotInstance.id == bot_id)
-            .values(last_heartbeat=datetime.now(UTC))
-        )
+        self.s.execute(update(BotInstance).where(BotInstance.id == bot_id).values(last_heartbeat=datetime.now(UTC)))
 
 
 class MetricsRepo:
@@ -63,14 +65,17 @@ class MetricsRepo:
 
     def add(self, metric: dict) -> PerformanceMetric:
         m = PerformanceMetric(**metric)
-        self.s.add(m); self.s.flush()
+        self.s.add(m)
+        self.s.flush()
         return m
 
     def latest_for_bot(self, bot_id: str, limit: int = 20) -> Sequence[PerformanceMetric]:
-        q = (select(PerformanceMetric)
-             .where(PerformanceMetric.bot_id == bot_id)
-             .order_by(PerformanceMetric.calculated_at.desc())
-             .limit(limit))
+        q = (
+            select(PerformanceMetric)
+            .where(PerformanceMetric.bot_id == bot_id)
+            .order_by(PerformanceMetric.calculated_at.desc())
+            .limit(limit)
+        )
         return list(self.s.execute(q).scalars())
 
 
@@ -80,7 +85,8 @@ class TradesRepo:
 
     def add(self, trade: dict) -> Trade:
         t = Trade(**trade)
-        self.s.add(t); self.s.flush()
+        self.s.add(t)
+        self.s.flush()
         return t
 
     def close_trade(self, trade_id: str, **fields) -> None:
@@ -93,10 +99,9 @@ class TradesRepo:
         return list(self.s.execute(q).scalars())
 
     def pnl_summary(self, bot_id: str | None = None):
-        q = select(
-            func.sum(Trade.net_pnl).label("net_pnl"),
-            func.count(Trade.id).label("n_trades")
-        ).where(Trade.status == "closed")
+        q = select(func.sum(Trade.net_pnl).label("net_pnl"), func.count(Trade.id).label("n_trades")).where(
+            Trade.status == "closed"
+        )
         if bot_id:
             q = q.where(Trade.bot_id == bot_id)
         return self.s.execute(q).one()
@@ -154,8 +159,16 @@ class PositionsRepo:
             q = q.where(Position.symbol == symbol)
         return list(self.s.execute(q).scalars())
 
-    def apply_fill(self, *, position_id: str, action: str, qty: float, price: float,
-                   ts: datetime | None = None, close_when_flat: bool = True) -> Position:
+    def apply_fill(
+        self,
+        *,
+        position_id: str,
+        action: str,
+        qty: float,
+        price: float,
+        ts: datetime | None = None,
+        close_when_flat: bool = True,
+    ) -> Position:
         action = action.lower()
         assert action in ("buy", "sell"), "action must be 'buy' or 'sell'"
 
@@ -169,8 +182,8 @@ class PositionsRepo:
         avg = _dec(p.avg_price)
         realized = _dec(p.realized_pnl)
 
-        add_side = ("buy" if p.direction == "long" else "sell")
-        reduce_side = ("sell" if p.direction == "long" else "buy")
+        add_side = "buy" if p.direction == "long" else "sell"
+        reduce_side = "sell" if p.direction == "long" else "buy"
 
         if action == add_side:
             if cur_qty == 0:

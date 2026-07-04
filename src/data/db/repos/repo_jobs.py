@@ -5,8 +5,8 @@ Repository layer for job scheduling and execution operations.
 Provides data access methods for schedules and runs tables.
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any, Dict, List
 
 from sqlalchemy import and_, asc, delete, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -55,7 +55,7 @@ class JobsRepository:
             _logger.exception("Failed to create schedule:")
             raise
 
-    def get_schedule(self, schedule_id: int) -> Optional[Schedule]:
+    def get_schedule(self, schedule_id: int) -> Schedule | None:
         """
         Get a schedule by ID.
 
@@ -65,11 +65,9 @@ class JobsRepository:
         Returns:
             Schedule object or None if not found
         """
-        return self.session.execute(
-            select(Schedule).where(Schedule.id == schedule_id)
-        ).scalar_one_or_none()
+        return self.session.execute(select(Schedule).where(Schedule.id == schedule_id)).scalar_one_or_none()
 
-    def get_schedule_by_name(self, user_id: int, name: str) -> Optional[Schedule]:
+    def get_schedule_by_name(self, user_id: int, name: str) -> Schedule | None:
         """
         Get a schedule by user ID and name.
 
@@ -81,16 +79,14 @@ class JobsRepository:
             Schedule object or None if not found
         """
         return self.session.execute(
-            select(Schedule).where(
-                and_(Schedule.user_id == user_id, Schedule.name == name)
-            )
+            select(Schedule).where(and_(Schedule.user_id == user_id, Schedule.name == name))
         ).scalar_one_or_none()
 
     def list_schedules(
         self,
-        user_id: Optional[int] = None,
-        job_type: Optional[JobType] = None,
-        enabled: Optional[bool] = None,
+        user_id: int | None = None,
+        job_type: JobType | None = None,
+        enabled: bool | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> List[Schedule]:
@@ -133,7 +129,7 @@ class JobsRepository:
         """
         return self.list_schedules(job_type=JobType.ALERT, enabled=True, limit=limit)
 
-    def update_schedule(self, schedule_id: int, update_data: Dict[str, Any]) -> Optional[Schedule]:
+    def update_schedule(self, schedule_id: int, update_data: Dict[str, Any]) -> Schedule | None:
         """
         Update a schedule.
 
@@ -244,7 +240,7 @@ class JobsRepository:
             _logger.exception("Failed to create run:")
             raise
 
-    def get_run(self, run_id: int) -> Optional[ScheduleRun]:
+    def get_run(self, run_id: int) -> ScheduleRun | None:
         """
         Get a run by ID.
 
@@ -254,15 +250,13 @@ class JobsRepository:
         Returns:
             ScheduleRun object or None if not found
         """
-        return self.session.execute(
-            select(ScheduleRun).where(ScheduleRun.id == run_id)
-        ).scalar_one_or_none()
+        return self.session.execute(select(ScheduleRun).where(ScheduleRun.id == run_id)).scalar_one_or_none()
 
     def list_runs(
         self,
-        user_id: Optional[int] = None,
-        job_type: Optional[JobType] = None,
-        status: Optional[RunStatus] = None,
+        user_id: int | None = None,
+        job_type: JobType | None = None,
+        status: RunStatus | None = None,
         limit: int = 100,
         offset: int = 0,
         order_by: str = "scheduled_for",
@@ -303,7 +297,7 @@ class JobsRepository:
         stmt = stmt.offset(offset).limit(limit)
         return list(self.session.execute(stmt).scalars())
 
-    def update_run(self, run_id: int, update_data: Dict[str, Any]) -> Optional[ScheduleRun]:
+    def update_run(self, run_id: int, update_data: Dict[str, Any]) -> ScheduleRun | None:
         """
         Update a run.
 
@@ -330,7 +324,7 @@ class JobsRepository:
             _logger.exception("Failed to update run %s:", run_id)
             raise
 
-    def claim_run(self, run_id: int, worker_id: str) -> Optional[ScheduleRun]:
+    def claim_run(self, run_id: int, worker_id: str) -> ScheduleRun | None:
         """
         Atomically claim a run for execution by a worker.
 
@@ -359,7 +353,7 @@ class JobsRepository:
                 return None
 
             run.status = RunStatus.RUNNING.value
-            run.started_at = datetime.now(timezone.utc)
+            run.started_at = datetime.now(UTC)
 
             self.session.flush()
             _logger.info("Claimed run: %s by worker: %s", run.id, worker_id)
@@ -371,7 +365,7 @@ class JobsRepository:
 
     def get_pending_runs(
         self,
-        job_type: Optional[JobType] = None,
+        job_type: JobType | None = None,
         limit: int = 10,
     ) -> List[ScheduleRun]:
         """
@@ -417,8 +411,8 @@ class JobsRepository:
 
     def get_run_statistics(
         self,
-        user_id: Optional[int] = None,
-        job_type: Optional[JobType] = None,
+        user_id: int | None = None,
+        job_type: JobType | None = None,
         days: int = 30,
     ) -> Dict[str, Any]:
         """
@@ -432,7 +426,7 @@ class JobsRepository:
         Returns:
             Dictionary with statistics
         """
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
         base_conditions: list = [ScheduleRun.scheduled_for >= cutoff_date]
         if user_id is not None:
@@ -443,24 +437,23 @@ class JobsRepository:
         # Counts per status
         status_counts: Dict[str, int] = {}
         for status in RunStatus:
-            count = self.session.execute(
-                select(func.count(ScheduleRun.id)).where(
-                    and_(*base_conditions, ScheduleRun.status == status.value)
-                )
-            ).scalar() or 0
+            count = (
+                self.session.execute(
+                    select(func.count(ScheduleRun.id)).where(and_(*base_conditions, ScheduleRun.status == status.value))
+                ).scalar()
+                or 0
+            )
             status_counts[status.value] = count
 
         # Total count
-        total_count = self.session.execute(
-            select(func.count(ScheduleRun.id)).where(and_(*base_conditions))
-        ).scalar() or 0
+        total_count = (
+            self.session.execute(select(func.count(ScheduleRun.id)).where(and_(*base_conditions))).scalar() or 0
+        )
 
         # Average execution time for completed runs
         completed_runs = list(
             self.session.execute(
-                select(ScheduleRun).where(
-                    and_(*base_conditions, ScheduleRun.status == RunStatus.COMPLETED.value)
-                )
+                select(ScheduleRun).where(and_(*base_conditions, ScheduleRun.status == RunStatus.COMPLETED.value))
             ).scalars()
         )
 
@@ -491,7 +484,7 @@ class JobsRepository:
         Returns:
             Number of runs deleted
         """
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
+        cutoff_date = datetime.now(UTC) - timedelta(days=days_to_keep)
 
         result = self.session.execute(
             delete(ScheduleRun).where(

@@ -8,9 +8,8 @@ this cache; no duplicate downloads or duplicate CSV files in results/.
 """
 
 import sys
+from datetime import date, datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timedelta, date
-from typing import Optional
 
 import pandas as pd
 
@@ -33,18 +32,18 @@ def _is_cache_fresh(path: Path, max_age_days: int = 1) -> bool:
     return age_days <= max_age_days
 
 
-def get_previous_trading_day(dt: Optional[datetime] = None) -> datetime:
+def get_previous_trading_day(dt: datetime | None = None) -> datetime:
     """Return the most recent weekday before today (or before dt)."""
     if dt is None:
         dt = datetime.now()
-    if dt.weekday() == 0:   # Monday → Friday
+    if dt.weekday() == 0:  # Monday → Friday
         return dt - timedelta(days=3)
-    if dt.weekday() == 6:   # Sunday → Friday
+    if dt.weekday() == 6:  # Sunday → Friday
         return dt - timedelta(days=2)
     return dt - timedelta(days=1)
 
 
-def download_trf(target_date: Optional[datetime] = None, force_download: bool = False) -> Path:
+def download_trf(target_date: datetime | None = None, force_download: bool = False) -> Path:
     """
     Ensure FINRA TRF data for target_date is available in DATA_CACHE_DIR/trf/.
 
@@ -130,7 +129,11 @@ def get_trf_correction_factor(ticker: str, dt: datetime) -> float:
             factor = total_vol / (total_vol - short_vol)
             _logger.debug(
                 "TRF correction factor for %s: %.4f (date=%s, total=%s, short=%s)",
-                ticker, factor, cache_path.stem, total_vol, short_vol,
+                ticker,
+                factor,
+                cache_path.stem,
+                total_vol,
+                short_vol,
             )
             return factor
     except Exception as e:
@@ -154,6 +157,7 @@ def main() -> None:
     except Exception as e:
         _logger.error("Error: %s", e)
         import sys
+
         sys.exit(1)
 
 

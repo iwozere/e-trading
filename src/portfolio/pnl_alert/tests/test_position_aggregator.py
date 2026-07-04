@@ -1,9 +1,9 @@
 """Unit tests for `position_aggregator.merge_holdings`."""
 
 from src.portfolio.pnl_alert.position_aggregator import (
-    RawIbkrPosition,
     SOURCE_IBKR,
     SOURCE_WATCHLIST,
+    RawIbkrPosition,
     merge_holdings,
 )
 from src.portfolio.pnl_alert.watchlist_loader import WatchlistEntry

@@ -6,9 +6,9 @@ and provides a unified interface for managing indicator parameters, presets, and
 """
 
 import json
-from pathlib import Path
-from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List
 
 from src.indicators.registry import INDICATOR_META, get_canonical_name, get_indicator_meta
 from src.notification.logger import setup_logger
@@ -19,6 +19,7 @@ _logger = setup_logger(__name__)
 @dataclass
 class PresetConfig:
     """Configuration for an indicator preset."""
+
     name: str
     description: str
     parameters: Dict[str, Dict[str, Any]]  # indicator_name -> parameters
@@ -46,7 +47,7 @@ class UnifiedConfigManager:
         try:
             config_file = Path(self.config_path)
             if config_file.exists():
-                with open(config_file, 'r') as f:
+                with open(config_file) as f:
                     config = json.load(f)
                 _logger.info("Loaded indicator configuration from %s", self.config_path)
                 return config
@@ -63,18 +64,15 @@ class UnifiedConfigManager:
             "version": "2.0",
             "default_parameters": {},
             "presets": {
-                "default": {
-                    "description": "Default parameters from registry",
-                    "parameters": {}
-                },
+                "default": {"description": "Default parameters from registry", "parameters": {}},
                 "conservative": {
                     "description": "Conservative trading parameters",
                     "parameters": {
                         "rsi": {"timeperiod": 21},
                         "macd": {"fastperiod": 15, "slowperiod": 30, "signalperiod": 12},
                         "bbands": {"timeperiod": 25, "nbdevup": 2.5, "nbdevdn": 2.5},
-                        "stoch": {"fastk_period": 21, "slowk_period": 5, "slowd_period": 5}
-                    }
+                        "stoch": {"fastk_period": 21, "slowk_period": 5, "slowd_period": 5},
+                    },
                 },
                 "aggressive": {
                     "description": "Aggressive trading parameters",
@@ -82,8 +80,8 @@ class UnifiedConfigManager:
                         "rsi": {"timeperiod": 7},
                         "macd": {"fastperiod": 8, "slowperiod": 17, "signalperiod": 5},
                         "bbands": {"timeperiod": 15, "nbdevup": 1.5, "nbdevdn": 1.5},
-                        "stoch": {"fastk_period": 7, "slowk_period": 2, "slowd_period": 2}
-                    }
+                        "stoch": {"fastk_period": 7, "slowk_period": 2, "slowd_period": 2},
+                    },
                 },
                 "day_trading": {
                     "description": "Day trading optimized parameters",
@@ -91,9 +89,9 @@ class UnifiedConfigManager:
                         "rsi": {"timeperiod": 5},
                         "macd": {"fastperiod": 5, "slowperiod": 13, "signalperiod": 3},
                         "bbands": {"timeperiod": 10, "nbdevup": 1.8, "nbdevdn": 1.8},
-                        "stoch": {"fastk_period": 5, "slowk_period": 1, "slowd_period": 1}
-                    }
-                }
+                        "stoch": {"fastk_period": 5, "slowk_period": 1, "slowd_period": 1},
+                    },
+                },
             },
             "legacy_mappings": {
                 # Legacy indicator name mappings
@@ -123,8 +121,8 @@ class UnifiedConfigManager:
                 "ROC": "roc",
                 "MFI": "mfi",
                 "OBV": "obv",
-                "ADR": "adr"
-            }
+                "ADR": "adr",
+            },
         }
 
         # Add default parameters from registry
@@ -144,12 +142,12 @@ class UnifiedConfigManager:
                 name=preset_name,
                 description=preset_data.get("description", ""),
                 parameters=preset_data.get("parameters", {}),
-                metadata=preset_data.get("metadata", {})
+                metadata=preset_data.get("metadata", {}),
             )
 
         return presets
 
-    def get_parameters(self, indicator: str, preset: Optional[str] = None) -> Dict[str, Any]:
+    def get_parameters(self, indicator: str, preset: str | None = None) -> Dict[str, Any]:
         """
         Get parameters for a specific indicator.
 
@@ -215,7 +213,7 @@ class UnifiedConfigManager:
         """Get list of available presets."""
         return list(self._presets.keys())
 
-    def get_preset_info(self, preset_name: str) -> Optional[PresetConfig]:
+    def get_preset_info(self, preset_name: str) -> PresetConfig | None:
         """Get information about a specific preset."""
         return self._presets.get(preset_name)
 
@@ -236,7 +234,7 @@ class UnifiedConfigManager:
         self._runtime_overrides[canonical_name][parameter] = value
         _logger.debug("Set parameter override: %s.%s = %s", canonical_name, parameter, value)
 
-    def clear_parameter_overrides(self, indicator: Optional[str] = None) -> None:
+    def clear_parameter_overrides(self, indicator: str | None = None) -> None:
         """
         Clear runtime parameter overrides.
 
@@ -271,11 +269,7 @@ class UnifiedConfigManager:
                 canonical_name = get_canonical_name(indicator)
                 canonical_parameters[canonical_name] = params
 
-            preset = PresetConfig(
-                name=name,
-                description=description,
-                parameters=canonical_parameters
-            )
+            preset = PresetConfig(name=name, description=description, parameters=canonical_parameters)
 
             self._presets[name] = preset
             _logger.info("Created new preset: %s", name)
@@ -284,7 +278,7 @@ class UnifiedConfigManager:
             _logger.error("Error creating preset %s: %s", name, e)
             return False
 
-    def save_config(self, path: Optional[str] = None) -> bool:
+    def save_config(self, path: str | None = None) -> bool:
         """
         Save current configuration to file.
 
@@ -302,7 +296,7 @@ class UnifiedConfigManager:
                 "version": "2.0",
                 "default_parameters": self.config.get("default_parameters", {}),
                 "presets": {},
-                "legacy_mappings": self.config.get("legacy_mappings", {})
+                "legacy_mappings": self.config.get("legacy_mappings", {}),
             }
 
             # Add presets
@@ -310,14 +304,14 @@ class UnifiedConfigManager:
                 config_to_save["presets"][preset_name] = {
                     "description": preset.description,
                     "parameters": preset.parameters,
-                    "metadata": preset.metadata
+                    "metadata": preset.metadata,
                 }
 
             # Ensure directory exists
             Path(save_path).parent.mkdir(parents=True, exist_ok=True)
 
             # Save to file
-            with open(save_path, 'w') as f:
+            with open(save_path, "w") as f:
                 json.dump(config_to_save, f, indent=2)
 
             _logger.info("Saved configuration to: %s", save_path)
@@ -365,7 +359,9 @@ class UnifiedConfigManager:
             if param in expected_params and meta.defaults:
                 expected_type = type(meta.defaults[param])
                 if not isinstance(value, expected_type):
-                    errors.append(f"Parameter {param} for {indicator} should be {expected_type.__name__}, got {type(value).__name__}")
+                    errors.append(
+                        f"Parameter {param} for {indicator} should be {expected_type.__name__}, got {type(value).__name__}"
+                    )
 
                 # Basic range validation for common parameters
                 if param == "timeperiod" and isinstance(value, int) and value <= 0:
@@ -373,7 +369,7 @@ class UnifiedConfigManager:
 
         return errors
 
-    def get_legacy_mapping(self, legacy_name: str) -> Optional[str]:
+    def get_legacy_mapping(self, legacy_name: str) -> str | None:
         """Get canonical name for a legacy indicator name."""
         return self.config.get("legacy_mappings", {}).get(legacy_name)
 
@@ -385,12 +381,13 @@ class UnifiedConfigManager:
             "available_presets": list(self._presets.keys()),
             "runtime_overrides": len(self._runtime_overrides),
             "total_indicators": len(INDICATOR_META),
-            "version": self.config.get("version", "1.0")
+            "version": self.config.get("version", "1.0"),
         }
 
 
 # Global instance for easy access
 _config_manager = None
+
 
 def get_config_manager() -> UnifiedConfigManager:
     """Get the global configuration manager instance."""

@@ -7,9 +7,9 @@ This test script verifies that the new error handling and resilience system
 works correctly and addresses the original issues.
 """
 
+import random
 import sys
 import time
-import random
 import unittest
 from pathlib import Path
 
@@ -17,22 +17,35 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from src.error_handling import (
-    # Exceptions
-    TradingException, DataFeedException, BrokerException, NetworkException,
-    InsufficientFundsException, RateLimitException, CircuitBreakerOpenException,
-
-    # Retry Management
-    RetryManager, RetryConfig, RetryStrategy,
-
+    BrokerException,
     # Circuit Breaker
-    CircuitBreaker, CircuitBreakerConfig, CircuitState,
-
-    # Recovery Management
-    ErrorRecoveryManager, RecoveryStrategy, RecoveryConfig,
-
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitBreakerOpenException,
+    CircuitState,
+    DataFeedException,
     # Error Monitoring
-    ErrorMonitor, ErrorSeverity, resilient, retry_on_failure, circuit_breaker, fallback, timeout,
-    resilient_api_call
+    ErrorMonitor,
+    # Recovery Management
+    ErrorRecoveryManager,
+    ErrorSeverity,
+    InsufficientFundsException,
+    NetworkException,
+    RateLimitException,
+    RecoveryConfig,
+    RecoveryStrategy,
+    RetryConfig,
+    # Retry Management
+    RetryManager,
+    RetryStrategy,
+    # Exceptions
+    TradingException,
+    circuit_breaker,
+    fallback,
+    resilient,
+    resilient_api_call,
+    retry_on_failure,
+    timeout,
 )
 
 
@@ -41,71 +54,49 @@ class TestCustomExceptions(unittest.TestCase):
 
     def test_trading_exception_with_context(self):
         """Test TradingException with rich context."""
-        context = {
-            'component': 'api',
-            'user_id': 'test_user',
-            'recovery_suggestion': 'Retry after 30 seconds'
-        }
+        context = {"component": "api", "user_id": "test_user", "recovery_suggestion": "Retry after 30 seconds"}
 
-        exception = TradingException(
-            message="Test error",
-            error_code="TEST_ERROR",
-            context=context,
-            retry_after=30
-        )
+        exception = TradingException(message="Test error", error_code="TEST_ERROR", context=context, retry_after=30)
 
         self.assertEqual(exception.message, "Test error")
         self.assertEqual(exception.error_code, "TEST_ERROR")
-        self.assertEqual(exception.context['component'], 'api')
+        self.assertEqual(exception.context["component"], "api")
         self.assertTrue(exception.recoverable)
         self.assertTrue(exception.should_retry())
-        self.assertEqual(exception.get_recovery_suggestion(), 'Retry after 30 seconds')
+        self.assertEqual(exception.get_recovery_suggestion(), "Retry after 30 seconds")
 
     def test_data_feed_exception(self):
         """Test DataFeedException with data source context."""
         exception = DataFeedException(
-            message="Data feed failed",
-            data_source="binance",
-            symbol="BTCUSDT",
-            interval="1h"
+            message="Data feed failed", data_source="binance", symbol="BTCUSDT", interval="1h"
         )
 
         self.assertEqual(exception.error_code, "DATA_FEED_ERROR")
-        self.assertEqual(exception.context['data_source'], 'binance')
-        self.assertEqual(exception.context['symbol'], 'BTCUSDT')
-        self.assertEqual(exception.context['component'], 'data_feed')
+        self.assertEqual(exception.context["data_source"], "binance")
+        self.assertEqual(exception.context["symbol"], "BTCUSDT")
+        self.assertEqual(exception.context["component"], "data_feed")
 
     def test_broker_exception(self):
         """Test BrokerException with broker context."""
         exception = BrokerException(
-            message="Order failed",
-            broker_type="binance",
-            symbol="BTCUSDT",
-            order_type="market_buy"
+            message="Order failed", broker_type="binance", symbol="BTCUSDT", order_type="market_buy"
         )
 
         self.assertEqual(exception.error_code, "BROKER_ERROR")
-        self.assertEqual(exception.context['broker_type'], 'binance')
-        self.assertEqual(exception.context['component'], 'broker')
+        self.assertEqual(exception.context["broker_type"], "binance")
+        self.assertEqual(exception.context["component"], "broker")
 
     def test_insufficient_funds_exception(self):
         """Test InsufficientFundsException."""
-        exception = InsufficientFundsException(
-            symbol="BTCUSDT",
-            required_amount=1000.0,
-            available_amount=500.0
-        )
+        exception = InsufficientFundsException(symbol="BTCUSDT", required_amount=1000.0, available_amount=500.0)
 
-        self.assertEqual(exception.context['required_amount'], 1000.0)
-        self.assertEqual(exception.context['available_amount'], 500.0)
+        self.assertEqual(exception.context["required_amount"], 1000.0)
+        self.assertEqual(exception.context["available_amount"], 500.0)
         self.assertTrue(exception.recoverable)
 
     def test_rate_limit_exception(self):
         """Test RateLimitException."""
-        exception = RateLimitException(
-            url="https://api.example.com",
-            retry_after=60
-        )
+        exception = RateLimitException(url="https://api.example.com", retry_after=60)
 
         self.assertEqual(exception.retry_after, 60)
         self.assertTrue(exception.should_retry())
@@ -120,12 +111,13 @@ class TestRetryManager(unittest.TestCase):
             max_attempts=3,
             base_delay=0.1,  # Short delay for testing
             strategy=RetryStrategy.EXPONENTIAL,
-            jitter=False  # Disable jitter for predictable testing
+            jitter=False,  # Disable jitter for predictable testing
         )
         self.retry_manager = RetryManager(self.retry_config)
 
     def test_successful_execution(self):
         """Test successful execution without retries."""
+
         def successful_func():
             return "success"
 
@@ -133,9 +125,9 @@ class TestRetryManager(unittest.TestCase):
         self.assertEqual(result, "success")
 
         stats = self.retry_manager.get_stats()
-        self.assertEqual(stats['total_calls'], 1)
-        self.assertEqual(stats['successful_calls'], 1)
-        self.assertEqual(stats['retry_attempts'], 0)
+        self.assertEqual(stats["total_calls"], 1)
+        self.assertEqual(stats["successful_calls"], 1)
+        self.assertEqual(stats["retry_attempts"], 0)
 
     def test_retry_on_failure(self):
         """Test retry mechanism on failure."""
@@ -153,12 +145,13 @@ class TestRetryManager(unittest.TestCase):
         self.assertEqual(call_count, 3)
 
         stats = self.retry_manager.get_stats()
-        self.assertEqual(stats['total_calls'], 1)
-        self.assertEqual(stats['successful_calls'], 1)
-        self.assertEqual(stats['retry_attempts'], 2)
+        self.assertEqual(stats["total_calls"], 1)
+        self.assertEqual(stats["successful_calls"], 1)
+        self.assertEqual(stats["retry_attempts"], 2)
 
     def test_max_attempts_exceeded(self):
         """Test behavior when max attempts exceeded."""
+
         def always_failing_func():
             raise NetworkException("Always fails")
 
@@ -166,21 +159,18 @@ class TestRetryManager(unittest.TestCase):
             self.retry_manager.execute(always_failing_func)
 
         stats = self.retry_manager.get_stats()
-        self.assertEqual(stats['total_calls'], 1)
-        self.assertEqual(stats['failed_calls'], 1)
-        self.assertEqual(stats['retry_attempts'], 3)
+        self.assertEqual(stats["total_calls"], 1)
+        self.assertEqual(stats["failed_calls"], 1)
+        self.assertEqual(stats["retry_attempts"], 3)
 
     def test_retry_strategies(self):
         """Test different retry strategies."""
         # Test fixed strategy
-        fixed_config = RetryConfig(
-            max_attempts=2,
-            base_delay=0.1,
-            strategy=RetryStrategy.FIXED
-        )
+        fixed_config = RetryConfig(max_attempts=2, base_delay=0.1, strategy=RetryStrategy.FIXED)
         fixed_manager = RetryManager(fixed_config)
 
         call_count = 0
+
         def failing_func():
             nonlocal call_count
             call_count += 1
@@ -193,11 +183,7 @@ class TestRetryManager(unittest.TestCase):
 
     def test_retry_on_specific_exceptions(self):
         """Test retry only on specific exceptions."""
-        config = RetryConfig(
-            max_attempts=2,
-            base_delay=0.1,
-            retry_on_exceptions=(NetworkException,)
-        )
+        config = RetryConfig(max_attempts=2, base_delay=0.1, retry_on_exceptions=(NetworkException,))
         manager = RetryManager(config)
 
         def raise_value_error():
@@ -208,7 +194,7 @@ class TestRetryManager(unittest.TestCase):
             manager.execute(raise_value_error)
 
         stats = manager.get_stats()
-        self.assertEqual(stats['retry_attempts'], 0)
+        self.assertEqual(stats["retry_attempts"], 0)
 
 
 class TestCircuitBreaker(unittest.TestCase):
@@ -220,12 +206,13 @@ class TestCircuitBreaker(unittest.TestCase):
             failure_threshold=2,
             failure_window=10,
             recovery_timeout=1,  # Short timeout for testing
-            success_threshold=1
+            success_threshold=1,
         )
         self.circuit_breaker = CircuitBreaker("test_circuit", self.config)
 
     def test_closed_state_normal_operation(self):
         """Test normal operation in CLOSED state."""
+
         def successful_func():
             return "success"
 
@@ -235,6 +222,7 @@ class TestCircuitBreaker(unittest.TestCase):
 
     def test_transition_to_open(self):
         """Test transition to OPEN state after failures."""
+
         def failing_func():
             raise NetworkException("Failure")
 
@@ -254,6 +242,7 @@ class TestCircuitBreaker(unittest.TestCase):
 
     def test_transition_to_half_open(self):
         """Test transition to HALF_OPEN state after timeout."""
+
         # First, open the circuit
         def failing_func():
             raise NetworkException("Failure")
@@ -273,6 +262,7 @@ class TestCircuitBreaker(unittest.TestCase):
 
     def test_transition_to_closed(self):
         """Test transition back to CLOSED state after success."""
+
         # First, open the circuit
         def failing_func():
             raise NetworkException("Failure")
@@ -306,6 +296,7 @@ class TestCircuitBreaker(unittest.TestCase):
 
     def test_circuit_breaker_stats(self):
         """Test circuit breaker statistics."""
+
         def successful_func():
             return "success"
 
@@ -319,9 +310,9 @@ class TestCircuitBreaker(unittest.TestCase):
             self.circuit_breaker.call(failing_func)
 
         stats = self.circuit_breaker.get_stats()
-        self.assertEqual(stats['total_calls'], 2)
-        self.assertEqual(stats['successful_calls'], 1)
-        self.assertEqual(stats['failed_calls'], 1)
+        self.assertEqual(stats["total_calls"], 2)
+        self.assertEqual(stats["successful_calls"], 1)
+        self.assertEqual(stats["failed_calls"], 1)
 
 
 class TestErrorRecovery(unittest.TestCase):
@@ -333,6 +324,7 @@ class TestErrorRecovery(unittest.TestCase):
 
     def test_fallback_strategy(self):
         """Test fallback recovery strategy."""
+
         def main_func():
             raise NetworkException("Main function failed")
 
@@ -340,35 +332,28 @@ class TestErrorRecovery(unittest.TestCase):
             return "Fallback response"
 
         # Register fallback strategy
-        self.recovery_manager.register_recovery('network', RecoveryConfig(
-            strategy=RecoveryStrategy.FALLBACK,
-            fallback_function=fallback_func
-        ))
+        self.recovery_manager.register_recovery(
+            "network", RecoveryConfig(strategy=RecoveryStrategy.FALLBACK, fallback_function=fallback_func)
+        )
 
         # Execute recovery
-        result = self.recovery_manager.execute_recovery(
-            NetworkException("Network error"),
-            {'component': 'network'}
-        )
+        result = self.recovery_manager.execute_recovery(NetworkException("Network error"), {"component": "network"})
 
         self.assertEqual(result, "Fallback response")
 
     def test_degrade_strategy(self):
         """Test degradation recovery strategy."""
+
         def degrade_func():
             return "Degraded response"
 
         # Register degrade strategy
-        self.recovery_manager.register_recovery('api', RecoveryConfig(
-            strategy=RecoveryStrategy.DEGRADE,
-            degrade_function=degrade_func
-        ))
+        self.recovery_manager.register_recovery(
+            "api", RecoveryConfig(strategy=RecoveryStrategy.DEGRADE, degrade_function=degrade_func)
+        )
 
         # Execute recovery
-        result = self.recovery_manager.execute_recovery(
-            BrokerException("API error"),
-            {'component': 'api'}
-        )
+        result = self.recovery_manager.execute_recovery(BrokerException("API error"), {"component": "api"})
 
         self.assertEqual(result, "Degraded response")
 
@@ -384,21 +369,14 @@ class TestErrorRecovery(unittest.TestCase):
             return "Success after retries"
 
         # Register retry strategy
-        self.recovery_manager.register_recovery('network', RecoveryConfig(
-            strategy=RecoveryStrategy.RETRY,
-            max_attempts=3,
-            timeout=1.0
-        ))
+        self.recovery_manager.register_recovery(
+            "network", RecoveryConfig(strategy=RecoveryStrategy.RETRY, max_attempts=3, timeout=1.0)
+        )
 
         # Execute recovery
         result = self.recovery_manager.execute_recovery(
             NetworkException("Network error"),
-            {
-                'component': 'network',
-                'function': failing_func,
-                'args': [],
-                'kwargs': {}
-            }
+            {"component": "network", "function": failing_func, "args": [], "kwargs": {}},
         )
 
         self.assertEqual(result, "Success after retries")
@@ -407,40 +385,31 @@ class TestErrorRecovery(unittest.TestCase):
     def test_ignore_strategy(self):
         """Test ignore recovery strategy."""
         # Register ignore strategy
-        self.recovery_manager.register_recovery('validation', RecoveryConfig(
-            strategy=RecoveryStrategy.IGNORE
-        ))
+        self.recovery_manager.register_recovery("validation", RecoveryConfig(strategy=RecoveryStrategy.IGNORE))
 
         # Execute recovery
         result = self.recovery_manager.execute_recovery(
-            ValueError("Validation error"),
-            {
-                'component': 'validation',
-                'default_value': "Default response"
-            }
+            ValueError("Validation error"), {"component": "validation", "default_value": "Default response"}
         )
 
         self.assertEqual(result, "Default response")
 
     def test_recovery_metrics(self):
         """Test recovery metrics tracking."""
+
         def fallback_func():
             return "Fallback"
 
-        self.recovery_manager.register_recovery('test', RecoveryConfig(
-            strategy=RecoveryStrategy.FALLBACK,
-            fallback_function=fallback_func
-        ))
-
-        # Execute recovery
-        self.recovery_manager.execute_recovery(
-            Exception("Test error"),
-            {'component': 'test'}
+        self.recovery_manager.register_recovery(
+            "test", RecoveryConfig(strategy=RecoveryStrategy.FALLBACK, fallback_function=fallback_func)
         )
 
+        # Execute recovery
+        self.recovery_manager.execute_recovery(Exception("Test error"), {"component": "test"})
+
         metrics = self.recovery_manager.get_metrics()
-        self.assertEqual(metrics['total_recoveries'], 1)
-        self.assertEqual(metrics['successful_recoveries'], 1)
+        self.assertEqual(metrics["total_recoveries"], 1)
+        self.assertEqual(metrics["successful_recoveries"], 1)
 
 
 class TestErrorMonitoring(unittest.TestCase):
@@ -462,17 +431,14 @@ class TestErrorMonitoring(unittest.TestCase):
         error = NetworkException("Test error", url="https://example.com")
 
         self.monitor.record_error(
-            error=error,
-            severity=ErrorSeverity.ERROR,
-            component="api",
-            context={'user_id': 'test_user'}
+            error=error, severity=ErrorSeverity.ERROR, component="api", context={"user_id": "test_user"}
         )
 
         # Check that error was recorded
         stats = self.monitor.get_error_stats()
-        self.assertEqual(stats['total_errors'], 1)
-        self.assertEqual(stats['severity_distribution']['ERROR'], 1)
-        self.assertEqual(stats['component_distribution']['api'], 1)
+        self.assertEqual(stats["total_errors"], 1)
+        self.assertEqual(stats["severity_distribution"]["ERROR"], 1)
+        self.assertEqual(stats["component_distribution"]["api"], 1)
 
     def test_error_alerting(self):
         """Test error alerting."""
@@ -480,17 +446,13 @@ class TestErrorMonitoring(unittest.TestCase):
 
         # Record error that should trigger alert
         error = NetworkException("Critical error", url="https://example.com")
-        self.monitor.record_error(
-            error=error,
-            severity=ErrorSeverity.CRITICAL,
-            component="api"
-        )
+        self.monitor.record_error(error=error, severity=ErrorSeverity.CRITICAL, component="api")
 
         # Check if alert was triggered
         self.assertTrue(self.alert_called)
         self.assertIsNotNone(self.alert_data)
-        self.assertIn('message', self.alert_data)
-        self.assertIn('error_event', self.alert_data)
+        self.assertIn("message", self.alert_data)
+        self.assertIn("error_event", self.alert_data)
 
     def test_error_statistics(self):
         """Test error statistics calculation."""
@@ -502,25 +464,19 @@ class TestErrorMonitoring(unittest.TestCase):
         ]
 
         for error, component in errors:
-            self.monitor.record_error(
-                error=error,
-                severity=ErrorSeverity.ERROR,
-                component=component
-            )
+            self.monitor.record_error(error=error, severity=ErrorSeverity.ERROR, component=component)
 
         stats = self.monitor.get_error_stats()
-        self.assertEqual(stats['total_errors'], 3)
-        self.assertEqual(len(stats['component_distribution']), 3)
-        self.assertEqual(len(stats['top_errors']), 3)
+        self.assertEqual(stats["total_errors"], 3)
+        self.assertEqual(len(stats["component_distribution"]), 3)
+        self.assertEqual(len(stats["top_errors"]), 3)
 
     def test_recent_errors(self):
         """Test recent error retrieval."""
         # Record some errors
         for i in range(5):
             self.monitor.record_error(
-                error=NetworkException(f"Error {i}"),
-                severity=ErrorSeverity.ERROR,
-                component="api"
+                error=NetworkException(f"Error {i}"), severity=ErrorSeverity.ERROR, component="api"
             )
 
         # Get recent errors
@@ -534,11 +490,7 @@ class TestErrorMonitoring(unittest.TestCase):
     def test_error_report_generation(self):
         """Test error report generation."""
         # Record some errors
-        self.monitor.record_error(
-            error=NetworkException("Test error"),
-            severity=ErrorSeverity.ERROR,
-            component="api"
-        )
+        self.monitor.record_error(error=NetworkException("Test error"), severity=ErrorSeverity.ERROR, component="api")
 
         # Generate JSON report
         json_report = self.monitor.generate_error_report(format="json")
@@ -572,6 +524,7 @@ class TestResilienceDecorators(unittest.TestCase):
 
     def test_circuit_breaker_decorator(self):
         """Test circuit breaker decorator."""
+
         @circuit_breaker("test_circuit", failure_threshold=2)
         def failing_func():
             raise NetworkException("Failure")
@@ -587,6 +540,7 @@ class TestResilienceDecorators(unittest.TestCase):
 
     def test_fallback_decorator(self):
         """Test fallback decorator."""
+
         def fallback_func():
             return "Fallback response"
 
@@ -599,6 +553,7 @@ class TestResilienceDecorators(unittest.TestCase):
 
     def test_timeout_decorator(self):
         """Test timeout decorator."""
+
         @timeout(0.1)
         def slow_func():
             time.sleep(0.2)  # Longer than timeout
@@ -609,6 +564,7 @@ class TestResilienceDecorators(unittest.TestCase):
 
     def test_resilient_decorator(self):
         """Test comprehensive resilient decorator."""
+
         def fallback_func():
             return "Fallback"
 
@@ -616,7 +572,7 @@ class TestResilienceDecorators(unittest.TestCase):
             retry_config=RetryConfig(max_attempts=2, base_delay=0.1),
             circuit_breaker_config=CircuitBreakerConfig(failure_threshold=3),
             fallback_func=fallback_func,
-            timeout=1.0
+            timeout=1.0,
         )
         def unreliable_func():
             if random.random() < 0.8:  # 80% failure rate
@@ -629,6 +585,7 @@ class TestResilienceDecorators(unittest.TestCase):
 
     def test_resilient_api_call_decorator(self):
         """Test pre-configured API resilience decorator."""
+
         @resilient_api_call(max_attempts=2, timeout_seconds=0.1)
         def api_call():
             if random.random() < 0.5:
@@ -656,6 +613,7 @@ class TestIntegration(unittest.TestCase):
 
         # Test function - succeeds on second attempt
         call_count = 0
+
         def test_func():
             nonlocal call_count
             call_count += 1
@@ -674,19 +632,11 @@ class TestIntegration(unittest.TestCase):
             self.assertEqual(result, "Success")
 
             # Record success in monitor
-            monitor.record_error(
-                error=Exception("Test error"),
-                severity=ErrorSeverity.INFO,
-                component="test"
-            )
+            monitor.record_error(error=Exception("Test error"), severity=ErrorSeverity.INFO, component="test")
 
         except Exception as e:
             # Record failure in monitor
-            monitor.record_error(
-                error=e,
-                severity=ErrorSeverity.ERROR,
-                component="test"
-            )
+            monitor.record_error(error=e, severity=ErrorSeverity.ERROR, component="test")
             raise
 
         # Check statistics
@@ -712,7 +662,7 @@ def run_tests():
         TestErrorRecovery,
         TestErrorMonitoring,
         TestResilienceDecorators,
-        TestIntegration
+        TestIntegration,
     ]
 
     for test_class in test_classes:
@@ -724,13 +674,15 @@ def run_tests():
     result = runner.run(test_suite)
 
     # Print summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Test Results Summary")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Tests run: {result.testsRun}")
     print(f"Failures: {len(result.failures)}")
     print(f"Errors: {len(result.errors)}")
-    print(f"Success rate: {((result.testsRun - len(result.failures) - len(result.errors)) / result.testsRun * 100):.1f}%")
+    print(
+        f"Success rate: {((result.testsRun - len(result.failures) - len(result.errors)) / result.testsRun * 100):.1f}%"
+    )
 
     if result.failures:
         print("\nFailures:")
@@ -747,4 +699,4 @@ def run_tests():
 
 if __name__ == "__main__":
     success = run_tests()
-    sys.exit(0 if success else 1) 
+    sys.exit(0 if success else 1)

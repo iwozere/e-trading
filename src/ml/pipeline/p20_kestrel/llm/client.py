@@ -12,21 +12,20 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
 import anthropic
 
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 from src.ml.pipeline.p20_kestrel.config import (
     HAIKU_MODEL,
     LLM_MONTHLY_BUDGET_USD,
     SONNET_MODEL,
 )
-from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 
 _kestrel = _KestrelService()
 get_llm_monthly_spend = _kestrel.get_llm_monthly_spend
@@ -73,20 +72,14 @@ class KestrelLLMClient:
 
         if pct >= _BUDGET_FULL_STOP_PCT:
             raise RuntimeError(
-                "LLM budget full stop: ${:.2f} / ${:.2f} ({:.0%})".format(
-                    spend, LLM_MONTHLY_BUDGET_USD, pct
-                )
+                f"LLM budget full stop: ${spend:.2f} / ${LLM_MONTHLY_BUDGET_USD:.2f} ({pct:.0%})"
             )
 
         if pct >= _BUDGET_DOSSIER_STOP_PCT and task_type in ("dossier", "risk_diff", "form10"):
-            raise RuntimeError(
-                "LLM dossier budget stop at {:.0%}; classification continues".format(pct)
-            )
+            raise RuntimeError(f"LLM dossier budget stop at {pct:.0%}; classification continues")
 
         if pct >= _BUDGET_WARN_PCT:
-            _logger.warning(
-                "LLM budget at %.0f%% ($%.2f / $%.2f)", pct * 100, spend, LLM_MONTHLY_BUDGET_USD
-            )
+            _logger.warning("LLM budget at %.0f%% ($%.2f / $%.2f)", pct * 100, spend, LLM_MONTHLY_BUDGET_USD)
 
     def call(
         self,
@@ -95,9 +88,9 @@ class KestrelLLMClient:
         system_prompt: str,
         user_prompt: str,
         model: str,
-        ticker: Optional[str] = None,
+        ticker: str | None = None,
         max_tokens: int = 1024,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Make a cached LLM call with budget enforcement.
 
@@ -139,17 +132,19 @@ class KestrelLLMClient:
         cost = _compute_cost(model, tokens_in, tokens_out)
         verdict = output_json.get("verdict") if output_json else None
 
-        insert_llm_run({
-            "ticker": ticker,
-            "task_type": task_type,
-            "input_ref": input_ref,
-            "output_json": output_json,
-            "model": model,
-            "tokens_in": tokens_in,
-            "tokens_out": tokens_out,
-            "cost_usd": cost,
-            "verdict": verdict,
-        })
+        insert_llm_run(
+            {
+                "ticker": ticker,
+                "task_type": task_type,
+                "input_ref": input_ref,
+                "output_json": output_json,
+                "model": model,
+                "tokens_in": tokens_in,
+                "tokens_out": tokens_out,
+                "cost_usd": cost,
+                "verdict": verdict,
+            }
+        )
 
         return output_json
 
@@ -159,7 +154,7 @@ class KestrelLLMClient:
         user_prompt: str,
         model: str,
         max_tokens: int,
-    ) -> Optional[tuple]:
+    ) -> tuple | None:
         """
         Make one raw Anthropic API call.
 
@@ -177,7 +172,7 @@ class KestrelLLMClient:
             tokens_in = response.usage.input_tokens
             tokens_out = response.usage.output_tokens
 
-            output_json: Optional[Dict[str, Any]] = None
+            output_json: Dict[str, Any] | None = None
             try:
                 # Strip markdown code fences if present
                 text = raw_text.strip()

@@ -7,17 +7,18 @@ Tests the CronParser service functionality including:
 - Validation and error handling for invalid expressions
 """
 
-import pytest
-from datetime import datetime, timezone
-import pytz
-
 # Add src to path
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
+
+import pytest
+import pytz
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.common.alerts.cron_parser import CronParser, CronExpression
+from src.common.alerts.cron_parser import CronExpression, CronParser
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -97,12 +98,12 @@ class TestCronParser:
     def test_validate_cron_valid_expressions(self):
         """Test validation of valid cron expressions."""
         valid_expressions = [
-            "0 12 * * *",      # Daily at noon
-            "*/5 * * * *",     # Every 5 minutes
-            "0 0 1 * *",       # First day of month
+            "0 12 * * *",  # Daily at noon
+            "*/5 * * * *",  # Every 5 minutes
+            "0 0 1 * *",  # First day of month
             "0 9-17 * * 1-5",  # Business hours weekdays
-            "30 0 12 * * *",   # 6-field: Daily at 12:00:30
-            "*/10 * * * * *"   # 6-field: Every 10 seconds
+            "30 0 12 * * *",  # 6-field: Daily at 12:00:30
+            "*/10 * * * * *",  # 6-field: Every 10 seconds
         ]
 
         for expr in valid_expressions:
@@ -111,12 +112,12 @@ class TestCronParser:
     def test_validate_cron_invalid_expressions(self):
         """Test validation of invalid cron expressions."""
         invalid_expressions = [
-            "",                # Empty
-            "0 12",           # Too few fields
-            "60 12 * * *",    # Invalid minute
-            "0 25 * * *",     # Invalid hour
-            "0 12 32 * *",    # Invalid day
-            "invalid format"   # Non-numeric
+            "",  # Empty
+            "0 12",  # Too few fields
+            "60 12 * * *",  # Invalid minute
+            "0 25 * * *",  # Invalid hour
+            "0 12 32 * *",  # Invalid day
+            "invalid format",  # Non-numeric
         ]
 
         for expr in invalid_expressions:
@@ -130,17 +131,17 @@ class TestCronParser:
 
         assert isinstance(next_run, datetime)
         assert next_run.tzinfo is not None
-        assert next_run > datetime.now(timezone.utc)
+        assert next_run > datetime.now(UTC)
 
     def test_calculate_next_run_with_base_time(self):
         """Test calculating next run time with specific base time."""
         expression = "0 12 * * *"  # Daily at noon
-        base_time = datetime(2024, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
+        base_time = datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC)
 
         next_run = CronParser.calculate_next_run(expression, from_time=base_time)
 
         # Should be same day at noon since base time is 10 AM
-        expected = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        expected = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
         assert next_run == expected
 
     def test_calculate_next_run_with_timezone(self):
@@ -149,11 +150,7 @@ class TestCronParser:
         base_time = datetime(2024, 1, 1, 10, 0, 0)
         timezone_str = "America/New_York"
 
-        next_run = CronParser.calculate_next_run(
-            expression,
-            from_time=base_time,
-            timezone=timezone_str
-        )
+        next_run = CronParser.calculate_next_run(expression, from_time=base_time, timezone=timezone_str)
 
         assert next_run.tzinfo.zone == timezone_str
 
@@ -165,21 +162,13 @@ class TestCronParser:
     def test_is_six_field_cron_detection(self):
         """Test detection of 6-field vs 5-field cron expressions."""
         # Test 5-field expressions
-        five_field_expressions = [
-            "0 12 * * *",
-            "*/5 * * * *",
-            "0 0 1 * *"
-        ]
+        five_field_expressions = ["0 12 * * *", "*/5 * * * *", "0 0 1 * *"]
 
         for expr in five_field_expressions:
             assert CronParser.is_six_field_cron(expr) is False
 
         # Test 6-field expressions
-        six_field_expressions = [
-            "30 0 12 * * *",
-            "*/10 * * * * *",
-            "0 0 0 1 * *"
-        ]
+        six_field_expressions = ["30 0 12 * * *", "*/10 * * * * *", "0 0 0 1 * *"]
 
         for expr in six_field_expressions:
             assert CronParser.is_six_field_cron(expr) is True
@@ -208,22 +197,22 @@ class TestCronParser:
 
         # Verify runs are in chronological order
         for i in range(1, len(runs)):
-            assert runs[i] > runs[i-1]
+            assert runs[i] > runs[i - 1]
 
     def test_get_next_n_runs_with_base_time(self):
         """Test getting multiple next run times with base time."""
         expression = "0 */6 * * *"  # Every 6 hours
         count = 4
-        base_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        base_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
 
         runs = CronParser.get_next_n_runs(expression, count, from_time=base_time)
 
         assert len(runs) == count
         expected_times = [
-            datetime(2024, 1, 1, 6, 0, 0, tzinfo=timezone.utc),
-            datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
-            datetime(2024, 1, 1, 18, 0, 0, tzinfo=timezone.utc),
-            datetime(2024, 1, 2, 0, 0, 0, tzinfo=timezone.utc)
+            datetime(2024, 1, 1, 6, 0, 0, tzinfo=UTC),
+            datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC),
+            datetime(2024, 1, 1, 18, 0, 0, tzinfo=UTC),
+            datetime(2024, 1, 2, 0, 0, 0, tzinfo=UTC),
         ]
 
         assert runs == expected_times
@@ -246,12 +235,12 @@ class TestCronParser:
     def test_complex_cron_expressions(self):
         """Test parsing complex but valid cron expressions."""
         complex_expressions = [
-            "0 9-17 * * 1-5",      # Business hours weekdays
-            "*/15 8-18 * * 1-5",   # Every 15 min during business hours
-            "0 0 1,15 * *",        # 1st and 15th of month
-            "0 2 * * 0",           # Sundays at 2 AM
-            "30 */2 * * *",        # Every 2 hours at 30 minutes past
-            "0 0 0 1 1 *"          # 6-field: New Year's Day at midnight
+            "0 9-17 * * 1-5",  # Business hours weekdays
+            "*/15 8-18 * * 1-5",  # Every 15 min during business hours
+            "0 0 1,15 * *",  # 1st and 15th of month
+            "0 2 * * 0",  # Sundays at 2 AM
+            "30 */2 * * *",  # Every 2 hours at 30 minutes past
+            "0 0 0 1 1 *",  # 6-field: New Year's Day at midnight
         ]
 
         for expr in complex_expressions:
@@ -279,7 +268,7 @@ class TestCronParser:
         """Test edge cases and boundary conditions."""
         # Test leap year handling
         expression = "0 0 29 2 *"  # Feb 29th
-        base_time = datetime(2024, 1, 1, tzinfo=timezone.utc)  # 2024 is leap year
+        base_time = datetime(2024, 1, 1, tzinfo=UTC)  # 2024 is leap year
 
         next_run = CronParser.calculate_next_run(expression, from_time=base_time)
         assert next_run.month == 2
@@ -314,6 +303,7 @@ class TestCronParser:
 
         # This should complete reasonably quickly
         import time
+
         start_time = time.time()
         runs = CronParser.get_next_n_runs(expression, count)
         end_time = time.time()
@@ -341,12 +331,7 @@ class TestCronParser:
         """Test thread safety of cron parsing operations."""
         import threading
 
-        expressions = [
-            "0 12 * * *",
-            "*/5 * * * *",
-            "0 0 1 * *",
-            "30 0 12 * * *"
-        ]
+        expressions = ["0 12 * * *", "*/5 * * * *", "0 0 1 * *", "30 0 12 * * *"]
 
         results = []
         errors = []

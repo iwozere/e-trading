@@ -5,15 +5,23 @@ This module provides optimized database queries and indexing strategies
 for the notification service to improve performance under high load.
 """
 
-from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import Any, Dict, List, Tuple
+from typing import cast as typing_cast
+
+from sqlalchemy import Index, and_, asc, cast, desc, func, inspect, or_, text
+from sqlalchemy.dialects.postgresql import ARRAY, TEXT, insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
-from sqlalchemy import and_, or_, desc, asc, func, text, Index, cast
-from sqlalchemy.dialects.postgresql import insert, ARRAY, TEXT
 
 from src.data.db.models.model_notification import (
-    Message, MessageDeliveryStatus, RateLimit, ChannelConfig,
-    MessagePriority, MessageStatus, DeliveryStatus
+    ChannelConfig,
+    DeliveryStatus,
+    Message,
+    MessageDeliveryStatus,
+    MessagePriority,
+    MessageStatus,
+    RateLimit,
 )
 from src.notification.logger import setup_logger
 
@@ -46,13 +54,10 @@ class OptimizedMessageRepository:
             IntegrityError: If message creation fails
         """
         try:
-            from sqlalchemy.exc import IntegrityError
-            import sqlalchemy as sa
-            
             # Filter message_data for valid model attributes
-            valid_attrs = {c.key for c in sa.inspect(Message).mapper.column_attrs}
+            valid_attrs = {c.key for c in inspect(Message).mapper.column_attrs}
             filtered_data = {k: v for k, v in message_data.items() if k in valid_attrs}
-            
+
             message = Message(**filtered_data)
             self.session.add(message)
             self.session.flush()  # Get the ID without committing
@@ -63,7 +68,7 @@ class OptimizedMessageRepository:
             _logger.exception("Failed to create message:")
             raise
 
-    def get_message(self, message_id: int) -> Optional[Message]:
+    def get_message(self, message_id: int) -> Message | None:
         """
         Get a message by ID.
 
@@ -77,14 +82,14 @@ class OptimizedMessageRepository:
 
     def list_messages(
         self,
-        status: Optional[MessageStatus] = None,
-        priority: Optional[MessagePriority] = None,
-        recipient_id: Optional[str] = None,
-        message_type: Optional[str] = None,
+        status: MessageStatus | None = None,
+        priority: MessagePriority | None = None,
+        recipient_id: str | None = None,
+        message_type: str | None = None,
         limit: int = 100,
         offset: int = 0,
         order_by: str = "created_at",
-        order_desc: bool = True
+        order_desc: bool = True,
     ) -> List[Message]:
         """
         List messages with optional filtering.
@@ -126,10 +131,7 @@ class OptimizedMessageRepository:
         return query.offset(offset).limit(limit).all()
 
     def get_pending_messages_with_lock(
-        self,
-        limit: int = 10,
-        lock_instance_id: str = None,
-        channels: Optional[List[str]] = None
+        self, limit: int = 10, lock_instance_id: str | None = None, channels: List[str] | None = None
     ) -> List[Message]:
         """
         Get pending messages with distributed locking for database-centric processing.
@@ -147,8 +149,7 @@ class OptimizedMessageRepository:
         if not lock_instance_id:
             raise ValueError("lock_instance_id is required for distributed processing")
 
-        from datetime import datetime, timezone, timedelta
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
         stale_lock_threshold = current_time - timedelta(minutes=5)  # Locks older than 5 minutes are stale
 
         try:
@@ -188,14 +189,14 @@ class OptimizedMessageRepository:
                 RETURNING *
             """)
 
-            params = {
-                'lock_instance_id': lock_instance_id,
-                'current_time': current_time,
-                'stale_threshold': stale_lock_threshold,
-                'limit': limit
+            params: dict[str, datetime | int | str | list[str]] = {
+                "lock_instance_id": lock_instance_id,
+                "current_time": current_time,
+                "stale_threshold": stale_lock_threshold,
+                "limit": limit,
             }
             if channels:
-                params['channels'] = channels
+                params["channels"] = channels
 
             result = self.session.execute(query, params)
 
@@ -208,10 +209,7 @@ class OptimizedMessageRepository:
                 messages.append(message)
 
             if messages:
-                _logger.info(
-                    "Claimed %s messages for processing by instance %s",
-                    len(messages), lock_instance_id
-                )
+                _logger.info("Claimed %s messages for processing by instance %s", len(messages), lock_instance_id)
 
             return messages
 
@@ -223,9 +221,9 @@ class OptimizedMessageRepository:
     def get_pending_messages(
         self,
         current_time: datetime,
-        priority: Optional[MessagePriority] = None,
-        channels: Optional[List[str]] = None,
-        limit: int = 100
+        priority: MessagePriority | None = None,
+        channels: List[str] | None = None,
+        limit: int = 100,
     ) -> List[Message]:
         """
         Get pending messages ready for processing.
@@ -246,9 +244,9 @@ class OptimizedMessageRepository:
     def get_pending_messages_optimized(
         self,
         current_time: datetime,
-        priority: Optional[MessagePriority] = None,
-        channels: Optional[List[str]] = None,
-        limit: int = 100
+        priority: MessagePriority | None = None,
+        channels: List[str] | None = None,
+        limit: int = 100,
     ) -> List[Message]:
         """
         Optimized query for pending messages with proper indexing.
@@ -266,19 +264,11 @@ class OptimizedMessageRepository:
         """
         # Use raw SQL for optimal performance with custom priority ordering
         priority_case = text(
-            "CASE priority "
-            "WHEN 'CRITICAL' THEN 1 "
-            "WHEN 'HIGH' THEN 2 "
-            "WHEN 'NORMAL' THEN 3 "
-            "WHEN 'LOW' THEN 4 "
-            "END"
+            "CASE priority WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'NORMAL' THEN 3 WHEN 'LOW' THEN 4 END"
         )
 
         query = self.session.query(Message).filter(
-            and_(
-                Message.status == MessageStatus.PENDING.value,
-                Message.scheduled_for <= current_time
-            )
+            and_(Message.status == MessageStatus.PENDING.value, Message.scheduled_for <= current_time)
         )
 
         if priority is not None:
@@ -292,17 +282,18 @@ class OptimizedMessageRepository:
             query = query.filter(Message.channels.overlap(cast(channels, ARRAY(TEXT))))
 
         # Use the optimized ordering with index hint
-        return query.order_by(
-            priority_case,
-            asc(Message.scheduled_for),
-            asc(Message.id)  # Tie-breaker for consistent ordering
-        ).limit(limit).all()
+        return (
+            query.order_by(
+                priority_case,
+                asc(Message.scheduled_for),
+                asc(Message.id),  # Tie-breaker for consistent ordering
+            )
+            .limit(limit)
+            .all()
+        )
 
     def bulk_update_message_status(
-        self,
-        message_ids: List[int],
-        status: MessageStatus,
-        processed_at: Optional[datetime] = None
+        self, message_ids: List[int], status: MessageStatus, processed_at: datetime | None = None
     ) -> int:
         """
         Bulk update message status for better performance.
@@ -318,21 +309,20 @@ class OptimizedMessageRepository:
         if not message_ids:
             return 0
 
-        update_data = {"status": status.value}
+        update_data: dict[str, Any] = {"status": status.value}
         if processed_at:
             update_data["processed_at"] = processed_at
 
-        updated_count = self.session.query(Message).filter(
-            Message.id.in_(message_ids)
-        ).update(update_data, synchronize_session=False)
+        updated_count = (
+            self.session.query(Message)
+            .filter(Message.id.in_(message_ids))
+            .update(typing_cast("dict[Any, Any]", update_data), synchronize_session=False)
+        )
 
         _logger.info("Bulk updated %s messages to status %s", updated_count, status.value)
         return updated_count
 
-    def get_messages_with_delivery_status(
-        self,
-        message_ids: List[int]
-    ) -> List[Message]:
+    def get_messages_with_delivery_status(self, message_ids: List[int]) -> List[Message]:
         """
         Efficiently load messages with their delivery statuses using eager loading.
 
@@ -342,15 +332,15 @@ class OptimizedMessageRepository:
         Returns:
             List of Message objects with delivery_statuses loaded
         """
-        return self.session.query(Message).options(
-            selectinload(Message.delivery_statuses)
-        ).filter(Message.id.in_(message_ids)).all()
+        return (
+            self.session.query(Message)
+            .options(selectinload(Message.delivery_statuses))
+            .filter(Message.id.in_(message_ids))
+            .all()
+        )
 
     def get_message_statistics_optimized(
-        self,
-        start_date: datetime,
-        end_date: datetime,
-        group_by_hour: bool = False
+        self, start_date: datetime, end_date: datetime, group_by_hour: bool = False
     ) -> List[Dict[str, Any]]:
         """
         Optimized query for message statistics using aggregation.
@@ -364,41 +354,39 @@ class OptimizedMessageRepository:
             List of statistics dictionaries
         """
         if group_by_hour:
-            date_trunc = func.date_trunc('hour', Message.created_at)
+            date_trunc = func.date_trunc("hour", Message.created_at)
         else:
-            date_trunc = func.date_trunc('day', Message.created_at)
+            date_trunc = func.date_trunc("day", Message.created_at)
 
         # Use a single query with aggregation for better performance
-        stats_query = self.session.query(
-            date_trunc.label('time_period'),
-            Message.status,
-            Message.priority,
-            func.count(Message.id).label('message_count'),
-            func.avg(Message.retry_count).label('avg_retry_count')
-        ).filter(
-            and_(
-                Message.created_at >= start_date,
-                Message.created_at <= end_date
+        stats_query = (
+            self.session.query(
+                date_trunc.label("time_period"),
+                Message.status,
+                Message.priority,
+                func.count(Message.id).label("message_count"),
+                func.avg(Message.retry_count).label("avg_retry_count"),
             )
-        ).group_by(
-            date_trunc,
-            Message.status,
-            Message.priority
-        ).order_by(date_trunc)
+            .filter(and_(Message.created_at >= start_date, Message.created_at <= end_date))
+            .group_by(date_trunc, Message.status, Message.priority)
+            .order_by(date_trunc)
+        )
 
         results = []
         for row in stats_query.all():
-            results.append({
-                "time_period": row.time_period.isoformat(),
-                "status": row.status,
-                "priority": row.priority,
-                "message_count": row.message_count,
-                "avg_retry_count": float(row.avg_retry_count) if row.avg_retry_count else 0.0
-            })
+            results.append(
+                {
+                    "time_period": row.time_period.isoformat(),
+                    "status": row.status,
+                    "priority": row.priority,
+                    "message_count": row.message_count,
+                    "avg_retry_count": float(row.avg_retry_count) if row.avg_retry_count else 0.0,
+                }
+            )
 
         return results
 
-    def update_message(self, message_id: int, update_data: Dict[str, Any]) -> Optional[Message]:
+    def update_message(self, message_id: int, update_data: Dict[str, Any]) -> Message | None:
         """
         Update a message.
 
@@ -424,7 +412,7 @@ class OptimizedMessageRepository:
             self.session.rollback()
             raise
 
-    def get_message(self, message_id: int) -> Optional[Message]:
+    def get_message(self, message_id: int) -> Message | None:
         """
         Get a message by ID.
 
@@ -437,10 +425,7 @@ class OptimizedMessageRepository:
         return self.session.query(Message).filter(Message.id == message_id).first()
 
     def get_failed_messages_for_retry(
-        self,
-        current_time: datetime,
-        retry_delay_minutes: int = 5,
-        limit: int = 50
+        self, current_time: datetime, retry_delay_minutes: int = 5, limit: int = 50
     ) -> List[Message]:
         """
         Get failed messages that can be retried.
@@ -455,16 +440,19 @@ class OptimizedMessageRepository:
         """
         retry_cutoff = current_time - timedelta(minutes=retry_delay_minutes)
 
-        return self.session.query(Message).filter(
-            and_(
-                Message.status == MessageStatus.FAILED.value,
-                Message.retry_count < Message.max_retries,
-                or_(
-                    Message.processed_at.is_(None),
-                    Message.processed_at <= retry_cutoff
+        return (
+            self.session.query(Message)
+            .filter(
+                and_(
+                    Message.status == MessageStatus.FAILED.value,
+                    Message.retry_count < Message.max_retries,
+                    or_(Message.processed_at.is_(None), Message.processed_at <= retry_cutoff),
                 )
             )
-        ).order_by(asc(Message.processed_at)).limit(limit).all()
+            .order_by(asc(Message.processed_at))
+            .limit(limit)
+            .all()
+        )
 
     def get_queue_health_for_channels(self, channels: List[str]) -> Dict[str, Any]:
         """
@@ -476,56 +464,69 @@ class OptimizedMessageRepository:
         Returns:
             Dictionary with queue health metrics
         """
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
         one_hour_ago = current_time - timedelta(hours=1)
         five_min_ago = current_time - timedelta(minutes=5)
 
         if not channels:
-            return {
-                "pending": 0,
-                "processing": 0,
-                "failed_last_hour": 0,
-                "delivered_last_hour": 0,
-                "stuck_messages": 0
-            }
+            return {"pending": 0, "processing": 0, "failed_last_hour": 0, "delivered_last_hour": 0, "stuck_messages": 0}
 
         # Use ARRAY overlap (&&) for PostgreSQL performance
         channel_array = cast(channels, ARRAY(TEXT))
 
-        pending_count = self.session.query(func.count(Message.id)).filter(
-            Message.status == MessageStatus.PENDING.value,
-            Message.channels.overlap(channel_array)
-        ).scalar() or 0
+        pending_count = (
+            self.session.query(func.count(Message.id))
+            .filter(Message.status == MessageStatus.PENDING.value, Message.channels.overlap(channel_array))
+            .scalar()
+            or 0
+        )
 
-        processing_count = self.session.query(func.count(Message.id)).filter(
-            Message.status == MessageStatus.PROCESSING.value,
-            Message.channels.overlap(channel_array)
-        ).scalar() or 0
+        processing_count = (
+            self.session.query(func.count(Message.id))
+            .filter(Message.status == MessageStatus.PROCESSING.value, Message.channels.overlap(channel_array))
+            .scalar()
+            or 0
+        )
 
-        failed_last_hour = self.session.query(func.count(Message.id)).filter(
-            Message.status == MessageStatus.FAILED.value,
-            Message.processed_at >= one_hour_ago,
-            Message.channels.overlap(channel_array)
-        ).scalar() or 0
+        failed_last_hour = (
+            self.session.query(func.count(Message.id))
+            .filter(
+                Message.status == MessageStatus.FAILED.value,
+                Message.processed_at >= one_hour_ago,
+                Message.channels.overlap(channel_array),
+            )
+            .scalar()
+            or 0
+        )
 
-        delivered_last_hour = self.session.query(func.count(Message.id)).filter(
-            Message.status == MessageStatus.DELIVERED.value,
-            Message.processed_at >= one_hour_ago,
-            Message.channels.overlap(channel_array)
-        ).scalar() or 0
+        delivered_last_hour = (
+            self.session.query(func.count(Message.id))
+            .filter(
+                Message.status == MessageStatus.DELIVERED.value,
+                Message.processed_at >= one_hour_ago,
+                Message.channels.overlap(channel_array),
+            )
+            .scalar()
+            or 0
+        )
 
-        stuck_messages = self.session.query(func.count(Message.id)).filter(
-            Message.status == MessageStatus.PROCESSING.value,
-            Message.locked_at < five_min_ago,
-            Message.channels.overlap(channel_array)
-        ).scalar() or 0
+        stuck_messages = (
+            self.session.query(func.count(Message.id))
+            .filter(
+                Message.status == MessageStatus.PROCESSING.value,
+                Message.locked_at < five_min_ago,
+                Message.channels.overlap(channel_array),
+            )
+            .scalar()
+            or 0
+        )
 
         return {
             "pending": pending_count,
             "processing": processing_count,
             "failed_last_hour": failed_last_hour,
             "delivered_last_hour": delivered_last_hour,
-            "stuck_messages": stuck_messages
+            "stuck_messages": stuck_messages,
         }
 
     def cleanup_old_messages(self, days_to_keep: int = 30) -> int:
@@ -538,14 +539,13 @@ class OptimizedMessageRepository:
         Returns:
             Number of messages deleted
         """
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
+        cutoff_date = datetime.now(UTC) - timedelta(days=days_to_keep)
 
-        deleted_count = self.session.query(Message).filter(
-            and_(
-                Message.created_at < cutoff_date,
-                Message.status == MessageStatus.DELIVERED.value
-            )
-        ).delete()
+        deleted_count = (
+            self.session.query(Message)
+            .filter(and_(Message.created_at < cutoff_date, Message.status == MessageStatus.DELIVERED.value))
+            .delete()
+        )
 
         _logger.info("Cleaned up %s old messages", deleted_count)
         return deleted_count
@@ -562,15 +562,11 @@ class OptimizedMessageRepository:
             True if lock was released, False otherwise
         """
         try:
-            updated_rows = self.session.query(Message).filter(
-                and_(
-                    Message.id == message_id,
-                    Message.locked_by == lock_instance_id
-                )
-            ).update({
-                'locked_by': None,
-                'locked_at': None
-            }, synchronize_session=False)
+            updated_rows = (
+                self.session.query(Message)
+                .filter(and_(Message.id == message_id, Message.locked_by == lock_instance_id))
+                .update({"locked_by": None, "locked_at": None}, synchronize_session=False)
+            )
 
             if updated_rows > 0:
                 _logger.debug("Released lock on message %s", message_id)
@@ -579,8 +575,8 @@ class OptimizedMessageRepository:
                 _logger.warning("Could not release lock on message %s (not owned by %s)", message_id, lock_instance_id)
                 return False
 
-        except Exception as e:
-            _logger.error("Error releasing lock on message %s: %s", message_id, e)
+        except Exception:
+            _logger.exception("Error releasing lock on message %s:", message_id)
             return False
 
     def cleanup_stale_locks(self, stale_threshold_minutes: int = 5) -> int:
@@ -594,17 +590,13 @@ class OptimizedMessageRepository:
             Number of stale locks cleaned up
         """
         try:
-            stale_threshold = datetime.now(timezone.utc) - timedelta(minutes=stale_threshold_minutes)
+            stale_threshold = datetime.now(UTC) - timedelta(minutes=stale_threshold_minutes)
 
-            updated_rows = self.session.query(Message).filter(
-                and_(
-                    Message.locked_by.isnot(None),
-                    Message.locked_at < stale_threshold
-                )
-            ).update({
-                'locked_by': None,
-                'locked_at': None
-            }, synchronize_session=False)
+            updated_rows = (
+                self.session.query(Message)
+                .filter(and_(Message.locked_by.isnot(None), Message.locked_at < stale_threshold))
+                .update({"locked_by": None, "locked_at": None}, synchronize_session=False)
+            )
 
             if updated_rows > 0:
                 _logger.info("Cleaned up %s stale message locks", updated_rows)
@@ -641,10 +633,7 @@ class OptimizedDeliveryStatusRepository:
         results = self.bulk_create_delivery_statuses([status_data])
         return results[0]
 
-    def bulk_create_delivery_statuses(
-        self,
-        delivery_data: List[Dict[str, Any]]
-    ) -> List[MessageDeliveryStatus]:
+    def bulk_create_delivery_statuses(self, delivery_data: List[Dict[str, Any]]) -> List[MessageDeliveryStatus]:
         """
         Bulk create delivery statuses for better performance.
 
@@ -662,20 +651,20 @@ class OptimizedDeliveryStatusRepository:
         stmt = stmt.returning(MessageDeliveryStatus)
 
         result = self.session.execute(stmt)
-        delivery_statuses = result.fetchall()
+        delivery_statuses = list(result.scalars().all())
 
         _logger.info("Bulk created %s delivery statuses", len(delivery_statuses))
         return delivery_statuses
 
     def get_delivery_history_optimized(
         self,
-        user_id: Optional[str] = None,
-        channel: Optional[str] = None,
-        status: Optional[DeliveryStatus] = None,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
+        user_id: str | None = None,
+        channel: str | None = None,
+        status: DeliveryStatus | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
     ) -> Tuple[List[MessageDeliveryStatus], int]:
         """
         Optimized delivery history query with proper indexing and joins.
@@ -695,10 +684,11 @@ class OptimizedDeliveryStatusRepository:
         # Build base query with conditional join
         if user_id:
             # Use explicit join for better query planning
-            query = self.session.query(MessageDeliveryStatus).join(
-                Message,
-                MessageDeliveryStatus.message_id == Message.id
-            ).filter(Message.recipient_id == user_id)
+            query = (
+                self.session.query(MessageDeliveryStatus)
+                .join(Message, MessageDeliveryStatus.message_id == Message.id)
+                .filter(Message.recipient_id == user_id)
+            )
         else:
             query = self.session.query(MessageDeliveryStatus)
 
@@ -719,18 +709,20 @@ class OptimizedDeliveryStatusRepository:
         total_count = query.count()
 
         # Apply ordering and pagination
-        deliveries = query.order_by(
-            desc(MessageDeliveryStatus.created_at),
-            desc(MessageDeliveryStatus.id)  # Tie-breaker
-        ).offset(offset).limit(limit).all()
+        deliveries = (
+            query.order_by(
+                desc(MessageDeliveryStatus.created_at),
+                desc(MessageDeliveryStatus.id),  # Tie-breaker
+            )
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
         return deliveries, total_count
 
     def get_channel_performance_metrics(
-        self,
-        start_date: datetime,
-        end_date: datetime,
-        channels: Optional[List[str]] = None
+        self, start_date: datetime, end_date: datetime, channels: List[str] | None = None
     ) -> Dict[str, Dict[str, Any]]:
         """
         Optimized query for channel performance metrics.
@@ -744,43 +736,47 @@ class OptimizedDeliveryStatusRepository:
             Dictionary with channel performance data
         """
         # Single aggregation query for all metrics
-        query = self.session.query(
-            MessageDeliveryStatus.channel,
-            func.count(MessageDeliveryStatus.id).label('total_attempts'),
-            func.sum(
-                func.case(
-                    [(MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value, 1)],
-                    else_=0
-                )
-            ).label('successful_deliveries'),
-            func.avg(
-                func.case(
-                    [(MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value,
-                      MessageDeliveryStatus.response_time_ms)],
-                    else_=None
-                )
-            ).label('avg_response_time'),
-            func.percentile_cont(0.5).within_group(
-                MessageDeliveryStatus.response_time_ms
-            ).label('median_response_time'),
-            func.percentile_cont(0.95).within_group(
-                MessageDeliveryStatus.response_time_ms
-            ).label('p95_response_time')
-        ).filter(
-            and_(
-                MessageDeliveryStatus.created_at >= start_date,
-                MessageDeliveryStatus.created_at <= end_date,
-                MessageDeliveryStatus.response_time_ms.isnot(None)
+        query = (
+            self.session.query(
+                MessageDeliveryStatus.channel,
+                func.count(MessageDeliveryStatus.id).label("total_attempts"),
+                func.sum(
+                    func.case([(MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value, 1)], else_=0)
+                ).label("successful_deliveries"),
+                func.avg(
+                    func.case(
+                        [
+                            (
+                                MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value,
+                                MessageDeliveryStatus.response_time_ms,
+                            )
+                        ],
+                        else_=None,
+                    )
+                ).label("avg_response_time"),
+                func.percentile_cont(0.5)
+                .within_group(MessageDeliveryStatus.response_time_ms)
+                .label("median_response_time"),
+                func.percentile_cont(0.95)
+                .within_group(MessageDeliveryStatus.response_time_ms)
+                .label("p95_response_time"),
             )
-        ).group_by(MessageDeliveryStatus.channel)
+            .filter(
+                and_(
+                    MessageDeliveryStatus.created_at >= start_date,
+                    MessageDeliveryStatus.created_at <= end_date,
+                    MessageDeliveryStatus.response_time_ms.isnot(None),
+                )
+            )
+            .group_by(MessageDeliveryStatus.channel)
+        )
 
         if channels:
             query = query.filter(MessageDeliveryStatus.channel.in_(channels))
 
         results = {}
         for row in query.all():
-            success_rate = (row.successful_deliveries / row.total_attempts
-                          if row.total_attempts > 0 else 0.0)
+            success_rate = row.successful_deliveries / row.total_attempts if row.total_attempts > 0 else 0.0
 
             results[row.channel] = {
                 "total_attempts": row.total_attempts,
@@ -789,10 +785,80 @@ class OptimizedDeliveryStatusRepository:
                 "success_rate": success_rate,
                 "avg_response_time_ms": float(row.avg_response_time) if row.avg_response_time else None,
                 "median_response_time_ms": float(row.median_response_time) if row.median_response_time else None,
-                "p95_response_time_ms": float(row.p95_response_time) if row.p95_response_time else None
+                "p95_response_time_ms": float(row.p95_response_time) if row.p95_response_time else None,
             }
 
         return results
+
+    def get_delivery_statistics(
+        self,
+        channel: str | None = None,
+        days: int = 30,
+    ) -> Dict[str, Any]:
+        """
+        Get delivery statistics for a time period.
+
+        Uses a single aggregation query (one GROUP BY per status value) instead
+        of N separate COUNT queries, making it more efficient than the base
+        DeliveryStatusRepository implementation.
+
+        Args:
+            channel: Filter by channel (None = all channels).
+            days: Number of days to look back.
+
+        Returns:
+            Dictionary with keys:
+                - total_deliveries (int)
+                - status_counts (dict[str, int])
+                - average_response_time_ms (float | None)
+                - period_days (int)
+                - channel (str | None)
+        """
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
+
+        base_query = self.session.query(MessageDeliveryStatus).filter(MessageDeliveryStatus.created_at >= cutoff_date)
+        if channel is not None:
+            base_query = base_query.filter(MessageDeliveryStatus.channel == channel)
+
+        # Single aggregation query: count per status
+        status_agg = self.session.query(
+            MessageDeliveryStatus.status,
+            func.count(MessageDeliveryStatus.id).label("cnt"),
+        ).filter(MessageDeliveryStatus.created_at >= cutoff_date)
+        if channel is not None:
+            status_agg = status_agg.filter(MessageDeliveryStatus.channel == channel)
+        status_agg = status_agg.group_by(MessageDeliveryStatus.status)
+
+        status_counts: Dict[str, int] = {s.value: 0 for s in DeliveryStatus}
+        total_count = 0
+        for row in status_agg.all():
+            status_counts[row.status] = row.cnt
+            total_count += row.cnt
+
+        # Average response time for delivered messages only
+        avg_response_time: float | None = None
+        delivered = (
+            base_query.filter(
+                and_(
+                    MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value,
+                    MessageDeliveryStatus.response_time_ms.isnot(None),
+                )
+            )
+            .with_entities(MessageDeliveryStatus.response_time_ms)
+            .all()
+        )
+        if delivered:
+            times = [row[0] for row in delivered if row[0] is not None]
+            if times:
+                avg_response_time = sum(times) / len(times)
+
+        return {
+            "total_deliveries": total_count,
+            "status_counts": status_counts,
+            "average_response_time_ms": avg_response_time,
+            "period_days": days,
+            "channel": channel,
+        }
 
 
 class OptimizedRateLimitRepository:
@@ -807,17 +873,12 @@ class OptimizedRateLimitRepository:
         """
         self.session = session
 
-    def bulk_refill_tokens(
-        self,
-        current_time: datetime,
-        batch_size: int = 1000
-    ) -> int:
+    def bulk_refill_tokens(self, current_time: datetime) -> int:
         """
         Bulk refill tokens for all rate limits that need updating.
 
         Args:
             current_time: Current timestamp
-            batch_size: Number of records to process at once
 
         Returns:
             Number of rate limits updated
@@ -833,19 +894,16 @@ class OptimizedRateLimitRepository:
             WHERE last_refill < :refill_cutoff
         """)
 
-        result = self.session.execute(update_sql, {
-            'current_time': current_time,
-            'refill_cutoff': refill_cutoff
-        })
+        result = self.session.execute(update_sql, {"current_time": current_time, "refill_cutoff": refill_cutoff})
 
-        updated_count = result.rowcount
+        # SQLAlchemy 2.x: CursorResult exposes rowcount; plain Result does not.
+        # Use getattr with -1 sentinel to handle both cases safely.
+        updated_count = getattr(result, "rowcount", -1)
         _logger.info("Bulk refilled tokens for %s rate limits", updated_count)
         return updated_count
 
     def check_rate_limits_batch(
-        self,
-        user_channel_pairs: List[Tuple[str, str]],
-        current_time: datetime
+        self, user_channel_pairs: List[Tuple[str, str]], current_time: datetime
     ) -> Dict[Tuple[str, str], bool]:
         """
         Check rate limits for multiple user-channel pairs efficiently.
@@ -863,19 +921,13 @@ class OptimizedRateLimitRepository:
         # Build conditions for all pairs
         conditions = []
         for user_id, channel in user_channel_pairs:
-            conditions.append(
-                and_(RateLimit.user_id == user_id, RateLimit.channel == channel)
-            )
+            conditions.append(and_(RateLimit.user_id == user_id, RateLimit.channel == channel))
 
         # Single query to get all relevant rate limits
-        rate_limits = self.session.query(RateLimit).filter(
-            or_(*conditions)
-        ).all()
+        rate_limits = self.session.query(RateLimit).filter(or_(*conditions)).all()
 
         # Create lookup dictionary
-        rate_limit_lookup = {
-            (rl.user_id, rl.channel): rl for rl in rate_limits
-        }
+        rate_limit_lookup = {(rl.user_id, rl.channel): rl for rl in rate_limits}
 
         results = {}
         for user_id, channel in user_channel_pairs:
@@ -904,56 +956,39 @@ def create_optimized_indexes(engine):
     indexes_to_create = [
         # Messages table optimizations
         Index(
-            'idx_msg_messages_status_scheduled_priority',
-            Message.status, Message.scheduled_for, Message.priority,
-            postgresql_where=Message.status == 'PENDING'
+            "idx_msg_messages_status_scheduled_priority",
+            Message.status,
+            Message.scheduled_for,
+            Message.priority,
+            postgresql_where=Message.status == "PENDING",
         ),
+        Index("idx_msg_messages_recipient_created", Message.recipient_id, Message.created_at),
+        Index("idx_msg_messages_type_status", Message.message_type, Message.status),
         Index(
-            'idx_msg_messages_recipient_created',
-            Message.recipient_id, Message.created_at
+            "idx_msg_messages_retry_status",
+            Message.retry_count,
+            Message.max_retries,
+            Message.status,
+            postgresql_where=Message.status == "FAILED",
         ),
-        Index(
-            'idx_msg_messages_type_status',
-            Message.message_type, Message.status
-        ),
-        Index(
-            'idx_msg_messages_retry_status',
-            Message.retry_count, Message.max_retries, Message.status,
-            postgresql_where=Message.status == 'FAILED'
-        ),
-
         # Delivery status table optimizations
         Index(
-            'idx_msg_delivery_status_channel_created',
-            MessageDeliveryStatus.channel, MessageDeliveryStatus.created_at
+            "idx_msg_delivery_status_channel_created", MessageDeliveryStatus.channel, MessageDeliveryStatus.created_at
         ),
         Index(
-            'idx_msg_delivery_status_status_delivered',
-            MessageDeliveryStatus.status, MessageDeliveryStatus.delivered_at
+            "idx_msg_delivery_status_status_delivered", MessageDeliveryStatus.status, MessageDeliveryStatus.delivered_at
         ),
         Index(
-            'idx_msg_delivery_status_message_channel',
-            MessageDeliveryStatus.message_id, MessageDeliveryStatus.channel
+            "idx_msg_delivery_status_message_channel", MessageDeliveryStatus.message_id, MessageDeliveryStatus.channel
         ),
-
         # Rate limits table optimizations
         Index(
-            'idx_msg_rate_limits_refill_time',
+            "idx_msg_rate_limits_refill_time",
             RateLimit.last_refill,
-            postgresql_where=RateLimit.tokens < RateLimit.max_tokens
+            postgresql_where=RateLimit.tokens < RateLimit.max_tokens,
         ),
-
-        # Channel health table optimizations
-        Index(
-            'idx_msg_channel_health_status_checked',
-            ChannelHealth.status, ChannelHealth.checked_at
-        ),
-
         # Channel configs table optimizations
-        Index(
-            'idx_msg_channel_configs_enabled_updated',
-            ChannelConfig.enabled, ChannelConfig.updated_at
-        )
+        Index("idx_msg_channel_configs_enabled_updated", ChannelConfig.enabled, ChannelConfig.updated_at),
     ]
 
     # Create indexes that don't already exist
@@ -980,12 +1015,7 @@ def analyze_query_performance(session: Session) -> Dict[str, Any]:
     """
     _logger.info("Analyzing query performance...")
 
-    analysis = {
-        "table_sizes": {},
-        "index_usage": {},
-        "slow_queries": [],
-        "recommendations": []
-    }
+    analysis: Dict[str, Any] = {"table_sizes": {}, "index_usage": {}, "slow_queries": [], "recommendations": []}
 
     try:
         # Get table sizes
@@ -1002,10 +1032,7 @@ def analyze_query_performance(session: Session) -> Dict[str, Any]:
 
         result = session.execute(table_size_query)
         for row in result:
-            analysis["table_sizes"][row.tablename] = {
-                "size": row.size,
-                "size_bytes": row.size_bytes
-            }
+            analysis["table_sizes"][row.tablename] = {"size": row.size, "size_bytes": row.size_bytes}
 
         # Get index usage statistics
         index_usage_query = text("""
@@ -1027,12 +1054,14 @@ def analyze_query_performance(session: Session) -> Dict[str, Any]:
             if table_key not in analysis["index_usage"]:
                 analysis["index_usage"][table_key] = []
 
-            analysis["index_usage"][table_key].append({
-                "index_name": row.indexname,
-                "scans": row.idx_scan,
-                "tuples_read": row.idx_tup_read,
-                "tuples_fetched": row.idx_tup_fetch
-            })
+            analysis["index_usage"][table_key].append(
+                {
+                    "index_name": row.indexname,
+                    "scans": row.idx_scan,
+                    "tuples_read": row.idx_tup_read,
+                    "tuples_fetched": row.idx_tup_fetch,
+                }
+            )
 
         # Generate recommendations based on analysis
         recommendations = []
@@ -1041,8 +1070,7 @@ def analyze_query_performance(session: Session) -> Dict[str, Any]:
         for table_name, table_info in analysis["table_sizes"].items():
             if table_info["size_bytes"] > 100 * 1024 * 1024:  # > 100MB
                 recommendations.append(
-                    f"Table {table_name} is large ({table_info['size']}). "
-                    "Consider partitioning or archiving old data."
+                    f"Table {table_name} is large ({table_info['size']}). Consider partitioning or archiving old data."
                 )
 
         # Check for unused indexes
@@ -1075,21 +1103,16 @@ def optimize_database_settings(engine):
     optimizations = [
         # Increase work_mem for complex queries
         "SET work_mem = '256MB'",
-
         # Optimize for read-heavy workload
         "SET random_page_cost = 1.1",
-
         # Increase effective_cache_size
         "SET effective_cache_size = '4GB'",
-
         # Enable parallel query execution
         "SET max_parallel_workers_per_gather = 4",
-
         # Optimize checkpoint settings
         "SET checkpoint_completion_target = 0.9",
-
         # Increase shared_buffers if not already set
-        "SET shared_buffers = '1GB'"
+        "SET shared_buffers = '1GB'",
     ]
 
     with engine.connect() as conn:

@@ -9,9 +9,9 @@ tracking, position management, and performance monitoring.
 from typing import Any, Dict, List
 
 from src.notification.logger import setup_logger
+from src.strategy.base_strategy import BaseStrategy
 from src.strategy.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
 from src.strategy.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
-from src.strategy.base_strategy import BaseStrategy
 
 _logger = setup_logger(__name__, use_multiprocessing=False)
 
@@ -72,7 +72,7 @@ class CustomStrategy(BaseStrategy):
 
                 if self.entry_logic:
                     entry_name = self.entry_logic["name"]
-                    entry_inds = self.entry_logic.get('indicators')
+                    entry_inds = self.entry_logic.get("indicators")
 
                     if not entry_inds:
                         # Fallback to Blueprint if None or empty list
@@ -90,7 +90,7 @@ class CustomStrategy(BaseStrategy):
 
                 if self.exit_logic:
                     exit_name = self.exit_logic["name"]
-                    exit_inds = self.exit_logic.get('indicators')
+                    exit_inds = self.exit_logic.get("indicators")
 
                     if not exit_inds:
                         # Fallback to Blueprint if None or empty list
@@ -111,9 +111,9 @@ class CustomStrategy(BaseStrategy):
                     _logger.info(f"CustomStrategy initializing {len(all_indicator_configs)} indicators from config")
                     # Prepare mock config for BaseStrategy._create_indicators_from_config
                     mock_config = {
-                        'parameters': {
-                            'entry_logic': {'indicators': all_indicator_configs},
-                            'exit_logic': {} # Already combined
+                        "parameters": {
+                            "entry_logic": {"indicators": all_indicator_configs},
+                            "exit_logic": {},  # Already combined
                         }
                     }
                     self._create_indicators_from_config(mock_config)
@@ -125,7 +125,9 @@ class CustomStrategy(BaseStrategy):
             _logger.exception("Error in _initialize_strategy")
             raise
 
-    def _resolve_indicator_params(self, indicator_configs: List[Dict[str, Any]], logic_params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _resolve_indicator_params(
+        self, indicator_configs: List[Dict[str, Any]], logic_params: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """
         Resolve indicator parameter placeholders with actual values from logic_params.
 
@@ -137,13 +139,13 @@ class CustomStrategy(BaseStrategy):
         resolved_configs = []
         for ind in indicator_configs:
             new_ind = ind.copy()
-            if 'params' in ind:
-                new_params = ind['params'].copy()
+            if "params" in ind:
+                new_params = ind["params"].copy()
                 for k, v in new_params.items():
                     if isinstance(v, str) and v in logic_params:
                         new_params[k] = logic_params[v]
                         _logger.debug(f"Resolved indicator param '{k}': {v} -> {logic_params[v]}")
-                new_ind['params'] = new_params
+                new_ind["params"] = new_params
             resolved_configs.append(new_ind)
         return resolved_configs
 
@@ -157,10 +159,7 @@ class CustomStrategy(BaseStrategy):
                 self.exit_mixin.next()
 
             # Check for entry signals
-            if (
-                self.position.size == 0
-                and self.entry_mixin
-            ):
+            if self.position.size == 0 and self.entry_mixin:
                 should_enter = self.entry_mixin.should_enter()
                 if should_enter:
                     # Use position_size from config if available, else default to 0.10
@@ -170,20 +169,14 @@ class CustomStrategy(BaseStrategy):
 
                     # Use base class method for position entry
                     self._enter_position(
-                        direction='long',
-                        confidence=position_size,
-                        reason=self.entry_mixin.get_entry_reason()
+                        direction="long", confidence=position_size, reason=self.entry_mixin.get_entry_reason()
                     )
 
             # Check for exit signals
-            if (
-                self.position.size != 0
-                and self.exit_mixin
-                and self.exit_mixin.should_exit()
-            ):
+            if self.position.size != 0 and self.exit_mixin and self.exit_mixin.should_exit():
                 # Get specific exit reason from mixin
                 exit_reason = "unknown"
-                if hasattr(self.exit_mixin, 'get_exit_reason'):
+                if hasattr(self.exit_mixin, "get_exit_reason"):
                     try:
                         exit_reason = self.exit_mixin.get_exit_reason()
                     except Exception as e:

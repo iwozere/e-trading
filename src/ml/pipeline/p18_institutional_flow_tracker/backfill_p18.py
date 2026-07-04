@@ -31,13 +31,13 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-import requests
 import pandas as pd
+import requests
 
-from src.notification.logger import setup_logger
 from src.data.downloader.edgar_downloader import EdgarDownloader
 from src.ml.pipeline.p18_institutional_flow_tracker.config import P18Config
 from src.ml.pipeline.p18_institutional_flow_tracker.pipeline import InstitutionalFlowPipeline
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -45,12 +45,12 @@ _logger = setup_logger(__name__)
 @dataclass(frozen=True)
 class QuarterSpec:
     label: str
-    year: int           # reporting quarter year
-    quarter: int        # reporting quarter 1-4
-    edgar_year: int     # EDGAR bulk index year (filing calendar year)
-    edgar_qtr: int      # EDGAR bulk index quarter (1-4, by filing date)
-    window_start: str   # earliest 13F filing date for this quarter (YYYY-MM-DD)
-    window_end: str     # latest 13F filing date for this quarter (YYYY-MM-DD)
+    year: int  # reporting quarter year
+    quarter: int  # reporting quarter 1-4
+    edgar_year: int  # EDGAR bulk index year (filing calendar year)
+    edgar_qtr: int  # EDGAR bulk index quarter (1-4, by filing date)
+    window_start: str  # earliest 13F filing date for this quarter (YYYY-MM-DD)
+    window_end: str  # latest 13F filing date for this quarter (YYYY-MM-DD)
 
 
 # Q4 2025: 45-day window ends 2026-02-14  → filed in EDGAR QTR1 2026
@@ -85,18 +85,24 @@ def _parse_13f_records(raw_text: str, window_start: str, window_end: str) -> pd.
     """Extract 13F-HR records within the filing window from a raw form.gz text."""
     records = []
     for m in _LINE_RE.finditer(raw_text):
-        records.append({
-            "cik": str(int(m.group(2))),    # strip leading zeros
-            "institution_name": m.group(1).strip(),
-            "accession_number": m.group(4),
-            "filed_date": m.group(3),
-        })
+        records.append(
+            {
+                "cik": str(int(m.group(2))),  # strip leading zeros
+                "institution_name": m.group(1).strip(),
+                "accession_number": m.group(4),
+                "filed_date": m.group(3),
+            }
+        )
 
     if not records:
-        return pd.DataFrame({"cik": pd.Series([], dtype=str),
-                             "institution_name": pd.Series([], dtype=str),
-                             "accession_number": pd.Series([], dtype=str),
-                             "filed_date": pd.Series([], dtype=str)})
+        return pd.DataFrame(
+            {
+                "cik": pd.Series([], dtype=str),
+                "institution_name": pd.Series([], dtype=str),
+                "accession_number": pd.Series([], dtype=str),
+                "filed_date": pd.Series([], dtype=str),
+            }
+        )
 
     df = pd.DataFrame(records)
     dates: pd.Series = pd.to_datetime(df["filed_date"])
@@ -105,8 +111,7 @@ def _parse_13f_records(raw_text: str, window_start: str, window_end: str) -> pd.
     return result
 
 
-def _seed_index_cache(edgar: EdgarDownloader, index_df: pd.DataFrame,
-                      year: int, quarter: int) -> None:
+def _seed_index_cache(edgar: EdgarDownloader, index_df: pd.DataFrame, year: int, quarter: int) -> None:
     """Write index_df to the path that download_13f_index uses as its cache."""
     dest = edgar._13f_index_dir / f"{year}_Q{quarter}.csv.gz"
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -116,12 +121,13 @@ def _seed_index_cache(edgar: EdgarDownloader, index_df: pd.DataFrame,
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="P18 full backfill via EDGAR bulk index.")
-    p.add_argument("--skip-q4-index", action="store_true",
-                   help="Skip downloading Q4 2025 bulk index (use if cache already exists)")
-    p.add_argument("--skip-q1-index", action="store_true",
-                   help="Skip downloading Q1 2026 bulk index (use if cache already exists)")
-    p.add_argument("--force", action="store_true",
-                   help="Force re-download of all infotables even if cached")
+    p.add_argument(
+        "--skip-q4-index", action="store_true", help="Skip downloading Q4 2025 bulk index (use if cache already exists)"
+    )
+    p.add_argument(
+        "--skip-q1-index", action="store_true", help="Skip downloading Q1 2026 bulk index (use if cache already exists)"
+    )
+    p.add_argument("--force", action="store_true", help="Force re-download of all infotables even if cached")
     return p.parse_args()
 
 
@@ -131,10 +137,12 @@ def main() -> int:
     edgar = EdgarDownloader()
 
     session = requests.Session()
-    session.headers.update({
-        "User-Agent": "research alkotrader@gmail.com",
-        "Accept-Encoding": "gzip, deflate",
-    })
+    session.headers.update(
+        {
+            "User-Agent": "research alkotrader@gmail.com",
+            "Accept-Encoding": "gzip, deflate",
+        }
+    )
 
     skip_by_label = {"Q4 2025": args.skip_q4_index, "Q1 2026": args.skip_q1_index}
 
@@ -155,8 +163,9 @@ def main() -> int:
             _logger.error("%s: no 13F-HR records found in bulk index — aborting", spec.label)
             return 1
 
-        _logger.info("%s: %d 13F-HR filers in window %s → %s",
-                     spec.label, len(index_df), spec.window_start, spec.window_end)
+        _logger.info(
+            "%s: %d 13F-HR filers in window %s → %s", spec.label, len(index_df), spec.window_start, spec.window_end
+        )
         _seed_index_cache(edgar, index_df, spec.year, spec.quarter)
 
     # ------------------------------------------------------------------ #

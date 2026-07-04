@@ -1,8 +1,9 @@
 import pytest
-from src.trading.broker.mock_broker import MockBroker
+
 from src.trading.broker.binance_broker import BinanceBroker
 from src.trading.broker.broker_factory import get_broker
 from src.trading.broker.ibkr_broker import IBKRBroker
+from src.trading.broker.mock_broker import MockBroker
 
 
 @pytest.mark.parametrize(

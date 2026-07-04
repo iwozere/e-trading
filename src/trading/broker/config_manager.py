@@ -21,25 +21,27 @@ Classes:
 - EnvironmentManager: Environment-specific configuration management
 """
 
-import json
-import yaml
-from pathlib import Path
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from enum import Enum
 import hashlib
+import json
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List
 
-from src.trading.broker.config_validator import validate_and_create_broker_config
-from src.trading.broker.binance_utils import create_binance_config_template
-from src.trading.broker.ibkr_utils import create_ibkr_config_template
+import yaml
 
 from src.notification.logger import setup_logger
+from src.trading.broker.binance_utils import create_binance_config_template
+from src.trading.broker.config_validator import validate_and_create_broker_config
+from src.trading.broker.ibkr_utils import create_ibkr_config_template
+
 _logger = setup_logger(__name__)
 
 
 class Environment(Enum):
     """Environment enumeration."""
+
     DEVELOPMENT = "development"
     STAGING = "staging"
     PRODUCTION = "production"
@@ -48,6 +50,7 @@ class Environment(Enum):
 
 class ConfigFormat(Enum):
     """Configuration file format enumeration."""
+
     JSON = "json"
     YAML = "yaml"
     TOML = "toml"
@@ -56,20 +59,21 @@ class ConfigFormat(Enum):
 @dataclass
 class ConfigVersion:
     """Configuration version information."""
+
     version: str
     timestamp: datetime
     description: str
     config_hash: str
-    author: Optional[str] = None
+    author: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
-            'version': self.version,
-            'timestamp': self.timestamp.isoformat(),
-            'description': self.description,
-            'config_hash': self.config_hash,
-            'author': self.author
+            "version": self.version,
+            "timestamp": self.timestamp.isoformat(),
+            "description": self.description,
+            "config_hash": self.config_hash,
+            "author": self.author,
         }
 
 
@@ -83,73 +87,65 @@ class ConfigTemplate:
     def _load_builtin_templates(self):
         """Load built-in configuration templates."""
         # Binance templates
-        self.templates['binance_paper'] = create_binance_config_template('paper')
-        self.templates['binance_live'] = create_binance_config_template('live')
+        self.templates["binance_paper"] = create_binance_config_template("paper")
+        self.templates["binance_live"] = create_binance_config_template("live")
 
         # IBKR templates
-        self.templates['ibkr_paper'] = create_ibkr_config_template('paper')
-        self.templates['ibkr_live'] = create_ibkr_config_template('live')
+        self.templates["ibkr_paper"] = create_ibkr_config_template("paper")
+        self.templates["ibkr_live"] = create_ibkr_config_template("live")
 
         # Mock template
-        self.templates['mock_dev'] = {
-            'type': 'mock',
-            'trading_mode': 'paper',
-            'cash': 100000.0,
-            'paper_trading_config': {
-                'mode': 'basic',
-                'commission_rate': 0.0,
-                'slippage_model': 'fixed',
-                'base_slippage': 0.0,
-                'latency_simulation': False
+        self.templates["mock_dev"] = {
+            "type": "mock",
+            "trading_mode": "paper",
+            "cash": 100000.0,
+            "paper_trading_config": {
+                "mode": "basic",
+                "commission_rate": 0.0,
+                "slippage_model": "fixed",
+                "base_slippage": 0.0,
+                "latency_simulation": False,
             },
-            'notifications': {
-                'position_opened': False,
-                'position_closed': False,
-                'email_enabled': False,
-                'telegram_enabled': False
-            }
+            "notifications": {
+                "position_opened": False,
+                "position_closed": False,
+                "email_enabled": False,
+                "telegram_enabled": False,
+            },
         }
 
         # Conservative template
-        self.templates['conservative'] = {
-            'type': 'ibkr',
-            'trading_mode': 'paper',
-            'cash': 10000.0,
-            'paper_trading_config': {
-                'mode': 'realistic',
-                'commission_rate': 0.0005,
-                'base_slippage': 0.0002,
-                'partial_fill_probability': 0.05,
-                'reject_probability': 0.001
+        self.templates["conservative"] = {
+            "type": "ibkr",
+            "trading_mode": "paper",
+            "cash": 10000.0,
+            "paper_trading_config": {
+                "mode": "realistic",
+                "commission_rate": 0.0005,
+                "base_slippage": 0.0002,
+                "partial_fill_probability": 0.05,
+                "reject_probability": 0.001,
             },
-            'risk_management': {
-                'max_position_size': 200.0,
-                'max_daily_loss': 100.0,
-                'max_portfolio_risk': 0.005
-            }
+            "risk_management": {"max_position_size": 200.0, "max_daily_loss": 100.0, "max_portfolio_risk": 0.005},
         }
 
         # Aggressive template
-        self.templates['aggressive'] = {
-            'type': 'binance',
-            'trading_mode': 'paper',
-            'cash': 50000.0,
-            'paper_trading_config': {
-                'mode': 'advanced',
-                'commission_rate': 0.001,
-                'base_slippage': 0.001,
-                'partial_fill_probability': 0.25,
-                'reject_probability': 0.05,
-                'market_impact_enabled': True
+        self.templates["aggressive"] = {
+            "type": "binance",
+            "trading_mode": "paper",
+            "cash": 50000.0,
+            "paper_trading_config": {
+                "mode": "advanced",
+                "commission_rate": 0.001,
+                "base_slippage": 0.001,
+                "partial_fill_probability": 0.25,
+                "reject_probability": 0.05,
+                "market_impact_enabled": True,
             },
-            'risk_management': {
-                'max_position_size': 5000.0,
-                'max_daily_loss': 2500.0,
-                'max_portfolio_risk': 0.05
-            }
+            "risk_management": {"max_position_size": 5000.0, "max_daily_loss": 2500.0, "max_portfolio_risk": 0.05},
         }
 
-    def get_template(self, template_name: str) -> Optional[Dict[str, Any]]:
+    def get_template(self, template_name: str) -> Dict[str, Any] | None:
         """Get a configuration template."""
         return self.templates.get(template_name)
 
@@ -202,7 +198,7 @@ class EnvironmentManager:
             config_file = self.config_dir / f"{env.value}.json"
             if config_file.exists():
                 try:
-                    with open(config_file, 'r') as f:
+                    with open(config_file) as f:
                         self.environments[env] = json.load(f)
                     _logger.info("Loaded %s environment configuration", env.value)
                 except Exception:
@@ -223,7 +219,7 @@ class EnvironmentManager:
         config_file = self.config_dir / f"{environment.value}.json"
 
         try:
-            with open(config_file, 'w') as f:
+            with open(config_file, "w") as f:
                 json.dump(config, f, indent=2, default=str)
 
             self.environments[environment] = config
@@ -233,8 +229,9 @@ class EnvironmentManager:
             _logger.exception("Failed to save %s config:", environment.value)
             raise
 
-    def apply_environment_overrides(self, base_config: Dict[str, Any],
-                                  environment: Environment = None) -> Dict[str, Any]:
+    def apply_environment_overrides(
+        self, base_config: Dict[str, Any], environment: Environment = None
+    ) -> Dict[str, Any]:
         """Apply environment-specific overrides to base configuration."""
         env = environment or self.current_environment
         env_config = self.get_environment_config(env)
@@ -291,11 +288,11 @@ class ConfigManager:
         """Load existing configurations from disk."""
         try:
             for config_file in self.config_dir.glob("*.json"):
-                if config_file.stem in ['development', 'staging', 'production', 'testing']:
+                if config_file.stem in ["development", "staging", "production", "testing"]:
                     continue  # Skip environment files
 
                 try:
-                    with open(config_file, 'r') as f:
+                    with open(config_file) as f:
                         config = json.load(f)
 
                     config_name = config_file.stem
@@ -308,8 +305,7 @@ class ConfigManager:
         except Exception:
             _logger.exception("Error loading configurations:")
 
-    def create_configuration(self, name: str, config: Dict[str, Any],
-                           validate: bool = True) -> bool:
+    def create_configuration(self, name: str, config: Dict[str, Any], validate: bool = True) -> bool:
         """
         Create a new configuration.
 
@@ -344,8 +340,9 @@ class ConfigManager:
             _logger.exception("Failed to create configuration %s:", name)
             return False
 
-    def update_configuration(self, name: str, config: Dict[str, Any],
-                           description: str = "Configuration update") -> bool:
+    def update_configuration(
+        self, name: str, config: Dict[str, Any], description: str = "Configuration update"
+    ) -> bool:
         """
         Update an existing configuration.
 
@@ -377,7 +374,7 @@ class ConfigManager:
             _logger.exception("Failed to update configuration %s:", name)
             return False
 
-    def get_configuration(self, name: str, environment: Environment = None) -> Optional[Dict[str, Any]]:
+    def get_configuration(self, name: str, environment: Environment = None) -> Dict[str, Any] | None:
         """
         Get a configuration with optional environment overrides.
 
@@ -437,20 +434,19 @@ class ConfigManager:
             latest_version = versions[-1] if versions else None
 
             config_info = {
-                'name': name,
-                'type': config.get('type', 'unknown'),
-                'trading_mode': config.get('trading_mode', 'unknown'),
-                'version_count': len(versions),
-                'latest_version': latest_version.version if latest_version else None,
-                'last_updated': latest_version.timestamp.isoformat() if latest_version else None
+                "name": name,
+                "type": config.get("type", "unknown"),
+                "trading_mode": config.get("trading_mode", "unknown"),
+                "version_count": len(versions),
+                "latest_version": latest_version.version if latest_version else None,
+                "last_updated": latest_version.timestamp.isoformat() if latest_version else None,
             }
 
             configs.append(config_info)
 
         return configs
 
-    def create_from_template(self, name: str, template_name: str,
-                           overrides: Dict[str, Any] = None) -> bool:
+    def create_from_template(self, name: str, template_name: str, overrides: Dict[str, Any] = None) -> bool:
         """
         Create configuration from template.
 
@@ -504,7 +500,7 @@ class ConfigManager:
                 _logger.error("Version file not found: %s", version_file)
                 return False
 
-            with open(version_file, 'r') as f:
+            with open(version_file) as f:
                 config = json.load(f)
 
             # Update current configuration
@@ -518,7 +514,7 @@ class ConfigManager:
         """Save configuration to disk."""
         config_file = self.config_dir / f"{name}.json"
 
-        with open(config_file, 'w') as f:
+        with open(config_file, "w") as f:
             json.dump(config, f, indent=2, default=str)
 
     def _create_version(self, name: str, config: Dict[str, Any], description: str):
@@ -528,15 +524,12 @@ class ConfigManager:
         config_hash = hashlib.sha256(config_str.encode()).hexdigest()[:16]
 
         # Create version
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
         version_num = len(self.config_versions.get(name, [])) + 1
         version = f"v{version_num:03d}"
 
         config_version = ConfigVersion(
-            version=version,
-            timestamp=timestamp,
-            description=description,
-            config_hash=config_hash
+            version=version, timestamp=timestamp, description=description, config_hash=config_hash
         )
 
         # Store version
@@ -550,13 +543,13 @@ class ConfigManager:
         versions_dir.mkdir(exist_ok=True)
 
         version_file = versions_dir / f"{name}_{version}.json"
-        with open(version_file, 'w') as f:
+        with open(version_file, "w") as f:
             json.dump(config, f, indent=2, default=str)
 
         # Save version metadata
         metadata_file = versions_dir / f"{name}_versions.json"
         versions_data = [v.to_dict() for v in self.config_versions[name]]
-        with open(metadata_file, 'w') as f:
+        with open(metadata_file, "w") as f:
             json.dump(versions_data, f, indent=2, default=str)
 
     def export_configuration(self, name: str, format: ConfigFormat = ConfigFormat.JSON) -> str:
@@ -581,8 +574,7 @@ class ConfigManager:
         else:
             raise ValueError(f"Unsupported format: {format}")
 
-    def import_configuration(self, name: str, config_str: str,
-                           format: ConfigFormat = ConfigFormat.JSON) -> bool:
+    def import_configuration(self, name: str, config_str: str, format: ConfigFormat = ConfigFormat.JSON) -> bool:
         """
         Import configuration from string.
 

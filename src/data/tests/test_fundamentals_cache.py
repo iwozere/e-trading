@@ -8,17 +8,18 @@ This script tests the fundamentals cache functionality including:
 - Integration with DataManager
 """
 
-import sys
 import os
+import sys
 import tempfile
 from datetime import datetime, timedelta
 
 # Add project root to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from src.data.cache.fundamentals_cache import FundamentalsCache
 from src.data.cache.fundamentals_combiner import FundamentalsCombiner
 from src.data.data_manager import DataManager
+
 
 def test_fundamentals_cache():
     """Test fundamentals cache operations."""
@@ -30,17 +31,17 @@ def test_fundamentals_cache():
 
         # Test data
         test_data = {
-            'market_cap': 3000000000000,
-            'pe_ratio': 25.5,
-            'pb_ratio': 4.2,
-            'dividend_yield': 0.5,
-            'revenue': 365000000000,
-            'net_income': 95000000000
+            "market_cap": 3000000000000,
+            "pe_ratio": 25.5,
+            "pb_ratio": 4.2,
+            "dividend_yield": 0.5,
+            "revenue": 365000000000,
+            "net_income": 95000000000,
         }
 
         # Test write and read
         print("  Testing cache write/read...")
-        file_path = cache.write_json('AAPL', 'yfinance', test_data)
+        file_path = cache.write_json("AAPL", "yfinance", test_data)
         assert os.path.exists(file_path), "Cache file should be created"
 
         # Test read
@@ -49,10 +50,10 @@ def test_fundamentals_cache():
 
         # Test find latest
         print("  Testing find latest...")
-        latest = cache.find_latest_json('AAPL')
+        latest = cache.find_latest_json("AAPL")
         assert latest is not None, "Should find latest cache"
-        assert latest.provider == 'yfinance', "Provider should match"
-        assert latest.symbol == 'AAPL', "Symbol should match"
+        assert latest.provider == "yfinance", "Provider should match"
+        assert latest.symbol == "AAPL", "Symbol should match"
 
         # Test cache validity
         print("  Testing cache validity...")
@@ -66,16 +67,17 @@ def test_fundamentals_cache():
         print("  Testing stale data cleanup...")
         # Use a timestamp that's newer than the cached file
         new_timestamp = datetime.now() + timedelta(minutes=1)
-        removed_files = cache.cleanup_stale_data('AAPL', 'yfinance', new_timestamp)
+        removed_files = cache.cleanup_stale_data("AAPL", "yfinance", new_timestamp)
         assert len(removed_files) == 1, "Should remove the existing file for newer timestamp"
 
         # Test cache stats
         print("  Testing cache stats...")
-        stats = cache.get_cache_stats('AAPL')
-        assert stats['files'] == 0, "Should have 0 cache files after cleanup"
-        assert stats['symbol'] == 'AAPL', "Symbol should match"
+        stats = cache.get_cache_stats("AAPL")
+        assert stats["files"] == 0, "Should have 0 cache files after cleanup"
+        assert stats["symbol"] == "AAPL", "Symbol should match"
 
         print("  ✅ Fundamentals cache tests passed!")
+
 
 def test_fundamentals_combiner():
     """Test fundamentals data combination."""
@@ -85,51 +87,43 @@ def test_fundamentals_combiner():
 
     # Test data from different providers
     provider_data = {
-        'yfinance': {
-            'market_cap': 3000000000000,
-            'pe_ratio': 25.5,
-            'dividend_yield': 0.5,
-            'revenue': 365000000000
+        "yfinance": {"market_cap": 3000000000000, "pe_ratio": 25.5, "dividend_yield": 0.5, "revenue": 365000000000},
+        "fmp": {
+            "market_cap": 3001000000000,  # Slightly different
+            "pe_ratio": 25.4,
+            "pb_ratio": 4.2,  # Additional field
+            "net_income": 95000000000,
         },
-        'fmp': {
-            'market_cap': 3001000000000,  # Slightly different
-            'pe_ratio': 25.4,
-            'pb_ratio': 4.2,  # Additional field
-            'net_income': 95000000000
-        },
-        'alpha_vantage': {
-            'market_cap': 3000500000000,
-            'pe_ratio': 25.6,
-            'cash': 50000000000
-        }
+        "alpha_vantage": {"market_cap": 3000500000000, "pe_ratio": 25.6, "cash": 50000000000},
     }
 
     # Test priority-based combination
     print("  Testing priority-based combination...")
-    combined = combiner.combine_snapshots(provider_data, 'priority_based')
+    combined = combiner.combine_snapshots(provider_data, "priority_based")
 
-    assert 'market_cap' in combined, "Should have market_cap"
-    assert 'pe_ratio' in combined, "Should have pe_ratio"
-    assert 'pb_ratio' in combined, "Should have pb_ratio from FMP"
-    assert 'cash' in combined, "Should have cash from Alpha Vantage"
-    assert '_metadata' in combined, "Should have metadata"
+    assert "market_cap" in combined, "Should have market_cap"
+    assert "pe_ratio" in combined, "Should have pe_ratio"
+    assert "pb_ratio" in combined, "Should have pb_ratio from FMP"
+    assert "cash" in combined, "Should have cash from Alpha Vantage"
+    assert "_metadata" in combined, "Should have metadata"
 
     # Check that FMP data takes priority (highest priority)
-    assert combined['pb_ratio'] == 4.2, "Should use FMP pb_ratio"
+    assert combined["pb_ratio"] == 4.2, "Should use FMP pb_ratio"
 
     # Test quality-based combination
     print("  Testing quality-based combination...")
-    combined_quality = combiner.combine_snapshots(provider_data, 'quality_based')
-    assert '_metadata' in combined_quality, "Should have metadata"
-    assert combined_quality['_metadata']['combination_strategy'] == 'quality_based'
+    combined_quality = combiner.combine_snapshots(provider_data, "quality_based")
+    assert "_metadata" in combined_quality, "Should have metadata"
+    assert combined_quality["_metadata"]["combination_strategy"] == "quality_based"
 
     # Test consensus combination
     print("  Testing consensus combination...")
-    combined_consensus = combiner.combine_snapshots(provider_data, 'consensus')
-    assert '_metadata' in combined_consensus, "Should have metadata"
-    assert combined_consensus['_metadata']['combination_strategy'] == 'consensus'
+    combined_consensus = combiner.combine_snapshots(provider_data, "consensus")
+    assert "_metadata" in combined_consensus, "Should have metadata"
+    assert combined_consensus["_metadata"]["combination_strategy"] == "consensus"
 
     print("  ✅ Fundamentals combiner tests passed!")
+
 
 def test_data_manager_integration():
     """Test DataManager integration with fundamentals cache."""
@@ -142,19 +136,19 @@ def test_data_manager_integration():
             dm = DataManager(temp_dir)
 
             # Test get_fundamentals method exists
-            assert hasattr(dm, 'get_fundamentals'), "DataManager should have get_fundamentals method"
+            assert hasattr(dm, "get_fundamentals"), "DataManager should have get_fundamentals method"
 
             # Test with a real symbol (this will try to fetch real data)
             print("  Testing fundamentals retrieval for AAPL...")
             try:
-                fundamentals = dm.get_fundamentals('AAPL', force_refresh=True)
+                fundamentals = dm.get_fundamentals("AAPL", force_refresh=True)
 
                 if fundamentals:
                     print(f"    Retrieved fundamentals with {len(fundamentals)} fields")
                     print(f"    Fields: {list(fundamentals.keys())[:5]}...")  # Show first 5 fields
 
                     # Check for metadata
-                    if '_metadata' in fundamentals:
+                    if "_metadata" in fundamentals:
                         print(f"    Combination strategy: {fundamentals['_metadata']['combination_strategy']}")
                         print(f"    Providers used: {fundamentals['_metadata']['providers_used']}")
                 else:
@@ -172,6 +166,7 @@ def test_data_manager_integration():
 
         except Exception as e:
             print(f"  ⚠️  DataManager integration test failed (expected if no API keys): {e}")
+
 
 def main():
     """Run all tests."""
@@ -192,10 +187,12 @@ def main():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 
     return 0
+
 
 if __name__ == "__main__":
     exit(main())

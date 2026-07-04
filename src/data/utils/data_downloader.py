@@ -17,11 +17,12 @@ Features:
     - Duplicate detection
 """
 
-import sys
 import os
-import pandas as pd
-from datetime import datetime, timezone
+import sys
+from datetime import UTC, datetime
 from pathlib import Path
+
+import pandas as pd
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -31,11 +32,10 @@ if str(PROJECT_ROOT) not in sys.path:
 # Change to project root directory for imports to work
 os.chdir(PROJECT_ROOT)
 
-from src.data.data_manager import DataManager
-from src.notification.logger import setup_logger
-
 # Import DATA_CACHE_DIR with fallback
 from config.donotshare.donotshare import DATA_CACHE_DIR
+from src.data.data_manager import DataManager
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -51,19 +51,20 @@ _logger.info("Cache directory: %s", DATA_CACHE_DIR)
 # start date will have ALL the bars for this date, for example 20250101 means all bars for 20250101
 # so if we want to download all the bars for 2025, we need to set start_date to 20250101 and end_date to 20251231
 DOWNLOAD_SCENARIOS = {
-    'symbols': ['XRPUSDT'],
-    'periods': [
-        {'start_date': '20200101', 'end_date': '20201231'},
-        {'start_date': '20210101', 'end_date': '20211231'},
-        {'start_date': '20220101', 'end_date': '20221231'},
-        {'start_date': '20230101', 'end_date': '20231231'},
-        {'start_date': '20240101', 'end_date': '20241231'}
+    "symbols": ["XRPUSDT"],
+    "periods": [
+        {"start_date": "20200101", "end_date": "20201231"},
+        {"start_date": "20210101", "end_date": "20211231"},
+        {"start_date": "20220101", "end_date": "20221231"},
+        {"start_date": "20230101", "end_date": "20231231"},
+        {"start_date": "20240101", "end_date": "20241231"},
     ],
-    'intervals': ['4h', '1h', '30m', '15m', '5m']
+    "intervals": ["4h", "1h", "30m", "15m", "5m"],
 }
 
 # Define output directory for merged CSV files
 DATA_OUTPUT_DIR = PROJECT_ROOT / "data"
+
 
 def download_all_scenarios():
     """
@@ -73,9 +74,7 @@ def download_all_scenarios():
     data_manager = DataManager(cache_dir=DATA_CACHE_DIR)
 
     total_combinations = (
-        len(DOWNLOAD_SCENARIOS['symbols']) *
-        len(DOWNLOAD_SCENARIOS['periods']) *
-        len(DOWNLOAD_SCENARIOS['intervals'])
+        len(DOWNLOAD_SCENARIOS["symbols"]) * len(DOWNLOAD_SCENARIOS["periods"]) * len(DOWNLOAD_SCENARIOS["intervals"])
     )
     completed = 0
     successful = 0
@@ -88,16 +87,18 @@ def download_all_scenarios():
     _logger.info("Total combinations: %d", total_combinations)
     _logger.info("=" * 80)
 
-    for symbol in DOWNLOAD_SCENARIOS['symbols']:
-        for period in DOWNLOAD_SCENARIOS['periods']:
-            for interval in DOWNLOAD_SCENARIOS['intervals']:
+    for symbol in DOWNLOAD_SCENARIOS["symbols"]:
+        for period in DOWNLOAD_SCENARIOS["periods"]:
+            for interval in DOWNLOAD_SCENARIOS["intervals"]:
                 completed += 1
 
                 # Convert date strings to datetime objects (UTC timezone-aware)
                 try:
-                    start_dt = datetime.strptime(period['start_date'], "%Y%m%d").replace(tzinfo=timezone.utc)
+                    start_dt = datetime.strptime(period["start_date"], "%Y%m%d").replace(tzinfo=UTC)
                     # Set end_dt to 23:59:59 to ensure all bars for that date are included
-                    end_dt = datetime.strptime(period['end_date'], "%Y%m%d").replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
+                    end_dt = datetime.strptime(period["end_date"], "%Y%m%d").replace(
+                        hour=23, minute=59, second=59, tzinfo=UTC
+                    )
                 except ValueError as e:
                     _logger.error("Invalid date format: %s", e)
                     failed += 1
@@ -105,10 +106,15 @@ def download_all_scenarios():
 
                 _logger.info("")
                 _logger.info("-" * 80)
-                _logger.info("Processing %d/%d: %s %s (%s to %s)",
-                           completed, total_combinations,
-                           symbol, interval,
-                           start_dt.date(), end_dt.date())
+                _logger.info(
+                    "Processing %d/%d: %s %s (%s to %s)",
+                    completed,
+                    total_combinations,
+                    symbol,
+                    interval,
+                    start_dt.date(),
+                    end_dt.date(),
+                )
                 _logger.info("-" * 80)
 
                 try:
@@ -118,7 +124,7 @@ def download_all_scenarios():
                         timeframe=interval,
                         start_date=start_dt,
                         end_date=end_dt,
-                        force_refresh=False  # Use cache if available
+                        force_refresh=False,  # Use cache if available
                     )
 
                     if df is not None and not df.empty:
@@ -134,7 +140,7 @@ def download_all_scenarios():
                         if not isinstance(df_to_save.index, pd.DatetimeIndex):
                             df_to_save.index = pd.to_datetime(df_to_save.index)
 
-                        df_to_save.insert(0, 'timestamp', df_to_save.index.strftime('%Y-%m-%d %H:%M:%S'))
+                        df_to_save.insert(0, "timestamp", df_to_save.index.strftime("%Y-%m-%d %H:%M:%S"))
 
                         df_to_save.to_csv(filepath, index=False)
                         _logger.info("💾 Saved merged data to: %s", filepath)

@@ -10,11 +10,18 @@ This package contains enhanced sentiment analysis algorithms including:
 - Sentiment aggregation and weighting strategies
 """
 
+from .bot_detector import BotDetectionResult, BotDetector, PostMetrics, UserProfile
+from .enhanced_hf_analyzer import ContentType, EnhancedHFAnalyzer, SentimentPrediction
 from .heuristic_analyzer import HeuristicSentimentAnalyzer, SentimentResult
-from .enhanced_hf_analyzer import EnhancedHFAnalyzer, SentimentPrediction, ContentType
-from .bot_detector import BotDetector, BotDetectionResult, UserProfile, PostMetrics
-from .virality_calculator import ViralityCalculator, ViralityResult, PostData, EngagementMetrics, AuthorInfluence, Platform
-from .sentiment_aggregator import SentimentAggregator, AggregatedSentiment, SourceSentiment
+from .sentiment_aggregator import AggregatedSentiment, SentimentAggregator, SourceSentiment
+from .virality_calculator import (
+    AuthorInfluence,
+    EngagementMetrics,
+    Platform,
+    PostData,
+    ViralityCalculator,
+    ViralityResult,
+)
 
 __all__ = [
     "HeuristicSentimentAnalyzer",
@@ -34,5 +41,5 @@ __all__ = [
     "Platform",
     "SentimentAggregator",
     "AggregatedSentiment",
-    "SourceSentiment"
+    "SourceSentiment",
 ]

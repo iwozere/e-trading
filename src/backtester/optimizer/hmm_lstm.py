@@ -18,24 +18,25 @@ Features:
 - Consistent results format with custom_optimizer.py
 """
 
-import sys
-import yaml
 import pickle
-import pandas as pd
-import torch
-from pathlib import Path
+import sys
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Any
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
 import backtrader as bt
 import matplotlib.pyplot as plt
+import pandas as pd
+import torch
+import yaml
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.backtester.optimizer.base_optimizer import BaseOptimizer
-from src.strategy.hmm_lstm_strategy import HMMLSTMStrategy
 from src.notification.logger import setup_logger
+from src.strategy.hmm_lstm_strategy import HMMLSTMStrategy
 
 _logger = setup_logger(__name__)
 
@@ -57,28 +58,26 @@ class HMMLSTMOptimizer(BaseOptimizer):
         """
         super().__init__(config_path)
 
-        self.pipeline_dir = Path(self.config['ml_models']['pipeline_dir'])
-        self.models_dir = Path(self.config['ml_models']['models_dir'])
+        self.pipeline_dir = Path(self.config["ml_models"]["pipeline_dir"])
+        self.models_dir = Path(self.config["ml_models"]["models_dir"])
         self.pipeline_config = self._load_pipeline_config()
 
         # Initialize device for PyTorch
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         _logger.info("Using device: %s", self.device)
-
-
 
     def _load_pipeline_config(self) -> dict:
         """Load pipeline configuration."""
-        pipeline_config_path = Path(self.config['ml_models']['config_file'])
+        pipeline_config_path = Path(self.config["ml_models"]["config_file"])
         if not pipeline_config_path.exists():
             raise FileNotFoundError(f"Pipeline config not found: {pipeline_config_path}")
 
-        with open(pipeline_config_path, 'r') as f:
+        with open(pipeline_config_path) as f:
             config = yaml.safe_load(f)
 
         return config
 
-    def find_latest_models(self, symbol: str, timeframe: str) -> Tuple[Optional[Path], Optional[Path]]:
+    def find_latest_models(self, symbol: str, timeframe: str) -> Tuple[Path | None, Path | None]:
         """
         Find the latest trained HMM and LSTM models for a symbol-timeframe combination.
 
@@ -100,7 +99,9 @@ class HMMLSTMOptimizer(BaseOptimizer):
         lstm_dir = self.models_dir / "lstm"
         lstm_pattern = f"lstm_{symbol}_{timeframe}_*.pkl"
         lstm_files = list(lstm_dir.glob(lstm_pattern))
-        _logger.debug("LSTM pattern '%s' found %d files: %s", lstm_pattern, len(lstm_files), [f.name for f in lstm_files])
+        _logger.debug(
+            "LSTM pattern '%s' found %d files: %s", lstm_pattern, len(lstm_files), [f.name for f in lstm_files]
+        )
         lstm_model_path = sorted(lstm_files)[-1] if lstm_files else None
 
         if hmm_model_path:
@@ -129,28 +130,34 @@ class HMMLSTMOptimizer(BaseOptimizer):
         # SECURITY: pickle.load is an RCE sink if model files are shared or
         # writable by others.  These artifacts must be produced locally by this
         # pipeline and stored in a path inaccessible to other users/services.
-        with open(hmm_path, 'rb') as f:
+        with open(hmm_path, "rb") as f:
             hmm_data = pickle.load(f)
 
-        with open(lstm_path, 'rb') as f:
+        with open(lstm_path, "rb") as f:
             lstm_data = pickle.load(f)
 
         # Log HMM model info (handle different possible structures)
-        if 'config' in hmm_data and 'n_components' in hmm_data['config']:
-            _logger.info("Loaded HMM model with %d components", hmm_data['config']['n_components'])
-        elif 'params' in hmm_data and 'n_components' in hmm_data['params']:
-            _logger.info("Loaded HMM model with %d components", hmm_data['params']['n_components'])
+        if "config" in hmm_data and "n_components" in hmm_data["config"]:
+            _logger.info("Loaded HMM model with %d components", hmm_data["config"]["n_components"])
+        elif "params" in hmm_data and "n_components" in hmm_data["params"]:
+            _logger.info("Loaded HMM model with %d components", hmm_data["params"]["n_components"])
         else:
             _logger.info("Loaded HMM model (structure: %s)", list(hmm_data.keys()))
 
         # Log LSTM model info (handle different possible structures)
-        if 'config' in lstm_data and 'input_size' in lstm_data['config']:
-            _logger.info("Loaded LSTM model with input_size=%d, hidden_size=%d",
-                        lstm_data['config']['input_size'], lstm_data['config']['hidden_size'])
-        elif 'model_architecture' in lstm_data:
-            arch = lstm_data['model_architecture']
-            _logger.info("Loaded LSTM model with input_size=%d, hidden_size=%d",
-                        arch.get('input_size', 'unknown'), arch.get('hidden_size', 'unknown'))
+        if "config" in lstm_data and "input_size" in lstm_data["config"]:
+            _logger.info(
+                "Loaded LSTM model with input_size=%d, hidden_size=%d",
+                lstm_data["config"]["input_size"],
+                lstm_data["config"]["hidden_size"],
+            )
+        elif "model_architecture" in lstm_data:
+            arch = lstm_data["model_architecture"]
+            _logger.info(
+                "Loaded LSTM model with input_size=%d, hidden_size=%d",
+                arch.get("input_size", "unknown"),
+                arch.get("hidden_size", "unknown"),
+            )
         else:
             _logger.info("Loaded LSTM model (structure: %s)", list(lstm_data.keys()))
 
@@ -171,30 +178,34 @@ class HMMLSTMOptimizer(BaseOptimizer):
             from src.strategy.hmm_lstm_strategy import LSTMModel
 
             # Get model architecture
-            if 'model_architecture' not in lstm_data:
+            if "model_architecture" not in lstm_data:
                 raise ValueError("No model_architecture found in LSTM data")
 
-            arch = lstm_data['model_architecture']
+            arch = lstm_data["model_architecture"]
 
             # Create model with saved architecture
             model = LSTMModel(
-                input_size=arch.get('input_size', 50),
-                hidden_size=arch.get('hidden_size', 100),
-                num_layers=arch.get('num_layers', 2),
-                dropout=arch.get('dropout', 0.2),
-                output_size=arch.get('output_size', 1),
-                n_regimes=arch.get('n_regimes', 3)
+                input_size=arch.get("input_size", 50),
+                hidden_size=arch.get("hidden_size", 100),
+                num_layers=arch.get("num_layers", 2),
+                dropout=arch.get("dropout", 0.2),
+                output_size=arch.get("output_size", 1),
+                n_regimes=arch.get("n_regimes", 3),
             )
 
             # Load state dict
-            if 'model_state_dict' not in lstm_data:
+            if "model_state_dict" not in lstm_data:
                 raise ValueError("No model_state_dict found in LSTM data")
 
-            model.load_state_dict(lstm_data['model_state_dict'])
+            model.load_state_dict(lstm_data["model_state_dict"])
             model.eval()  # Set to evaluation mode
 
-            _logger.info("Reconstructed LSTM model: input_size=%d, hidden_size=%d, num_layers=%d",
-                        arch.get('input_size', 50), arch.get('hidden_size', 100), arch.get('num_layers', 2))
+            _logger.info(
+                "Reconstructed LSTM model: input_size=%d, hidden_size=%d, num_layers=%d",
+                arch.get("input_size", 50),
+                arch.get("hidden_size", 100),
+                arch.get("num_layers", 2),
+            )
 
             return model
 
@@ -214,7 +225,7 @@ class HMMLSTMOptimizer(BaseOptimizer):
             DataFrame with OHLCV data
         """
         # Load raw OHLCV data
-        data_dir = Path(self.config['data']['data_dir'])
+        data_dir = Path(self.config["data"]["data_dir"])
 
         # Find the data file with the correct naming pattern
         # Pattern: {source}_{symbol}_{timeframe}_{start_date}_{end_date}.csv
@@ -232,7 +243,7 @@ class HMMLSTMOptimizer(BaseOptimizer):
 
         # Handle different datetime column names
         datetime_col = None
-        for col in ['datetime', 'timestamp', 'date']:
+        for col in ["datetime", "timestamp", "date"]:
             if col in df.columns:
                 datetime_col = col
                 break
@@ -240,25 +251,25 @@ class HMMLSTMOptimizer(BaseOptimizer):
         if datetime_col is None:
             raise ValueError(f"No datetime column found in {data_file}. Available columns: {df.columns.tolist()}")
 
-        df['datetime'] = pd.to_datetime(df[datetime_col], utc=True)
-        df.set_index('datetime', inplace=True)
+        df["datetime"] = pd.to_datetime(df[datetime_col], utc=True)
+        df.set_index("datetime", inplace=True)
 
         # Convert to timezone-naive for compatibility
         df.index = df.index.tz_localize(None)
 
         # Ensure we have required OHLCV columns
-        required_cols = ['open', 'high', 'low', 'close', 'volume']
+        required_cols = ["open", "high", "low", "close", "volume"]
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             raise ValueError(f"Missing required columns: {missing_cols}")
 
         # Filter by date range if specified
-        if 'start_date' in self.config['data']:
-            start_date = pd.to_datetime(self.config['data']['start_date'])
+        if "start_date" in self.config["data"]:
+            start_date = pd.to_datetime(self.config["data"]["start_date"])
             df = df[df.index >= start_date]
 
-        if 'end_date' in self.config['data']:
-            end_date = pd.to_datetime(self.config['data']['end_date'])
+        if "end_date" in self.config["data"]:
+            end_date = pd.to_datetime(self.config["data"]["end_date"])
             df = df[df.index <= end_date]
 
         _logger.info("Loaded data: %s rows, %s columns", len(df), len(df.columns))
@@ -276,27 +287,31 @@ class HMMLSTMOptimizer(BaseOptimizer):
             Dictionary with backtest results
         """
         try:
-            _logger.info("Running backtest for %s %s %s",
-                        combination['provider'], combination['symbol'], combination['timeframe'])
+            _logger.info(
+                "Running backtest for %s %s %s",
+                combination["provider"],
+                combination["symbol"],
+                combination["timeframe"],
+            )
 
             # Prepare data using base class method
-            data_file = self.data_dir / combination['data_file']
+            data_file = self.data_dir / combination["data_file"]
             df = self._prepare_data(data_file)
 
             # Load models
-            hmm_data, lstm_data = self.load_models(Path(combination['hmm_model']), Path(combination['lstm_model']))
+            hmm_data, lstm_data = self.load_models(Path(combination["hmm_model"]), Path(combination["lstm_model"]))
 
             # Prepare strategy config
             strategy_config = {
-                'prediction_threshold': strategy_params.get('entry_threshold', 0.001),
-                'regime_confidence_threshold': strategy_params.get('regime_confidence_threshold', 0.4),
-                'profit_target': strategy_params.get('profit_target', 0.02),
-                'stop_loss': strategy_params.get('stop_loss', 0.01),
-                'trailing_stop': strategy_params.get('trailing_stop', 0.005),
-                'position_size': strategy_params.get('position_size', 0.1),
-                'max_position_size': strategy_params.get('max_position_size', 0.5),
-                'models_dir': str(self.models_dir),
-                'results_dir': str(self.output_dir)
+                "prediction_threshold": strategy_params.get("entry_threshold", 0.001),
+                "regime_confidence_threshold": strategy_params.get("regime_confidence_threshold", 0.4),
+                "profit_target": strategy_params.get("profit_target", 0.02),
+                "stop_loss": strategy_params.get("stop_loss", 0.01),
+                "trailing_stop": strategy_params.get("trailing_stop", 0.005),
+                "position_size": strategy_params.get("position_size", 0.1),
+                "max_position_size": strategy_params.get("max_position_size", 0.5),
+                "models_dir": str(self.models_dir),
+                "results_dir": str(self.output_dir),
             }
 
             # Reconstruct LSTM model from saved components
@@ -309,42 +324,42 @@ class HMMLSTMOptimizer(BaseOptimizer):
             # Reset index to make datetime a column instead of index to avoid Backtrader issues
             df_copy = df.copy(deep=True)
             df_copy = df_copy.reset_index()
-            df_copy = df_copy.rename(columns={'datetime': 'timestamp'})
-            df_copy['timestamp'] = pd.to_datetime(df_copy['timestamp'])
+            df_copy = df_copy.rename(columns={"datetime": "timestamp"})
+            df_copy["timestamp"] = pd.to_datetime(df_copy["timestamp"])
 
             # Add data feed
             data = bt.feeds.PandasData(
                 dataname=df_copy,
                 datetime=0,  # 0 indicates datetime is in column 0 (timestamp)
-                open=1,      # open is now column 1
-                high=2,      # high is now column 2
-                low=3,       # low is now column 3
-                close=4,     # close is now column 4
-                volume=5,    # volume is now column 5
+                open=1,  # open is now column 1
+                high=2,  # high is now column 2
+                low=3,  # low is now column 3
+                close=4,  # close is now column 4
+                volume=5,  # volume is now column 5
                 openinterest=None,
                 fromdate=df.index[0],
-                todate=df.index[-1]
+                todate=df.index[-1],
             )
             cerebro.adddata(data)
 
             # Add strategy with correct model data structure
             cerebro.addstrategy(
                 HMMLSTMStrategy,
-                hmm_model=hmm_data['model'],
-                hmm_scaler=hmm_data.get('scaler', None),
-                hmm_features=hmm_data.get('features', None),
+                hmm_model=hmm_data["model"],
+                hmm_scaler=hmm_data.get("scaler", None),
+                hmm_features=hmm_data.get("features", None),
                 lstm_model=lstm_model,
-                lstm_scalers=lstm_data['scalers'],
-                lstm_features=lstm_data['features'],
-                sequence_length=lstm_data.get('hyperparameters', {}).get('sequence_length', 60),
-                strategy_config=strategy_config
+                lstm_scalers=lstm_data["scalers"],
+                lstm_features=lstm_data["features"],
+                sequence_length=lstm_data.get("hyperparameters", {}).get("sequence_length", 60),
+                strategy_config=strategy_config,
             )
 
             # Add analyzers
-            cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
-            cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
-            cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
-            cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
+            cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name="sharpe")
+            cerebro.addanalyzer(bt.analyzers.DrawDown, _name="drawdown")
+            cerebro.addanalyzer(bt.analyzers.Returns, _name="returns")
+            cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name="trades")
 
             # Set initial cash and commission
             cerebro.broker.setcash(self.initial_cash)
@@ -358,23 +373,32 @@ class HMMLSTMOptimizer(BaseOptimizer):
             backtest_results = self._extract_backtest_results(cerebro, strategy)
 
             # Add combination-specific information
-            backtest_results.update({
-                'symbol': combination['symbol'],
-                'timeframe': combination['timeframe'],
-                'provider': combination['provider'],
-                'strategy_params': strategy_params
-            })
+            backtest_results.update(
+                {
+                    "symbol": combination["symbol"],
+                    "timeframe": combination["timeframe"],
+                    "provider": combination["provider"],
+                    "strategy_params": strategy_params,
+                }
+            )
 
-            _logger.info("Backtest completed - Return: %.2f%%, Sharpe: %.3f, Max DD: %.2f%%, Trades: %d",
-                        backtest_results['total_return'] * 100, backtest_results['sharpe_ratio'],
-                        backtest_results['max_drawdown'] * 100, backtest_results['total_trades'])
+            _logger.info(
+                "Backtest completed - Return: %.2f%%, Sharpe: %.3f, Max DD: %.2f%%, Trades: %d",
+                backtest_results["total_return"] * 100,
+                backtest_results["sharpe_ratio"],
+                backtest_results["max_drawdown"] * 100,
+                backtest_results["total_trades"],
+            )
 
             return backtest_results
 
         except Exception:
-            _logger.exception("Error in backtest for %s %s %s:",
-                         combination['provider'], combination['symbol'], combination['timeframe'])
-
+            _logger.exception(
+                "Error in backtest for %s %s %s:",
+                combination["provider"],
+                combination["symbol"],
+                combination["timeframe"],
+            )
 
     def to_dict(self, obj):
         """Convert object to dictionary (same as custom_optimizer.py)."""
@@ -399,43 +423,40 @@ class HMMLSTMOptimizer(BaseOptimizer):
             Dictionary with optimization results
         """
         try:
-            _logger.info("Starting parameter optimization for %s %s %s",
-                        combination['provider'], combination['symbol'], combination['timeframe'])
+            _logger.info(
+                "Starting parameter optimization for %s %s %s",
+                combination["provider"],
+                combination["symbol"],
+                combination["timeframe"],
+            )
 
             def objective(trial):
                 # Suggest parameters based on config
                 strategy_params = {}
 
                 # Get parameter ranges from config
-                param_ranges = self.config.get('optimization', {}).get('parameter_ranges', {})
+                param_ranges = self.config.get("optimization", {}).get("parameter_ranges", {})
 
                 for param_name, param_config in param_ranges.items():
-                    if param_config['type'] == 'float':
+                    if param_config["type"] == "float":
                         strategy_params[param_name] = trial.suggest_float(
-                            param_name,
-                            param_config['min'],
-                            param_config['max']
+                            param_name, param_config["min"], param_config["max"]
                         )
-                    elif param_config['type'] == 'int':
+                    elif param_config["type"] == "int":
                         strategy_params[param_name] = trial.suggest_int(
-                            param_name,
-                            param_config['min'],
-                            param_config['max']
+                            param_name, param_config["min"], param_config["max"]
                         )
-                    elif param_config['type'] == 'categorical':
-                        strategy_params[param_name] = trial.suggest_categorical(
-                            param_name,
-                            param_config['choices']
-                        )
+                    elif param_config["type"] == "categorical":
+                        strategy_params[param_name] = trial.suggest_categorical(param_name, param_config["choices"])
 
                 # Run backtest
                 results = self.run_backtest(combination, strategy_params)
 
                 # Return negative Sharpe ratio (Optuna minimizes)
-                return -results['sharpe_ratio']
+                return -results["sharpe_ratio"]
 
             # Create study using base class method
-            study = self._create_optuna_study(direction='minimize')
+            study = self._create_optuna_study(direction="minimize")
 
             # Optimize
             study.optimize(objective, n_trials=n_trials)
@@ -448,10 +469,10 @@ class HMMLSTMOptimizer(BaseOptimizer):
             final_results = self.run_backtest(combination, best_params)
 
             optimization_results = {
-                'best_params': best_params,
-                'best_sharpe': best_value,
-                'final_results': final_results,
-                'optimization_history': study.trials_dataframe().to_dict('records')
+                "best_params": best_params,
+                "best_sharpe": best_value,
+                "final_results": final_results,
+                "optimization_history": study.trials_dataframe().to_dict("records"),
             }
 
             _logger.info("Optimization completed - Best Sharpe: %.3f", best_value)
@@ -462,26 +483,25 @@ class HMMLSTMOptimizer(BaseOptimizer):
             _logger.exception("Error in parameter optimization:")
             raise
 
-
-
         # 3. Max drawdown
-        axes[1, 0].bar(symbols, summary_df['Max Drawdown (%)'])
-        axes[1, 0].set_xlabel('Symbol')
-        axes[1, 0].set_ylabel('Max Drawdown (%)')
-        axes[1, 0].set_title('Maximum Drawdown by Symbol')
+        axes[1, 0].bar(symbols, summary_df["Max Drawdown (%)"])
+        axes[1, 0].set_xlabel("Symbol")
+        axes[1, 0].set_ylabel("Max Drawdown (%)")
+        axes[1, 0].set_title("Maximum Drawdown by Symbol")
         axes[1, 0].grid(True, alpha=0.3)
 
         # 4. Risk-return scatter
-        axes[1, 1].scatter(summary_df['Max Drawdown (%)'], summary_df['Total Return (%)'],
-                          s=100, alpha=0.7)
+        axes[1, 1].scatter(summary_df["Max Drawdown (%)"], summary_df["Total Return (%)"], s=100, alpha=0.7)
         for i, symbol in enumerate(symbols):
-            axes[1, 1].annotate(symbol,
-                              (summary_df.iloc[i]['Max Drawdown (%)'],
-                               summary_df.iloc[i]['Total Return (%)']),
-                              xytext=(5, 5), textcoords='offset points')
-        axes[1, 1].set_xlabel('Max Drawdown (%)')
-        axes[1, 1].set_ylabel('Total Return (%)')
-        axes[1, 1].set_title('Risk-Return Profile')
+            axes[1, 1].annotate(
+                symbol,
+                (summary_df.iloc[i]["Max Drawdown (%)"], summary_df.iloc[i]["Total Return (%)"]),
+                xytext=(5, 5),
+                textcoords="offset points",
+            )
+        axes[1, 1].set_xlabel("Max Drawdown (%)")
+        axes[1, 1].set_ylabel("Total Return (%)")
+        axes[1, 1].set_title("Risk-Return Profile")
         axes[1, 1].grid(True, alpha=0.3)
 
         plt.tight_layout()
@@ -489,7 +509,7 @@ class HMMLSTMOptimizer(BaseOptimizer):
         # Save plot
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         plot_file = self.output_dir / f"hmm_lstm_performance_{timestamp}.png"
-        plt.savefig(plot_file, dpi=300, bbox_inches='tight')
+        plt.savefig(plot_file, dpi=300, bbox_inches="tight")
         plt.close()
 
         _logger.info("Performance plots saved to %s", plot_file)
@@ -502,7 +522,7 @@ class HMMLSTMOptimizer(BaseOptimizer):
             List of dictionaries with symbol, timeframe, and model information
         """
         available_combinations = []
-        data_dir = Path(self.config['data']['data_dir'])
+        data_dir = Path(self.config["data"]["data_dir"])
 
         if not data_dir.exists():
             _logger.warning("Data directory not found: %s", data_dir)
@@ -518,14 +538,18 @@ class HMMLSTMOptimizer(BaseOptimizer):
             # Example: binance_BTCUSDT_1h_20230829_20250828.csv
             filename = csv_file.stem  # Remove .csv extension
 
-            if '_' not in filename:
-                _logger.warning("Skipping file with invalid format: %s (expected: source_symbol_timeframe_*.csv)", csv_file.name)
+            if "_" not in filename:
+                _logger.warning(
+                    "Skipping file with invalid format: %s (expected: source_symbol_timeframe_*.csv)", csv_file.name
+                )
                 continue
 
             # Split by underscores to extract components
-            parts = filename.split('_')
+            parts = filename.split("_")
             if len(parts) < 3:
-                _logger.warning("Skipping file with invalid format: %s (expected: source_symbol_timeframe_*.csv)", csv_file.name)
+                _logger.warning(
+                    "Skipping file with invalid format: %s (expected: source_symbol_timeframe_*.csv)", csv_file.name
+                )
                 continue
 
             # Extract source, symbol, and timeframe
@@ -537,18 +561,19 @@ class HMMLSTMOptimizer(BaseOptimizer):
             hmm_path, lstm_path = self.find_latest_models(symbol, timeframe)
 
             if hmm_path and lstm_path:
-                available_combinations.append({
-                    'provider': source,
-                    'symbol': symbol,
-                    'timeframe': timeframe,
-                    'data_file': csv_file.name,
-                    'hmm_model': str(hmm_path),
-                    'lstm_model': str(lstm_path)
-                })
+                available_combinations.append(
+                    {
+                        "provider": source,
+                        "symbol": symbol,
+                        "timeframe": timeframe,
+                        "data_file": csv_file.name,
+                        "hmm_model": str(hmm_path),
+                        "lstm_model": str(lstm_path),
+                    }
+                )
                 _logger.info("Found complete setup for %s %s (data + models)", symbol, timeframe)
             else:
-                _logger.warning("Skipping %s %s - models not found (data exists: %s)",
-                              symbol, timeframe, csv_file.name)
+                _logger.warning("Skipping %s %s - models not found (data exists: %s)", symbol, timeframe, csv_file.name)
 
         return available_combinations
 
@@ -573,7 +598,9 @@ class HMMLSTMOptimizer(BaseOptimizer):
         if not available_combinations:
             _logger.error("No valid symbol-timeframe combinations found with both models and data")
             _logger.info("Please ensure you have:")
-            _logger.info("1. OHLCV files in %s with format: source_symbol_timeframe_*.csv", self.config['data']['data_dir'])
+            _logger.info(
+                "1. OHLCV files in %s with format: source_symbol_timeframe_*.csv", self.config["data"]["data_dir"]
+            )
             _logger.info("2. Trained models in %s with format: hmm/lstm_symbol_timeframe_*.pkl", self.models_dir)
             return {}
 
@@ -581,32 +608,38 @@ class HMMLSTMOptimizer(BaseOptimizer):
 
         for i, combination in enumerate(available_combinations):
             try:
-                _logger.info("Processing combination %d/%d: %s %s %s",
-                            i + 1, len(available_combinations),
-                            combination['provider'], combination['symbol'], combination['timeframe'])
+                _logger.info(
+                    "Processing combination %d/%d: %s %s %s",
+                    i + 1,
+                    len(available_combinations),
+                    combination["provider"],
+                    combination["symbol"],
+                    combination["timeframe"],
+                )
 
                 # Load models
-                hmm_data, lstm_data = self.load_models(Path(combination['hmm_model']), Path(combination['lstm_model']))
+                hmm_data, lstm_data = self.load_models(Path(combination["hmm_model"]), Path(combination["lstm_model"]))
 
                 if optimize:
                     # Run optimization
                     results = self.optimize_parameters(combination, n_trials)
                 else:
                     # Run backtest with default parameters
-                    default_params = self.config.get('strategy', {})
+                    default_params = self.config.get("strategy", {})
                     results = {
-                        'final_results': self.run_backtest(combination, default_params),
-                        'best_params': default_params
+                        "final_results": self.run_backtest(combination, default_params),
+                        "best_params": default_params,
                     }
 
-                all_results.append({
-                    'combination': combination,
-                    'results': results
-                })
+                all_results.append({"combination": combination, "results": results})
 
             except Exception:
-                _logger.exception("Error processing combination %s %s %s:",
-                             combination['provider'], combination['symbol'], combination['timeframe'])
+                _logger.exception(
+                    "Error processing combination %s %s %s:",
+                    combination["provider"],
+                    combination["symbol"],
+                    combination["timeframe"],
+                )
                 continue
 
         # Generate overall summary using base class method
@@ -624,13 +657,10 @@ def main():
     """Main entry point for HMM-LSTM backtesting."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='HMM-LSTM Backtesting Optimizer')
-    parser.add_argument('--config', default='config/optimizer/p01_hmm_lstm.json',
-                       help='Path to configuration file')
-    parser.add_argument('--optimize', action='store_true',
-                       help='Run parameter optimization')
-    parser.add_argument('--n-trials', type=int, default=100,
-                       help='Number of optimization trials')
+    parser = argparse.ArgumentParser(description="HMM-LSTM Backtesting Optimizer")
+    parser.add_argument("--config", default="config/optimizer/p01_hmm_lstm.json", help="Path to configuration file")
+    parser.add_argument("--optimize", action="store_true", help="Run parameter optimization")
+    parser.add_argument("--n-trials", type=int, default=100, help="Number of optimization trials")
 
     args = parser.parse_args()
 

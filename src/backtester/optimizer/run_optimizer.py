@@ -29,12 +29,13 @@ import backtrader as bt
 import numpy as np
 import optuna
 import pandas as pd
+from joblib import Parallel, delayed
 from scipy import stats
+
+from src.backtester.optimizer.custom_optimizer import CustomOptimizer
+from src.notification.logger import setup_logger, setup_multiprocessing_logging
 from src.strategy.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
 from src.strategy.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
-from src.notification.logger import setup_logger, setup_multiprocessing_logging
-from src.backtester.optimizer.custom_optimizer import CustomOptimizer
-from joblib import Parallel, delayed
 
 _logger = setup_logger(__name__, use_multiprocessing=True)
 
@@ -57,7 +58,7 @@ def check_if_already_processed(data_file, entry_logic_name, exit_logic_name):
         entry_logic_name=entry_logic_name,
         exit_logic_name=exit_logic_name,
         suffix="",
-        include_timestamp=False
+        include_timestamp=False,
     )
 
     # Look for existing files in results directory
@@ -67,20 +68,23 @@ def check_if_already_processed(data_file, entry_logic_name, exit_logic_name):
 
     # Check if any file matches the pattern
     for filename in os.listdir(results_dir):
-        if filename.startswith(base_filename) and filename.endswith('.json'):
+        if filename.startswith(base_filename) and filename.endswith(".json"):
             # Found a matching file, check if it's valid
             filepath = os.path.join(results_dir, filename)
             try:
-                with open(filepath, 'r') as f:
+                with open(filepath) as f:
                     result_data = json.load(f)
 
                 # Check if the file has complete results
-                if (result_data.get('trades') is not None and
-                    result_data.get('analyzers') is not None and
-                    result_data.get('best_params') is not None and
-                    len(result_data.get('trades', [])) >= 0):
-
-                    _logger.info("Skipping %s + %s + %s - already processed", data_file, entry_logic_name, exit_logic_name)
+                if (
+                    result_data.get("trades") is not None
+                    and result_data.get("analyzers") is not None
+                    and result_data.get("best_params") is not None
+                    and len(result_data.get("trades", [])) >= 0
+                ):
+                    _logger.info(
+                        "Skipping %s + %s + %s - already processed", data_file, entry_logic_name, exit_logic_name
+                    )
                     _logger.info("   Found existing file: %s", filename)
                     return True
                 else:
@@ -97,7 +101,7 @@ def check_if_already_processed(data_file, entry_logic_name, exit_logic_name):
 def prepare_data_frame(data_file) -> pd.DataFrame:
     """Load and prepare data from CSV file"""
     # Load and prepare data
-    #df = pd.read_csv(os.path.join("data", data_file))
+    # df = pd.read_csv(os.path.join("data", data_file))
     df = pd.read_csv(data_file)
     print("Available columns:", df.columns.tolist())
 
@@ -139,6 +143,7 @@ def prepare_data_frame(data_file) -> pd.DataFrame:
 
     return df
 
+
 def pre_calculate_htf_data(df: pd.DataFrame, intervals: list) -> pd.DataFrame:
     """
     Pre-calculate HTF indicators using Pandas once per combination.
@@ -154,44 +159,41 @@ def pre_calculate_htf_data(df: pd.DataFrame, intervals: list) -> pd.DataFrame:
         # Resample to HTF
         # Note: We use 'closed=left', 'label=left' to match standard crypto bar behavior (e.g. Binance)
         # and prevent 4-hour shifts when resampling from the same interval.
-        htf = df.resample(rule, closed='left', label='left').agg({
-            'open': 'first',
-            'high': 'max',
-            'low': 'min',
-            'close': 'last',
-            'volume': 'sum'
-        })
+        htf = df.resample(rule, closed="left", label="left").agg(
+            {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+        )
 
         # Calculate True Range and ATR
         # TR = max(high - low, abs(high - prev_close), abs(low - prev_close))
-        htf['prev_close'] = htf['close'].shift(1)
-        tr = pd.concat([
-            htf['high'] - htf['low'],
-            (htf['high'] - htf['prev_close']).abs(),
-            (htf['low'] - htf['prev_close']).abs()
-        ], axis=1).max(axis=1)
+        htf["prev_close"] = htf["close"].shift(1)
+        tr = pd.concat(
+            [htf["high"] - htf["low"], (htf["high"] - htf["prev_close"]).abs(), (htf["low"] - htf["prev_close"]).abs()],
+            axis=1,
+        ).max(axis=1)
 
         # Standard periods used in config
         periods = [10, 14, 20, 30]
         for p in periods:
             # We use Simple Moving Average of TR to match Backtrader's bt.indicators.ATR default (Simple)
             # though some use EWMA. Let's use Simple for consistency with our current tests.
-            htf[f'atr_{interval}_{p}'] = tr.rolling(window=p).mean()
+            htf[f"atr_{interval}_{p}"] = tr.rolling(window=p).mean()
 
         # Aligne (Forward-fill) HTF indicators back to LTF
         # We reindex to match LTF and then ffill
-        htf_aligned = htf[[f'atr_{interval}_{p}' for p in periods]].reindex(df.index, method='ffill')
+        htf_aligned = htf[[f"atr_{interval}_{p}" for p in periods]].reindex(df.index, method="ffill")
 
         # Add to result_df
         for p in periods:
-            col_name = f'atr_{interval}_{p}'
+            col_name = f"atr_{interval}_{p}"
             result_df[col_name] = htf_aligned[col_name]
 
     return result_df
 
+
 # Define DynamicPandasData once at module level to avoid redundant class creation
 class DynamicPandasData(bt.feeds.PandasData):
     pass
+
 
 def prepare_data_feed(df: pd.DataFrame, symbol: str):
     """Prepare data feed from pandas dataframe with robust datetime handling"""
@@ -208,7 +210,7 @@ def prepare_data_feed(df: pd.DataFrame, symbol: str):
 
     # Ensure the required columns are present. Columns are already prepared in prepare_data_frame.
     # Just filter to what's needed for the feed.
-    atr_cols = [c for c in df.columns if c.startswith('atr_')]
+    atr_cols = [c for c in df.columns if c.startswith("atr_")]
     cols = ["open", "high", "low", "close", "volume"] + atr_cols
     df_copy = df_copy[cols]
 
@@ -226,12 +228,9 @@ def prepare_data_feed(df: pd.DataFrame, symbol: str):
 
     if cache_key not in prepare_data_feed._class_cache:
         prepare_data_feed._class_cache[cache_key] = type(
-            'DynamicPandasData',
+            "DynamicPandasData",
             (bt.feeds.PandasData,),
-            {
-                'lines': tuple(atr_cols),
-                'params': tuple((col, -1) for col in atr_cols)
-            }
+            {"lines": tuple(atr_cols), "params": tuple((col, -1) for col in atr_cols)},
         )
 
     DataClass = prepare_data_feed._class_cache[cache_key]
@@ -249,7 +248,7 @@ def prepare_data_feed(df: pd.DataFrame, symbol: str):
         fromdate=df_copy.index.min(),
         todate=df_copy.index.max(),
         name=symbol,
-        **{col: 5 + i for i, col in enumerate(atr_cols)}
+        **{col: 5 + i for i, col in enumerate(atr_cols)},
     )
 
     return data_feed
@@ -272,18 +271,18 @@ def load_mixin_config(mixin_name: str, config_type: str, timeframe: str) -> dict
         tf_specific_path = os.path.join("config", "optimizer", config_type, f"{mixin_name}_{timeframe}.json")
         if os.path.exists(tf_specific_path):
             _logger.info("Loading timeframe-specific config: %s", tf_specific_path)
-            with open(tf_specific_path, 'r') as f:
+            with open(tf_specific_path) as f:
                 config = json.load(f)
-            _logger.debug("Loaded %s config for %s: %s", timeframe, mixin_name, config.get('params', {}))
+            _logger.debug("Loaded %s config for %s: %s", timeframe, mixin_name, config.get("params", {}))
             return config
 
         # Fallback to generic configuration
         generic_path = os.path.join("config", "optimizer", config_type, f"{mixin_name}.json")
         if os.path.exists(generic_path):
             _logger.info("Using generic config (timeframe-specific not found): %s", generic_path)
-            with open(generic_path, 'r') as f:
+            with open(generic_path) as f:
                 config = json.load(f)
-            _logger.debug("Loaded generic config for %s: %s", mixin_name, config.get('params', {}))
+            _logger.debug("Loaded generic config for %s: %s", mixin_name, config.get("params", {}))
             return config
 
         _logger.warning("No configuration found for %s (neither timeframe-specific nor generic)", mixin_name)
@@ -293,14 +292,14 @@ def load_mixin_config(mixin_name: str, config_type: str, timeframe: str) -> dict
         _logger.exception("Error loading configuration for %s: %s", mixin_name, e)
         raise
 
-def parse_data_file_name(data_file : str) -> dict:
+
+def parse_data_file_name(data_file: str) -> dict:
     """Parse data file name and return a dictionary with symbol, interval, start_date, end_date"""
     parts = data_file.replace(".csv", "").split("_")
     return parts
 
-def get_result_filename(
-    data_file, entry_logic_name=None, exit_logic_name=None, suffix="", include_timestamp=True
-):
+
+def get_result_filename(data_file, entry_logic_name=None, exit_logic_name=None, suffix="", include_timestamp=True):
     """Generate a standardized filename for results"""
     # Extract symbol, interval, and dates from data_file
     symbol, interval, start_date, end_date = parse_data_file_name(data_file)
@@ -345,13 +344,8 @@ def save_results(result, data_file, initial_deposit=None):
         for trade in result.get("trades", []):
             try:
                 # Ensure we have all required fields
-                if not all(
-                    k in trade
-                    for k in ["entry_time", "exit_time", "entry_price", "exit_price"]
-                ):
-                    _logger.warning(
-                        f"Skipping trade with missing required fields: {trade}"
-                    )
+                if not all(k in trade for k in ["entry_time", "exit_time", "entry_price", "exit_price"]):
+                    _logger.warning(f"Skipping trade with missing required fields: {trade}")
                     continue
 
                 # Convert datetime objects to ISO format strings
@@ -446,7 +440,9 @@ def save_results(result, data_file, initial_deposit=None):
             "data_file": str(data_file),
             "total_trades": len(trades),
             "total_profit": float(result.get("total_profit", 0)),  # Gross profit (before commission)
-            "total_profit_with_commission": float(result.get("total_profit_with_commission", 0)),  # Net profit (after commission)
+            "total_profit_with_commission": float(
+                result.get("total_profit_with_commission", 0)
+            ),  # Net profit (after commission)
             "total_commission": float(result.get("total_commission", 0)),  # Total commission paid
             "initial_deposit": float(initial_deposit) if initial_deposit is not None else None,
             "best_params": result.get("best_params", {}),
@@ -477,10 +473,7 @@ def calculate_optimization_metrics(study: optuna.Study) -> dict:
         Dictionary with metrics: best, median, mean, std, top_10_avg, etc.
         Returns None if no valid trials found.
     """
-    completed_trials = [
-        t for t in study.trials
-        if t.state == optuna.trial.TrialState.COMPLETE
-    ]
+    completed_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
 
     if len(completed_trials) == 0:
         _logger.warning("No completed trials found in study")
@@ -493,24 +486,18 @@ def calculate_optimization_metrics(study: optuna.Study) -> dict:
         return None
 
     metrics = {
-        'best_value': study.best_value,
-        'median_value': float(np.median(trial_values)),
-        'mean_value': float(np.mean(trial_values)),
-        'std_value': float(np.std(trial_values)),
-        'min_value': float(np.min(trial_values)),
-        'max_value': float(np.max(trial_values)),
-        'top_10_avg': float(np.mean(
-            sorted(trial_values, reverse=True)[:min(10, len(trial_values))]
-        )),
-        'top_20_percent_avg': float(np.mean(
-            sorted(trial_values, reverse=True)[:max(1, len(trial_values) // 5)]
-        )),
-        'bottom_10_avg': float(np.mean(
-            sorted(trial_values)[:min(10, len(trial_values))]
-        )),
-        'total_trials': len(trial_values),
-        'completed_trials': len(completed_trials),
-        'failed_trials': len(study.trials) - len(completed_trials),
+        "best_value": study.best_value,
+        "median_value": float(np.median(trial_values)),
+        "mean_value": float(np.mean(trial_values)),
+        "std_value": float(np.std(trial_values)),
+        "min_value": float(np.min(trial_values)),
+        "max_value": float(np.max(trial_values)),
+        "top_10_avg": float(np.mean(sorted(trial_values, reverse=True)[: min(10, len(trial_values))])),
+        "top_20_percent_avg": float(np.mean(sorted(trial_values, reverse=True)[: max(1, len(trial_values) // 5)])),
+        "bottom_10_avg": float(np.mean(sorted(trial_values)[: min(10, len(trial_values))])),
+        "total_trials": len(trial_values),
+        "completed_trials": len(completed_trials),
+        "failed_trials": len(study.trials) - len(completed_trials),
     }
 
     return metrics
@@ -530,34 +517,31 @@ def evaluate_combination_promise(metrics: dict, thresholds: dict) -> tuple:
     if metrics is None:
         return False, "No valid metrics"
 
-    threshold_median = thresholds.get('threshold_median', 0.05)
-    threshold_best = thresholds.get('threshold_best', 0.15)
-    threshold_std = thresholds.get('threshold_std', 1.0)
-    min_trials = thresholds.get('min_trials_for_evaluation', 50)
+    threshold_median = thresholds.get("threshold_median", 0.05)
+    threshold_best = thresholds.get("threshold_best", 0.15)
+    threshold_std = thresholds.get("threshold_std", 1.0)
+    min_trials = thresholds.get("min_trials_for_evaluation", 50)
 
     # Check minimum trials
-    if metrics['total_trials'] < min_trials:
+    if metrics["total_trials"] < min_trials:
         return False, f"Insufficient trials ({metrics['total_trials']} < {min_trials})"
 
     # Check median return
-    if metrics['median_value'] <= threshold_median:
+    if metrics["median_value"] <= threshold_median:
         return False, f"Low median return ({metrics['median_value']:.4f} <= {threshold_median:.4f})"
 
     # Check best return
-    if metrics['best_value'] <= threshold_best:
+    if metrics["best_value"] <= threshold_best:
         return False, f"Low best return ({metrics['best_value']:.4f} <= {threshold_best:.4f})"
 
     # Check stability (standard deviation)
-    if metrics['std_value'] >= threshold_std:
+    if metrics["std_value"] >= threshold_std:
         return False, f"High volatility ({metrics['std_value']:.4f} >= {threshold_std:.4f})"
 
     return True, "Passed all criteria"
 
 
-def perform_statistical_validation(
-    promising_results: dict,
-    unpromising_results: dict
-) -> dict:
+def perform_statistical_validation(promising_results: dict, unpromising_results: dict) -> dict:
     """
     Perform statistical tests to validate that promising combinations are significantly better.
 
@@ -571,8 +555,8 @@ def perform_statistical_validation(
     if not promising_results or not unpromising_results:
         return None
 
-    promising_medians = [v['metrics']['median_value'] for v in promising_results.values() if v.get('metrics')]
-    unpromising_medians = [v['metrics']['median_value'] for v in unpromising_results.values() if v.get('metrics')]
+    promising_medians = [v["metrics"]["median_value"] for v in promising_results.values() if v.get("metrics")]
+    unpromising_medians = [v["metrics"]["median_value"] for v in unpromising_results.values() if v.get("metrics")]
 
     if len(promising_medians) < 2 or len(unpromising_medians) < 2:
         return None
@@ -581,24 +565,20 @@ def perform_statistical_validation(
         t_stat, p_value = stats.ttest_ind(promising_medians, unpromising_medians)
 
         return {
-            't_statistic': float(t_stat),
-            'p_value': float(p_value),
-            'is_significant': p_value < 0.05,
-            'promising_mean': float(np.mean(promising_medians)),
-            'unpromising_mean': float(np.mean(unpromising_medians)),
-            'promising_count': len(promising_medians),
-            'unpromising_count': len(unpromising_medians),
+            "t_statistic": float(t_stat),
+            "p_value": float(p_value),
+            "is_significant": p_value < 0.05,
+            "promising_mean": float(np.mean(promising_medians)),
+            "unpromising_mean": float(np.mean(unpromising_medians)),
+            "promising_count": len(promising_medians),
+            "unpromising_count": len(unpromising_medians),
         }
     except Exception as e:
         _logger.warning("Error performing statistical validation: %s", e)
         return None
 
 
-def generate_summary_report(
-    all_results: dict,
-    statistical_validation: dict,
-    output_dir: str = "results"
-) -> None:
+def generate_summary_report(all_results: dict, statistical_validation: dict, output_dir: str = "results") -> None:
     """
     Generate summary report comparing all combinations.
 
@@ -610,21 +590,23 @@ def generate_summary_report(
     # Create summary DataFrame
     summary_data = []
     for (entry, exit), data in all_results.items():
-        metrics = data.get('metrics')
+        metrics = data.get("metrics")
         if metrics is not None:
-            summary_data.append({
-                'Entry Logic': entry,
-                'Exit Logic': exit,
-                'Best': metrics['best_value'],
-                'Median': metrics['median_value'],
-                'Mean': metrics['mean_value'],
-                'Std': metrics['std_value'],
-                'Top 10 Avg': metrics['top_10_avg'],
-                'Top 20% Avg': metrics['top_20_percent_avg'],
-                'Total Trials': metrics['total_trials'],
-                'Stage': data.get('stage', 'unknown'),
-                'Promising': data.get('is_promising', False),
-            })
+            summary_data.append(
+                {
+                    "Entry Logic": entry,
+                    "Exit Logic": exit,
+                    "Best": metrics["best_value"],
+                    "Median": metrics["median_value"],
+                    "Mean": metrics["mean_value"],
+                    "Std": metrics["std_value"],
+                    "Top 10 Avg": metrics["top_10_avg"],
+                    "Top 20% Avg": metrics["top_20_percent_avg"],
+                    "Total Trials": metrics["total_trials"],
+                    "Stage": data.get("stage", "unknown"),
+                    "Promising": data.get("is_promising", False),
+                }
+            )
 
     if not summary_data:
         _logger.warning("No results to summarize")
@@ -633,11 +615,11 @@ def generate_summary_report(
     summary_df = pd.DataFrame(summary_data)
 
     # Sort by median (most reliable metric)
-    summary_df = summary_df.sort_values('Median', ascending=False)
+    summary_df = summary_df.sort_values("Median", ascending=False)
 
     # Save as CSV
     os.makedirs(output_dir, exist_ok=True)
-    timestamp = dt.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
     csv_path = os.path.join(output_dir, f"optimization_summary_{timestamp}.csv")
     summary_df.to_csv(csv_path, index=False)
 
@@ -660,11 +642,11 @@ def generate_summary_report(
     print("STATISTICS BY STAGE")
     print("=" * 120)
 
-    stage_stats = summary_df.groupby('Stage').agg({
-        'Median': ['count', 'mean', 'std', 'min', 'max'],
-        'Best': ['mean', 'max'],
-        'Std': ['mean']
-    }).round(4)
+    stage_stats = (
+        summary_df.groupby("Stage")
+        .agg({"Median": ["count", "mean", "std", "min", "max"], "Best": ["mean", "max"], "Std": ["mean"]})
+        .round(4)
+    )
     print(stage_stats)
 
     # Show promising vs unpromising
@@ -672,23 +654,27 @@ def generate_summary_report(
     print("PROMISING vs UNPROMISING COMBINATIONS")
     print("=" * 120)
 
-    promising_df = summary_df[summary_df['Promising'] == True]
-    unpromising_df = summary_df[summary_df['Promising'] == False]
+    promising_df = summary_df[summary_df["Promising"] == True]
+    unpromising_df = summary_df[summary_df["Promising"] == False]
 
     print(f"\nPromising combinations: {len(promising_df)}")
     print(f"Unpromising combinations: {len(unpromising_df)}")
 
     if len(promising_df) > 0:
-        print(f"\nPromising - Median stats: mean={promising_df['Median'].mean():.4f}, "
-              f"std={promising_df['Median'].std():.4f}, "
-              f"min={promising_df['Median'].min():.4f}, "
-              f"max={promising_df['Median'].max():.4f}")
+        print(
+            f"\nPromising - Median stats: mean={promising_df['Median'].mean():.4f}, "
+            f"std={promising_df['Median'].std():.4f}, "
+            f"min={promising_df['Median'].min():.4f}, "
+            f"max={promising_df['Median'].max():.4f}"
+        )
 
     if len(unpromising_df) > 0:
-        print(f"Unpromising - Median stats: mean={unpromising_df['Median'].mean():.4f}, "
-              f"std={unpromising_df['Median'].std():.4f}, "
-              f"min={unpromising_df['Median'].min():.4f}, "
-              f"max={unpromising_df['Median'].max():.4f}")
+        print(
+            f"Unpromising - Median stats: mean={unpromising_df['Median'].mean():.4f}, "
+            f"std={unpromising_df['Median'].std():.4f}, "
+            f"min={unpromising_df['Median'].min():.4f}, "
+            f"max={unpromising_df['Median'].max():.4f}"
+        )
 
     # Statistical validation results
     if statistical_validation:
@@ -706,9 +692,9 @@ def generate_summary_report(
     print("OVERALL STATISTICS")
     print("=" * 120)
 
-    stage1_count = len([d for d in all_results.values() if d.get('stage') == 'screening'])
-    stage2_count = len([d for d in all_results.values() if d.get('stage') == 'deep_optimization'])
-    promising_count = len([d for d in all_results.values() if d.get('is_promising', False)])
+    stage1_count = len([d for d in all_results.values() if d.get("stage") == "screening"])
+    stage2_count = len([d for d in all_results.values() if d.get("stage") == "deep_optimization"])
+    promising_count = len([d for d in all_results.values() if d.get("is_promising", False)])
 
     print(f"Total combinations tested: {len(all_results)}")
     print(f"Stage 1 (screening): {stage1_count}")
@@ -719,7 +705,6 @@ def generate_summary_report(
         print(f"Promising rate: {promising_count / stage1_count * 100:.1f}%")
 
     print("\n")
-
 
 
 def optimize_combination(
@@ -782,8 +767,7 @@ def optimize_combination(
         # ========== STAGE 1: SCREENING OPTIMIZATION ==========
         _logger.info("[%s + %s] STAGE 1: Screening phase (%d trials)", entry_logic_name, exit_logic_name, stage1_trials)
         study = optuna.create_study(
-            direction="maximize",
-            pruner=optuna.pruners.MedianPruner(n_startup_trials=50, n_warmup_steps=10)
+            direction="maximize", pruner=optuna.pruners.MedianPruner(n_startup_trials=50, n_warmup_steps=10)
         )
 
         study.optimize(
@@ -800,13 +784,13 @@ def optimize_combination(
         combination_key = (entry_logic_name, exit_logic_name)
 
         result_entry = {
-            'key': combination_key,
-            'metrics': metrics,
-            'best_params': study.best_params,
-            'stage': 'screening',
-            'is_promising': is_promising,
-            'reason': reason,
-            'data_file': data_file
+            "key": combination_key,
+            "metrics": metrics,
+            "best_params": study.best_params,
+            "stage": "screening",
+            "is_promising": is_promising,
+            "reason": reason,
+            "data_file": data_file,
         }
 
         # ========== STAGE 2: DEEP OPTIMIZATION ==========
@@ -819,11 +803,13 @@ def optimize_combination(
             )
             metrics = calculate_optimization_metrics(study)
             if metrics:
-                result_entry.update({
-                    'metrics': metrics,
-                    'best_params': study.best_params,
-                    'stage': 'deep_optimization',
-                })
+                result_entry.update(
+                    {
+                        "metrics": metrics,
+                        "best_params": study.best_params,
+                        "stage": "deep_optimization",
+                    }
+                )
 
         # Run final backtest and save if promising or not screening-only
         if not dry_run_mode and (not two_stage_enabled or is_promising):
@@ -859,7 +845,9 @@ if __name__ == "__main__":
     setup_multiprocessing_logging()
     _logger.info("Multiprocessing-safe logging enabled for optimizer")
 
-    with open(os.path.join("config", "optimizer", "optimizer.json"), "r",) as f:
+    with open(
+        os.path.join("config", "optimizer", "optimizer.json"),
+    ) as f:
         optimizer_config = json.load(f)
 
     start_time = dt.now()
@@ -912,9 +900,12 @@ if __name__ == "__main__":
     n_parallel_jobs = optimizer_config.get("optimizer_settings", {}).get("n_jobs", -1)
     if n_parallel_jobs == -1:
         import multiprocessing
+
         n_parallel_jobs = multiprocessing.cpu_count()
 
-    _logger.info("Starting parallel execution of %d combinations using %d processes", total_combinations, n_parallel_jobs)
+    _logger.info(
+        "Starting parallel execution of %d combinations using %d processes", total_combinations, n_parallel_jobs
+    )
 
     # Set up multiprocessing-safe logging
     log_queue = setup_multiprocessing_logging()
@@ -944,10 +935,10 @@ if __name__ == "__main__":
             continue
 
         processed_combinations += 1
-        combination_key = result['key']
+        combination_key = result["key"]
         all_results[combination_key] = result
 
-        if result['is_promising']:
+        if result["is_promising"]:
             promising_results[combination_key] = result
         else:
             unpromising_results[combination_key] = result
@@ -963,9 +954,11 @@ if __name__ == "__main__":
     statistical_validation = perform_statistical_validation(promising_results, unpromising_results)
 
     if statistical_validation:
-        _logger.info("Statistical validation completed: p-value=%.6f, significant=%s",
-                    statistical_validation['p_value'],
-                    statistical_validation['is_significant'])
+        _logger.info(
+            "Statistical validation completed: p-value=%.6f, significant=%s",
+            statistical_validation["p_value"],
+            statistical_validation["is_significant"],
+        )
     else:
         _logger.info("Statistical validation skipped (insufficient data)")
 
@@ -980,7 +973,7 @@ if __name__ == "__main__":
     _logger.info("   - Promising combinations: %d", len(promising_results))
     _logger.info("   - Unpromising combinations: %d", len(unpromising_results))
     if two_stage_enabled:
-        stage2_count = len([r for r in all_results.values() if r.get('stage') == 'deep_optimization'])
+        stage2_count = len([r for r in all_results.values() if r.get("stage") == "deep_optimization"])
         _logger.info("   - Deep optimization runs: %d", stage2_count)
         if len(all_results) > 0:
             _logger.info("   - Pass rate to Stage 2: %.1f%%", stage2_count / len(all_results) * 100)

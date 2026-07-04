@@ -3,8 +3,8 @@
 Test script for DataDownloaderFactory
 """
 
-import sys
 import os
+import sys
 
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -13,6 +13,7 @@ from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
+
 
 def test_provider_codes():
     """Test provider code mapping."""
@@ -37,16 +38,18 @@ def test_provider_codes():
 
     print("✓ All provider code tests passed!")
 
+
 def test_yahoo_downloader():
     """Test Yahoo Finance downloader creation."""
     print("\nTesting Yahoo Finance downloader creation:")
 
     downloader = DataDownloaderFactory.create_downloader("yf")
     assert downloader is not None
-    assert hasattr(downloader, 'get_fundamentals')
-    assert hasattr(downloader, 'get_ohlcv')
+    assert hasattr(downloader, "get_fundamentals")
+    assert hasattr(downloader, "get_ohlcv")
 
     print("✓ Yahoo Finance downloader created successfully!")
+
 
 def test_invalid_provider():
     """Test invalid provider handling."""
@@ -56,6 +59,7 @@ def test_invalid_provider():
     assert downloader is None
 
     print("✓ Invalid provider correctly handled!")
+
 
 def test_provider_listing():
     """Test provider listing functionality."""
@@ -69,6 +73,7 @@ def test_provider_listing():
 
     print(f"✓ Found {len(providers)} supported providers")
     print(f"  Sample providers: {providers[:5]}")
+
 
 def test_provider_info():
     """Test provider information retrieval."""
@@ -85,6 +90,7 @@ def test_provider_info():
     assert "requires_api_key" in yahoo_info
 
     print("✓ Provider information retrieved successfully!")
+
 
 def main():
     """Run all tests."""
@@ -107,6 +113,7 @@ def main():
         return 1
 
     return 0
+
 
 if __name__ == "__main__":
     exit(main())

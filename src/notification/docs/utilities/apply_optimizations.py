@@ -5,8 +5,8 @@ This script applies all database optimizations for the notification service,
 including indexes, constraints, and performance settings.
 """
 
-import sys
 import json
+import sys
 from pathlib import Path
 
 # Add project root to path
@@ -14,6 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from sqlalchemy import create_engine
+
 from src.data.db.core.database import get_database_url
 from src.notification.docs.utilities.database_migrations import run_optimization_migration
 from src.notification.docs.utilities.query_analyzer import get_query_monitor
@@ -31,16 +32,16 @@ def main():
         database_url = get_database_url()
         engine = create_engine(database_url, echo=False)
 
-        _logger.info("Connected to database: %s", database_url.split('@')[1] if '@' in database_url else "local")
+        _logger.info("Connected to database: %s", database_url.split("@")[1] if "@" in database_url else "local")
 
         # Run optimization migration
         _logger.info("Applying database optimizations...")
         results = run_optimization_migration(engine)
 
         # Print results summary
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("DATABASE OPTIMIZATION RESULTS")
-        print("="*60)
+        print("=" * 60)
 
         # Indexes
         if results.get("indexes_created"):
@@ -96,9 +97,9 @@ def main():
                 if isinstance(partition, dict) and "recommendation" in partition:
                     print(f"   • {partition['table']}: {partition['recommendation']}")
 
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("OPTIMIZATION COMPLETE")
-        print("="*60)
+        print("=" * 60)
 
         # Save detailed results to file
         results_file = Path("optimization_results.json")
@@ -125,28 +126,28 @@ def main():
         return False
 
     finally:
-        if 'engine' in locals():
+        if "engine" in locals():
             engine.dispose()
 
 
 def show_monitoring_queries():
     """Show useful monitoring queries."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("MONITORING QUERIES")
-    print("="*60)
+    print("=" * 60)
 
     queries = [
         {
             "name": "Channel Performance Summary",
-            "sql": "SELECT * FROM v_msg_delivery_summary WHERE hour >= NOW() - INTERVAL '24 hours' ORDER BY hour DESC, channel;"
+            "sql": "SELECT * FROM v_msg_delivery_summary WHERE hour >= NOW() - INTERVAL '24 hours' ORDER BY hour DESC, channel;",
         },
         {
             "name": "Channel Health Status",
-            "sql": "SELECT * FROM v_msg_channel_health_summary ORDER BY recent_failure_rate DESC;"
+            "sql": "SELECT * FROM v_msg_channel_health_summary ORDER BY recent_failure_rate DESC;",
         },
         {
             "name": "User Activity Summary",
-            "sql": "SELECT * FROM v_msg_user_activity ORDER BY total_messages DESC LIMIT 10;"
+            "sql": "SELECT * FROM v_msg_user_activity ORDER BY total_messages DESC LIMIT 10;",
         },
         {
             "name": "Slow Query Detection",
@@ -155,7 +156,7 @@ def show_monitoring_queries():
                 FROM pg_stat_statements
                 WHERE query LIKE '%msg_%' AND mean_time > 1000
                 ORDER BY mean_time DESC LIMIT 10;
-            """
+            """,
         },
         {
             "name": "Index Usage Statistics",
@@ -164,15 +165,15 @@ def show_monitoring_queries():
                 FROM pg_stat_user_indexes
                 WHERE tablename LIKE 'msg_%'
                 ORDER BY idx_scan DESC;
-            """
-        }
+            """,
+        },
     ]
 
     for i, query in enumerate(queries, 1):
         print(f"\n{i}. {query['name']}:")
-        print("   " + query['sql'].strip().replace('\n', '\n   '))
+        print("   " + query["sql"].strip().replace("\n", "\n   "))
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
 
 
 if __name__ == "__main__":

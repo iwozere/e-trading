@@ -10,38 +10,38 @@ Covers:
 
 import sys
 from pathlib import Path
+
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.strategy.custom_strategy import StrategyConfigBuilder
+from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 from src.strategy.entry.entry_mixin_factory import (
+    ENTRY_MIXIN_REGISTRY,
     get_entry_mixin,
-    get_entry_mixin_from_config,
     get_entry_mixin_default_params,
+    get_entry_mixin_from_config,
     list_available_entry_mixins,
     validate_entry_mixin_params,
-    ENTRY_MIXIN_REGISTRY,
 )
 from src.strategy.exit.exit_mixin_factory import (
+    EXIT_MIXIN_REGISTRY,
     get_exit_mixin,
-    get_exit_mixin_from_config,
     get_exit_mixin_default_params,
+    get_exit_mixin_from_config,
     list_available_exit_mixins,
     validate_exit_mixin_params,
-    EXIT_MIXIN_REGISTRY,
 )
-from src.strategy.entry.base_entry_mixin import BaseEntryMixin
-from src.strategy.custom_strategy import StrategyConfigBuilder
-
 
 # ---------------------------------------------------------------------------
 # Entry mixin factory
 # ---------------------------------------------------------------------------
 
-class TestEntryMixinFactory:
 
+class TestEntryMixinFactory:
     def test_list_returns_non_empty(self):
         names = list_available_entry_mixins()
         assert len(names) > 0, "Entry mixin registry must not be empty"
@@ -100,8 +100,8 @@ class TestEntryMixinFactory:
 # Exit mixin factory
 # ---------------------------------------------------------------------------
 
-class TestExitMixinFactory:
 
+class TestExitMixinFactory:
     def test_list_returns_non_empty(self):
         assert len(list_available_exit_mixins()) > 0
 
@@ -149,10 +149,11 @@ class TestExitMixinFactory:
 # BaseEntryMixin contract enforcement
 # ---------------------------------------------------------------------------
 
-class TestBaseEntryMixinContract:
 
+class TestBaseEntryMixinContract:
     def test_missing_should_enter_raises(self):
         """A concrete subclass that omits should_enter must not instantiate."""
+
         class BrokenMixin(BaseEntryMixin):
             @classmethod
             def get_default_params(cls):
@@ -171,6 +172,7 @@ class TestBaseEntryMixinContract:
 
     def test_missing_get_default_params_raises(self):
         """A concrete subclass that omits get_default_params must not instantiate."""
+
         class BrokenMixin(BaseEntryMixin):
             def get_required_params(self):
                 return []
@@ -188,6 +190,7 @@ class TestBaseEntryMixinContract:
 
     def test_valid_subclass_instantiates(self):
         """A fully compliant subclass must instantiate without error."""
+
         class GoodMixin(BaseEntryMixin):
             @classmethod
             def get_default_params(cls):
@@ -208,6 +211,7 @@ class TestBaseEntryMixinContract:
 
     def test_required_param_missing_raises_value_error(self):
         """Missing a required parameter must raise ValueError on instantiation."""
+
         class StrictMixin(BaseEntryMixin):
             @classmethod
             def get_default_params(cls):
@@ -248,8 +252,8 @@ class TestBaseEntryMixinContract:
 # StrategyConfigBuilder
 # ---------------------------------------------------------------------------
 
-class TestStrategyConfigBuilder:
 
+class TestStrategyConfigBuilder:
     def test_build_valid_config(self):
         config = (
             StrategyConfigBuilder()
@@ -264,19 +268,11 @@ class TestStrategyConfigBuilder:
 
     def test_build_without_entry_raises(self):
         with pytest.raises(ValueError, match="[Ee]ntry"):
-            (
-                StrategyConfigBuilder()
-                .set_exit_mixin("ATRExitMixin")
-                .build()
-            )
+            (StrategyConfigBuilder().set_exit_mixin("ATRExitMixin").build())
 
     def test_build_without_exit_raises(self):
         with pytest.raises(ValueError, match="[Ee]xit"):
-            (
-                StrategyConfigBuilder()
-                .set_entry_mixin("RSIBBEntryMixin")
-                .build()
-            )
+            (StrategyConfigBuilder().set_entry_mixin("RSIBBEntryMixin").build())
 
     def test_position_size_zero_raises(self):
         with pytest.raises(ValueError):

@@ -5,14 +5,15 @@ This module provides consistent data processing, validation, and transformation
 across all data sources in the system.
 """
 
-import pandas as pd
-from typing import Optional, Dict, Any
-from datetime import datetime, timezone
-from pathlib import Path
 import logging
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Dict
 
-from src.data.utils.validation import validate_ohlcv_data, get_data_quality_score
+import pandas as pd
+
 from src.data.utils.caching import get_cache
+from src.data.utils.validation import get_data_quality_score, validate_ohlcv_data
 
 _logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class DataHandler:
         symbol: str,
         interval: str,
         timestamp_col: str = "timestamp",
-        timezone_aware: bool = False
+        timezone_aware: bool = False,
     ) -> pd.DataFrame:
         """
         Standardize OHLCV data to consistent format.
@@ -69,47 +70,47 @@ class DataHandler:
 
         # Standardize column names
         column_mapping = {
-            'open': ['open', 'Open', 'OPEN', 'o', 'O'],
-            'high': ['high', 'High', 'HIGH', 'h', 'H'],
-            'low': ['low', 'Low', 'LOW', 'l', 'L'],
-            'close': ['close', 'Close', 'CLOSE', 'c', 'C'],
-            'volume': ['volume', 'Volume', 'VOLUME', 'vol', 'Vol', 'VOL', 'v', 'V'],
-            'timestamp': [timestamp_col, 'datetime', 'date', 'time', 'Date', 'Time']
+            "open": ["open", "Open", "OPEN", "o", "O"],
+            "high": ["high", "High", "HIGH", "h", "H"],
+            "low": ["low", "Low", "LOW", "l", "L"],
+            "close": ["close", "Close", "CLOSE", "c", "C"],
+            "volume": ["volume", "Volume", "VOLUME", "vol", "Vol", "VOL", "v", "V"],
+            "timestamp": [timestamp_col, "datetime", "date", "time", "Date", "Time"],
         }
 
         # Map columns to standard names
         for std_name, possible_names in column_mapping.items():
             for col_name in possible_names:
                 if col_name in df_std.columns:
-                    if std_name != 'timestamp':
+                    if std_name != "timestamp":
                         df_std.rename(columns={col_name: std_name}, inplace=True)
                     break
 
         # Ensure required columns exist
-        required_columns = ['open', 'high', 'low', 'close', 'volume']
+        required_columns = ["open", "high", "low", "close", "volume"]
         missing_columns = [col for col in required_columns if col not in df_std.columns]
         if missing_columns:
             raise ValueError(f"Missing required columns: {missing_columns}")
 
         # Handle timestamp column
-        if 'timestamp' not in df_std.columns:
+        if "timestamp" not in df_std.columns:
             # Use index if it's datetime
             if isinstance(df_std.index, pd.DatetimeIndex):
                 df_std = df_std.reset_index()
-                df_std.rename(columns={'index': 'timestamp'}, inplace=True)
+                df_std.rename(columns={"index": "timestamp"}, inplace=True)
             else:
                 raise ValueError("No timestamp column found and index is not datetime")
 
         # Standardize timestamp format
-        df_std['timestamp'] = pd.to_datetime(df_std['timestamp'], utc=True)
+        df_std["timestamp"] = pd.to_datetime(df_std["timestamp"], utc=True)
 
         # Convert to timezone-naive if required
-        if not timezone_aware and df_std['timestamp'].dt.tz is not None:
-            df_std['timestamp'] = df_std['timestamp'].dt.tz_localize(None)
+        if not timezone_aware and df_std["timestamp"].dt.tz is not None:
+            df_std["timestamp"] = df_std["timestamp"].dt.tz_localize(None)
 
         # Ensure numeric columns are float
-        for col in ['open', 'high', 'low', 'close', 'volume']:
-            df_std[col] = pd.to_numeric(df_std[col], errors='coerce')
+        for col in ["open", "high", "low", "close", "volume"]:
+            df_std[col] = pd.to_numeric(df_std[col], errors="coerce")
 
         # Remove rows with invalid data
         initial_rows = len(df_std)
@@ -118,23 +119,18 @@ class DataHandler:
             _logger.warning("Removed %d rows with invalid data for %s", initial_rows - len(df_std), symbol)
 
         # Sort by timestamp
-        df_std.sort_values('timestamp', inplace=True)
+        df_std.sort_values("timestamp", inplace=True)
         df_std.reset_index(drop=True, inplace=True)
 
         # Add metadata
-        df_std.attrs['symbol'] = symbol
-        df_std.attrs['interval'] = interval
-        df_std.attrs['provider'] = self.provider
-        df_std.attrs['standardized_at'] = datetime.now(timezone.utc)
+        df_std.attrs["symbol"] = symbol
+        df_std.attrs["interval"] = interval
+        df_std.attrs["provider"] = self.provider
+        df_std.attrs["standardized_at"] = datetime.now(UTC)
 
         return df_std
 
-    def validate_and_score_data(
-        self,
-        df: pd.DataFrame,
-        symbol: str,
-        strict_validation: bool = False
-    ) -> Dict[str, Any]:
+    def validate_and_score_data(self, df: pd.DataFrame, symbol: str, strict_validation: bool = False) -> Dict[str, Any]:
         """
         Validate data and calculate quality score.
 
@@ -158,22 +154,18 @@ class DataHandler:
         else:
             _logger.info("Data validation passed for %s", symbol)
 
-        _logger.info("Data quality score for %s: %.2f", symbol, quality_score['quality_score'])
+        _logger.info("Data quality score for %s: %.2f", symbol, quality_score["quality_score"])
 
-        return {
-            'is_valid': is_valid,
-            'errors': errors,
-            'quality_score': quality_score
-        }
+        return {"is_valid": is_valid, "errors": errors, "quality_score": quality_score}
 
     def cache_data(
         self,
         df: pd.DataFrame,
         symbol: str,
         interval: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        file_format: str = "parquet"
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        file_format: str = "parquet",
     ) -> bool:
         """
         Cache data using the data caching system.
@@ -193,9 +185,7 @@ class DataHandler:
             return False
 
         try:
-            return self.cache.put(
-                df, self.provider, symbol, interval, start_date, end_date, file_format
-            )
+            return self.cache.put(df, self.provider, symbol, interval, start_date, end_date, file_format)
         except Exception:
             _logger.exception("Failed to cache data for %s:", symbol)
             return False
@@ -204,10 +194,10 @@ class DataHandler:
         self,
         symbol: str,
         interval: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        file_format: str = "parquet"
-    ) -> Optional[pd.DataFrame]:
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        file_format: str = "parquet",
+    ) -> pd.DataFrame | None:
         """
         Retrieve cached data.
 
@@ -225,9 +215,7 @@ class DataHandler:
             return None
 
         try:
-            return self.cache.get(
-                self.provider, symbol, interval, start_date, end_date, file_format
-            )
+            return self.cache.get(self.provider, symbol, interval, start_date, end_date, file_format)
         except Exception:
             _logger.exception("Failed to retrieve cached data for %s:", symbol)
             return None
@@ -238,9 +226,9 @@ class DataHandler:
         symbol: str,
         interval: str,
         directory: Path,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        file_format: str = "parquet"
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        file_format: str = "parquet",
     ) -> Path:
         """
         Save data to file with standardized naming.
@@ -273,7 +261,7 @@ class DataHandler:
         # Save data
         try:
             if file_format == "parquet":
-                df.to_parquet(filepath, index=False, compression='snappy')
+                df.to_parquet(filepath, index=False, compression="snappy")
             elif file_format == "csv":
                 df.to_csv(filepath, index=False)
             else:
@@ -297,14 +285,14 @@ class DataHandler:
             Loaded DataFrame
         """
         try:
-            if filepath.suffix.lower() == '.parquet':
+            if filepath.suffix.lower() == ".parquet":
                 df = pd.read_parquet(filepath)
             else:
                 df = pd.read_csv(filepath)
 
             # Parse timestamp if present
-            if 'timestamp' in df.columns:
-                df['timestamp'] = pd.to_datetime(df['timestamp'])
+            if "timestamp" in df.columns:
+                df["timestamp"] = pd.to_datetime(df["timestamp"])
 
             _logger.info("Loaded data from %s", filepath)
             return df
@@ -313,12 +301,7 @@ class DataHandler:
             _logger.exception("Failed to load data from %s:", filepath)
             raise
 
-    def merge_data(
-        self,
-        df1: pd.DataFrame,
-        df2: pd.DataFrame,
-        symbol: str
-    ) -> pd.DataFrame:
+    def merge_data(self, df1: pd.DataFrame, df2: pd.DataFrame, symbol: str) -> pd.DataFrame:
         """
         Merge two DataFrames, handling duplicates and maintaining data integrity.
 
@@ -336,18 +319,18 @@ class DataHandler:
             return df1
 
         # Ensure both have timestamp column
-        if 'timestamp' not in df1.columns or 'timestamp' not in df2.columns:
+        if "timestamp" not in df1.columns or "timestamp" not in df2.columns:
             raise ValueError("Both DataFrames must have 'timestamp' column")
 
         # Combine DataFrames
         combined = pd.concat([df1, df2], ignore_index=True)
 
         # Sort by timestamp
-        combined.sort_values('timestamp', inplace=True)
+        combined.sort_values("timestamp", inplace=True)
 
         # Remove duplicates based on timestamp
         initial_rows = len(combined)
-        combined.drop_duplicates(subset=['timestamp'], keep='last', inplace=True)
+        combined.drop_duplicates(subset=["timestamp"], keep="last", inplace=True)
 
         if len(combined) < initial_rows:
             _logger.info("Removed %d duplicate rows for %s", initial_rows - len(combined), symbol)
@@ -360,12 +343,7 @@ class DataHandler:
 
         return combined
 
-    def resample_data(
-        self,
-        df: pd.DataFrame,
-        target_interval: str,
-        symbol: str
-    ) -> pd.DataFrame:
+    def resample_data(self, df: pd.DataFrame, target_interval: str, symbol: str) -> pd.DataFrame:
         """
         Resample data to a different interval.
 
@@ -377,20 +355,14 @@ class DataHandler:
         Returns:
             Resampled DataFrame
         """
-        if df.empty or 'timestamp' not in df.columns:
+        if df.empty or "timestamp" not in df.columns:
             return df
 
         # Set timestamp as index for resampling
-        df_resampled = df.set_index('timestamp').copy()
+        df_resampled = df.set_index("timestamp").copy()
 
         # Define resampling rules
-        resampling_rules = {
-            'open': 'first',
-            'high': 'max',
-            'low': 'min',
-            'close': 'last',
-            'volume': 'sum'
-        }
+        resampling_rules = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
 
         try:
             # Resample data

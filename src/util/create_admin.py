@@ -27,10 +27,13 @@ from src.notification.logger import setup_logger
 
 logger = setup_logger("create_admin")
 
+
 def generate_code() -> str:
     """Generate a cryptographically secure 6-digit verification code."""
     import secrets
+
     return f"{secrets.randbelow(900000) + 100000:06d}"
+
 
 def create_admin(telegram_user_id: str, email: str):
     """
@@ -63,11 +66,7 @@ def create_admin(telegram_user_id: str, email: str):
 
             # Update user info and set as admin
             users_service.update_user(
-                telegram_user_id=telegram_user_id,
-                email=email,
-                is_admin=True,
-                is_verified=True,
-                is_approved=True
+                telegram_user_id=telegram_user_id, email=email, is_admin=True, is_verified=True, is_approved=True
             )
 
             logger.info("Successfully updated user %s to admin role.", telegram_user_id)
@@ -78,11 +77,7 @@ def create_admin(telegram_user_id: str, email: str):
 
         # Create user with admin privileges
         users_service.create_user(
-            telegram_user_id=telegram_user_id,
-            email=email,
-            is_admin=True,
-            is_verified=True,
-            is_approved=True
+            telegram_user_id=telegram_user_id, email=email, is_admin=True, is_verified=True, is_approved=True
         )
 
         logger.info("Successfully created admin user %s with email %s", telegram_user_id, email)
@@ -91,6 +86,7 @@ def create_admin(telegram_user_id: str, email: str):
     except Exception:
         logger.exception("Error creating admin user: ")
         return False
+
 
 def main():
     """Main function to handle command line arguments"""
@@ -122,6 +118,7 @@ def main():
     else:
         logger.error("Failed to create admin user for %s. Check logs above for details.", telegram_user_id)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

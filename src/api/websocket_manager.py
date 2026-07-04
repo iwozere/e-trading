@@ -18,11 +18,12 @@ Features:
 
 import asyncio
 import json
-from typing import Dict, List, Set, Any, Optional
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
+from typing import Any, Dict, List, Set
 
 from fastapi import WebSocket
+
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -33,6 +34,7 @@ def get_current_user(token: str):
     # This is a placeholder - in real implementation this would validate JWT token
     # and return user from database
     from unittest.mock import Mock
+
     user = Mock()
     user.id = 123
     user.role = "trader"
@@ -41,6 +43,7 @@ def get_current_user(token: str):
 
 class MessageType(Enum):
     """WebSocket message types."""
+
     WELCOME = "welcome"
     PING = "ping"
     PONG = "pong"
@@ -57,6 +60,7 @@ class MessageType(Enum):
 
 class BroadcastChannel(Enum):
     """Broadcast channel types."""
+
     STRATEGY = "strategy"
     STRATEGY_UPDATES = "strategy_updates"
     SYSTEM = "system"
@@ -74,8 +78,8 @@ class WebSocketConnection:
         self.websocket = websocket
         self.user_id = user_id
         self.connection_id = connection_id
-        self.connected_at = datetime.now(timezone.utc)
-        self.last_ping = datetime.now(timezone.utc)
+        self.connected_at = datetime.now(UTC)
+        self.last_ping = datetime.now(UTC)
         self.subscriptions: Set[str] = set()
 
     async def send_message(self, message: Dict[str, Any]) -> bool:
@@ -91,7 +95,7 @@ class WebSocketConnection:
         """Send ping to client."""
         try:
             await self.websocket.send_text(json.dumps({"type": "ping", "timestamp": datetime.now().isoformat()}))
-            self.last_ping = datetime.now(timezone.utc)
+            self.last_ping = datetime.now(UTC)
             return True
         except Exception:
             _logger.exception("Error pinging %s:", self.connection_id)
@@ -111,7 +115,7 @@ class WebSocketConnection:
 
     def update_last_ping(self) -> None:
         """Update the last ping timestamp."""
-        self.last_ping = datetime.now(timezone.utc)
+        self.last_ping = datetime.now(UTC)
 
     def get_connection_info(self) -> Dict[str, Any]:
         """Get connection information."""
@@ -120,12 +124,12 @@ class WebSocketConnection:
             "connection_id": self.connection_id,
             "connected_at": self.connected_at.isoformat(),
             "last_ping": self.last_ping.isoformat(),
-            "subscriptions": list(self.subscriptions)
+            "subscriptions": list(self.subscriptions),
         }
 
     def is_stale(self, timeout_seconds: int = 300) -> bool:
         """Check if connection is stale (no ping response)."""
-        return (datetime.now(timezone.utc) - self.last_ping).total_seconds() > timeout_seconds
+        return (datetime.now(UTC) - self.last_ping).total_seconds() > timeout_seconds
 
 
 class WebSocketManager:
@@ -138,7 +142,7 @@ class WebSocketManager:
         self.user_connections: Dict[str, Set[str]] = {}  # user_id -> connection_ids
         self.strategy_subscribers: Dict[str, Set[str]] = {}  # strategy_id -> connection_ids
         self.system_subscribers: Set[str] = set()  # connection_ids subscribed to system events
-        self.cleanup_task: Optional[asyncio.Task] = None
+        self.cleanup_task: asyncio.Task | None = None
         self.is_running = False
         self.connection_manager = self  # Self-reference for tests that expect this attribute
 
@@ -173,6 +177,7 @@ class WebSocketManager:
             # Generate connection ID if not provided
             if connection_id is None:
                 import uuid
+
                 connection_id = str(uuid.uuid4())
 
             connection = WebSocketConnection(websocket, user_id, connection_id)
@@ -186,11 +191,9 @@ class WebSocketManager:
             _logger.info("WebSocket connected: %s (user: %s)", connection_id, user_id)
 
             # Send welcome message
-            await connection.send_message({
-                "type": "welcome",
-                "connection_id": connection_id,
-                "timestamp": datetime.now().isoformat()
-            })
+            await connection.send_message(
+                {"type": "welcome", "connection_id": connection_id, "timestamp": datetime.now().isoformat()}
+            )
 
             return connection_id
 
@@ -254,7 +257,7 @@ class WebSocketManager:
 
             if message_type == "pong":
                 # Update last ping time
-                connection.last_ping = datetime.now(timezone.utc)
+                connection.last_ping = datetime.now(UTC)
 
             elif message_type == "subscribe":
                 # Handle subscription requests
@@ -311,7 +314,7 @@ class WebSocketManager:
             "type": "strategy_update",
             "strategy_id": strategy_id,
             "data": status_data,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         # Send to all subscribers
@@ -325,11 +328,7 @@ class WebSocketManager:
 
     async def broadcast_system_update(self, system_data: Dict[str, Any]):
         """Broadcast system status update to subscribers."""
-        message = {
-            "type": "system_update",
-            "data": system_data,
-            "timestamp": datetime.now().isoformat()
-        }
+        message = {"type": "system_update", "data": system_data, "timestamp": datetime.now().isoformat()}
 
         # Send to all system subscribers
         subscribers = list(self.system_subscribers)
@@ -346,7 +345,7 @@ class WebSocketManager:
             "type": "trade_notification",
             "strategy_id": strategy_id,
             "data": trade_data,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         # Send to strategy subscribers and system subscribers
@@ -364,12 +363,7 @@ class WebSocketManager:
 
     async def broadcast_alert(self, alert_data: Dict[str, Any], priority: str = "info"):
         """Broadcast system alert to all connected users."""
-        message = {
-            "type": "alert",
-            "priority": priority,
-            "data": alert_data,
-            "timestamp": datetime.now().isoformat()
-        }
+        message = {"type": "alert", "priority": priority, "data": alert_data, "timestamp": datetime.now().isoformat()}
 
         # Send to all connections
         for connection_id in list(self.connections.keys()):
@@ -409,7 +403,7 @@ class WebSocketManager:
                 connections.append(self.connections[connection_id])
         return connections
 
-    def get_connection(self, connection_id: str) -> Optional[WebSocketConnection]:
+    def get_connection(self, connection_id: str) -> WebSocketConnection | None:
         """Get connection by ID."""
         return self.connections.get(connection_id)
 
@@ -484,9 +478,8 @@ class WebSocketManager:
             "oldest_connection": oldest_connection.connected_at.isoformat() if oldest_connection else None,
             "newest_connection": newest_connection.connected_at.isoformat() if newest_connection else None,
             "connections_by_user": {
-                user_id: len(connection_ids)
-                for user_id, connection_ids in self.user_connections.items()
-            }
+                user_id: len(connection_ids) for user_id, connection_ids in self.user_connections.items()
+            },
         }
 
     async def handle_connection(self, websocket: WebSocket, token: str):
@@ -497,6 +490,7 @@ class WebSocketManager:
             # Try to get current user (this will be mocked in tests)
             try:
                 from src.api.websocket_manager import get_current_user
+
                 user = get_current_user(token)
             except Exception:
                 # Authentication failed
@@ -540,57 +534,33 @@ class WebSocketManager:
 
         if message_type == "ping":
             connection.update_last_ping()
-            await connection.send_message({
-                "type": "pong",
-                "timestamp": datetime.now().isoformat()
-            })
+            await connection.send_message({"type": "pong", "timestamp": datetime.now().isoformat()})
         elif message_type == "subscribe":
             channel = message.get("channel")
             if channel:
                 connection.add_subscription(channel)
-                await connection.send_message({
-                    "type": "subscribed",
-                    "channel": channel
-                })
+                await connection.send_message({"type": "subscribed", "channel": channel})
         elif message_type == "unsubscribe":
             channel = message.get("channel")
             if channel:
                 connection.remove_subscription(channel)
-                await connection.send_message({
-                    "type": "unsubscribed",
-                    "channel": channel
-                })
+                await connection.send_message({"type": "unsubscribed", "channel": channel})
         else:
-            await connection.send_message({
-                "type": "error",
-                "message": "Unknown message type: {}".format(message_type)
-            })
+            await connection.send_message({"type": "error", "message": f"Unknown message type: {message_type}"})
 
     async def broadcast_strategy_update(self, strategy_data: Dict[str, Any]):
         """Broadcast strategy update to subscribers."""
-        message = {
-            "type": "strategy_update",
-            "data": strategy_data,
-            "timestamp": datetime.now().isoformat()
-        }
+        message = {"type": "strategy_update", "data": strategy_data, "timestamp": datetime.now().isoformat()}
         await self.broadcast_to_channel("strategy_updates", message)
 
     async def broadcast_system_metrics(self, metrics_data: Dict[str, Any]):
         """Broadcast system metrics to subscribers."""
-        message = {
-            "type": "system_metrics",
-            "data": metrics_data,
-            "timestamp": datetime.now().isoformat()
-        }
+        message = {"type": "system_metrics", "data": metrics_data, "timestamp": datetime.now().isoformat()}
         await self.broadcast_to_channel("system_metrics", message)
 
     async def broadcast_notification(self, notification: Dict[str, Any]):
         """Broadcast notification to all connections."""
-        message = {
-            "type": "notification",
-            "data": notification,
-            "timestamp": datetime.now().isoformat()
-        }
+        message = {"type": "notification", "data": notification, "timestamp": datetime.now().isoformat()}
         await self.broadcast_to_all(message)
 
     async def handle_message(self, connection: WebSocketConnection, message: Dict[str, Any]):

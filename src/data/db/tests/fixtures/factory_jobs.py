@@ -3,8 +3,10 @@ Test data factories for Jobs models.
 
 Provides factory functions to create test data for Schedule and ScheduleRun models.
 """
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, Optional
+
+from datetime import UTC, datetime, timedelta
+from typing import Any, Dict
+
 from src.data.db.models.model_jobs import JobType, RunStatus
 
 
@@ -19,9 +21,9 @@ class ScheduleFactory:
         target: str = "AAPL,MSFT",
         cron: str = "0 9 * * *",
         enabled: bool = True,
-        task_params: Optional[Dict[str, Any]] = None,
-        next_run_at: Optional[datetime] = None,
-        **kwargs
+        task_params: Dict[str, Any] | None = None,
+        next_run_at: datetime | None = None,
+        **kwargs,
     ) -> Dict[str, Any]:
         """Create schedule data dictionary."""
         return {
@@ -32,8 +34,8 @@ class ScheduleFactory:
             "cron": cron,
             "enabled": enabled,
             "task_params": task_params or {},
-            "next_run_at": next_run_at or datetime.now(timezone.utc) + timedelta(days=1),
-            **kwargs
+            "next_run_at": next_run_at or datetime.now(UTC) + timedelta(days=1),
+            **kwargs,
         }
 
     @staticmethod
@@ -45,7 +47,7 @@ class ScheduleFactory:
             job_type=JobType.SCREENER,
             target="sp500",
             cron="0 9 * * *",  # 9 AM daily
-            enabled=True
+            enabled=True,
         )
 
     @staticmethod
@@ -57,19 +59,14 @@ class ScheduleFactory:
             job_type=JobType.REPORT,
             target="weekly_summary",
             cron="0 10 * * 1",  # 10 AM every Monday
-            enabled=True
+            enabled=True,
         )
 
     @staticmethod
     def disabled_schedule(user_id: int = 1, name: str = "disabled_schedule") -> Dict[str, Any]:
         """Create a disabled schedule."""
         return ScheduleFactory.create_data(
-            user_id=user_id,
-            name=name,
-            job_type=JobType.ALERT,
-            target="test_alert",
-            cron="0 * * * *",
-            enabled=False
+            user_id=user_id, name=name, job_type=JobType.ALERT, target="test_alert", cron="0 * * * *", enabled=False
         )
 
 
@@ -79,12 +76,12 @@ class ScheduleRunFactory:
     @staticmethod
     def create_data(
         job_type: JobType = JobType.SCREENER,
-        job_id: Optional[int] = None,  # Changed to Optional[int] to match model
+        job_id: int | None = None,  # Changed to Optional[int] to match model
         user_id: int = 1,
         status: RunStatus = RunStatus.PENDING,
-        scheduled_for: Optional[datetime] = None,
-        job_snapshot: Optional[Dict[str, Any]] = None,
-        **kwargs
+        scheduled_for: datetime | None = None,
+        job_snapshot: Dict[str, Any] | None = None,
+        **kwargs,
     ) -> Dict[str, Any]:
         """Create schedule run data dictionary."""
         return {
@@ -92,16 +89,16 @@ class ScheduleRunFactory:
             "job_id": job_id or 1,  # Default to 1 if not provided
             "user_id": user_id,
             "status": status.value if isinstance(status, RunStatus) else status,
-            "scheduled_for": scheduled_for or datetime.now(timezone.utc),
+            "scheduled_for": scheduled_for or datetime.now(UTC),
             "job_snapshot": job_snapshot or {"test": "data"},
-            **kwargs
+            **kwargs,
         }
 
     @staticmethod
     def pending_run(
         job_id: int = 1,  # Changed to int
         user_id: int = 1,
-        scheduled_for: Optional[datetime] = None
+        scheduled_for: datetime | None = None,
     ) -> Dict[str, Any]:
         """Create a pending run."""
         return ScheduleRunFactory.create_data(
@@ -109,14 +106,14 @@ class ScheduleRunFactory:
             job_id=job_id,
             user_id=user_id,
             status=RunStatus.PENDING,
-            scheduled_for=scheduled_for or datetime.now(timezone.utc)
+            scheduled_for=scheduled_for or datetime.now(UTC),
         )
 
     @staticmethod
     def running_run(
         job_id: int = 2,  # Changed to int
         user_id: int = 1,
-        worker_id: str = "worker_1"
+        worker_id: str = "worker_1",
     ) -> Dict[str, Any]:
         """Create a running run."""
         return ScheduleRunFactory.create_data(
@@ -125,17 +122,17 @@ class ScheduleRunFactory:
             user_id=user_id,
             status=RunStatus.RUNNING,
             worker_id=worker_id,
-            started_at=datetime.now(timezone.utc)
+            started_at=datetime.now(UTC),
         )
 
     @staticmethod
     def completed_run(
         job_id: int = 3,  # Changed to int
         user_id: int = 1,
-        execution_time_ms: int = 1500
+        execution_time_ms: int = 1500,
     ) -> Dict[str, Any]:
         """Create a completed run."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return ScheduleRunFactory.create_data(
             job_type=JobType.SCREENER,
             job_id=job_id,
@@ -144,17 +141,17 @@ class ScheduleRunFactory:
             started_at=now - timedelta(seconds=2),
             ended_at=now,
             execution_time_ms=execution_time_ms,
-            result={"success": True, "records_processed": 100}
+            result={"success": True, "records_processed": 100},
         )
 
     @staticmethod
     def failed_run(
         job_id: int = 4,  # Changed to int
         user_id: int = 1,
-        error: str = "Test error"
+        error: str = "Test error",
     ) -> Dict[str, Any]:
         """Create a failed run."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return ScheduleRunFactory.create_data(
             job_type=JobType.SCREENER,
             job_id=job_id,
@@ -162,7 +159,7 @@ class ScheduleRunFactory:
             status=RunStatus.FAILED,
             started_at=now - timedelta(seconds=1),
             ended_at=now,
-            error=error
+            error=error,
         )
 
 

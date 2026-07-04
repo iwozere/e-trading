@@ -7,14 +7,16 @@ Tests the AlertSchemaValidator service functionality including:
 - Error message formatting and warnings
 """
 
-import pytest
 import json
+
+# Add src to path
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-# Add src to path
-import sys
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
@@ -39,37 +41,22 @@ class TestAlertSchemaValidator:
                 "type": "object",
                 "required": ["ticker", "timeframe", "rule"],
                 "properties": {
-                    "ticker": {
-                        "type": "string",
-                        "pattern": "^[A-Z0-9]+$"
-                    },
-                    "timeframe": {
-                        "type": "string",
-                        "enum": ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
-                    },
+                    "ticker": {"type": "string", "pattern": "^[A-Z0-9]+$"},
+                    "timeframe": {"type": "string", "enum": ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]},
                     "rule": {
                         "type": "object",
                         "required": ["indicator", "comparison", "value"],
                         "properties": {
                             "indicator": {"type": "string"},
-                            "comparison": {
-                                "type": "string",
-                                "enum": ["gt", "gte", "lt", "lte", "eq", "ne"]
-                            },
-                            "value": {"type": "number"}
-                        }
+                            "comparison": {"type": "string", "enum": ["gt", "gte", "lt", "lte", "eq", "ne"]},
+                            "value": {"type": "number"},
+                        },
                     },
                     "options": {
                         "type": "object",
-                        "properties": {
-                            "lookback": {
-                                "type": "integer",
-                                "minimum": 1,
-                                "maximum": 1000
-                            }
-                        }
-                    }
-                }
+                        "properties": {"lookback": {"type": "integer", "minimum": 1, "maximum": 1000}},
+                    },
+                },
             }
 
             # Create schedule schema
@@ -78,26 +65,15 @@ class TestAlertSchemaValidator:
                 "type": "object",
                 "required": ["action"],
                 "properties": {
-                    "action": {
-                        "type": "string",
-                        "enum": ["data_sync", "cleanup", "backup"]
-                    },
+                    "action": {"type": "string", "enum": ["data_sync", "cleanup", "backup"]},
                     "options": {
                         "type": "object",
                         "properties": {
-                            "timeout": {
-                                "type": "integer",
-                                "minimum": 60,
-                                "maximum": 3600
-                            },
-                            "retry_count": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "maximum": 5
-                            }
-                        }
-                    }
-                }
+                            "timeout": {"type": "integer", "minimum": 60, "maximum": 3600},
+                            "retry_count": {"type": "integer", "minimum": 0, "maximum": 5},
+                        },
+                    },
+                },
             }
 
             # Write schemas to files
@@ -128,7 +104,7 @@ class TestAlertSchemaValidator:
 
     def test_initialization_nonexistent_schema_dir(self):
         """Test validator initialization with non-existent schema directory."""
-        with patch('src.common.alerts.schema_validator._logger') as mock_logger:
+        with patch("src.common.alerts.schema_validator._logger") as mock_logger:
             validator = AlertSchemaValidator(schema_dir="/nonexistent/path")
             mock_logger.warning.assert_called_once()
 
@@ -154,7 +130,7 @@ class TestAlertSchemaValidator:
 
     def test_load_schema_nonexistent_file(self, validator):
         """Test loading non-existent schema file."""
-        with patch('src.common.alerts.schema_validator._logger') as mock_logger:
+        with patch("src.common.alerts.schema_validator._logger") as mock_logger:
             schema = validator.load_schema("nonexistent")
             assert schema is None
             mock_logger.error.assert_called()
@@ -168,7 +144,7 @@ class TestAlertSchemaValidator:
 
         validator = AlertSchemaValidator(schema_dir=temp_schema_dir)
 
-        with patch('src.common.alerts.schema_validator._logger') as mock_logger:
+        with patch("src.common.alerts.schema_validator._logger") as mock_logger:
             schema = validator.load_schema("invalid")
             assert schema is None
             mock_logger.error.assert_called()
@@ -183,7 +159,7 @@ class TestAlertSchemaValidator:
 
         validator = AlertSchemaValidator(schema_dir=temp_schema_dir)
 
-        with patch('src.common.alerts.schema_validator._logger') as mock_logger:
+        with patch("src.common.alerts.schema_validator._logger") as mock_logger:
             schema = validator.load_schema("invalid_schema")
             assert schema is None
             mock_logger.error.assert_called()
@@ -193,11 +169,7 @@ class TestAlertSchemaValidator:
         valid_config = {
             "ticker": "BTCUSDT",
             "timeframe": "1h",
-            "rule": {
-                "indicator": "RSI",
-                "comparison": "gt",
-                "value": 70
-            }
+            "rule": {"indicator": "RSI", "comparison": "gt", "value": 70},
         }
 
         result = validator.validate_alert_config(valid_config)
@@ -224,12 +196,12 @@ class TestAlertSchemaValidator:
         """Test validation with invalid field values."""
         invalid_config = {
             "ticker": "btc-usdt",  # Invalid pattern (should be uppercase)
-            "timeframe": "2h",     # Invalid enum value
+            "timeframe": "2h",  # Invalid enum value
             "rule": {
                 "indicator": "RSI",
                 "comparison": "greater_than",  # Invalid enum value
-                "value": "seventy"  # Invalid type (should be number)
-            }
+                "value": "seventy",  # Invalid type (should be number)
+            },
         }
 
         result = validator.validate_alert_config(invalid_config)
@@ -239,13 +211,7 @@ class TestAlertSchemaValidator:
 
     def test_validate_schedule_config_valid(self, validator):
         """Test validation of valid schedule configuration."""
-        valid_config = {
-            "action": "data_sync",
-            "options": {
-                "timeout": 300,
-                "retry_count": 2
-            }
-        }
+        valid_config = {"action": "data_sync", "options": {"timeout": 300, "retry_count": 2}}
 
         result = validator.validate_schedule_config(valid_config)
 
@@ -257,9 +223,9 @@ class TestAlertSchemaValidator:
         invalid_config = {
             "action": "invalid_action",  # Invalid enum value
             "options": {
-                "timeout": 30,    # Below minimum
-                "retry_count": 10  # Above maximum
-            }
+                "timeout": 30,  # Below minimum
+                "retry_count": 10,  # Above maximum
+            },
         }
 
         result = validator.validate_schedule_config(invalid_config)
@@ -281,7 +247,7 @@ class TestAlertSchemaValidator:
         """Test validation when schema loading fails."""
         config = {"test": "data"}
 
-        with patch.object(validator, 'load_schema', return_value=None):
+        with patch.object(validator, "load_schema", return_value=None):
             result = validator.validate_config(config, "alert")
 
             assert result.is_valid is False
@@ -302,7 +268,7 @@ class TestAlertSchemaValidator:
             validator="required",
             validator_value=["field1", "field2"],
             instance=instance,
-            schema=schema
+            schema=schema,
         )
 
         formatted = validator._format_validation_error(error)
@@ -319,7 +285,7 @@ class TestAlertSchemaValidator:
             validator="enum",
             validator_value=["valid1", "valid2"],
             instance="invalid",
-            schema={"enum": ["valid1", "valid2"]}
+            schema={"enum": ["valid1", "valid2"]},
         )
 
         formatted = validator._format_validation_error(error)
@@ -336,7 +302,7 @@ class TestAlertSchemaValidator:
             validator="type",
             validator_value="number",
             instance="string_value",
-            schema={"type": "number"}
+            schema={"type": "number"},
         )
 
         formatted = validator._format_validation_error(error)
@@ -354,7 +320,7 @@ class TestAlertSchemaValidator:
             validator="pattern",
             validator_value="^[A-Z]+$",
             instance="invalid",
-            schema={"pattern": "^[A-Z]+$"}
+            schema={"pattern": "^[A-Z]+$"},
         )
 
         formatted = validator._format_validation_error(error)
@@ -372,7 +338,7 @@ class TestAlertSchemaValidator:
             validator="minimum",
             validator_value=10,
             instance=5,
-            schema={"minimum": 10}
+            schema={"minimum": 10},
         )
 
         formatted = validator._format_validation_error(error_min)
@@ -386,7 +352,7 @@ class TestAlertSchemaValidator:
             validator="maximum",
             validator_value=50,
             instance=100,
-            schema={"maximum": 50}
+            schema={"maximum": 50},
         )
 
         formatted = validator._format_validation_error(error_max)
@@ -395,15 +361,7 @@ class TestAlertSchemaValidator:
 
     def test_check_warnings_alert_no_rearm(self, validator):
         """Test warning generation for alert without rearm configuration."""
-        config = {
-            "ticker": "BTCUSDT",
-            "timeframe": "1h",
-            "rule": {
-                "indicator": "RSI",
-                "comparison": "gt",
-                "value": 70
-            }
-        }
+        config = {"ticker": "BTCUSDT", "timeframe": "1h", "rule": {"indicator": "RSI", "comparison": "gt", "value": 70}}
 
         warnings = validator._check_warnings(config, "alert")
         assert len(warnings) > 0
@@ -414,14 +372,8 @@ class TestAlertSchemaValidator:
         config = {
             "ticker": "BTCUSDT",
             "timeframe": "1h",
-            "rule": {
-                "indicator": "RSI",
-                "comparison": "gt",
-                "value": 70
-            },
-            "options": {
-                "lookback": 1000
-            }
+            "rule": {"indicator": "RSI", "comparison": "gt", "value": 70},
+            "options": {"lookback": 1000},
         }
 
         warnings = validator._check_warnings(config, "alert")
@@ -433,7 +385,7 @@ class TestAlertSchemaValidator:
             "action": "data_sync",
             "options": {
                 "timeout": 2000  # Over 30 minutes
-            }
+            },
         }
 
         warnings = validator._check_warnings(config, "schedule")
@@ -441,12 +393,7 @@ class TestAlertSchemaValidator:
 
     def test_check_warnings_schedule_high_retry_count(self, validator):
         """Test warning generation for schedule with high retry count."""
-        config = {
-            "action": "data_sync",
-            "options": {
-                "retry_count": 5
-            }
-        }
+        config = {"action": "data_sync", "options": {"retry_count": 5}}
 
         warnings = validator._check_warnings(config, "schedule")
         assert any("retry" in warning for warning in warnings)
@@ -480,14 +427,8 @@ class TestAlertSchemaValidator:
         config = {
             "ticker": "BTCUSDT",
             "timeframe": "1h",
-            "rule": {
-                "indicator": "RSI",
-                "comparison": "gt",
-                "value": 70
-            },
-            "options": {
-                "lookback": 200
-            }
+            "rule": {"indicator": "RSI", "comparison": "gt", "value": 70},
+            "options": {"lookback": 200},
         }
 
         result = validator.validate_alert_config(config)
@@ -496,7 +437,7 @@ class TestAlertSchemaValidator:
     def test_validation_exception_handling(self, validator):
         """Test handling of unexpected exceptions during validation."""
         # Mock an exception during validation
-        with patch('jsonschema.Draft7Validator') as mock_validator_class:
+        with patch("jsonschema.Draft7Validator") as mock_validator_class:
             mock_validator = mock_validator_class.return_value
             mock_validator.iter_errors.side_effect = Exception("Unexpected error")
 
@@ -543,14 +484,8 @@ class TestAlertSchemaValidator:
         large_config = {
             "ticker": "BTCUSDT",
             "timeframe": "1h",
-            "rule": {
-                "indicator": "RSI",
-                "comparison": "gt",
-                "value": 70
-            },
-            "options": {
-                "lookback": 500
-            }
+            "rule": {"indicator": "RSI", "comparison": "gt", "value": 70},
+            "options": {"lookback": 500},
         }
 
         # Add many additional properties (should be ignored if not in schema)
@@ -561,19 +496,11 @@ class TestAlertSchemaValidator:
         # Should still be valid (extra fields are typically ignored)
         assert result.is_valid is True
 
-    @patch('src.common.alerts.schema_validator._logger')
+    @patch("src.common.alerts.schema_validator._logger")
     def test_logging_behavior(self, mock_logger, validator):
         """Test that appropriate logging occurs."""
         # Test successful validation
-        config = {
-            "ticker": "BTCUSDT",
-            "timeframe": "1h",
-            "rule": {
-                "indicator": "RSI",
-                "comparison": "gt",
-                "value": 70
-            }
-        }
+        config = {"ticker": "BTCUSDT", "timeframe": "1h", "rule": {"indicator": "RSI", "comparison": "gt", "value": 70}}
 
         validator.validate_alert_config(config)
         mock_logger.debug.assert_called()

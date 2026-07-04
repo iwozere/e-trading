@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from src.data.db.models.model_notification import (
     Message,
     MessageDeliveryStatus,
-    RateLimit,
-    MessageStatus,
     MessagePriority,
+    MessageStatus,
+    RateLimit,
 )
 
 
@@ -41,12 +41,12 @@ def test_rate_limit_consume_and_refill():
     rl.tokens = 1
     rl.max_tokens = 5
     rl.refill_rate = 2
-    rl.last_refill = datetime.now(timezone.utc) - timedelta(minutes=2)
+    rl.last_refill = datetime.now(UTC) - timedelta(minutes=2)
 
     assert rl.is_available
     assert rl.consume_token() is True
     assert rl.consume_token() is False
 
     # refill should add tokens
-    rl.refill_tokens(datetime.now(timezone.utc))
+    rl.refill_tokens(datetime.now(UTC))
     assert rl.tokens >= 0

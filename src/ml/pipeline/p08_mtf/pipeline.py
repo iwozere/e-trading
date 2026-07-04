@@ -14,7 +14,7 @@ Remove once no scheduler or caller references this entrypoint directly.
 
 import warnings
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from src.ml.pipeline.p07_combined.pipeline import P07Pipeline
 from src.notification.logger import setup_logger
@@ -33,17 +33,12 @@ class P08Pipeline:
     Deprecated shim — delegates to P07Pipeline(enable_mtf=True).
     """
 
-    def __init__(self, db_url: Optional[str] = None,
-                 result_root: Path = Path("results/p08_mtf")):
+    def __init__(self, db_url: str | None = None, result_root: Path = Path("results/p08_mtf")):
         warnings.warn(_DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
         _logger.warning("P08Pipeline is deprecated. %s", _DEPRECATION_MSG)
-        self._delegate = P07Pipeline(
-            result_root=result_root,
-            db_url=db_url,
-            enable_mtf=True
-        )
+        self._delegate = P07Pipeline(result_root=result_root, db_url=db_url, enable_mtf=True)
 
-    def run_batch(self, ticker_files: List[Path], train_years: Optional[List[str]] = None):
+    def run_batch(self, ticker_files: List[Path], train_years: List[str] | None = None):
         return self._delegate.run_batch(ticker_files, train_years=train_years)
 
     def run_robustness(self, ticker: str, timeframe: str):
@@ -52,6 +47,7 @@ class P08Pipeline:
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="P08 MTF Pipeline (deprecated — use P07 --enable-mtf)")
     parser.add_argument("--ticker", type=str)
     parser.add_argument("--tf", type=str)
@@ -59,6 +55,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     import warnings as _w
+
     _w.filterwarnings("ignore", category=DeprecationWarning)
     p = P08Pipeline()
 

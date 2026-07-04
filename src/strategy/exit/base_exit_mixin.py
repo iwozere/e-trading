@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List
 
 from src.notification.logger import setup_logger
 
@@ -9,7 +9,7 @@ _logger = setup_logger(__name__)
 class BaseExitMixin(ABC):
     """Base class for all exit mixins"""
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         self.strategy = None
         self.params = params or {}
         self.indicators = {}
@@ -21,9 +21,7 @@ class BaseExitMixin(ABC):
         required_params = self.get_required_params()
         for param in required_params:
             if param not in self.params:
-                raise ValueError(
-                    f"Required parameter '{param}' not provided for {self.__class__.__name__}"
-                )
+                raise ValueError(f"Required parameter '{param}' not provided for {self.__class__.__name__}")
 
     def _set_defaults(self):
         """Setting default values for parameters.
@@ -55,7 +53,7 @@ class BaseExitMixin(ABC):
         """
         return []
 
-    def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
+    def init_exit(self, strategy, additional_params: Dict[str, Any] | None = None):
         self.strategy = strategy
 
         if additional_params:
@@ -73,7 +71,7 @@ class BaseExitMixin(ABC):
         """
         Check if required indicators exist in the strategy registry.
         """
-        if self.strategy and hasattr(self.strategy, 'indicators'):
+        if self.strategy and hasattr(self.strategy, "indicators"):
             return True
 
         if not hasattr(self, "indicators"):
@@ -145,7 +143,7 @@ class BaseExitMixin(ABC):
         if self.strategy is None:
             raise RuntimeError("Mixin not attached to strategy")
 
-        if not hasattr(self.strategy, 'indicators') or alias not in self.strategy.indicators:
+        if not hasattr(self.strategy, "indicators") or alias not in self.strategy.indicators:
             raise KeyError(
                 f"Indicator '{alias}' not found in strategy. "
                 f"Available indicators: {list(getattr(self.strategy, 'indicators', {}).keys())}"
@@ -172,7 +170,7 @@ class BaseExitMixin(ABC):
         if self.strategy is None:
             raise RuntimeError("Mixin not attached to strategy")
 
-        if not hasattr(self.strategy, 'indicators') or alias not in self.strategy.indicators:
+        if not hasattr(self.strategy, "indicators") or alias not in self.strategy.indicators:
             raise KeyError(f"Indicator '{alias}' not found in strategy")
 
         indicator = self.strategy.indicators[alias]
@@ -196,7 +194,7 @@ class BaseExitMixin(ABC):
             _logger.debug("Indicator %s set as strategy attribute", name)
 
             # Unified architecture support: add to strategy's centralized indicator dictionary
-            if not hasattr(self.strategy, 'indicators'):
+            if not hasattr(self.strategy, "indicators"):
                 self.strategy.indicators = {}
 
             # If it's a multi-line indicator object (like BT-TALIB wrapper),
@@ -206,9 +204,7 @@ class BaseExitMixin(ABC):
             # must exist in strategy.indicators.
             self.strategy.indicators[name] = indicator
         else:
-            _logger.warning(
-                f"Cannot set {name} as strategy attribute - strategy not available"
-            )
+            _logger.warning(f"Cannot set {name} as strategy attribute - strategy not available")
 
     def next(self):
         """Called for each new bar"""

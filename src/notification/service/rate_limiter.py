@@ -8,13 +8,13 @@ Supports configurable limits, priority bypass, and violation tracking.
 import asyncio
 import time
 from collections import deque
-from typing import Dict, Any, Optional, Tuple, List
-from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from enum import Enum
+from typing import Any, Dict, List, Tuple
 
-from src.data.db.services.database_service import get_database_service
 from src.data.db.models.model_notification import MessagePriority
+from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -22,6 +22,7 @@ _logger = setup_logger(__name__)
 
 class RateLimitResult(Enum):
     """Rate limit check result."""
+
     ALLOWED = "ALLOWED"
     RATE_LIMITED = "RATE_LIMITED"
     BYPASSED = "BYPASSED"
@@ -135,7 +136,7 @@ class RateLimitViolation:
             "requested_tokens": self.requested_tokens,
             "available_tokens": self.available_tokens,
             "priority": self.priority,
-            "bypassed": self.bypassed
+            "bypassed": self.bypassed,
         }
 
 
@@ -168,7 +169,7 @@ class RateLimiter:
             "telegram_channel": RateLimitConfig(max_tokens=30, refill_rate=30),
             "email_channel": RateLimitConfig(max_tokens=10, refill_rate=10),
             "sms_channel": RateLimitConfig(max_tokens=5, refill_rate=5),
-            "default": RateLimitConfig(max_tokens=60, refill_rate=60)
+            "default": RateLimitConfig(max_tokens=60, refill_rate=60),
         }
 
         # Priority bypass settings
@@ -183,7 +184,7 @@ class RateLimiter:
         """Get rate limit configuration for channel."""
         return self._default_configs.get(channel, self._default_configs["default"])
 
-    async def _load_bucket_from_db(self, user_id: str, channel: str) -> Optional[TokenBucket]:
+    async def _load_bucket_from_db(self, user_id: str, channel: str) -> TokenBucket | None:
         """Load token bucket state from database."""
         try:
             db_service = get_database_service()
@@ -205,7 +206,7 @@ class RateLimiter:
                         max_tokens=rate_limit.max_tokens,
                         refill_rate=refill_rate_per_second,
                         last_refill=rate_limit.last_refill.timestamp(),
-                        config=config
+                        config=config,
                     )
 
                     return bucket
@@ -226,7 +227,7 @@ class RateLimiter:
                     "tokens": int(bucket.tokens),
                     "max_tokens": bucket.max_tokens,
                     "refill_rate": int(bucket.refill_rate * 60),  # Convert to per-minute
-                    "last_refill": datetime.fromtimestamp(bucket.last_refill, tz=timezone.utc)
+                    "last_refill": datetime.fromtimestamp(bucket.last_refill, tz=UTC),
                 }
 
                 r.notifications.rate_limits.create_or_update_rate_limit(rate_limit_data)
@@ -260,7 +261,7 @@ class RateLimiter:
                     max_tokens=config.max_tokens,
                     refill_rate=config.refill_rate / 60.0,  # Convert to per-second
                     last_refill=time.time(),
-                    config=config
+                    config=config,
                 )
                 self._logger.info("Created new rate limit bucket for %s:%s", user_id, channel)
 
@@ -268,12 +269,8 @@ class RateLimiter:
             return bucket
 
     async def check_rate_limit(
-        self,
-        user_id: str,
-        channel: str,
-        priority: MessagePriority = MessagePriority.NORMAL,
-        tokens: int = 1
-    ) -> Tuple[RateLimitResult, Optional[float]]:
+        self, user_id: str, channel: str, priority: MessagePriority = MessagePriority.NORMAL, tokens: int = 1
+    ) -> Tuple[RateLimitResult, float | None]:
         """
         Check if request is within rate limits.
 
@@ -290,17 +287,19 @@ class RateLimiter:
 
         # Check for priority bypass
         if self._bypass_enabled and priority in self._bypass_priorities:
-            self._logger.debug("Rate limit bypassed for %s priority message from %s:%s", priority.value, user_id, channel)
+            self._logger.debug(
+                "Rate limit bypassed for %s priority message from %s:%s", priority.value, user_id, channel
+            )
 
             # Still record as violation for tracking, but mark as bypassed
             violation = RateLimitViolation(
                 user_id=user_id,
                 channel=channel,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 requested_tokens=tokens,
                 available_tokens=0,  # Would have been rate limited
                 priority=priority.value,
-                bypassed=True
+                bypassed=True,
             )
 
             # deque.append is atomic in CPython and there is no await here, so no
@@ -329,26 +328,26 @@ class RateLimiter:
         violation = RateLimitViolation(
             user_id=user_id,
             channel=channel,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             requested_tokens=tokens,
             available_tokens=bucket.tokens,
             priority=priority.value,
-            bypassed=False
+            bypassed=False,
         )
         self._violations.append(violation)
 
         self._logger.warning(
             "Rate limit exceeded for %s:%s (available: %.2f, requested: %d, wait: %.2fs)",
-            user_id, channel, bucket.tokens, tokens, wait_time
+            user_id,
+            channel,
+            bucket.tokens,
+            tokens,
+            wait_time,
         )
         return RateLimitResult.RATE_LIMITED, wait_time
 
     async def consume_tokens(
-        self,
-        user_id: str,
-        channel: str,
-        priority: MessagePriority = MessagePriority.NORMAL,
-        tokens: int = 1
+        self, user_id: str, channel: str, priority: MessagePriority = MessagePriority.NORMAL, tokens: int = 1
     ) -> bool:
         """
         Consume tokens if available (convenience method).
@@ -392,8 +391,8 @@ class RateLimiter:
                 "max_tokens": bucket.config.max_tokens,
                 "refill_rate": bucket.config.refill_rate * 60,
                 "window_minutes": bucket.config.window_minutes,
-                "burst_allowance": bucket.config.burst_allowance
-            }
+                "burst_allowance": bucket.config.burst_allowance,
+            },
         }
 
     def set_channel_config(self, channel: str, config: RateLimitConfig) -> None:
@@ -429,10 +428,10 @@ class RateLimiter:
 
     def get_violations(
         self,
-        user_id: Optional[str] = None,
-        channel: Optional[str] = None,
-        since: Optional[datetime] = None,
-        limit: int = 100
+        user_id: str | None = None,
+        channel: str | None = None,
+        since: datetime | None = None,
+        limit: int = 100,
     ) -> List[RateLimitViolation]:
         """
         Get rate limit violations with optional filtering.
@@ -465,10 +464,7 @@ class RateLimiter:
         return violations[:limit]
 
     def get_statistics(
-        self,
-        user_id: Optional[str] = None,
-        channel: Optional[str] = None,
-        hours: int = 24
+        self, user_id: str | None = None, channel: str | None = None, hours: int = 24
     ) -> Dict[str, Any]:
         """
         Get rate limiting statistics.
@@ -481,7 +477,7 @@ class RateLimiter:
         Returns:
             Dictionary with statistics
         """
-        since = datetime.now(timezone.utc) - timedelta(hours=hours)
+        since = datetime.now(UTC) - timedelta(hours=hours)
         violations = self.get_violations(user_id, channel, since)
 
         # Calculate statistics
@@ -523,10 +519,7 @@ class RateLimiter:
             "bypass_rate": bypassed_violations / total_violations if total_violations > 0 else 0,
             "channel_statistics": channel_stats,
             "priority_statistics": priority_stats,
-            "filter": {
-                "user_id": user_id,
-                "channel": channel
-            }
+            "filter": {"user_id": user_id, "channel": channel},
         }
 
     async def cleanup_old_violations(self, days_to_keep: int = 7) -> int:
@@ -539,14 +532,11 @@ class RateLimiter:
         Returns:
             Number of violations removed
         """
-        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
+        cutoff_time = datetime.now(UTC) - timedelta(days=days_to_keep)
 
         # No await — safe without a lock in asyncio single-threaded context.
         original_count = len(self._violations)
-        self._violations = deque(
-            (v for v in self._violations if v.timestamp >= cutoff_time),
-            maxlen=10_000
-        )
+        self._violations = deque((v for v in self._violations if v.timestamp >= cutoff_time), maxlen=10_000)
         removed_count = original_count - len(self._violations)
 
         if removed_count > 0:
@@ -554,7 +544,7 @@ class RateLimiter:
 
         return removed_count
 
-    async def reset_user_limits(self, user_id: str, channel: Optional[str] = None) -> int:
+    async def reset_user_limits(self, user_id: str, channel: str | None = None) -> int:
         """
         Reset rate limits for a user (admin function).
 
@@ -592,14 +582,16 @@ class RateLimiter:
                 if channel:
                     rate_limit = r.notifications.rate_limits.get_rate_limit(user_id, channel)
                     if rate_limit:
-                        r.notifications.rate_limits.create_or_update_rate_limit({
-                            "user_id": user_id,
-                            "channel": channel,
-                            "tokens": rate_limit.max_tokens,
-                            "max_tokens": rate_limit.max_tokens,
-                            "refill_rate": rate_limit.refill_rate,
-                            "last_refill": datetime.now(timezone.utc)
-                        })
+                        r.notifications.rate_limits.create_or_update_rate_limit(
+                            {
+                                "user_id": user_id,
+                                "channel": channel,
+                                "tokens": rate_limit.max_tokens,
+                                "max_tokens": rate_limit.max_tokens,
+                                "refill_rate": rate_limit.refill_rate,
+                                "last_refill": datetime.now(UTC),
+                            }
+                        )
                 else:
                     # Reset all channels for user - would need custom query
                     pass
@@ -607,7 +599,9 @@ class RateLimiter:
         except Exception as e:
             self._logger.error("Failed to reset rate limits in database for %s: %s", user_id, e)
 
-        self._logger.info("Reset rate limits for user %s (%s): %d buckets", user_id, channel or "all channels", reset_count)
+        self._logger.info(
+            "Reset rate limits for user %s (%s): %d buckets", user_id, channel or "all channels", reset_count
+        )
         return reset_count
 
 

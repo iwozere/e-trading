@@ -8,12 +8,14 @@ This service provides health monitoring for the Notification Service by delegati
 to the database service layer, following the proper repository pattern.
 """
 
-from typing import Dict, Any, List
-from pathlib import Path
 import sys
+from pathlib import Path
+from typing import Any, Dict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
+
+from datetime import UTC
 
 from src.data.db.services.health_monitoring_service import HealthMonitoringService
 from src.notification.logger import setup_logger
@@ -57,24 +59,25 @@ class NotificationHealthService:
         except Exception:
             _logger.exception("Error getting Notification Service health status:")
             # Return error status if database query fails
-            from datetime import datetime, timezone
+            from datetime import datetime
+
             return {
                 "service": "notification_service",
                 "status": "error",
                 "status_reason": "Failed to query health status from database",
                 "error": "Database query failed",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "channels": {
                     "owned": self.enabled_channels,
                     "telegram_owned_by": "telegram_bot",
                     "email_status": "unknown",
-                    "sms_status": "unknown"
+                    "sms_status": "unknown",
                 },
                 "queue": {
                     "pending": -1,
                     "processing": -1,
                     "failed_last_hour": -1,
                     "delivered_last_hour": -1,
-                    "stuck_messages": -1
-                }
+                    "stuck_messages": -1,
+                },
             }

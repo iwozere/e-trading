@@ -68,14 +68,16 @@ class P18Config:
     # (_DEFAULT_LARGE_EXIT_TIERS_USD), and consensus breadth (institution count)
     # adds a separate graded bonus. This prevents every $500M+ exit from clearing
     # the alert threshold and saturating the results.
-    signal_weights: Dict[str, int] = field(default_factory=lambda: {
-        "consensus_exit_3plus": 40,
-        "volume_spike_confirmed": 20,
-        "form4_insider_sell": 10,
-        "schedule_13dg_drop": 10,
-        "seasonal_redemption_window": 5,
-        "price_below_52w_high_15pct": 5,
-    })
+    signal_weights: Dict[str, int] = field(
+        default_factory=lambda: {
+            "consensus_exit_3plus": 40,
+            "volume_spike_confirmed": 20,
+            "form4_insider_sell": 10,
+            "schedule_13dg_drop": 10,
+            "seasonal_redemption_window": 5,
+            "price_below_52w_high_15pct": 5,
+        }
+    )
 
     # ------------------------------------------------------------------
     # Scheduler / pipeline behaviour

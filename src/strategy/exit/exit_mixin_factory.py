@@ -1,20 +1,20 @@
 # exit_mixin_factory.py
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
-from src.strategy.exit.atr_exit_mixin import ATRExitMixin
 from src.strategy.exit.advanced_atr_exit_mixin import AdvancedATRExitMixin
-from src.strategy.exit.simple_atr_exit_mixin import SimpleATRExitMixin
-from src.strategy.exit.fixed_ratio_exit_mixin import FixedRatioExitMixin
-from src.strategy.exit.ma_crossover_exit_mixin import MACrossoverExitMixin
-from src.strategy.exit.rsi_bb_exit_mixin import RSIBBExitMixin
-from src.strategy.exit.rsi_or_bb_exit_mixin import RSIOrBBExitMixin
-from src.strategy.exit.time_based_exit_mixin import TimeBasedExitMixin
-from src.strategy.exit.trailing_stop_exit_mixin import TrailingStopExitMixin
+from src.strategy.exit.atr_exit_mixin import ATRExitMixin
 from src.strategy.exit.eom_breakdown_exit_mixin import EOMBreakdownExitMixin
 from src.strategy.exit.eom_macd_breakdown_exit_mixin import EOMMAcdBreakdownExitMixin
 from src.strategy.exit.eom_rejection_exit_mixin import EOMRejectionExitMixin
+from src.strategy.exit.fixed_ratio_exit_mixin import FixedRatioExitMixin
+from src.strategy.exit.ma_crossover_exit_mixin import MACrossoverExitMixin
 from src.strategy.exit.multi_level_atr_exit_mixin import MultiLevelAtrExitMixin
+from src.strategy.exit.rsi_bb_exit_mixin import RSIBBExitMixin
+from src.strategy.exit.rsi_or_bb_exit_mixin import RSIOrBBExitMixin
+from src.strategy.exit.simple_atr_exit_mixin import SimpleATRExitMixin
+from src.strategy.exit.time_based_exit_mixin import TimeBasedExitMixin
+from src.strategy.exit.trailing_stop_exit_mixin import TrailingStopExitMixin
 
 # Registry of all available exit mixins
 EXIT_MIXIN_REGISTRY = {
@@ -34,13 +34,11 @@ EXIT_MIXIN_REGISTRY = {
 }
 
 
-def get_exit_mixin(mixin_name: str, params: Optional[Dict[str, Any]] = None):
+def get_exit_mixin(mixin_name: str, params: Dict[str, Any] | None = None):
     """Factory for creating instances of exit mixins."""
     if mixin_name not in EXIT_MIXIN_REGISTRY:
         available_mixins = list(EXIT_MIXIN_REGISTRY.keys())
-        raise ValueError(
-            f"Unknown exit mixin: {mixin_name}. Available: {available_mixins}"
-        )
+        raise ValueError(f"Unknown exit mixin: {mixin_name}. Available: {available_mixins}")
 
     mixin_class = EXIT_MIXIN_REGISTRY[mixin_name]
     return mixin_class(params=params)

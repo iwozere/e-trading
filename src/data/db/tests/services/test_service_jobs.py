@@ -10,14 +10,20 @@ Tests cover:
 - Statistics and cleanup
 - Error handling
 """
-import pytest
-from datetime import datetime, timezone, timedelta
 
-from src.data.db.services.jobs_service import JobsService
+from datetime import UTC, datetime, timedelta
+
+import pytest
+
 from src.data.db.models.model_jobs import (
-    JobType, RunStatus,
-    ScheduleCreate, ScheduleUpdate, ScheduleRunCreate, ScheduleRunUpdate
+    JobType,
+    RunStatus,
+    ScheduleCreate,
+    ScheduleRunCreate,
+    ScheduleRunUpdate,
+    ScheduleUpdate,
 )
+from src.data.db.services.jobs_service import JobsService
 
 
 class TestJobsServiceSchedules:
@@ -33,7 +39,7 @@ class TestJobsServiceSchedules:
             target="AAPL,MSFT",
             cron="0 9 * * *",
             enabled=True,
-            task_params={"filter": "volume > 1000000"}
+            task_params={"filter": "volume > 1000000"},
         )
 
         schedule = service.create_schedule(user_id=1, schedule_data=schedule_data)
@@ -55,7 +61,7 @@ class TestJobsServiceSchedules:
             job_type=JobType.SCREENER,
             target="AAPL",
             cron="99 99 99 99 99",  # Valid format for Pydantic, invalid for croniter
-            enabled=True
+            enabled=True,
         )
 
         with pytest.raises(ValueError, match="Invalid cron expression"):
@@ -67,11 +73,7 @@ class TestJobsServiceSchedules:
 
         # Create a schedule first
         schedule_data = ScheduleCreate(
-            name="test_schedule",
-            job_type=JobType.SCREENER,
-            target="AAPL",
-            cron="0 9 * * *",
-            enabled=True
+            name="test_schedule", job_type=JobType.SCREENER, target="AAPL", cron="0 9 * * *", enabled=True
         )
         created = service.create_schedule(user_id=1, schedule_data=schedule_data)
 
@@ -89,11 +91,7 @@ class TestJobsServiceSchedules:
         # Create multiple schedules
         for i in range(3):
             schedule_data = ScheduleCreate(
-                name=f"schedule_{i}",
-                job_type=JobType.SCREENER,
-                target="AAPL",
-                cron="0 9 * * *",
-                enabled=True
+                name=f"schedule_{i}", job_type=JobType.SCREENER, target="AAPL", cron="0 9 * * *", enabled=True
             )
             service.create_schedule(user_id=1, schedule_data=schedule_data)
 
@@ -112,7 +110,7 @@ class TestJobsServiceSchedules:
                 job_type=JobType.SCREENER,
                 target="AAPL",
                 cron="0 9 * * *",
-                enabled=True
+                enabled=True,
             )
             service.create_schedule(user_id=user_id, schedule_data=schedule_data)
 
@@ -128,19 +126,12 @@ class TestJobsServiceSchedules:
 
         # Create a schedule
         schedule_data = ScheduleCreate(
-            name="original_name",
-            job_type=JobType.SCREENER,
-            target="AAPL",
-            cron="0 9 * * *",
-            enabled=True
+            name="original_name", job_type=JobType.SCREENER, target="AAPL", cron="0 9 * * *", enabled=True
         )
         schedule = service.create_schedule(user_id=1, schedule_data=schedule_data)
 
         # Update it
-        update_data = ScheduleUpdate(
-            name="updated_name",
-            enabled=False
-        )
+        update_data = ScheduleUpdate(name="updated_name", enabled=False)
         updated = service.update_schedule(schedule_id=schedule.id, update_data=update_data)
 
         assert updated is not None
@@ -153,11 +144,7 @@ class TestJobsServiceSchedules:
 
         # Create a schedule
         schedule_data = ScheduleCreate(
-            name="test_schedule",
-            job_type=JobType.SCREENER,
-            target="AAPL",
-            cron="0 9 * * *",
-            enabled=True
+            name="test_schedule", job_type=JobType.SCREENER, target="AAPL", cron="0 9 * * *", enabled=True
         )
         schedule = service.create_schedule(user_id=1, schedule_data=schedule_data)
         original_next_run = schedule.next_run_at
@@ -176,11 +163,7 @@ class TestJobsServiceSchedules:
 
         # Create a schedule
         schedule_data = ScheduleCreate(
-            name="to_delete",
-            job_type=JobType.SCREENER,
-            target="AAPL",
-            cron="0 9 * * *",
-            enabled=True
+            name="to_delete", job_type=JobType.SCREENER, target="AAPL", cron="0 9 * * *", enabled=True
         )
         schedule = service.create_schedule(user_id=1, schedule_data=schedule_data)
 
@@ -192,7 +175,9 @@ class TestJobsServiceSchedules:
         retrieved = service.get_schedule(schedule_id=schedule.id)
         assert retrieved is None
 
-    @pytest.mark.skip(reason="Bug in service: trigger_schedule creates string job_id, fails Pydantic validation expecting int")
+    @pytest.mark.skip(
+        reason="Bug in service: trigger_schedule creates string job_id, fails Pydantic validation expecting int"
+    )
     def test_trigger_schedule(self, mock_database_service, db_session):
         """Test manually triggering a schedule."""
         service = JobsService(db_service=mock_database_service)
@@ -204,7 +189,7 @@ class TestJobsServiceSchedules:
             target="AAPL,MSFT",
             cron="0 9 * * *",
             enabled=True,
-            task_params={"filter": "test"}
+            task_params={"filter": "test"},
         )
         schedule = service.create_schedule(user_id=1, schedule_data=schedule_data)
 
@@ -225,11 +210,7 @@ class TestJobsServiceSchedules:
 
         # Create a disabled schedule
         schedule_data = ScheduleCreate(
-            name="disabled_schedule",
-            job_type=JobType.SCREENER,
-            target="AAPL",
-            cron="0 9 * * *",
-            enabled=False
+            name="disabled_schedule", job_type=JobType.SCREENER, target="AAPL", cron="0 9 * * *", enabled=False
         )
         schedule = service.create_schedule(user_id=1, schedule_data=schedule_data)
 
@@ -242,13 +223,9 @@ class TestJobsServiceSchedules:
         service = JobsService(db_service=mock_database_service)
 
         # Create a schedule due in the past
-        past_time = datetime.now(timezone.utc) - timedelta(hours=1)
+        past_time = datetime.now(UTC) - timedelta(hours=1)
         schedule_data = ScheduleCreate(
-            name="past_due",
-            job_type=JobType.SCREENER,
-            target="AAPL",
-            cron="0 9 * * *",
-            enabled=True
+            name="past_due", job_type=JobType.SCREENER, target="AAPL", cron="0 9 * * *", enabled=True
         )
         schedule = service.create_schedule(user_id=1, schedule_data=schedule_data)
 
@@ -274,8 +251,8 @@ class TestJobsServiceRuns:
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
             job_id=12345,  # Must be int, not string
-            scheduled_for=datetime.now(timezone.utc),
-            job_snapshot={"test": "data"}
+            scheduled_for=datetime.now(UTC),
+            job_snapshot={"test": "data"},
         )
 
         run = service.create_run(user_id=1, run_data=run_data)
@@ -294,8 +271,8 @@ class TestJobsServiceRuns:
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
             job_id=123,  # Must be int
-            scheduled_for=datetime.now(timezone.utc),
-            job_snapshot={"test": "data"}
+            scheduled_for=datetime.now(UTC),
+            job_snapshot={"test": "data"},
         )
         created = service.create_run(user_id=1, run_data=run_data)
 
@@ -314,8 +291,8 @@ class TestJobsServiceRuns:
             run_data = ScheduleRunCreate(
                 job_type=JobType.SCREENER,
                 job_id=100 + i,  # Must be int
-                scheduled_for=datetime.now(timezone.utc),
-                job_snapshot={"test": i}
+                scheduled_for=datetime.now(UTC),
+                job_snapshot={"test": i},
             )
             service.create_run(user_id=1, run_data=run_data)
 
@@ -331,16 +308,13 @@ class TestJobsServiceRuns:
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
             job_id=123,  # Must be int
-            scheduled_for=datetime.now(timezone.utc),
-            job_snapshot={"test": "data"}
+            scheduled_for=datetime.now(UTC),
+            job_snapshot={"test": "data"},
         )
         run = service.create_run(user_id=1, run_data=run_data)
 
         # Update it
-        update_data = ScheduleRunUpdate(
-            status=RunStatus.COMPLETED,
-            result={"success": True}
-        )
+        update_data = ScheduleRunUpdate(status=RunStatus.COMPLETED, result={"success": True})
         updated = service.update_run(run_id=run.id, update_data=update_data)
 
         assert updated is not None
@@ -355,8 +329,8 @@ class TestJobsServiceRuns:
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
             job_id=200,  # Must be int
-            scheduled_for=datetime.now(timezone.utc),
-            job_snapshot={"test": "data"}
+            scheduled_for=datetime.now(UTC),
+            job_snapshot={"test": "data"},
         )
         run = service.create_run(user_id=1, run_data=run_data)
 
@@ -381,8 +355,8 @@ class TestJobsServiceRuns:
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
             job_id=201,  # Must be int
-            scheduled_for=datetime.now(timezone.utc),
-            job_snapshot={"test": "data"}
+            scheduled_for=datetime.now(UTC),
+            job_snapshot={"test": "data"},
         )
         run = service.create_run(user_id=1, run_data=run_data)
         service.claim_run(run_id=run.id, worker_id="worker_1")
@@ -402,8 +376,8 @@ class TestJobsServiceRuns:
             run_data = ScheduleRunCreate(
                 job_type=JobType.SCREENER,
                 job_id=300 + i,  # Must be int
-                scheduled_for=datetime.now(timezone.utc),
-                job_snapshot={"test": i}
+                scheduled_for=datetime.now(UTC),
+                job_snapshot={"test": i},
             )
             run = service.create_run(user_id=1, run_data=run_data)
 
@@ -426,8 +400,8 @@ class TestJobsServiceRuns:
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
             job_id=400,  # Must be int
-            scheduled_for=datetime.now(timezone.utc),
-            job_snapshot={"test": "data"}
+            scheduled_for=datetime.now(UTC),
+            job_snapshot={"test": "data"},
         )
         run = service.create_run(user_id=1, run_data=run_data)
 
@@ -453,8 +427,8 @@ class TestJobsServiceRuns:
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
             job_id=401,  # Must be int
-            scheduled_for=datetime.now(timezone.utc),
-            job_snapshot={"test": "data"}
+            scheduled_for=datetime.now(UTC),
+            job_snapshot={"test": "data"},
         )
         run = service.create_run(user_id=1, run_data=run_data)
 
@@ -498,7 +472,7 @@ class TestJobsServiceHelpers:
         """Test next run time calculation."""
         service = JobsService(db_service=mock_database_service)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         next_run = service._calculate_next_run_time("0 9 * * *")
 
         assert next_run > now
@@ -541,7 +515,9 @@ class TestJobsServiceHelpers:
 class TestJobsServiceScreener:
     """Tests for screener run creation."""
 
-    @pytest.mark.skip(reason="Bug in service: create_screener_run creates string job_id, fails Pydantic validation expecting int")
+    @pytest.mark.skip(
+        reason="Bug in service: create_screener_run creates string job_id, fails Pydantic validation expecting int"
+    )
     def test_create_screener_run_with_set(self, mock_database_service, db_session):
         """Test creating screener run with screener set."""
         service = JobsService(db_service=mock_database_service)
@@ -549,10 +525,7 @@ class TestJobsServiceScreener:
         # BUG: service creates job_id with string format (line 377 in jobs_service.py)
         # but ScheduleRunCreate expects Optional[int]
         run = service.create_screener_run(
-            user_id=1,
-            screener_set="sp500",
-            filter_criteria={"volume": "> 1000000"},
-            top_n=10
+            user_id=1, screener_set="sp500", filter_criteria={"volume": "> 1000000"}, top_n=10
         )
 
         assert run is not None
@@ -561,7 +534,9 @@ class TestJobsServiceScreener:
         assert run.job_snapshot["screener_set"] == "sp500"
         assert len(run.job_snapshot["tickers"]) > 0
 
-    @pytest.mark.skip(reason="Bug in service: create_screener_run creates string job_id, fails Pydantic validation expecting int")
+    @pytest.mark.skip(
+        reason="Bug in service: create_screener_run creates string job_id, fails Pydantic validation expecting int"
+    )
     def test_create_screener_run_with_tickers(self, mock_database_service, db_session):
         """Test creating screener run with ticker list."""
         service = JobsService(db_service=mock_database_service)
@@ -569,9 +544,7 @@ class TestJobsServiceScreener:
         # BUG: service creates job_id with string format (line 377 in jobs_service.py)
         # but ScheduleRunCreate expects Optional[int]
         run = service.create_screener_run(
-            user_id=1,
-            tickers=["AAPL", "MSFT", "GOOGL"],
-            filter_criteria={"price": "> 100"}
+            user_id=1, tickers=["AAPL", "MSFT", "GOOGL"], filter_criteria={"price": "> 100"}
         )
 
         assert run is not None
@@ -588,7 +561,9 @@ class TestJobsServiceScreener:
 class TestJobsServiceReport:
     """Tests for report run creation."""
 
-    @pytest.mark.skip(reason="Bug in service: create_report_run creates string job_id, fails Pydantic validation expecting int")
+    @pytest.mark.skip(
+        reason="Bug in service: create_report_run creates string job_id, fails Pydantic validation expecting int"
+    )
     def test_create_report_run(self, mock_database_service, db_session):
         """Test creating report run."""
         service = JobsService(db_service=mock_database_service)
@@ -596,9 +571,7 @@ class TestJobsServiceReport:
         # BUG: service creates job_id with string format (line 406 in jobs_service.py)
         # but ScheduleRunCreate expects Optional[int]
         run = service.create_report_run(
-            user_id=1,
-            report_type="weekly_summary",
-            parameters={"start_date": "2025-01-01", "end_date": "2025-01-07"}
+            user_id=1, report_type="weekly_summary", parameters={"start_date": "2025-01-01", "end_date": "2025-01-07"}
         )
 
         assert run is not None
@@ -620,8 +593,8 @@ class TestJobsServiceStatistics:
             run_data = ScheduleRunCreate(
                 job_type=JobType.SCREENER,
                 job_id=500,  # Must be int
-                scheduled_for=datetime.now(timezone.utc),
-                job_snapshot={"status": status.value}
+                scheduled_for=datetime.now(UTC),
+                job_snapshot={"status": status.value},
             )
             run = service.create_run(user_id=1, run_data=run_data)
 
@@ -642,12 +615,12 @@ class TestJobsServiceStatistics:
         service = JobsService(db_service=mock_database_service)
 
         # Create an old completed run
-        old_time = datetime.now(timezone.utc) - timedelta(days=100)
+        old_time = datetime.now(UTC) - timedelta(days=100)
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
             job_id=600,  # Must be int
             scheduled_for=old_time,
-            job_snapshot={"test": "old"}
+            job_snapshot={"test": "old"},
         )
         run = service.create_run(user_id=1, run_data=run_data)
 

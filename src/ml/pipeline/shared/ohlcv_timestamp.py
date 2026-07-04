@@ -12,12 +12,10 @@ logic.
 
 from __future__ import annotations
 
-from typing import Optional
-
 import pandas as pd
 
 
-def coerce_ohlcv_timestamp_column(df: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
+def coerce_ohlcv_timestamp_column(df: pd.DataFrame | None) -> pd.DataFrame | None:
     """If ``df`` has a DatetimeIndex but no ``timestamp`` column, add one from the index."""
     if df is None or df.empty:
         return df

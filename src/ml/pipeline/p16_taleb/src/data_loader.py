@@ -16,7 +16,6 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 
@@ -32,7 +31,7 @@ def _norm_index(df: pd.DataFrame) -> pd.DataFrame:
 # Project-level imports (src/ lives outside this package)
 # ---------------------------------------------------------------------------
 _here = Path(__file__).resolve()
-_project_root = _here.parents[5]   # src/ml/pipeline/p16_taleb/src/ -> project root
+_project_root = _here.parents[5]  # src/ml/pipeline/p16_taleb/src/ -> project root
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
@@ -50,11 +49,10 @@ from src.data.data_manager import DataManager
 _logger = logging.getLogger(__name__)
 
 
-
-
 # ---------------------------------------------------------------------------
 # Public loaders
 # ---------------------------------------------------------------------------
+
 
 def load_sp500(
     ticker: str = "SPY",
@@ -74,7 +72,8 @@ def load_sp500(
     """
     dm = DataManager()
     df = dm.get_ohlcv(
-        ticker, "1d",
+        ticker,
+        "1d",
         start_date=datetime.fromisoformat(start),
         end_date=datetime.fromisoformat(end),
     )
@@ -82,8 +81,7 @@ def load_sp500(
         _logger.warning("No SP500 data returned for %s", ticker)
         return df
     df = _norm_index(df)
-    _logger.info("SP500 (%s): %d rows, %s to %s", ticker, len(df),
-                 df.index[0].date(), df.index[-1].date())  # type: ignore[union-attr]
+    _logger.info("SP500 (%s): %d rows, %s to %s", ticker, len(df), df.index[0].date(), df.index[-1].date())  # type: ignore[union-attr]
     return df
 
 
@@ -105,7 +103,8 @@ def load_vix(
     """
     dm = DataManager()
     df = dm.get_ohlcv(
-        ticker, "1d",
+        ticker,
+        "1d",
         start_date=datetime.fromisoformat(start),
         end_date=datetime.fromisoformat(end),
     )
@@ -114,8 +113,7 @@ def load_vix(
         return df
     df = _norm_index(df)
     vix = df[["close"]].rename(columns={"close": "vix"})  # type: ignore[call-overload]
-    _logger.info("VIX (%s): %d rows, %s to %s", ticker, len(vix),
-                 vix.index[0].date(), vix.index[-1].date())  # type: ignore[union-attr]
+    _logger.info("VIX (%s): %d rows, %s to %s", ticker, len(vix), vix.index[0].date(), vix.index[-1].date())  # type: ignore[union-attr]
     return vix
 
 
@@ -161,8 +159,7 @@ def load_rates(
     rates.columns = pd.Index(["rate_3m"])
     rates["rate_3m"] = rates["rate_3m"] / 100.0
     rates = rates.loc[start:end].dropna()  # type: ignore[misc]
-    _logger.info("Rates (%s): %d rows, %s to %s", series_id, len(rates),
-                 rates.index[0].date(), rates.index[-1].date())  # type: ignore[union-attr]
+    _logger.info("Rates (%s): %d rows, %s to %s", series_id, len(rates), rates.index[0].date(), rates.index[-1].date())  # type: ignore[union-attr]
     return rates
 
 
@@ -194,9 +191,7 @@ def load_gdelt(
     existing = pd.DataFrame()
     if output_path.exists() and not force_rebuild:
         try:
-            existing = pd.read_csv(
-                output_path, index_col=0, parse_dates=True, compression="gzip"
-            )
+            existing = pd.read_csv(output_path, index_col=0, parse_dates=True, compression="gzip")
             existing = _norm_index(existing)
         except Exception:
             _logger.warning("Could not read existing GDELT cache; rebuilding")
@@ -214,10 +209,7 @@ def load_gdelt(
         return existing
 
     if last_cached is not None and not force_rebuild:
-        event_files = [
-            f for f in event_files
-            if datetime.strptime(f.name[:8], "%Y%m%d").date() > last_cached
-        ]
+        event_files = [f for f in event_files if datetime.strptime(f.name[:8], "%Y%m%d").date() > last_cached]
 
     if not event_files:
         _logger.info("GDELT cache is up to date: %d days", len(existing))
@@ -240,13 +232,15 @@ def load_gdelt(
             goldstein = float((df["goldstein_scale_avg"] * df["num_articles"]).sum() / total_articles)
             file_date = datetime.strptime(path.name[:8], "%Y%m%d").date()
 
-            new_rows.append({
-                "date": pd.Timestamp(file_date),
-                "avgtone": avgtone,
-                "goldstein_scale": goldstein,
-                "num_articles": int(total_articles),
-                "num_events": int(df["num_events"].sum()),
-            })
+            new_rows.append(
+                {
+                    "date": pd.Timestamp(file_date),
+                    "avgtone": avgtone,
+                    "goldstein_scale": goldstein,
+                    "num_articles": int(total_articles),
+                    "num_events": int(df["num_events"].sum()),
+                }
+            )
         except Exception:
             _logger.warning("Failed to process GDELT file: %s", path.name)
 
@@ -264,14 +258,14 @@ def load_gdelt(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     combined.to_csv(output_path, compression="gzip")
-    _logger.info("GDELT cache saved: %d days (added %d) -> %s",
-                 len(combined), len(new_rows), output_path)
+    _logger.info("GDELT cache saved: %d days (added %d) -> %s", len(combined), len(new_rows), output_path)
     return combined  # type: ignore[return-value]
 
 
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
+
 
 def _validate_master(df: pd.DataFrame, start: str, end: str) -> None:
     """Warn if the master DataFrame has gaps longer than 5 business days."""
@@ -310,9 +304,10 @@ def _validate_master(df: pd.DataFrame, start: str, end: str) -> None:
 # Master loader
 # ---------------------------------------------------------------------------
 
+
 def load_all(
     config: dict,
-    cache_dir: Optional[Path] = None,
+    cache_dir: Path | None = None,
     force_gdelt_rebuild: bool = False,
 ) -> pd.DataFrame:
     """
@@ -381,7 +376,10 @@ def load_all(
 
     _logger.info(
         "Master dataset: %d rows x %d cols, %s to %s -> %s",
-        len(master), len(master.columns),
-        master.index.min().date(), master.index.max().date(), master_path,  # type: ignore[union-attr]
+        len(master),
+        len(master.columns),
+        master.index.min().date(),
+        master.index.max().date(),
+        master_path,  # type: ignore[union-attr]
     )
     return master

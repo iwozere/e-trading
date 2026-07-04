@@ -43,6 +43,7 @@ def test_rs_score_empty_signals():
 def test_regime_filter_fail_open(monkeypatch):
     """Regime check returns True (fail-open) when no SPY signal is available."""
     import src.ml.pipeline.p20_kestrel.screening.sleeve_c as sleeve_c
+
     monkeypatch.setattr(sleeve_c, "get_latest_signal", lambda *_: None)
     assert sleeve_c._regime_allows_new_entry() is True
 
@@ -50,6 +51,7 @@ def test_regime_filter_fail_open(monkeypatch):
 def test_regime_filter_blocks_below_200dma(monkeypatch):
     """Regime check returns False when SPY below 200DMA."""
     import src.ml.pipeline.p20_kestrel.screening.sleeve_c as sleeve_c
+
     monkeypatch.setattr(sleeve_c, "get_latest_signal", lambda *_: 0.0)
     assert sleeve_c._regime_allows_new_entry() is False
 
@@ -57,5 +59,6 @@ def test_regime_filter_blocks_below_200dma(monkeypatch):
 def test_regime_filter_allows_above_200dma(monkeypatch):
     """Regime check returns True when SPY above 200DMA."""
     import src.ml.pipeline.p20_kestrel.screening.sleeve_c as sleeve_c
+
     monkeypatch.setattr(sleeve_c, "get_latest_signal", lambda *_: 1.0)
     assert sleeve_c._regime_allows_new_entry() is True

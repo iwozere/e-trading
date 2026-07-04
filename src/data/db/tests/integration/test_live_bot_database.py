@@ -9,8 +9,8 @@ IMPORTANT: This test uses isolated test database fixtures, NOT production databa
 """
 
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 import pytest
 
@@ -31,15 +31,12 @@ class TestLiveBotDatabase:
         # Create a bot instance
         bot_id = "test_bot"
         bot_data = {
-            'id': bot_id,
-            'type': 'paper',
-            'config_file': 'test_bot.json',
-            'status': 'running',
-            'current_balance': 1000.0,
-            'extra_metadata': {
-                'trading_pair': 'BTCUSDT',
-                'interval': '1h'
-            }
+            "id": bot_id,
+            "type": "paper",
+            "config_file": "test_bot.json",
+            "status": "running",
+            "current_balance": 1000.0,
+            "extra_metadata": {"trading_pair": "BTCUSDT", "interval": "1h"},
         }
 
         bot_instance = bots_repo.create(bot_data)
@@ -54,7 +51,7 @@ class TestLiveBotDatabase:
         # Verify we can retrieve it
         retrieved_bot = bots_repo.get_by_id(bot_id)
         assert retrieved_bot is not None
-        assert retrieved_bot.type == 'paper'
+        assert retrieved_bot.type == "paper"
         print(f"✅ Bot instance created in database: {retrieved_bot.id}")
 
     def test_bot_id_naming(self, db_session):
@@ -65,11 +62,11 @@ class TestLiveBotDatabase:
         bot_id = config_file  # Bot ID should match config filename
 
         bot_data = {
-            'id': bot_id,
-            'type': 'paper',
-            'config_file': config_file,
-            'status': 'running',
-            'current_balance': 1000.0,
+            "id": bot_id,
+            "type": "paper",
+            "config_file": config_file,
+            "status": "running",
+            "current_balance": 1000.0,
         }
 
         bot = bots_repo.create(bot_data)
@@ -94,31 +91,31 @@ class TestLiveBotDatabase:
 
         # Create bot instance
         bot_data = {
-            'id': bot_id,
-            'type': 'paper',
-            'config_file': config_file,
-            'status': 'running',
+            "id": bot_id,
+            "type": "paper",
+            "config_file": config_file,
+            "status": "running",
         }
         bot = bots_repo.create(bot_data)
         db_session.flush()
 
         # Create a test open trade
         trade_data = {
-            'bot_id': bot_id,
-            'trade_type': 'paper',
-            'strategy_name': 'TestStrategy',
-            'entry_logic_name': 'RSIEntry',
-            'exit_logic_name': 'ATRExit',
-            'symbol': trading_pair,
-            'interval': '1h',
-            'entry_time': datetime.now(timezone.utc),
-            'buy_order_created': datetime.now(timezone.utc),
-            'entry_price': 50000.0,
-            'entry_value': 1000.0,
-            'size': 0.02,
-            'direction': 'long',
-            'status': 'open',
-            'extra_metadata': {'test': True}
+            "bot_id": bot_id,
+            "trade_type": "paper",
+            "strategy_name": "TestStrategy",
+            "entry_logic_name": "RSIEntry",
+            "exit_logic_name": "ATRExit",
+            "symbol": trading_pair,
+            "interval": "1h",
+            "entry_time": datetime.now(UTC),
+            "buy_order_created": datetime.now(UTC),
+            "entry_price": 50000.0,
+            "entry_value": 1000.0,
+            "size": 0.02,
+            "direction": "long",
+            "status": "open",
+            "extra_metadata": {"test": True},
         }
 
         trade = trades_repo.create(trade_data)
@@ -127,10 +124,7 @@ class TestLiveBotDatabase:
 
         # Simulate restart - load open positions
         all_trades = trades_repo.get_all()
-        open_trades = [
-            t for t in all_trades
-            if t.bot_id == bot_id and t.symbol == trading_pair and t.status == 'open'
-        ]
+        open_trades = [t for t in all_trades if t.bot_id == bot_id and t.symbol == trading_pair and t.status == "open"]
 
         assert len(open_trades) == 1
         print(f"✅ Found {len(open_trades)} open trade on restart")
@@ -138,7 +132,7 @@ class TestLiveBotDatabase:
         # Verify trade details
         open_trade = open_trades[0]
         assert open_trade.symbol == trading_pair
-        assert open_trade.status == 'open'
+        assert open_trade.status == "open"
         print(f"✅ Open trade details: {open_trade.symbol} @ {open_trade.entry_price}")
 
 

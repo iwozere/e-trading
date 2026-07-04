@@ -13,15 +13,18 @@ Features:
 """
 
 import json
-import yaml
 import shutil
-from pathlib import Path
-from typing import Dict, List, Any
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List
+
+import yaml
+
 from src.config.config_manager import ConfigManager
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class ConfigMigrator:
     """
@@ -46,12 +49,7 @@ class ConfigMigrator:
         self.new_config_dir.mkdir(parents=True, exist_ok=True)
 
         # Migration statistics
-        self.migration_stats = {
-            "total_files": 0,
-            "migrated_files": 0,
-            "failed_files": 0,
-            "errors": []
-        }
+        self.migration_stats = {"total_files": 0, "migrated_files": 0, "failed_files": 0, "errors": []}
 
     def discover_old_configs(self) -> Dict[str, List[Path]]:
         """
@@ -60,13 +58,7 @@ class ConfigMigrator:
         Returns:
             Dictionary mapping config types to file paths
         """
-        configs = {
-            "trading": [],
-            "optimizer": [],
-            "data": [],
-            "plotter": [],
-            "unknown": []
-        }
+        configs = {"trading": [], "optimizer": [], "data": [], "plotter": [], "unknown": []}
 
         if not self.old_config_dir.exists():
             _logger.warning("Old config directory not found: %s", self.old_config_dir)
@@ -74,12 +66,12 @@ class ConfigMigrator:
 
         # Scan for configuration files
         for config_file in self.old_config_dir.rglob("*"):
-            if config_file.is_file() and config_file.suffix.lower() in ['.json', '.yaml', '.yml']:
+            if config_file.is_file() and config_file.suffix.lower() in [".json", ".yaml", ".yml"]:
                 config_type = self._detect_config_type(config_file)
                 configs[config_type].append(config_file)
                 self.migration_stats["total_files"] += 1
 
-        _logger.info("Discovered %d configuration files", self.migration_stats['total_files'])
+        _logger.info("Discovered %d configuration files", self.migration_stats["total_files"])
         for config_type, files in configs.items():
             if files:
                 _logger.info("  %s: %d files", config_type, len(files))
@@ -90,21 +82,21 @@ class ConfigMigrator:
         """Detect the type of configuration file"""
         try:
             # Load the configuration
-            if config_path.suffix.lower() in ['.yaml', '.yml']:
-                with open(config_path, 'r') as f:
+            if config_path.suffix.lower() in [".yaml", ".yml"]:
+                with open(config_path) as f:
                     config = yaml.safe_load(f)
             else:
-                with open(config_path, 'r') as f:
+                with open(config_path) as f:
                     config = json.load(f)
 
             # Determine type based on content
-            if 'bot_id' in config or 'broker' in config:
+            if "bot_id" in config or "broker" in config:
                 return "trading"
-            elif 'optimizer_type' in config or 'n_trials' in config:
+            elif "optimizer_type" in config or "n_trials" in config:
                 return "optimizer"
-            elif 'data_source' in config:
+            elif "data_source" in config:
                 return "data"
-            elif 'plot' in config or 'visualization' in config:
+            elif "plot" in config or "visualization" in config:
                 return "plotter"
             else:
                 return "unknown"
@@ -142,10 +134,7 @@ class ConfigMigrator:
                         self.migration_stats["migrated_files"] += 1
                     except Exception as e:
                         self.migration_stats["failed_files"] += 1
-                        self.migration_stats["errors"].append({
-                            "file": str(config_file),
-                            "error": str(e)
-                        })
+                        self.migration_stats["errors"].append({"file": str(config_file), "error": str(e)})
                         _logger.exception("Failed to migrate %s: %s")
 
         # Generate migration report
@@ -156,11 +145,11 @@ class ConfigMigrator:
     def _migrate_single_config(self, config_path: Path, config_type: str, env_dir: Path):
         """Migrate a single configuration file"""
         # Load old configuration
-        if config_path.suffix.lower() in ['.yaml', '.yml']:
-            with open(config_path, 'r') as f:
+        if config_path.suffix.lower() in [".yaml", ".yml"]:
+            with open(config_path) as f:
                 old_config = yaml.safe_load(f)
         else:
-            with open(config_path, 'r') as f:
+            with open(config_path) as f:
                 old_config = json.load(f)
 
         # Transform configuration based on type
@@ -175,18 +164,20 @@ class ConfigMigrator:
             new_config = self._transform_generic_config(old_config, config_path)
 
         # Add migration metadata
-        new_config.update({
-            "migrated_from": str(config_path),
-            "migrated_at": datetime.now().isoformat(),
-            "original_config_type": config_type
-        })
+        new_config.update(
+            {
+                "migrated_from": str(config_path),
+                "migrated_at": datetime.now().isoformat(),
+                "original_config_type": config_type,
+            }
+        )
 
         # Generate new filename
         new_filename = self._generate_new_filename(config_path, config_type)
         new_config_path = env_dir / new_filename
 
         # Save new configuration
-        with open(new_config_path, 'w') as f:
+        with open(new_config_path, "w") as f:
             json.dump(new_config, f, indent=2, default=str)
 
         _logger.debug("Migrated %s -> %s", config_path, new_config_path)
@@ -207,7 +198,7 @@ class ConfigMigrator:
             new_config["broker"] = {
                 "type": old_config["type"],
                 "initial_balance": old_config.get("initial_balance", 1000.0),
-                "commission": old_config.get("commission", 0.001)
+                "commission": old_config.get("commission", 0.001),
             }
 
         # Transform trading parameters
@@ -219,7 +210,7 @@ class ConfigMigrator:
                 "position_size": old_config.get("position_size", 0.1),
                 "max_positions": old_config.get("max_positions", 1),
                 "max_drawdown_pct": old_config.get("max_drawdown_pct", 20.0),
-                "max_exposure": old_config.get("max_exposure", 1.0)
+                "max_exposure": old_config.get("max_exposure", 1.0),
             }
 
         # Transform data configuration
@@ -231,7 +222,7 @@ class ConfigMigrator:
                 "symbol": old_config.get("trading_pair", "BTCUSDT"),
                 "interval": old_config.get("interval", "1h"),
                 "lookback_bars": old_config.get("lookback_bars", 1000),
-                "retry_interval": old_config.get("retry_interval", 60)
+                "retry_interval": old_config.get("retry_interval", 60),
             }
 
         # Transform strategy configuration
@@ -242,22 +233,24 @@ class ConfigMigrator:
                 "type": "custom",
                 "entry_logic": {
                     "name": old_config.get("entry_logic", "RSIBBVolumeEntryMixin"),
-                    "params": old_config.get("strategy_params", {})
+                    "params": old_config.get("strategy_params", {}),
                 },
                 "exit_logic": {
                     "name": old_config.get("exit_logic", "RSIBBExitMixin"),
-                    "params": old_config.get("strategy_params", {})
-                }
+                    "params": old_config.get("strategy_params", {}),
+                },
             }
 
         # Add default sections
-        new_config.update({
-            "risk_management": old_config.get("risk_management", {}),
-            "logging": old_config.get("logging", {}),
-            "scheduling": old_config.get("scheduling", {}),
-            "performance": old_config.get("performance", {}),
-            "notifications": old_config.get("notifications", {})
-        })
+        new_config.update(
+            {
+                "risk_management": old_config.get("risk_management", {}),
+                "logging": old_config.get("logging", {}),
+                "scheduling": old_config.get("scheduling", {}),
+                "performance": old_config.get("performance", {}),
+                "notifications": old_config.get("notifications", {}),
+            }
+        )
 
         return new_config
 
@@ -303,7 +296,7 @@ class ConfigMigrator:
             "version": "1.0.0",
             "description": f"Migrated config from {config_path.name}",
             "config_type": "generic",
-            "data": old_config
+            "data": old_config,
         }
 
     def _generate_new_filename(self, config_path: Path, config_type: str) -> str:
@@ -325,26 +318,28 @@ class ConfigMigrator:
                 "timestamp": datetime.now().isoformat(),
                 "old_config_dir": str(self.old_config_dir),
                 "new_config_dir": str(self.new_config_dir),
-                "environment": env_dir.name
+                "environment": env_dir.name,
             },
             "statistics": self.migration_stats,
-            "migrated_files": []
+            "migrated_files": [],
         }
 
         # List all migrated files
         for config_file in env_dir.glob("*.json"):
-            with open(config_file, 'r') as f:
+            with open(config_file) as f:
                 config = json.load(f)
-                report["migrated_files"].append({
-                    "file": config_file.name,
-                    "original_file": config.get("migrated_from"),
-                    "config_type": config.get("original_config_type"),
-                    "description": config.get("description")
-                })
+                report["migrated_files"].append(
+                    {
+                        "file": config_file.name,
+                        "original_file": config.get("migrated_from"),
+                        "config_type": config.get("original_config_type"),
+                        "description": config.get("description"),
+                    }
+                )
 
         # Save report
         report_path = self.new_config_dir / "migration_report.json"
-        with open(report_path, 'w') as f:
+        with open(report_path, "w") as f:
             json.dump(report, f, indent=2, default=str)
 
         _logger.info("Migration report saved to: %s", report_path)
@@ -396,7 +391,6 @@ def main():
     parser.add_argument("--validate", action="store_true", help="Validate migrated configurations")
 
     args = parser.parse_args()
-
 
     # Create migrator
     migrator = ConfigMigrator(args.old_dir, args.new_dir)

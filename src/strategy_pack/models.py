@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Dict
 
 from pydantic import BaseModel, Field, model_validator
 
 
 def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def make_idempotency_key(
-    strategy_id: str, symbol: str, bar_close_ts: str, signal: str, variant: str = ""
-) -> str:
+def make_idempotency_key(strategy_id: str, symbol: str, bar_close_ts: str, signal: str, variant: str = "") -> str:
     raw = f"{strategy_id}|{variant}|{symbol}|{bar_close_ts}|{signal}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:40]
 
@@ -37,7 +35,7 @@ class PackSignal(BaseModel):
     notify_recommended: bool = True
 
     @model_validator(mode="after")
-    def _fill_idempotency(self) -> "PackSignal":
+    def _fill_idempotency(self) -> PackSignal:
         if not self.idempotency_key:
             self.idempotency_key = make_idempotency_key(
                 self.strategy_id,

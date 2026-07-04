@@ -6,10 +6,10 @@ to send various types of notifications.
 """
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
+from src.notification.model import NotificationPriority, NotificationType
 from src.notification.service.client import NotificationServiceClient, NotificationServiceError
-from src.notification.model import NotificationType, NotificationPriority
 
 
 async def main():
@@ -18,7 +18,7 @@ async def main():
     client = NotificationServiceClient(
         base_url="http://localhost:8080",  # Notification service URL
         timeout=30,
-        max_retries=3
+        max_retries=3,
     )
 
     try:
@@ -29,7 +29,7 @@ async def main():
             title="System Alert",
             message="Trading system is now online and ready for trading.",
             priority=NotificationPriority.NORMAL,
-            channels=["telegram", "email"]
+            channels=["telegram", "email"],
         )
         print(f"✓ Notification sent with ID: {response.message_id}")
 
@@ -40,15 +40,14 @@ async def main():
             side="BUY",
             price=45000.0,
             quantity=0.1,
-            pnl=None  # Entry trade, no PnL yet
+            pnl=None,  # Entry trade, no PnL yet
         )
         print(f"✓ Trade notification sent with ID: {response.message_id}")
 
         # Example 3: Error notification
         print("\nSending error notification...")
         response = await client.send_error_notification_async(
-            error_message="Failed to connect to exchange API. Retrying in 30 seconds.",
-            source="trading_engine"
+            error_message="Failed to connect to exchange API. Retrying in 30 seconds.", source="trading_engine"
         )
         print(f"✓ Error notification sent with ID: {response.message_id}")
 
@@ -56,14 +55,14 @@ async def main():
         print("\nSending notification with attachments...")
         attachments = {
             "chart.png": b"fake_chart_data_here",  # In real usage, this would be actual image data
-            "report.txt": "Trading report content"
+            "report.txt": "Trading report content",
         }
         response = await client.send_notification_async(
             notification_type=NotificationType.PERFORMANCE,
             title="Daily Trading Report",
             message="Please find attached the daily trading performance report.",
             channels=["email"],  # Email supports attachments better
-            attachments=attachments
+            attachments=attachments,
         )
         print(f"✓ Notification with attachments sent with ID: {response.message_id}")
 
@@ -76,8 +75,8 @@ async def main():
             channels=["telegram"],
             metadata={
                 "telegram_chat_id": "123456789",  # Specific chat ID
-                "reply_to_message_id": 12345      # Reply to a specific message
-            }
+                "reply_to_message_id": 12345,  # Reply to a specific message
+            },
         )
         print(f"✓ Telegram notification sent with ID: {response.message_id}")
 
@@ -94,7 +93,8 @@ async def main():
         # Example 8: Scheduled notification
         print("\nSending scheduled notification...")
         from datetime import timedelta
-        scheduled_time = datetime.now(timezone.utc) + timedelta(minutes=5)
+
+        scheduled_time = datetime.now(UTC) + timedelta(minutes=5)
 
         request = {
             "message_type": "system",
@@ -102,18 +102,16 @@ async def main():
             "channels": ["telegram"],
             "content": {
                 "text": "This is a scheduled notification that will be sent in 5 minutes.",
-                "subject": "Scheduled Alert"
+                "subject": "Scheduled Alert",
             },
-            "scheduled_for": scheduled_time.isoformat()
+            "scheduled_for": scheduled_time.isoformat(),
         }
 
         # For scheduled notifications, we need to use the raw API
         import aiohttp
+
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{client.base_url}/api/v1/messages",
-                json=request
-            ) as response:
+            async with session.post(f"{client.base_url}/api/v1/messages", json=request) as response:
                 response.raise_for_status()
                 data = await response.json()
                 print(f"✓ Scheduled notification created with ID: {data['message_id']}")
@@ -129,14 +127,12 @@ async def main():
 
 def sync_example():
     """Example using synchronous methods."""
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print("SYNCHRONOUS EXAMPLES")
-    print("="*50)
+    print("=" * 50)
 
     # Initialize the client
-    client = NotificationServiceClient(
-        base_url="http://localhost:8080"
-    )
+    client = NotificationServiceClient(base_url="http://localhost:8080")
 
     try:
         # Synchronous notification
@@ -145,20 +141,14 @@ def sync_example():
             notification_type=NotificationType.WARNING,
             title="Sync Alert",
             message="This notification was sent synchronously.",
-            priority=NotificationPriority.HIGH
+            priority=NotificationPriority.HIGH,
         )
         print(f"✓ Sync notification sent with ID: {response.message_id}")
 
         # Synchronous trade notification
         print("\nSending synchronous trade notification...")
         response = client.send_trade_notification(
-            symbol="ETHUSDT",
-            side="SELL",
-            price=3200.0,
-            quantity=2.0,
-            entry_price=3000.0,
-            pnl=6.67,
-            exit_type="TP"
+            symbol="ETHUSDT", side="SELL", price=3200.0, quantity=2.0, entry_price=3000.0, pnl=6.67, exit_type="TP"
         )
         print(f"✓ Sync trade notification sent with ID: {response.message_id}")
 
@@ -178,9 +168,9 @@ def sync_example():
 
 def backward_compatibility_example():
     """Example showing backward compatibility with AsyncNotificationManager."""
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print("BACKWARD COMPATIBILITY EXAMPLES")
-    print("="*50)
+    print("=" * 50)
 
     from src.notification.compatibility import AsyncNotificationManagerCompat
 
@@ -189,7 +179,7 @@ def backward_compatibility_example():
         manager = AsyncNotificationManagerCompat(
             telegram_chat_id="123456789",
             email_receiver="trader@example.com",
-            notification_service_url="http://localhost:8080"
+            notification_service_url="http://localhost:8080",
         )
 
         await manager.start()
@@ -201,18 +191,13 @@ def backward_compatibility_example():
                 notification_type=NotificationType.INFO,
                 title="Compatibility Test",
                 message="This uses the old AsyncNotificationManager interface!",
-                priority=NotificationPriority.NORMAL
+                priority=NotificationPriority.NORMAL,
             )
             print(f"✓ Old interface notification sent: {success}")
 
             # Trade notification with old interface
             print("\nSending trade notification using old interface...")
-            success = await manager.send_trade_notification(
-                symbol="ADAUSDT",
-                side="BUY",
-                price=0.45,
-                quantity=1000.0
-            )
+            success = await manager.send_trade_notification(symbol="ADAUSDT", side="BUY", price=0.45, quantity=1000.0)
             print(f"✓ Old interface trade notification sent: {success}")
 
             # Get stats (old interface)
@@ -227,13 +212,13 @@ def backward_compatibility_example():
 
 
 if __name__ == "__main__":
-    print("="*50)
+    print("=" * 50)
     print("NOTIFICATION SERVICE CLIENT EXAMPLES")
-    print("="*50)
+    print("=" * 50)
 
     # Run async examples
     print("ASYNCHRONOUS EXAMPLES")
-    print("="*50)
+    print("=" * 50)
     asyncio.run(main())
 
     # Run sync examples
@@ -242,6 +227,6 @@ if __name__ == "__main__":
     # Run backward compatibility examples
     backward_compatibility_example()
 
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print("ALL EXAMPLES COMPLETED")
-    print("="*50)
+    print("=" * 50)

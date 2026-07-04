@@ -5,13 +5,14 @@ Routes through the AlertManager business-logic layer (P2-TG-1).
 AlertManager.handle_alerts_add already enforces per-user alert quotas (P2-TG-5).
 Services are cached at module level to avoid per-request instantiation.
 """
-from aiogram import Dispatcher
-from aiogram.types import Message
-from aiogram.filters import Command
 
+from aiogram import Dispatcher
+from aiogram.filters import Command
+from aiogram.types import Message
+
+from src.model.telegram_bot import ParsedCommand
 from src.notification.logger import setup_logger
 from src.telegram.command_parser import parse_command
-from src.model.telegram_bot import ParsedCommand
 
 _logger = setup_logger("telegram_screener_bot")
 

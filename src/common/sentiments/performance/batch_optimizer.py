@@ -6,14 +6,15 @@ and adaptive performance optimization based on system resources and API constrai
 """
 
 import asyncio
-import time
-from typing import List, Dict, Any, Optional, Callable, TypeVar
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-import sys
-import psutil
 import os
+import sys
+import time
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any, Callable, Dict, List, TypeVar
+
+import psutil
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -23,12 +24,13 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 @dataclass
 class BatchConfig:
     """Configuration for batch processing optimization."""
+
     # Batch sizing
     min_batch_size: int = 5
     max_batch_size: int = 100
@@ -53,7 +55,7 @@ class BatchConfig:
     memory_threshold_percent: float = 85.0
 
     @classmethod
-    def from_env(cls) -> 'BatchConfig':
+    def from_env(cls) -> "BatchConfig":
         """Create configuration from environment variables."""
         return cls(
             min_batch_size=int(os.getenv("BATCH_MIN_SIZE", "5")),
@@ -68,13 +70,14 @@ class BatchConfig:
             performance_window_size=int(os.getenv("BATCH_PERF_WINDOW", "10")),
             adjustment_factor=float(os.getenv("BATCH_ADJUSTMENT_FACTOR", "0.2")),
             cpu_threshold_percent=float(os.getenv("BATCH_CPU_THRESHOLD", "80.0")),
-            memory_threshold_percent=float(os.getenv("BATCH_MEMORY_THRESHOLD", "85.0"))
+            memory_threshold_percent=float(os.getenv("BATCH_MEMORY_THRESHOLD", "85.0")),
         )
 
 
 @dataclass
 class BatchPerformanceMetrics:
     """Performance metrics for batch processing."""
+
     batch_size: int
     processing_time_seconds: float
     memory_usage_mb: float
@@ -93,7 +96,7 @@ class BatchOptimizer:
     while maintaining reliability.
     """
 
-    def __init__(self, config: Optional[BatchConfig] = None):
+    def __init__(self, config: BatchConfig | None = None):
         """
         Initialize batch optimizer.
 
@@ -147,22 +150,13 @@ class BatchOptimizer:
 
         if avg_time > self.config.target_batch_time_seconds and avg_success_rate > 0.9:
             # Too slow but reliable - decrease batch size
-            new_size = max(
-                self.config.min_batch_size,
-                int(current_size * (1 - self.config.adjustment_factor))
-            )
+            new_size = max(self.config.min_batch_size, int(current_size * (1 - self.config.adjustment_factor)))
         elif avg_time < self.config.target_batch_time_seconds * 0.7 and avg_success_rate > 0.95:
             # Fast and reliable - increase batch size
-            new_size = min(
-                self.config.max_batch_size,
-                int(current_size * (1 + self.config.adjustment_factor))
-            )
+            new_size = min(self.config.max_batch_size, int(current_size * (1 + self.config.adjustment_factor)))
         elif avg_success_rate < 0.8:
             # Poor reliability - decrease batch size significantly
-            new_size = max(
-                self.config.min_batch_size,
-                int(current_size * 0.7)
-            )
+            new_size = max(self.config.min_batch_size, int(current_size * 0.7))
 
         # Check system resources before finalizing
         if self._should_reduce_load():
@@ -189,21 +183,21 @@ class BatchOptimizer:
         batches = []
 
         for i in range(0, len(items), batch_size):
-            batch = items[i:i + batch_size]
+            batch = items[i : i + batch_size]
             batches.append(batch)
 
         _logger.debug(
             "Created %d batches of size ~%d for adapter %s (%d items total)",
-            len(batches), batch_size, adapter_name, len(items)
+            len(batches),
+            batch_size,
+            adapter_name,
+            len(items),
         )
 
         return batches
 
     async def process_batches_parallel(
-        self,
-        batches: List[List[T]],
-        processor: Callable[[List[T]], Any],
-        adapter_name: str
+        self, batches: List[List[T]], processor: Callable[[List[T]], Any], adapter_name: str
     ) -> List[Any]:
         """
         Process batches in parallel with concurrency control.
@@ -221,9 +215,7 @@ class BatchOptimizer:
 
         # Ensure adapter semaphore exists
         if adapter_name not in self._adapter_semaphores:
-            self._adapter_semaphores[adapter_name] = asyncio.Semaphore(
-                self.config.max_concurrent_per_adapter
-            )
+            self._adapter_semaphores[adapter_name] = asyncio.Semaphore(self.config.max_concurrent_per_adapter)
 
         adapter_semaphore = self._adapter_semaphores[adapter_name]
 
@@ -256,7 +248,7 @@ class BatchOptimizer:
                 cpu_usage_percent=(start_cpu + end_cpu) / 2,
                 success_rate=success_rate,
                 throughput_items_per_second=len(batch) / processing_time if processing_time > 0 else 0,
-                timestamp=datetime.now(timezone.utc)
+                timestamp=datetime.now(UTC),
             )
 
             self._record_performance(adapter_name, metrics)
@@ -279,19 +271,17 @@ class BatchOptimizer:
 
     def _get_recent_metrics(self, adapter_name: str) -> List[BatchPerformanceMetrics]:
         """Get recent performance metrics for an adapter."""
-        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=30)
+        cutoff_time = datetime.now(UTC) - timedelta(minutes=30)
         return [
-            m for m in self._performance_history[-self.config.performance_window_size:]
+            m
+            for m in self._performance_history[-self.config.performance_window_size :]
             if m.timestamp > cutoff_time and adapter_name in str(m)
         ]
 
     def _record_performance(self, adapter_name: str, metrics: BatchPerformanceMetrics) -> None:
         """Record performance metrics."""
         # Add adapter name to metrics for filtering
-        metrics_dict = {
-            'adapter': adapter_name,
-            'metrics': metrics
-        }
+        metrics_dict = {"adapter": adapter_name, "metrics": metrics}
 
         self._performance_history.append(metrics)
 
@@ -304,8 +294,10 @@ class BatchOptimizer:
         if metrics.processing_time_seconds > self.config.target_batch_time_seconds:
             _logger.debug(
                 "Slow batch for %s: size=%d, time=%.2fs, throughput=%.1f/s",
-                adapter_name, metrics.batch_size, metrics.processing_time_seconds,
-                metrics.throughput_items_per_second
+                adapter_name,
+                metrics.batch_size,
+                metrics.processing_time_seconds,
+                metrics.throughput_items_per_second,
             )
 
     def _should_reduce_load(self) -> bool:
@@ -358,15 +350,15 @@ class BatchOptimizer:
         recent_metrics = self._performance_history[-50:]  # Last 50 batches
 
         return {
-            'total_batches_processed': len(self._performance_history),
-            'recent_batches': len(recent_metrics),
-            'avg_batch_size': sum(m.batch_size for m in recent_metrics) / len(recent_metrics),
-            'avg_processing_time': sum(m.processing_time_seconds for m in recent_metrics) / len(recent_metrics),
-            'avg_throughput': sum(m.throughput_items_per_second for m in recent_metrics) / len(recent_metrics),
-            'avg_success_rate': sum(m.success_rate for m in recent_metrics) / len(recent_metrics),
-            'current_batch_sizes': dict(self._current_batch_sizes),
-            'system_cpu_percent': self._get_cpu_usage(),
-            'system_memory_mb': self._get_memory_usage_mb()
+            "total_batches_processed": len(self._performance_history),
+            "recent_batches": len(recent_metrics),
+            "avg_batch_size": sum(m.batch_size for m in recent_metrics) / len(recent_metrics),
+            "avg_processing_time": sum(m.processing_time_seconds for m in recent_metrics) / len(recent_metrics),
+            "avg_throughput": sum(m.throughput_items_per_second for m in recent_metrics) / len(recent_metrics),
+            "avg_success_rate": sum(m.success_rate for m in recent_metrics) / len(recent_metrics),
+            "current_batch_sizes": dict(self._current_batch_sizes),
+            "system_cpu_percent": self._get_cpu_usage(),
+            "system_memory_mb": self._get_memory_usage_mb(),
         }
 
     def reset_performance_history(self) -> None:
@@ -377,7 +369,7 @@ class BatchOptimizer:
 
 
 # Global batch optimizer instance
-_global_optimizer: Optional[BatchOptimizer] = None
+_global_optimizer: BatchOptimizer | None = None
 
 
 def get_batch_optimizer() -> BatchOptimizer:

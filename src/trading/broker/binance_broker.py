@@ -23,12 +23,12 @@ Classes:
 
 import asyncio
 import json
-from datetime import datetime, timezone
-from decimal import Decimal, ROUND_DOWN
-from typing import Dict, List, Optional, Any, Tuple
-import websocket
 import threading
+from datetime import UTC, datetime
+from decimal import ROUND_DOWN, Decimal
+from typing import Any, Dict, List, Tuple
 
+import websocket
 from binance.client import Client
 from binance.enums import (
     ORDER_TYPE_LIMIT,
@@ -41,13 +41,18 @@ from binance.enums import (
 )
 from binance.exceptions import BinanceAPIException
 
+from src.notification.logger import setup_logger
 from src.trading.broker.base_broker import (
-    BaseBroker, Order, Position, Portfolio, OrderStatus, OrderSide,
-    OrderType, TradingMode
+    BaseBroker,
+    Order,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    Portfolio,
+    Position,
+    TradingMode,
 )
 from src.trading.broker.paper_trading_mixin import PaperTradingMixin
-
-from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -75,8 +80,8 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
             config = {}
 
         # Set default Binance configuration
-        config.setdefault('name', 'binance_broker')
-        config.setdefault('type', 'binance')
+        config.setdefault("name", "binance_broker")
+        config.setdefault("type", "binance")
 
         # Initialize parent classes
         super().__init__(config)
@@ -100,7 +105,9 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
         self.exchange_info = None
         self.symbol_filters = {}
 
-        _logger.info("Enhanced Binance broker initialized - Mode: %s, URL: %s", self.trading_mode.value, self.client.API_URL)
+        _logger.info(
+            "Enhanced Binance broker initialized - Mode: %s, URL: %s", self.trading_mode.value, self.client.API_URL
+        )
 
     def _setup_binance_client(self):
         """Set up Binance client based on trading mode."""
@@ -108,13 +115,13 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
 
         if self.trading_mode == TradingMode.PAPER:
             # Use Binance testnet for paper trading
-            self.client.API_URL = 'https://testnet.binance.vision/api'
-            self.ws_base_url = 'wss://testnet.binance.vision/ws'
+            self.client.API_URL = "https://testnet.binance.vision/api"
+            self.ws_base_url = "wss://testnet.binance.vision/ws"
             _logger.info("Using Binance testnet for paper trading")
         else:
             # Use Binance mainnet for live trading
-            self.client.API_URL = 'https://api.binance.com/api'
-            self.ws_base_url = 'wss://stream.binance.com:9443/ws'
+            self.client.API_URL = "https://api.binance.com/api"
+            self.ws_base_url = "wss://stream.binance.com:9443/ws"
             _logger.info("Using Binance mainnet for live trading")
 
     async def connect(self) -> bool:
@@ -122,7 +129,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
         try:
             # Test API connection
             account_info = await asyncio.to_thread(self.client.get_account)
-            _logger.info("Connected to Binance API - Account status: %s", account_info.get('accountType', 'Unknown'))
+            _logger.info("Connected to Binance API - Account status: %s", account_info.get("accountType", "Unknown"))
 
             # Load exchange info and trading rules
             await self._load_exchange_info()
@@ -163,13 +170,13 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
             self.exchange_info = await asyncio.to_thread(self.client.get_exchange_info)
 
             # Cache symbol filters for quick access
-            for symbol_info in self.exchange_info['symbols']:
-                symbol = symbol_info['symbol']
+            for symbol_info in self.exchange_info["symbols"]:
+                symbol = symbol_info["symbol"]
                 self.symbol_filters[symbol] = {
-                    'status': symbol_info['status'],
-                    'baseAsset': symbol_info['baseAsset'],
-                    'quoteAsset': symbol_info['quoteAsset'],
-                    'filters': {f['filterType']: f for f in symbol_info['filters']}
+                    "status": symbol_info["status"],
+                    "baseAsset": symbol_info["baseAsset"],
+                    "quoteAsset": symbol_info["quoteAsset"],
+                    "filters": {f["filterType"]: f for f in symbol_info["filters"]},
                 }
 
             _logger.info("Loaded exchange info for %d symbols", len(self.symbol_filters))
@@ -183,12 +190,12 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
             return
 
         try:
-            self._ws_last_message_time = datetime.now(timezone.utc)
+            self._ws_last_message_time = datetime.now(UTC)
             self._ws_stop_event = threading.Event()
 
             def on_message(ws, message):
                 try:
-                    self._ws_last_message_time = datetime.now(timezone.utc)
+                    self._ws_last_message_time = datetime.now(UTC)
                     data = json.loads(message)
                     self._process_websocket_message(data)
                 except Exception:
@@ -200,12 +207,13 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
             def on_close(ws, close_status_code, close_msg):
                 _logger.warning(
                     "WebSocket connection closed (status=%s, msg=%s); reconnect loop will retry",
-                    close_status_code, close_msg
+                    close_status_code,
+                    close_msg,
                 )
 
             def on_open(ws):
                 _logger.info("WebSocket connection opened")
-                self._ws_last_message_time = datetime.now(timezone.utc)
+                self._ws_last_message_time = datetime.now(UTC)
 
             def run_websocket_with_reconnect():
                 backoff = 1
@@ -216,7 +224,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
                             on_message=on_message,
                             on_error=on_error,
                             on_close=on_close,
-                            on_open=on_open
+                            on_open=on_open,
                         )
                         self.ws_client.run_forever(ping_interval=30, ping_timeout=10)
                         # run_forever returned → connection closed; apply backoff before retry
@@ -244,16 +252,16 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
             if isinstance(data, list):
                 # Process ticker array
                 for ticker in data:
-                    symbol = ticker.get('s')
-                    price = float(ticker.get('c', 0))
+                    symbol = ticker.get("s")
+                    price = float(ticker.get("c", 0))
 
                     if symbol and price > 0:
                         self.update_market_data_cache(symbol, price)
 
             elif isinstance(data, dict):
                 # Process individual ticker
-                symbol = data.get('s')
-                price = float(data.get('c', 0))
+                symbol = data.get("s")
+                price = float(data.get("c", 0))
 
                 if symbol and price > 0:
                     self.update_market_data_cache(symbol, price)
@@ -268,7 +276,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
             is_valid, validation_message = await self.validate_order(order)
             if not is_valid:
                 order.status = OrderStatus.REJECTED
-                order.metadata['rejection_reason'] = validation_message
+                order.metadata["rejection_reason"] = validation_message
                 _logger.warning("Order validation failed: %s", validation_message)
                 return order.order_id
 
@@ -276,7 +284,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
             binance_validation = await self._validate_binance_order(order)
             if not binance_validation[0]:
                 order.status = OrderStatus.REJECTED
-                order.metadata['rejection_reason'] = binance_validation[1]
+                order.metadata["rejection_reason"] = binance_validation[1]
                 _logger.warning("Binance validation failed: %s", binance_validation[1])
                 return order.order_id
 
@@ -291,7 +299,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
                     return await self.paper_place_order(order, current_price)
                 else:
                     order.status = OrderStatus.REJECTED
-                    order.metadata['rejection_reason'] = "Unable to get current market price"
+                    order.metadata["rejection_reason"] = "Unable to get current market price"
                     return order.order_id
             else:
                 # Handle live trading
@@ -300,8 +308,8 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
         except Exception as e:
             _logger.exception("Error placing order:")
             order.status = OrderStatus.REJECTED
-            order.metadata['rejection_reason'] = f"Order placement error: {str(e)}"
-            await self.notify_error(f"Order placement failed: {str(e)}", {'order_id': order.order_id})
+            order.metadata["rejection_reason"] = f"Order placement error: {str(e)}"
+            await self.notify_error(f"Order placement failed: {str(e)}", {"order_id": order.order_id})
             return order.order_id
 
     async def _validate_binance_order(self, order: Order) -> Tuple[bool, str]:
@@ -314,19 +322,19 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
                 return False, f"Symbol {symbol} not found or not supported"
 
             symbol_info = self.symbol_filters[symbol]
-            if symbol_info['status'] != 'TRADING':
+            if symbol_info["status"] != "TRADING":
                 return False, f"Symbol {symbol} is not currently trading (status: {symbol_info['status']})"
 
-            filters = symbol_info['filters']
+            filters = symbol_info["filters"]
 
             # Validate and round lot size using Decimal to avoid float-modulo artefacts.
             # Binance requires quantities that are exact multiples of stepSize; we round
             # down rather than reject so valid orders are never spuriously refused.
-            if 'LOT_SIZE' in filters:
-                lot_filter = filters['LOT_SIZE']
-                min_qty = Decimal(lot_filter['minQty'])
-                max_qty = Decimal(lot_filter['maxQty'])
-                step_size = Decimal(lot_filter['stepSize'])
+            if "LOT_SIZE" in filters:
+                lot_filter = filters["LOT_SIZE"]
+                min_qty = Decimal(lot_filter["minQty"])
+                max_qty = Decimal(lot_filter["maxQty"])
+                step_size = Decimal(lot_filter["stepSize"])
                 qty = Decimal(str(order.quantity))
 
                 if step_size > 0:
@@ -341,11 +349,11 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
 
             # Validate and round price for limit orders using Decimal (same rationale).
             if order.order_type == OrderType.LIMIT and order.price:
-                if 'PRICE_FILTER' in filters:
-                    price_filter = filters['PRICE_FILTER']
-                    min_price = Decimal(price_filter['minPrice'])
-                    max_price = Decimal(price_filter['maxPrice'])
-                    tick_size = Decimal(price_filter['tickSize'])
+                if "PRICE_FILTER" in filters:
+                    price_filter = filters["PRICE_FILTER"]
+                    min_price = Decimal(price_filter["minPrice"])
+                    max_price = Decimal(price_filter["maxPrice"])
+                    tick_size = Decimal(price_filter["tickSize"])
                     price = Decimal(str(order.price))
 
                     if tick_size > 0:
@@ -359,9 +367,9 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
                     order.price = float(price)
 
             # Validate notional value
-            if 'MIN_NOTIONAL' in filters:
-                notional_filter = filters['MIN_NOTIONAL']
-                min_notional = float(notional_filter['minNotional'])
+            if "MIN_NOTIONAL" in filters:
+                notional_filter = filters["MIN_NOTIONAL"]
+                min_notional = float(notional_filter["minNotional"])
 
                 order_notional = order.quantity * (order.price or await self._fetch_current_price(symbol) or 0)
                 if order_notional < min_notional:
@@ -378,27 +386,27 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
         try:
             # Convert our order format to Binance format
             binance_params = {
-                'symbol': order.symbol,
-                'side': SIDE_BUY if order.side == OrderSide.BUY else SIDE_SELL,
-                'quantity': order.quantity,
-                'newClientOrderId': order.client_order_id
+                "symbol": order.symbol,
+                "side": SIDE_BUY if order.side == OrderSide.BUY else SIDE_SELL,
+                "quantity": order.quantity,
+                "newClientOrderId": order.client_order_id,
             }
 
             # Set order type and additional parameters
             if order.order_type == OrderType.MARKET:
-                binance_params['type'] = ORDER_TYPE_MARKET
+                binance_params["type"] = ORDER_TYPE_MARKET
             elif order.order_type == OrderType.LIMIT:
-                binance_params['type'] = ORDER_TYPE_LIMIT
-                binance_params['price'] = str(order.price)
-                binance_params['timeInForce'] = TIME_IN_FORCE_GTC
+                binance_params["type"] = ORDER_TYPE_LIMIT
+                binance_params["price"] = str(order.price)
+                binance_params["timeInForce"] = TIME_IN_FORCE_GTC
             elif order.order_type == OrderType.STOP:
-                binance_params['type'] = ORDER_TYPE_STOP_LOSS
-                binance_params['stopPrice'] = str(order.stop_price)
+                binance_params["type"] = ORDER_TYPE_STOP_LOSS
+                binance_params["stopPrice"] = str(order.stop_price)
             elif order.order_type == OrderType.STOP_LIMIT:
-                binance_params['type'] = ORDER_TYPE_STOP_LOSS_LIMIT
-                binance_params['price'] = str(order.price)
-                binance_params['stopPrice'] = str(order.stop_price)
-                binance_params['timeInForce'] = TIME_IN_FORCE_GTC
+                binance_params["type"] = ORDER_TYPE_STOP_LOSS_LIMIT
+                binance_params["price"] = str(order.price)
+                binance_params["stopPrice"] = str(order.stop_price)
+                binance_params["timeInForce"] = TIME_IN_FORCE_GTC
             else:
                 raise ValueError(f"Unsupported order type for live trading: {order.order_type}")
 
@@ -406,14 +414,14 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
             response = await asyncio.to_thread(lambda: self.client.create_order(**binance_params))
 
             # Update order with Binance response
-            order.metadata['binance_order_id'] = response['orderId']
-            order.metadata['binance_response'] = response
+            order.metadata["binance_order_id"] = response["orderId"]
+            order.metadata["binance_response"] = response
             order.status = OrderStatus.PENDING
 
             # Store order for tracking
             self.binance_orders[order.order_id] = response
 
-            _logger.info("Live order placed on Binance: %s -> %s", order.order_id, response['orderId'])
+            _logger.info("Live order placed on Binance: %s -> %s", order.order_id, response["orderId"])
 
             # NOTE: position notification is intentionally deferred to fill confirmation
             # (get_order_status / order-update webhook) so "Position Opened" is only
@@ -424,8 +432,8 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
         except BinanceAPIException as e:
             _logger.exception("Binance API error placing live order:")
             order.status = OrderStatus.REJECTED
-            order.metadata['rejection_reason'] = f"Binance API error: {e.message}"
-            await self.notify_error(f"Live order failed: {e.message}", {'order_id': order.order_id})
+            order.metadata["rejection_reason"] = f"Binance API error: {e.message}"
+            await self.notify_error(f"Live order failed: {e.message}", {"order_id": order.order_id})
             return order.order_id
 
         except Exception as e:
@@ -441,8 +449,8 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
                             origClientOrderId=order.client_order_id,
                         )
                     )
-                    order.metadata['binance_order_id'] = reconciled['orderId']
-                    order.metadata['binance_response'] = reconciled
+                    order.metadata["binance_order_id"] = reconciled["orderId"]
+                    order.metadata["binance_response"] = reconciled
                     order.status = OrderStatus.PENDING
                     self.binance_orders[order.order_id] = reconciled
                     _logger.warning(
@@ -453,15 +461,15 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
                 except BinanceAPIException:
                     pass  # Order genuinely not on exchange; safe to mark REJECTED below
             order.status = OrderStatus.REJECTED
-            order.metadata['rejection_reason'] = f"Live order error: {str(e)}"
-            await self.notify_error(f"Live order failed: {str(e)}", {'order_id': order.order_id})
+            order.metadata["rejection_reason"] = f"Live order error: {str(e)}"
+            await self.notify_error(f"Live order failed: {str(e)}", {"order_id": order.order_id})
             return order.order_id
 
-    async def _fetch_current_price(self, symbol: str) -> Optional[float]:
+    async def _fetch_current_price(self, symbol: str) -> float | None:
         """Fetch current price from Binance API."""
         try:
             ticker = await asyncio.to_thread(lambda: self.client.get_symbol_ticker(symbol=symbol))
-            price = float(ticker['price'])
+            price = float(ticker["price"])
 
             # Update cache
             self.update_market_data_cache(symbol, price)
@@ -481,8 +489,8 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
                 # Cancel live order
                 if order_id in self.binance_orders:
                     binance_order = self.binance_orders[order_id]
-                    symbol = binance_order['symbol']
-                    binance_order_id = binance_order['orderId']
+                    symbol = binance_order["symbol"]
+                    binance_order_id = binance_order["orderId"]
 
                     response = await asyncio.to_thread(
                         lambda: self.client.cancel_order(symbol=symbol, orderId=binance_order_id)
@@ -498,7 +506,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
             _logger.exception("Error cancelling order %s:", order_id)
             return False
 
-    async def get_order_status(self, order_id: str) -> Optional[Order]:
+    async def get_order_status(self, order_id: str) -> Order | None:
         """Get order status."""
         try:
             if self.paper_trading_enabled:
@@ -507,44 +515,48 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
                 # Get live order status
                 if order_id in self.binance_orders:
                     binance_order = self.binance_orders[order_id]
-                    symbol = binance_order['symbol']
-                    binance_order_id = binance_order['orderId']
+                    symbol = binance_order["symbol"]
+                    binance_order_id = binance_order["orderId"]
 
                     # Fetch live order status from Binance API
                     try:
                         binance_order = await asyncio.to_thread(
                             lambda: self.client.get_order(symbol=symbol, orderId=binance_order_id)
                         )
-                        
+
                         # Map Binance status to OrderStatus
                         status_map = {
-                            'NEW': OrderStatus.PENDING,
-                            'PARTIALLY_FILLED': OrderStatus.PARTIALLY_FILLED,
-                            'FILLED': OrderStatus.FILLED,
-                            'CANCELED': OrderStatus.CANCELLED,
-                            'REJECTED': OrderStatus.REJECTED,
-                            'EXPIRED': OrderStatus.REJECTED
+                            "NEW": OrderStatus.PENDING,
+                            "PARTIALLY_FILLED": OrderStatus.PARTIALLY_FILLED,
+                            "FILLED": OrderStatus.FILLED,
+                            "CANCELED": OrderStatus.CANCELLED,
+                            "REJECTED": OrderStatus.REJECTED,
+                            "EXPIRED": OrderStatus.REJECTED,
                         }
-                        
+
                         # Create Order object
                         order = Order(
                             symbol=symbol,
-                            side=OrderSide.BUY if binance_order['side'] == 'BUY' else OrderSide.SELL,
-                            quantity=float(binance_order['origQty']),
-                            price=float(binance_order['price']) if float(binance_order['price']) > 0 else None,
-                            order_type=OrderType.MARKET if binance_order['type'] == 'MARKET' else OrderType.LIMIT,
+                            side=OrderSide.BUY if binance_order["side"] == "BUY" else OrderSide.SELL,
+                            quantity=float(binance_order["origQty"]),
+                            price=float(binance_order["price"]) if float(binance_order["price"]) > 0 else None,
+                            order_type=OrderType.MARKET if binance_order["type"] == "MARKET" else OrderType.LIMIT,
                             order_id=order_id,
-                            status=status_map.get(binance_order['status'], OrderStatus.PENDING),
-                            client_order_id=binance_order.get('clientOrderId')
+                            status=status_map.get(binance_order["status"], OrderStatus.PENDING),
+                            client_order_id=binance_order.get("clientOrderId"),
                         )
-                        
+
                         # Add metadata
-                        order.metadata['binance_response'] = binance_order
-                        order.metadata['filled_quantity'] = float(binance_order['executedQty'])
-                        order.metadata['average_fill_price'] = float(binance_order['cummulativeQuoteQty']) / float(binance_order['executedQty']) if float(binance_order['executedQty']) > 0 else 0.0
-                        
+                        order.metadata["binance_response"] = binance_order
+                        order.metadata["filled_quantity"] = float(binance_order["executedQty"])
+                        order.metadata["average_fill_price"] = (
+                            float(binance_order["cummulativeQuoteQty"]) / float(binance_order["executedQty"])
+                            if float(binance_order["executedQty"]) > 0
+                            else 0.0
+                        )
+
                         return order
-                        
+
                     except BinanceAPIException as e:
                         _logger.error("Binance API error getting status for %s: %s", order_id, e.message)
                         return None
@@ -566,7 +578,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
         try:
             tickers = await asyncio.to_thread(self.client.get_all_tickers)
             for ticker in tickers:
-                price_map[ticker['symbol']] = float(ticker['price'])
+                price_map[ticker["symbol"]] = float(ticker["price"])
         except Exception:
             _logger.exception("Error fetching all tickers for price map:")
         return price_map
@@ -587,10 +599,10 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
         """
         totals: Dict[str, List] = {}  # asset -> [cumulative_cost, cumulative_qty]
         for response in self.binance_orders.values():
-            symbol = response.get('symbol', '')
-            side = response.get('side', '')
-            exec_qty = float(response.get('executedQty') or 0)
-            quote_qty = float(response.get('cummulativeQuoteQty') or 0)
+            symbol = response.get("symbol", "")
+            side = response.get("side", "")
+            exec_qty = float(response.get("executedQty") or 0)
+            quote_qty = float(response.get("cummulativeQuoteQty") or 0)
             if exec_qty <= 0:
                 continue
             base = None
@@ -602,10 +614,10 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
                 continue
             if base not in totals:
                 totals[base] = [0.0, 0.0]
-            if side == 'BUY':
+            if side == "BUY":
                 totals[base][0] += quote_qty
                 totals[base][1] += exec_qty
-            elif side == 'SELL':
+            elif side == "SELL":
                 totals[base][0] -= quote_qty
                 totals[base][1] -= exec_qty
 
@@ -626,10 +638,10 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
             cost_basis = self._compute_cost_basis()
             positions: Dict[str, Position] = {}
 
-            for balance in account['balances']:
-                asset = balance['asset']
-                free = float(balance['free'])
-                locked = float(balance['locked'])
+            for balance in account["balances"]:
+                asset = balance["asset"]
+                free = float(balance["free"])
+                locked = float(balance["locked"])
                 total = free + locked
                 if total <= 0:
                     continue
@@ -670,10 +682,10 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
             total_unrealized_pnl = 0.0
             positions: Dict[str, Position] = {}
 
-            for balance in account['balances']:
-                asset = balance['asset']
-                free = float(balance['free'])
-                locked = float(balance['locked'])
+            for balance in account["balances"]:
+                asset = balance["asset"]
+                free = float(balance["free"])
+                locked = float(balance["locked"])
                 total = free + locked
                 if total <= 0:
                     continue
@@ -725,35 +737,35 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
                 # Return paper trading account info
                 portfolio = await self.get_paper_portfolio()
                 return {
-                    'account_type': 'paper',
-                    'trading_mode': self.trading_mode.value,
-                    'total_value': portfolio.total_value,
-                    'cash': portfolio.cash,
-                    'positions_count': len(portfolio.positions),
-                    'paper_trading_config': {
-                        'mode': self.paper_trading_config.mode.value,
-                        'initial_balance': self.paper_trading_config.initial_balance,
-                        'commission_rate': self.paper_trading_config.commission_rate
-                    }
+                    "account_type": "paper",
+                    "trading_mode": self.trading_mode.value,
+                    "total_value": portfolio.total_value,
+                    "cash": portfolio.cash,
+                    "positions_count": len(portfolio.positions),
+                    "paper_trading_config": {
+                        "mode": self.paper_trading_config.mode.value,
+                        "initial_balance": self.paper_trading_config.initial_balance,
+                        "commission_rate": self.paper_trading_config.commission_rate,
+                    },
                 }
             else:
                 # Return live account info
                 account = await asyncio.to_thread(self.client.get_account)
                 return {
-                    'account_type': 'live',
-                    'trading_mode': self.trading_mode.value,
-                    'account_status': account.get('accountType', 'Unknown'),
-                    'can_trade': account.get('canTrade', False),
-                    'can_withdraw': account.get('canWithdraw', False),
-                    'can_deposit': account.get('canDeposit', False),
-                    'balances_count': len(account.get('balances', [])),
-                    'maker_commission': account.get('makerCommission', 0),
-                    'taker_commission': account.get('takerCommission', 0)
+                    "account_type": "live",
+                    "trading_mode": self.trading_mode.value,
+                    "account_status": account.get("accountType", "Unknown"),
+                    "can_trade": account.get("canTrade", False),
+                    "can_withdraw": account.get("canWithdraw", False),
+                    "can_deposit": account.get("canDeposit", False),
+                    "balances_count": len(account.get("balances", [])),
+                    "maker_commission": account.get("makerCommission", 0),
+                    "taker_commission": account.get("takerCommission", 0),
                 }
 
         except Exception as e:
             _logger.exception("Error getting account info:")
-            return {'error': str(e)}
+            return {"error": str(e)}
 
     def get_supported_order_types(self) -> List[OrderType]:
         """Get list of supported order types for Binance."""
@@ -762,33 +774,34 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
             OrderType.LIMIT,
             OrderType.STOP,
             OrderType.STOP_LIMIT,
-            OrderType.OCO  # One-Cancels-Other (Binance specific)
+            OrderType.OCO,  # One-Cancels-Other (Binance specific)
         ]
 
     def get_supported_symbols(self) -> List[str]:
         """Get list of supported trading symbols."""
         if self.symbol_filters:
-            return [symbol for symbol, info in self.symbol_filters.items()
-                   if info['status'] == 'TRADING']
+            return [symbol for symbol, info in self.symbol_filters.items() if info["status"] == "TRADING"]
         return []
 
     async def get_binance_specific_info(self) -> Dict[str, Any]:
         """Get Binance-specific broker information."""
         return {
-            'broker_type': 'binance',
-            'api_url': self.client.API_URL,
-            'websocket_url': getattr(self, 'ws_base_url', None),
-            'trading_mode': self.trading_mode.value,
-            'paper_trading': self.paper_trading_enabled,
-            'supported_order_types': [ot.value for ot in self.get_supported_order_types()],
-            'supported_symbols_count': len(self.get_supported_symbols()),
-            'websocket_connected': self.ws_client is not None and hasattr(self.ws_client, 'sock') and self.ws_client.sock,
-            'exchange_info_loaded': self.exchange_info is not None,
-            'market_data_symbols': len(self.market_data_cache) if hasattr(self, 'market_data_cache') else 0
+            "broker_type": "binance",
+            "api_url": self.client.API_URL,
+            "websocket_url": getattr(self, "ws_base_url", None),
+            "trading_mode": self.trading_mode.value,
+            "paper_trading": self.paper_trading_enabled,
+            "supported_order_types": [ot.value for ot in self.get_supported_order_types()],
+            "supported_symbols_count": len(self.get_supported_symbols()),
+            "websocket_connected": self.ws_client is not None
+            and hasattr(self.ws_client, "sock")
+            and self.ws_client.sock,
+            "exchange_info_loaded": self.exchange_info is not None,
+            "market_data_symbols": len(self.market_data_cache) if hasattr(self, "market_data_cache") else 0,
         }
 
     async def process_market_data_update(self):
         """Process pending orders against current market data (for paper trading)."""
-        if self.paper_trading_enabled and hasattr(self, 'market_data_cache'):
-            market_data = {symbol: data['price'] for symbol, data in self.market_data_cache.items()}
+        if self.paper_trading_enabled and hasattr(self, "market_data_cache"):
+            market_data = {symbol: data["price"] for symbol, data in self.market_data_cache.items()}
             await self.process_pending_paper_orders(market_data)

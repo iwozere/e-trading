@@ -8,16 +8,16 @@ in the e-trading platform.
 import asyncio
 import json
 import time
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any, Callable, Dict, List
 
 import psutil
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from src.data.db.services.database_service import DatabaseService
 from src.data.db.models.model_system_health import SystemHealth, SystemHealthStatus
+from src.data.db.services.database_service import DatabaseService
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -28,11 +28,11 @@ class HealthCheckResult:
     """Result of a health check operation."""
 
     system: str
-    component: Optional[str]
+    component: str | None
     status: SystemHealthStatus
-    response_time_ms: Optional[int]
-    error_message: Optional[str]
-    metadata: Optional[Dict[str, Any]] = None
+    response_time_ms: int | None
+    error_message: str | None
+    metadata: Dict[str, Any] | None = None
 
 
 class HealthMonitor:
@@ -40,7 +40,7 @@ class HealthMonitor:
     Centralized health monitoring service for all subsystems.
     """
 
-    def __init__(self, db_service: Optional[DatabaseService] = None):
+    def __init__(self, db_service: DatabaseService | None = None):
         """
         Initialize the health monitor.
 
@@ -71,16 +71,18 @@ class HealthMonitor:
         Replace a stub with a real implementation via
         :meth:`register_health_checker` once it is production-ready.
         """
-        self._health_checkers.update({
-            "database": self._check_database_health,
-            "notification": self._check_notification_health,
-            "system_resources": self._check_system_resources,
-            # Stub checkers — return UNKNOWN until fully implemented.
-            "telegram_bot": self._make_stub_checker("telegram_bot"),
-            "api_service": self._make_stub_checker("api_service"),
-            "web_ui": self._make_stub_checker("web_ui"),
-            "trading_bot": self._make_stub_checker("trading_bot"),
-        })
+        self._health_checkers.update(
+            {
+                "database": self._check_database_health,
+                "notification": self._check_notification_health,
+                "system_resources": self._check_system_resources,
+                # Stub checkers — return UNKNOWN until fully implemented.
+                "telegram_bot": self._make_stub_checker("telegram_bot"),
+                "api_service": self._make_stub_checker("api_service"),
+                "web_ui": self._make_stub_checker("web_ui"),
+                "trading_bot": self._make_stub_checker("trading_bot"),
+            }
+        )
 
     @staticmethod
     def _make_stub_checker(system_name: str) -> Callable:
@@ -96,7 +98,8 @@ class HealthMonitor:
         Returns:
             An async callable compatible with the health-checker signature.
         """
-        async def _stub(component: Optional[str] = None) -> "HealthCheckResult":
+
+        async def _stub(component: str | None = None) -> "HealthCheckResult":
             return HealthCheckResult(
                 system=system_name,
                 component=component,
@@ -104,6 +107,7 @@ class HealthMonitor:
                 response_time_ms=None,
                 error_message="Health checker not yet implemented — register via register_health_checker()",
             )
+
         return _stub
 
     def register_health_checker(self, system: str, checker_func: Callable):
@@ -117,7 +121,7 @@ class HealthMonitor:
         self._health_checkers[system] = checker_func
         _logger.info("Registered health checker for system: %s", system)
 
-    async def check_system_health(self, system: str, component: Optional[str] = None) -> HealthCheckResult:
+    async def check_system_health(self, system: str, component: str | None = None) -> HealthCheckResult:
         """
         Check health of a specific system.
 
@@ -141,7 +145,7 @@ class HealthMonitor:
                     component=component,
                     status=SystemHealthStatus.UNKNOWN,
                     response_time_ms=None,
-                    error_message=f"No health checker registered for system: {system}"
+                    error_message=f"No health checker registered for system: {system}",
                 )
         except Exception as e:
             _logger.exception("Health check failed for system %s:", system)
@@ -150,7 +154,7 @@ class HealthMonitor:
                 component=component,
                 status=SystemHealthStatus.DOWN,
                 response_time_ms=int((time.time() - start_time) * 1000),
-                error_message=str(e)
+                error_message=str(e),
             )
 
     async def check_all_systems_health(self) -> List[HealthCheckResult]:
@@ -163,10 +167,7 @@ class HealthMonitor:
         results = []
 
         # Run all health checks concurrently
-        tasks = [
-            self.check_system_health(system)
-            for system in self._health_checkers.keys()
-        ]
+        tasks = [self.check_system_health(system) for system in self._health_checkers.keys()]
 
         try:
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -180,7 +181,7 @@ class HealthMonitor:
                         component=None,
                         status=SystemHealthStatus.DOWN,
                         response_time_ms=None,
-                        error_message=str(result)
+                        error_message=str(result),
                     )
         except Exception:
             _logger.exception("Failed to check all systems health:")
@@ -197,16 +198,11 @@ class HealthMonitor:
         try:
             with self.db_service.uow() as uow:
                 # Get or create system health record
-                health_record = SystemHealth.get_system_status(
-                    uow.s, result.system, result.component
-                )
+                health_record = SystemHealth.get_system_status(uow.s, result.system, result.component)
 
                 if not health_record:
                     health_record = SystemHealth(
-                        system=result.system,
-                        component=result.component,
-                        status=result.status.value,
-                        failure_count=0
+                        system=result.system, component=result.component, status=result.status.value, failure_count=0
                     )
                     uow.s.add(health_record)
 
@@ -219,7 +215,7 @@ class HealthMonitor:
                     status=result.status,
                     response_time_ms=result.response_time_ms,
                     error_message=result.error_message,
-                    metadata=metadata_json
+                    metadata=metadata_json,
                 )
 
                 uow.commit()
@@ -241,15 +237,15 @@ class HealthMonitor:
 
                 summary = {
                     "overall_status": "HEALTHY",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "systems": {},
                     "statistics": {
                         "total_systems": 0,
                         "healthy_systems": 0,
                         "degraded_systems": 0,
                         "down_systems": 0,
-                        "unknown_systems": 0
-                    }
+                        "unknown_systems": 0,
+                    },
                 }
 
                 # Process each health record
@@ -264,7 +260,7 @@ class HealthMonitor:
                         "avg_response_time_ms": record.avg_response_time_ms,
                         "error_message": record.error_message,
                         "checked_at": record.checked_at.isoformat(),
-                        "metadata": json.loads(record.metadata) if record.metadata else None
+                        "metadata": json.loads(record.metadata) if record.metadata else None,
                     }
 
                     summary["systems"][system_key] = system_data
@@ -289,15 +285,15 @@ class HealthMonitor:
             _logger.exception("Failed to get health summary:")
             return {
                 "overall_status": "UNKNOWN",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "error": str(e),
                 "systems": {},
-                "statistics": {}
+                "statistics": {},
             }
 
     # Health checker implementations
 
-    async def _check_database_health(self, component: Optional[str] = None) -> HealthCheckResult:
+    async def _check_database_health(self, component: str | None = None) -> HealthCheckResult:
         """Check database connectivity and performance."""
         try:
             with self.db_service.uow() as uow:
@@ -310,8 +306,8 @@ class HealthMonitor:
                     # Additional checks for database health
                     metadata = {
                         "query_time_ms": query_time,
-                        "connection_pool_size": getattr(self.db_service.engine.pool, 'size', 'unknown'),
-                        "checked_out_connections": getattr(self.db_service.engine.pool, 'checkedout', 'unknown')
+                        "connection_pool_size": getattr(self.db_service.engine.pool, "size", "unknown"),
+                        "checked_out_connections": getattr(self.db_service.engine.pool, "checkedout", "unknown"),
                     }
 
                     status = SystemHealthStatus.HEALTHY
@@ -324,7 +320,7 @@ class HealthMonitor:
                         status=status,
                         response_time_ms=query_time,
                         error_message=None,
-                        metadata=metadata
+                        metadata=metadata,
                     )
                 else:
                     return HealthCheckResult(
@@ -332,7 +328,7 @@ class HealthMonitor:
                         component=component,
                         status=SystemHealthStatus.DOWN,
                         response_time_ms=query_time,
-                        error_message="Database query returned unexpected result"
+                        error_message="Database query returned unexpected result",
                     )
 
         except SQLAlchemyError as e:
@@ -341,10 +337,10 @@ class HealthMonitor:
                 component=component,
                 status=SystemHealthStatus.DOWN,
                 response_time_ms=None,
-                error_message=f"Database error: {str(e)}"
+                error_message=f"Database error: {str(e)}",
             )
 
-    async def _check_notification_health(self, component: Optional[str] = None) -> HealthCheckResult:
+    async def _check_notification_health(self, component: str | None = None) -> HealthCheckResult:
         """Check notification service health via database (database-centric architecture)."""
         try:
             # Check notification service health from database instead of HTTP
@@ -361,10 +357,10 @@ class HealthMonitor:
                 return HealthCheckResult(
                     system="notification",
                     component=component,
-                    status=system_health.get('status', SystemHealthStatus.UNKNOWN),
-                    response_time_ms=system_health.get('avg_response_time_ms'),
-                    error_message=system_health.get('error_message'),
-                    metadata=system_health.get('metadata', {})
+                    status=system_health.get("status", SystemHealthStatus.UNKNOWN),
+                    response_time_ms=system_health.get("avg_response_time_ms"),
+                    error_message=system_health.get("error_message"),
+                    metadata=system_health.get("metadata", {}),
                 )
             else:
                 # No health record found - service might not be running
@@ -373,7 +369,7 @@ class HealthMonitor:
                     component=component,
                     status=SystemHealthStatus.UNKNOWN,
                     response_time_ms=None,
-                    error_message="No health record found in database"
+                    error_message="No health record found in database",
                 )
 
         except Exception as e:
@@ -382,10 +378,10 @@ class HealthMonitor:
                 component=component,
                 status=SystemHealthStatus.DOWN,
                 response_time_ms=None,
-                error_message=f"Database health check failed: {str(e)}"
+                error_message=f"Database health check failed: {str(e)}",
             )
 
-    async def _check_telegram_bot_health(self, component: Optional[str] = None) -> HealthCheckResult:
+    async def _check_telegram_bot_health(self, component: str | None = None) -> HealthCheckResult:
         """Check Telegram bot health."""
         # This would need to be implemented based on your telegram bot architecture
         # For now, return a placeholder
@@ -394,10 +390,10 @@ class HealthMonitor:
             component=component,
             status=SystemHealthStatus.UNKNOWN,
             response_time_ms=None,
-            error_message="Health check not implemented yet"
+            error_message="Health check not implemented yet",
         )
 
-    async def _check_api_service_health(self, component: Optional[str] = None) -> HealthCheckResult:
+    async def _check_api_service_health(self, component: str | None = None) -> HealthCheckResult:
         """Check API service health."""
         # This would check your main API service
         return HealthCheckResult(
@@ -405,10 +401,10 @@ class HealthMonitor:
             component=component,
             status=SystemHealthStatus.UNKNOWN,
             response_time_ms=None,
-            error_message="Health check not implemented yet"
+            error_message="Health check not implemented yet",
         )
 
-    async def _check_web_ui_health(self, component: Optional[str] = None) -> HealthCheckResult:
+    async def _check_web_ui_health(self, component: str | None = None) -> HealthCheckResult:
         """Check Web UI health."""
         # This would check your web UI service
         return HealthCheckResult(
@@ -416,10 +412,10 @@ class HealthMonitor:
             component=component,
             status=SystemHealthStatus.UNKNOWN,
             response_time_ms=None,
-            error_message="Health check not implemented yet"
+            error_message="Health check not implemented yet",
         )
 
-    async def _check_trading_bot_health(self, component: Optional[str] = None) -> HealthCheckResult:
+    async def _check_trading_bot_health(self, component: str | None = None) -> HealthCheckResult:
         """Check trading bot health."""
         # This would check your trading bot service
         return HealthCheckResult(
@@ -427,23 +423,23 @@ class HealthMonitor:
             component=component,
             status=SystemHealthStatus.UNKNOWN,
             response_time_ms=None,
-            error_message="Health check not implemented yet"
+            error_message="Health check not implemented yet",
         )
 
-    async def _check_system_resources(self, component: Optional[str] = None) -> HealthCheckResult:
+    async def _check_system_resources(self, component: str | None = None) -> HealthCheckResult:
         """Check system resource usage."""
         try:
             # Get system metrics
             cpu_percent = psutil.cpu_percent(interval=1)
             memory = psutil.virtual_memory()
-            disk = psutil.disk_usage('/')
+            disk = psutil.disk_usage("/")
 
             metadata = {
                 "cpu_percent": cpu_percent,
                 "memory_percent": memory.percent,
                 "memory_available_gb": round(memory.available / (1024**3), 2),
                 "disk_percent": disk.percent,
-                "disk_free_gb": round(disk.free / (1024**3), 2)
+                "disk_free_gb": round(disk.free / (1024**3), 2),
             }
 
             # Determine status based on resource usage
@@ -471,7 +467,7 @@ class HealthMonitor:
                 status=status,
                 response_time_ms=None,
                 error_message="; ".join(error_messages) if error_messages else None,
-                metadata=metadata
+                metadata=metadata,
             )
 
         except Exception as e:
@@ -480,7 +476,7 @@ class HealthMonitor:
                 component=component,
                 status=SystemHealthStatus.DOWN,
                 response_time_ms=None,
-                error_message=str(e)
+                error_message=str(e),
             )
 
     async def start_monitoring(self, interval: int = 60):

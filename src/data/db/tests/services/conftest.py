@@ -3,11 +3,14 @@ Service-layer test fixtures.
 
 Uses the same database setup as repository tests but adds service-specific fixtures.
 """
+
 from __future__ import annotations
-import sys
+
 import pathlib
-import pytest
+import sys
 from unittest.mock import Mock
+
+import pytest
 from sqlalchemy.orm import Session
 
 # Ensure repository root is on sys.path
@@ -18,34 +21,50 @@ if str(REPO_ROOT) not in sys.path:
 # Import repository test fixtures to reuse database setup
 pytest_plugins = ["src.data.db.tests.repos.conftest"]
 
-from src.data.db.services.database_service import DatabaseService, ReposBundle
 from src.data.db.repos.repo_jobs import JobsRepository
-from src.data.db.repos.repo_users import UsersRepo, VerificationRepo
 from src.data.db.repos.repo_notification import NotificationRepository
 from src.data.db.repos.repo_short_squeeze import ShortSqueezeRepo
 from src.data.db.repos.repo_system_health import SystemHealthRepository
+from src.data.db.repos.repo_telegram import (
+    BroadcastRepo as TelegramBroadcastRepo,
+)
+from src.data.db.repos.repo_telegram import (
+    CommandAuditRepo as TelegramCommandAuditRepo,
+)
 
 # Import with same aliases as database_service.py
 from src.data.db.repos.repo_telegram import (
     FeedbackRepo as TelegramFeedbackRepo,
-    CommandAuditRepo as TelegramCommandAuditRepo,
-    BroadcastRepo as TelegramBroadcastRepo,
+)
+from src.data.db.repos.repo_telegram import (
     SettingsRepo as TelegramSettingsRepo,
 )
-
-from src.data.db.repos.repo_webui import (
-    AuditRepo as WebUIAuditRepo,
-    SnapshotRepo as WebUISnapshotRepo,
-    StrategyTemplateRepo as WebUIStrategyTemplateRepo,
-    SystemConfigRepo as WebUISystemConfigRepo,
-)
-
 from src.data.db.repos.repo_trading import (
     BotsRepo as TradingBotsRepo,
-    TradesRepo as TradingTradesRepo,
-    PositionsRepo as TradingPositionsRepo,
+)
+from src.data.db.repos.repo_trading import (
     MetricsRepo as TradingMetricsRepo,
 )
+from src.data.db.repos.repo_trading import (
+    PositionsRepo as TradingPositionsRepo,
+)
+from src.data.db.repos.repo_trading import (
+    TradesRepo as TradingTradesRepo,
+)
+from src.data.db.repos.repo_users import UsersRepo, VerificationRepo
+from src.data.db.repos.repo_webui import (
+    AuditRepo as WebUIAuditRepo,
+)
+from src.data.db.repos.repo_webui import (
+    SnapshotRepo as WebUISnapshotRepo,
+)
+from src.data.db.repos.repo_webui import (
+    StrategyTemplateRepo as WebUIStrategyTemplateRepo,
+)
+from src.data.db.repos.repo_webui import (
+    SystemConfigRepo as WebUISystemConfigRepo,
+)
+from src.data.db.services.database_service import DatabaseService, ReposBundle
 
 
 @pytest.fixture

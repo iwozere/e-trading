@@ -1,8 +1,9 @@
 import asyncio
-import aiohttp
-import sys
 import json
+import sys
 from pathlib import Path
+
+import aiohttp
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -12,6 +13,7 @@ from src.common.sentiments.adapters.async_trends import AsyncTrendsAdapter
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 async def test_single_ticker(ticker="AAPL"):
     print(f"Testing Google Trends adapter for: {ticker}")
@@ -26,23 +28,27 @@ async def test_single_ticker(ticker="AAPL"):
             print(f"Cookie fetch: {'SUCCESS' if success else 'FAILURE'}")
             if success:
                 import yarl
-                url = yarl.URL('https://trends.google.com')
+
+                url = yarl.URL("https://trends.google.com")
                 cookies = session.cookie_jar.filter_cookies(url)
                 print(f"Cookies: {cookies}")
 
             print("--- Fetching Tokens ---")
             # Intercept the call to see params
             url = "https://trends.google.com/trends/api/explore"
-            region = 'US'
-            timeframe = 'today 7-d'
+            region = "US"
+            timeframe = "today 7-d"
             params = {
-                'hl': 'en-US',
-                'tz': 0, # Use integer
-                'req': json.dumps({
-                    'comparisonItem': [{'keyword': ticker.upper(), 'geo': region, 'time': timeframe}],
-                    'category': 0,
-                    'property': ''
-                }, separators=(',', ':'))
+                "hl": "en-US",
+                "tz": 0,  # Use integer
+                "req": json.dumps(
+                    {
+                        "comparisonItem": [{"keyword": ticker.upper(), "geo": region, "time": timeframe}],
+                        "category": 0,
+                        "property": "",
+                    },
+                    separators=(",", ":"),
+                ),
             }
             print(f"Target URL: {url}")
             print(f"Params: {params}")
@@ -59,9 +65,11 @@ async def test_single_ticker(ticker="AAPL"):
         except Exception as e:
             print(f"ERROR: Exception occurred: {e}")
             import traceback
+
             traceback.print_exc()
         finally:
             await adapter.close()
+
 
 if __name__ == "__main__":
     asyncio.run(test_single_ticker())

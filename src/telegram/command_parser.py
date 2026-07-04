@@ -8,6 +8,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import re
 import shlex
 from typing import Dict
+
 from src.model.telegram_bot import CommandSpec, ParsedCommand
 
 
@@ -42,6 +43,7 @@ class EnterpriseCommandParser:
                     if flag == "provider":
                         try:
                             from src.data.downloader.data_downloader_factory import DataDownloaderFactory
+
                             canonical = DataDownloaderFactory.get_provider_by_code(value)
                             if canonical:
                                 value = canonical
@@ -71,12 +73,9 @@ class EnterpriseCommandParser:
             args["action"] = positionals[0].lower() if len(positionals) > 0 else None  # Convert action to lowercase
             args["params"] = positionals[1:] if len(positionals) > 1 else []
         return ParsedCommand(
-            command=command,
-            args=args,
-            positionals=positionals,
-            raw_args=tokens,
-            extra_flags=extra_flags
+            command=command, args=args, positionals=positionals, raw_args=tokens, extra_flags=extra_flags
         )
+
 
 # Example command specs for extensibility
 COMMAND_SPECS = {
@@ -87,7 +86,7 @@ COMMAND_SPECS = {
         defaults={
             "email": False,
         },
-        positional=[]
+        positional=[],
     ),
     "help": CommandSpec(
         parameters={
@@ -96,7 +95,7 @@ COMMAND_SPECS = {
         defaults={
             "email": False,
         },
-        positional=[]
+        positional=[],
     ),
     "info": CommandSpec(
         parameters={
@@ -105,7 +104,7 @@ COMMAND_SPECS = {
         defaults={
             "email": False,
         },
-        positional=[]
+        positional=[],
     ),
     "report": CommandSpec(
         parameters={
@@ -124,7 +123,7 @@ COMMAND_SPECS = {
             "provider": None,
             "config": None,
         },
-        positional=["tickers"]
+        positional=["tickers"],
     ),
     "admin": CommandSpec(
         parameters={
@@ -133,7 +132,7 @@ COMMAND_SPECS = {
         defaults={
             "email": False,
         },
-        positional=["action", "params"]
+        positional=["action", "params"],
     ),
     "alerts": CommandSpec(
         parameters={
@@ -148,7 +147,7 @@ COMMAND_SPECS = {
             "action_type": "notify",
             "config": None,
         },
-        positional=["action", "params"]
+        positional=["action", "params"],
     ),
     "schedules": CommandSpec(
         parameters={
@@ -167,7 +166,7 @@ COMMAND_SPECS = {
             "provider": None,
             "config": None,
         },
-        positional=["action", "params"]
+        positional=["action", "params"],
     ),
     "screener": CommandSpec(
         parameters={
@@ -178,7 +177,7 @@ COMMAND_SPECS = {
             "email": False,
             "immediate": True,
         },
-        positional=["screener_name_or_config"]
+        positional=["screener_name_or_config"],
     ),
     "register": CommandSpec(
         parameters={
@@ -187,7 +186,7 @@ COMMAND_SPECS = {
         defaults={
             "email": False,
         },
-        positional=["email_address", "language"]
+        positional=["email_address", "language"],
     ),
     "verify": CommandSpec(
         parameters={
@@ -196,7 +195,7 @@ COMMAND_SPECS = {
         defaults={
             "email": False,
         },
-        positional=["verification_code"]
+        positional=["verification_code"],
     ),
     "language": CommandSpec(
         parameters={
@@ -205,7 +204,7 @@ COMMAND_SPECS = {
         defaults={
             "email": False,
         },
-        positional=["language_code"]
+        positional=["language_code"],
     ),
     "feedback": CommandSpec(
         parameters={
@@ -214,7 +213,7 @@ COMMAND_SPECS = {
         defaults={
             "email": False,
         },
-        positional=["message"]
+        positional=["message"],
     ),
     "feature": CommandSpec(
         parameters={
@@ -223,7 +222,7 @@ COMMAND_SPECS = {
         defaults={
             "email": False,
         },
-        positional=["message"]
+        positional=["message"],
     ),
     "request_approval": CommandSpec(
         parameters={
@@ -232,7 +231,7 @@ COMMAND_SPECS = {
         defaults={
             "email": False,
         },
-        positional=[]
+        positional=[],
     ),
 }
 

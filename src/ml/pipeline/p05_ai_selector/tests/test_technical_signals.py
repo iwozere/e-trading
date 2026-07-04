@@ -1,18 +1,15 @@
 """Tests for technical signal computation."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-import numpy as np
 import pandas as pd
-import pytest
 
 from src.ml.pipeline.p05_ai_selector.signals.technical import (
     compute_rsi,
-    compute_sma,
     compute_volume_surge_ratio,
     score_technicals,
 )
@@ -23,13 +20,15 @@ def _make_ohlcv(n: int = 60, trend: str = "up") -> pd.DataFrame:
     base = 100.0
     closes = [base + (i if trend == "up" else -i) for i in range(n)]
     closes = [max(0.01, c) for c in closes]
-    return pd.DataFrame({
-        "open": closes,
-        "high": [c * 1.01 for c in closes],
-        "low": [c * 0.99 for c in closes],
-        "close": closes,
-        "volume": [1_000_000.0] * n,
-    })
+    return pd.DataFrame(
+        {
+            "open": closes,
+            "high": [c * 1.01 for c in closes],
+            "low": [c * 0.99 for c in closes],
+            "close": closes,
+            "volume": [1_000_000.0] * n,
+        }
+    )
 
 
 class TestComputeRsi:

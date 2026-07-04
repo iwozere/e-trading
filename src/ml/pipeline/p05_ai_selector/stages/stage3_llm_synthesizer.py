@@ -2,16 +2,16 @@
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, List
-import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
 
-from src.ml.pipeline.p05_ai_selector.config import LLM_MODEL, LLM_MAX_TOKENS
+from src.ml.pipeline.p05_ai_selector.config import LLM_MAX_TOKENS, LLM_MODEL
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -53,8 +53,16 @@ _TOOL_SCHEMA = {
                 "description": "Exactly 5 ranked picks.",
                 "items": {
                     "type": "object",
-                    "required": ["rank", "ticker", "confidence", "bias", "thesis",
-                                 "risk_factors", "time_horizon", "exit_strategy"],
+                    "required": [
+                        "rank",
+                        "ticker",
+                        "confidence",
+                        "bias",
+                        "thesis",
+                        "risk_factors",
+                        "time_horizon",
+                        "exit_strategy",
+                    ],
                     "properties": {
                         "rank": {"type": "integer"},
                         "ticker": {"type": "string"},
@@ -65,8 +73,13 @@ _TOOL_SCHEMA = {
                         "time_horizon": {"type": "string"},
                         "exit_strategy": {
                             "type": "object",
-                            "required": ["add_conditions", "hold_conditions",
-                                         "thesis_breakers", "profit_targets", "time_horizon_note"],
+                            "required": [
+                                "add_conditions",
+                                "hold_conditions",
+                                "thesis_breakers",
+                                "profit_targets",
+                                "time_horizon_note",
+                            ],
                             "properties": {
                                 "add_conditions": {"type": "array", "items": {"type": "string"}},
                                 "hold_conditions": {"type": "array", "items": {"type": "string"}},
@@ -109,11 +122,10 @@ class Stage3LLMSynthesizer:
 
     def __init__(self, api_key: str = "", model: str = LLM_MODEL):
         from src.config.provider_config import get_api_key
+
         self._api_key = api_key or get_api_key("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY", "")
         if not self._api_key:
-            raise ValueError(
-                "ANTHROPIC_API_KEY is required. Set it in the environment or config."
-            )
+            raise ValueError("ANTHROPIC_API_KEY is required. Set it in the environment or config.")
         self._model = model
 
     def run(self, stage2_df: pd.DataFrame) -> Dict[str, Any]:
@@ -151,6 +163,7 @@ class Stage3LLMSynthesizer:
             if earnings_date:
                 try:
                     from datetime import date
+
                     ed = date.fromisoformat(earnings_date)
                     earnings_in_days = (ed - date.today()).days
                 except ValueError:
@@ -175,13 +188,11 @@ class Stage3LLMSynthesizer:
                 "fundamentals": {
                     "pe_ratio": fund_bd.get("pe_ratio"),
                     "profit_margin_pct": (
-                        float(fund_bd["profit_margin"]) * 100
-                        if fund_bd.get("profit_margin") is not None else None
+                        float(fund_bd["profit_margin"]) * 100 if fund_bd.get("profit_margin") is not None else None
                     ),
                     "debt_to_equity": fund_bd.get("debt_to_equity"),
                     "revenue_yoy_pct": (
-                        float(fund_bd["revenue_growth"]) * 100
-                        if fund_bd.get("revenue_growth") is not None else None
+                        float(fund_bd["revenue_growth"]) * 100 if fund_bd.get("revenue_growth") is not None else None
                     ),
                     "dividend_yield_pct": fund_bd.get("dividend_yield"),
                     "available": bool(row.get("fundamentals_available", False)),
@@ -237,9 +248,7 @@ class Stage3LLMSynthesizer:
             None,
         )
         if tool_block is None:
-            raise ValueError(
-                f"No tool_use block in Claude response (stop_reason={stop_reason})."
-            )
+            raise ValueError(f"No tool_use block in Claude response (stop_reason={stop_reason}).")
         return {"tool_input": tool_block.input, "tokens_used": tokens_used}  # type: ignore[attr-defined]
 
     def _parse_response(self, raw: Dict[str, Any]) -> Dict[str, Any]:
@@ -252,16 +261,12 @@ class Stage3LLMSynthesizer:
         tool_input = raw.get("tool_input", {})
         picks = tool_input.get("picks")
         if not picks or not isinstance(picks, list) or len(picks) == 0:
-            raise ValueError(
-                f"LLM response missing 'picks' or picks is empty. Raw tool_input: {tool_input}"
-            )
+            raise ValueError(f"LLM response missing 'picks' or picks is empty. Raw tool_input: {tool_input}")
 
         for i, pick in enumerate(picks):
             for required_key in ("rank", "ticker", "confidence", "bias", "thesis", "exit_strategy"):
                 if required_key not in pick:
-                    raise ValueError(
-                        f"Pick #{i} missing required field '{required_key}'. Pick: {pick}"
-                    )
+                    raise ValueError(f"Pick #{i} missing required field '{required_key}'. Pick: {pick}")
 
         notification_override = bool(tool_input.get("notification_override", False))
         # Also check if any pick has confidence >= 9 as a safety net

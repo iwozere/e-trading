@@ -4,19 +4,18 @@ Demo script for FMP Data Downloader functionality.
 This script demonstrates how to use the FMP API for stock screening.
 """
 
-import sys
 import json
+import sys
 from pathlib import Path
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.downloader.fmp_data_downloader import FMPDataDownloader
-from src.notification.logger import setup_logger
-
 # Import API key from donotshare configuration
 from config.donotshare.donotshare import FMP_API_KEY
+from src.data.downloader.fmp_data_downloader import FMPDataDownloader
+from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
 
@@ -41,7 +40,7 @@ def demo_fmp_screener():
         # Load predefined screener criteria
         criteria_file = PROJECT_ROOT / "config" / "screener" / "fmp_screener_criteria.json"
         if criteria_file.exists():
-            with open(criteria_file, 'r') as f:
+            with open(criteria_file) as f:
                 screener_configs = json.load(f)
             print(f"✅ Loaded {len(screener_configs)} predefined screener configurations")
         else:
@@ -49,18 +48,14 @@ def demo_fmp_screener():
             screener_configs = {}
 
         # Demo different screener strategies
-        demo_strategies = [
-            "conservative_value",
-            "growth_at_reasonable_price",
-            "dividend_aristocrats"
-        ]
+        demo_strategies = ["conservative_value", "growth_at_reasonable_price", "dividend_aristocrats"]
 
         for strategy in demo_strategies:
             if strategy in screener_configs:
                 print(f"\n📊 Testing {strategy} screener...")
                 print(f"Description: {screener_configs[strategy]['description']}")
 
-                criteria = screener_configs[strategy]['criteria']
+                criteria = screener_configs[strategy]["criteria"]
                 print(f"Criteria: {json.dumps(criteria, indent=2)}")
 
                 try:
@@ -89,7 +84,7 @@ def demo_fmp_screener():
             "marketCapMoreThan": 1000000000,  # $1B+ market cap
             "peRatioLessThan": 15,
             "returnOnEquityMoreThan": 0.12,
-            "limit": 10
+            "limit": 10,
         }
 
         try:

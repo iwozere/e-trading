@@ -14,11 +14,11 @@ Conditions (all must be true):
 4. ATR volatility floor: ATR > ATR_SMA * atr_floor_multiplier
 """
 
-from typing import Any, Dict, Optional, List
 import math
+from typing import Any, Dict, List
 
-from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 from src.notification.logger import setup_logger
+from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 
 _logger = setup_logger(__name__)
 
@@ -29,7 +29,7 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
     New Architecture only.
     """
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
 
@@ -64,29 +64,17 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
             {
                 "type": "SupportResistance",
                 "params": {"lookback_bars": res_lookback},
-                "fields_mapping": {"resistance": "entry_resistance", "support": "entry_support"}
+                "fields_mapping": {"resistance": "entry_resistance", "support": "entry_support"},
             },
-            {
-                "type": "EOM",
-                "params": {"timeperiod": eom_period},
-                "fields_mapping": {"eom": "entry_eom"}
-            },
-            {
-                "type": "RSI",
-                "params": {"timeperiod": rsi_period},
-                "fields_mapping": {"rsi": "entry_rsi"}
-            },
-            {
-                "type": "ATR",
-                "params": {"timeperiod": atr_period},
-                "fields_mapping": {"atr": "entry_atr"}
-            },
+            {"type": "EOM", "params": {"timeperiod": eom_period}, "fields_mapping": {"eom": "entry_eom"}},
+            {"type": "RSI", "params": {"timeperiod": rsi_period}, "fields_mapping": {"rsi": "entry_rsi"}},
+            {"type": "ATR", "params": {"timeperiod": atr_period}, "fields_mapping": {"atr": "entry_atr"}},
             {
                 "type": "SMA",
                 "params": {"timeperiod": atr_sma_period},
                 "data_field": "entry_atr",
-                "fields_mapping": {"sma": "entry_atr_sma"}
-            }
+                "fields_mapping": {"sma": "entry_atr_sma"},
+            },
         ]
 
     def _init_indicators(self):
@@ -100,16 +88,14 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
             self.get_param("rsi_period", 14),
             self.get_param("atr_period", 14),
             self.get_param("atr_sma_period", 100),
-            self.get_param("resistance_lookback", 2) * 5
+            self.get_param("resistance_lookback", 2) * 5,
         ]
         return max(periods)
 
     def are_indicators_ready(self) -> bool:
         """Check if required indicators exist in the strategy registry."""
-        required = [
-            'entry_support', 'entry_eom', 'entry_rsi', 'entry_atr', 'entry_atr_sma'
-        ]
-        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
+        required = ["entry_support", "entry_eom", "entry_rsi", "entry_atr", "entry_atr_sma"]
+        return all(alias in getattr(self.strategy, "indicators", {}) for alias in required)
 
     def should_enter(self) -> bool:
         """Determines if the mixin should enter a position."""
@@ -123,13 +109,13 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
             low = self.strategy.data.low[0]
 
             # Unified Indicator Access
-            support = self.get_indicator('entry_support')
-            eom = self.get_indicator('entry_eom')
-            eom_prev = self.get_indicator_prev('entry_eom', 1)
-            rsi = self.get_indicator('entry_rsi')
-            rsi_prev = self.get_indicator_prev('entry_rsi', 1)
-            atr = self.get_indicator('entry_atr')
-            atr_sma = self.get_indicator('entry_atr_sma')
+            support = self.get_indicator("entry_support")
+            eom = self.get_indicator("entry_eom")
+            eom_prev = self.get_indicator_prev("entry_eom", 1)
+            rsi = self.get_indicator("entry_rsi")
+            rsi_prev = self.get_indicator_prev("entry_rsi", 1)
+            atr = self.get_indicator("entry_atr")
+            atr_sma = self.get_indicator("entry_atr_sma")
 
             # Get parameters
             support_threshold = self._resolve_param("support_threshold", "e_support_threshold", 0.005)

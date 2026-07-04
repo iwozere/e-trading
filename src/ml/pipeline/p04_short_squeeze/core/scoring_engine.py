@@ -5,19 +5,22 @@ This module implements the scoring engine that combines structural and transient
 to calculate comprehensive squeeze probability scores.
 """
 
-from pathlib import Path
-import sys
-from typing import Dict, Any
 import math
+import sys
+from pathlib import Path
+from typing import Any, Dict
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.ml.pipeline.p04_short_squeeze.config.data_classes import DeepScanWeights, ScoringConfig
 from src.ml.pipeline.p04_short_squeeze.core.models import (
-    StructuralMetrics, TransientMetrics, ScoredCandidate, Candidate
+    Candidate,
+    ScoredCandidate,
+    StructuralMetrics,
+    TransientMetrics,
 )
-from src.ml.pipeline.p04_short_squeeze.config.data_classes import ScoringConfig, DeepScanWeights
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -46,18 +49,17 @@ class ScoringEngine:
         # Validate configuration
         self._validate_config()
 
-        _logger.info("ScoringEngine initialized with normalization method: %s",
-                    self.config.normalization_method)
+        _logger.info("ScoringEngine initialized with normalization method: %s", self.config.normalization_method)
 
     def _validate_config(self) -> None:
         """Validate scoring configuration."""
         if self.config.weight_validation:
             # Check that weights sum to approximately 1.0
             total_weight = (
-                self.weights.volume_spike +
-                self.weights.sentiment_24h +
-                self.weights.call_put_ratio +
-                self.weights.borrow_fee
+                self.weights.volume_spike
+                + self.weights.sentiment_24h
+                + self.weights.call_put_ratio
+                + self.weights.borrow_fee
             )
 
             if abs(total_weight - 1.0) > 0.01:
@@ -71,9 +73,7 @@ class ScoringEngine:
         if min_bound >= max_bound:
             raise ValueError("Score bounds min must be less than max")
 
-    def calculate_squeeze_score(self,
-                              structural: StructuralMetrics,
-                              transient: TransientMetrics) -> float:
+    def calculate_squeeze_score(self, structural: StructuralMetrics, transient: TransientMetrics) -> float:
         """
         Calculate comprehensive squeeze probability score.
 
@@ -104,7 +104,9 @@ class ScoringEngine:
 
             self._logger.debug(
                 "Calculated squeeze score: structural=%.3f, transient=%.3f, final=%.3f",
-                structural_score, weighted_transient_score, final_score
+                structural_score,
+                weighted_transient_score,
+                final_score,
             )
 
             return final_score
@@ -143,12 +145,7 @@ class ScoringEngine:
         volume_score = min(volume_per_mcap / 50, 1.0)  # Cap at 50 volume per million market cap
 
         # Weighted combination of structural factors
-        structural_score = (
-            0.4 * si_score +
-            0.3 * dtc_score +
-            0.2 * float_score +
-            0.1 * volume_score
-        )
+        structural_score = 0.4 * si_score + 0.3 * dtc_score + 0.2 * float_score + 0.1 * volume_score
 
         return max(0.0, min(1.0, structural_score))
 
@@ -163,13 +160,13 @@ class ScoringEngine:
             Dictionary of metric name to value
         """
         metrics = {
-            'volume_spike': transient.volume_spike,
-            'sentiment_24h': transient.sentiment_24h,
-            'call_put_ratio': transient.call_put_ratio or 0.0,  # Default to 0 if None
-            'borrow_fee': transient.borrow_fee_pct or 0.0,  # Default to 0 if None
-            'virality_index': transient.virality_index,
-            'mentions_growth_7d': transient.mentions_growth_7d or 0.0,  # Default to 0 if None
-            'bot_pct': transient.bot_pct
+            "volume_spike": transient.volume_spike,
+            "sentiment_24h": transient.sentiment_24h,
+            "call_put_ratio": transient.call_put_ratio or 0.0,  # Default to 0 if None
+            "borrow_fee": transient.borrow_fee_pct or 0.0,  # Default to 0 if None
+            "virality_index": transient.virality_index,
+            "mentions_growth_7d": transient.mentions_growth_7d or 0.0,  # Default to 0 if None
+            "bot_pct": transient.bot_pct,
         }
 
         return metrics
@@ -221,13 +218,13 @@ class ScoringEngine:
         """
         # Define expected ranges for each metric
         ranges = {
-            'volume_spike': (1.0, 10.0),  # 1x to 10x volume spike
-            'sentiment_24h': (-1.0, 1.0),  # Already normalized
-            'call_put_ratio': (0.0, 5.0),  # 0 to 5 call/put ratio
-            'borrow_fee': (0.0, 50.0),  # 0% to 50% borrow fee
-            'virality_index': (0.0, 1.0),  # Already normalized
-            'mentions_growth_7d': (-1.0, 10.0),  # -100% to +1000% growth
-            'bot_pct': (0.0, 1.0)  # Already normalized (inverse)
+            "volume_spike": (1.0, 10.0),  # 1x to 10x volume spike
+            "sentiment_24h": (-1.0, 1.0),  # Already normalized
+            "call_put_ratio": (0.0, 5.0),  # 0 to 5 call/put ratio
+            "borrow_fee": (0.0, 50.0),  # 0% to 50% borrow fee
+            "virality_index": (0.0, 1.0),  # Already normalized
+            "mentions_growth_7d": (-1.0, 10.0),  # -100% to +1000% growth
+            "bot_pct": (0.0, 1.0),  # Already normalized (inverse)
         }
 
         if metric_name not in ranges:
@@ -237,13 +234,13 @@ class ScoringEngine:
         min_val, max_val = ranges[metric_name]
 
         # Handle already normalized metrics
-        if metric_name == 'sentiment_24h':
+        if metric_name == "sentiment_24h":
             # Convert from [-1, 1] to [0, 1]
             return (value + 1.0) / 2.0
-        elif metric_name in ['virality_index', 'bot_pct']:
+        elif metric_name in ["virality_index", "bot_pct"]:
             # Already in [0, 1] range
             return value
-        elif metric_name == 'mentions_growth_7d':
+        elif metric_name == "mentions_growth_7d":
             # Growth metric: 0 = no change, positive = growth, negative = decline
             # Normalize so 0 growth = 0.5, 10x growth = 1.0, -100% = 0.0
             normalized = (value - min_val) / (max_val - min_val)
@@ -266,10 +263,10 @@ class ScoringEngine:
         """
         # Define sigmoid parameters for each metric
         params = {
-            'volume_spike': (3.0, 2.0),  # center=3x, steepness=2
-            'sentiment_24h': (0.0, 4.0),  # center=0, steepness=4
-            'call_put_ratio': (1.5, 1.5),  # center=1.5, steepness=1.5
-            'borrow_fee': (10.0, 0.2)  # center=10%, steepness=0.2
+            "volume_spike": (3.0, 2.0),  # center=3x, steepness=2
+            "sentiment_24h": (0.0, 4.0),  # center=0, steepness=4
+            "call_put_ratio": (1.5, 1.5),  # center=1.5, steepness=1.5
+            "borrow_fee": (10.0, 0.2),  # center=10%, steepness=0.2
         }
 
         if metric_name not in params:
@@ -279,7 +276,7 @@ class ScoringEngine:
         center, steepness = params[metric_name]
 
         # Handle sentiment which is already normalized
-        if metric_name == 'sentiment_24h':
+        if metric_name == "sentiment_24h":
             # Apply sigmoid and convert to [0, 1]
             sigmoid_val = 1 / (1 + math.exp(-steepness * (value - center)))
             return sigmoid_val
@@ -303,10 +300,10 @@ class ScoringEngine:
             Weighted score
         """
         weighted_score = (
-            self.weights.volume_spike * normalized_metrics.get('volume_spike', 0.0) +
-            self.weights.sentiment_24h * normalized_metrics.get('sentiment_24h', 0.0) +
-            self.weights.call_put_ratio * normalized_metrics.get('call_put_ratio', 0.0) +
-            self.weights.borrow_fee * normalized_metrics.get('borrow_fee', 0.0)
+            self.weights.volume_spike * normalized_metrics.get("volume_spike", 0.0)
+            + self.weights.sentiment_24h * normalized_metrics.get("sentiment_24h", 0.0)
+            + self.weights.call_put_ratio * normalized_metrics.get("call_put_ratio", 0.0)
+            + self.weights.borrow_fee * normalized_metrics.get("borrow_fee", 0.0)
         )
 
         return weighted_score
@@ -344,21 +341,13 @@ class ScoringEngine:
             Scored candidate with squeeze score
         """
         try:
-            squeeze_score = self.calculate_squeeze_score(
-                candidate.structural_metrics,
-                transient
-            )
+            squeeze_score = self.calculate_squeeze_score(candidate.structural_metrics, transient)
 
             scored_candidate = ScoredCandidate(
-                candidate=candidate,
-                transient_metrics=transient,
-                squeeze_score=squeeze_score
+                candidate=candidate, transient_metrics=transient, squeeze_score=squeeze_score
             )
 
-            self._logger.debug(
-                "Scored candidate %s: squeeze_score=%.3f",
-                candidate.ticker, squeeze_score
-            )
+            self._logger.debug("Scored candidate %s: squeeze_score=%.3f", candidate.ticker, squeeze_score)
 
             return scored_candidate
 
@@ -366,14 +355,10 @@ class ScoringEngine:
             self._logger.error("Error scoring candidate %s: %s", candidate.ticker, e)
             # Return candidate with minimum score on error
             return ScoredCandidate(
-                candidate=candidate,
-                transient_metrics=transient,
-                squeeze_score=self.config.score_bounds[0]
+                candidate=candidate, transient_metrics=transient, squeeze_score=self.config.score_bounds[0]
             )
 
-    def get_score_breakdown(self,
-                          structural: StructuralMetrics,
-                          transient: TransientMetrics) -> Dict[str, Any]:
+    def get_score_breakdown(self, structural: StructuralMetrics, transient: TransientMetrics) -> Dict[str, Any]:
         """
         Get detailed breakdown of score calculation for analysis.
 
@@ -394,29 +379,23 @@ class ScoringEngine:
             final_score = self._validate_score_bounds(final_score)
 
             return {
-                'final_score': final_score,
-                'structural_score': structural_score,
-                'transient_score': weighted_transient_score,
-                'raw_transient_metrics': transient_metrics,
-                'normalized_transient_metrics': normalized_transient,
-                'weights': {
-                    'volume_spike': self.weights.volume_spike,
-                    'sentiment_24h': self.weights.sentiment_24h,
-                    'call_put_ratio': self.weights.call_put_ratio,
-                    'borrow_fee': self.weights.borrow_fee
+                "final_score": final_score,
+                "structural_score": structural_score,
+                "transient_score": weighted_transient_score,
+                "raw_transient_metrics": transient_metrics,
+                "normalized_transient_metrics": normalized_transient,
+                "weights": {
+                    "volume_spike": self.weights.volume_spike,
+                    "sentiment_24h": self.weights.sentiment_24h,
+                    "call_put_ratio": self.weights.call_put_ratio,
+                    "borrow_fee": self.weights.borrow_fee,
                 },
-                'combination_weights': {
-                    'transient': 0.6,
-                    'structural': 0.4
-                }
+                "combination_weights": {"transient": 0.6, "structural": 0.4},
             }
 
         except Exception as e:
             self._logger.exception("Error generating score breakdown:")
-            return {
-                'final_score': self.config.score_bounds[0],
-                'error': str(e)
-            }
+            return {"final_score": self.config.score_bounds[0], "error": str(e)}
 
     def calculate_virality_score_with_bot_penalty(self, virality_index: float, bot_pct: float) -> float:
         """

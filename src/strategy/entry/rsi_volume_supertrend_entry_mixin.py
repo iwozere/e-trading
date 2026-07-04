@@ -44,11 +44,10 @@ Configuration Example (New TALib Architecture):
     }
 """
 
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List
 
-import backtrader as bt
-from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 from src.notification.logger import setup_logger
+from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 
 logger = setup_logger(__name__)
 
@@ -58,7 +57,7 @@ class RSIVolumeSupertrendEntryMixin(BaseEntryMixin):
     New Architecture only.
     """
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
 
@@ -87,25 +86,18 @@ class RSIVolumeSupertrendEntryMixin(BaseEntryMixin):
         st_multiplier = params.get("st_multiplier", 3.0)
 
         return [
-            {
-                "type": "RSI",
-                "params": {"timeperiod": rsi_period},
-                "fields_mapping": {"rsi": "entry_rsi"}
-            },
+            {"type": "RSI", "params": {"timeperiod": rsi_period}, "fields_mapping": {"rsi": "entry_rsi"}},
             {
                 "type": "SMA",
                 "data_inputs": ["volume"],
                 "params": {"timeperiod": vol_ma_period},
-                "fields_mapping": {"sma": "entry_volume_ma"}
+                "fields_mapping": {"sma": "entry_volume_ma"},
             },
             {
                 "type": "SUPERTREND",
                 "params": {"length": st_period, "multiplier": st_multiplier},
-                "fields_mapping": {
-                    "super_trend": "entry_supertrend",
-                    "direction": "entry_supertrend_direction"
-                }
-            }
+                "fields_mapping": {"super_trend": "entry_supertrend", "direction": "entry_supertrend_direction"},
+            },
         ]
 
     def _init_indicators(self):
@@ -115,15 +107,13 @@ class RSIVolumeSupertrendEntryMixin(BaseEntryMixin):
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
         return max(
-            self.get_param("rsi_period", 14),
-            self.get_param("vol_ma_period", 20),
-            self.get_param("st_period", 10)
+            self.get_param("rsi_period", 14), self.get_param("vol_ma_period", 20), self.get_param("st_period", 10)
         )
 
     def are_indicators_ready(self) -> bool:
         """Check if required indicators exist in the strategy registry."""
-        required = ['entry_rsi', 'entry_volume_ma', 'entry_supertrend_direction']
-        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
+        required = ["entry_rsi", "entry_volume_ma", "entry_supertrend_direction"]
+        return all(alias in getattr(self.strategy, "indicators", {}) for alias in required)
 
     def should_enter(self) -> bool:
         """Check if we should enter a position."""
@@ -138,9 +128,9 @@ class RSIVolumeSupertrendEntryMixin(BaseEntryMixin):
             min_volume_ratio = self._resolve_param("min_volume_ratio", "e_min_volume_ratio", 1.5)
 
             # Unified Indicator Access
-            current_rsi = self.get_indicator('entry_rsi')
-            vol_ma = self.get_indicator('entry_volume_ma')
-            supertrend_direction = self.get_indicator('entry_supertrend_direction')
+            current_rsi = self.get_indicator("entry_rsi")
+            vol_ma = self.get_indicator("entry_volume_ma")
+            supertrend_direction = self.get_indicator("entry_supertrend_direction")
 
             # Check conditions
             rsi_condition = current_rsi <= rsi_oversold
@@ -152,7 +142,7 @@ class RSIVolumeSupertrendEntryMixin(BaseEntryMixin):
             if entry_signal:
                 logger.debug(
                     f"ENTRY SIGNAL - RSI: {current_rsi:.2f} (<= {rsi_oversold}), "
-                    f"Volume Ratio: {current_volume/vol_ma:.2f} (> {min_volume_ratio}), "
+                    f"Volume Ratio: {current_volume / vol_ma:.2f} (> {min_volume_ratio}), "
                     f"Supertrend: {supertrend_direction}"
                 )
             return entry_signal

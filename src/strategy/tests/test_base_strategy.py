@@ -19,10 +19,10 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.strategy.base_strategy import BaseStrategy
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _bare_strategy(**attrs) -> BaseStrategy:
     """
@@ -81,8 +81,8 @@ def _bare_strategy(**attrs) -> BaseStrategy:
 # _simple_asset_type_detection
 # ---------------------------------------------------------------------------
 
-class TestSimpleAssetTypeDetection:
 
+class TestSimpleAssetTypeDetection:
     def test_empty_symbol_returns_crypto(self):
         s = _bare_strategy(symbol="")
         assert s._simple_asset_type_detection() == "crypto"
@@ -112,8 +112,8 @@ class TestSimpleAssetTypeDetection:
 # _validate_position_size
 # ---------------------------------------------------------------------------
 
-class TestValidatePositionSize:
 
+class TestValidatePositionSize:
     # --- crypto ---
 
     def test_crypto_positive_fractional_is_valid(self):
@@ -157,8 +157,8 @@ class TestValidatePositionSize:
 # _calculate_position_size
 # ---------------------------------------------------------------------------
 
-class TestCalculatePositionSize:
 
+class TestCalculatePositionSize:
     def test_default_returns_base_size(self):
         s = _bare_strategy(base_position_size=0.1, min_position_size=0.05, max_position_size=0.2)
         result = s._calculate_position_size()
@@ -189,8 +189,8 @@ class TestCalculatePositionSize:
 # _calculate_actual_trade_size
 # ---------------------------------------------------------------------------
 
-class TestCalculateActualTradeSize:
 
+class TestCalculateActualTradeSize:
     def _make_open_trade(self, size: float) -> MagicMock:
         trade = MagicMock()
         trade.isclosed = False
@@ -232,11 +232,12 @@ class TestCalculateActualTradeSize:
 # get_performance_summary
 # ---------------------------------------------------------------------------
 
-class TestGetPerformanceSummary:
 
+class TestGetPerformanceSummary:
     def test_no_trades_returns_zeros(self):
-        s = _bare_strategy(trades=[], total_trades=0, winning_trades=0,
-                           losing_trades=0, total_pnl=0.0, max_drawdown=0.0)
+        s = _bare_strategy(
+            trades=[], total_trades=0, winning_trades=0, losing_trades=0, total_pnl=0.0, max_drawdown=0.0
+        )
         result = s.get_performance_summary()
         assert result["total_trades"] == 0
         assert result["win_rate"] == pytest.approx(0.0)

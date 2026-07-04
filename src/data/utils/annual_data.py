@@ -41,11 +41,11 @@ Usage:
 
 import argparse
 import sys
-import os
-from pathlib import Path
-from datetime import datetime, timedelta
-from typing import List, Dict, Any
 import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List
+
 import pandas as pd
 
 # Add project root to path
@@ -136,8 +136,9 @@ class AnnualDataDownloader:
         end_str = self.format_date_for_filename(end_date)
         return f"{ticker}_{timeframe}_{start_str}_{end_str}.csv"
 
-    def download_annual_data(self, ticker: str, timeframe: str, year: int,
-                            force_refresh: bool = False) -> Dict[str, Any]:
+    def download_annual_data(
+        self, ticker: str, timeframe: str, year: int, force_refresh: bool = False
+    ) -> Dict[str, Any]:
         """
         Download data for a specific ticker/timeframe/year.
 
@@ -154,13 +155,13 @@ class AnnualDataDownloader:
             Provider is automatically selected by DataManager based on symbol/timeframe
         """
         result = {
-            'ticker': ticker,
-            'timeframe': timeframe,
-            'year': year,
-            'success': False,
-            'filename': None,
-            'rows': 0,
-            'error': None
+            "ticker": ticker,
+            "timeframe": timeframe,
+            "year": year,
+            "success": False,
+            "filename": None,
+            "rows": 0,
+            "error": None,
         }
 
         try:
@@ -178,15 +179,20 @@ class AnnualDataDownloader:
             # Check if file already exists
             if filepath.exists() and not use_force_refresh:
                 _logger.info("File already exists: %s (use --force-refresh to re-download)", filename)
-                result['success'] = True
-                result['filename'] = filename
-                result['skipped'] = True
+                result["success"] = True
+                result["filename"] = filename
+                result["skipped"] = True
                 return result
 
-            _logger.info("Downloading %s %s for year %d (%s to %s) [force_refresh=%s]",
-                        ticker, timeframe, year,
-                        start_date.strftime("%Y-%m-%d"),
-                        end_date.strftime("%Y-%m-%d"), use_force_refresh)
+            _logger.info(
+                "Downloading %s %s for year %d (%s to %s) [force_refresh=%s]",
+                ticker,
+                timeframe,
+                year,
+                start_date.strftime("%Y-%m-%d"),
+                end_date.strftime("%Y-%m-%d"),
+                use_force_refresh,
+            )
 
             # Download data using DataManager with explicit date range
             # Note: Don't use get_ohlcv() with period string, as "365d" means "365 days from NOW"
@@ -197,59 +203,64 @@ class AnnualDataDownloader:
                 timeframe=timeframe,
                 start_date=start_date,
                 end_date=end_date,
-                force_refresh=use_force_refresh
+                force_refresh=use_force_refresh,
             )
 
             if df is None or df.empty:
                 error_msg = f"No data returned for {ticker} {timeframe} {year}"
                 _logger.warning(error_msg)
-                result['error'] = error_msg
+                result["error"] = error_msg
                 return result
 
             # Handle timestamp in index or column
             # When loaded from UnifiedCache, timestamp is a DatetimeIndex (not column)
-            if df.index.name == 'timestamp' or isinstance(df.index, pd.DatetimeIndex):
+            if df.index.name == "timestamp" or isinstance(df.index, pd.DatetimeIndex):
                 df = df.reset_index()  # Convert index to column
 
             # Filter data to exact year range (in case provider returns extra data)
-            if 'timestamp' in df.columns:
-                df['timestamp'] = df['timestamp'].dt.tz_localize(None)  # Remove timezone if present
-                df = df[(df['timestamp'] >= start_date) & (df['timestamp'] <= end_date)]
+            if "timestamp" in df.columns:
+                df["timestamp"] = df["timestamp"].dt.tz_localize(None)  # Remove timezone if present
+                df = df[(df["timestamp"] >= start_date) & (df["timestamp"] <= end_date)]
 
                 # Add human-readable timestamp column if not present
-                if 'timestamp_human' not in df.columns:
-                    df['timestamp_human'] = df['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
+                if "timestamp_human" not in df.columns:
+                    df["timestamp_human"] = df["timestamp"].dt.strftime("%Y-%m-%d %H:%M:%S")
                 # Place human-readable column first for convenience
-                cols = ['timestamp_human'] + [col for col in df.columns if col != 'timestamp_human']
+                cols = ["timestamp_human"] + [col for col in df.columns if col != "timestamp_human"]
                 df = df[cols]
 
             if df.empty:
                 error_msg = f"No data within date range for {ticker} {timeframe} {year}"
                 _logger.warning(error_msg)
-                result['error'] = error_msg
+                result["error"] = error_msg
                 return result
 
             # Save to CSV
             df.to_csv(filepath, index=False)
 
-            result['success'] = True
-            result['filename'] = filename
-            result['rows'] = len(df)
-            result['filepath'] = str(filepath.absolute())
+            result["success"] = True
+            result["filename"] = filename
+            result["rows"] = len(df)
+            result["filepath"] = str(filepath.absolute())
 
             _logger.info("✅ Saved %s: %d rows", filename, len(df))
 
         except Exception as e:
             error_msg = f"Error downloading {ticker} {timeframe} {year}: {e}"
             _logger.exception(error_msg)
-            result['error'] = error_msg
+            result["error"] = error_msg
 
         return result
 
-    def download_batch(self, tickers: List[str], timeframes: List[str],
-                      start_year: int, end_year: int = None,
-                      force_refresh: bool = False,
-                      delay: float = 0.5) -> List[Dict[str, Any]]:
+    def download_batch(
+        self,
+        tickers: List[str],
+        timeframes: List[str],
+        start_year: int,
+        end_year: int = None,
+        force_refresh: bool = False,
+        delay: float = 0.5,
+    ) -> List[Dict[str, Any]]:
         """
         Download data for multiple tickers/timeframes/years.
 
@@ -287,14 +298,12 @@ class AnnualDataDownloader:
                 for year in years:
                     completed += 1
 
-                    _logger.info("Progress: %d/%d - Processing %s %s %d",
-                               completed, total_downloads, ticker, timeframe, year)
+                    _logger.info(
+                        "Progress: %d/%d - Processing %s %s %d", completed, total_downloads, ticker, timeframe, year
+                    )
 
                     result = self.download_annual_data(
-                        ticker=ticker,
-                        timeframe=timeframe,
-                        year=year,
-                        force_refresh=force_refresh
+                        ticker=ticker, timeframe=timeframe, year=year, force_refresh=force_refresh
                     )
 
                     results.append(result)
@@ -316,11 +325,11 @@ class AnnualDataDownloader:
         _logger.info("DOWNLOAD SUMMARY")
         _logger.info("=" * 80)
 
-        successful = [r for r in results if r['success']]
-        skipped = [r for r in results if r.get('skipped', False)]
-        failed = [r for r in results if not r['success']]
+        successful = [r for r in results if r["success"]]
+        skipped = [r for r in results if r.get("skipped", False)]
+        failed = [r for r in results if not r["success"]]
 
-        total_rows = sum(r['rows'] for r in successful)
+        total_rows = sum(r["rows"] for r in successful)
 
         _logger.info("Total downloads: %d", len(results))
         _logger.info("Successful: %d", len(successful))
@@ -332,9 +341,13 @@ class AnnualDataDownloader:
             _logger.warning("-" * 80)
             _logger.warning("FAILED DOWNLOADS:")
             for result in failed:
-                _logger.warning("  %s %s %d: %s",
-                              result['ticker'], result['timeframe'], result['year'],
-                              result.get('error', 'Unknown error'))
+                _logger.warning(
+                    "  %s %s %d: %s",
+                    result["ticker"],
+                    result["timeframe"],
+                    result["year"],
+                    result.get("error", "Unknown error"),
+                )
 
         _logger.info("=" * 80)
         _logger.info("Output directory: %s", self.output_dir.absolute())
@@ -368,55 +381,37 @@ Examples:
 
   # All custom
   python src/data/utils/annual_data.py --tickers BTCUSDT --timeframes 5m,15m --start-year 2022 --end-year 2023
-        """
+        """,
     )
 
     parser.add_argument(
         "--tickers",
         type=str,
         default="BTCUSDT,ETHUSDT,LTCUSDT",
-        help="Comma-separated list of tickers (default: BTCUSDT,ETHUSDT,LTCUSDT)"
+        help="Comma-separated list of tickers (default: BTCUSDT,ETHUSDT,LTCUSDT)",
     )
 
     parser.add_argument(
         "--timeframes",
         type=str,
         default="5m,15m,30m,1h,4h",
-        help="Comma-separated list of timeframes (default: 5m,15m,30m,1h,4h)"
+        help="Comma-separated list of timeframes (default: 5m,15m,30m,1h,4h)",
     )
 
-    parser.add_argument(
-        "--start-year",
-        type=int,
-        default=2020,
-        help="Start year for data download (default: 2020)"
-    )
+    parser.add_argument("--start-year", type=int, default=2020, help="Start year for data download (default: 2020)")
 
-    parser.add_argument(
-        "--end-year",
-        type=int,
-        help="End year for data download (default: current year)"
-    )
+    parser.add_argument("--end-year", type=int, help="End year for data download (default: current year)")
 
     parser.add_argument(
         "--output-dir",
         type=str,
         default="data/annual",
-        help="Output directory for annual data files (default: data/annual)"
+        help="Output directory for annual data files (default: data/annual)",
     )
 
-    parser.add_argument(
-        "--force-refresh",
-        action="store_true",
-        help="Force re-download even if files already exist"
-    )
+    parser.add_argument("--force-refresh", action="store_true", help="Force re-download even if files already exist")
 
-    parser.add_argument(
-        "--delay",
-        type=float,
-        default=0.5,
-        help="Delay between downloads in seconds (default: 0.5)"
-    )
+    parser.add_argument("--delay", type=float, default=0.5, help="Delay between downloads in seconds (default: 0.5)")
 
     args = parser.parse_args()
 
@@ -451,14 +446,14 @@ Examples:
             start_year=args.start_year,
             end_year=end_year,
             force_refresh=args.force_refresh,
-            delay=args.delay
+            delay=args.delay,
         )
 
         # Print summary
         downloader.print_summary(results)
 
         # Exit with appropriate code
-        failed = [r for r in results if not r['success']]
+        failed = [r for r in results if not r["success"]]
         if failed:
             _logger.warning("Some downloads failed")
             sys.exit(1)

@@ -1,13 +1,20 @@
 from __future__ import annotations
+
+from datetime import UTC, datetime
 from typing import Sequence
+
 from sqlalchemy import select
-from datetime import datetime, timezone
 from sqlalchemy.orm import Session
+
 from src.data.db.models.model_webui import (
-    WebUIAuditLog, WebUIPerformanceSnapshot, WebUIStrategyTemplate, WebUISystemConfig
+    WebUIAuditLog,
+    WebUIPerformanceSnapshot,
+    WebUIStrategyTemplate,
+    WebUISystemConfig,
 )
 
-UTC = timezone.utc
+UTC = UTC
+
 
 class AuditRepo:
     def __init__(self, s: Session) -> None:
@@ -15,7 +22,8 @@ class AuditRepo:
 
     def log(self, user_id: int, action: str, **kw) -> WebUIAuditLog:
         row = WebUIAuditLog(user_id=user_id, action=action, **kw)
-        self.s.add(row); self.s.flush()
+        self.s.add(row)
+        self.s.flush()
         return row
 
 
@@ -28,7 +36,8 @@ class SnapshotRepo:
         if not snapshot.get("timestamp"):
             snapshot = {**snapshot, "timestamp": datetime.now(UTC)}
         row = WebUIPerformanceSnapshot(**snapshot)
-        self.s.add(row); self.s.flush()
+        self.s.add(row)
+        self.s.flush()
         return row
 
     def latest(self, strategy_id: str, limit: int = 50) -> Sequence[WebUIPerformanceSnapshot]:
@@ -50,7 +59,8 @@ class StrategyTemplateRepo:
 
     def create(self, t: dict) -> WebUIStrategyTemplate:
         row = WebUIStrategyTemplate(**t)
-        self.s.add(row); self.s.flush()
+        self.s.add(row)
+        self.s.flush()
         return row
 
     def by_author(self, user_id: int) -> Sequence[WebUIStrategyTemplate]:
@@ -74,5 +84,6 @@ class SystemConfigRepo:
                 row.description = description
             return row
         row = WebUISystemConfig(key=key, value=value, description=description)
-        self.s.add(row); self.s.flush()
+        self.s.add(row)
+        self.s.flush()
         return row

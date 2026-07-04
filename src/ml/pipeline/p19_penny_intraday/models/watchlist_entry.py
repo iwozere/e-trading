@@ -1,7 +1,7 @@
 """P19 WatchlistEntry model."""
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 
 @dataclass
@@ -15,23 +15,23 @@ class WatchlistEntry:
     """
 
     ticker: str
-    source: str                                   # "p17" | "gapper" | "manual"
-    tier: str = ""                                # p17 tier, if applicable
-    explosive: bool = False                       # p17 explosive_candidate flag
+    source: str  # "p17" | "gapper" | "manual"
+    tier: str = ""  # p17 tier, if applicable
+    explosive: bool = False  # p17 explosive_candidate flag
     company_name: str = ""
 
     # ── Baseline context (for RVOL / % move / fade flags) ──────────────────
-    prior_close: float = 0.0                      # last known close (P17 detection price)
+    prior_close: float = 0.0  # last known close (P17 detection price)
     avg_volume_30d: float = 0.0
     float_shares: float = 0.0
     market_cap: float = 0.0
-    dilution_penalty: float = 0.0                 # >0 → fade risk
-    short_interest_pct_float: Optional[float] = None
+    dilution_penalty: float = 0.0  # >0 → fade risk
+    short_interest_pct_float: float | None = None
     has_catalyst: bool = False
     catalyst_signals: List[str] = field(default_factory=list)
 
     # ── Builder bookkeeping ────────────────────────────────────────────────
-    priority: float = 0.0                         # ranking score (higher = kept first)
+    priority: float = 0.0  # ranking score (higher = kept first)
 
     def to_dict(self) -> Dict:
         return {

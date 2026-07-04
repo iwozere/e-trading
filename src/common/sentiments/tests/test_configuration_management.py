@@ -9,18 +9,21 @@ Tests cover:
 - Configuration merging and overrides
 """
 
-import unittest
-from unittest.mock import patch
 import os
-from pathlib import Path
 import sys
+import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.common.sentiments.collect_sentiment_async import (
-    get_default_config, validate_config, _load_config_from_env, DEFAULT_CONFIG
+    DEFAULT_CONFIG,
+    _load_config_from_env,
+    get_default_config,
+    validate_config,
 )
 
 
@@ -90,15 +93,18 @@ class TestConfigurationManagement(unittest.TestCase):
         self.assertIsInstance(config["providers"]["reddit_pushshift"], bool)
         self.assertIsInstance(config["providers"]["hf_enabled"], bool)
 
-    @patch.dict(os.environ, {
-        "SENTIMENT_STOCKTWITS_ENABLED": "false",
-        "SENTIMENT_REDDIT_ENABLED": "true",
-        "SENTIMENT_HF_ENABLED": "true",
-        "SENTIMENT_LOOKBACK_HOURS": "48",
-        "SENTIMENT_CONCURRENCY": "16",
-        "SENTIMENT_WEIGHT_STOCKTWITS": "0.3",
-        "SENTIMENT_WEIGHT_REDDIT": "0.7"
-    })
+    @patch.dict(
+        os.environ,
+        {
+            "SENTIMENT_STOCKTWITS_ENABLED": "false",
+            "SENTIMENT_REDDIT_ENABLED": "true",
+            "SENTIMENT_HF_ENABLED": "true",
+            "SENTIMENT_LOOKBACK_HOURS": "48",
+            "SENTIMENT_CONCURRENCY": "16",
+            "SENTIMENT_WEIGHT_STOCKTWITS": "0.3",
+            "SENTIMENT_WEIGHT_REDDIT": "0.7",
+        },
+    )
     def test_environment_variable_override(self):
         """Test configuration override from environment variables."""
         config = get_default_config()
@@ -112,13 +118,16 @@ class TestConfigurationManagement(unittest.TestCase):
         self.assertEqual(config["weights"]["stocktwits"], 0.3)
         self.assertEqual(config["weights"]["reddit"], 0.7)
 
-    @patch.dict(os.environ, {
-        "SENTIMENT_POSITIVE_TOKENS": "moon,rocket,lambo,tendies",
-        "SENTIMENT_NEGATIVE_TOKENS": "crash,dump,rekt,fud",
-        "SENTIMENT_REDIS_HOST": "redis.example.com",
-        "SENTIMENT_REDIS_PORT": "6380",
-        "SENTIMENT_CACHE_MEMORY_SIZE": "2000"
-    })
+    @patch.dict(
+        os.environ,
+        {
+            "SENTIMENT_POSITIVE_TOKENS": "moon,rocket,lambo,tendies",
+            "SENTIMENT_NEGATIVE_TOKENS": "crash,dump,rekt,fud",
+            "SENTIMENT_REDIS_HOST": "redis.example.com",
+            "SENTIMENT_REDIS_PORT": "6380",
+            "SENTIMENT_CACHE_MEMORY_SIZE": "2000",
+        },
+    )
     def test_complex_environment_overrides(self):
         """Test complex environment variable overrides."""
         config = get_default_config()
@@ -151,26 +160,15 @@ class TestConfigurationManagement(unittest.TestCase):
     def test_validate_config_valid(self):
         """Test configuration validation with valid config."""
         valid_config = {
-            "providers": {
-                "stocktwits": True,
-                "reddit_pushshift": True,
-                "hf_enabled": False
-            },
+            "providers": {"stocktwits": True, "reddit_pushshift": True, "hf_enabled": False},
             "lookback_hours": 24,
-            "batching": {
-                "concurrency": 8,
-                "rate_limit_delay_sec": 0.3
-            },
-            "weights": {
-                "stocktwits": 0.4,
-                "reddit": 0.6,
-                "heuristic_vs_hf": 0.5
-            },
+            "batching": {"concurrency": 8, "rate_limit_delay_sec": 0.3},
+            "weights": {"stocktwits": 0.4, "reddit": 0.6, "heuristic_vs_hf": 0.5},
             "heuristic": {
                 "positive_tokens": ["moon", "rocket"],
                 "negative_tokens": ["crash", "dump"],
-                "engagement_weight_formula": "sqrt"
-            }
+                "engagement_weight_formula": "sqrt",
+            },
         }
 
         # Should not raise exception
@@ -204,7 +202,7 @@ class TestConfigurationManagement(unittest.TestCase):
             "lookback_hours": -5,  # Invalid
             "batching": {"concurrency": 8, "rate_limit_delay_sec": 0.3},
             "weights": {"stocktwits": 0.4, "reddit": 0.6},
-            "heuristic": {"positive_tokens": [], "negative_tokens": []}
+            "heuristic": {"positive_tokens": [], "negative_tokens": []},
         }
 
         with self.assertRaises(ValueError) as context:
@@ -219,7 +217,7 @@ class TestConfigurationManagement(unittest.TestCase):
             "lookback_hours": 24,
             "batching": {"concurrency": 0, "rate_limit_delay_sec": 0.3},  # Invalid
             "weights": {"stocktwits": 0.4, "reddit": 0.6},
-            "heuristic": {"positive_tokens": [], "negative_tokens": []}
+            "heuristic": {"positive_tokens": [], "negative_tokens": []},
         }
 
         with self.assertRaises(ValueError) as context:
@@ -234,7 +232,7 @@ class TestConfigurationManagement(unittest.TestCase):
             "lookback_hours": 24,
             "batching": {"concurrency": 8, "rate_limit_delay_sec": 0.3},
             "weights": {"stocktwits": 0.0, "reddit": 0.0},  # Invalid - sum to zero
-            "heuristic": {"positive_tokens": [], "negative_tokens": []}
+            "heuristic": {"positive_tokens": [], "negative_tokens": []},
         }
 
         with self.assertRaises(ValueError) as context:
@@ -249,14 +247,13 @@ class TestConfigurationManagement(unittest.TestCase):
             "lookback_hours": 24,
             "batching": {"concurrency": 8, "rate_limit_delay_sec": 0.3},
             "weights": {"stocktwits": 0.8, "reddit": 1.2},  # Sum to 2.0
-            "heuristic": {"positive_tokens": [], "negative_tokens": []}
+            "heuristic": {"positive_tokens": [], "negative_tokens": []},
         }
 
         validated_config = validate_config(config_with_unnormalized_weights)
 
         # Weights should be normalized to sum to 1.0
-        weight_sum = (validated_config["weights"]["stocktwits"] +
-                     validated_config["weights"]["reddit"])
+        weight_sum = validated_config["weights"]["stocktwits"] + validated_config["weights"]["reddit"]
         self.assertAlmostEqual(weight_sum, 1.0, places=3)
 
         # Relative proportions should be maintained
@@ -274,7 +271,7 @@ class TestConfigurationManagement(unittest.TestCase):
             },
             "batching": {
                 "concurrency": 16  # Only override this one setting
-            }
+            },
         }
 
         # Simulate the merging logic from get_default_config
@@ -291,11 +288,9 @@ class TestConfigurationManagement(unittest.TestCase):
         self.assertEqual(merged_config["batching"]["concurrency"], 16)
         self.assertEqual(merged_config["batching"]["rate_limit_delay_sec"], 0.3)  # Should remain unchanged
 
-    @patch.dict(os.environ, {
-        "SENTIMENT_HF_MODEL": "custom-model-name",
-        "SENTIMENT_HF_DEVICE": "0",
-        "SENTIMENT_HF_WORKERS": "4"
-    })
+    @patch.dict(
+        os.environ, {"SENTIMENT_HF_MODEL": "custom-model-name", "SENTIMENT_HF_DEVICE": "0", "SENTIMENT_HF_WORKERS": "4"}
+    )
     def test_huggingface_config_override(self):
         """Test HuggingFace configuration override."""
         config = get_default_config()
@@ -304,11 +299,14 @@ class TestConfigurationManagement(unittest.TestCase):
         self.assertEqual(config["hf"]["device"], 0)
         self.assertEqual(config["hf"]["max_workers"], 4)
 
-    @patch.dict(os.environ, {
-        "SENTIMENT_REDIS_ENABLED": "false",
-        "SENTIMENT_REDIS_PASSWORD": "secret123",
-        "SENTIMENT_CACHE_WARMING": "false"
-    })
+    @patch.dict(
+        os.environ,
+        {
+            "SENTIMENT_REDIS_ENABLED": "false",
+            "SENTIMENT_REDIS_PASSWORD": "secret123",
+            "SENTIMENT_CACHE_WARMING": "false",
+        },
+    )
     def test_caching_config_override(self):
         """Test caching configuration override."""
         config = get_default_config()
@@ -342,23 +340,25 @@ class TestConfigurationManagement(unittest.TestCase):
             ("0", False),
             ("yes", False),
             ("no", False),
-            ("", False)
+            ("", False),
         ]
 
         for env_value, expected in test_cases:
             with patch.dict(os.environ, {"SENTIMENT_STOCKTWITS_ENABLED": env_value}):
                 config = _load_config_from_env()
-                self.assertEqual(config["providers"]["stocktwits"], expected,
-                               f"Failed for env_value: '{env_value}'")
+                self.assertEqual(config["providers"]["stocktwits"], expected, f"Failed for env_value: '{env_value}'")
 
     def test_numeric_environment_parsing(self):
         """Test parsing of numeric values from environment variables."""
-        with patch.dict(os.environ, {
-            "SENTIMENT_LOOKBACK_HOURS": "48",
-            "SENTIMENT_CONCURRENCY": "16",
-            "SENTIMENT_RATE_DELAY": "0.5",
-            "SENTIMENT_WEIGHT_STOCKTWITS": "0.3"
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "SENTIMENT_LOOKBACK_HOURS": "48",
+                "SENTIMENT_CONCURRENCY": "16",
+                "SENTIMENT_RATE_DELAY": "0.5",
+                "SENTIMENT_WEIGHT_STOCKTWITS": "0.3",
+            },
+        ):
             config = _load_config_from_env()
 
             self.assertEqual(config["lookback_hours"], 48)
@@ -368,10 +368,13 @@ class TestConfigurationManagement(unittest.TestCase):
 
     def test_list_environment_parsing(self):
         """Test parsing of comma-separated lists from environment variables."""
-        with patch.dict(os.environ, {
-            "SENTIMENT_POSITIVE_TOKENS": "moon,rocket,lambo,  tendies  ,hodl",
-            "SENTIMENT_NEGATIVE_TOKENS": "crash, dump ,rekt,  fud"
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "SENTIMENT_POSITIVE_TOKENS": "moon,rocket,lambo,  tendies  ,hodl",
+                "SENTIMENT_NEGATIVE_TOKENS": "crash, dump ,rekt,  fud",
+            },
+        ):
             config = _load_config_from_env()
 
             # Should handle whitespace and empty strings
@@ -389,7 +392,7 @@ class TestConfigurationManagement(unittest.TestCase):
             "lookback_hours": 24,  # Add required field
             "batching": {"concurrency": 1, "rate_limit_delay_sec": 0},
             "weights": {"stocktwits": 1.0, "reddit": 0.0},
-            "heuristic": {"positive_tokens": [], "negative_tokens": []}
+            "heuristic": {"positive_tokens": [], "negative_tokens": []},
         }
 
         validated = validate_config(minimal_config)
@@ -401,7 +404,7 @@ class TestConfigurationManagement(unittest.TestCase):
             "lookback_hours": 48,  # Add required field
             "batching": {"concurrency": 8, "rate_limit_delay_sec": 0.3},
             "weights": {"stocktwits": 0.5, "reddit": 0.5},
-            "heuristic": {"positive_tokens": [], "negative_tokens": []}
+            "heuristic": {"positive_tokens": [], "negative_tokens": []},
             # Missing other optional fields like caching, hf, etc.
         }
 
@@ -411,7 +414,7 @@ class TestConfigurationManagement(unittest.TestCase):
     def test_environment_loading_error_handling(self):
         """Test error handling in environment configuration loading."""
         # Mock an exception during environment loading
-        with patch('os.getenv', side_effect=Exception("Environment error")):
+        with patch("os.getenv", side_effect=Exception("Environment error")):
             config = get_default_config()
 
             # Should fall back to defaults without crashing

@@ -8,12 +8,14 @@ Tests cover:
 - Thread pool execution and async integration
 - Health monitoring and resource cleanup
 """
+
+import asyncio
+import sys
+from pathlib import Path
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
 import pytest_asyncio
-import asyncio
-from unittest.mock import Mock, AsyncMock, patch
-from pathlib import Path
-import sys
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -30,25 +32,18 @@ class TestAsyncHFSentiment:
     def mock_pipeline(self):
         """Create mock HuggingFace pipeline."""
         pipeline_mock = Mock()
-        pipeline_mock.return_value = [
-            {"label": "POSITIVE", "score": 0.8},
-            {"label": "NEGATIVE", "score": 0.7}
-        ]
+        pipeline_mock.return_value = [{"label": "POSITIVE", "score": 0.8}, {"label": "NEGATIVE", "score": 0.7}]
         return pipeline_mock
 
     @pytest_asyncio.fixture
     async def adapter(self, mock_pipeline):
         """Create adapter instance for testing."""
-        with patch('src.common.sentiments.adapters.async_hf_sentiment.HF_AVAILABLE', True):
-            with patch('src.common.sentiments.adapters.async_hf_sentiment.pipeline') as mock_pipe_func:
+        with patch("src.common.sentiments.adapters.async_hf_sentiment.HF_AVAILABLE", True):
+            with patch("src.common.sentiments.adapters.async_hf_sentiment.pipeline") as mock_pipe_func:
                 mock_pipe_func.return_value = mock_pipeline
 
                 adapter = AsyncHFSentiment(
-                    model_name="test-model",
-                    device=-1,
-                    max_workers=1,
-                    concurrency=1,
-                    rate_limit_delay=0.01
+                    model_name="test-model", device=-1, max_workers=1, concurrency=1, rate_limit_delay=0.01
                 )
 
                 # Wait for initialization to complete
@@ -60,8 +55,8 @@ class TestAsyncHFSentiment:
     @pytest.mark.asyncio
     async def test_initialization_success(self, mock_pipeline):
         """Test successful pipeline initialization."""
-        with patch('src.common.sentiments.adapters.async_hf_sentiment.HF_AVAILABLE', True):
-            with patch('src.common.sentiments.adapters.async_hf_sentiment.pipeline') as mock_pipe_func:
+        with patch("src.common.sentiments.adapters.async_hf_sentiment.HF_AVAILABLE", True):
+            with patch("src.common.sentiments.adapters.async_hf_sentiment.pipeline") as mock_pipe_func:
                 mock_pipe_func.return_value = mock_pipeline
 
                 adapter = AsyncHFSentiment(model_name="test-model")
@@ -76,10 +71,7 @@ class TestAsyncHFSentiment:
 
                     # Verify pipeline was created with correct parameters
                     mock_pipe_func.assert_called_once_with(
-                        "sentiment-analysis",
-                        model="test-model",
-                        tokenizer="test-model",
-                        device=-1
+                        "sentiment-analysis", model="test-model", tokenizer="test-model", device=-1
                     )
 
                 finally:
@@ -88,8 +80,8 @@ class TestAsyncHFSentiment:
     @pytest.mark.asyncio
     async def test_initialization_failure(self):
         """Test handling of initialization failure."""
-        with patch('src.common.sentiments.adapters.async_hf_sentiment.HF_AVAILABLE', True):
-            with patch('src.common.sentiments.adapters.async_hf_sentiment.pipeline') as mock_pipe_func:
+        with patch("src.common.sentiments.adapters.async_hf_sentiment.HF_AVAILABLE", True):
+            with patch("src.common.sentiments.adapters.async_hf_sentiment.pipeline") as mock_pipe_func:
                 mock_pipe_func.side_effect = Exception("Model loading failed")
 
                 adapter = AsyncHFSentiment(model_name="invalid-model")
@@ -112,7 +104,7 @@ class TestAsyncHFSentiment:
     @pytest.mark.asyncio
     async def test_hf_not_available(self):
         """Test behavior when HuggingFace is not available."""
-        with patch('src.common.sentiments.adapters.async_hf_sentiment.HF_AVAILABLE', False):
+        with patch("src.common.sentiments.adapters.async_hf_sentiment.HF_AVAILABLE", False):
             with pytest.raises(RuntimeError, match="transformers is required"):
                 AsyncHFSentiment()
 
@@ -123,10 +115,7 @@ class TestAsyncHFSentiment:
 
         # Mock the pipeline to return expected results
         if adapter._pipe:
-            adapter._pipe.return_value = [
-                {"label": "POSITIVE", "score": 0.9},
-                {"label": "NEGATIVE", "score": 0.8}
-            ]
+            adapter._pipe.return_value = [{"label": "POSITIVE", "score": 0.9}, {"label": "NEGATIVE", "score": 0.8}]
 
         results = await adapter.predict_batch(texts)
 
@@ -152,7 +141,7 @@ class TestAsyncHFSentiment:
             adapter._pipe.return_value = [
                 {"label": "NEUTRAL", "score": 0.5},
                 {"label": "NEUTRAL", "score": 0.5},
-                {"label": "POSITIVE", "score": 0.8}
+                {"label": "POSITIVE", "score": 0.8},
             ]
 
         results = await adapter.predict_batch(texts)
@@ -164,8 +153,8 @@ class TestAsyncHFSentiment:
     @pytest.mark.asyncio
     async def test_predict_batch_initialization_error(self):
         """Test batch prediction when initialization failed."""
-        with patch('src.common.sentiments.adapters.async_hf_sentiment.HF_AVAILABLE', True):
-            with patch('src.common.sentiments.adapters.async_hf_sentiment.pipeline') as mock_pipe_func:
+        with patch("src.common.sentiments.adapters.async_hf_sentiment.HF_AVAILABLE", True):
+            with patch("src.common.sentiments.adapters.async_hf_sentiment.pipeline") as mock_pipe_func:
                 mock_pipe_func.side_effect = Exception("Init failed")
 
                 adapter = AsyncHFSentiment()
@@ -227,7 +216,7 @@ class TestAsyncHFSentiment:
     @pytest.mark.asyncio
     async def test_predict_single_error_handling(self, adapter):
         """Test error handling in single prediction."""
-        with patch.object(adapter, 'predict_batch', new_callable=AsyncMock) as mock_batch:
+        with patch.object(adapter, "predict_batch", new_callable=AsyncMock) as mock_batch:
             mock_batch.side_effect = Exception("Batch failed")
 
             result = await adapter.predict_single("test")
@@ -241,10 +230,7 @@ class TestAsyncHFSentiment:
         texts = ["Great!", "Terrible!"]
 
         if adapter._pipe:
-            adapter._pipe.return_value = [
-                {"label": "POSITIVE", "score": 0.9},
-                {"label": "NEGATIVE", "score": 0.8}
-            ]
+            adapter._pipe.return_value = [{"label": "POSITIVE", "score": 0.9}, {"label": "NEGATIVE", "score": 0.8}]
 
         results = adapter._predict_blocking(texts)
 
@@ -325,8 +311,8 @@ class TestAsyncHFSentiment:
     @pytest.mark.asyncio
     async def test_concurrency_limiting(self):
         """Test that concurrency is properly limited."""
-        with patch('src.common.sentiments.adapters.async_hf_sentiment.HF_AVAILABLE', True):
-            with patch('src.common.sentiments.adapters.async_hf_sentiment.pipeline') as mock_pipe_func:
+        with patch("src.common.sentiments.adapters.async_hf_sentiment.HF_AVAILABLE", True):
+            with patch("src.common.sentiments.adapters.async_hf_sentiment.pipeline") as mock_pipe_func:
                 mock_pipeline = Mock()
                 mock_pipeline.return_value = [{"label": "NEUTRAL", "score": 0.5}]
                 mock_pipe_func.return_value = mock_pipeline
@@ -342,14 +328,14 @@ class TestAsyncHFSentiment:
                         await asyncio.sleep(0.05)  # Reduced sleep time
                         return [{"label": "NEUTRAL", "score": 0.5}]
 
-                    with patch.object(adapter, 'predict_batch', side_effect=slow_predict):
+                    with patch.object(adapter, "predict_batch", side_effect=slow_predict):
                         # Start multiple concurrent requests
                         start_time = asyncio.get_event_loop().time()
 
                         tasks = [
                             adapter.predict_single("text1"),
                             adapter.predict_single("text2"),
-                            adapter.predict_single("text3")
+                            adapter.predict_single("text3"),
                         ]
 
                         await asyncio.gather(*tasks)
@@ -377,8 +363,8 @@ class TestAsyncHFSentiment:
     @pytest.mark.asyncio
     async def test_close_with_running_init_task(self):
         """Test close behavior when initialization task is still running."""
-        with patch('src.common.sentiments.adapters.async_hf_sentiment.HF_AVAILABLE', True):
-            with patch('src.common.sentiments.adapters.async_hf_sentiment.pipeline') as mock_pipe_func:
+        with patch("src.common.sentiments.adapters.async_hf_sentiment.HF_AVAILABLE", True):
+            with patch("src.common.sentiments.adapters.async_hf_sentiment.pipeline") as mock_pipe_func:
                 # Make initialization slow
                 async def slow_init():
                     await asyncio.sleep(1.0)
@@ -396,9 +382,9 @@ class TestAsyncHFSentiment:
     @pytest.mark.asyncio
     async def test_default_model_from_env(self):
         """Test that default model can be set via environment variable."""
-        with patch('src.common.sentiments.adapters.async_hf_sentiment.HF_AVAILABLE', True):
-            with patch('src.common.sentiments.adapters.async_hf_sentiment.DEFAULT_MODEL', 'env-model'):
-                with patch('src.common.sentiments.adapters.async_hf_sentiment.pipeline') as mock_pipe_func:
+        with patch("src.common.sentiments.adapters.async_hf_sentiment.HF_AVAILABLE", True):
+            with patch("src.common.sentiments.adapters.async_hf_sentiment.DEFAULT_MODEL", "env-model"):
+                with patch("src.common.sentiments.adapters.async_hf_sentiment.pipeline") as mock_pipe_func:
                     mock_pipe_func.return_value = Mock()
 
                     adapter = AsyncHFSentiment()  # No model_name specified
@@ -407,7 +393,7 @@ class TestAsyncHFSentiment:
                         await adapter._init_task
 
                         # Should use the environment model
-                        assert adapter.model_name == 'env-model'
+                        assert adapter.model_name == "env-model"
 
                     finally:
                         await adapter.close()

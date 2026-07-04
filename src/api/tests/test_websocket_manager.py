@@ -7,24 +7,25 @@ Tests for WebSocket connection management, real-time communication,
 and message broadcasting functionality.
 """
 
-import pytest
 import asyncio
 import json
-from unittest.mock import Mock, AsyncMock, patch
+import sys
 from datetime import datetime
 from pathlib import Path
-import sys
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.api.websocket_manager import (
-    WebSocketConnection,
-    WebSocketManager,
+    BroadcastChannel,
     ConnectionManager,
     MessageType,
-    BroadcastChannel
+    WebSocketConnection,
+    WebSocketManager,
 )
 
 
@@ -35,9 +36,7 @@ class TestWebSocketConnection:
         """Set up test dependencies."""
         self.mock_websocket = AsyncMock()
         self.connection = WebSocketConnection(
-            websocket=self.mock_websocket,
-            user_id="test_user_123",
-            connection_id="conn_456"
+            websocket=self.mock_websocket, user_id="test_user_123", connection_id="conn_456"
         )
 
     def test_connection_initialization(self):
@@ -129,10 +128,7 @@ class TestConnectionManager:
     @pytest.mark.asyncio
     async def test_connect_user(self):
         """Test connecting a user."""
-        connection_id = await self.manager.connect(
-            websocket=self.mock_websocket1,
-            user_id="user_123"
-        )
+        connection_id = await self.manager.connect(websocket=self.mock_websocket1, user_id="user_123")
 
         assert connection_id is not None
         assert len(self.manager.active_connections) == 1
@@ -286,7 +282,7 @@ class TestWebSocketManager:
         mock_user.role = "trader"
 
         # Mock authentication
-        with patch('src.api.websocket_manager.get_current_user') as mock_auth:
+        with patch("src.api.websocket_manager.get_current_user") as mock_auth:
             mock_auth.return_value = mock_user
 
             # Mock WebSocket accept and receive
@@ -295,7 +291,7 @@ class TestWebSocketManager:
                 json.dumps({"type": "ping"}),
                 json.dumps({"type": "subscribe", "channel": "strategy_updates"}),
                 # Simulate disconnect
-                Exception("WebSocket disconnected")
+                Exception("WebSocket disconnected"),
             ]
 
             # Should handle connection without raising exception
@@ -309,7 +305,7 @@ class TestWebSocketManager:
         mock_websocket = AsyncMock()
 
         # Mock authentication failure
-        with patch('src.api.websocket_manager.get_current_user') as mock_auth:
+        with patch("src.api.websocket_manager.get_current_user") as mock_auth:
             mock_auth.side_effect = Exception("Invalid token")
 
             await self.manager.handle_connection(mock_websocket, "invalid_token")
@@ -376,12 +372,8 @@ class TestWebSocketManager:
     @pytest.mark.asyncio
     async def test_broadcast_strategy_update(self):
         """Test broadcasting strategy update."""
-        with patch.object(self.manager.connection_manager, 'broadcast_to_channel') as mock_broadcast:
-            strategy_data = {
-                "strategy_id": "test_strategy",
-                "status": "running",
-                "uptime": 3600
-            }
+        with patch.object(self.manager.connection_manager, "broadcast_to_channel") as mock_broadcast:
+            strategy_data = {"strategy_id": "test_strategy", "status": "running", "uptime": 3600}
 
             await self.manager.broadcast_strategy_update(strategy_data)
 
@@ -394,12 +386,8 @@ class TestWebSocketManager:
     @pytest.mark.asyncio
     async def test_broadcast_system_metrics(self):
         """Test broadcasting system metrics."""
-        with patch.object(self.manager.connection_manager, 'broadcast_to_channel') as mock_broadcast:
-            metrics_data = {
-                "cpu_percent": 25.5,
-                "memory_percent": 60.2,
-                "timestamp": "2024-01-01T00:00:00Z"
-            }
+        with patch.object(self.manager.connection_manager, "broadcast_to_channel") as mock_broadcast:
+            metrics_data = {"cpu_percent": 25.5, "memory_percent": 60.2, "timestamp": "2024-01-01T00:00:00Z"}
 
             await self.manager.broadcast_system_metrics(metrics_data)
 
@@ -412,12 +400,8 @@ class TestWebSocketManager:
     @pytest.mark.asyncio
     async def test_broadcast_notification(self):
         """Test broadcasting notification."""
-        with patch.object(self.manager.connection_manager, 'broadcast_to_all') as mock_broadcast:
-            notification = {
-                "title": "Test Notification",
-                "message": "This is a test",
-                "severity": "info"
-            }
+        with patch.object(self.manager.connection_manager, "broadcast_to_all") as mock_broadcast:
+            notification = {"title": "Test Notification", "message": "This is a test", "severity": "info"}
 
             await self.manager.broadcast_notification(notification)
 
@@ -428,11 +412,8 @@ class TestWebSocketManager:
 
     def test_get_manager_stats(self):
         """Test getting manager statistics."""
-        with patch.object(self.manager.connection_manager, 'get_connection_stats') as mock_stats:
-            mock_stats.return_value = {
-                "total_connections": 5,
-                "unique_users": 3
-            }
+        with patch.object(self.manager.connection_manager, "get_connection_stats") as mock_stats:
+            mock_stats.return_value = {"total_connections": 5, "unique_users": 3}
 
             stats = self.manager.get_manager_stats()
 
@@ -457,21 +438,21 @@ class TestMessageTypes:
 
     def test_message_type_constants(self):
         """Test message type constants are defined."""
-        assert hasattr(MessageType, 'PING')
-        assert hasattr(MessageType, 'PONG')
-        assert hasattr(MessageType, 'SUBSCRIBE')
-        assert hasattr(MessageType, 'UNSUBSCRIBE')
-        assert hasattr(MessageType, 'STRATEGY_UPDATE')
-        assert hasattr(MessageType, 'SYSTEM_METRICS')
-        assert hasattr(MessageType, 'NOTIFICATION')
-        assert hasattr(MessageType, 'ERROR')
+        assert hasattr(MessageType, "PING")
+        assert hasattr(MessageType, "PONG")
+        assert hasattr(MessageType, "SUBSCRIBE")
+        assert hasattr(MessageType, "UNSUBSCRIBE")
+        assert hasattr(MessageType, "STRATEGY_UPDATE")
+        assert hasattr(MessageType, "SYSTEM_METRICS")
+        assert hasattr(MessageType, "NOTIFICATION")
+        assert hasattr(MessageType, "ERROR")
 
     def test_broadcast_channel_constants(self):
         """Test broadcast channel constants are defined."""
-        assert hasattr(BroadcastChannel, 'STRATEGY_UPDATES')
-        assert hasattr(BroadcastChannel, 'SYSTEM_METRICS')
-        assert hasattr(BroadcastChannel, 'NOTIFICATIONS')
-        assert hasattr(BroadcastChannel, 'ALERTS')
+        assert hasattr(BroadcastChannel, "STRATEGY_UPDATES")
+        assert hasattr(BroadcastChannel, "SYSTEM_METRICS")
+        assert hasattr(BroadcastChannel, "NOTIFICATIONS")
+        assert hasattr(BroadcastChannel, "ALERTS")
 
 
 if __name__ == "__main__":

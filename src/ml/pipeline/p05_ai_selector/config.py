@@ -36,10 +36,26 @@ LLM_MAX_TOKENS = 16384
 # Universe
 # ---------------------------------------------------------------------------
 CRYPTO_TICKERS: List[str] = [
-    "BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD", "ADA-USD",
-    "AVAX-USD", "DOT-USD", "LINK-USD", "MATIC-USD", "UNI-USD",
-    "XRP-USD", "LTC-USD", "ATOM-USD", "NEAR-USD", "ICP-USD",
-    "FIL-USD", "APT-USD", "ARB-USD", "OP-USD", "DOGE-USD",
+    "BTC-USD",
+    "ETH-USD",
+    "BNB-USD",
+    "SOL-USD",
+    "ADA-USD",
+    "AVAX-USD",
+    "DOT-USD",
+    "LINK-USD",
+    "MATIC-USD",
+    "UNI-USD",
+    "XRP-USD",
+    "LTC-USD",
+    "ATOM-USD",
+    "NEAR-USD",
+    "ICP-USD",
+    "FIL-USD",
+    "APT-USD",
+    "ARB-USD",
+    "OP-USD",
+    "DOGE-USD",
 ]
 
 # ---------------------------------------------------------------------------
@@ -91,6 +107,7 @@ P18_WEIGHTS: Dict[str, int] = {
 @dataclass
 class P05Config:
     """Consolidated config dataclass for dependency injection in tests."""
+
     crypto_tickers: List[str] = field(default_factory=lambda: CRYPTO_TICKERS)
     min_price: float = MIN_PRICE
     min_avg_daily_volume_usd: float = MIN_AVG_DAILY_VOLUME_USD

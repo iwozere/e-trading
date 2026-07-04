@@ -1,8 +1,8 @@
 """Tests for Stage3LLMSynthesizer — mocks the Anthropic client."""
 
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -16,28 +16,30 @@ from src.ml.pipeline.p05_ai_selector.stages.stage3_llm_synthesizer import Stage3
 def _make_stage2_df(n: int = 5) -> pd.DataFrame:
     rows = []
     for i in range(n):
-        rows.append({
-            "ticker": f"TICK{i}",
-            "asset_type": "equity",
-            "last_price": 100.0 + i,
-            "market_cap_b": 5.0,
-            "total_score": 100.0 - i * 5,
-            "momentum_score": 30.0,
-            "fundamental_score": 20.0,
-            "p18_score": 0.0,
-            "volume_surge_ratio": 1.2,
-            "earnings_flag": False,
-            "earnings_date": "",
-            "fundamentals_available": True,
-            "signal_breakdown": "{}",
-        })
+        rows.append(
+            {
+                "ticker": f"TICK{i}",
+                "asset_type": "equity",
+                "last_price": 100.0 + i,
+                "market_cap_b": 5.0,
+                "total_score": 100.0 - i * 5,
+                "momentum_score": 30.0,
+                "fundamental_score": 20.0,
+                "p18_score": 0.0,
+                "volume_surge_ratio": 1.2,
+                "earnings_flag": False,
+                "earnings_date": "",
+                "fundamentals_available": True,
+                "signal_breakdown": "{}",
+            }
+        )
     return pd.DataFrame(rows)
 
 
 def _make_mock_pick(rank: int = 1, confidence: int = 7) -> dict:
     return {
         "rank": rank,
-        "ticker": f"TICK{rank-1}",
+        "ticker": f"TICK{rank - 1}",
         "confidence": confidence,
         "bias": "long",
         "thesis": "A compelling thesis.",
@@ -47,9 +49,7 @@ def _make_mock_pick(rank: int = 1, confidence: int = 7) -> dict:
             "add_conditions": ["Dip to $90 on volume"],
             "hold_conditions": ["Revenue growth > 10%"],
             "thesis_breakers": ["Revenue misses by >5%", "CEO departure"],
-            "profit_targets": [
-                {"price_level": 120, "action": "Trim 25%", "note": "lock gains"}
-            ],
+            "profit_targets": [{"price_level": 120, "action": "Trim 25%", "note": "lock gains"}],
             "time_horizon_note": "Patience is the edge here.",
         },
     }
@@ -77,9 +77,12 @@ def _make_mock_claude_response(
 
 @pytest.fixture()
 def synthesizer():
-    with patch("src.ml.pipeline.p05_ai_selector.stages.stage3_llm_synthesizer.Stage3LLMSynthesizer.__init__",
-               lambda self, api_key="", model="claude-sonnet-4-6": setattr(self, "_api_key", "fake") or
-               setattr(self, "_model", "claude-sonnet-4-6")):
+    with patch(
+        "src.ml.pipeline.p05_ai_selector.stages.stage3_llm_synthesizer.Stage3LLMSynthesizer.__init__",
+        lambda self, api_key="", model="claude-sonnet-4-6": (
+            setattr(self, "_api_key", "fake") or setattr(self, "_model", "claude-sonnet-4-6")
+        ),
+    ):
         s = Stage3LLMSynthesizer.__new__(Stage3LLMSynthesizer)
         s._api_key = "fake-key"
         s._model = "claude-sonnet-4-6"
@@ -93,8 +96,16 @@ class TestBuildDataPackets:
         packets = synthesizer._build_data_packets(df)
 
         assert len(packets) == 3
-        required_keys = {"ticker", "asset_type", "price", "technicals", "fundamentals",
-                         "institutional_flow", "contextual", "deterministic_score"}
+        required_keys = {
+            "ticker",
+            "asset_type",
+            "price",
+            "technicals",
+            "fundamentals",
+            "institutional_flow",
+            "contextual",
+            "deterministic_score",
+        }
         for packet in packets:
             assert required_keys.issubset(packet.keys())
 
@@ -103,11 +114,14 @@ class TestParseResponse:
     def test_parse_response_valid(self, synthesizer):
         """Valid tool response is parsed correctly."""
         picks = [_make_mock_pick(i + 1) for i in range(5)]
-        raw = {"tool_input": {
-            "picks": picks,
-            "market_context": "Positive backdrop.",
-            "notification_override": False,
-        }, "tokens_used": 11000}
+        raw = {
+            "tool_input": {
+                "picks": picks,
+                "market_context": "Positive backdrop.",
+                "notification_override": False,
+            },
+            "tokens_used": 11000,
+        }
 
         result = synthesizer._parse_response(raw)
         assert len(result["picks"]) == 5
@@ -123,22 +137,28 @@ class TestParseResponse:
     def test_notification_override_extracted(self, synthesizer):
         """notification_override=True is passed through."""
         picks = [_make_mock_pick(i + 1) for i in range(5)]
-        raw = {"tool_input": {
-            "picks": picks,
-            "market_context": "",
-            "notification_override": True,
-        }, "tokens_used": 5000}
+        raw = {
+            "tool_input": {
+                "picks": picks,
+                "market_context": "",
+                "notification_override": True,
+            },
+            "tokens_used": 5000,
+        }
         result = synthesizer._parse_response(raw)
         assert result["notification_override"] is True
 
     def test_high_confidence_sets_override(self, synthesizer):
         """A pick with confidence >= 9 auto-sets notification_override even if LLM returned False."""
         picks = [_make_mock_pick(i + 1, confidence=9 if i == 0 else 7) for i in range(5)]
-        raw = {"tool_input": {
-            "picks": picks,
-            "market_context": "",
-            "notification_override": False,
-        }, "tokens_used": 5000}
+        raw = {
+            "tool_input": {
+                "picks": picks,
+                "market_context": "",
+                "notification_override": False,
+            },
+            "tokens_used": 5000,
+        }
         result = synthesizer._parse_response(raw)
         assert result["notification_override"] is True
 

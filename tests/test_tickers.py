@@ -6,10 +6,11 @@ Test script for the refactored tickers_list.py
 from src.util.tickers_list import (
     get_all_us_tickers,
     get_us_delisted_tickers,
-    get_us_small_cap_tickers,
+    get_us_large_cap_tickers,
     get_us_medium_cap_tickers,
-    get_us_large_cap_tickers
+    get_us_small_cap_tickers,
 )
+
 
 def test_ticker_loading():
     """Test that all ticker functions load data correctly"""
@@ -35,6 +36,7 @@ def test_ticker_loading():
             print(f"✗ {name}: Error - {str(e)}")
 
     print("\nAll tests completed!")
+
 
 if __name__ == "__main__":
     test_ticker_loading()

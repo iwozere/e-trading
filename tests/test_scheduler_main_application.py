@@ -7,20 +7,21 @@ Tests the complete main application functionality including:
 - Graceful shutdown and cleanup
 """
 
-import pytest
 import asyncio
 import os
 import signal
 import sys
-from unittest.mock import Mock, AsyncMock, patch
 from pathlib import Path
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 # Add src to path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.scheduler.main import SchedulerApplication, setup_signal_handlers, main
 from src.scheduler.config import SchedulerServiceConfig
+from src.scheduler.main import SchedulerApplication, main, setup_signal_handlers
 
 
 @pytest.fixture
@@ -39,21 +40,16 @@ def test_config():
 @pytest.fixture
 def mock_dependencies():
     """Create mock dependencies for testing."""
-    mocks = {
-        'scheduler_service': Mock(),
-        'notification_client': Mock()
-    }
+    mocks = {"scheduler_service": Mock(), "notification_client": Mock()}
 
     # Setup async methods
-    mocks['notification_client'].close = AsyncMock()
-    mocks['scheduler_service'].start = AsyncMock()
-    mocks['scheduler_service'].stop = AsyncMock()
-    mocks['scheduler_service'].reload_schedules = AsyncMock(return_value=5)
-    mocks['scheduler_service'].get_scheduler_status = Mock(return_value={
-        "is_running": True,
-        "job_count": 3,
-        "scheduler_state": "running"
-    })
+    mocks["notification_client"].close = AsyncMock()
+    mocks["scheduler_service"].start = AsyncMock()
+    mocks["scheduler_service"].stop = AsyncMock()
+    mocks["scheduler_service"].reload_schedules = AsyncMock(return_value=5)
+    mocks["scheduler_service"].get_scheduler_status = Mock(
+        return_value={"is_running": True, "job_count": 3, "scheduler_state": "running"}
+    )
 
     return mocks
 
@@ -125,9 +121,9 @@ class TestSchedulerApplicationLifecycle:
         """Test successful application startup."""
         app = SchedulerApplication(test_config)
 
-        with patch.object(app, 'initialize_services', new_callable=AsyncMock) as mock_init:
+        with patch.object(app, "initialize_services", new_callable=AsyncMock) as mock_init:
             # Mock the scheduler service
-            app.scheduler_service = mock_dependencies['scheduler_service']
+            app.scheduler_service = mock_dependencies["scheduler_service"]
             mock_init.return_value = None
 
             # Start application
@@ -135,14 +131,14 @@ class TestSchedulerApplicationLifecycle:
 
             # Verify initialization and startup
             mock_init.assert_called_once()
-            mock_dependencies['scheduler_service'].start.assert_called_once()
+            mock_dependencies["scheduler_service"].start.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_application_start_initialization_failure(self, test_config):
         """Test application startup with initialization failure."""
         app = SchedulerApplication(test_config)
 
-        with patch.object(app, 'initialize_services', side_effect=Exception("Init failed")):
+        with patch.object(app, "initialize_services", side_effect=Exception("Init failed")):
             # Should raise exception on startup failure
             with pytest.raises(Exception, match="Init failed"):
                 await app.start()
@@ -152,10 +148,10 @@ class TestSchedulerApplicationLifecycle:
         """Test application startup with scheduler service failure."""
         app = SchedulerApplication(test_config)
 
-        with patch.object(app, 'initialize_services', new_callable=AsyncMock):
+        with patch.object(app, "initialize_services", new_callable=AsyncMock):
             # Mock scheduler service to fail on start
-            app.scheduler_service = mock_dependencies['scheduler_service']
-            mock_dependencies['scheduler_service'].start.side_effect = Exception("Scheduler start failed")
+            app.scheduler_service = mock_dependencies["scheduler_service"]
+            mock_dependencies["scheduler_service"].start.side_effect = Exception("Scheduler start failed")
 
             # Should raise exception on scheduler start failure
             with pytest.raises(Exception, match="Scheduler start failed"):
@@ -167,15 +163,15 @@ class TestSchedulerApplicationLifecycle:
         app = SchedulerApplication(test_config)
 
         # Setup services
-        app.scheduler_service = mock_dependencies['scheduler_service']
-        app.notification_client = mock_dependencies['notification_client']
+        app.scheduler_service = mock_dependencies["scheduler_service"]
+        app.notification_client = mock_dependencies["notification_client"]
 
         # Stop application
         await app.stop()
 
         # Verify shutdown sequence
-        mock_dependencies['scheduler_service'].stop.assert_called_once()
-        mock_dependencies['notification_client'].close.assert_called_once()
+        mock_dependencies["scheduler_service"].stop.assert_called_once()
+        mock_dependencies["notification_client"].close.assert_called_once()
         assert app._shutdown_event.is_set()
 
     @pytest.mark.asyncio
@@ -184,10 +180,10 @@ class TestSchedulerApplicationLifecycle:
         app = SchedulerApplication(test_config)
 
         # Setup services with stop failures
-        app.scheduler_service = mock_dependencies['scheduler_service']
-        app.notification_client = mock_dependencies['notification_client']
-        mock_dependencies['scheduler_service'].stop.side_effect = Exception("Stop failed")
-        mock_dependencies['notification_client'].close.side_effect = Exception("Close failed")
+        app.scheduler_service = mock_dependencies["scheduler_service"]
+        app.notification_client = mock_dependencies["notification_client"]
+        mock_dependencies["scheduler_service"].stop.side_effect = Exception("Stop failed")
+        mock_dependencies["notification_client"].close.side_effect = Exception("Close failed")
 
         # Should handle errors gracefully
         with pytest.raises(Exception, match="Stop failed"):
@@ -235,14 +231,14 @@ class TestSchedulerApplicationOperations:
     async def test_reload_schedules_success(self, test_config, mock_dependencies):
         """Test successful schedule reloading."""
         app = SchedulerApplication(test_config)
-        app.scheduler_service = mock_dependencies['scheduler_service']
+        app.scheduler_service = mock_dependencies["scheduler_service"]
 
         # Test reload
         count = await app.reload_schedules()
 
         # Verify reload was called and count returned
         assert count == 5
-        mock_dependencies['scheduler_service'].reload_schedules.assert_called_once()
+        mock_dependencies["scheduler_service"].reload_schedules.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_reload_schedules_not_initialized(self, test_config):
@@ -269,7 +265,7 @@ class TestSchedulerApplicationOperations:
     def test_get_status_with_scheduler(self, test_config, mock_dependencies):
         """Test getting status when scheduler service is initialized."""
         app = SchedulerApplication(test_config)
-        app.scheduler_service = mock_dependencies['scheduler_service']
+        app.scheduler_service = mock_dependencies["scheduler_service"]
 
         status = app.get_status()
 
@@ -277,7 +273,7 @@ class TestSchedulerApplicationOperations:
         assert status["service"] == test_config.service.name
         assert status["scheduler"]["is_running"] is True
         assert status["scheduler"]["job_count"] == 3
-        mock_dependencies['scheduler_service'].get_scheduler_status.assert_called_once()
+        mock_dependencies["scheduler_service"].get_scheduler_status.assert_called_once()
 
     def test_get_status_database_url_masking(self, test_config):
         """Test that database URL is properly masked in status."""
@@ -313,7 +309,7 @@ class TestConfigurationLoading:
             "NOTIFICATION_SERVICE_URL": "http://test-notification:9000",
             "NOTIFICATION_TIMEOUT": "45",
             "TRADING_ENV": "staging",
-            "LOG_LEVEL": "DEBUG"
+            "LOG_LEVEL": "DEBUG",
         }
 
         with patch.dict(os.environ, test_env):
@@ -383,7 +379,7 @@ class TestSignalHandling:
         app = SchedulerApplication(test_config)
 
         # Mock signal.signal to verify calls
-        with patch('signal.signal') as mock_signal:
+        with patch("signal.signal") as mock_signal:
             setup_signal_handlers(app)
 
             # Verify signal handlers were registered
@@ -399,15 +395,16 @@ class TestSignalHandling:
         app = SchedulerApplication(test_config)
 
         # Mock asyncio.create_task to verify shutdown is called
-        with patch('asyncio.create_task') as mock_create_task, \
-             patch.object(app, 'stop', new_callable=AsyncMock) as mock_stop:
-
+        with (
+            patch("asyncio.create_task") as mock_create_task,
+            patch.object(app, "stop", new_callable=AsyncMock) as mock_stop,
+        ):
             # Setup signal handlers
             setup_signal_handlers(app)
 
             # Simulate signal reception
             # Get the signal handler function
-            with patch('signal.signal') as mock_signal:
+            with patch("signal.signal") as mock_signal:
                 setup_signal_handlers(app)
                 signal_handler = mock_signal.call_args_list[0][0][1]
 
@@ -424,10 +421,11 @@ class TestMainFunction:
     @pytest.mark.asyncio
     async def test_main_function_success(self):
         """Test successful main function execution."""
-        with patch('src.scheduler.main.SchedulerServiceConfig') as mock_config_class, \
-             patch('src.scheduler.main.SchedulerApplication') as mock_app_class, \
-             patch('src.scheduler.main.setup_signal_handlers') as mock_setup_signals:
-
+        with (
+            patch("src.scheduler.main.SchedulerServiceConfig") as mock_config_class,
+            patch("src.scheduler.main.SchedulerApplication") as mock_app_class,
+            patch("src.scheduler.main.setup_signal_handlers") as mock_setup_signals,
+        ):
             # Setup mocks
             mock_config = Mock()
             mock_config_class.return_value = mock_config
@@ -452,10 +450,11 @@ class TestMainFunction:
     @pytest.mark.asyncio
     async def test_main_function_keyboard_interrupt(self):
         """Test main function handling keyboard interrupt."""
-        with patch('src.scheduler.main.SchedulerServiceConfig') as mock_config_class, \
-             patch('src.scheduler.main.SchedulerApplication') as mock_app_class, \
-             patch('src.scheduler.main.setup_signal_handlers'):
-
+        with (
+            patch("src.scheduler.main.SchedulerServiceConfig") as mock_config_class,
+            patch("src.scheduler.main.SchedulerApplication") as mock_app_class,
+            patch("src.scheduler.main.setup_signal_handlers"),
+        ):
             # Setup mocks
             mock_config = Mock()
             mock_config_class.return_value = mock_config
@@ -475,11 +474,12 @@ class TestMainFunction:
     @pytest.mark.asyncio
     async def test_main_function_application_error(self):
         """Test main function handling application errors."""
-        with patch('src.scheduler.main.SchedulerServiceConfig') as mock_config_class, \
-             patch('src.scheduler.main.SchedulerApplication') as mock_app_class, \
-             patch('src.scheduler.main.setup_signal_handlers'), \
-             patch('sys.exit') as mock_exit:
-
+        with (
+            patch("src.scheduler.main.SchedulerServiceConfig") as mock_config_class,
+            patch("src.scheduler.main.SchedulerApplication") as mock_app_class,
+            patch("src.scheduler.main.setup_signal_handlers"),
+            patch("sys.exit") as mock_exit,
+        ):
             # Setup mocks
             mock_config = Mock()
             mock_config_class.return_value = mock_config
@@ -499,9 +499,10 @@ class TestMainFunction:
     @pytest.mark.asyncio
     async def test_main_function_config_error(self):
         """Test main function handling configuration errors."""
-        with patch('src.scheduler.main.SchedulerServiceConfig', side_effect=Exception("Config error")), \
-             patch('sys.exit') as mock_exit:
-
+        with (
+            patch("src.scheduler.main.SchedulerServiceConfig", side_effect=Exception("Config error")),
+            patch("sys.exit") as mock_exit,
+        ):
             # Run main function (should handle config error and exit)
             await main()
 
@@ -517,8 +518,7 @@ class TestIntegrationScenarios:
         """Test complete application lifecycle from start to stop."""
         app = SchedulerApplication(test_config)
 
-        with patch.object(app, 'initialize_services', new_callable=AsyncMock) as mock_init:
-
+        with patch.object(app, "initialize_services", new_callable=AsyncMock) as mock_init:
             # Setup mock services
             mock_scheduler = Mock()
             mock_scheduler.start = AsyncMock()
@@ -561,7 +561,7 @@ class TestIntegrationScenarios:
         app = SchedulerApplication(test_config)
 
         # Test that initialization failure is handled properly
-        with patch.object(app, 'initialize_services', side_effect=Exception("Service unavailable")):
+        with patch.object(app, "initialize_services", side_effect=Exception("Service unavailable")):
             with pytest.raises(Exception, match="Service unavailable"):
                 await app.start()
 
@@ -569,17 +569,14 @@ class TestIntegrationScenarios:
     async def test_concurrent_operations(self, test_config, mock_dependencies):
         """Test concurrent application operations."""
         app = SchedulerApplication(test_config)
-        app.scheduler_service = mock_dependencies['scheduler_service']
+        app.scheduler_service = mock_dependencies["scheduler_service"]
 
         # Test concurrent status checks and reloads
         async def get_status_async():
             return app.get_status()
 
         results = await asyncio.gather(
-            get_status_async(),
-            app.reload_schedules(),
-            get_status_async(),
-            return_exceptions=True
+            get_status_async(), app.reload_schedules(), get_status_async(), return_exceptions=True
         )
 
         # Verify all operations completed

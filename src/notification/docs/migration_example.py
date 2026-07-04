@@ -5,18 +5,20 @@ This example shows how to migrate from AsyncNotificationManager to NotificationS
 """
 
 import asyncio
-from pathlib import Path
 import sys
+from pathlib import Path
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.service.client import (
-    NotificationServiceClient, MessageType, MessagePriority,
-    initialize_notification_client
-)
 from src.notification.logger import setup_logger
+from src.notification.service.client import (
+    MessagePriority,
+    MessageType,
+    NotificationServiceClient,
+    initialize_notification_client,
+)
 
 _logger = setup_logger(__name__)
 
@@ -27,12 +29,13 @@ class LegacyService:
     def __init__(self):
         # OLD: Import and initialize AsyncNotificationManager
         from src.notification.async_notification_manager import AsyncNotificationManager
+
         self.notification_manager = AsyncNotificationManager(
             telegram_token="your_token",
             telegram_chat_id="your_chat_id",
             email_api_key="your_api_key",
             email_sender="sender@example.com",
-            email_receiver="receiver@example.com"
+            email_receiver="receiver@example.com",
         )
 
     async def start(self):
@@ -53,26 +56,20 @@ class LegacyService:
             title=f"Price Alert: {symbol}",
             message=f"Price reached ${price:.2f}",
             priority="high",
-            source="legacy_service"
+            source="legacy_service",
         )
 
     async def send_trade_notification(self, symbol: str, side: str, price: float, quantity: float):
         """Send a trade notification."""
         # OLD: Use AsyncNotificationManager trade method
         await self.notification_manager.send_trade_notification(
-            symbol=symbol,
-            side=side,
-            price=price,
-            quantity=quantity
+            symbol=symbol, side=side, price=price, quantity=quantity
         )
 
     async def send_error(self, error_message: str):
         """Send an error notification."""
         # OLD: Use AsyncNotificationManager error method
-        await self.notification_manager.send_error_notification(
-            error_message=error_message,
-            source="legacy_service"
-        )
+        await self.notification_manager.send_error_notification(error_message=error_message, source="legacy_service")
 
 
 class ModernService:
@@ -102,7 +99,7 @@ class ModernService:
             priority=MessagePriority.HIGH,
             source="modern_service",
             channels=["telegram", "email"],
-            recipient_id="trader_1"
+            recipient_id="trader_1",
         )
 
         if not success:
@@ -112,11 +109,7 @@ class ModernService:
         """Send a trade notification."""
         # NEW: Use NotificationServiceClient trade method (same interface)
         success = await self.notification_client.send_trade_notification(
-            symbol=symbol,
-            side=side,
-            price=price,
-            quantity=quantity,
-            recipient_id="trader_1"
+            symbol=symbol, side=side, price=price, quantity=quantity, recipient_id="trader_1"
         )
 
         if not success:
@@ -126,9 +119,7 @@ class ModernService:
         """Send an error notification."""
         # NEW: Use NotificationServiceClient error method (same interface)
         success = await self.notification_client.send_error_notification(
-            error_message=error_message,
-            source="modern_service",
-            recipient_id="admin"
+            error_message=error_message, source="modern_service", recipient_id="admin"
         )
 
         if not success:
@@ -143,9 +134,7 @@ async def migration_example():
     # Step 1: Initialize the new notification service client
     print("1. Initializing NotificationServiceClient...")
     notification_client = await initialize_notification_client(
-        service_url="http://localhost:8000",
-        timeout=30,
-        max_retries=3
+        service_url="http://localhost:8000", timeout=30, max_retries=3
     )
     print("   ✓ NotificationServiceClient initialized\n")
 
@@ -246,7 +235,7 @@ For each service that uses AsyncNotificationManager:
 
 if __name__ == "__main__":
     print_migration_checklist()
-    print("\n" + "="*60 + "\n")
+    print("\n" + "=" * 60 + "\n")
 
     # Run the migration example (requires notification service to be running)
     try:

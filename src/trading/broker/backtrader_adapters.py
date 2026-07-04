@@ -8,7 +8,7 @@ small and independently reviewable.
 """
 
 from src.trading.broker.backtrader_availability import BACKTRADER_AVAILABLE
-from src.trading.broker.models import Order, Position, Portfolio, OrderStatus
+from src.trading.broker.models import Order, OrderStatus, Portfolio, Position
 
 
 class BacktraderOrderAdapter:
@@ -68,7 +68,7 @@ class BacktraderOrderAdapter:
                 OrderStatus.REJECTED: bt.Order.Rejected,
                 OrderStatus.EXPIRED: bt.Order.Expired,
                 OrderStatus.SIMULATING: bt.Order.Submitted,
-                OrderStatus.QUEUED: bt.Order.Submitted
+                OrderStatus.QUEUED: bt.Order.Submitted,
             }
 
             return status_map.get(status, bt.Order.Created)
@@ -165,7 +165,7 @@ class BacktraderPositionAdapter:
     @property
     def pnlcomm(self):
         """P&L including commission."""
-        commission = getattr(self._position, 'commission_paid', 0.0)
+        commission = getattr(self._position, "commission_paid", 0.0)
         return self.pnl - commission
 
     def clone(self):
@@ -207,14 +207,11 @@ class BacktraderPortfolioAdapter:
     @property
     def positions(self):
         """Dictionary of positions adapted for backtrader."""
-        return {
-            symbol: BacktraderPositionAdapter(position)
-            for symbol, position in self._portfolio.positions.items()
-        }
+        return {symbol: BacktraderPositionAdapter(position) for symbol, position in self._portfolio.positions.items()}
 
     def get_position(self, data):
         """Get position for a specific data feed (backtrader compatibility)."""
-        symbol = getattr(data, '_name', 'UNKNOWN') if data else 'UNKNOWN'
+        symbol = getattr(data, "_name", "UNKNOWN") if data else "UNKNOWN"
         position = self._portfolio.positions.get(symbol)
         if position:
             return BacktraderPositionAdapter(position)

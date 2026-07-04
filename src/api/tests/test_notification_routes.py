@@ -2,7 +2,7 @@
 Tests for notification routes
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -19,7 +19,7 @@ def _patch_get_db(uow):
     service = MagicMock()
     service.uow.return_value.__enter__.return_value = uow
     service.uow.return_value.__exit__.return_value = False
-    return patch('src.api.notification_routes.get_database_service', return_value=service)
+    return patch("src.api.notification_routes.get_database_service", return_value=service)
 
 
 def _mock_created_message(message_id, priority="NORMAL"):
@@ -27,7 +27,7 @@ def _mock_created_message(message_id, priority="NORMAL"):
     created = MagicMock()
     created.id = message_id
     created.priority = priority
-    created.scheduled_for = datetime(2026, 6, 30, 12, 0, 0, tzinfo=timezone.utc)
+    created.scheduled_for = datetime(2026, 6, 30, 12, 0, 0, tzinfo=UTC)
     return created
 
 
@@ -55,10 +55,7 @@ def test_create_notification_endpoint_structure(authenticated_client_trader):
         "priority": "normal",
         "channels": ["telegram"],
         "recipient_id": "test_user",
-        "content": {
-            "title": "Test Alert",
-            "message": "This is a test alert"
-        }
+        "content": {"title": "Test Alert", "message": "This is a test alert"},
     }
 
     uow = MagicMock()
@@ -98,7 +95,7 @@ def test_send_alert_convenience_endpoint(authenticated_client_trader):
         "title": "Test Alert",
         "message": "This is a test alert message",
         "severity": "high",
-        "channels": ["telegram", "email"]
+        "channels": ["telegram", "email"],
     }
 
     uow = MagicMock()
@@ -121,7 +118,7 @@ def test_send_trade_convenience_endpoint(authenticated_client_trader):
         "quantity": 0.1,
         "price": 45000.0,
         "strategy_name": "test_strategy",
-        "channels": ["telegram"]
+        "channels": ["telegram"],
     }
 
     uow = MagicMock()
@@ -187,7 +184,7 @@ def test_notification_service_unavailable_handling(client: TestClient):
     service = MagicMock()
     service.uow.return_value.__enter__.side_effect = Exception("Connection failed")
 
-    with patch('src.api.notification_routes.get_database_service', return_value=service):
+    with patch("src.api.notification_routes.get_database_service", return_value=service):
         response = client.get("/api/notifications/health")
 
     # Health endpoint handles errors gracefully and still returns 200.
@@ -209,9 +206,7 @@ def test_get_notification_statistics(authenticated_client_viewer):
     # Each MessageStatus bucket reports 2 rows -> 5 statuses == 10 total messages.
     uow.s.query.return_value.filter.return_value.count.return_value = 2
 
-    with _patch_get_db(uow), patch(
-        'src.data.db.services.system_health_service.SystemHealthService'
-    ) as mock_health:
+    with _patch_get_db(uow), patch("src.data.db.services.system_health_service.SystemHealthService") as mock_health:
         mock_health.return_value.get_notification_channels_health.return_value = [
             {"channel": "telegram", "status": "healthy"}
         ]

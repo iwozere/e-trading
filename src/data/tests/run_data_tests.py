@@ -16,15 +16,15 @@ Examples:
     python run_data_tests.py --coverage         # Run with coverage report
 """
 
-import sys
-import os
-import time
 import argparse
+import os
 import subprocess
+import sys
+import time
 from datetime import datetime
 
 # Add the src directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 
 def run_tests(test_pattern, verbose=False, coverage=False):
@@ -126,10 +126,7 @@ def run_data_downloader_tests(verbose=False, coverage=False):
     print("Running Data Downloader Tests")
     print("=" * 80)
 
-    tests = [
-        "tests/test_data_downloaders.py",
-        "tests/test_base_data_downloader.py"
-    ]
+    tests = ["tests/test_data_downloaders.py", "tests/test_base_data_downloader.py"]
 
     all_passed = True
     for test in tests:
@@ -148,10 +145,7 @@ def run_live_feed_tests(verbose=False, coverage=False):
     print("Running Live Feed Tests")
     print("=" * 80)
 
-    tests = [
-        "tests/test_live_feeds.py",
-        "tests/test_live_data_feeds.py"
-    ]
+    tests = ["tests/test_live_feeds.py", "tests/test_live_data_feeds.py"]
 
     all_passed = True
     for test in tests:
@@ -170,9 +164,7 @@ def run_factory_tests(verbose=False, coverage=False):
     print("Running Factory Tests")
     print("=" * 80)
 
-    tests = [
-        "test_data_downloader_factory.py"
-    ]
+    tests = ["test_data_downloader_factory.py"]
 
     all_passed = True
     for test in tests:

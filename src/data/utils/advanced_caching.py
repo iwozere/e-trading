@@ -8,25 +8,27 @@ This module provides enhanced caching capabilities including:
 - Cache compression and optimization
 """
 
-import time
-import hashlib
-import pickle
 import gzip
-from typing import Any, Optional, Dict, List, Union
+import hashlib
+import logging
+import pickle
+import threading
+import time
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-import logging
-import threading
-from dataclasses import dataclass, asdict
+from typing import Any, Dict, List, Union
 
 try:
     import redis
+
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
 
 try:
     import zstandard as zstd
+
     ZSTD_AVAILABLE = True
 except ImportError:
     ZSTD_AVAILABLE = False
@@ -45,6 +47,7 @@ _logger = logging.getLogger(__name__)
 @dataclass
 class CacheMetrics:
     """Cache performance metrics."""
+
     hits: int = 0
     misses: int = 0
     sets: int = 0
@@ -103,13 +106,13 @@ class RedisCache:
 
     def __init__(
         self,
-        host: str = 'localhost',
+        host: str = "localhost",
         port: int = 6379,
         db: int = 0,
-        password: Optional[str] = None,
+        password: str | None = None,
         max_connections: int = 10,
         compression_enabled: bool = True,
-        default_ttl: int = 3600
+        default_ttl: int = 3600,
     ):
         """
         Initialize Redis cache.
@@ -140,7 +143,7 @@ class RedisCache:
             db=db,
             password=password,
             max_connections=max_connections,
-            decode_responses=False  # Keep as bytes for compression
+            decode_responses=False,  # Keep as bytes for compression
         )
 
         self.compressor = CacheCompressor() if compression_enabled else None
@@ -172,9 +175,7 @@ class RedisCache:
             compression_ratio = self.compressor.get_compression_ratio(serialized, compressed)
 
             with self._lock:
-                self.metrics.compression_ratio = (
-                    (self.metrics.compression_ratio + compression_ratio) / 2
-                )
+                self.metrics.compression_ratio = (self.metrics.compression_ratio + compression_ratio) / 2
 
             serialized = compressed
 
@@ -182,8 +183,8 @@ class RedisCache:
         with self._lock:
             self.metrics.total_size_bytes += len(serialized)
             self.metrics.avg_response_time_ms = (
-                (self.metrics.avg_response_time_ms + (time.time() - start_time) * 1000) / 2
-            )
+                self.metrics.avg_response_time_ms + (time.time() - start_time) * 1000
+            ) / 2
 
         return serialized
 
@@ -209,12 +210,12 @@ class RedisCache:
         # Update metrics
         with self._lock:
             self.metrics.avg_response_time_ms = (
-                (self.metrics.avg_response_time_ms + (time.time() - start_time) * 1000) / 2
-            )
+                self.metrics.avg_response_time_ms + (time.time() - start_time) * 1000
+            ) / 2
 
         return result
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Get value from cache."""
         start_time = time.time()
 
@@ -241,7 +242,7 @@ class RedisCache:
                 self.metrics.errors += 1
             return None
 
-    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
+    def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
         """Set value in cache."""
         try:
             redis_client = self._get_redis()
@@ -306,12 +307,12 @@ class RedisCache:
             redis_client = self._get_redis()
             info = redis_client.info()
             return {
-                'redis_version': info.get('redis_version'),
-                'connected_clients': info.get('connected_clients'),
-                'used_memory_human': info.get('used_memory_human'),
-                'total_commands_processed': info.get('total_commands_processed'),
-                'keyspace_hits': info.get('keyspace_hits'),
-                'keyspace_misses': info.get('keyspace_misses'),
+                "redis_version": info.get("redis_version"),
+                "connected_clients": info.get("connected_clients"),
+                "used_memory_human": info.get("used_memory_human"),
+                "total_commands_processed": info.get("total_commands_processed"),
+                "keyspace_hits": info.get("keyspace_hits"),
+                "keyspace_misses": info.get("keyspace_misses"),
             }
         except Exception:
             _logger.exception("Failed to get Redis info:")
@@ -340,7 +341,7 @@ class TimeBasedInvalidation(CacheInvalidationStrategy):
 
     def should_invalidate(self, key: str, metadata: Dict[str, Any]) -> bool:
         """Check if entry is too old."""
-        created_at = metadata.get('created_at')
+        created_at = metadata.get("created_at")
         if not created_at:
             return True
 
@@ -365,7 +366,7 @@ class VersionBasedInvalidation(CacheInvalidationStrategy):
 
     def should_invalidate(self, key: str, metadata: Dict[str, Any]) -> bool:
         """Check if entry version is outdated."""
-        cached_version = metadata.get('version')
+        cached_version = metadata.get("version")
         return cached_version != self.current_version
 
 
@@ -377,9 +378,9 @@ class AdvancedDataCache(DataCache):
         cache_dir: Union[str, Path] = DATA_CACHE_DIR,
         max_size_gb: float = 10.0,
         retention_days: int = 30,
-        redis_config: Optional[Dict[str, Any]] = None,
-        invalidation_strategies: Optional[List[CacheInvalidationStrategy]] = None,
-        compression_enabled: bool = True
+        redis_config: Dict[str, Any] | None = None,
+        invalidation_strategies: List[CacheInvalidationStrategy] | None = None,
+        compression_enabled: bool = True,
     ):
         """
         Initialize advanced data cache.
@@ -399,22 +400,20 @@ class AdvancedDataCache(DataCache):
         if redis_config and REDIS_AVAILABLE:
             try:
                 self.redis_cache = RedisCache(
-                    host=redis_config.get('host', 'localhost'),
-                    port=redis_config.get('port', 6379),
-                    db=redis_config.get('db', 0),
-                    password=redis_config.get('password'),
-                    max_connections=redis_config.get('max_connections', 10),
+                    host=redis_config.get("host", "localhost"),
+                    port=redis_config.get("port", 6379),
+                    db=redis_config.get("db", 0),
+                    password=redis_config.get("password"),
+                    max_connections=redis_config.get("max_connections", 10),
                     compression_enabled=compression_enabled,
-                    default_ttl=redis_config.get('default_ttl', 3600)
+                    default_ttl=redis_config.get("default_ttl", 3600),
                 )
                 _logger.info("Redis cache enabled")
             except Exception as e:
                 _logger.warning("Failed to initialize Redis cache: %s", e)
 
         # Initialize invalidation strategies
-        self.invalidation_strategies = invalidation_strategies or [
-            TimeBasedInvalidation(max_age_hours=24)
-        ]
+        self.invalidation_strategies = invalidation_strategies or [TimeBasedInvalidation(max_age_hours=24)]
 
         # Performance tracking
         self.metrics = CacheMetrics()
@@ -425,8 +424,8 @@ class AdvancedDataCache(DataCache):
         provider: str,
         symbol: str,
         interval: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
     ) -> str:
         """Create a standardized cache key."""
         key_parts = [provider, symbol, interval]
@@ -441,11 +440,11 @@ class AdvancedDataCache(DataCache):
     def _get_metadata(self, df: Any) -> Dict[str, Any]:
         """Generate metadata for cache entry."""
         return {
-            'created_at': datetime.now().isoformat(),
-            'version': '1.0.0',
-            'rows': len(df) if hasattr(df, '__len__') else 0,
-            'columns': list(df.columns) if hasattr(df, 'columns') else [],
-            'size_bytes': len(pickle.dumps(df)) if hasattr(df, '__len__') else 0
+            "created_at": datetime.now().isoformat(),
+            "version": "1.0.0",
+            "rows": len(df) if hasattr(df, "__len__") else 0,
+            "columns": list(df.columns) if hasattr(df, "columns") else [],
+            "size_bytes": len(pickle.dumps(df)) if hasattr(df, "__len__") else 0,
         }
 
     def _should_invalidate(self, metadata: Dict[str, Any]) -> bool:
@@ -460,10 +459,10 @@ class AdvancedDataCache(DataCache):
         provider: str,
         symbol: str,
         interval: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        file_format: str = "parquet"
-    ) -> Optional[Any]:
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        file_format: str = "parquet",
+    ) -> Any | None:
         """Get data from cache (Redis first, then file)."""
         start_time = time.time()
         cache_key = self._make_cache_key(provider, symbol, interval, start_date, end_date)
@@ -474,11 +473,11 @@ class AdvancedDataCache(DataCache):
                 result = self.redis_cache.get(cache_key)
                 if result is not None:
                     # Check if data should be invalidated
-                    metadata = result.get('metadata', {})
+                    metadata = result.get("metadata", {})
                     if not self._should_invalidate(metadata):
                         with self._lock:
                             self.metrics.hits += 1
-                        return result['data']
+                        return result["data"]
                     else:
                         # Invalidate outdated data
                         self.redis_cache.delete(cache_key)
@@ -509,9 +508,9 @@ class AdvancedDataCache(DataCache):
         provider: str,
         symbol: str,
         interval: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        file_format: str = "parquet"
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        file_format: str = "parquet",
     ) -> bool:
         """Put data in cache (both Redis and file)."""
         cache_key = self._make_cache_key(provider, symbol, interval, start_date, end_date)
@@ -522,10 +521,7 @@ class AdvancedDataCache(DataCache):
         # Store in Redis
         if self.redis_cache:
             try:
-                cache_data = {
-                    'data': df,
-                    'metadata': metadata
-                }
+                cache_data = {"data": df, "metadata": metadata}
                 success &= self.redis_cache.set(cache_key, cache_data)
             except Exception as e:
                 _logger.warning("Redis put failed: %s", e)
@@ -546,14 +542,11 @@ class AdvancedDataCache(DataCache):
 
     def get_metrics(self) -> Dict[str, Any]:
         """Get comprehensive cache metrics."""
-        metrics = {
-            'file_cache': super().get_stats(),
-            'advanced_metrics': asdict(self.metrics)
-        }
+        metrics = {"file_cache": super().get_stats(), "advanced_metrics": asdict(self.metrics)}
 
         if self.redis_cache:
-            metrics['redis_cache'] = self.redis_cache.get_metrics()
-            metrics['redis_info'] = self.redis_cache.get_info()
+            metrics["redis_cache"] = self.redis_cache.get_metrics()
+            metrics["redis_info"] = self.redis_cache.get_info()
 
         return metrics
 
@@ -577,13 +570,11 @@ class AdvancedDataCache(DataCache):
 
 
 # Global advanced cache instance
-_advanced_cache_instance: Optional[AdvancedDataCache] = None
+_advanced_cache_instance: AdvancedDataCache | None = None
 
 
 def get_advanced_cache(
-    cache_dir: Union[str, Path] = DATA_CACHE_DIR,
-    redis_config: Optional[Dict[str, Any]] = None,
-    **kwargs
+    cache_dir: Union[str, Path] = DATA_CACHE_DIR, redis_config: Dict[str, Any] | None = None, **kwargs
 ) -> AdvancedDataCache:
     """
     Get or create global advanced cache instance.
@@ -599,20 +590,16 @@ def get_advanced_cache(
     global _advanced_cache_instance
 
     if _advanced_cache_instance is None:
-        _advanced_cache_instance = AdvancedDataCache(
-            cache_dir=cache_dir,
-            redis_config=redis_config,
-            **kwargs
-        )
+        _advanced_cache_instance = AdvancedDataCache(cache_dir=cache_dir, redis_config=redis_config, **kwargs)
 
     return _advanced_cache_instance
 
 
 def configure_advanced_cache(
     cache_dir: Union[str, Path] = DATA_CACHE_DIR,
-    redis_config: Optional[Dict[str, Any]] = None,
-    invalidation_strategies: Optional[List[CacheInvalidationStrategy]] = None,
-    **kwargs
+    redis_config: Dict[str, Any] | None = None,
+    invalidation_strategies: List[CacheInvalidationStrategy] | None = None,
+    **kwargs,
 ) -> AdvancedDataCache:
     """
     Configure and return advanced cache instance.
@@ -629,10 +616,7 @@ def configure_advanced_cache(
     global _advanced_cache_instance
 
     _advanced_cache_instance = AdvancedDataCache(
-        cache_dir=cache_dir,
-        redis_config=redis_config,
-        invalidation_strategies=invalidation_strategies,
-        **kwargs
+        cache_dir=cache_dir, redis_config=redis_config, invalidation_strategies=invalidation_strategies, **kwargs
     )
 
     return _advanced_cache_instance

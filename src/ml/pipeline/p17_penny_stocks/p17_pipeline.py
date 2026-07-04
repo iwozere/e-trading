@@ -14,13 +14,13 @@ Each stage is wrapped in _run_job() for isolated error handling — a single
 failing stage does not abort the pipeline.
 """
 
+import logging
+import sys
 import time
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-import sys
-import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 import pandas as pd
 
@@ -28,18 +28,18 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
+from src.ml.pipeline.p17_penny_stocks.agents.catalyst_agent import CatalystAgent
+from src.ml.pipeline.p17_penny_stocks.agents.dilution_agent import DilutionAgent
+from src.ml.pipeline.p17_penny_stocks.agents.market_agent import MarketAgent
+from src.ml.pipeline.p17_penny_stocks.agents.notification_agent import NotificationAgent
+from src.ml.pipeline.p17_penny_stocks.agents.reporting_agent import ReportingAgent
+from src.ml.pipeline.p17_penny_stocks.agents.scoring_agent import ScoringAgent
+from src.ml.pipeline.p17_penny_stocks.agents.short_squeeze_agent import ShortSqueezeAgent
+from src.ml.pipeline.p17_penny_stocks.agents.technical_agent import TechnicalAgent
+from src.ml.pipeline.p17_penny_stocks.agents.universe_agent import UniverseAgent
 from src.ml.pipeline.p17_penny_stocks.config import P17PipelineConfig
 from src.ml.pipeline.p17_penny_stocks.models.candidate import Candidate
-from src.ml.pipeline.p17_penny_stocks.agents.universe_agent import UniverseAgent
-from src.ml.pipeline.p17_penny_stocks.agents.market_agent import MarketAgent
-from src.ml.pipeline.p17_penny_stocks.agents.technical_agent import TechnicalAgent
-from src.ml.pipeline.p17_penny_stocks.agents.short_squeeze_agent import ShortSqueezeAgent
-from src.ml.pipeline.p17_penny_stocks.agents.dilution_agent import DilutionAgent
-from src.ml.pipeline.p17_penny_stocks.agents.catalyst_agent import CatalystAgent
-from src.ml.pipeline.p17_penny_stocks.agents.scoring_agent import ScoringAgent
-from src.ml.pipeline.p17_penny_stocks.agents.reporting_agent import ReportingAgent
-from src.ml.pipeline.p17_penny_stocks.agents.notification_agent import NotificationAgent
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -64,8 +64,8 @@ class P17Pipeline:
 
     def __init__(
         self,
-        config: Optional[P17PipelineConfig] = None,
-        target_date: Optional[str] = None,
+        config: P17PipelineConfig | None = None,
+        target_date: str | None = None,
     ) -> None:
         self.config = config or P17PipelineConfig.create_default()
 
@@ -81,7 +81,8 @@ class P17Pipeline:
 
         _logger.info(
             "P17 Pipeline initialised (target_date=%s, results=%s)",
-            self.target_date, self._results_dir,
+            self.target_date,
+            self._results_dir,
         )
 
     # ── Agents ─────────────────────────────────────────────────────────────
@@ -89,28 +90,42 @@ class P17Pipeline:
     def _init_agents(self) -> None:
         cfg = self.config
         self._universe_agent = UniverseAgent(
-            cfg.filter_config, cfg.universe_config,
-            self._results_dir, self.target_date,
+            cfg.filter_config,
+            cfg.universe_config,
+            self._results_dir,
+            self.target_date,
         )
         self._market_agent = MarketAgent(
-            cfg.filter_config, self._results_dir, self.target_date,
+            cfg.filter_config,
+            self._results_dir,
+            self.target_date,
         )
         self._technical_agent = TechnicalAgent(cfg.technical_config)
         self._ss_agent = ShortSqueezeAgent(
-            cfg.short_squeeze_config, self._results_dir, self.target_date,
+            cfg.short_squeeze_config,
+            self._results_dir,
+            self.target_date,
         )
         self._dilution_agent = DilutionAgent(
-            cfg.scoring_config, self._results_dir, self.target_date,
+            cfg.scoring_config,
+            self._results_dir,
+            self.target_date,
         )
         self._catalyst_agent = CatalystAgent(
-            cfg.catalyst_config, self._results_dir, self.target_date,
+            cfg.catalyst_config,
+            self._results_dir,
+            self.target_date,
         )
         self._scoring_agent = ScoringAgent(cfg.scoring_config, self._ss_agent)
         self._reporting_agent = ReportingAgent(
-            cfg.scoring_config, self._results_dir, self.target_date,
+            cfg.scoring_config,
+            self._results_dir,
+            self.target_date,
         )
         self._notification_agent = NotificationAgent(
-            cfg.alert_config, self.target_date, cfg.user_id,
+            cfg.alert_config,
+            self.target_date,
+            cfg.user_id,
         )
 
     # ── Run ────────────────────────────────────────────────────────────────
@@ -118,7 +133,7 @@ class P17Pipeline:
     def run(
         self,
         force_refresh: bool = False,
-        tickers: Optional[List[str]] = None,
+        tickers: List[str] | None = None,
     ) -> Dict[str, Any]:
         """
         Execute all pipeline stages.
@@ -162,9 +177,7 @@ class P17Pipeline:
             ohlcv, fundamentals = self._market_agent.run(ticker_list, force_refresh)
 
             # Survival filter (cash runway, debt/cash)
-            survived = self._market_agent.apply_survival_filter(
-                ticker_list, fundamentals, self.config.filter_config
-            )
+            survived = self._market_agent.apply_survival_filter(ticker_list, fundamentals, self.config.filter_config)
             return {"ohlcv_tickers": len(ohlcv), "survived_survival": len(survived)}
 
         job_results["market"] = self._run_job("Stage2 Market", stage2)
@@ -247,8 +260,10 @@ class P17Pipeline:
         _logger.info(
             "Result: %d candidates | A=%d B=%d C=%d | explosive=%d",
             len(candidates),
-            report_meta.get("tier_a", 0), report_meta.get("tier_b", 0),
-            report_meta.get("tier_c", 0), report_meta.get("explosive", 0),
+            report_meta.get("tier_a", 0),
+            report_meta.get("tier_b", 0),
+            report_meta.get("tier_c", 0),
+            report_meta.get("explosive", 0),
         )
         _logger.info("=" * 70)
 
@@ -313,7 +328,7 @@ class P17Pipeline:
             _logger.warning("Could not save intermediate CSV: %s", filename)
 
     @staticmethod
-    def _run_job(name: str, fn: Callable[[], Optional[Dict]]) -> Dict:
+    def _run_job(name: str, fn: Callable[[], Dict | None]) -> Dict:
         t0 = time.monotonic()
         try:
             extra = fn() or {}
@@ -338,13 +353,9 @@ class P17Pipeline:
 
     def _setup_pipeline_logging(self) -> None:
         log_file = self._results_dir / "pipeline.log"
-        handler = RotatingFileHandler(
-            str(log_file), maxBytes=100 * 1024 * 1024, backupCount=3, encoding="utf-8"
-        )
+        handler = RotatingFileHandler(str(log_file), maxBytes=100 * 1024 * 1024, backupCount=3, encoding="utf-8")
         handler.setLevel(logging.DEBUG)
-        fmt = logging.Formatter(
-            "%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
-        )
+        fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s")
         handler.setFormatter(fmt)
         pipeline_logger = logging.getLogger("src.ml.pipeline")
         pipeline_logger.addHandler(handler)

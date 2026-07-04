@@ -7,10 +7,11 @@ validates their performance metrics, and inserts them into the trading_bots tabl
 """
 
 import json
+import os
 import sys
-from pathlib import Path
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List
 
 # Add project root to sys.path to allow absolute imports from 'src'
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -51,9 +52,7 @@ class StrategyPromoter:
         self.max_drawdown = max_drawdown
         self.min_trades = min_trades
 
-    def get_best_trials(
-        self, study_name: str, top_n: int = 5
-    ) -> List[optuna.trial.FrozenTrial]:
+    def get_best_trials(self, study_name: str, top_n: int = 5) -> List[optuna.trial.FrozenTrial]:
         """
         Retrieve the top N trials from a study.
 
@@ -65,9 +64,7 @@ class StrategyPromoter:
             List of FrozenTrial objects
         """
         try:
-            study = optuna.load_study(
-                study_name=study_name, storage=self.storage_url
-            )
+            study = optuna.load_study(study_name=study_name, storage=self.storage_url)
 
             # Get all trials sorted by value (descending)
             trials = study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.COMPLETE])
@@ -111,9 +108,7 @@ class StrategyPromoter:
 
         return True, "Valid"
 
-    def load_trial_metrics(
-        self, study_name: str, trial_id: int
-    ) -> Optional[Dict[str, Any]]:
+    def load_trial_metrics(self, study_name: str, trial_id: int) -> Dict[str, Any] | None:
         """
         Load metrics from the JSON report for a trial.
 
@@ -131,7 +126,7 @@ class StrategyPromoter:
             return None
 
         try:
-            with open(report_path, 'r') as f:
+            with open(report_path) as f:
                 report = json.load(f)
             return report.get("metrics", {})
         except Exception as e:
@@ -143,8 +138,8 @@ class StrategyPromoter:
         study_name: str,
         trial: optuna.trial.FrozenTrial,
         user_id: int = 1,
-        description: Optional[str] = None,
-    ) -> Optional[int]:
+        description: str | None = None,
+    ) -> int | None:
         """
         Promote a single trial to PostgreSQL.
 
@@ -166,17 +161,13 @@ class StrategyPromoter:
         # Load metrics from report
         metrics = self.load_trial_metrics(study_name, trial.number)
         if metrics is None:
-            _logger.warning(
-                f"Could not load metrics for trial {trial.number}. Proceeding with user_attrs only."
-            )
+            _logger.warning(f"Could not load metrics for trial {trial.number}. Proceeding with user_attrs only.")
             metrics = {}
 
         # Additional Calmar check if available
         calmar = metrics.get("calmar_ratio", 0.0)
         if calmar > 0 and calmar < self.min_calmar:
-            _logger.warning(
-                f"Trial {trial.number} below Calmar threshold: {calmar:.2f} < {self.min_calmar}"
-            )
+            _logger.warning(f"Trial {trial.number} below Calmar threshold: {calmar:.2f} < {self.min_calmar}")
             return None
 
         # Build configuration JSON
@@ -194,8 +185,7 @@ class StrategyPromoter:
         if description is None:
             leverage = trial.params.get("leverage", "N/A")
             description = (
-                f"Strategy from {study_name} - Trial #{trial.number} "
-                f"(Leverage: {leverage}x, Score: {trial.value:.4f})"
+                f"Strategy from {study_name} - Trial #{trial.number} (Leverage: {leverage}x, Score: {trial.value:.4f})"
             )
 
         # Insert into PostgreSQL using TradingService
@@ -257,9 +247,7 @@ class StrategyPromoter:
             if bot_id is not None:
                 promoted_ids.append(bot_id)
 
-        _logger.info(
-            f"🎉 Promotion complete: {len(promoted_ids)}/{top_n} strategies promoted."
-        )
+        _logger.info(f"🎉 Promotion complete: {len(promoted_ids)}/{top_n} strategies promoted.")
         return promoted_ids
 
     def list_studies(self) -> List[str]:
@@ -281,37 +269,18 @@ def main():
     """CLI entry point for strategy promotion."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Promote optimized strategies from SQLite to PostgreSQL"
-    )
-    parser.add_argument(
-        "study_name", type=str, help="Name of the Optuna study to promote from"
-    )
-    parser.add_argument(
-        "--top-n", type=int, default=5, help="Number of top trials to promote (default: 5)"
-    )
-    parser.add_argument(
-        "--user-id", type=int, default=1, help="User ID to associate with bots (default: 1)"
-    )
-    parser.add_argument(
-        "--min-calmar", type=float, default=1.5, help="Minimum Calmar ratio (default: 1.5)"
-    )
-    parser.add_argument(
-        "--max-drawdown", type=float, default=0.4, help="Max drawdown threshold (default: 0.4)"
-    )
-    parser.add_argument(
-        "--min-trades", type=int, default=20, help="Minimum trades required (default: 20)"
-    )
-    parser.add_argument(
-        "--list-studies", action="store_true", help="List all available studies"
-    )
+    parser = argparse.ArgumentParser(description="Promote optimized strategies from SQLite to PostgreSQL")
+    parser.add_argument("study_name", type=str, help="Name of the Optuna study to promote from")
+    parser.add_argument("--top-n", type=int, default=5, help="Number of top trials to promote (default: 5)")
+    parser.add_argument("--user-id", type=int, default=1, help="User ID to associate with bots (default: 1)")
+    parser.add_argument("--min-calmar", type=float, default=1.5, help="Minimum Calmar ratio (default: 1.5)")
+    parser.add_argument("--max-drawdown", type=float, default=0.4, help="Max drawdown threshold (default: 0.4)")
+    parser.add_argument("--min-trades", type=int, default=20, help="Minimum trades required (default: 20)")
+    parser.add_argument("--list-studies", action="store_true", help="List all available studies")
 
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    # Logger is configured via setup_logger(__name__) above
 
     promoter = StrategyPromoter(
         min_calmar=args.min_calmar,
@@ -326,9 +295,7 @@ def main():
             print(f"  - {study}")
         return
 
-    promoted_ids = promoter.promote_top_trials(
-        args.study_name, top_n=args.top_n, user_id=args.user_id
-    )
+    promoted_ids = promoter.promote_top_trials(args.study_name, top_n=args.top_n, user_id=args.user_id)
 
     print(f"\n✅ Promoted {len(promoted_ids)} strategies:")
     for bot_id in promoted_ids:

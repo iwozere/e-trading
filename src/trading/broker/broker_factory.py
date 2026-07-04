@@ -19,17 +19,18 @@ Functions:
 - get_broker_capabilities: Broker capability detection
 """
 
+import os as _os
 from typing import Any, Dict, List
+
+from dotenv import load_dotenv
 
 from src.trading.broker.binance_broker import BinanceBroker
 from src.trading.broker.ibkr_broker import IBKRBroker
 from src.trading.broker.mock_broker import MockBroker
 
-import os as _os
-from dotenv import load_dotenv
-
 # Load environment variables from .env file if it exists
 load_dotenv()
+
 
 def _env(key: str, default: str = "") -> str:
     """Read a credential from the environment (``os.environ`` / ``.env`` via ``load_dotenv``)."""
@@ -38,21 +39,47 @@ def _env(key: str, default: str = "") -> str:
         return val.strip()
     return default
 
-def _get_binance_key(): return _env("BINANCE_API_KEY")
-def _get_binance_secret(): return _env("BINANCE_API_SECRET")
-def _get_binance_paper_key(): return _env("BINANCE_TESTNET_API_KEY")
-def _get_binance_paper_secret(): return _env("BINANCE_TESTNET_API_SECRET")
-def _get_ibkr_host(): return _env("IBKR_HOST", "127.0.0.1")
-def _get_ibkr_port(): return _env("IBKR_PORT", "4001")
-def _get_ibkr_paper_port(): return _env("IBKR_PAPER_PORT", "4002")
-def _get_ibkr_client_id(): return _env("IBKR_CLIENT_ID", "1")
+
+def _get_binance_key():
+    return _env("BINANCE_API_KEY")
+
+
+def _get_binance_secret():
+    return _env("BINANCE_API_SECRET")
+
+
+def _get_binance_paper_key():
+    return _env("BINANCE_TESTNET_API_KEY")
+
+
+def _get_binance_paper_secret():
+    return _env("BINANCE_TESTNET_API_SECRET")
+
+
+def _get_ibkr_host():
+    return _env("IBKR_HOST", "127.0.0.1")
+
+
+def _get_ibkr_port():
+    return _env("IBKR_PORT", "4001")
+
+
+def _get_ibkr_paper_port():
+    return _env("IBKR_PAPER_PORT", "4002")
+
+
+def _get_ibkr_client_id():
+    return _env("IBKR_CLIENT_ID", "1")
+
 
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
 
 
 class BrokerConfigurationError(Exception):
     """Exception raised for broker configuration errors."""
+
     pass
 
 
@@ -70,29 +97,24 @@ class LiveTradingValidator:
         Raises:
             BrokerConfigurationError: If configuration is invalid for live trading
         """
-        if config.get('trading_mode') != 'live':
+        if config.get("trading_mode") != "live":
             return
 
         # Require explicit confirmation for live trading
-        if not config.get('live_trading_confirmed', False):
+        if not config.get("live_trading_confirmed", False):
             raise BrokerConfigurationError(
-                "Live trading requires explicit confirmation. "
-                "Set 'live_trading_confirmed': true in configuration."
+                "Live trading requires explicit confirmation. Set 'live_trading_confirmed': true in configuration."
             )
 
         # Validate risk management configuration
-        risk_config = config.get('risk_management', {})
+        risk_config = config.get("risk_management", {})
         if not risk_config:
-            raise BrokerConfigurationError(
-                "Live trading requires risk management configuration"
-            )
+            raise BrokerConfigurationError("Live trading requires risk management configuration")
 
-        required_risk_params = ['max_position_size', 'max_daily_loss']
+        required_risk_params = ["max_position_size", "max_daily_loss"]
         missing_params = [param for param in required_risk_params if param not in risk_config]
         if missing_params:
-            raise BrokerConfigurationError(
-                f"Live trading requires risk management parameters: {missing_params}"
-            )
+            raise BrokerConfigurationError(f"Live trading requires risk management parameters: {missing_params}")
 
         # Validate broker credentials are available
         broker_type = config.get("type", "").lower()
@@ -120,51 +142,51 @@ def validate_broker_config(config: Dict[str, Any]) -> Dict[str, Any]:
     """
     # Set defaults
     normalized_config = {
-        'type': 'mock',
-        'trading_mode': 'paper',
-        'cash': 10000.0,
-        'paper_trading_config': {
-            'mode': 'realistic',
-            'initial_balance': 10000.0,
-            'commission_rate': 0.001,
-            'slippage_model': 'linear',
-            'base_slippage': 0.0005,
-            'latency_simulation': True,
-            'min_latency_ms': 10,
-            'max_latency_ms': 100,
-            'market_impact_enabled': True,
-            'market_impact_factor': 0.0001,
-            'realistic_fills': True,
-            'partial_fill_probability': 0.1,
-            'reject_probability': 0.01,
-            'enable_execution_quality': True
+        "type": "mock",
+        "trading_mode": "paper",
+        "cash": 10000.0,
+        "paper_trading_config": {
+            "mode": "realistic",
+            "initial_balance": 10000.0,
+            "commission_rate": 0.001,
+            "slippage_model": "linear",
+            "base_slippage": 0.0005,
+            "latency_simulation": True,
+            "min_latency_ms": 10,
+            "max_latency_ms": 100,
+            "market_impact_enabled": True,
+            "market_impact_factor": 0.0001,
+            "realistic_fills": True,
+            "partial_fill_probability": 0.1,
+            "reject_probability": 0.01,
+            "enable_execution_quality": True,
         },
-        'notifications': {
-            'position_opened': True,
-            'position_closed': True,
-            'email_enabled': True,
-            'telegram_enabled': True,
-            'error_notifications': True
-        }
+        "notifications": {
+            "position_opened": True,
+            "position_closed": True,
+            "email_enabled": True,
+            "telegram_enabled": True,
+            "error_notifications": True,
+        },
     }
 
     # Update with provided config
     normalized_config.update(config)
 
     # Validate broker type
-    supported_types = ['binance', 'ibkr', 'mock', 'file_broker']
-    broker_type = normalized_config.get('type', '').lower()
+    supported_types = ["binance", "ibkr", "mock", "file_broker"]
+    broker_type = normalized_config.get("type", "").lower()
     if broker_type not in supported_types:
         raise BrokerConfigurationError(f"Unsupported broker type: {broker_type}. Supported: {supported_types}")
 
     # Validate trading mode
-    supported_modes = ['paper', 'live']
-    trading_mode = normalized_config.get('trading_mode', '').lower()
+    supported_modes = ["paper", "live"]
+    trading_mode = normalized_config.get("trading_mode", "").lower()
     if trading_mode not in supported_modes:
         raise BrokerConfigurationError(f"Unsupported trading mode: {trading_mode}. Supported: {supported_modes}")
 
     # Set paper_trading flag based on mode
-    normalized_config['paper_trading'] = (trading_mode == 'paper')
+    normalized_config["paper_trading"] = trading_mode == "paper"
 
     # Validate live trading configuration
     LiveTradingValidator.validate_live_trading_config(normalized_config)
@@ -185,36 +207,36 @@ def get_broker_credentials(broker_type: str, trading_mode: str) -> Dict[str, Any
     """
     credentials = {}
 
-    if broker_type == 'binance':
-        if trading_mode == 'paper':
+    if broker_type == "binance":
+        if trading_mode == "paper":
             credentials = {
-                'api_key': _get_binance_paper_key(),
-                'api_secret': _get_binance_paper_secret(),
-                'base_url': 'https://testnet.binance.vision',
-                'testnet': True
+                "api_key": _get_binance_paper_key(),
+                "api_secret": _get_binance_paper_secret(),
+                "base_url": "https://testnet.binance.vision",
+                "testnet": True,
             }
         else:  # live
             credentials = {
-                'api_key': _get_binance_key(),
-                'api_secret': _get_binance_secret(),
-                'base_url': 'https://api.binance.com',
-                'testnet': False
+                "api_key": _get_binance_key(),
+                "api_secret": _get_binance_secret(),
+                "base_url": "https://api.binance.com",
+                "testnet": False,
             }
 
-    elif broker_type == 'ibkr':
-        if trading_mode == 'paper':
+    elif broker_type == "ibkr":
+        if trading_mode == "paper":
             credentials = {
-                'host': _get_ibkr_host(),
-                'port': int(_get_ibkr_paper_port()),
-                'client_id': int(_get_ibkr_client_id()),
-                'paper_trading': True
+                "host": _get_ibkr_host(),
+                "port": int(_get_ibkr_paper_port()),
+                "client_id": int(_get_ibkr_client_id()),
+                "paper_trading": True,
             }
         else:  # live
             credentials = {
-                'host': _get_ibkr_host(),
-                'port': int(_get_ibkr_port()),
-                'client_id': int(_get_ibkr_client_id()),
-                'paper_trading': False
+                "host": _get_ibkr_host(),
+                "port": int(_get_ibkr_port()),
+                "client_id": int(_get_ibkr_client_id()),
+                "paper_trading": False,
             }
 
     return credentials
@@ -253,8 +275,8 @@ def get_broker(config: Dict[str, Any]):
         # Validate and normalize configuration
         validated_config = validate_broker_config(config)
 
-        broker_type = validated_config['type'].lower()
-        trading_mode = validated_config['trading_mode'].lower()
+        broker_type = validated_config["type"].lower()
+        trading_mode = validated_config["trading_mode"].lower()
 
         # Get appropriate credentials
         credentials = get_broker_credentials(broker_type, trading_mode)
@@ -265,30 +287,27 @@ def get_broker(config: Dict[str, Any]):
         _logger.info("Creating %s broker in %s mode", broker_type, trading_mode)
 
         # Create broker instance based on type and mode
-        if broker_type == 'binance':
+        if broker_type == "binance":
             # Enhanced Binance broker handles both paper and live modes
             return BinanceBroker(
-                api_key=credentials['api_key'],
-                api_secret=credentials['api_secret'],
-                cash=broker_config.get('cash', 10000.0),
-                config=broker_config
+                api_key=credentials["api_key"],
+                api_secret=credentials["api_secret"],
+                cash=broker_config.get("cash", 10000.0),
+                config=broker_config,
             )
 
-        elif broker_type == 'ibkr':
+        elif broker_type == "ibkr":
             # Enhanced IBKR broker handles both paper and live modes internally
             return IBKRBroker(
-                host=credentials['host'],
-                port=credentials['port'],
-                client_id=credentials['client_id'],
-                cash=broker_config.get('cash', 25000.0),
-                config=broker_config
+                host=credentials["host"],
+                port=credentials["port"],
+                client_id=credentials["client_id"],
+                cash=broker_config.get("cash", 25000.0),
+                config=broker_config,
             )
 
-        elif broker_type == 'mock' or broker_type == 'file_broker':
-            return MockBroker(
-                cash=broker_config.get('cash', 10000.0),
-                config=broker_config
-            )
+        elif broker_type == "mock" or broker_type == "file_broker":
+            return MockBroker(cash=broker_config.get("cash", 10000.0), config=broker_config)
 
         else:
             raise BrokerConfigurationError(f"Unsupported broker type: {broker_type}")
@@ -309,40 +328,40 @@ def get_broker_capabilities(broker_type: str) -> Dict[str, Any]:
         Dictionary with broker capabilities
     """
     capabilities = {
-        'binance': {
-            'paper_trading': True,
-            'live_trading': True,
-            'order_types': ['market', 'limit', 'stop', 'stop_limit', 'oco'],
-            'asset_classes': ['crypto'],
-            'markets': ['spot', 'futures'],
-            'real_time_data': True,
-            'historical_data': True,
-            'notifications': True,
-            'dual_mode_switching': True
+        "binance": {
+            "paper_trading": True,
+            "live_trading": True,
+            "order_types": ["market", "limit", "stop", "stop_limit", "oco"],
+            "asset_classes": ["crypto"],
+            "markets": ["spot", "futures"],
+            "real_time_data": True,
+            "historical_data": True,
+            "notifications": True,
+            "dual_mode_switching": True,
         },
-        'ibkr': {
-            'paper_trading': True,
-            'live_trading': True,
-            'order_types': ['market', 'limit', 'stop', 'stop_limit', 'trailing_stop', 'bracket'],
-            'asset_classes': ['stocks', 'options', 'futures', 'forex', 'bonds'],
-            'markets': ['global'],
-            'real_time_data': True,
-            'historical_data': True,
-            'notifications': True,
-            'dual_mode_switching': True,
-            'margin_trading': True
+        "ibkr": {
+            "paper_trading": True,
+            "live_trading": True,
+            "order_types": ["market", "limit", "stop", "stop_limit", "trailing_stop", "bracket"],
+            "asset_classes": ["stocks", "options", "futures", "forex", "bonds"],
+            "markets": ["global"],
+            "real_time_data": True,
+            "historical_data": True,
+            "notifications": True,
+            "dual_mode_switching": True,
+            "margin_trading": True,
         },
-        'mock': {
-            'paper_trading': True,
-            'live_trading': False,
-            'order_types': ['market', 'limit'],
-            'asset_classes': ['any'],
-            'markets': ['simulated'],
-            'real_time_data': False,
-            'historical_data': False,
-            'notifications': True,
-            'dual_mode_switching': False
-        }
+        "mock": {
+            "paper_trading": True,
+            "live_trading": False,
+            "order_types": ["market", "limit"],
+            "asset_classes": ["any"],
+            "markets": ["simulated"],
+            "real_time_data": False,
+            "historical_data": False,
+            "notifications": True,
+            "dual_mode_switching": False,
+        },
     }
 
     return capabilities.get(broker_type.lower(), {})
@@ -357,32 +376,39 @@ def list_available_brokers() -> List[Dict[str, Any]]:
     """
     brokers = []
 
-    for broker_type in ['binance', 'ibkr', 'mock']:
+    for broker_type in ["binance", "ibkr", "mock"]:
         capabilities = get_broker_capabilities(broker_type)
 
         # Check if credentials are available
         credentials_available = True
-        if broker_type == 'binance':
-            credentials_available = bool(_get_binance_key() and _get_binance_secret() and _get_binance_paper_key() and _get_binance_paper_secret())
-        elif broker_type == 'ibkr':
+        if broker_type == "binance":
+            credentials_available = bool(
+                _get_binance_key()
+                and _get_binance_secret()
+                and _get_binance_paper_key()
+                and _get_binance_paper_secret()
+            )
+        elif broker_type == "ibkr":
             credentials_available = bool(_get_ibkr_host() and _get_ibkr_port() and _get_ibkr_client_id())
 
-        brokers.append({
-            'type': broker_type,
-            'name': broker_type.upper(),
-            'capabilities': capabilities,
-            'credentials_available': credentials_available,
-            'recommended_for': {
-                'binance': 'Cryptocurrency trading',
-                'ibkr': 'Multi-asset global trading',
-                'mock': 'Testing and development'
-            }.get(broker_type, 'General use')
-        })
+        brokers.append(
+            {
+                "type": broker_type,
+                "name": broker_type.upper(),
+                "capabilities": capabilities,
+                "credentials_available": credentials_available,
+                "recommended_for": {
+                    "binance": "Cryptocurrency trading",
+                    "ibkr": "Multi-asset global trading",
+                    "mock": "Testing and development",
+                }.get(broker_type, "General use"),
+            }
+        )
 
     return brokers
 
 
-def create_sample_config(broker_type: str, trading_mode: str = 'paper') -> Dict[str, Any]:
+def create_sample_config(broker_type: str, trading_mode: str = "paper") -> Dict[str, Any]:
     """
     Create a sample configuration for a broker type and trading mode.
 
@@ -394,43 +420,45 @@ def create_sample_config(broker_type: str, trading_mode: str = 'paper') -> Dict[
         Sample configuration dictionary
     """
     base_config = {
-        'type': broker_type,
-        'trading_mode': trading_mode,
-        'cash': 10000.0,
-        'paper_trading_config': {
-            'mode': 'realistic',
-            'initial_balance': 10000.0,
-            'commission_rate': 0.001,
-            'slippage_model': 'linear',
-            'base_slippage': 0.0005,
-            'latency_simulation': True,
-            'min_latency_ms': 10,
-            'max_latency_ms': 100,
-            'market_impact_enabled': True,
-            'realistic_fills': True,
-            'partial_fill_probability': 0.1,
-            'reject_probability': 0.01
+        "type": broker_type,
+        "trading_mode": trading_mode,
+        "cash": 10000.0,
+        "paper_trading_config": {
+            "mode": "realistic",
+            "initial_balance": 10000.0,
+            "commission_rate": 0.001,
+            "slippage_model": "linear",
+            "base_slippage": 0.0005,
+            "latency_simulation": True,
+            "min_latency_ms": 10,
+            "max_latency_ms": 100,
+            "market_impact_enabled": True,
+            "realistic_fills": True,
+            "partial_fill_probability": 0.1,
+            "reject_probability": 0.01,
         },
-        'notifications': {
-            'position_opened': True,
-            'position_closed': True,
-            'email_enabled': True,
-            'telegram_enabled': True,
-            'error_notifications': True
-        }
+        "notifications": {
+            "position_opened": True,
+            "position_closed": True,
+            "email_enabled": True,
+            "telegram_enabled": True,
+            "error_notifications": True,
+        },
     }
 
     # Add live trading specific configuration
-    if trading_mode == 'live':
-        base_config.update({
-            'live_trading_confirmed': False,  # Must be manually set to True
-            'risk_management': {
-                'max_position_size': 1000.0,
-                'max_daily_loss': 500.0,
-                'max_portfolio_risk': 0.02,  # 2%
-                'position_sizing_method': 'fixed_dollar'
+    if trading_mode == "live":
+        base_config.update(
+            {
+                "live_trading_confirmed": False,  # Must be manually set to True
+                "risk_management": {
+                    "max_position_size": 1000.0,
+                    "max_daily_loss": 500.0,
+                    "max_portfolio_risk": 0.02,  # 2%
+                    "position_sizing_method": "fixed_dollar",
+                },
             }
-        })
+        )
 
     return base_config
 

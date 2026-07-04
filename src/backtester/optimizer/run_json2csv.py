@@ -47,9 +47,9 @@ Output fields:
 - position_size: position size, taken from result file, "best_params" field, "position_size" field
 """
 
-import sys
 import json
 import os
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -89,7 +89,7 @@ def extract_nested_value(data, keys, default=None):
 
 def process_json_file(file_path):
     """Process a single JSON file and extract relevant information"""
-    with open(file_path, "r") as f:
+    with open(file_path) as f:
         data = json.load(f)
 
     # Extract symbol, interval, start_date, end_date from filename

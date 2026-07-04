@@ -37,12 +37,12 @@ Classes:
 import gzip
 import io
 import json
+import sys
 import time
 import zipfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
-import sys
+from typing import Any, Callable, Dict, List, Union
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
@@ -67,8 +67,16 @@ _GDELT_1_GKG_START = datetime(2013, 4, 1)
 
 # GKG 1.0 tab-separated columns (no header in the file)
 _GKG1_COLS = [
-    "DATE", "NUMARTS", "COUNTS", "THEMES", "LOCATIONS",
-    "PERSONS", "ORGANIZATIONS", "TONE", "CAMEOCOUNTRIES", "GCAM",
+    "DATE",
+    "NUMARTS",
+    "COUNTS",
+    "THEMES",
+    "LOCATIONS",
+    "PERSONS",
+    "ORGANIZATIONS",
+    "TONE",
+    "CAMEOCOUNTRIES",
+    "GCAM",
 ]
 
 # GDELT 2.0 — 15-minute files
@@ -77,46 +85,103 @@ _GDELT_2_START = datetime(2015, 2, 18)
 
 # Polite rate limiting — no official limit documented for GDELT HTTP
 _DEFAULT_REQUEST_DELAY = 0.5  # seconds between requests
-_DEFAULT_FILES_PER_DAY = 4    # one per ~6 hours; use 96 for full coverage
+_DEFAULT_FILES_PER_DAY = 4  # one per ~6 hours; use 96 for full coverage
 
 # All 96 HHMMSS timeslots in a day (every 15 minutes)
-_ALL_TIMESLOTS: List[str] = [
-    f"{h:02d}{m:02d}00"
-    for h in range(24)
-    for m in range(0, 60, 15)
-]
+_ALL_TIMESLOTS: List[str] = [f"{h:02d}{m:02d}00" for h in range(24) for m in range(0, 60, 15)]
 
 _GKG_COLS = [
-    "GKGRECORDID", "DATE", "SourceCollectionIdentifier",
-    "SourceCommonName", "DocumentIdentifier", "Counts",
-    "V2Counts", "Themes", "V2Themes", "Locations",
-    "V2Locations", "Persons", "V2Persons", "Organizations",
-    "V2Organizations", "V2Tone", "Dates", "GCAM",
-    "SharingImage", "RelatedImages", "SocialImageEmbeds",
-    "SocialVideoEmbeds", "Quotations", "AllNames",
-    "Amounts", "TranslationInfo", "Extras",
+    "GKGRECORDID",
+    "DATE",
+    "SourceCollectionIdentifier",
+    "SourceCommonName",
+    "DocumentIdentifier",
+    "Counts",
+    "V2Counts",
+    "Themes",
+    "V2Themes",
+    "Locations",
+    "V2Locations",
+    "Persons",
+    "V2Persons",
+    "Organizations",
+    "V2Organizations",
+    "V2Tone",
+    "Dates",
+    "GCAM",
+    "SharingImage",
+    "RelatedImages",
+    "SocialImageEmbeds",
+    "SocialVideoEmbeds",
+    "Quotations",
+    "AllNames",
+    "Amounts",
+    "TranslationInfo",
+    "Extras",
 ]
 
 _EVENTS_COLS = [
-    "GLOBALEVENTID", "SQLDATE", "MonthYear", "Year", "FractionDate",
-    "Actor1Code", "Actor1Name", "Actor1CountryCode", "Actor1KnownGroupCode",
-    "Actor1EthnicCode", "Actor1Religion1Code", "Actor1Religion2Code",
-    "Actor1Type1Code", "Actor1Type2Code", "Actor1Type3Code",
-    "Actor2Code", "Actor2Name", "Actor2CountryCode", "Actor2KnownGroupCode",
-    "Actor2EthnicCode", "Actor2Religion1Code", "Actor2Religion2Code",
-    "Actor2Type1Code", "Actor2Type2Code", "Actor2Type3Code",
-    "IsRootEvent", "EventCode", "EventBaseCode", "EventRootCode", "QuadClass",
-    "GoldsteinScale", "NumMentions", "NumSources", "NumArticles", "AvgTone",
-    "Actor1Geo_Type", "Actor1Geo_FullName", "Actor1Geo_CountryCode",
-    "Actor1Geo_ADM1Code", "Actor1Geo_ADM2Code", "Actor1Geo_Lat", "Actor1Geo_Long",
+    "GLOBALEVENTID",
+    "SQLDATE",
+    "MonthYear",
+    "Year",
+    "FractionDate",
+    "Actor1Code",
+    "Actor1Name",
+    "Actor1CountryCode",
+    "Actor1KnownGroupCode",
+    "Actor1EthnicCode",
+    "Actor1Religion1Code",
+    "Actor1Religion2Code",
+    "Actor1Type1Code",
+    "Actor1Type2Code",
+    "Actor1Type3Code",
+    "Actor2Code",
+    "Actor2Name",
+    "Actor2CountryCode",
+    "Actor2KnownGroupCode",
+    "Actor2EthnicCode",
+    "Actor2Religion1Code",
+    "Actor2Religion2Code",
+    "Actor2Type1Code",
+    "Actor2Type2Code",
+    "Actor2Type3Code",
+    "IsRootEvent",
+    "EventCode",
+    "EventBaseCode",
+    "EventRootCode",
+    "QuadClass",
+    "GoldsteinScale",
+    "NumMentions",
+    "NumSources",
+    "NumArticles",
+    "AvgTone",
+    "Actor1Geo_Type",
+    "Actor1Geo_FullName",
+    "Actor1Geo_CountryCode",
+    "Actor1Geo_ADM1Code",
+    "Actor1Geo_ADM2Code",
+    "Actor1Geo_Lat",
+    "Actor1Geo_Long",
     "Actor1Geo_FeatureID",
-    "Actor2Geo_Type", "Actor2Geo_FullName", "Actor2Geo_CountryCode",
-    "Actor2Geo_ADM1Code", "Actor2Geo_ADM2Code", "Actor2Geo_Lat", "Actor2Geo_Long",
+    "Actor2Geo_Type",
+    "Actor2Geo_FullName",
+    "Actor2Geo_CountryCode",
+    "Actor2Geo_ADM1Code",
+    "Actor2Geo_ADM2Code",
+    "Actor2Geo_Lat",
+    "Actor2Geo_Long",
     "Actor2Geo_FeatureID",
-    "ActionGeo_Type", "ActionGeo_FullName", "ActionGeo_CountryCode",
-    "ActionGeo_ADM1Code", "ActionGeo_ADM2Code", "ActionGeo_Lat", "ActionGeo_Long",
+    "ActionGeo_Type",
+    "ActionGeo_FullName",
+    "ActionGeo_CountryCode",
+    "ActionGeo_ADM1Code",
+    "ActionGeo_ADM2Code",
+    "ActionGeo_Lat",
+    "ActionGeo_Long",
     "ActionGeo_FeatureID",
-    "DATEADDED", "SOURCEURL",
+    "DATEADDED",
+    "SOURCEURL",
 ]
 
 
@@ -136,7 +201,7 @@ class GdeltDownloader(BaseDataDownloader):
 
     def __init__(
         self,
-        cache_dir: Optional[Union[str, Path]] = None,
+        cache_dir: Union[str, Path] | None = None,
         request_delay: float = _DEFAULT_REQUEST_DELAY,
         files_per_day: int = _DEFAULT_FILES_PER_DAY,
     ):
@@ -156,15 +221,18 @@ class GdeltDownloader(BaseDataDownloader):
         self._events_dir = self._gdelt_dir / "events"
         self._gkg_dir = self._gdelt_dir / "gkg"
         self._session = requests.Session()
-        self._session.headers.update({
-            "User-Agent": "e-trading-research gdelt-downloader akossyrev@gmail.com",
-        })
+        self._session.headers.update(
+            {
+                "User-Agent": "e-trading-research gdelt-downloader akossyrev@gmail.com",
+            }
+        )
         self._request_delay = request_delay
         self._last_request_time: float = 0.0
         self._timeslots = _select_timeslots(files_per_day)
         _logger.info(
             "GdeltDownloader initialised: files_per_day=%d timeslots=%s",
-            files_per_day, len(self._timeslots),
+            files_per_day,
+            len(self._timeslots),
         )
 
     # ------------------------------------------------------------------
@@ -208,7 +276,7 @@ class GdeltDownloader(BaseDataDownloader):
     # GKG downloads
     # ------------------------------------------------------------------
 
-    def download_gkg_day(self, date: datetime, force: bool = False) -> Optional[Path]:
+    def download_gkg_day(self, date: datetime, force: bool = False) -> Path | None:
         """
         Download, aggregate, and cache GKG data for a single calendar day.
 
@@ -280,9 +348,13 @@ class GdeltDownloader(BaseDataDownloader):
             Summary dict: ``total``, ``downloaded``, ``skipped``, ``errors``.
         """
         return self._range_download(
-            start_date, end_date,
-            self.download_gkg_day, self._gkg_dir,
-            force, "GKG", ".gkg.csv.gz",
+            start_date,
+            end_date,
+            self.download_gkg_day,
+            self._gkg_dir,
+            force,
+            "GKG",
+            ".gkg.csv.gz",
         )
 
     def load_gkg_day(self, date: datetime, force_refresh: bool = False) -> pd.DataFrame:
@@ -311,7 +383,7 @@ class GdeltDownloader(BaseDataDownloader):
     # Events downloads
     # ------------------------------------------------------------------
 
-    def download_events_day(self, date: datetime, force: bool = False) -> Optional[Path]:
+    def download_events_day(self, date: datetime, force: bool = False) -> Path | None:
         """
         Download, aggregate, and cache Events data for a single calendar day.
 
@@ -384,9 +456,13 @@ class GdeltDownloader(BaseDataDownloader):
             Summary dict: ``total``, ``downloaded``, ``skipped``, ``errors``.
         """
         return self._range_download(
-            start_date, end_date,
-            self.download_events_day, self._events_dir,
-            force, "Events", ".events.csv.gz",
+            start_date,
+            end_date,
+            self.download_events_day,
+            self._events_dir,
+            force,
+            "Events",
+            ".events.csv.gz",
         )
 
     def load_events_day(self, date: datetime, force_refresh: bool = False) -> pd.DataFrame:
@@ -416,7 +492,7 @@ class GdeltDownloader(BaseDataDownloader):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _download_gkg_file(self, url: str) -> Optional[pd.DataFrame]:
+    def _download_gkg_file(self, url: str) -> pd.DataFrame | None:
         """Download and parse a single 15-minute GKG CSV zip file."""
         content = self._fetch_zip(url)
         if content is None:
@@ -439,7 +515,7 @@ class GdeltDownloader(BaseDataDownloader):
             _logger.exception("Failed to parse GKG file from %s", url)
             return None
 
-    def _download_events_file(self, url: str) -> Optional[pd.DataFrame]:
+    def _download_events_file(self, url: str) -> pd.DataFrame | None:
         """Download and parse a single 15-minute Events CSV zip file."""
         content = self._fetch_zip(url)
         if content is None:
@@ -462,7 +538,7 @@ class GdeltDownloader(BaseDataDownloader):
             _logger.exception("Failed to parse Events file from %s", url)
             return None
 
-    def _fetch_zip(self, url: str) -> Optional[bytes]:
+    def _fetch_zip(self, url: str) -> bytes | None:
         """Rate-limited GET returning raw zip bytes, or None on error/404."""
         elapsed = time.monotonic() - self._last_request_time
         if elapsed < self._request_delay:
@@ -488,7 +564,7 @@ class GdeltDownloader(BaseDataDownloader):
         self,
         start_date: datetime,
         end_date: datetime,
-        download_fn: Callable[[datetime, bool], Optional[Path]],
+        download_fn: Callable[[datetime, bool], Path | None],
         dest_dir: Path,
         force: bool,
         label: str,
@@ -504,9 +580,7 @@ class GdeltDownloader(BaseDataDownloader):
             cached = set()
             for f in dest_dir.glob(f"????????{file_suffix}"):
                 try:
-                    cached.add(
-                        datetime.strptime(f.name[:8], "%Y%m%d").date()
-                    )
+                    cached.add(datetime.strptime(f.name[:8], "%Y%m%d").date())
                 except ValueError:
                     pass
         else:
@@ -514,7 +588,9 @@ class GdeltDownloader(BaseDataDownloader):
 
         _logger.info(
             "Starting %s range download: %s → %s",
-            label, current.date(), end.date(),
+            label,
+            current.date(),
+            end.date(),
         )
 
         while current <= end:
@@ -533,14 +609,22 @@ class GdeltDownloader(BaseDataDownloader):
             if total % 30 == 0:
                 _logger.info(
                     "%s progress: %d days processed — downloaded=%d skipped=%d errors=%d",
-                    label, total, downloaded, skipped, errors,
+                    label,
+                    total,
+                    downloaded,
+                    skipped,
+                    errors,
                 )
 
             current += timedelta(days=1)
 
         _logger.info(
             "%s range complete: downloaded=%d skipped=%d errors=%d / %d total",
-            label, downloaded, skipped, errors, total,
+            label,
+            downloaded,
+            skipped,
+            errors,
+            total,
         )
         return {"total": total, "downloaded": downloaded, "skipped": skipped, "errors": errors}
 
@@ -548,6 +632,7 @@ class GdeltDownloader(BaseDataDownloader):
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
 
 def _select_timeslots(files_per_day: int) -> List[str]:
     """
@@ -566,7 +651,7 @@ def _select_timeslots(files_per_day: int) -> List[str]:
     return [_ALL_TIMESLOTS[i * step] for i in range(n)]
 
 
-def _parse_tone(tone_str: Any) -> Dict[str, Optional[float]]:
+def _parse_tone(tone_str: Any) -> Dict[str, float | None]:
     """
     Parse a GDELT V2Tone string into tone components.
 
@@ -579,8 +664,11 @@ def _parse_tone(tone_str: Any) -> Dict[str, Optional[float]]:
         Dict with keys: ``tone``, ``positive``, ``negative``, ``polarity``.
         All values are None if the string cannot be parsed.
     """
-    empty: Dict[str, Optional[float]] = {
-        "tone": None, "positive": None, "negative": None, "polarity": None,
+    empty: Dict[str, float | None] = {
+        "tone": None,
+        "positive": None,
+        "negative": None,
+        "polarity": None,
     }
     if not isinstance(tone_str, str):
         return empty
@@ -589,7 +677,7 @@ def _parse_tone(tone_str: Any) -> Dict[str, Optional[float]]:
         return empty
     try:
         return {
-            "tone":     float(parts[0]),
+            "tone": float(parts[0]),
             "positive": float(parts[1]),
             "negative": float(parts[2]),
             "polarity": float(parts[3]),
@@ -714,11 +802,13 @@ def _aggregate_events(raw: pd.DataFrame, date: datetime) -> pd.DataFrame:
         .reset_index()
     )
 
-    agg = agg.rename(columns={
-        "EventCode": "event_code",
-        "EventRootCode": "event_root_code",
-        "QuadClass": "quad_class",
-    })
+    agg = agg.rename(
+        columns={
+            "EventCode": "event_code",
+            "EventRootCode": "event_root_code",
+            "QuadClass": "quad_class",
+        }
+    )
     quad_numeric: pd.Series = pd.to_numeric(agg["quad_class"], errors="coerce")  # type: ignore[assignment]
     agg["quad_class"] = quad_numeric.astype("Int64")
     agg["date"] = date.strftime("%Y-%m-%d")
@@ -730,6 +820,7 @@ def _aggregate_events(raw: pd.DataFrame, date: datetime) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # GDELT 1.0 downloader
 # ---------------------------------------------------------------------------
+
 
 class Gdelt1Downloader(BaseDataDownloader):
     """
@@ -748,7 +839,7 @@ class Gdelt1Downloader(BaseDataDownloader):
 
     def __init__(
         self,
-        cache_dir: Optional[Union[str, Path]] = None,
+        cache_dir: Union[str, Path] | None = None,
         request_delay: float = _DEFAULT_REQUEST_DELAY,
     ):
         """
@@ -763,9 +854,11 @@ class Gdelt1Downloader(BaseDataDownloader):
         root = Path(cache_dir) if cache_dir else Path(DATA_CACHE_DIR)
         self._gkg_dir = root / "gdelt" / "gkg"
         self._session = requests.Session()
-        self._session.headers.update({
-            "User-Agent": "e-trading-research gdelt1-downloader akossyrev@gmail.com",
-        })
+        self._session.headers.update(
+            {
+                "User-Agent": "e-trading-research gdelt1-downloader akossyrev@gmail.com",
+            }
+        )
         self._request_delay = request_delay
         self._last_request_time: float = 0.0
 
@@ -810,7 +903,7 @@ class Gdelt1Downloader(BaseDataDownloader):
     # GKG downloads
     # ------------------------------------------------------------------
 
-    def download_gkg_day(self, date: datetime, force: bool = False) -> Optional[Path]:
+    def download_gkg_day(self, date: datetime, force: bool = False) -> Path | None:
         """
         Download and cache the GDELT 1.0 GKG zip file for a single calendar day.
 
@@ -893,14 +986,20 @@ class Gdelt1Downloader(BaseDataDownloader):
             if total % 30 == 0:
                 _logger.info(
                     "GKG 1.0 progress: %d days — downloaded=%d skipped=%d errors=%d",
-                    total, downloaded, skipped, errors,
+                    total,
+                    downloaded,
+                    skipped,
+                    errors,
                 )
 
             current += timedelta(days=1)
 
         _logger.info(
             "GKG 1.0 range complete: downloaded=%d skipped=%d errors=%d / %d total",
-            downloaded, skipped, errors, total,
+            downloaded,
+            skipped,
+            errors,
+            total,
         )
         return {"total": total, "downloaded": downloaded, "skipped": skipped, "errors": errors}
 
@@ -942,7 +1041,7 @@ class Gdelt1Downloader(BaseDataDownloader):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _fetch_zip(self, url: str) -> Optional[bytes]:
+    def _fetch_zip(self, url: str) -> bytes | None:
         """Rate-limited GET returning raw zip bytes, or None on error/404."""
         elapsed = time.monotonic() - self._last_request_time
         if elapsed < self._request_delay:
@@ -1021,15 +1120,21 @@ if __name__ == "__main__":
 
     # -- shared options --
     parser.add_argument(
-        "--cache-dir", type=str, default=None,
+        "--cache-dir",
+        type=str,
+        default=None,
         help=f"Cache root directory (default: {DATA_CACHE_DIR})",
     )
     parser.add_argument(
-        "--files-per-day", type=int, default=_DEFAULT_FILES_PER_DAY,
+        "--files-per-day",
+        type=int,
+        default=_DEFAULT_FILES_PER_DAY,
         help="[v2.0 only] 15-minute files per day (1=midnight, 4=default, 96=full)",
     )
     parser.add_argument(
-        "--request-delay", type=float, default=_DEFAULT_REQUEST_DELAY,
+        "--request-delay",
+        type=float,
+        default=_DEFAULT_REQUEST_DELAY,
         help="Seconds between HTTP requests (default: 0.5)",
     )
 
@@ -1040,7 +1145,7 @@ if __name__ == "__main__":
 
         if args.command == "v1-gkg-day":
             if args.yesterday:
-                date = datetime.now(timezone.utc).replace(
+                date = datetime.now(UTC).replace(
                     hour=0, minute=0, second=0, microsecond=0, tzinfo=None
                 ) - timedelta(days=1)
             else:

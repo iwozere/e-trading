@@ -3,10 +3,10 @@ Tests for Russell3000Downloader.
 """
 
 import json
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 import sys
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -14,7 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import pandas as pd
 import pytest
 
-from src.data.downloader.russell3000_downloader import Russell3000Downloader, _REQUIRED_COLUMNS
+from src.data.downloader.russell3000_downloader import _REQUIRED_COLUMNS, Russell3000Downloader
 
 
 @pytest.fixture()
@@ -29,20 +29,22 @@ def downloader(tmp_path):
 
 
 def _make_sample_df() -> pd.DataFrame:
-    return pd.DataFrame({
-        "ticker": ["AAPL", "MSFT", "GOOGL"],
-        "name": ["Apple Inc.", "Microsoft Corporation", "Alphabet Inc."],
-        "sector": ["Technology", "Technology", "Communication Services"],
-        "industry": ["Consumer Electronics", "Software-Infrastructure", "Internet Content & Information"],
-        "exchange": ["NASDAQ", "NASDAQ", "NASDAQ"],
-    })
+    return pd.DataFrame(
+        {
+            "ticker": ["AAPL", "MSFT", "GOOGL"],
+            "name": ["Apple Inc.", "Microsoft Corporation", "Alphabet Inc."],
+            "sector": ["Technology", "Technology", "Communication Services"],
+            "industry": ["Consumer Electronics", "Software-Infrastructure", "Internet Content & Information"],
+            "exchange": ["NASDAQ", "NASDAQ", "NASDAQ"],
+        }
+    )
 
 
 def _write_fresh_cache(downloader, df: pd.DataFrame) -> None:
     downloader._cache_dir.mkdir(parents=True, exist_ok=True)
     df.to_csv(downloader._cache_file, index=False, compression="gzip")
     meta = {
-        "last_updated": datetime.now(timezone.utc).isoformat(),
+        "last_updated": datetime.now(UTC).isoformat(),
         "source_used": "fmp",
         "row_count": len(df),
     }
@@ -68,7 +70,7 @@ class TestLoad:
         df = _make_sample_df()
         downloader._cache_dir.mkdir(parents=True, exist_ok=True)
         df.to_csv(downloader._cache_file, index=False, compression="gzip")
-        old_date = (datetime.now(timezone.utc) - timedelta(days=91)).isoformat()
+        old_date = (datetime.now(UTC) - timedelta(days=91)).isoformat()
         downloader._meta_file.write_text(json.dumps({"last_updated": old_date, "source_used": "fmp", "row_count": 3}))
 
         fmp_df = _make_sample_df()
@@ -120,6 +122,6 @@ class TestIsStale:
         df = _make_sample_df()
         downloader._cache_dir.mkdir(parents=True, exist_ok=True)
         df.to_csv(downloader._cache_file, index=False, compression="gzip")
-        old_ts = (datetime.now(timezone.utc) - timedelta(days=95)).isoformat()
+        old_ts = (datetime.now(UTC) - timedelta(days=95)).isoformat()
         downloader._meta_file.write_text(json.dumps({"last_updated": old_ts}))
         assert downloader.is_stale() is True

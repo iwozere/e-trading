@@ -6,10 +6,11 @@ Loads and provides access to predefined screener sets from YAML configuration.
 Used by the job scheduler system for batch screening operations.
 """
 
-import yaml
-from pathlib import Path
-from typing import Dict, Any, List, Optional
 from functools import lru_cache
+from pathlib import Path
+from typing import Any, Dict, List
+
+import yaml
 
 from src.notification.logger import setup_logger
 
@@ -24,7 +25,7 @@ class ScreenerConfigLoader:
     from YAML configuration files.
     """
 
-    def __init__(self, config_path: Optional[Path] = None):
+    def __init__(self, config_path: Path | None = None):
         """
         Initialize the screener config loader.
 
@@ -48,7 +49,7 @@ class ScreenerConfigLoader:
             raise FileNotFoundError(f"Screener config file not found: {self.config_path}")
 
         try:
-            with open(self.config_path, 'r', encoding='utf-8') as f:
+            with open(self.config_path, encoding="utf-8") as f:
                 self._config = yaml.safe_load(f)
 
             _logger.debug("Loaded screener config from: %s", self.config_path)
@@ -111,9 +112,7 @@ class ScreenerConfigLoader:
             desc_lower = set_data.get("description", "").lower()
             display_name_lower = set_data.get("name", "").lower()
 
-            if (search_lower in name_lower or
-                search_lower in desc_lower or
-                search_lower in display_name_lower):
+            if search_lower in name_lower or search_lower in desc_lower or search_lower in display_name_lower:
                 matching_sets.append(set_name)
 
         return matching_sets
@@ -152,7 +151,7 @@ class ScreenerConfigLoader:
             "description": set_data.get("description", ""),
             "categories": set_data.get("categories", []),
             "tickers": tickers,
-            "ticker_count": len(tickers)
+            "ticker_count": len(tickers),
         }
 
     def get_tickers(self, set_name: str) -> List[str]:

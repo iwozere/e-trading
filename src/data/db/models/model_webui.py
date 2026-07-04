@@ -1,9 +1,11 @@
 # model_webui.py  (aligned to DB)
 
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import String, Integer, DateTime, ForeignKey, Index, text, Boolean
+
 from src.data.db.core.base import Base
 from src.data.db.core.json_types import JsonType
+
 
 class WebUIAuditLog(Base):
     __tablename__ = "webui_audit_logs"
@@ -16,18 +18,23 @@ class WebUIAuditLog(Base):
     details: Mapped[dict | None] = mapped_column(JsonType())
     ip_address: Mapped[str | None] = mapped_column(String(45))
     user_agent: Mapped[str | None] = mapped_column(String(500))
-    created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
+    created_at: Mapped[DateTime | None] = mapped_column(
+        DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP")
+    )
 
     __table_args__ = (
         Index("ix_webui_audit_logs_user_id", "user_id"),
         Index("ix_webui_audit_logs_action", "action"),
     )
 
+
 class WebUIPerformanceSnapshot(Base):
     __tablename__ = "webui_performance_snapshots"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     strategy_id: Mapped[str] = mapped_column(String(100))
-    timestamp: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
+    timestamp: Mapped[DateTime | None] = mapped_column(
+        DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP")
+    )
     pnl: Mapped[dict] = mapped_column(JsonType())
     positions: Mapped[dict | None] = mapped_column(JsonType())
     trades_count: Mapped[int | None] = mapped_column(Integer, server_default=text("0"))
@@ -35,9 +42,8 @@ class WebUIPerformanceSnapshot(Base):
     drawdown: Mapped[dict | None] = mapped_column(JsonType())
     metrics: Mapped[dict | None] = mapped_column(JsonType())
 
-    __table_args__ = (
-        Index("ix_webui_performance_snapshots_strategy_id", "strategy_id"),
-    )
+    __table_args__ = (Index("ix_webui_performance_snapshots_strategy_id", "strategy_id"),)
+
 
 class WebUIStrategyTemplate(Base):
     __tablename__ = "webui_strategy_templates"
@@ -47,12 +53,13 @@ class WebUIStrategyTemplate(Base):
     template_data: Mapped[dict] = mapped_column(JsonType())
     is_public: Mapped[bool | None] = mapped_column(Boolean, server_default=text("FALSE"))
     created_by: Mapped[int] = mapped_column(ForeignKey("usr_users.id"))
-    created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
+    created_at: Mapped[DateTime | None] = mapped_column(
+        DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP")
+    )
     updated_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
 
-    __table_args__ = (
-        Index("ix_webui_strategy_templates_created_by", "created_by"),
-    )
+    __table_args__ = (Index("ix_webui_strategy_templates_created_by", "created_by"),)
+
 
 class WebUISystemConfig(Base):
     __tablename__ = "webui_system_config"
@@ -60,5 +67,7 @@ class WebUISystemConfig(Base):
     key: Mapped[str] = mapped_column(String(100), unique=True)  # remove index=True to match DB
     value: Mapped[dict] = mapped_column(JsonType())
     description: Mapped[str | None]
-    created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
+    created_at: Mapped[DateTime | None] = mapped_column(
+        DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP")
+    )
     updated_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))

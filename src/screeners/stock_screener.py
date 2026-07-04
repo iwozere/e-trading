@@ -25,19 +25,13 @@ class StockScreener:
         self.stock_data = stock_data
 
     def filter_by_price(self, min_price, max_price):
-        return [
-            stock
-            for stock in self.stock_data
-            if min_price <= stock["price"] <= max_price
-        ]
+        return [stock for stock in self.stock_data if min_price <= stock["price"] <= max_price]
 
     def filter_by_volume(self, min_volume):
         return [stock for stock in self.stock_data if stock["volume"] >= min_volume]
 
     def filter_by_market_cap(self, min_market_cap):
-        return [
-            stock for stock in self.stock_data if stock["market_cap"] >= min_market_cap
-        ]
+        return [stock for stock in self.stock_data if stock["market_cap"] >= min_market_cap]
 
     def screen_stocks(self, tickers, suffix=""):  # suffix for Swiss (SIX) shares is .SW
         results = []
@@ -56,25 +50,17 @@ class StockScreener:
                 fcf_latest = None
                 ocf_latest = None
                 capex_latest = None
-                if (
-                    fcf_info
-                    and isinstance(fcf_info, dict)
-                    and "FCF (oldest → newest)" in fcf_info
-                ):
+                if fcf_info and isinstance(fcf_info, dict) and "FCF (oldest → newest)" in fcf_info:
                     fcf_list = fcf_info["FCF (oldest → newest)"]
                     if fcf_list:
                         fcf_latest = fcf_list[-1]
                     if "OCF (oldest → newest)" in fcf_info:
                         ocf_latest = (
-                            fcf_info["OCF (oldest → newest)"][-1]
-                            if fcf_info["OCF (oldest → newest)"]
-                            else None
+                            fcf_info["OCF (oldest → newest)"][-1] if fcf_info["OCF (oldest → newest)"] else None
                         )
                     if "CapEx (oldest → newest)" in fcf_info:
                         capex_latest = (
-                            fcf_info["CapEx (oldest → newest)"][-1]
-                            if fcf_info["CapEx (oldest → newest)"]
-                            else None
+                            fcf_info["CapEx (oldest → newest)"][-1] if fcf_info["CapEx (oldest → newest)"] else None
                         )
                 if all(
                     [

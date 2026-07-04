@@ -5,11 +5,12 @@ Comprehensive test runner for Phase 4 that executes all unit tests,
 integration tests, and performance benchmarks.
 """
 
+import argparse
 import sys
 import time
-import argparse
-from pathlib import Path
 import unittest
+from pathlib import Path
+
 import pandas as pd
 
 # Add src to path for imports
@@ -86,14 +87,15 @@ def run_specific_test(test_path):
 
     # Import and run the specific test
     import importlib.util
+
     spec = importlib.util.spec_from_file_location("test_module", test_path)
     test_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(test_module)
 
     # Find and run the test function if it exists
-    if hasattr(test_module, 'run_phase4_integration_tests'):
+    if hasattr(test_module, "run_phase4_integration_tests"):
         return test_module.run_phase4_integration_tests()
-    elif hasattr(test_module, 'run_performance_benchmarks'):
+    elif hasattr(test_module, "run_performance_benchmarks"):
         return test_module.run_performance_benchmarks()
     else:
         # Run as regular unittest
@@ -127,9 +129,15 @@ def generate_test_report(unit_result, integration_result, performance_result):
     print(f"  Success Rate: {success_rate:.1f}%")
 
     print("\nBreakdown by Test Type:")
-    print(f"  Unit Tests: {unit_result.testsRun} run, {len(unit_result.failures)} failures, {len(unit_result.errors)} errors")
-    print(f"  Integration Tests: {integration_result.testsRun} run, {len(integration_result.failures)} failures, {len(integration_result.errors)} errors")
-    print(f"  Performance Tests: {performance_result.testsRun} run, {len(performance_result.failures)} failures, {len(performance_result.errors)} errors")
+    print(
+        f"  Unit Tests: {unit_result.testsRun} run, {len(unit_result.failures)} failures, {len(unit_result.errors)} errors"
+    )
+    print(
+        f"  Integration Tests: {integration_result.testsRun} run, {len(integration_result.failures)} failures, {len(integration_result.errors)} errors"
+    )
+    print(
+        f"  Performance Tests: {performance_result.testsRun} run, {len(performance_result.failures)} failures, {len(performance_result.errors)} errors"
+    )
 
     # Detailed failure/error reporting
     if total_failures > 0 or total_errors > 0:
@@ -171,6 +179,7 @@ def generate_test_report(unit_result, integration_result, performance_result):
     # Check if file-based cache is working
     try:
         from src.data import FileBasedCache, get_file_cache
+
         print("  ✓ File-based cache system: Available")
     except ImportError as e:
         print(f"  ✗ File-based cache system: Import error - {e}")
@@ -178,6 +187,7 @@ def generate_test_report(unit_result, integration_result, performance_result):
     # Check if Redis dependency is removed
     try:
         from src.data import RedisCache
+
         print("  ✗ Redis dependency: Still present (should be removed)")
     except ImportError:
         print("  ✓ Redis dependency: Successfully removed")
@@ -186,30 +196,36 @@ def generate_test_report(unit_result, integration_result, performance_result):
     print("\nEnhanced CSV Cache Functionality:")
     try:
         from src.data.utils.file_based_cache import (
-            CSVFormatConventions, SafeCSVAppender, SmartDataAppender, CacheMetadata
+            CacheMetadata,
+            CSVFormatConventions,
+            SafeCSVAppender,
+            SmartDataAppender,
         )
+
         print("  ✓ CSV Format Conventions: Available")
         print("  ✓ Safe CSV Appender: Available")
         print("  ✓ Smart Data Appender: Available")
         print("  ✓ Enhanced Cache Metadata: Available")
 
         # Test basic functionality
-        test_df = pd.DataFrame({
-            'timestamp': pd.date_range('2023-01-01', periods=5, freq='h'),
-            'open': [100.0, 101.0, 102.0, 103.0, 104.0],
-            'high': [101.0, 102.0, 103.0, 104.0, 105.0],
-            'low': [99.0, 100.0, 101.0, 102.0, 103.0],
-            'close': [101.0, 102.0, 103.0, 104.0, 105.0],
-            'volume': [1000.0, 1100.0, 1200.0, 1300.0, 1400.0]
-        })
+        test_df = pd.DataFrame(
+            {
+                "timestamp": pd.date_range("2023-01-01", periods=5, freq="h"),
+                "open": [100.0, 101.0, 102.0, 103.0, 104.0],
+                "high": [101.0, 102.0, 103.0, 104.0, 105.0],
+                "low": [99.0, 100.0, 101.0, 102.0, 103.0],
+                "close": [101.0, 102.0, 103.0, 104.0, 105.0],
+                "volume": [1000.0, 1100.0, 1200.0, 1300.0, 1400.0],
+            }
+        )
 
         # Test CSV validation
         is_valid = CSVFormatConventions.validate_dataframe(test_df)
         print(f"  ✓ CSV Validation: {'Working' if is_valid else 'Failed'}")
 
         # Test standardization
-        standardized_df = CSVFormatConventions.standardize_dataframe(test_df, 'test_provider')
-        has_provider_ts = 'provider_download_ts' in standardized_df.columns
+        standardized_df = CSVFormatConventions.standardize_dataframe(test_df, "test_provider")
+        has_provider_ts = "provider_download_ts" in standardized_df.columns
         print(f"  ✓ CSV Standardization: {'Working' if has_provider_ts else 'Failed'}")
 
     except ImportError as e:
@@ -289,11 +305,7 @@ def main():
             integration_result = run_integration_tests()
 
             if args.skip_performance:
-                performance_result = type('MockResult', (), {
-                    'testsRun': 0,
-                    'failures': [],
-                    'errors': []
-                })()
+                performance_result = type("MockResult", (), {"testsRun": 0, "failures": [], "errors": []})()
             else:
                 performance_result = run_performance_tests()
 

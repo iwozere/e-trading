@@ -3,7 +3,9 @@ Correlation Check Module
 
 Implements correlation-based position limits.
 """
+
 import numpy as np
+
 
 def check_correlation_limit(correlation_matrix: np.ndarray, threshold: float) -> bool:
     """
@@ -16,7 +18,7 @@ def check_correlation_limit(correlation_matrix: np.ndarray, threshold: float) ->
     """
     n = correlation_matrix.shape[0]
     for i in range(n):
-        for j in range(i+1, n):
+        for j in range(i + 1, n):
             if abs(correlation_matrix[i, j]) > threshold:
                 return False
-    return True 
+    return True

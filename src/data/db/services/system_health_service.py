@@ -6,18 +6,18 @@ Provides high-level business logic for monitoring all subsystems including notif
 telegram bot, API services, web UI, trading components, and system resources.
 """
 
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone
-from pathlib import Path
-import sys
 import json
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Dict, List
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
 from src.data.db.models.model_system_health import SystemHealth, SystemHealthStatus
+from src.data.db.services.base_service import BaseDBService, handle_db_error, with_uow
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -40,11 +40,11 @@ class SystemHealthService(BaseDBService):
     def update_system_health(
         self,
         system: str,
-        component: Optional[str] = None,
+        component: str | None = None,
         status: SystemHealthStatus = SystemHealthStatus.HEALTHY,
-        response_time_ms: Optional[int] = None,
-        error_message: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        response_time_ms: int | None = None,
+        error_message: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> SystemHealth:
         """
         Update system health status.
@@ -70,15 +70,15 @@ class SystemHealthService(BaseDBService):
             status=status,
             response_time_ms=response_time_ms,
             error_message=error_message,
-            metadata=metadata_json
+            metadata=metadata_json,
         )
 
-        #_logger.debug("Updated health for %s.%s: %s", system, component or 'main', status.value)
+        # _logger.debug("Updated health for %s.%s: %s", system, component or 'main', status.value)
         return health_record
 
     @with_uow
     @handle_db_error
-    def get_system_health(self, system: str, component: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def get_system_health(self, system: str, component: str | None = None) -> Dict[str, Any] | None:
         """
         Get health status for a specific system/component.
 
@@ -125,18 +125,18 @@ class SystemHealthService(BaseDBService):
 
         # Determine overall platform status
         overall_status = "HEALTHY"
-        if statistics.get('down_systems', 0) > 0:
+        if statistics.get("down_systems", 0) > 0:
             overall_status = "DOWN"
-        elif statistics.get('degraded_systems', 0) > 0:
+        elif statistics.get("degraded_systems", 0) > 0:
             overall_status = "DEGRADED"
-        elif statistics.get('unknown_systems', 0) > 0:
+        elif statistics.get("unknown_systems", 0) > 0:
             overall_status = "UNKNOWN"
 
         return {
             "overall_status": overall_status,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "systems_overview": overview_data,
-            "statistics": statistics
+            "statistics": statistics,
         }
 
     @with_uow
@@ -167,7 +167,7 @@ class SystemHealthService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_notification_channel_health(self, channel: str) -> Optional[Dict[str, Any]]:
+    def get_notification_channel_health(self, channel: str) -> Dict[str, Any] | None:
         """
         Get health status for a specific notification channel (backward compatibility).
 
@@ -188,9 +188,9 @@ class SystemHealthService(BaseDBService):
         self,
         channel: str,
         status: SystemHealthStatus = SystemHealthStatus.HEALTHY,
-        response_time_ms: Optional[int] = None,
-        error_message: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        response_time_ms: int | None = None,
+        error_message: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> SystemHealth:
         """
         Update notification channel health (backward compatibility).
@@ -206,12 +206,12 @@ class SystemHealthService(BaseDBService):
             Updated SystemHealth object
         """
         return self.update_system_health(
-            system='notification',
+            system="notification",
             component=channel,
             status=status,
             response_time_ms=response_time_ms,
             error_message=error_message,
-            metadata=metadata
+            metadata=metadata,
         )
 
     # System-specific health update methods
@@ -219,81 +219,81 @@ class SystemHealthService(BaseDBService):
     def update_telegram_bot_health(
         self,
         status: SystemHealthStatus = SystemHealthStatus.HEALTHY,
-        response_time_ms: Optional[int] = None,
-        error_message: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        response_time_ms: int | None = None,
+        error_message: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> SystemHealth:
         """Update Telegram bot health status."""
         return self.update_system_health(
-            system='telegram_bot',
+            system="telegram_bot",
             status=status,
             response_time_ms=response_time_ms,
             error_message=error_message,
-            metadata=metadata
+            metadata=metadata,
         )
 
     def update_api_service_health(
         self,
         status: SystemHealthStatus = SystemHealthStatus.HEALTHY,
-        response_time_ms: Optional[int] = None,
-        error_message: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        response_time_ms: int | None = None,
+        error_message: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> SystemHealth:
         """Update API service health status."""
         return self.update_system_health(
-            system='api_service',
+            system="api_service",
             status=status,
             response_time_ms=response_time_ms,
             error_message=error_message,
-            metadata=metadata
+            metadata=metadata,
         )
 
     def update_web_ui_health(
         self,
         status: SystemHealthStatus = SystemHealthStatus.HEALTHY,
-        response_time_ms: Optional[int] = None,
-        error_message: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        response_time_ms: int | None = None,
+        error_message: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> SystemHealth:
         """Update Web UI health status."""
         return self.update_system_health(
-            system='web_ui',
+            system="web_ui",
             status=status,
             response_time_ms=response_time_ms,
             error_message=error_message,
-            metadata=metadata
+            metadata=metadata,
         )
 
     def update_trading_bot_health(
         self,
         status: SystemHealthStatus = SystemHealthStatus.HEALTHY,
-        response_time_ms: Optional[int] = None,
-        error_message: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        response_time_ms: int | None = None,
+        error_message: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> SystemHealth:
         """Update trading bot health status."""
         return self.update_system_health(
-            system='trading_bot',
+            system="trading_bot",
             status=status,
             response_time_ms=response_time_ms,
             error_message=error_message,
-            metadata=metadata
+            metadata=metadata,
         )
 
     def update_database_health(
         self,
         status: SystemHealthStatus = SystemHealthStatus.HEALTHY,
-        response_time_ms: Optional[int] = None,
-        error_message: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        response_time_ms: int | None = None,
+        error_message: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> SystemHealth:
         """Update database health status."""
         return self.update_system_health(
-            system='database',
+            system="database",
             status=status,
             response_time_ms=response_time_ms,
             error_message=error_message,
-            metadata=metadata
+            metadata=metadata,
         )
 
     # Utility methods
@@ -316,7 +316,7 @@ class SystemHealthService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def delete_system_health(self, system: str, component: Optional[str] = None) -> bool:
+    def delete_system_health(self, system: str, component: str | None = None) -> bool:
         """
         Delete a system health record.
 
@@ -358,7 +358,7 @@ class SystemHealthService(BaseDBService):
             "system_identifier": record.system_identifier,
             "is_healthy": record.is_healthy,
             "is_degraded": record.is_degraded,
-            "is_down": record.is_down
+            "is_down": record.is_down,
         }
 
     def _format_channel_health_record(self, record: SystemHealth) -> Dict[str, Any]:
@@ -384,5 +384,5 @@ class SystemHealthService(BaseDBService):
             "error_message": record.error_message,
             "metadata": metadata,
             "checked_at": record.checked_at.isoformat(),
-            "is_healthy": record.is_healthy
+            "is_healthy": record.is_healthy,
         }

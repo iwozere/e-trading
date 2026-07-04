@@ -8,13 +8,15 @@ Tests cover:
 - Health monitoring and circuit breaker
 - Rate limiting and concurrency
 """
+
+import asyncio
+import sys
+from pathlib import Path
+from unittest.mock import AsyncMock, Mock, patch
+
+import aiohttp
 import pytest
 import pytest_asyncio
-import asyncio
-import aiohttp
-from unittest.mock import Mock, AsyncMock, patch
-from pathlib import Path
-import sys
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -34,12 +36,7 @@ class TestAsyncStocktwitsAdapter:
         mock_session = Mock(spec=aiohttp.ClientSession)
         mock_session.close = AsyncMock()
 
-        adapter = AsyncStocktwitsAdapter(
-            concurrency=2,
-            rate_limit_delay=0.01,
-            max_retries=1,
-            session=mock_session
-        )
+        adapter = AsyncStocktwitsAdapter(concurrency=2, rate_limit_delay=0.01, max_retries=1, session=mock_session)
         yield adapter
         await adapter.close()
 
@@ -58,33 +55,25 @@ class TestAsyncStocktwitsAdapter:
                     "id": 123456,
                     "body": "AAPL to the moon! 🚀 Buy and hold!",
                     "created_at": "2023-01-01T12:00:00Z",
-                    "user": {
-                        "id": 789,
-                        "username": "trader123",
-                        "followers": 1500
-                    },
+                    "user": {"id": 789, "username": "trader123", "followers": 1500},
                     "likes": 25,
-                    "replies": 5
+                    "replies": 5,
                 },
                 {
                     "id": 123457,
                     "body": "AAPL looks bearish, might sell soon",
                     "created_at": "2023-01-01T11:30:00Z",
-                    "user": {
-                        "id": 790,
-                        "username": "bear_trader",
-                        "followers": 800
-                    },
+                    "user": {"id": 790, "username": "bear_trader", "followers": 800},
                     "likes": 10,
-                    "replies": 2
-                }
+                    "replies": 2,
+                },
             ]
         }
 
     @pytest.mark.asyncio
     async def test_fetch_messages_success(self, adapter, sample_stocktwits_response):
         """Test successful message fetching."""
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = sample_stocktwits_response
 
             messages = await adapter.fetch_messages("AAPL", limit=10)
@@ -101,7 +90,7 @@ class TestAsyncStocktwitsAdapter:
     @pytest.mark.asyncio
     async def test_fetch_messages_empty_response(self, adapter):
         """Test handling of empty API response."""
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = {"messages": []}
 
             messages = await adapter.fetch_messages("INVALID")
@@ -129,7 +118,7 @@ class TestAsyncStocktwitsAdapter:
             ]
         }
 
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = malformed_response
 
             messages = await adapter.fetch_messages("AAPL")
@@ -143,7 +132,7 @@ class TestAsyncStocktwitsAdapter:
     @pytest.mark.asyncio
     async def test_fetch_summary_success(self, adapter, sample_stocktwits_response):
         """Test successful summary generation."""
-        with patch.object(adapter, 'fetch_messages', new_callable=AsyncMock) as mock_fetch:
+        with patch.object(adapter, "fetch_messages", new_callable=AsyncMock) as mock_fetch:
             # Create messages with clear sentiment
             messages = [
                 {"body": "AAPL to the moon! 🚀 Buy and hold!"},  # Bullish
@@ -166,7 +155,7 @@ class TestAsyncStocktwitsAdapter:
     @pytest.mark.asyncio
     async def test_fetch_summary_no_messages(self, adapter):
         """Test summary generation with no messages."""
-        with patch.object(adapter, 'fetch_messages', new_callable=AsyncMock) as mock_fetch:
+        with patch.object(adapter, "fetch_messages", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = []
 
             summary = await adapter.fetch_summary("INVALID")
@@ -189,7 +178,7 @@ class TestAsyncStocktwitsAdapter:
         ]
 
         for messages, expected_score in test_cases:
-            with patch.object(adapter, 'fetch_messages', new_callable=AsyncMock) as mock_fetch:
+            with patch.object(adapter, "fetch_messages", new_callable=AsyncMock) as mock_fetch:
                 mock_fetch.return_value = messages
 
                 summary = await adapter.fetch_summary("TEST")
@@ -210,6 +199,7 @@ class TestAsyncStocktwitsAdapter:
         mock_context_manager.__aexit__.return_value = None
 
         import aiohttp
+
         mock_session = Mock(spec=aiohttp.ClientSession)
         mock_session.get = Mock(return_value=mock_context_manager)
         adapter._session = mock_session
@@ -225,7 +215,7 @@ class TestAsyncStocktwitsAdapter:
         # First call returns 429, second call succeeds
         mock_response_429 = Mock()
         mock_response_429.status = 429
-        mock_response_429.headers = {'retry-after': '0.1'}  # Shorter delay for testing
+        mock_response_429.headers = {"retry-after": "0.1"}  # Shorter delay for testing
         mock_response_429.request_info = Mock()
         mock_response_429.history = []
 
@@ -245,6 +235,7 @@ class TestAsyncStocktwitsAdapter:
         mock_context_manager_200.__aexit__.return_value = None
 
         import aiohttp
+
         mock_session = Mock(spec=aiohttp.ClientSession)
         mock_session.get = Mock(side_effect=[mock_context_manager_429, mock_context_manager_200])
         adapter._session = mock_session
@@ -269,9 +260,7 @@ class TestAsyncStocktwitsAdapter:
         mock_response_200.raise_for_status = Mock()
 
         mock_session = AsyncMock()
-        mock_session.get.return_value.__aenter__.side_effect = [
-            mock_response_500, mock_response_200
-        ]
+        mock_session.get.return_value.__aenter__.side_effect = [mock_response_500, mock_response_200]
         adapter._session = mock_session
 
         result = await adapter._get_with_retry("/test")
@@ -301,7 +290,7 @@ class TestAsyncStocktwitsAdapter:
     async def test_get_with_retry_timeout(self, adapter):
         """Test handling of timeout errors."""
         mock_session = AsyncMock()
-        mock_session.get.side_effect = asyncio.TimeoutError("Request timeout")
+        mock_session.get.side_effect = TimeoutError("Request timeout")
         adapter._session = mock_session
 
         result = await adapter._get_with_retry("/test")
@@ -381,14 +370,14 @@ class TestAsyncStocktwitsAdapter:
                 await asyncio.sleep(0.1)  # Simulate slow request
                 return {"messages": []}
 
-            with patch.object(limited_adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+            with patch.object(limited_adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
                 mock_get.side_effect = mock_slow_request
 
                 # Start multiple concurrent requests
                 tasks = [
                     limited_adapter.fetch_messages("AAPL"),
                     limited_adapter.fetch_messages("TSLA"),
-                    limited_adapter.fetch_messages("MSFT")
+                    limited_adapter.fetch_messages("MSFT"),
                 ]
 
                 await asyncio.gather(*tasks)
@@ -396,7 +385,7 @@ class TestAsyncStocktwitsAdapter:
                 # Verify requests were serialized (not truly concurrent)
                 assert len(call_times) == 3
                 # With concurrency=1, requests should be serialized
-                time_diffs = [call_times[i+1] - call_times[i] for i in range(len(call_times)-1)]
+                time_diffs = [call_times[i + 1] - call_times[i] for i in range(len(call_times) - 1)]
                 assert all(diff >= 0.05 for diff in time_diffs)  # Should have gaps due to serialization
 
         finally:
@@ -434,12 +423,11 @@ class TestAsyncStocktwitsAdapter:
         # Create response with many messages
         large_response = {
             "messages": [
-                {"id": i, "body": f"Message {i}", "user": {"id": i, "username": f"user{i}"}}
-                for i in range(50)
+                {"id": i, "body": f"Message {i}", "user": {"id": i, "username": f"user{i}"}} for i in range(50)
             ]
         }
 
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = large_response
 
             messages = await adapter.fetch_messages("AAPL", limit=10)
@@ -450,12 +438,12 @@ class TestAsyncStocktwitsAdapter:
     @pytest.mark.asyncio
     async def test_ticker_normalization(self, adapter):
         """Test that tickers are properly normalized."""
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = {"messages": []}
 
             # Test various ticker formats
             await adapter.fetch_messages("  aapl  ")  # Should be normalized to AAPL
-            await adapter.fetch_messages("tsla")      # Should be normalized to TSLA
+            await adapter.fetch_messages("tsla")  # Should be normalized to TSLA
 
             # Verify the API was called with normalized tickers
             calls = mock_get.call_args_list

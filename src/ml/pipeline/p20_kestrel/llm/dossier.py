@@ -10,17 +10,17 @@ from __future__ import annotations
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 from src.ml.pipeline.p20_kestrel.config import (
     REVISIONS_FEED_AVAILABLE,
     SLEEVE_A_DOSSIER_THRESHOLD,
     SONNET_MODEL,
 )
-from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 
 _kestrel = _KestrelService()
 finish_job_run = _kestrel.finish_job_run
@@ -69,7 +69,7 @@ def _build_dossier_context(
     }
 
 
-def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
+def run(as_of_date: date | None = None) -> Dict[str, Any]:
     """
     Generate dossiers for all watchlist candidates above the score threshold.
 
@@ -86,9 +86,9 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
     try:
         watchlist_rows = get_watchlist()
         candidates = [
-            r for r in watchlist_rows
-            if (r.get("score") or 0) >= SLEEVE_A_DOSSIER_THRESHOLD
-            and r.get("state") in ("screening", "candidate")
+            r
+            for r in watchlist_rows
+            if (r.get("score") or 0) >= SLEEVE_A_DOSSIER_THRESHOLD and r.get("state") in ("screening", "candidate")
         ]
         _logger.info("Generating dossiers for %d candidates", len(candidates))
 
@@ -142,14 +142,16 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
                     elif verdict == "reject":
                         rejects += 1
 
-                    upsert_watchlist({
-                        "ticker": ticker,
-                        "sleeve": sleeve,
-                        "score": score,
-                        "llm_verdict": verdict,
-                        "thesis_short": result.get("thesis", "")[:255],
-                        "state": "candidate" if verdict in ("advance", "watch") else "rejected",
-                    })
+                    upsert_watchlist(
+                        {
+                            "ticker": ticker,
+                            "sleeve": sleeve,
+                            "score": score,
+                            "llm_verdict": verdict,
+                            "thesis_short": result.get("thesis", "")[:255],
+                            "state": "candidate" if verdict in ("advance", "watch") else "rejected",
+                        }
+                    )
 
             except RuntimeError as exc:
                 if "budget" in str(exc).lower():

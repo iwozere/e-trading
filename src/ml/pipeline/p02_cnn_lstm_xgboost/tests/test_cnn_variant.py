@@ -10,11 +10,11 @@ Verifies:
 6. P03 run_pipeline.py emits DeprecationWarning.
 """
 
-import sys
-import warnings
 import importlib
+import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 import numpy as np
 import pytest
 
@@ -27,20 +27,23 @@ if str(PROJECT_ROOT) not in sys.path:
 # 1. CNN1D model via build_cnn_model factory
 # ---------------------------------------------------------------------------
 
-class TestBuildCnnModel:
 
+class TestBuildCnnModel:
     def test_simple_variant_returns_cnn1d(self):
-        from src.ml.pipeline.p02_cnn_lstm_xgboost.models import build_cnn_model, CNN1D
+        from src.ml.pipeline.p02_cnn_lstm_xgboost.models import CNN1D, build_cnn_model
+
         model = build_cnn_model("simple", input_channels=5, sequence_length=60)
         assert isinstance(model, CNN1D)
 
     def test_unknown_variant_raises_value_error(self):
         from src.ml.pipeline.p02_cnn_lstm_xgboost.models import build_cnn_model
+
         with pytest.raises(ValueError, match="Unknown cnn_variant"):
             build_cnn_model("transformer")
 
     def test_cnn_lstm_variant_raises_import_error_when_module_absent(self):
         from src.ml.pipeline.p02_cnn_lstm_xgboost.models import build_cnn_model
+
         # Patch the import inside build_cnn_model to simulate missing module
         with patch.dict(sys.modules, {"x_03_optuna_cnn_lstm": None}):
             with pytest.raises(ImportError):
@@ -51,14 +54,14 @@ class TestBuildCnnModel:
 # 2. CNN1D forward pass
 # ---------------------------------------------------------------------------
 
-class TestCNN1DForward:
 
+class TestCNN1DForward:
     def test_output_shape_is_embedding_dim(self):
         import torch
+
         from src.ml.pipeline.p02_cnn_lstm_xgboost.models import CNN1D
 
-        model = CNN1D(input_channels=5, sequence_length=60,
-                      num_filters=[16, 32], kernel_sizes=[3, 5])
+        model = CNN1D(input_channels=5, sequence_length=60, num_filters=[16, 32], kernel_sizes=[3, 5])
         model.eval()
         batch = torch.randn(4, 5, 60)
         with torch.no_grad():
@@ -68,6 +71,7 @@ class TestCNN1DForward:
 
     def test_default_embedding_dim_is_128(self):
         import torch
+
         from src.ml.pipeline.p02_cnn_lstm_xgboost.models import CNN1D
 
         model = CNN1D(input_channels=5, sequence_length=120)
@@ -83,10 +87,11 @@ class TestCNN1DForward:
 # 3. walk_forward_validate produces fold metrics
 # ---------------------------------------------------------------------------
 
-class TestWalkForwardValidate:
 
+class TestWalkForwardValidate:
     def _make_validator(self):
         from src.ml.pipeline.p02_cnn_lstm_xgboost.x_08_validate_models import ModelValidator
+
         with patch.object(ModelValidator, "__init__", return_value=None):
             v = ModelValidator.__new__(ModelValidator)
             v.config = {}
@@ -102,8 +107,8 @@ class TestWalkForwardValidate:
 
         result = validator.walk_forward_validate(y_true, y_pred, n_splits=4)
 
-        assert result['n_folds'] == 4
-        assert len(result['fold_metrics']) == 4
+        assert result["n_folds"] == 4
+        assert len(result["fold_metrics"]) == 4
 
     def test_avg_mse_is_finite(self):
         validator = self._make_validator()
@@ -113,8 +118,8 @@ class TestWalkForwardValidate:
 
         result = validator.walk_forward_validate(y_true, y_pred, n_splits=5)
 
-        assert np.isfinite(result['avg_mse'])
-        assert np.isfinite(result['avg_directional_accuracy'])
+        assert np.isfinite(result["avg_mse"])
+        assert np.isfinite(result["avg_directional_accuracy"])
 
     def test_directional_accuracy_between_0_and_1(self):
         validator = self._make_validator()
@@ -124,8 +129,8 @@ class TestWalkForwardValidate:
 
         result = validator.walk_forward_validate(y_true, y_pred, n_splits=5)
 
-        for fold in result['fold_metrics']:
-            da = fold['directional_accuracy']
+        for fold in result["fold_metrics"]:
+            da = fold["directional_accuracy"]
             assert 0.0 <= da <= 1.0, f"Fold {fold['fold']}: directional_accuracy={da} out of range"
 
 
@@ -133,8 +138,8 @@ class TestWalkForwardValidate:
 # 4. P03 deprecation shim
 # ---------------------------------------------------------------------------
 
-class TestP03DeprecationShim:
 
+class TestP03DeprecationShim:
     def test_p03_run_pipeline_emits_deprecation_warning(self):
         mod_name = "src.ml.pipeline.p03_cnn_xgboost.run_pipeline"
         sys.modules.pop(mod_name, None)

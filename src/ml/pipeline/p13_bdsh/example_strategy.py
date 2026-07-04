@@ -1,6 +1,5 @@
-import pandas as pd
-import sys
 import os
+import sys
 from datetime import datetime, timedelta
 
 # Ensure project root is in sys.path
@@ -11,6 +10,7 @@ if project_root not in sys.path:
 
 from src.data.data_manager import DataManager
 
+
 def get_live_signals(window=30):
     """
     Example of how to get live VIX signals using the shared DataManager.
@@ -19,20 +19,20 @@ def get_live_signals(window=30):
     dm = DataManager()
     end_dt = datetime.now()
     start_dt = end_dt - timedelta(days=60)
-    
+
     # We only need VIX for signals in this example
     vix_df = dm.get_ohlcv("^VIX", "1d", start_dt, end_dt)
-    
+
     if vix_df is None or vix_df.empty:
         return "ERROR: Could not fetch VIX data."
 
     # 2. Calculate Current VIX Z-Score
-    vix = vix_df['close']
+    vix = vix_df["close"]
     vix_mean = vix.rolling(window=window).mean()
     vix_std = vix.rolling(window=window).std()
     current_z = (vix.iloc[-1] - vix_mean.iloc[-1]) / vix_std.iloc[-1]
 
-    print(f"--- Market State ---")
+    print("--- Market State ---")
     print(f"Current VIX: {vix.iloc[-1]:.2f}")
     print(f"Current VIX Z-Score: {current_z:.2f}\n")
 
@@ -49,6 +49,7 @@ def get_live_signals(window=30):
         note = "NEUTRAL: Signal is HOLD existing positions"
 
     return note
+
 
 # Usage
 if __name__ == "__main__":

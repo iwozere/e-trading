@@ -9,18 +9,16 @@ Tests cover:
 - Configurable detection rules and thresholds
 """
 
-import unittest
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
 import sys
+import unittest
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.common.sentiments.processing.bot_detector import (
-    BotDetector, BotDetectionResult, UserProfile, PostMetrics
-)
+from src.common.sentiments.processing.bot_detector import BotDetectionResult, BotDetector, PostMetrics, UserProfile
 
 
 class TestBotDetector(unittest.TestCase):
@@ -39,7 +37,7 @@ class TestBotDetector(unittest.TestCase):
             "min_posts_for_pattern": 5,
             "min_content_length": 10,
             "max_hashtag_ratio": 0.3,
-            "max_mention_ratio": 0.5
+            "max_mention_ratio": 0.5,
         }
         self.detector = BotDetector(self.config)
 
@@ -70,17 +68,17 @@ class TestBotDetector(unittest.TestCase):
             verified=False,
             profile_image_default=False,
             bio_length=50,
-            creation_date=datetime.now(timezone.utc) - timedelta(days=365)
+            creation_date=datetime.now(UTC) - timedelta(days=365),
         )
 
         posts = [
             PostMetrics(
-                timestamp=datetime.now(timezone.utc) - timedelta(hours=i),
+                timestamp=datetime.now(UTC) - timedelta(hours=i),
                 content=f"This is a normal post about trading {i}",
                 likes=5 + i,
                 replies=2,
                 retweets=1,
-                content_hash=f"hash_{i}"
+                content_hash=f"hash_{i}",
             )
             for i in range(5)
         ]
@@ -97,13 +95,7 @@ class TestBotDetector(unittest.TestCase):
 
     def test_analyze_user_suspicious_username(self):
         """Test analysis of user with suspicious username patterns."""
-        suspicious_usernames = [
-            "user12345",
-            "trader_9876",
-            "cryptobot123",
-            "autotrader456",
-            "abc123456"
-        ]
+        suspicious_usernames = ["user12345", "trader_9876", "cryptobot123", "autotrader456", "abc123456"]
 
         for username in suspicious_usernames:
             profile = UserProfile(
@@ -115,7 +107,7 @@ class TestBotDetector(unittest.TestCase):
                 verified=False,
                 profile_image_default=True,
                 bio_length=5,
-                creation_date=datetime.now(timezone.utc) - timedelta(days=365)
+                creation_date=datetime.now(UTC) - timedelta(days=365),
             )
 
             result = self.detector.analyze_user(profile, [])
@@ -135,7 +127,7 @@ class TestBotDetector(unittest.TestCase):
             verified=False,
             profile_image_default=True,
             bio_length=0,
-            creation_date=datetime.now(timezone.utc) - timedelta(days=5)
+            creation_date=datetime.now(UTC) - timedelta(days=5),
         )
 
         result = self.detector.analyze_user(profile, [])
@@ -155,7 +147,7 @@ class TestBotDetector(unittest.TestCase):
             verified=False,
             profile_image_default=False,
             bio_length=20,
-            creation_date=datetime.now(timezone.utc) - timedelta(days=100)
+            creation_date=datetime.now(UTC) - timedelta(days=100),
         )
 
         result = self.detector.analyze_user(profile, [])
@@ -175,19 +167,19 @@ class TestBotDetector(unittest.TestCase):
             verified=False,
             profile_image_default=False,
             bio_length=20,
-            creation_date=datetime.now(timezone.utc) - timedelta(days=100)
+            creation_date=datetime.now(UTC) - timedelta(days=100),
         )
 
         # Create posts with very similar content
         duplicate_content = "Check out this amazing trading opportunity! Link in bio!"
         posts = [
             PostMetrics(
-                timestamp=datetime.now(timezone.utc) - timedelta(hours=i),
+                timestamp=datetime.now(UTC) - timedelta(hours=i),
                 content=duplicate_content,  # Same content
                 likes=1,
                 replies=0,
                 retweets=0,
-                content_hash=f"hash_{i}"
+                content_hash=f"hash_{i}",
             )
             for i in range(5)
         ]
@@ -212,17 +204,17 @@ class TestBotDetector(unittest.TestCase):
             verified=False,
             profile_image_default=False,
             bio_length=20,
-            creation_date=datetime.now(timezone.utc) - timedelta(days=100)
+            creation_date=datetime.now(UTC) - timedelta(days=100),
         )
 
         spam_posts = [
             PostMetrics(
-                timestamp=datetime.now(timezone.utc) - timedelta(hours=i),
+                timestamp=datetime.now(UTC) - timedelta(hours=i),
                 content=f"Follow me for more amazing signals! DM for premium group {i}",
                 likes=1,
                 replies=0,
                 retweets=0,
-                content_hash=f"hash_{i}"
+                content_hash=f"hash_{i}",
             )
             for i in range(3)
         ]
@@ -244,11 +236,11 @@ class TestBotDetector(unittest.TestCase):
             verified=False,
             profile_image_default=False,
             bio_length=20,
-            creation_date=datetime.now(timezone.utc) - timedelta(days=100)
+            creation_date=datetime.now(UTC) - timedelta(days=100),
         )
 
         # Create posts with very high frequency (every minute)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         frequent_posts = [
             PostMetrics(
                 timestamp=now - timedelta(minutes=i),
@@ -256,7 +248,7 @@ class TestBotDetector(unittest.TestCase):
                 likes=1,
                 replies=0,
                 retweets=0,
-                content_hash=f"hash_{i}"
+                content_hash=f"hash_{i}",
             )
             for i in range(20)  # 20 posts in 20 minutes
         ]
@@ -265,8 +257,9 @@ class TestBotDetector(unittest.TestCase):
 
         # Should detect high posting frequency
         self.assertGreater(result.bot_score, 0.0)
-        self.assertTrue(any("frequency" in reason.lower() or "interval" in reason.lower()
-                           for reason in result.detection_reasons))
+        self.assertTrue(
+            any("frequency" in reason.lower() or "interval" in reason.lower() for reason in result.detection_reasons)
+        )
 
     def test_hashtag_mention_analysis(self):
         """Test analysis of excessive hashtag and mention usage."""
@@ -279,18 +272,18 @@ class TestBotDetector(unittest.TestCase):
             verified=False,
             profile_image_default=False,
             bio_length=20,
-            creation_date=datetime.now(timezone.utc) - timedelta(days=100)
+            creation_date=datetime.now(UTC) - timedelta(days=100),
         )
 
         # Posts with excessive hashtags and mentions
         hashtag_posts = [
             PostMetrics(
-                timestamp=datetime.now(timezone.utc) - timedelta(hours=i),
+                timestamp=datetime.now(UTC) - timedelta(hours=i),
                 content="#crypto #bitcoin #trading #moon #rocket #lambo #hodl #btc #eth #ada @user1 @user2 @user3",
                 likes=1,
                 replies=0,
                 retweets=0,
-                content_hash=f"hash_{i}"
+                content_hash=f"hash_{i}",
             )
             for i in range(3)
         ]
@@ -299,8 +292,9 @@ class TestBotDetector(unittest.TestCase):
 
         # Should detect excessive hashtag/mention usage
         self.assertGreater(result.bot_score, 0.0)
-        self.assertTrue(any("hashtag" in reason.lower() or "mention" in reason.lower()
-                           for reason in result.detection_reasons))
+        self.assertTrue(
+            any("hashtag" in reason.lower() or "mention" in reason.lower() for reason in result.detection_reasons)
+        )
 
     def test_engagement_pattern_analysis(self):
         """Test analysis of suspicious engagement patterns."""
@@ -313,18 +307,18 @@ class TestBotDetector(unittest.TestCase):
             verified=False,
             profile_image_default=False,
             bio_length=20,
-            creation_date=datetime.now(timezone.utc) - timedelta(days=100)
+            creation_date=datetime.now(UTC) - timedelta(days=100),
         )
 
         # Posts with consistently very low engagement
         low_engagement_posts = [
             PostMetrics(
-                timestamp=datetime.now(timezone.utc) - timedelta(hours=i),
+                timestamp=datetime.now(UTC) - timedelta(hours=i),
                 content=f"Post with no engagement {i}",
                 likes=0,
                 replies=0,
                 retweets=0,
-                content_hash=f"hash_{i}"
+                content_hash=f"hash_{i}",
             )
             for i in range(15)
         ]
@@ -348,16 +342,16 @@ class TestBotDetector(unittest.TestCase):
             verified=True,
             profile_image_default=False,
             bio_length=50,
-            creation_date=datetime.now(timezone.utc) - timedelta(days=365)
+            creation_date=datetime.now(UTC) - timedelta(days=365),
         )
         legitimate_posts = [
             PostMetrics(
-                timestamp=datetime.now(timezone.utc) - timedelta(hours=i*6),
+                timestamp=datetime.now(UTC) - timedelta(hours=i * 6),
                 content=f"Legitimate trading insight {i}",
                 likes=10 + i,
                 replies=2,
                 retweets=1,
-                content_hash=f"legit_hash_{i}"
+                content_hash=f"legit_hash_{i}",
             )
             for i in range(3)
         ]
@@ -373,16 +367,16 @@ class TestBotDetector(unittest.TestCase):
             verified=False,
             profile_image_default=True,
             bio_length=0,
-            creation_date=datetime.now(timezone.utc) - timedelta(days=5)
+            creation_date=datetime.now(UTC) - timedelta(days=5),
         )
         suspicious_posts = [
             PostMetrics(
-                timestamp=datetime.now(timezone.utc) - timedelta(minutes=i*5),
+                timestamp=datetime.now(UTC) - timedelta(minutes=i * 5),
                 content="Follow for signals! DM for premium!",
                 likes=0,
                 replies=0,
                 retweets=0,
-                content_hash=f"spam_hash_{i}"
+                content_hash=f"spam_hash_{i}",
             )
             for i in range(10)
         ]
@@ -412,7 +406,7 @@ class TestBotDetector(unittest.TestCase):
             verified=False,
             profile_image_default=False,
             bio_length=20,
-            creation_date=datetime.now(timezone.utc) - timedelta(days=100)
+            creation_date=datetime.now(UTC) - timedelta(days=100),
         )
 
         self.detector.analyze_user(profile, [])
@@ -439,7 +433,7 @@ class TestBotDetector(unittest.TestCase):
             verified=False,
             profile_image_default=False,
             bio_length=20,
-            creation_date=datetime.now(timezone.utc) - timedelta(days=100)
+            creation_date=datetime.now(UTC) - timedelta(days=100),
         )
 
         self.detector.analyze_user(profile, [])
@@ -467,7 +461,7 @@ class TestBotDetector(unittest.TestCase):
             verified=False,
             profile_image_default=False,
             bio_length=0,
-            creation_date=None
+            creation_date=None,
         )
 
         result = self.detector.analyze_user(profile_with_nones, [])
@@ -488,18 +482,18 @@ class TestBotDetector(unittest.TestCase):
             verified=False,
             profile_image_default=False,
             bio_length=20,
-            creation_date=datetime.now(timezone.utc) - timedelta(days=100)
+            creation_date=datetime.now(UTC) - timedelta(days=100),
         )
 
         # Posts with very short content
         short_posts = [
             PostMetrics(
-                timestamp=datetime.now(timezone.utc) - timedelta(hours=i),
+                timestamp=datetime.now(UTC) - timedelta(hours=i),
                 content="ok",  # Very short content
                 likes=1,
                 replies=0,
                 retweets=0,
-                content_hash=f"short_hash_{i}"
+                content_hash=f"short_hash_{i}",
             )
             for i in range(10)
         ]
@@ -515,7 +509,7 @@ class TestUserProfile(unittest.TestCase):
 
     def test_user_profile_creation(self):
         """Test UserProfile object creation."""
-        creation_date = datetime.now(timezone.utc) - timedelta(days=100)
+        creation_date = datetime.now(UTC) - timedelta(days=100)
 
         profile = UserProfile(
             username="test_user",
@@ -526,7 +520,7 @@ class TestUserProfile(unittest.TestCase):
             verified=True,
             profile_image_default=False,
             bio_length=75,
-            creation_date=creation_date
+            creation_date=creation_date,
         )
 
         self.assertEqual(profile.username, "test_user")
@@ -545,7 +539,7 @@ class TestPostMetrics(unittest.TestCase):
 
     def test_post_metrics_creation(self):
         """Test PostMetrics object creation."""
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
 
         post = PostMetrics(
             timestamp=timestamp,
@@ -553,7 +547,7 @@ class TestPostMetrics(unittest.TestCase):
             likes=15,
             replies=3,
             retweets=2,
-            content_hash="test_hash_123"
+            content_hash="test_hash_123",
         )
 
         self.assertEqual(post.timestamp, timestamp)

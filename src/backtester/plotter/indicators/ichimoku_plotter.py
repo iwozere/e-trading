@@ -1,7 +1,8 @@
 from src.backtester.plotter.indicators.base_indicator_plotter import BaseIndicatorPlotter
-
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
+
 
 class IchimokuPlotter(BaseIndicatorPlotter):
     def plot(self, ax):
@@ -30,8 +31,7 @@ class IchimokuPlotter(BaseIndicatorPlotter):
                 dates,
                 self.indicators["senkou_span_a"],
                 self.indicators["senkou_span_b"],
-                where=self.indicators["senkou_span_a"]
-                >= self.indicators["senkou_span_b"],
+                where=self.indicators["senkou_span_a"] >= self.indicators["senkou_span_b"],
                 color="green",
                 alpha=0.2,
                 label="Bullish Cloud",
@@ -40,8 +40,7 @@ class IchimokuPlotter(BaseIndicatorPlotter):
                 dates,
                 self.indicators["senkou_span_a"],
                 self.indicators["senkou_span_b"],
-                where=self.indicators["senkou_span_a"]
-                < self.indicators["senkou_span_b"],
+                where=self.indicators["senkou_span_a"] < self.indicators["senkou_span_b"],
                 color="red",
                 alpha=0.2,
                 label="Bearish Cloud",

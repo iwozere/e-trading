@@ -3,9 +3,10 @@
 Configuration utilities for the e-trading project.
 """
 
-import yaml
 from pathlib import Path
-from typing import Dict, Any, Union
+from typing import Any, Dict, Union
+
+import yaml
 
 
 def load_config(config_path: Union[str, Path]) -> Dict[str, Any]:
@@ -23,7 +24,7 @@ def load_config(config_path: Union[str, Path]) -> Dict[str, Any]:
     if not config_path.exists():
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
-    with open(config_path, 'r') as f:
+    with open(config_path) as f:
         config = yaml.safe_load(f)
 
     return config
@@ -61,5 +62,5 @@ def save_config(config: Dict[str, Any], config_path: Union[str, Path]) -> None:
     config_path = Path(config_path)
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(config_path, 'w') as f:
+    with open(config_path, "w") as f:
         yaml.dump(config, f, default_flow_style=False, indent=2)

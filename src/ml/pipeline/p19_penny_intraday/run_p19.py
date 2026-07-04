@@ -15,21 +15,21 @@ Usage:
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.ml.pipeline.p19_penny_intraday.config import P19Config
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
 
 def _today() -> str:
     """Trading date for the watchlist (UTC today; pre-market build)."""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return datetime.now(UTC).strftime("%Y-%m-%d")
 
 
 def _not_implemented(phase: str, what: str) -> int:
@@ -58,6 +58,7 @@ def main() -> int:
 
     if args.cmd == "build-watchlist":
         from src.ml.pipeline.p19_penny_intraday.watchlist_builder import WatchlistBuilder
+
         target = args.date or _today()
         summary = WatchlistBuilder(config, target).run()
         print(f"P19 watchlist {target}: {summary['count']} names {summary['sources']}")
@@ -68,14 +69,15 @@ def main() -> int:
         if args.mode == "live":
             return _not_implemented("Phase 2", "run-once (live alerting)")
         from src.ml.pipeline.p19_penny_intraday.shadow_loop import ShadowLoop
+
         target = args.date or _today()
         summary = ShadowLoop(config, target).run_once()
-        print(f"P19 shadow poll {target}: logged={summary.get('logged')} "
-              f"of polled={summary.get('polled')}")
+        print(f"P19 shadow poll {target}: logged={summary.get('logged')} of polled={summary.get('polled')}")
         print(f"__SCHEDULER_RESULT__:{json.dumps(summary)}")
         return 0
     if args.cmd == "eod-backfill":
         from src.ml.pipeline.p19_penny_intraday.shadow_loop import ShadowLoop
+
         target = args.date or _today()
         summary = ShadowLoop(config, target).eod_backfill()
         print(f"P19 eod-backfill {target}: {summary.get('rows_updated')} rows")

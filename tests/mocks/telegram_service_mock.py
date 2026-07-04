@@ -5,11 +5,12 @@ This mock provides all the methods used by TelegramBusinessLogic
 with configurable responses and behavior tracking.
 """
 
-from typing import Any, Dict, List, Optional
-import time
 import json
+import time
+from typing import Any, Dict, List
 
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
 
 
@@ -47,17 +48,12 @@ class TelegramServiceMock:
             "max_alerts": 10,
             "max_schedules": 5,
             "verification_code": None,
-            "code_sent_time": None
+            "code_sent_time": None,
         }
 
     def _log_call(self, method_name: str, *args, **kwargs):
         """Log method calls for verification in tests."""
-        self.call_log.append({
-            "method": method_name,
-            "args": args,
-            "kwargs": kwargs,
-            "timestamp": time.time()
-        })
+        self.call_log.append({"method": method_name, "args": args, "kwargs": kwargs, "timestamp": time.time()})
         _logger.debug("Mock call: %s(*%s, **%s)", method_name, args, kwargs)
 
     def _check_error_config(self, method_name: str):
@@ -75,7 +71,7 @@ class TelegramServiceMock:
 
     # User Management Methods
 
-    def get_user_status(self, telegram_user_id: str) -> Optional[Dict[str, Any]]:
+    def get_user_status(self, telegram_user_id: str) -> Dict[str, Any] | None:
         """Get user status with mock data."""
         self._log_call("get_user_status", telegram_user_id)
         self._check_error_config("get_user_status")
@@ -164,7 +160,7 @@ class TelegramServiceMock:
 
         self.users[telegram_user_id][key] = value
 
-    def get_user_limit(self, telegram_user_id: str, key: str) -> Optional[int]:
+    def get_user_limit(self, telegram_user_id: str, key: str) -> int | None:
         """Get user limit for a specific key."""
         self._log_call("get_user_limit", telegram_user_id, key)
         self._check_error_config("get_user_limit")
@@ -232,15 +228,24 @@ class TelegramServiceMock:
             "email": email,
             "status": "ARMED",
             "created_at": time.time(),
-            "enabled": True
+            "enabled": True,
         }
 
         return self._get_custom_response("add_alert", alert_id)
 
-    def add_json_alert(self, telegram_user_id: str, config_json: str, *, email: Optional[bool] = None,
-                      status: str = "ARMED", re_arm_config: Optional[str] = None) -> int:
+    def add_json_alert(
+        self,
+        telegram_user_id: str,
+        config_json: str,
+        *,
+        email: bool | None = None,
+        status: str = "ARMED",
+        re_arm_config: str | None = None,
+    ) -> int:
         """Add a JSON-configured alert."""
-        self._log_call("add_json_alert", telegram_user_id, config_json, email=email, status=status, re_arm_config=re_arm_config)
+        self._log_call(
+            "add_json_alert", telegram_user_id, config_json, email=email, status=status, re_arm_config=re_arm_config
+        )
         self._check_error_config("add_json_alert")
 
         alert_id = len(self.alerts) + 1
@@ -255,7 +260,7 @@ class TelegramServiceMock:
             "re_arm_config": re_arm_config,
             "created_at": time.time(),
             "enabled": status == "ARMED",
-            "ticker": config.get("ticker", "unknown")
+            "ticker": config.get("ticker", "unknown"),
         }
 
         return self._get_custom_response("add_json_alert", alert_id)
@@ -298,7 +303,9 @@ class TelegramServiceMock:
 
         return self._get_custom_response("delete_alert", False)
 
-    def list_active_alerts(self, telegram_user_id: str = None, *, limit: int = 100, offset: int = 0, older_first: bool = False):
+    def list_active_alerts(
+        self, telegram_user_id: str = None, *, limit: int = 100, offset: int = 0, older_first: bool = False
+    ):
         """List active alerts."""
         self._log_call("list_active_alerts", telegram_user_id, limit=limit, offset=offset, older_first=older_first)
         self._check_error_config("list_active_alerts")
@@ -307,7 +314,7 @@ class TelegramServiceMock:
         if telegram_user_id:
             active_alerts = [alert for alert in active_alerts if alert["user_id"] == telegram_user_id]
 
-        return self._get_custom_response("list_active_alerts", active_alerts[offset:offset+limit])
+        return self._get_custom_response("list_active_alerts", active_alerts[offset : offset + limit])
 
     # Schedule Management Methods
 
@@ -324,12 +331,14 @@ class TelegramServiceMock:
             "scheduled_time": scheduled_time,
             "created_at": time.time(),
             "enabled": True,
-            **kwargs
+            **kwargs,
         }
 
         return self._get_custom_response("add_schedule", schedule_id)
 
-    def add_json_schedule(self, telegram_user_id: str, config_json: str, *, schedule_config: Optional[str] = None) -> int:
+    def add_json_schedule(
+        self, telegram_user_id: str, config_json: str, *, schedule_config: str | None = None
+    ) -> int:
         """Add a JSON-configured schedule."""
         self._log_call("add_json_schedule", telegram_user_id, config_json, schedule_config=schedule_config)
         self._check_error_config("add_json_schedule")
@@ -344,7 +353,7 @@ class TelegramServiceMock:
             "schedule_config": schedule_config,
             "created_at": time.time(),
             "enabled": True,
-            "ticker": config.get("ticker", "unknown")
+            "ticker": config.get("ticker", "unknown"),
         }
 
         return self._get_custom_response("add_json_schedule", schedule_id)
@@ -393,14 +402,14 @@ class TelegramServiceMock:
 
     # Settings Management Methods
 
-    def get_setting(self, key: str) -> Optional[str]:
+    def get_setting(self, key: str) -> str | None:
         """Get a setting value."""
         self._log_call("get_setting", key)
         self._check_error_config("get_setting")
 
         return self._get_custom_response("get_setting", self.settings.get(key))
 
-    def set_setting(self, key: str, value: Optional[str]) -> None:
+    def set_setting(self, key: str, value: str | None) -> None:
         """Set a setting value."""
         self._log_call("set_setting", key, value)
         self._check_error_config("set_setting")
@@ -424,12 +433,12 @@ class TelegramServiceMock:
             "type": type_,
             "message": message,
             "created_at": time.time(),
-            "status": "pending"
+            "status": "pending",
         }
 
         return self._get_custom_response("add_feedback", feedback_id)
 
-    def list_feedback(self, type_: Optional[str] = None):
+    def list_feedback(self, type_: str | None = None):
         """List feedback entries."""
         self._log_call("list_feedback", type_)
         self._check_error_config("list_feedback")
@@ -464,7 +473,7 @@ class TelegramServiceMock:
             "telegram_user_id": telegram_user_id,
             "command": command,
             "created_at": time.time(),
-            **kwargs
+            **kwargs,
         }
 
         return self._get_custom_response("log_command_audit", audit_id)
@@ -491,7 +500,7 @@ class TelegramServiceMock:
             "sent_by": sent_by,
             "success_count": success_count,
             "total_count": total_count,
-            "created_at": time.time()
+            "created_at": time.time(),
         }
 
         return self._get_custom_response("log_broadcast", broadcast_id)
@@ -533,7 +542,7 @@ class TelegramServiceMock:
         """Get the number of times a method was called."""
         return len([call for call in self.call_log if call["method"] == method_name])
 
-    def get_last_call(self, method_name: str) -> Optional[Dict[str, Any]]:
+    def get_last_call(self, method_name: str) -> Dict[str, Any] | None:
         """Get the last call to a specific method."""
         calls = [call for call in self.call_log if call["method"] == method_name]
         return calls[-1] if calls else None
@@ -541,9 +550,7 @@ class TelegramServiceMock:
     def was_called_with(self, method_name: str, *args, **kwargs) -> bool:
         """Check if a method was called with specific arguments."""
         for call in self.call_log:
-            if (call["method"] == method_name and
-                call["args"] == args and
-                call["kwargs"] == kwargs):
+            if call["method"] == method_name and call["args"] == args and call["kwargs"] == kwargs:
                 return True
         return False
 

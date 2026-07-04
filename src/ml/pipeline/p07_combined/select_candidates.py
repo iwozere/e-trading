@@ -1,6 +1,7 @@
-import pandas as pd
 from pathlib import Path
-from typing import List, Dict, Any
+
+import pandas as pd
+
 
 def select_top_candidates(results_root: str = "results/p07_combined", top_n: int = 5):
     """
@@ -24,16 +25,12 @@ def select_top_candidates(results_root: str = "results/p07_combined", top_n: int
     numeric_cols = ["Total Trades", "Profit Factor", "Total Return [%]", "Sharpe Ratio"]
     for col in numeric_cols:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+            df[col] = pd.to_numeric(df[col], errors="coerce")
 
     # Apply Filters
     # Note: We prioritize Validation (VAL) results if available, but for general selection
     # we filter the whole set and then drop duplicates to get unique pairs.
-    mask = (
-        (df["Total Trades"] >= 30) &
-        (df["Profit Factor"] > 1.1) &
-        (df["Total Return [%]"] > 0)
-    )
+    mask = (df["Total Trades"] >= 30) & (df["Profit Factor"] > 1.1) & (df["Total Return [%]"] > 0)
 
     candidates = df[mask].copy()
 
@@ -52,6 +49,7 @@ def select_top_candidates(results_root: str = "results/p07_combined", top_n: int
 
     print(f"Selected {len(top_pairs)} candidates. Saved to {output_file}")
     print(top_pairs[["ticker", "timeframe", "Sharpe Ratio"]])
+
 
 if __name__ == "__main__":
     select_top_candidates()

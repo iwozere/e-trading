@@ -23,21 +23,23 @@ cerebro.run()
 
 import backtrader as bt
 import pandas as pd
+
 from src.strategy.future.hybrid_nn_core import HybridNNCore
+
 
 class HybridNNBacktraderStrategy(bt.Strategy):
     params = (
-        ('cnn_lstm_path', 'cnn_lstm_attention.pt'),
-        ('xgb_path', 'xgboost_model.json'),
-        ('window_size', 100),
-        ('device', None),
+        ("cnn_lstm_path", "cnn_lstm_attention.pt"),
+        ("xgb_path", "xgboost_model.json"),
+        ("window_size", 100),
+        ("device", None),
     )
 
     def __init__(self):
         self.window_size = self.p.window_size
         self.core = HybridNNCore(self.p.cnn_lstm_path, self.p.xgb_path, self.p.window_size, self.p.device)
         self.ohlcv_buffer = []
-        self.datafields = ['open', 'high', 'low', 'close', 'volume']
+        self.datafields = ["open", "high", "low", "close", "volume"]
 
     def next(self):
         bar = [float(getattr(self.data, f)[0]) for f in self.datafields]
@@ -53,8 +55,8 @@ class HybridNNBacktraderStrategy(bt.Strategy):
             print(f"[HybridNNBacktraderStrategy] Prediction error: {e}")
             return
         if not self.position:
-            if signal == 'buy':
+            if signal == "buy":
                 self.buy()
         else:
-            if signal == 'sell':
+            if signal == "sell":
                 self.sell()

@@ -9,14 +9,16 @@ This example demonstrates the new configuration-based fundamentals system with:
 """
 
 import logging
-from src.data.data_manager import DataManager
-from src.data.cache.fundamentals_combiner import get_fundamentals_combiner
+
 from src.data.cache.fundamentals_cache import get_fundamentals_cache
+from src.data.cache.fundamentals_combiner import get_fundamentals_combiner
 from src.data.config.fundamentals_config_validator import validate_fundamentals_config
+from src.data.data_manager import DataManager
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def demonstrate_configuration_validation():
     """Demonstrate configuration validation."""
@@ -32,17 +34,19 @@ def demonstrate_configuration_validation():
         for error in errors:
             print(f"  - {error}")
 
+
 def demonstrate_provider_sequences():
     """Demonstrate provider sequences for different data types."""
     print("\n=== Provider Sequences ===")
 
     combiner = get_fundamentals_combiner()
 
-    data_types = ['statements', 'ratios', 'profile', 'calendar', 'dividends']
+    data_types = ["statements", "ratios", "profile", "calendar", "dividends"]
 
     for data_type in data_types:
         sequence = combiner.get_provider_sequence(data_type)
         print(f"{data_type:12}: {sequence}")
+
 
 def demonstrate_ttl_settings():
     """Demonstrate TTL settings for different data types."""
@@ -50,11 +54,12 @@ def demonstrate_ttl_settings():
 
     combiner = get_fundamentals_combiner()
 
-    data_types = ['profiles', 'ratios', 'statements', 'calendar', 'dividends']
+    data_types = ["profiles", "ratios", "statements", "calendar", "dividends"]
 
     for data_type in data_types:
         ttl_days = combiner.get_ttl_for_data_type(data_type)
         print(f"{data_type:12}: {ttl_days} days")
+
 
 def demonstrate_field_priorities():
     """Demonstrate field-specific provider priorities."""
@@ -64,17 +69,18 @@ def demonstrate_field_priorities():
 
     # Test different field paths
     field_paths = [
-        'ttm_metrics.pe_ratio',
-        'ttm_metrics.pb_ratio',
-        'company_profile.sector',
-        'company_profile.industry',
-        'share_data.shares_outstanding',
-        'calendar_events.earnings_date'
+        "ttm_metrics.pe_ratio",
+        "ttm_metrics.pb_ratio",
+        "company_profile.sector",
+        "company_profile.industry",
+        "share_data.shares_outstanding",
+        "calendar_events.earnings_date",
     ]
 
     for field_path in field_paths:
         priority = combiner.get_field_provider_priority(field_path)
         print(f"{field_path:30}: {priority}")
+
 
 def demonstrate_data_manager_usage():
     """Demonstrate DataManager usage with new configuration system."""
@@ -84,8 +90,8 @@ def demonstrate_data_manager_usage():
         dm = DataManager("data-cache")
 
         # Test different data types
-        symbols = ['AAPL', 'GOOGL', 'MSFT']
-        data_types = ['ratios', 'profile', 'statements']
+        symbols = ["AAPL", "GOOGL", "MSFT"]
+        data_types = ["ratios", "profile", "statements"]
 
         for symbol in symbols:
             print(f"\n--- {symbol} ---")
@@ -94,14 +100,12 @@ def demonstrate_data_manager_usage():
                 try:
                     print(f"Fetching {data_type} for {symbol}...")
                     fundamentals = dm.get_fundamentals(
-                        symbol,
-                        data_type=data_type,
-                        combination_strategy='priority_based'
+                        symbol, data_type=data_type, combination_strategy="priority_based"
                     )
 
                     if fundamentals:
                         # Show some key fields
-                        key_fields = ['market_cap', 'pe_ratio', 'sector', 'name']
+                        key_fields = ["market_cap", "pe_ratio", "sector", "name"]
                         available_fields = [field for field in key_fields if field in fundamentals]
 
                         if available_fields:
@@ -117,6 +121,7 @@ def demonstrate_data_manager_usage():
     except Exception as e:
         print(f"Error initializing DataManager: {e}")
 
+
 def demonstrate_cache_operations():
     """Demonstrate cache operations with configuration."""
     print("\n=== Cache Operations ===")
@@ -131,8 +136,8 @@ def demonstrate_cache_operations():
         print(f"Cache statistics: {stats}")
 
         # Test cache validity with different data types
-        symbol = 'AAPL'
-        data_types = ['ratios', 'profile', 'statements']
+        symbol = "AAPL"
+        data_types = ["ratios", "profile", "statements"]
 
         for data_type in data_types:
             cached_data = cache.find_latest_json(symbol, data_type=data_type)
@@ -145,6 +150,7 @@ def demonstrate_cache_operations():
 
     except Exception as e:
         print(f"Error with cache operations: {e}")
+
 
 def main():
     """Run all demonstrations."""
@@ -161,6 +167,7 @@ def main():
 
     print("\n" + "=" * 50)
     print("Demo completed!")
+
 
 if __name__ == "__main__":
     main()

@@ -7,20 +7,20 @@ Tests the integration of all three systems and their interactions.
 
 import asyncio
 import sys
-from pathlib import Path
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.service.rate_limiter import rate_limiter, RateLimitResult, RateLimitConfig
-from src.notification.service.priority_handler import priority_handler
-from src.notification.service.batch_processor import batch_processor, BatchConfig
-from src.notification.service.message_queue import QueuedMessage
 from src.data.db.models.model_notification import MessagePriority
 from src.notification.logger import setup_logger
+from src.notification.service.batch_processor import BatchConfig, batch_processor
+from src.notification.service.message_queue import QueuedMessage
+from src.notification.service.priority_handler import priority_handler
+from src.notification.service.rate_limiter import RateLimitConfig, RateLimitResult, rate_limiter
 
 _logger = setup_logger(__name__)
 
@@ -30,7 +30,7 @@ def create_test_message(
     priority: MessagePriority = MessagePriority.NORMAL,
     channels: list = None,
     recipient_id: str = "test_user",
-    message_type: str = "test_message"
+    message_type: str = "test_message",
 ) -> QueuedMessage:
     """Create a test message."""
     if channels is None:
@@ -45,10 +45,10 @@ def create_test_message(
         template_name=None,
         content={"text": f"Test message {message_id}"},
         metadata=None,
-        scheduled_for=datetime.now(timezone.utc),
+        scheduled_for=datetime.now(UTC),
         retry_count=0,
         max_retries=3,
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC),
     )
 
 
@@ -61,7 +61,7 @@ async def test_rate_limiter():
         test_config = RateLimitConfig(
             max_tokens=5,
             refill_rate=5,  # 5 tokens per minute
-            window_minutes=1
+            window_minutes=1,
         )
         rate_limiter.set_channel_config("test_channel", test_config)
 
@@ -71,9 +71,7 @@ async def test_rate_limiter():
         # Test normal rate limiting
         results = []
         for i in range(7):  # Try to consume 7 tokens (should hit limit)
-            result, wait_time = await rate_limiter.check_rate_limit(
-                user_id, channel, MessagePriority.NORMAL, 1
-            )
+            result, wait_time = await rate_limiter.check_rate_limit(user_id, channel, MessagePriority.NORMAL, 1)
             results.append((result, wait_time))
 
         # Should allow first 5, then rate limit
@@ -83,9 +81,7 @@ async def test_rate_limiter():
         print(f"✓ Rate limiting: {allowed_count} allowed, {rate_limited_count} rate limited")
 
         # Test priority bypass
-        result, _ = await rate_limiter.check_rate_limit(
-            user_id, channel, MessagePriority.CRITICAL, 1
-        )
+        result, _ = await rate_limiter.check_rate_limit(user_id, channel, MessagePriority.CRITICAL, 1)
 
         if result == RateLimitResult.BYPASSED:
             print("✓ Priority bypass working for CRITICAL messages")
@@ -148,7 +144,9 @@ async def test_priority_handler():
 
         # Test queue status
         status = priority_handler.get_queue_status()
-        print(f"✓ Queue status: {status['total_queued']} queued, {status['processing_stats']['total_processed']} processed")
+        print(
+            f"✓ Queue status: {status['total_queued']} queued, {status['processing_stats']['total_processed']} processed"
+        )
 
         # Test SLA monitoring
         sla_violations = priority_handler.get_sla_violations()
@@ -168,10 +166,7 @@ async def test_batch_processor():
     try:
         # Configure batch processor
         test_config = BatchConfig(
-            max_batch_size=3,
-            max_wait_time_seconds=2.0,
-            min_batch_size=1,
-            prefer_same_recipient=True
+            max_batch_size=3, max_wait_time_seconds=2.0, min_batch_size=1, prefer_same_recipient=True
         )
         batch_processor.set_channel_config("test_channel", test_config)
 
@@ -238,25 +233,23 @@ async def test_integration():
 
     try:
         # Configure systems for integration test
-        rate_limiter.set_channel_config("integration_channel", RateLimitConfig(
-            max_tokens=3,
-            refill_rate=3
-        ))
+        rate_limiter.set_channel_config("integration_channel", RateLimitConfig(max_tokens=3, refill_rate=3))
 
-        batch_processor.set_channel_config("integration_channel", BatchConfig(
-            max_batch_size=2,
-            max_wait_time_seconds=1.0
-        ))
+        batch_processor.set_channel_config(
+            "integration_channel", BatchConfig(max_batch_size=2, max_wait_time_seconds=1.0)
+        )
 
         await batch_processor.start()
 
         # Test scenario: Mix of priority messages with rate limiting
         test_messages = [
             create_test_message(100, MessagePriority.CRITICAL, ["integration_channel"]),  # Should bypass rate limit
-            create_test_message(101, MessagePriority.NORMAL, ["integration_channel"]),    # Should be batched
-            create_test_message(102, MessagePriority.NORMAL, ["integration_channel"]),    # Should be batched
-            create_test_message(103, MessagePriority.HIGH, ["integration_channel"]),      # Should bypass batching
-            create_test_message(104, MessagePriority.NORMAL, ["integration_channel"]),    # Should be rate limited after 3 tokens
+            create_test_message(101, MessagePriority.NORMAL, ["integration_channel"]),  # Should be batched
+            create_test_message(102, MessagePriority.NORMAL, ["integration_channel"]),  # Should be batched
+            create_test_message(103, MessagePriority.HIGH, ["integration_channel"]),  # Should bypass batching
+            create_test_message(
+                104, MessagePriority.NORMAL, ["integration_channel"]
+            ),  # Should be rate limited after 3 tokens
         ]
 
         # Process messages through the integrated system
@@ -274,9 +267,7 @@ async def test_integration():
 
         for message in test_messages:
             # Check rate limit first
-            result, wait_time = await rate_limiter.check_rate_limit(
-                user_id, channel, message.priority, 1
-            )
+            result, wait_time = await rate_limiter.check_rate_limit(user_id, channel, message.priority, 1)
 
             if result == RateLimitResult.RATE_LIMITED:
                 rate_limited_messages.append(message)
@@ -300,9 +291,11 @@ async def test_integration():
         print(f"  Rate limited messages: {len(rate_limited_messages)}")
 
         # Verify expected behavior
-        if (len(priority_messages) >= 2 and  # CRITICAL and HIGH
-            len(processed_batches) >= 1 and   # Normal messages batched
-            len(rate_limited_messages) >= 0): # Some may be rate limited
+        if (
+            len(priority_messages) >= 2  # CRITICAL and HIGH
+            and len(processed_batches) >= 1  # Normal messages batched
+            and len(rate_limited_messages) >= 0
+        ):  # Some may be rate limited
             print("✓ Integration test passed")
             success = True
         else:
@@ -350,10 +343,7 @@ async def test_performance():
         # Test priority handler performance
         start_time = time.time()
 
-        priority_messages = [
-            create_test_message(i, MessagePriority.NORMAL)
-            for i in range(num_messages)
-        ]
+        priority_messages = [create_test_message(i, MessagePriority.NORMAL) for i in range(num_messages)]
 
         for message in priority_messages:
             await priority_handler.enqueue_message(message)

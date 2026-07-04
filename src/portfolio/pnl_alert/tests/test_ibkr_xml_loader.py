@@ -10,7 +10,6 @@ import pytest
 from src.portfolio.pnl_alert.ibkr_xml_loader import load_ibkr_xml, resolve_xml_path
 from src.portfolio.pnl_alert.position_aggregator import RawIbkrPosition
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -58,6 +57,7 @@ _TWO_ACCOUNT_XML = textwrap.dedent("""\
 # resolve_xml_path
 # ---------------------------------------------------------------------------
 
+
 def test_resolve_exact_path(tmp_path: Path) -> None:
     xml_file = tmp_path / "positions.xml"
     xml_file.write_text("<root/>")
@@ -87,6 +87,7 @@ def test_resolve_glob_no_matches(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # load_ibkr_xml — single account
 # ---------------------------------------------------------------------------
+
 
 def test_single_account_loads_positions(tmp_path: Path) -> None:
     xml_file = tmp_path / "positions.xml"
@@ -121,6 +122,7 @@ def test_zero_position_filtered(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # load_ibkr_xml — multi-account position merging
 # ---------------------------------------------------------------------------
+
 
 def test_multi_account_quantities_summed(tmp_path: Path) -> None:
     xml_file = tmp_path / "positions.xml"
@@ -165,6 +167,7 @@ def test_returns_sorted_by_symbol(tmp_path: Path) -> None:
 # load_ibkr_xml — glob resolution
 # ---------------------------------------------------------------------------
 
+
 def test_load_via_glob(tmp_path: Path) -> None:
     old = tmp_path / "Open_Positions-2026-06-09.xml"
     new = tmp_path / "Open_Positions-2026-06-11.xml"
@@ -179,6 +182,7 @@ def test_load_via_glob(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # load_ibkr_xml — error handling
 # ---------------------------------------------------------------------------
+
 
 def test_missing_file_raises(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):

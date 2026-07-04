@@ -15,38 +15,48 @@ Features:
 - Supports regime-aware LSTM with one-hot encoding
 """
 
-import pandas as pd
-import numpy as np
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset
-import yaml
-from pathlib import Path
 import json
 import pickle
-from datetime import datetime
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
-import talib
 import sys
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Tuple
+
+import numpy as np
+import pandas as pd
+import talib
+import torch
+import torch.nn as nn
+import yaml
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from torch.utils.data import DataLoader, TensorDataset
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
 
 # Set device
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _logger.info("Using device: %s", DEVICE)
+
 
 class LSTMModel(nn.Module):
     """Enhanced LSTM model for time series prediction with regime awareness."""
 
-    def __init__(self, input_size: int, hidden_size: int, num_layers: int,
-                 dropout: float = 0.2, output_size: int = 1, n_regimes: int = 3):
-        super(LSTMModel, self).__init__()
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        num_layers: int,
+        dropout: float = 0.2,
+        output_size: int = 1,
+        n_regimes: int = 3,
+    ):
+        super().__init__()
 
         self.hidden_size = hidden_size
         self.num_layers = num_layers
@@ -59,7 +69,7 @@ class LSTMModel(nn.Module):
             num_layers=num_layers,
             dropout=dropout if num_layers > 1 else 0,
             batch_first=True,
-            bidirectional=False
+            bidirectional=False,
         )
 
         # Additional dense layers for better feature extraction
@@ -100,6 +110,7 @@ class LSTMModel(nn.Module):
 
         return output
 
+
 class LSTMTrainer:
     def __init__(self, config_path: str = "config/pipeline/p01.yaml"):
         """
@@ -110,9 +121,9 @@ class LSTMTrainer:
         """
         self.config_path = Path(config_path)
         self.config = self._load_config()
-        self.labeled_data_dir = Path(self.config['paths']['data_labeled'])
-        self.results_dir = Path(self.config['paths']['models_lstm'])
-        self.models_dir = Path(self.config['paths']['models_lstm'])
+        self.labeled_data_dir = Path(self.config["paths"]["data_labeled"])
+        self.results_dir = Path(self.config["paths"]["models_lstm"])
+        self.models_dir = Path(self.config["paths"]["models_lstm"])
         self.models_dir.mkdir(parents=True, exist_ok=True)
 
     def _load_config(self) -> dict:
@@ -120,7 +131,7 @@ class LSTMTrainer:
         if not self.config_path.exists():
             raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
 
-        with open(self.config_path, 'r') as f:
+        with open(self.config_path) as f:
             config = yaml.safe_load(f)
 
         _logger.info("Loaded configuration from %s", self.config_path)
@@ -133,33 +144,35 @@ class LSTMTrainer:
         fname = f"checkpoint_{symbol}_{timeframe}.pth"
         return self.models_dir / fname
 
-    def save_checkpoint(self, model, optimizer, epoch, train_losses, val_losses,
-                        symbol: str, timeframe: str):
+    def save_checkpoint(self, model, optimizer, epoch, train_losses, val_losses, symbol: str, timeframe: str):
         """Save model/optimizer state so training can resume later."""
         ckpt_path = self._get_checkpoint_path(symbol, timeframe)
-        torch.save({
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'train_losses': train_losses,
-            'val_losses': val_losses
-        }, ckpt_path)
-        _logger.info("Checkpoint saved at %s (epoch %d)", ckpt_path, epoch+1)
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "train_losses": train_losses,
+                "val_losses": val_losses,
+            },
+            ckpt_path,
+        )
+        _logger.info("Checkpoint saved at %s (epoch %d)", ckpt_path, epoch + 1)
 
     def load_checkpoint(self, model, optimizer, symbol: str, timeframe: str):
         """Load model/optimizer state to resume training if checkpoint exists."""
         ckpt_path = self._get_checkpoint_path(symbol, timeframe)
         if ckpt_path.exists():
             checkpoint = torch.load(ckpt_path, map_location=DEVICE)
-            model.load_state_dict(checkpoint['model_state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            start_epoch = checkpoint['epoch'] + 1
+            model.load_state_dict(checkpoint["model_state_dict"])
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            start_epoch = checkpoint["epoch"] + 1
             _logger.info("Resuming from checkpoint %s (epoch %d)", ckpt_path, start_epoch)
-            return start_epoch, checkpoint['train_losses'], checkpoint['val_losses']
+            return start_epoch, checkpoint["train_losses"], checkpoint["val_losses"]
         else:
             return 0, [], []
 
-    def load_optimization_results(self, symbol: str, timeframe: str) -> Tuple[Optional[Dict], Optional[Dict]]:
+    def load_optimization_results(self, symbol: str, timeframe: str) -> Tuple[Dict | None, Dict | None]:
         """
         Load optimization results for indicators and LSTM parameters.
 
@@ -177,9 +190,9 @@ class LSTMTrainer:
         indicator_params = None
         if indicator_files:
             indicator_file = sorted(indicator_files)[-1]
-            with open(indicator_file, 'r') as f:
+            with open(indicator_file) as f:
                 results = json.load(f)
-            indicator_params = results['best_params']
+            indicator_params = results["best_params"]
             _logger.info("Loaded indicator parameters from %s", indicator_file)
         else:
             _logger.warning("No indicator optimization results found for %s %s", symbol, timeframe)
@@ -191,21 +204,21 @@ class LSTMTrainer:
         lstm_params = None
         if lstm_files:
             lstm_file = sorted(lstm_files)[-1]
-            with open(lstm_file, 'r') as f:
+            with open(lstm_file) as f:
                 results = json.load(f)
-            lstm_params = results['best_params']
+            lstm_params = results["best_params"]
             _logger.info("Loaded LSTM parameters from %s", lstm_file)
         else:
             _logger.warning("No LSTM optimization results found for %s %s", symbol, timeframe)
             # Use default parameters from config
             lstm_params = {
-                'sequence_length': self.config['lstm']['sequence_length'],
-                'hidden_size': self.config['lstm']['hidden_size'],
-                'num_layers': self.config['lstm']['num_layers'],
-                'dropout': self.config['lstm']['dropout'],
-                'learning_rate': self.config['lstm']['learning_rate'],
-                'batch_size': self.config['lstm']['batch_size'],
-                'epochs': self.config['lstm']['epochs']
+                "sequence_length": self.config["lstm"]["sequence_length"],
+                "hidden_size": self.config["lstm"]["hidden_size"],
+                "num_layers": self.config["lstm"]["num_layers"],
+                "dropout": self.config["lstm"]["dropout"],
+                "learning_rate": self.config["lstm"]["learning_rate"],
+                "batch_size": self.config["lstm"]["batch_size"],
+                "epochs": self.config["lstm"]["epochs"],
             }
             _logger.info("Using default LSTM parameters: %s", lstm_params)
 
@@ -225,80 +238,79 @@ class LSTMTrainer:
         df = df.copy()
 
         # Extract OHLCV arrays
-        high = df['high'].values
-        low = df['low'].values
-        close = df['close'].values
-        volume = df['volume'].values
+        high = df["high"].values
+        low = df["low"].values
+        close = df["close"].values
+        volume = df["volume"].values
 
         try:
             # Apply optimized indicators (same as in x_06_optuna_lstm.py)
 
             # RSI
-            if 'rsi_period' in params:
-                df['rsi_optimized'] = talib.RSI(close, timeperiod=params['rsi_period'])
+            if "rsi_period" in params:
+                df["rsi_optimized"] = talib.RSI(close, timeperiod=params["rsi_period"])
 
             # Bollinger Bands
-            if 'bb_period' in params and 'bb_std' in params:
+            if "bb_period" in params and "bb_std" in params:
                 bb_upper, bb_middle, bb_lower = talib.BBANDS(
-                    close,
-                    timeperiod=params['bb_period'],
-                    nbdevup=params['bb_std'],
-                    nbdevdn=params['bb_std']
+                    close, timeperiod=params["bb_period"], nbdevup=params["bb_std"], nbdevdn=params["bb_std"]
                 )
-                df['bb_upper_opt'] = bb_upper
-                df['bb_middle_opt'] = bb_middle
-                df['bb_lower_opt'] = bb_lower
-                df['bb_position_opt'] = (close - bb_lower) / (bb_upper - bb_lower)
-                df['bb_width_opt'] = (bb_upper - bb_lower) / bb_middle
+                df["bb_upper_opt"] = bb_upper
+                df["bb_middle_opt"] = bb_middle
+                df["bb_lower_opt"] = bb_lower
+                df["bb_position_opt"] = (close - bb_lower) / (bb_upper - bb_lower)
+                df["bb_width_opt"] = (bb_upper - bb_lower) / bb_middle
 
             # MACD
-            if all(param in params for param in ['macd_fast', 'macd_slow', 'macd_signal']):
+            if all(param in params for param in ["macd_fast", "macd_slow", "macd_signal"]):
                 macd, macd_signal, macd_hist = talib.MACD(
                     close,
-                    fastperiod=params['macd_fast'],
-                    slowperiod=params['macd_slow'],
-                    signalperiod=params['macd_signal']
+                    fastperiod=params["macd_fast"],
+                    slowperiod=params["macd_slow"],
+                    signalperiod=params["macd_signal"],
                 )
-                df['macd_opt'] = macd
-                df['macd_signal_opt'] = macd_signal
-                df['macd_histogram_opt'] = macd_hist
+                df["macd_opt"] = macd
+                df["macd_signal_opt"] = macd_signal
+                df["macd_histogram_opt"] = macd_hist
 
             # EMAs
-            if 'ema_fast' in params:
-                df['ema_fast_opt'] = talib.EMA(close, timeperiod=params['ema_fast'])
-            if 'ema_slow' in params:
-                df['ema_slow_opt'] = talib.EMA(close, timeperiod=params['ema_slow'])
+            if "ema_fast" in params:
+                df["ema_fast_opt"] = talib.EMA(close, timeperiod=params["ema_fast"])
+            if "ema_slow" in params:
+                df["ema_slow_opt"] = talib.EMA(close, timeperiod=params["ema_slow"])
 
             # EMA spread
-            if 'ema_fast_opt' in df.columns and 'ema_slow_opt' in df.columns:
-                df['ema_spread_opt'] = (df['ema_fast_opt'] - df['ema_slow_opt']) / df['close']
+            if "ema_fast_opt" in df.columns and "ema_slow_opt" in df.columns:
+                df["ema_spread_opt"] = (df["ema_fast_opt"] - df["ema_slow_opt"]) / df["close"]
 
             # ATR
-            if 'atr_period' in params:
-                df['atr_opt'] = talib.ATR(high, low, close, timeperiod=params['atr_period'])
+            if "atr_period" in params:
+                df["atr_opt"] = talib.ATR(high, low, close, timeperiod=params["atr_period"])
 
             # Stochastic
-            if 'stoch_k' in params and 'stoch_d' in params:
+            if "stoch_k" in params and "stoch_d" in params:
                 stoch_k, stoch_d = talib.STOCH(
-                    high, low, close,
-                    fastk_period=params['stoch_k'],
-                    slowk_period=params['stoch_d'],
-                    slowd_period=params['stoch_d']
+                    high,
+                    low,
+                    close,
+                    fastk_period=params["stoch_k"],
+                    slowk_period=params["stoch_d"],
+                    slowd_period=params["stoch_d"],
                 )
-                df['stoch_k_opt'] = stoch_k
-                df['stoch_d_opt'] = stoch_d
+                df["stoch_k_opt"] = stoch_k
+                df["stoch_d_opt"] = stoch_d
 
             # Williams %R
-            if 'williams_period' in params:
-                df['williams_r_opt'] = talib.WILLR(high, low, close, timeperiod=params['williams_period'])
+            if "williams_period" in params:
+                df["williams_r_opt"] = talib.WILLR(high, low, close, timeperiod=params["williams_period"])
 
             # MFI
-            if 'mfi_period' in params:
-                df['mfi_opt'] = talib.MFI(high, low, close, volume, timeperiod=params['mfi_period'])
+            if "mfi_period" in params:
+                df["mfi_opt"] = talib.MFI(high, low, close, volume, timeperiod=params["mfi_period"])
 
             # SMA
-            if 'sma_period' in params:
-                df['sma_opt'] = talib.SMA(close, timeperiod=params['sma_period'])
+            if "sma_period" in params:
+                df["sma_opt"] = talib.SMA(close, timeperiod=params["sma_period"])
 
         except Exception as e:
             _logger.warning("Error applying optimized indicators: %s", str(e))
@@ -318,33 +330,38 @@ class LSTMTrainer:
             List of selected feature column names
         """
         # Base OHLCV features
-        base_features = ['open', 'high', 'low', 'close', 'volume', 'log_return']
+        base_features = ["open", "high", "low", "close", "volume", "log_return"]
 
         # Regime features (exclude the categorical regime itself)
-        regime_features = ['regime_confidence', 'regime_duration']
+        regime_features = ["regime_confidence", "regime_duration"]
         if not exclude_regime:
-            regime_features.append('regime')
+            regime_features.append("regime")
 
         # Optimized indicator features (prioritize these)
-        optimized_features = [col for col in df.columns if col.endswith('_opt')]
+        optimized_features = [col for col in df.columns if col.endswith("_opt")]
 
         # Time features
-        time_features = [col for col in df.columns if any(t in col for t in ['hour_sin', 'hour_cos', 'day_of_week_sin', 'day_of_week_cos'])]
+        time_features = [
+            col
+            for col in df.columns
+            if any(t in col for t in ["hour_sin", "hour_cos", "day_of_week_sin", "day_of_week_cos"])
+        ]
 
         # Only use optimized indicators - no baseline indicators to avoid timeframe noise
         # Additional technical features (only if they're optimized)
         additional_features = []
         for col in df.columns:
-            if any(indicator in col for indicator in ['rsi', 'bb_', 'macd', 'ema_', 'atr', 'stoch', 'williams', 'mfi', 'sma']):
-                if col.endswith('_opt') and col not in optimized_features:
+            if any(
+                indicator in col
+                for indicator in ["rsi", "bb_", "macd", "ema_", "atr", "stoch", "williams", "mfi", "sma"]
+            ):
+                if col.endswith("_opt") and col not in optimized_features:
                     additional_features.append(col)
 
         # Combine features (only optimized indicators to avoid timeframe noise)
-        selected_features = (base_features +
-                           regime_features +
-                           optimized_features +
-                           time_features +
-                           additional_features[:5])  # Limit additional optimized features
+        selected_features = (
+            base_features + regime_features + optimized_features + time_features + additional_features[:5]
+        )  # Limit additional optimized features
 
         # Filter to only include features that exist in the DataFrame
         available_features = [feat for feat in selected_features if feat in df.columns]
@@ -352,8 +369,9 @@ class LSTMTrainer:
         _logger.info("Selected %d features for LSTM: %s...", len(available_features), available_features[:10])
         return available_features
 
-    def create_sequences(self, data: np.ndarray, regimes: np.ndarray, target: np.ndarray,
-                        sequence_length: int, n_regimes: int = 3) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def create_sequences(
+        self, data: np.ndarray, regimes: np.ndarray, target: np.ndarray, sequence_length: int, n_regimes: int = 3
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Create sequences for LSTM training with regime information.
 
@@ -370,7 +388,7 @@ class LSTMTrainer:
         X, regime_onehot, y = [], [], []
 
         for i in range(sequence_length, len(data)):
-            X.append(data[i-sequence_length:i])
+            X.append(data[i - sequence_length : i])
 
             # One-hot encode the current regime
             current_regime = int(regimes[i])
@@ -383,8 +401,7 @@ class LSTMTrainer:
 
         return np.array(X), np.array(regime_onehot), np.array(y)
 
-    def prepare_data(self, df: pd.DataFrame, features: List[str],
-                    sequence_length: int, test_size: float = 0.1) -> Dict:
+    def prepare_data(self, df: pd.DataFrame, features: List[str], sequence_length: int, test_size: float = 0.1) -> Dict:
         """
         Prepare data for LSTM training.
 
@@ -407,17 +424,17 @@ class LSTMTrainer:
 
         # Clip extreme values to prevent numerical issues
         for col in feature_data.columns:
-            if feature_data[col].dtype in ['float64', 'float32']:
+            if feature_data[col].dtype in ["float64", "float32"]:
                 # Get the 1st and 99th percentiles
                 q1 = feature_data[col].quantile(0.01)
                 q99 = feature_data[col].quantile(0.99)
                 # Clip values outside this range
                 feature_data[col] = feature_data[col].clip(lower=q1, upper=q99)
 
-        regime_data = df['regime'].fillna(0).astype(int)
+        regime_data = df["regime"].fillna(0).astype(int)
 
         # Target is next period's log return
-        target_data = df['log_return'].shift(-1).fillna(0)  # Predict next period
+        target_data = df["log_return"].shift(-1).fillna(0)  # Predict next period
 
         # Create sequences
         X, regime_onehot, y = self.create_sequences(
@@ -452,16 +469,16 @@ class LSTMTrainer:
         _logger.info("Data splits - Train: %d, Val: %d, Test: %d", len(X_train), len(X_val), len(X_test))
 
         return {
-            'X_train': X_train,
-            'regime_train': regime_train,
-            'y_train': y_train,
-            'X_val': X_val,
-            'regime_val': regime_val,
-            'y_val': y_val,
-            'X_test': X_test,
-            'regime_test': regime_test,
-            'y_test': y_test,
-            'n_features': X.shape[2]
+            "X_train": X_train,
+            "regime_train": regime_train,
+            "y_train": y_train,
+            "X_val": X_val,
+            "regime_val": regime_val,
+            "y_val": y_val,
+            "X_test": X_test,
+            "regime_test": regime_test,
+            "y_test": y_test,
+            "n_features": X.shape[2],
         }
 
     def scale_data(self, data_dict: Dict) -> Tuple[Dict, Dict]:
@@ -478,41 +495,38 @@ class LSTMTrainer:
         feature_scaler = StandardScaler()
 
         # Reshape for scaling
-        X_train_reshaped = data_dict['X_train'].reshape(-1, data_dict['n_features'])
+        X_train_reshaped = data_dict["X_train"].reshape(-1, data_dict["n_features"])
         X_train_scaled = feature_scaler.fit_transform(X_train_reshaped)
-        X_train_scaled = X_train_scaled.reshape(data_dict['X_train'].shape)
+        X_train_scaled = X_train_scaled.reshape(data_dict["X_train"].shape)
 
-        X_val_reshaped = data_dict['X_val'].reshape(-1, data_dict['n_features'])
+        X_val_reshaped = data_dict["X_val"].reshape(-1, data_dict["n_features"])
         X_val_scaled = feature_scaler.transform(X_val_reshaped)
-        X_val_scaled = X_val_scaled.reshape(data_dict['X_val'].shape)
+        X_val_scaled = X_val_scaled.reshape(data_dict["X_val"].shape)
 
-        X_test_reshaped = data_dict['X_test'].reshape(-1, data_dict['n_features'])
+        X_test_reshaped = data_dict["X_test"].reshape(-1, data_dict["n_features"])
         X_test_scaled = feature_scaler.transform(X_test_reshaped)
-        X_test_scaled = X_test_scaled.reshape(data_dict['X_test'].shape)
+        X_test_scaled = X_test_scaled.reshape(data_dict["X_test"].shape)
 
         # Scale targets
         target_scaler = MinMaxScaler()
-        y_train_scaled = target_scaler.fit_transform(data_dict['y_train'].reshape(-1, 1)).flatten()
-        y_val_scaled = target_scaler.transform(data_dict['y_val'].reshape(-1, 1)).flatten()
-        y_test_scaled = target_scaler.transform(data_dict['y_test'].reshape(-1, 1)).flatten()
+        y_train_scaled = target_scaler.fit_transform(data_dict["y_train"].reshape(-1, 1)).flatten()
+        y_val_scaled = target_scaler.transform(data_dict["y_val"].reshape(-1, 1)).flatten()
+        y_test_scaled = target_scaler.transform(data_dict["y_test"].reshape(-1, 1)).flatten()
 
         scaled_data = {
-            'X_train': X_train_scaled,
-            'regime_train': data_dict['regime_train'],  # Don't scale one-hot
-            'y_train': y_train_scaled,
-            'X_val': X_val_scaled,
-            'regime_val': data_dict['regime_val'],
-            'y_val': y_val_scaled,
-            'X_test': X_test_scaled,
-            'regime_test': data_dict['regime_test'],
-            'y_test': y_test_scaled,
-            'n_features': data_dict['n_features']
+            "X_train": X_train_scaled,
+            "regime_train": data_dict["regime_train"],  # Don't scale one-hot
+            "y_train": y_train_scaled,
+            "X_val": X_val_scaled,
+            "regime_val": data_dict["regime_val"],
+            "y_val": y_val_scaled,
+            "X_test": X_test_scaled,
+            "regime_test": data_dict["regime_test"],
+            "y_test": y_test_scaled,
+            "n_features": data_dict["n_features"],
         }
 
-        scalers = {
-            'feature_scaler': feature_scaler,
-            'target_scaler': target_scaler
-        }
+        scalers = {"feature_scaler": feature_scaler, "target_scaler": target_scaler}
 
         return scaled_data, scalers
 
@@ -528,13 +542,13 @@ class LSTMTrainer:
             Dict with data loaders
         """
         # Convert to tensors
-        X_train_tensor = torch.tensor(data_dict['X_train'], dtype=torch.float32)
-        regime_train_tensor = torch.tensor(data_dict['regime_train'], dtype=torch.float32)
-        y_train_tensor = torch.tensor(data_dict['y_train'], dtype=torch.float32)
+        X_train_tensor = torch.tensor(data_dict["X_train"], dtype=torch.float32)
+        regime_train_tensor = torch.tensor(data_dict["regime_train"], dtype=torch.float32)
+        y_train_tensor = torch.tensor(data_dict["y_train"], dtype=torch.float32)
 
-        X_val_tensor = torch.tensor(data_dict['X_val'], dtype=torch.float32)
-        regime_val_tensor = torch.tensor(data_dict['regime_val'], dtype=torch.float32)
-        y_val_tensor = torch.tensor(data_dict['y_val'], dtype=torch.float32)
+        X_val_tensor = torch.tensor(data_dict["X_val"], dtype=torch.float32)
+        regime_val_tensor = torch.tensor(data_dict["regime_val"], dtype=torch.float32)
+        y_val_tensor = torch.tensor(data_dict["y_val"], dtype=torch.float32)
 
         # Create datasets
         train_dataset = TensorDataset(X_train_tensor, regime_train_tensor, y_train_tensor)
@@ -544,27 +558,30 @@ class LSTMTrainer:
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-        return {
-            'train_loader': train_loader,
-            'val_loader': val_loader
-        }
+        return {"train_loader": train_loader, "val_loader": val_loader}
 
-    def train_model(self, model: nn.Module, train_loader: DataLoader, val_loader: DataLoader,
-                   learning_rate: float, epochs: int, symbol: str = "LTCUSDT", timeframe: str = "15m",
-                   early_stopping_patience: int = 15) -> Dict:
+    def train_model(
+        self,
+        model: nn.Module,
+        train_loader: DataLoader,
+        val_loader: DataLoader,
+        learning_rate: float,
+        epochs: int,
+        symbol: str = "LTCUSDT",
+        timeframe: str = "15m",
+        early_stopping_patience: int = 15,
+    ) -> Dict:
         """
         Train LSTM model with checkpointing, early stopping, and LR scheduling.
         """
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
         criterion = nn.MSELoss()
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='min', factor=0.5, patience=5
-        )
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=5)
 
         # Try to load checkpoint
         start_epoch, train_losses, val_losses = self.load_checkpoint(model, optimizer, symbol, timeframe)
 
-        best_val_loss = float('inf') if not val_losses else min(val_losses)
+        best_val_loss = float("inf") if not val_losses else min(val_losses)
         patience_counter = 0
         best_model_state = None
 
@@ -610,25 +627,33 @@ class LSTMTrainer:
             else:
                 patience_counter += 1
                 if patience_counter >= early_stopping_patience:
-                    _logger.info("Early stopping at epoch %d", epoch+1)
+                    _logger.info("Early stopping at epoch %d", epoch + 1)
                     break
 
             if (epoch + 1) % 5 == 0:
-                _logger.info("Epoch %d/%d - Train Loss: %.6f, Val Loss: %.6f", epoch+1, epochs, train_loss, val_loss)
+                _logger.info("Epoch %d/%d - Train Loss: %.6f, Val Loss: %.6f", epoch + 1, epochs, train_loss, val_loss)
 
         if best_model_state is not None:
             model.load_state_dict(best_model_state)
 
         return {
-            'train_losses': train_losses,
-            'val_losses': val_losses,
-            'best_val_loss': best_val_loss,
-            'final_epoch': epoch + 1
+            "train_losses": train_losses,
+            "val_losses": val_losses,
+            "best_val_loss": best_val_loss,
+            "final_epoch": epoch + 1,
         }
 
-    def save_model(self, model: nn.Module, scalers: Dict, features: List[str],
-                  training_results: Dict, lstm_params: Dict, symbol: str, timeframe: str,
-                  regime_suffix: str = "") -> Path:
+    def save_model(
+        self,
+        model: nn.Module,
+        scalers: Dict,
+        features: List[str],
+        training_results: Dict,
+        lstm_params: Dict,
+        symbol: str,
+        timeframe: str,
+        regime_suffix: str = "",
+    ) -> Path:
         """
         Save trained LSTM model and metadata.
 
@@ -651,35 +676,36 @@ class LSTMTrainer:
 
         # Prepare model package
         model_package = {
-            'model_state_dict': model.state_dict(),
-            'model_architecture': {
-                'input_size': model.lstm.input_size,
-                'hidden_size': model.hidden_size,
-                'num_layers': model.num_layers,
-                'n_regimes': model.n_regimes
+            "model_state_dict": model.state_dict(),
+            "model_architecture": {
+                "input_size": model.lstm.input_size,
+                "hidden_size": model.hidden_size,
+                "num_layers": model.num_layers,
+                "n_regimes": model.n_regimes,
             },
-            'scalers': scalers,
-            'features': features,
-            'training_results': training_results,
-            'hyperparameters': lstm_params,
-            'metadata': {
-                'symbol': symbol,
-                'timeframe': timeframe,
-                'timestamp': timestamp,
-                'training_date': datetime.now().isoformat(),
-                'device': str(DEVICE)
-            }
+            "scalers": scalers,
+            "features": features,
+            "training_results": training_results,
+            "hyperparameters": lstm_params,
+            "metadata": {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "timestamp": timestamp,
+                "training_date": datetime.now().isoformat(),
+                "device": str(DEVICE),
+            },
         }
 
         # Save model
-        with open(filepath, 'wb') as f:
+        with open(filepath, "wb") as f:
             pickle.dump(model_package, f)
 
         _logger.info("Saved LSTM model to %s", filepath)
         return filepath
 
-    def _train_single(self, df: pd.DataFrame, symbol: str, timeframe: str,
-                       lstm_params: Dict, regime_suffix: str = "") -> Dict:
+    def _train_single(
+        self, df: pd.DataFrame, symbol: str, timeframe: str, lstm_params: Dict, regime_suffix: str = ""
+    ) -> Dict:
         """
         Train one LSTM on a (possibly regime-filtered) DataFrame.
         regime_suffix is appended to the saved filename, e.g. "_regime0".
@@ -687,82 +713,83 @@ class LSTMTrainer:
         features = self.prepare_lstm_features(df, exclude_regime=True)
 
         data_dict = self.prepare_data(
-            df, features,
-            lstm_params['sequence_length'],
-            test_size=self.config['evaluation']['test_split']
+            df, features, lstm_params["sequence_length"], test_size=self.config["evaluation"]["test_split"]
         )
 
         scaled_data, scalers = self.scale_data(data_dict)
-        loaders = self.create_data_loaders(scaled_data, lstm_params['batch_size'])
+        loaders = self.create_data_loaders(scaled_data, lstm_params["batch_size"])
 
         model = LSTMModel(
-            input_size=scaled_data['n_features'],
-            hidden_size=lstm_params['hidden_size'],
-            num_layers=lstm_params['num_layers'],
-            dropout=lstm_params['dropout'],
-            n_regimes=self.config['hmm']['n_components']
+            input_size=scaled_data["n_features"],
+            hidden_size=lstm_params["hidden_size"],
+            num_layers=lstm_params["num_layers"],
+            dropout=lstm_params["dropout"],
+            n_regimes=self.config["hmm"]["n_components"],
         ).to(DEVICE)
 
-        _logger.info("LSTM model (%s%s): %d parameters",
-                     f"{symbol} {timeframe}", regime_suffix,
-                     sum(p.numel() for p in model.parameters()))
+        _logger.info(
+            "LSTM model (%s%s): %d parameters",
+            f"{symbol} {timeframe}",
+            regime_suffix,
+            sum(p.numel() for p in model.parameters()),
+        )
 
         training_results = self.train_model(
             model,
-            loaders['train_loader'],
-            loaders['val_loader'],
-            lstm_params['learning_rate'],
-            lstm_params['epochs'],
+            loaders["train_loader"],
+            loaders["val_loader"],
+            lstm_params["learning_rate"],
+            lstm_params["epochs"],
             symbol=symbol,
-            timeframe=f"{timeframe}{regime_suffix}"
+            timeframe=f"{timeframe}{regime_suffix}",
         )
 
         model_path = self.save_model(
-            model, scalers, features, training_results, lstm_params,
-            symbol, timeframe, regime_suffix=regime_suffix
+            model, scalers, features, training_results, lstm_params, symbol, timeframe, regime_suffix=regime_suffix
         )
         return {
-            'model_path': str(model_path),
-            'best_val_loss': training_results['best_val_loss'],
-            'training_epochs': training_results['final_epoch'],
-            'n_parameters': sum(p.numel() for p in model.parameters()),
-            'features_used': len(features),
+            "model_path": str(model_path),
+            "best_val_loss": training_results["best_val_loss"],
+            "training_epochs": training_results["final_epoch"],
+            "n_parameters": sum(p.numel() for p in model.parameters()),
+            "features_used": len(features),
         }
 
-    def _train_multi_regime(self, df: pd.DataFrame, symbol: str, timeframe: str,
-                             lstm_params: Dict) -> Dict:
+    def _train_multi_regime(self, df: pd.DataFrame, symbol: str, timeframe: str, lstm_params: Dict) -> Dict:
         """
         Train one LSTM per distinct HMM regime.
         Skips regimes with fewer than min_regime_samples rows.
         Returns a dict keyed by regime_id with per-regime results.
         """
-        min_samples = self.config['lstm'].get('min_regime_samples', 200)
+        min_samples = self.config["lstm"].get("min_regime_samples", 200)
         regime_results = {}
 
-        if 'regime' not in df.columns:
+        if "regime" not in df.columns:
             _logger.error("'regime' column not found; cannot train in multi-regime mode.")
             return regime_results
 
-        for regime_id in sorted(df['regime'].dropna().unique()):
-            regime_df = df[df['regime'] == regime_id].copy().reset_index(drop=True)
+        for regime_id in sorted(df["regime"].dropna().unique()):
+            regime_df = df[df["regime"] == regime_id].copy().reset_index(drop=True)
             if len(regime_df) < min_samples:
-                _logger.warning("Regime %s has only %d samples (min=%d); skipping.",
-                                 regime_id, len(regime_df), min_samples)
+                _logger.warning(
+                    "Regime %s has only %d samples (min=%d); skipping.", regime_id, len(regime_df), min_samples
+                )
                 continue
 
             suffix = f"_regime{int(regime_id)}"
-            _logger.info("Training LSTM for %s %s%s (%d samples)",
-                         symbol, timeframe, suffix, len(regime_df))
+            _logger.info("Training LSTM for %s %s%s (%d samples)", symbol, timeframe, suffix, len(regime_df))
             try:
-                result = self._train_single(regime_df, symbol, timeframe, lstm_params,
-                                            regime_suffix=suffix)
-                regime_results[int(regime_id)] = {**result, 'success': True}
-                _logger.info("[OK] regime %s — best_val_loss=%.6f, epochs=%d",
-                             regime_id, result['best_val_loss'], result['training_epochs'])
+                result = self._train_single(regime_df, symbol, timeframe, lstm_params, regime_suffix=suffix)
+                regime_results[int(regime_id)] = {**result, "success": True}
+                _logger.info(
+                    "[OK] regime %s — best_val_loss=%.6f, epochs=%d",
+                    regime_id,
+                    result["best_val_loss"],
+                    result["training_epochs"],
+                )
             except Exception as e:
-                _logger.error("Failed training regime %s for %s %s: %s",
-                              regime_id, symbol, timeframe, str(e))
-                regime_results[int(regime_id)] = {'success': False, 'error': str(e)}
+                _logger.error("Failed training regime %s for %s %s: %s", regime_id, symbol, timeframe, str(e))
+                regime_results[int(regime_id)] = {"success": False, "error": str(e)}
 
         return regime_results
 
@@ -788,7 +815,7 @@ class LSTMTrainer:
             csv_files = []
 
             # Try provider-specific patterns first
-            for provider in ['binance', 'yfinance']:
+            for provider in ["binance", "yfinance"]:
                 pattern = f"{provider}_{symbol}_{timeframe}_*_labeled.csv"
                 provider_files = list(self.labeled_data_dir.glob(pattern))
                 csv_files.extend(provider_files)
@@ -817,47 +844,47 @@ class LSTMTrainer:
             if indicator_params:
                 df = self.apply_optimized_indicators(df, indicator_params)
 
-            multi_regime = self.config['lstm'].get('multi_regime', False)
+            multi_regime = self.config["lstm"].get("multi_regime", False)
 
             if multi_regime:
                 _logger.info("Multi-regime mode: training one LSTM per HMM regime.")
                 regime_results = self._train_multi_regime(df, symbol, timeframe, lstm_params)
-                n_trained = sum(1 for r in regime_results.values() if r.get('success'))
-                _logger.info("[OK] Multi-regime training done for %s %s: %d/%d regimes trained.",
-                             symbol, timeframe, n_trained, len(regime_results))
+                n_trained = sum(1 for r in regime_results.values() if r.get("success"))
+                _logger.info(
+                    "[OK] Multi-regime training done for %s %s: %d/%d regimes trained.",
+                    symbol,
+                    timeframe,
+                    n_trained,
+                    len(regime_results),
+                )
                 return {
-                    'symbol': symbol,
-                    'timeframe': timeframe,
-                    'success': n_trained > 0,
-                    'multi_regime': True,
-                    'regime_results': regime_results,
-                    'regimes_trained': n_trained,
+                    "symbol": symbol,
+                    "timeframe": timeframe,
+                    "success": n_trained > 0,
+                    "multi_regime": True,
+                    "regime_results": regime_results,
+                    "regimes_trained": n_trained,
                 }
 
             # --- Single-model path ---
             result = self._train_single(df, symbol, timeframe, lstm_params)
 
             _logger.info("[OK] LSTM training completed for %s %s", symbol, timeframe)
-            _logger.info("  Best validation loss: %.6f", result['best_val_loss'])
-            _logger.info("  Training epochs: %d", result['training_epochs'])
+            _logger.info("  Best validation loss: %.6f", result["best_val_loss"])
+            _logger.info("  Training epochs: %d", result["training_epochs"])
 
             return {
-                'symbol': symbol,
-                'timeframe': timeframe,
-                'success': True,
-                'multi_regime': False,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "success": True,
+                "multi_regime": False,
                 **result,
             }
 
         except Exception as e:
             error_msg = f"Failed to train LSTM for {symbol} {timeframe}: {str(e)}"
             _logger.error(error_msg)
-            return {
-                'symbol': symbol,
-                'timeframe': timeframe,
-                'success': False,
-                'error': error_msg
-            }
+            return {"symbol": symbol, "timeframe": timeframe, "success": False, "error": error_msg}
 
     def _get_symbols_and_timeframes(self) -> Tuple[List[str], List[str]]:
         """
@@ -866,14 +893,14 @@ class LSTMTrainer:
         Returns:
             Tuple of (symbols, timeframes) lists
         """
-        if 'data_sources' in self.config:
+        if "data_sources" in self.config:
             # New multi-provider format
             symbols = []
             timeframes = []
 
-            for provider, config in self.config['data_sources'].items():
-                provider_symbols = config.get('symbols', [])
-                provider_timeframes = config.get('timeframes', [])
+            for provider, config in self.config["data_sources"].items():
+                provider_symbols = config.get("symbols", [])
+                provider_timeframes = config.get("timeframes", [])
 
                 symbols.extend(provider_symbols)
                 timeframes.extend(provider_timeframes)
@@ -888,8 +915,8 @@ class LSTMTrainer:
 
         else:
             # Legacy format
-            symbols = self.config['symbols']
-            timeframes = self.config['timeframes']
+            symbols = self.config["symbols"]
+            timeframes = self.config["timeframes"]
             _logger.info("Using legacy configuration")
 
         return symbols, timeframes
@@ -912,9 +939,9 @@ class LSTMTrainer:
             filename = labeled_file.name
 
             # Parse provider_symbol_timeframe pattern
-            if filename.startswith(('binance_', 'yfinance_')):
+            if filename.startswith(("binance_", "yfinance_")):
                 # Format: provider_symbol_timeframe_date_labeled.csv
-                parts = filename.replace('_labeled.csv', '').split('_')
+                parts = filename.replace("_labeled.csv", "").split("_")
                 if len(parts) >= 3:
                     provider = parts[0]
                     symbol = parts[1]
@@ -926,15 +953,21 @@ class LSTMTrainer:
 
                     if lstm_files:
                         available_combinations.append((symbol, timeframe))
-                        _logger.info("Found complete setup for %s %s: data=%s, lstm_params=%s",
-                                   symbol, timeframe, labeled_file.name, lstm_files[0].name)
+                        _logger.info(
+                            "Found complete setup for %s %s: data=%s, lstm_params=%s",
+                            symbol,
+                            timeframe,
+                            labeled_file.name,
+                            lstm_files[0].name,
+                        )
                     else:
-                        _logger.debug("Missing LSTM params for %s %s (has data: %s)",
-                                    symbol, timeframe, labeled_file.name)
+                        _logger.debug(
+                            "Missing LSTM params for %s %s (has data: %s)", symbol, timeframe, labeled_file.name
+                        )
             else:
                 # Try legacy pattern: labeled_symbol_timeframe_date.csv
-                if filename.startswith('labeled_'):
-                    parts = filename.replace('labeled_', '').replace('.csv', '').split('_')
+                if filename.startswith("labeled_"):
+                    parts = filename.replace("labeled_", "").replace(".csv", "").split("_")
                     if len(parts) >= 2:
                         symbol = parts[0]
                         timeframe = parts[1]
@@ -945,8 +978,13 @@ class LSTMTrainer:
 
                         if lstm_files:
                             available_combinations.append((symbol, timeframe))
-                            _logger.info("Found complete setup for %s %s: data=%s, lstm_params=%s",
-                                       symbol, timeframe, labeled_file.name, lstm_files[0].name)
+                            _logger.info(
+                                "Found complete setup for %s %s: data=%s, lstm_params=%s",
+                                symbol,
+                                timeframe,
+                                labeled_file.name,
+                                lstm_files[0].name,
+                            )
 
         # Remove duplicates while preserving order
         unique_combinations = []
@@ -969,43 +1007,35 @@ class LSTMTrainer:
 
         if not available_combinations:
             _logger.error("No labeled data found for any symbol-timeframe combination")
-            return {
-                'total': 0,
-                'successful': [],
-                'failed': [],
-                'error': 'No labeled data available'
-            }
+            return {"total": 0, "successful": [], "failed": [], "error": "No labeled data available"}
 
         _logger.info("Training LSTM models for %d available combinations", len(available_combinations))
 
-        results = {
-            'total': len(available_combinations),
-            'successful': [],
-            'failed': []
-        }
+        results = {"total": len(available_combinations), "successful": [], "failed": []}
 
         for symbol, timeframe in available_combinations:
             result = self.train_lstm(symbol, timeframe)
 
-            if result['success']:
-                results['successful'].append(result)
+            if result["success"]:
+                results["successful"].append(result)
             else:
-                results['failed'].append(result)
+                results["failed"].append(result)
 
         # Log summary
-        _logger.info("\n%s", "="*50)
+        _logger.info("\n%s", "=" * 50)
         _logger.info("LSTM Training Summary:")
-        _logger.info("  Total: %d", results['total'])
-        _logger.info("  Successful: %d", len(results['successful']))
-        _logger.info("  Failed: %d", len(results['failed']))
-        _logger.info("%s", "="*50)
+        _logger.info("  Total: %d", results["total"])
+        _logger.info("  Successful: %d", len(results["successful"]))
+        _logger.info("  Failed: %d", len(results["failed"]))
+        _logger.info("%s", "=" * 50)
 
-        if results['failed']:
+        if results["failed"]:
             _logger.warning("Failed training:")
-            for failure in results['failed']:
-                _logger.warning("  %s %s: %s", failure['symbol'], failure['timeframe'], failure['error'])
+            for failure in results["failed"]:
+                _logger.warning("  %s %s: %s", failure["symbol"], failure["timeframe"], failure["error"])
 
         return results
+
 
 def main():
     """Main function to run LSTM training."""
@@ -1018,6 +1048,7 @@ def main():
     except Exception:
         _logger.exception("LSTM training failed: ")
         raise
+
 
 if __name__ == "__main__":
     main()

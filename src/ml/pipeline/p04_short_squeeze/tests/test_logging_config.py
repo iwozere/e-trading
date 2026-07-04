@@ -4,13 +4,16 @@ Unit tests for the logging configuration system.
 Tests pipeline-specific logging, context management, and performance metrics.
 """
 
-import unittest
-from unittest.mock import patch, MagicMock
 import time
+import unittest
+from unittest.mock import MagicMock, patch
 
 from src.ml.pipeline.p04_short_squeeze.config.logging_config import (
-    PipelineLogger, LoggerFactory, setup_pipeline_logging,
-    PIPELINE_LOGGER, SCREENER_LOGGER
+    PIPELINE_LOGGER,
+    SCREENER_LOGGER,
+    LoggerFactory,
+    PipelineLogger,
+    setup_pipeline_logging,
 )
 
 
@@ -71,7 +74,7 @@ class TestPipelineLogger(unittest.TestCase):
         self.assertIn("Test message", formatted)
         self.assertNotIn("[", formatted.split("]")[1])  # No context brackets after run_id
 
-    @patch('src.ml.pipeline.p04_short_squeeze.config.logging_config.setup_logger')
+    @patch("src.ml.pipeline.p04_short_squeeze.config.logging_config.setup_logger")
     def test_logging_methods(self, mock_setup_logger):
         """Test all logging level methods."""
         mock_logger = MagicMock()
@@ -103,7 +106,7 @@ class TestPipelineLogger(unittest.TestCase):
 
     def test_operation_context_success(self):
         """Test operation context manager for successful operations."""
-        with patch.object(self.logger, 'info') as mock_info:
+        with patch.object(self.logger, "info") as mock_info:
             with self.logger.operation_context("test_operation", param="value"):
                 time.sleep(0.01)  # Small delay to test timing
 
@@ -126,9 +129,7 @@ class TestPipelineLogger(unittest.TestCase):
 
     def test_operation_context_failure(self):
         """Test operation context manager for failed operations."""
-        with patch.object(self.logger, 'info') as mock_info, \
-             patch.object(self.logger, 'error') as mock_error:
-
+        with patch.object(self.logger, "info") as mock_info, patch.object(self.logger, "error") as mock_error:
             with self.assertRaises(ValueError):
                 with self.logger.operation_context("failing_operation"):
                     raise ValueError("Test error")
@@ -153,7 +154,7 @@ class TestPipelineLogger(unittest.TestCase):
 
     def test_timed_operation(self):
         """Test timed operation context manager."""
-        with patch.object(self.logger, 'debug') as mock_debug:
+        with patch.object(self.logger, "debug") as mock_debug:
             with self.logger.timed_operation("timed_test"):
                 time.sleep(0.01)
 
@@ -174,7 +175,7 @@ class TestPipelineLogger(unittest.TestCase):
         self.logger.add_metric("operation_duration", 12.5)
         self.logger.add_metric("success_rate", 0.95)
 
-        with patch.object(self.logger, 'info') as mock_info:
+        with patch.object(self.logger, "info") as mock_info:
             self.logger.log_performance_summary()
 
         # Should log summary header plus one line per metric
@@ -198,7 +199,7 @@ class TestPipelineLogger(unittest.TestCase):
 
     def test_log_performance_summary_no_metrics(self):
         """Test performance summary logging without metrics."""
-        with patch.object(self.logger, 'info') as mock_info:
+        with patch.object(self.logger, "info") as mock_info:
             self.logger.log_performance_summary()
 
         mock_info.assert_called_once()
@@ -245,11 +246,11 @@ class TestSetupPipelineLogging(unittest.TestCase):
         loggers = setup_pipeline_logging(run_id)
 
         self.assertIsInstance(loggers, dict)
-        self.assertIn('pipeline', loggers)
-        self.assertIn('screener', loggers)
-        self.assertIn('deep_scan', loggers)
-        self.assertIn('alert', loggers)
-        self.assertIn('reporting', loggers)
+        self.assertIn("pipeline", loggers)
+        self.assertIn("screener", loggers)
+        self.assertIn("deep_scan", loggers)
+        self.assertIn("alert", loggers)
+        self.assertIn("reporting", loggers)
 
         # Check that all loggers have the same run_id
         for logger in loggers.values():
@@ -267,5 +268,5 @@ class TestSetupPipelineLogging(unittest.TestCase):
         self.assertEqual(len(set(run_ids)), 1)  # All should be the same
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

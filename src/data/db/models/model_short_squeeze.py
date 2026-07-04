@@ -6,21 +6,30 @@ Includes ScreenerSnapshot, DeepScanMetrics, SqueezeAlert, and AdHocCandidateMode
 """
 
 from datetime import date, datetime
-from typing import Optional
 from enum import Enum
 
 from sqlalchemy import (
-    BigInteger, String, Date, DateTime, Numeric, Boolean, Text,
-    CheckConstraint, UniqueConstraint, Index, func
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
-from src.data.db.core.json_types import JsonType
 
 from src.data.db.core.base import Base
+from src.data.db.core.json_types import JsonType
 
 
 class AlertLevel(str, Enum):
     """Alert level enumeration."""
+
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
@@ -28,6 +37,7 @@ class AlertLevel(str, Enum):
 
 class CandidateSource(str, Enum):
     """Candidate source enumeration."""
+
     SCREENER = "screener"
     ADHOC = "adhoc"
     VOLUME_SCREENER = "volume_screener"
@@ -72,13 +82,15 @@ class ScreenerSnapshot(Base):
         # Import here to avoid circular imports
         from src.ml.pipeline.p04_short_squeeze.core.models import StructuralMetrics
 
-        if not all([
-            self.short_interest_pct is not None,
-            self.days_to_cover is not None,
-            self.float_shares is not None,
-            self.avg_volume_14d is not None,
-            self.market_cap is not None
-        ]):
+        if not all(
+            [
+                self.short_interest_pct is not None,
+                self.days_to_cover is not None,
+                self.float_shares is not None,
+                self.avg_volume_14d is not None,
+                self.market_cap is not None,
+            ]
+        ):
             return None
 
         return StructuralMetrics(
@@ -86,7 +98,7 @@ class ScreenerSnapshot(Base):
             days_to_cover=float(self.days_to_cover),
             float_shares=int(self.float_shares),
             avg_volume_14d=int(self.avg_volume_14d),
-            market_cap=int(self.market_cap)
+            market_cap=int(self.market_cap),
         )
 
 
@@ -137,7 +149,7 @@ class DeepScanMetrics(Base):
             volume_spike=float(self.volume_spike),
             call_put_ratio=float(self.call_put_ratio) if self.call_put_ratio is not None else None,
             sentiment_24h=float(self.sentiment_24h),
-            borrow_fee_pct=float(self.borrow_fee_pct) if self.borrow_fee_pct is not None else None
+            borrow_fee_pct=float(self.borrow_fee_pct) if self.borrow_fee_pct is not None else None,
         )
 
 
@@ -181,7 +193,7 @@ class SqueezeAlert(Base):
             timestamp=self.timestamp,
             cooldown_expires=self.cooldown_expires,
             sent=self.sent,
-            notification_id=self.notification_id
+            notification_id=self.notification_id,
         )
 
 
@@ -219,5 +231,5 @@ class AdHocCandidateModel(Base):
             first_seen=self.first_seen,
             expires_at=self.expires_at,
             active=self.active,
-            promoted_by_screener=self.promoted_by_screener
+            promoted_by_screener=self.promoted_by_screener,
         )

@@ -6,7 +6,7 @@ This module provides the base class for all entry mixins.
 
 import inspect
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List
 
 from src.notification.logger import setup_logger
 
@@ -16,7 +16,7 @@ _logger = setup_logger(__name__)
 class BaseEntryMixin(ABC):
     """Base class for all entry mixins"""
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         """
         Initialization of the mixin
 
@@ -67,8 +67,7 @@ class BaseEntryMixin(ABC):
         sig = inspect.signature(required_params_method)
         if "self" not in sig.parameters:
             raise TypeError(
-                f"{self.__class__.__name__}.get_required_params must be an instance method. "
-                "Use 'self' parameter."
+                f"{self.__class__.__name__}.get_required_params must be an instance method. Use 'self' parameter."
             )
 
         # Check _init_indicators
@@ -83,8 +82,7 @@ class BaseEntryMixin(ABC):
         sig = inspect.signature(init_indicators_method)
         if "self" not in sig.parameters:
             raise TypeError(
-                f"{self.__class__.__name__}._init_indicators must be an instance method. "
-                "Use 'self' parameter."
+                f"{self.__class__.__name__}._init_indicators must be an instance method. Use 'self' parameter."
             )
 
         # Check should_enter
@@ -98,10 +96,7 @@ class BaseEntryMixin(ABC):
         # Check method signature
         sig = inspect.signature(should_enter_method)
         if "self" not in sig.parameters:
-            raise TypeError(
-                f"{self.__class__.__name__}.should_enter must be an instance method. "
-                "Use 'self' parameter."
-            )
+            raise TypeError(f"{self.__class__.__name__}.should_enter must be an instance method. Use 'self' parameter.")
 
         # Validate method signatures and return types
         self._validate_method_signatures()
@@ -194,7 +189,7 @@ class BaseEntryMixin(ABC):
         """
         return []
 
-    def init_entry(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
+    def init_entry(self, strategy, additional_params: Dict[str, Any] | None = None):
         """
         Initialization of the mixin with a strategy
 
@@ -220,7 +215,7 @@ class BaseEntryMixin(ABC):
         Check if required indicators exist in the strategy registry.
         """
         # New Architecture check: if we have a strategy, it should have the indicators
-        if self.strategy and hasattr(self.strategy, 'indicators'):
+        if self.strategy and hasattr(self.strategy, "indicators"):
             # This is a basic check. Subclasses should override if they have specific aliases.
             return True
 
@@ -292,7 +287,7 @@ class BaseEntryMixin(ABC):
         if self.strategy is None:
             raise RuntimeError("Mixin not attached to strategy")
 
-        if not hasattr(self.strategy, 'indicators') or alias not in self.strategy.indicators:
+        if not hasattr(self.strategy, "indicators") or alias not in self.strategy.indicators:
             raise KeyError(
                 f"Indicator '{alias}' not found in strategy. "
                 f"Available indicators: {list(getattr(self.strategy, 'indicators', {}).keys())}"
@@ -315,7 +310,7 @@ class BaseEntryMixin(ABC):
         if self.strategy is None:
             raise RuntimeError("Mixin not attached to strategy")
 
-        if not hasattr(self.strategy, 'indicators') or alias not in self.strategy.indicators:
+        if not hasattr(self.strategy, "indicators") or alias not in self.strategy.indicators:
             raise KeyError(f"Indicator '{alias}' not found in strategy")
 
         return self.strategy.indicators[alias]
@@ -338,7 +333,7 @@ class BaseEntryMixin(ABC):
         if self.strategy is None:
             raise RuntimeError("Mixin not attached to strategy")
 
-        if not hasattr(self.strategy, 'indicators') or alias not in self.strategy.indicators:
+        if not hasattr(self.strategy, "indicators") or alias not in self.strategy.indicators:
             raise KeyError(f"Indicator '{alias}' not found in strategy")
 
         indicator = self.strategy.indicators[alias]
@@ -380,13 +375,9 @@ class BaseEntryMixin(ABC):
             if not hasattr(self.strategy, "indicators"):
                 self.strategy.indicators = {}
             self.strategy.indicators[name] = indicator
-            _logger.debug(
-                f"Added indicator '{name}' to strategy's indicators dictionary"
-            )
+            _logger.debug(f"Added indicator '{name}' to strategy's indicators dictionary")
         else:
-            _logger.warning(
-                f"Strategy not set, indicator '{name}' only stored in indicators dictionary"
-            )
+            _logger.warning(f"Strategy not set, indicator '{name}' only stored in indicators dictionary")
 
     def next(self):
         """Called for each new bar"""

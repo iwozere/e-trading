@@ -1,7 +1,7 @@
 """Unit tests for ConsensusDetector."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -19,8 +19,7 @@ def detector() -> ConsensusDetector:
 
 def _make_exits(tickers_ciks: list) -> pd.DataFrame:
     rows = [
-        {"cik": cik, "ticker": ticker, "value_usd_prev": 50_000_000, "delta_pct": -0.5}
-        for ticker, cik in tickers_ciks
+        {"cik": cik, "ticker": ticker, "value_usd_prev": 50_000_000, "delta_pct": -0.5} for ticker, cik in tickers_ciks
     ]
     return pd.DataFrame(rows)
 
@@ -40,10 +39,17 @@ def test_ticker_with_two_institutions_not_flagged(detector: ConsensusDetector) -
 
 
 def test_sorted_by_institution_count(detector: ConsensusDetector) -> None:
-    exits = _make_exits([
-        ("GOOG", "1"), ("GOOG", "2"), ("GOOG", "3"), ("GOOG", "4"),
-        ("META", "1"), ("META", "2"), ("META", "3"),
-    ])
+    exits = _make_exits(
+        [
+            ("GOOG", "1"),
+            ("GOOG", "2"),
+            ("GOOG", "3"),
+            ("GOOG", "4"),
+            ("META", "1"),
+            ("META", "2"),
+            ("META", "3"),
+        ]
+    )
     result = detector.detect(exits)
     assert result.iloc[0]["ticker"] == "GOOG"
     assert result.iloc[0]["institution_count"] == 4

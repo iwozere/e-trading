@@ -1,6 +1,6 @@
 """Fundamental signal scoring — §6.2 of the P05 spec."""
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 from src.notification.logger import setup_logger
 
@@ -8,9 +8,9 @@ _logger = setup_logger(__name__)
 
 
 def score_fundamentals(
-    fundamentals: Optional[Any],
+    fundamentals: Any | None,
     sector_medians: Dict[str, Dict[str, float]],
-    weights: Optional[Dict[str, int]] = None,
+    weights: Dict[str, int] | None = None,
 ) -> Tuple[float, Dict[str, object]]:
     """
     Score equity fundamentals per spec §6.2.
@@ -31,17 +31,17 @@ def score_fundamentals(
 
     w = weights or FUNDAMENTAL_WEIGHTS
 
-    def _get(attr: str) -> Optional[float]:
+    def _get(attr: str) -> float | None:
         if isinstance(fundamentals, dict):
             return fundamentals.get(attr)
         return getattr(fundamentals, attr, None)
 
-    pe_ratio: Optional[float] = _get("pe_ratio")
-    profit_margin: Optional[float] = _get("profit_margin")
-    debt_to_equity: Optional[float] = _get("debt_to_equity")
-    revenue_growth: Optional[float] = _get("revenue_growth")
-    dividend_yield: Optional[float] = _get("dividend_yield")
-    sector: Optional[str] = _get("sector") or "Unknown"
+    pe_ratio: float | None = _get("pe_ratio")
+    profit_margin: float | None = _get("profit_margin")
+    debt_to_equity: float | None = _get("debt_to_equity")
+    revenue_growth: float | None = _get("revenue_growth")
+    dividend_yield: float | None = _get("dividend_yield")
+    sector: str | None = _get("sector") or "Unknown"
 
     breakdown: Dict[str, object] = {
         "pe_ratio": pe_ratio,
@@ -111,7 +111,7 @@ def build_sector_medians(
         if fund is None:
             continue
 
-        def _get(attr: str) -> Optional[float]:
+        def _get(attr: str) -> float | None:
             if isinstance(fund, dict):
                 return fund.get(attr)
             return getattr(fund, attr, None)
@@ -126,11 +126,7 @@ def build_sector_medians(
         if pes:
             sorted_pes = sorted(pes)
             mid = len(sorted_pes) // 2
-            median = (
-                (sorted_pes[mid - 1] + sorted_pes[mid]) / 2
-                if len(sorted_pes) % 2 == 0
-                else sorted_pes[mid]
-            )
+            median = (sorted_pes[mid - 1] + sorted_pes[mid]) / 2 if len(sorted_pes) % 2 == 0 else sorted_pes[mid]
             result[sector] = {"median_pe": round(median, 2)}
 
     return result

@@ -7,10 +7,10 @@ pipeline-specific logging with structured context and performance metrics.
 
 import time
 from contextlib import contextmanager
-from typing import Dict, Any, Optional
 from datetime import datetime
+from typing import Any, Dict
 
-from src.notification.logger import setup_logger, set_logging_context
+from src.notification.logger import set_logging_context, setup_logger
 
 # Pipeline-specific logger names
 PIPELINE_LOGGER = "short_squeeze_pipeline"
@@ -28,7 +28,7 @@ class PipelineLogger:
     with the existing notification system.
     """
 
-    def __init__(self, name: str, run_id: Optional[str] = None):
+    def __init__(self, name: str, run_id: str | None = None):
         """
         Initialize pipeline logger.
 
@@ -164,7 +164,7 @@ class PipelineLogger:
 
         self.info("Performance Summary:")
         for key, value in self._metrics.items():
-            if isinstance(value, float) and key.endswith('_duration'):
+            if isinstance(value, float) and key.endswith("_duration"):
                 self.info("  %s: %.2fs", key, value)
             else:
                 self.info("  %s: %s", key, value)
@@ -174,32 +174,32 @@ class LoggerFactory:
     """Factory for creating pipeline-specific loggers."""
 
     @staticmethod
-    def get_pipeline_logger(run_id: Optional[str] = None) -> PipelineLogger:
+    def get_pipeline_logger(run_id: str | None = None) -> PipelineLogger:
         """Get main pipeline logger."""
         return PipelineLogger(PIPELINE_LOGGER, run_id)
 
     @staticmethod
-    def get_screener_logger(run_id: Optional[str] = None) -> PipelineLogger:
+    def get_screener_logger(run_id: str | None = None) -> PipelineLogger:
         """Get screener module logger."""
         return PipelineLogger(SCREENER_LOGGER, run_id)
 
     @staticmethod
-    def get_deep_scan_logger(run_id: Optional[str] = None) -> PipelineLogger:
+    def get_deep_scan_logger(run_id: str | None = None) -> PipelineLogger:
         """Get deep scan module logger."""
         return PipelineLogger(DEEP_SCAN_LOGGER, run_id)
 
     @staticmethod
-    def get_alert_logger(run_id: Optional[str] = None) -> PipelineLogger:
+    def get_alert_logger(run_id: str | None = None) -> PipelineLogger:
         """Get alert engine logger."""
         return PipelineLogger(ALERT_LOGGER, run_id)
 
     @staticmethod
-    def get_reporting_logger(run_id: Optional[str] = None) -> PipelineLogger:
+    def get_reporting_logger(run_id: str | None = None) -> PipelineLogger:
         """Get reporting engine logger."""
         return PipelineLogger(REPORTING_LOGGER, run_id)
 
 
-def setup_pipeline_logging(run_id: Optional[str] = None) -> Dict[str, PipelineLogger]:
+def setup_pipeline_logging(run_id: str | None = None) -> Dict[str, PipelineLogger]:
     """
     Set up all pipeline loggers with consistent run_id.
 
@@ -213,14 +213,14 @@ def setup_pipeline_logging(run_id: Optional[str] = None) -> Dict[str, PipelineLo
         run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     loggers = {
-        'pipeline': LoggerFactory.get_pipeline_logger(run_id),
-        'screener': LoggerFactory.get_screener_logger(run_id),
-        'deep_scan': LoggerFactory.get_deep_scan_logger(run_id),
-        'alert': LoggerFactory.get_alert_logger(run_id),
-        'reporting': LoggerFactory.get_reporting_logger(run_id),
+        "pipeline": LoggerFactory.get_pipeline_logger(run_id),
+        "screener": LoggerFactory.get_screener_logger(run_id),
+        "deep_scan": LoggerFactory.get_deep_scan_logger(run_id),
+        "alert": LoggerFactory.get_alert_logger(run_id),
+        "reporting": LoggerFactory.get_reporting_logger(run_id),
     }
 
     # Log initialization
-    loggers['pipeline'].info("Pipeline logging initialized with run_id: %s", run_id)
+    loggers["pipeline"].info("Pipeline logging initialized with run_id: %s", run_id)
 
     return loggers

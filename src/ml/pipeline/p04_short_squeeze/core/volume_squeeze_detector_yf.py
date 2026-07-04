@@ -5,21 +5,22 @@ This module provides volume and momentum-based squeeze detection using yfinance
 instead of FMP API to avoid rate limiting issues.
 """
 
-from pathlib import Path
 import sys
-from typing import List, Dict, Any, Optional, Tuple
+from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
 import numpy as np
 import pandas as pd
-from dataclasses import dataclass
 import yfinance as yf
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.ml.pipeline.p04_short_squeeze.core.models import Candidate, CandidateSource
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -27,6 +28,7 @@ _logger = setup_logger(__name__)
 @dataclass
 class VolumeMetrics:
     """Volume-based metrics for squeeze detection."""
+
     avg_volume_14d: float
     current_volume: float
     volume_spike_ratio: float
@@ -46,6 +48,7 @@ class VolumeMetrics:
 @dataclass
 class MomentumMetrics:
     """Price momentum metrics for squeeze detection."""
+
     price_change_1d: float
     price_change_3d: float
     price_change_7d: float
@@ -61,6 +64,7 @@ class MomentumMetrics:
 @dataclass
 class SqueezeIndicators:
     """Combined squeeze indicators."""
+
     volume_score: float
     momentum_score: float
     float_score: float
@@ -85,19 +89,14 @@ class VolumeSqueezeDetectorYF:
     def __init__(self):
         """Initialize Volume Squeeze Detector with yfinance."""
         # Scoring weights
-        self.weights = {
-            'volume_spike': 0.4,
-            'momentum': 0.3,
-            'float_size': 0.2,
-            'consistency': 0.1
-        }
+        self.weights = {"volume_spike": 0.4, "momentum": 0.3, "float_size": 0.2, "consistency": 0.1}
 
         # Thresholds
         self.min_volume_spike = 2.0  # 2x average volume
         self.min_momentum_score = 0.3
         self.lookback_days = 30
 
-    def get_company_info_yf(self, ticker: str) -> Optional[Dict[str, Any]]:
+    def get_company_info_yf(self, ticker: str) -> Dict[str, Any] | None:
         """
         Get company information using yfinance.
 
@@ -113,20 +112,20 @@ class VolumeSqueezeDetectorYF:
 
             # Extract relevant information
             return {
-                'ticker': ticker,
-                'market_cap': info.get('marketCap'),
-                'shares_outstanding': info.get('sharesOutstanding'),
-                'float_shares': info.get('floatShares'),
-                'avg_volume': info.get('averageVolume'),
-                'avg_volume_10d': info.get('averageVolume10days'),
-                'sector': info.get('sector'),
-                'industry': info.get('industry')
+                "ticker": ticker,
+                "market_cap": info.get("marketCap"),
+                "shares_outstanding": info.get("sharesOutstanding"),
+                "float_shares": info.get("floatShares"),
+                "avg_volume": info.get("averageVolume"),
+                "avg_volume_10d": info.get("averageVolume10days"),
+                "sector": info.get("sector"),
+                "industry": info.get("industry"),
             }
         except Exception as e:
             _logger.warning("Failed to get company info for %s: %s", ticker, e)
             return None
 
-    def get_ohlcv_yf(self, ticker: str, start_date: datetime, end_date: datetime) -> Optional[pd.DataFrame]:
+    def get_ohlcv_yf(self, ticker: str, start_date: datetime, end_date: datetime) -> pd.DataFrame | None:
         """
         Get OHLCV data using yfinance.
 
@@ -147,16 +146,10 @@ class VolumeSqueezeDetectorYF:
                 return None
 
             # Rename columns to match expected format
-            df = df.rename(columns={
-                'Open': 'open',
-                'High': 'high',
-                'Low': 'low',
-                'Close': 'close',
-                'Volume': 'volume'
-            })
+            df = df.rename(columns={"Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"})
 
             # Ensure required columns exist
-            required_cols = ['open', 'high', 'low', 'close', 'volume']
+            required_cols = ["open", "high", "low", "close", "volume"]
             if not all(col in df.columns for col in required_cols):
                 _logger.warning("Missing required columns for %s", ticker)
                 return None
@@ -167,7 +160,7 @@ class VolumeSqueezeDetectorYF:
             _logger.warning("Failed to get OHLCV data for %s: %s", ticker, e)
             return None
 
-    def calculate_volume_metrics(self, ticker: str) -> Optional[VolumeMetrics]:
+    def calculate_volume_metrics(self, ticker: str) -> VolumeMetrics | None:
         """
         Calculate volume metrics for a ticker.
 
@@ -188,7 +181,7 @@ class VolumeSqueezeDetectorYF:
                 return None
 
             # Calculate metrics
-            volumes = df['volume'].values
+            volumes = df["volume"].values
             current_volume = float(volumes[-1])
             avg_volume_14d = float(np.mean(volumes[-14:]))
 
@@ -211,14 +204,14 @@ class VolumeSqueezeDetectorYF:
                 current_volume=current_volume,
                 volume_spike_ratio=volume_spike_ratio,
                 volume_trend_7d=volume_trend_7d,
-                volume_consistency=volume_consistency
+                volume_consistency=volume_consistency,
             )
 
         except Exception as e:
             _logger.warning("Error calculating volume metrics for %s: %s", ticker, e)
             return None
 
-    def calculate_momentum_metrics(self, ticker: str) -> Optional[MomentumMetrics]:
+    def calculate_momentum_metrics(self, ticker: str) -> MomentumMetrics | None:
         """
         Calculate price momentum metrics.
 
@@ -237,7 +230,7 @@ class VolumeSqueezeDetectorYF:
             if df is None or len(df) < 7:
                 return None
 
-            closes = df['close'].values
+            closes = df["close"].values
 
             # Price changes
             price_change_1d = (closes[-1] - closes[-2]) / closes[-2] if len(closes) >= 2 else 0
@@ -254,9 +247,7 @@ class VolumeSqueezeDetectorYF:
 
             # Momentum score (weighted combination of price changes)
             momentum_score = (
-                0.3 * max(0, price_change_1d) +
-                0.4 * max(0, price_change_3d) +
-                0.3 * max(0, price_change_7d)
+                0.3 * max(0, price_change_1d) + 0.4 * max(0, price_change_3d) + 0.3 * max(0, price_change_7d)
             )
             momentum_score = min(momentum_score, 1.0)  # Cap at 1.0
 
@@ -265,7 +256,7 @@ class VolumeSqueezeDetectorYF:
                 price_change_3d=price_change_3d,
                 price_change_7d=price_change_7d,
                 price_volatility=price_volatility,
-                momentum_score=momentum_score
+                momentum_score=momentum_score,
             )
 
         except Exception as e:
@@ -287,8 +278,8 @@ class VolumeSqueezeDetectorYF:
             if not info:
                 return 0.5  # Default neutral score
 
-            market_cap = info.get('market_cap')
-            float_shares = info.get('float_shares')
+            market_cap = info.get("market_cap")
+            float_shares = info.get("float_shares")
 
             if not market_cap or not float_shares:
                 return 0.5
@@ -306,7 +297,7 @@ class VolumeSqueezeDetectorYF:
         except Exception:
             return 0.5
 
-    def calculate_squeeze_indicators(self, ticker: str) -> Optional[SqueezeIndicators]:
+    def calculate_squeeze_indicators(self, ticker: str) -> SqueezeIndicators | None:
         """
         Calculate combined squeeze indicators.
 
@@ -331,33 +322,33 @@ class VolumeSqueezeDetectorYF:
 
             # Combined score (weighted average)
             combined_score = (
-                self.weights['volume_spike'] * volume_score +
-                self.weights['momentum'] * momentum_score +
-                self.weights['float_size'] * float_score +
-                self.weights['consistency'] * volume_metrics.volume_consistency
+                self.weights["volume_spike"] * volume_score
+                + self.weights["momentum"] * momentum_score
+                + self.weights["float_size"] * float_score
+                + self.weights["consistency"] * volume_metrics.volume_consistency
             )
 
             # Determine squeeze probability
             if combined_score >= 0.7:
-                squeeze_probability = 'HIGH'
+                squeeze_probability = "HIGH"
             elif combined_score >= 0.5:
-                squeeze_probability = 'MEDIUM'
+                squeeze_probability = "MEDIUM"
             else:
-                squeeze_probability = 'LOW'
+                squeeze_probability = "LOW"
 
             return SqueezeIndicators(
                 volume_score=volume_score,
                 momentum_score=momentum_score,
                 float_score=float_score,
                 combined_score=combined_score,
-                squeeze_probability=squeeze_probability
+                squeeze_probability=squeeze_probability,
             )
 
         except Exception as e:
             _logger.warning("Error calculating squeeze indicators for %s: %s", ticker, e)
             return None
 
-    def analyze_ticker(self, ticker: str) -> Optional[Tuple[Candidate, SqueezeIndicators]]:
+    def analyze_ticker(self, ticker: str) -> Tuple[Candidate, SqueezeIndicators] | None:
         """
         Analyze a single ticker for volume squeeze potential.
 
@@ -391,7 +382,7 @@ class VolumeSqueezeDetectorYF:
                 ticker=ticker,
                 source=CandidateSource.VOLUME_DETECTOR,
                 detection_date=datetime.now().date(),
-                confidence_score=indicators.combined_score
+                confidence_score=indicators.combined_score,
             )
 
             return (candidate, indicators)
@@ -417,8 +408,7 @@ class VolumeSqueezeDetectorYF:
 
         for i, ticker in enumerate(tickers):
             if i % 50 == 0:
-                _logger.info("Progress: %d/%d tickers analyzed, %d candidates found",
-                           i, len(tickers), len(candidates))
+                _logger.info("Progress: %d/%d tickers analyzed, %d candidates found", i, len(tickers), len(candidates))
 
             try:
                 result = self.analyze_ticker(ticker)
@@ -426,16 +416,18 @@ class VolumeSqueezeDetectorYF:
                     candidate, indicators = result
                     if indicators.combined_score >= min_score:
                         candidates.append(result)
-                        _logger.info("Found candidate: %s (score=%.3f, volume_spike=%.2fx)",
-                                   ticker, indicators.combined_score,
-                                   self.calculate_volume_metrics(ticker).volume_spike_ratio)
+                        _logger.info(
+                            "Found candidate: %s (score=%.3f, volume_spike=%.2fx)",
+                            ticker,
+                            indicators.combined_score,
+                            self.calculate_volume_metrics(ticker).volume_spike_ratio,
+                        )
 
             except Exception as e:
                 _logger.warning("Error screening ticker %s: %s", ticker, e)
                 continue
 
-        _logger.info("Screening complete: %d candidates found from %d tickers",
-                    len(candidates), len(tickers))
+        _logger.info("Screening complete: %d candidates found from %d tickers", len(candidates), len(tickers))
 
         # Sort by combined score
         candidates.sort(key=lambda x: x[1].combined_score, reverse=True)

@@ -13,15 +13,16 @@ project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
 import json
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
 import talib
 
+from src.ml.pipeline.p03_cnn_xgboost.utils.data_validation import convert_targets_to_numeric
 from src.notification.logger import setup_logger
 from src.util.config import load_config
-from src.ml.pipeline.p03_cnn_xgboost.utils.data_validation import convert_targets_to_numeric
+
 _logger = setup_logger(__name__)
 
 
@@ -51,9 +52,27 @@ class TAFeatureEngineer:
 
         # Define technical indicators to calculate
         self.indicators = [
-            "rsi", "macd", "macd_signal", "macd_histogram", "bb_upper", "bb_middle", "bb_lower",
-            "sma_20", "ema_fast", "price_vs_sma20", "price_vs_ema_fast",
-            "stoch_k", "stoch_d", "adx", "plus_di", "minus_di", "obv", "atr", "cci", "roc", "mfi"
+            "rsi",
+            "macd",
+            "macd_signal",
+            "macd_histogram",
+            "bb_upper",
+            "bb_middle",
+            "bb_lower",
+            "sma_20",
+            "ema_fast",
+            "price_vs_sma20",
+            "price_vs_ema_fast",
+            "stoch_k",
+            "stoch_d",
+            "adx",
+            "plus_di",
+            "minus_di",
+            "obv",
+            "atr",
+            "cci",
+            "roc",
+            "mfi",
         ]
 
     def run(self) -> Dict[str, Any]:
@@ -118,12 +137,7 @@ class TAFeatureEngineer:
         """
         _logger.info("Processing %d labeled data files", len(labeled_files))
 
-        results = {
-            "files_processed": 0,
-            "total_features": 0,
-            "failed_files": [],
-            "file_results": []
-        }
+        results = {"files_processed": 0, "total_features": 0, "failed_files": [], "file_results": []}
 
         for file_path in labeled_files:
             try:
@@ -136,13 +150,13 @@ class TAFeatureEngineer:
 
             except Exception as e:
                 _logger.warning("Failed to process %s: %s", file_path, e)
-                results["failed_files"].append({
-                    "file": str(file_path),
-                    "error": str(e)
-                })
+                results["failed_files"].append({"file": str(file_path), "error": str(e)})
 
-        _logger.info("TA feature engineering completed: %d files processed, %d total features",
-                    results["files_processed"], results["total_features"])
+        _logger.info(
+            "TA feature engineering completed: %d files processed, %d total features",
+            results["files_processed"],
+            results["total_features"],
+        )
 
         return results
 
@@ -179,7 +193,7 @@ class TAFeatureEngineer:
             "features_count": len(ta_features.columns),
             "original_rows": len(df),
             "feature_rows": len(feature_df),
-            "indicators_calculated": list(ta_features.columns)
+            "indicators_calculated": list(ta_features.columns),
         }
 
     def _calculate_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -260,9 +274,7 @@ class TAFeatureEngineer:
 
         return ta_features
 
-    def _combine_features(self,
-                         original_df: pd.DataFrame,
-                         ta_features: pd.DataFrame) -> pd.DataFrame:
+    def _combine_features(self, original_df: pd.DataFrame, ta_features: pd.DataFrame) -> pd.DataFrame:
         """
         Combine original data, embeddings, and technical indicators.
 
@@ -281,10 +293,7 @@ class TAFeatureEngineer:
         base_cols = [col for col in base_cols if col in original_df.columns]
 
         # Combine base data, embeddings, and TA features
-        combined_df = pd.concat([
-            original_df[base_cols + embedding_cols],
-            ta_features
-        ], axis=1)
+        combined_df = pd.concat([original_df[base_cols + embedding_cols], ta_features], axis=1)
 
         # Add metadata columns if they exist
         metadata_cols = ["sequence_start_idx", "sequence_end_idx"]
@@ -334,7 +343,7 @@ class TAFeatureEngineer:
         # Handle NaN values in targets and ensure proper data types
         target_cols = ["target_direction", "target_volatility", "target_trend", "target_magnitude"]
 
-                # Convert targets to proper numeric types
+        # Convert targets to proper numeric types
         df = convert_targets_to_numeric(df, target_cols)
 
         return df
@@ -376,7 +385,7 @@ class TAFeatureEngineer:
             "status": "completed",
             "timestamp": pd.Timestamp.now().isoformat(),
             "indicators_calculated": self.indicators,
-            "processing_results": processing_results
+            "processing_results": processing_results,
         }
 
         with open(summary_path, "w") as f:

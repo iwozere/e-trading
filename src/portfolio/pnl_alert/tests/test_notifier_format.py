@@ -1,6 +1,6 @@
 """Unit tests for notifier message formatting."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.portfolio.pnl_alert.notifier import format_html, format_plain_text
 from src.portfolio.pnl_alert.pnl_evaluator import AlertRow
@@ -18,7 +18,7 @@ def _row(symbol: str, avg: float, now: float, qty: float = 1.0, source: str = "i
     )
 
 
-AS_OF = datetime(2026, 4, 20, tzinfo=timezone.utc)
+AS_OF = datetime(2026, 4, 20, tzinfo=UTC)
 
 
 def test_plain_text_contains_header_and_rows():

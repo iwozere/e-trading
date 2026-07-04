@@ -16,18 +16,17 @@ sys.path.append(str(PROJECT_ROOT))
 from src.ml.pipeline.p20_kestrel.reporting.data_health import run as run_data_health
 from src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator import run as run_aggregator
 
-
 # ---------------------------------------------------------------------------
 # Data health check
 # ---------------------------------------------------------------------------
+
 
 def test_data_health_returns_required_keys():
     """data_health.run() returns a dict with expected summary keys."""
     with (
         patch("src.ml.pipeline.p20_kestrel.reporting.data_health.start_job_run"),
         patch("src.ml.pipeline.p20_kestrel.reporting.data_health.finish_job_run"),
-        patch("src.ml.pipeline.p20_kestrel.reporting.data_health.get_llm_monthly_spend",
-              return_value=10.0),
+        patch("src.ml.pipeline.p20_kestrel.reporting.data_health.get_llm_monthly_spend", return_value=10.0),
     ):
         try:
             result = run_data_health()
@@ -41,17 +40,15 @@ def test_data_health_returns_required_keys():
 # Sentiment aggregator
 # ---------------------------------------------------------------------------
 
+
 def test_sentiment_aggregator_handles_empty_watchlist():
     """Aggregator returns a valid dict when watchlist is empty."""
     with (
-        patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.get_watchlist_tickers",
-              return_value=[]),
-        patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.get_open_positions",
-              return_value=[]),
+        patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.get_watchlist_tickers", return_value=[]),
+        patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.get_open_positions", return_value=[]),
         patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.start_job_run"),
         patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.finish_job_run"),
-        patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.upsert_signals",
-              return_value=0),
+        patch("src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator.upsert_signals", return_value=0),
     ):
         try:
             result = run_aggregator()
@@ -64,17 +61,15 @@ def test_sentiment_aggregator_handles_empty_watchlist():
 # Sleeve B full run() path
 # ---------------------------------------------------------------------------
 
+
 def test_sleeve_b_run_aggregates_all_sub_sleeves():
     """Sleeve B run() returns a dict covering all three sub-sleeves."""
     from src.ml.pipeline.p20_kestrel.screening.sleeve_b import run as run_b
 
     with (
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window",
-              return_value=[]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_past_spinoffs",
-              return_value=[]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_active_tickers",
-              return_value=[]),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window", return_value=[]),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_past_spinoffs", return_value=[]),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_active_tickers", return_value=[]),
         patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.upsert_watchlist"),
     ):
         result = run_b()
@@ -88,11 +83,14 @@ def test_sleeve_b_run_aggregates_all_sub_sleeves():
 
 def test_sleeve_b_run_counts_candidates_correctly():
     """Sleeve B run() total_candidates == sum of all sub-sleeves."""
+    from datetime import timedelta
+
     from src.ml.pipeline.p20_kestrel.screening.sleeve_b import (
         _B2_MCAP_MIN,
+    )
+    from src.ml.pipeline.p20_kestrel.screening.sleeve_b import (
         run as run_b,
     )
-    from datetime import timedelta
 
     spinoff = {
         "ticker": "SPINCO",
@@ -101,16 +99,14 @@ def test_sleeve_b_run_counts_candidates_correctly():
     }
 
     with (
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window",
-              return_value=[]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_past_spinoffs",
-              return_value=[spinoff]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
-              return_value={"ticker": "SPINCO", "mcap": _B2_MCAP_MIN * 2}),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_active_tickers",
-              return_value=[]),
-        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b._get_latest_index_changes_file",
-              return_value=None),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_catalysts_in_window", return_value=[]),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_past_spinoffs", return_value=[spinoff]),
+        patch(
+            "src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_universe_row",
+            return_value={"ticker": "SPINCO", "mcap": _B2_MCAP_MIN * 2},
+        ),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.get_active_tickers", return_value=[]),
+        patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b._get_latest_index_changes_file", return_value=None),
         patch("src.ml.pipeline.p20_kestrel.screening.sleeve_b.upsert_watchlist"),
     ):
         result = run_b()

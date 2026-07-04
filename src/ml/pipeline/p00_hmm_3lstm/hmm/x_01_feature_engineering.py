@@ -16,7 +16,8 @@ Core Libraries:
 
 import sys
 from pathlib import Path
-PROJECT_ROOT = Path(__file__).resolve().parents[3] # Go up 3 levels from 'src/ml/hmm'
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]  # Go up 3 levels from 'src/ml/hmm'
 sys.path.append(str(PROJECT_ROOT))
 
 import numpy as np
@@ -37,7 +38,7 @@ def add_log_return(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: The DataFrame with a 'log_return' column added.
     """
-    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    df["log_return"] = np.log(df["close"] / df["close"].shift(1))
     return df
 
 
@@ -53,7 +54,7 @@ def add_volatility(df: pd.DataFrame, window: int) -> pd.DataFrame:
     Returns:
         pd.DataFrame: The DataFrame with a 'volatility' column added.
     """
-    df['volatility'] = df['log_return'].rolling(window=window).std()
+    df["volatility"] = df["log_return"].rolling(window=window).std()
     return df
 
 
@@ -67,7 +68,7 @@ def add_rsi(df: pd.DataFrame, period: int) -> pd.DataFrame:
     Returns:
         pd.DataFrame: The DataFrame with an 'rsi' column added.
     """
-    df['rsi'] = talib.RSI(df['close'], timeperiod=period)
+    df["rsi"] = talib.RSI(df["close"], timeperiod=period)
     return df
 
 
@@ -85,13 +86,8 @@ def add_macd(df: pd.DataFrame, fast: int, slow: int, signal: int) -> pd.DataFram
     Returns:
         pd.DataFrame: The DataFrame with a 'macd' column added.
     """
-    macd, macdsignal, macdhist = talib.MACD(
-        df['close'],
-        fastperiod=fast,
-        slowperiod=slow,
-        signalperiod=signal
-    )
-    df['macd'] = macd
+    macd, macdsignal, macdhist = talib.MACD(df["close"], fastperiod=fast, slowperiod=slow, signalperiod=signal)
+    df["macd"] = macd
     return df
 
 
@@ -108,14 +104,8 @@ def add_bollinger_band_width(df: pd.DataFrame, period: int) -> pd.DataFrame:
     Returns:
         pd.DataFrame: The DataFrame with a 'boll_width' column added.
     """
-    upper, middle, lower = talib.BBANDS(
-        df['close'],
-        timeperiod=period,
-        nbdevup=2,
-        nbdevdn=2,
-        matype=0
-    )
-    df['boll_width'] = upper - lower
+    upper, middle, lower = talib.BBANDS(df["close"], timeperiod=period, nbdevup=2, nbdevdn=2, matype=0)
+    df["boll_width"] = upper - lower
     return df
 
 
@@ -146,21 +136,20 @@ def generate_features(df: pd.DataFrame, feature_list: list[str], params: dict) -
     # Log return is always calculated as it's a base for other features.
     df = add_log_return(df)
 
-    if 'volatility' in feature_list:
-        df = add_volatility(df, window=params.get('vol_window', 20))
-    if 'rsi' in feature_list:
-        df = add_rsi(df, period=params.get('rsi_period', 14))
-    if 'macd' in feature_list:
-        df = add_macd(df,
-                      fast=params.get('macd_fast', 12),
-                      slow=params.get('macd_slow', 26),
-                      signal=params.get('macd_signal', 9))
-    if 'boll' in feature_list:
-        df = add_bollinger_band_width(df, period=params.get('boll_window', 20))
+    if "volatility" in feature_list:
+        df = add_volatility(df, window=params.get("vol_window", 20))
+    if "rsi" in feature_list:
+        df = add_rsi(df, period=params.get("rsi_period", 14))
+    if "macd" in feature_list:
+        df = add_macd(
+            df, fast=params.get("macd_fast", 12), slow=params.get("macd_slow", 26), signal=params.get("macd_signal", 9)
+        )
+    if "boll" in feature_list:
+        df = add_bollinger_band_width(df, period=params.get("boll_window", 20))
 
     df.dropna(inplace=True)
 
     # Create a list of columns that were actually generated before returning
-    generated_cols = [col for col in ['log_return', 'volatility', 'rsi', 'macd', 'boll_width'] if col in df.columns]
+    generated_cols = [col for col in ["log_return", "volatility", "rsi", "macd", "boll_width"] if col in df.columns]
 
     return df[generated_cols], df

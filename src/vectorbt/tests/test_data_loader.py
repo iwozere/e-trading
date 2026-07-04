@@ -1,7 +1,9 @@
-import pytest
-import pandas as pd
 import os
+
+import pytest
+
 from src.vectorbt.data.loader import DataLoader
+
 
 def test_data_loader_integrity():
     # Note: Requires test data in data/ folder or mocks
@@ -18,7 +20,7 @@ def test_data_loader_integrity():
         if data is not None:
             # Check MultiIndex structure
             assert data.columns.nlevels == 2
-            assert 'Close' in data.columns.get_level_values('column')
+            assert "Close" in data.columns.get_level_values("column")
 
             # Check no missing data after alignment
             assert data.isna().sum().sum() == 0

@@ -12,6 +12,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
+
 def test_pipeline_imports():
     """Test that all pipeline stages can be imported."""
     print("Testing pipeline imports...")
@@ -19,34 +20,42 @@ def test_pipeline_imports():
     try:
         # Test data loader
         from x_01_data_loader import DataLoader
+
         print("✅ DataLoader imported successfully")
 
         # Test CNN training
-        from x_02_train_cnn import CNNTrainer, CNN1D
+        from x_02_train_cnn import CNN1D, CNNTrainer
+
         print("✅ CNNTrainer and CNN1D imported successfully")
 
         # Test embedding generation
         from x_03_generate_embeddings import EmbeddingGenerator
+
         print("✅ EmbeddingGenerator imported successfully")
 
         # Test TA features
         from x_04_ta_features import TAFeatureEngineer
+
         print("✅ TAFeatureEngineer imported successfully")
 
         # Test XGBoost optimization
         from x_05_optuna_xgboost import XGBoostOptimizer
+
         print("✅ XGBoostOptimizer imported successfully")
 
         # Test XGBoost training
         from x_06_train_xgboost import XGBoostTrainer
+
         print("✅ XGBoostTrainer imported successfully")
 
         # Test validation
         from x_07_validate_model import ModelValidator
+
         print("✅ ModelValidator imported successfully")
 
         # Test pipeline orchestrator
         from run_pipeline import CNNXGBoostPipeline
+
         print("✅ CNNXGBoostPipeline imported successfully")
 
         return True
@@ -57,6 +66,7 @@ def test_pipeline_imports():
     except Exception as e:
         print(f"❌ Unexpected error: {e}")
         return False
+
 
 def test_config_loading():
     """Test that configuration can be loaded."""
@@ -82,6 +92,7 @@ def test_config_loading():
         print(f"❌ Configuration loading error: {e}")
         return False
 
+
 def test_directory_structure():
     """Test that required directories exist."""
     print("\nTesting directory structure...")
@@ -93,7 +104,7 @@ def test_directory_structure():
         "src/ml/pipeline/p03_cnn_xgboost/models/cnn",
         "src/ml/pipeline/p03_cnn_xgboost/models/xgboost",
         "src/ml/pipeline/p03_cnn_xgboost/tests",
-        "config/pipeline"
+        "config/pipeline",
     ]
 
     all_exist = True
@@ -106,6 +117,7 @@ def test_directory_structure():
 
     return all_exist
 
+
 def test_documentation_files():
     """Test that documentation files exist."""
     print("\nTesting documentation files...")
@@ -115,7 +127,7 @@ def test_documentation_files():
         "src/ml/pipeline/p03_cnn_xgboost/docs/Design.md",
         "src/ml/pipeline/p03_cnn_xgboost/docs/Requirements.md",
         "src/ml/pipeline/p03_cnn_xgboost/docs/Tasks.md",
-        "config/pipeline/p03.yaml"
+        "config/pipeline/p03.yaml",
     ]
 
     all_exist = True
@@ -127,6 +139,7 @@ def test_documentation_files():
             all_exist = False
 
     return all_exist
+
 
 def test_pipeline_stages():
     """Test that all pipeline stage files exist."""
@@ -140,7 +153,7 @@ def test_pipeline_stages():
         "src/ml/pipeline/p03_cnn_xgboost/x_05_optuna_xgboost.py",
         "src/ml/pipeline/p03_cnn_xgboost/x_06_train_xgboost.py",
         "src/ml/pipeline/p03_cnn_xgboost/x_07_validate_model.py",
-        "src/ml/pipeline/p03_cnn_xgboost/run_pipeline.py"
+        "src/ml/pipeline/p03_cnn_xgboost/run_pipeline.py",
     ]
 
     all_exist = True
@@ -153,6 +166,7 @@ def test_pipeline_stages():
 
     return all_exist
 
+
 def main():
     """Run all tests."""
     print("=" * 60)
@@ -164,7 +178,7 @@ def main():
         ("Configuration Loading", test_config_loading),
         ("Directory Structure", test_directory_structure),
         ("Documentation Files", test_documentation_files),
-        ("Pipeline Stages", test_pipeline_stages)
+        ("Pipeline Stages", test_pipeline_stages),
     ]
 
     results = []
@@ -196,6 +210,7 @@ def main():
     else:
         print("\n⚠️  Some tests failed. Please check the issues above.")
         return False
+
 
 if __name__ == "__main__":
     success = main()

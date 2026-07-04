@@ -11,13 +11,13 @@ import re
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.ml.pipeline.p20_kestrel.config import SONNET_MODEL
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+from src.ml.pipeline.p20_kestrel.config import SONNET_MODEL
 
 _kestrel = _KestrelService()
 finish_job_run = _kestrel.finish_job_run
@@ -61,6 +61,7 @@ def _fetch_recent_10k_texts(ticker: str) -> List[Dict[str, Any]]:
         List of dicts with keys: form_type, filed_date, text.
     """
     import requests
+
     from src.data.downloader.edgar_downloader import EdgarDownloader
 
     downloader = EdgarDownloader()
@@ -70,10 +71,11 @@ def _fetch_recent_10k_texts(ticker: str) -> List[Dict[str, Any]]:
         # Map ticker → CIK via the company tickers JSON
         tickers_path = downloader.download_company_tickers()
         import json
+
         with open(tickers_path, encoding="utf-8") as f:
             cik_map = json.load(f)
 
-        cik: Optional[str] = None
+        cik: str | None = None
         ticker_upper = ticker.upper()
         for entry in cik_map.values():
             if str(entry.get("ticker", "")).upper() == ticker_upper:
@@ -112,16 +114,15 @@ def _fetch_recent_10k_texts(ticker: str) -> List[Dict[str, Any]]:
                 continue
 
             try:
-                url = (
-                    f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession}/"
-                    f"{primary_doc}"
-                )
+                url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession}/{primary_doc}"
                 resp = requests.get(url, timeout=10, headers={"User-Agent": "KestrelBot akossyrev@gmail.com"})
-                filings.append({
-                    "form_type": form_type,
-                    "filed_date": filed_date,
-                    "text": resp.text[:100_000] if resp.ok else "",
-                })
+                filings.append(
+                    {
+                        "form_type": form_type,
+                        "filed_date": filed_date,
+                        "text": resp.text[:100_000] if resp.ok else "",
+                    }
+                )
                 collected += 1
             except Exception:
                 filings.append({"form_type": form_type, "filed_date": filed_date, "text": ""})
@@ -133,7 +134,7 @@ def _fetch_recent_10k_texts(ticker: str) -> List[Dict[str, Any]]:
     return filings
 
 
-def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
+def run(as_of_date: date | None = None) -> Dict[str, Any]:
     """
     Generate risk diffs for all watchlist tickers with recent 10-K/Q filings.
 

@@ -2,31 +2,36 @@
 # Standard library
 import asyncio
 import time
-from typing import Dict, Any, List, Optional
-from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Dict, List
 
 # Third party
 import pandas as pd
 
 # Local application
-from src.common.common import get_ohlcv, determine_provider
-from src.indicators.utils import coerce_ohlcv, resample_df, validate_indicator_config
-from src.indicators.registry import INDICATOR_META, get_canonical_name, get_indicator_meta
-from src.indicators.config_manager import get_config_manager
+from src.common.common import determine_provider, get_ohlcv
 from src.common.recommendation.engine import RecommendationEngine
-from src.indicators.adapters.ta_lib_adapter import TaLibAdapter
-from src.indicators.adapters.pandas_ta_adapter import PandasTaAdapter
 from src.indicators.adapters.fundamentals_adapter import FundamentalsAdapter
+from src.indicators.adapters.pandas_ta_adapter import PandasTaAdapter
+from src.indicators.adapters.ta_lib_adapter import TaLibAdapter
+from src.indicators.config_manager import get_config_manager
 from src.indicators.models import (
-    IndicatorBatchConfig, IndicatorResultSet,
-    IndicatorSpec, IndicatorValue, TickerIndicatorsRequest
+    BatchIndicatorRequest,
+    IndicatorBatchConfig,
+    IndicatorCalculationRequest,
+    IndicatorCategory,
+    IndicatorResult,
+    IndicatorResultSet,
+    IndicatorSet,
+    IndicatorSpec,
+    IndicatorValue,
+    PerformanceMetrics,
+    TickerIndicatorsRequest,
 )
-from src.indicators.models import (
-    IndicatorResult, IndicatorSet, IndicatorCategory,
-    IndicatorCalculationRequest, BatchIndicatorRequest, PerformanceMetrics
-)
+from src.indicators.registry import INDICATOR_META, get_canonical_name, get_indicator_meta
+from src.indicators.utils import coerce_ohlcv, resample_df, validate_indicator_config
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -34,6 +39,7 @@ _logger = setup_logger(__name__)
 
 class IndicatorServiceError(Exception):
     """Base exception for indicator service errors."""
+
     def __init__(self, message: str, error_code: str = None, context: Dict[str, Any] = None):
         super().__init__(message)
         self.error_code = error_code
@@ -43,36 +49,42 @@ class IndicatorServiceError(Exception):
 
 class ConfigurationError(IndicatorServiceError):
     """Error in indicator configuration."""
+
     pass
 
 
 class DataError(IndicatorServiceError):
     """Error related to data availability or quality."""
+
     pass
 
 
 class CalculationError(IndicatorServiceError):
     """Error during indicator calculation."""
+
     pass
 
 
 class IndicatorTimeoutError(IndicatorServiceError):
     """Error due to operation timeout. Named to avoid shadowing the built-in TimeoutError."""
+
     pass
 
 
 class CircuitBreakerError(IndicatorServiceError):
     """Error when circuit breaker is open."""
+
     pass
 
 
 @dataclass
 class CircuitBreakerState:
     """State of a circuit breaker."""
+
     name: str
     is_open: bool = False
     failure_count: int = 0
-    last_failure_time: Optional[datetime] = None
+    last_failure_time: datetime | None = None
     success_count: int = 0
     total_requests: int = 0
     failure_threshold: int = 5
@@ -85,9 +97,7 @@ class CircuitBreaker:
 
     def __init__(self, name: str, failure_threshold: int = 5, recovery_timeout: float = 60.0):
         self.state = CircuitBreakerState(
-            name=name,
-            failure_threshold=failure_threshold,
-            recovery_timeout=recovery_timeout
+            name=name, failure_threshold=failure_threshold, recovery_timeout=recovery_timeout
         )
         self._lock = asyncio.Lock()
 
@@ -115,7 +125,7 @@ class CircuitBreaker:
                 raise CircuitBreakerError(
                     f"Circuit breaker {self.state.name} is open",
                     error_code="CIRCUIT_BREAKER_OPEN",
-                    context={"circuit_breaker": self.state.name}
+                    context={"circuit_breaker": self.state.name},
                 )
 
         # Execute the function
@@ -141,10 +151,7 @@ class CircuitBreaker:
 
     def _should_open(self) -> bool:
         """Check if circuit breaker should be opened."""
-        return (
-            not self.state.is_open and
-            self.state.failure_count >= self.state.failure_threshold
-        )
+        return not self.state.is_open and self.state.failure_count >= self.state.failure_threshold
 
     def _should_attempt_reset(self) -> bool:
         """Check if circuit breaker should attempt reset."""
@@ -202,22 +209,19 @@ class ErrorRecoveryStrategy:
         """Get delay before retry based on error type and attempt."""
         error_category = ErrorRecoveryStrategy.categorize_error(error)
 
-        base_delays = {
-            "network": 2.0,
-            "data": 1.0,
-            "calculation": 0.5,
-            "unknown": 1.0
-        }
+        base_delays = {"network": 2.0, "data": 1.0, "calculation": 0.5, "unknown": 1.0}
 
         base_delay = base_delays.get(error_category, 1.0)
         # Exponential backoff with jitter
         import random
-        return base_delay * (2 ** attempt) + random.uniform(0, 1)
+
+        return base_delay * (2**attempt) + random.uniform(0, 1)
 
 
 @dataclass
 class PerformanceTracker:
     """Track performance metrics for operations."""
+
     operation_times: Dict[str, List[float]] = field(default_factory=dict)
     operation_counts: Dict[str, int] = field(default_factory=dict)
     cache_hits: Dict[str, int] = field(default_factory=dict)
@@ -262,7 +266,7 @@ class PerformanceTracker:
                 "error_rate": self.error_counts[operation] / max(1, self.operation_counts[operation]),
                 "total_cache_hits": self.cache_hits[operation],
                 "total_cache_misses": self.cache_misses[operation],
-                "total_errors": self.error_counts[operation]
+                "total_errors": self.error_counts[operation],
             }
         else:
             # Return stats for all operations
@@ -281,7 +285,7 @@ class PerformanceTracker:
                 "total_errors": total_errors,
                 "overall_error_rate": total_errors / max(1, total_operations),
                 "overall_cache_hit_rate": total_cache_hits / max(1, total_cache_hits + total_cache_misses),
-                "uptime_seconds": (datetime.now() - self.start_time).total_seconds()
+                "uptime_seconds": (datetime.now() - self.start_time).total_seconds(),
             }
 
             return stats
@@ -297,11 +301,7 @@ class PerformanceMonitor:
     def start_operation(self, operation: str) -> str:
         """Start timing an operation."""
         operation_id = f"{operation}_{time.time()}"
-        self._operation_stack.append({
-            "id": operation_id,
-            "operation": operation,
-            "start_time": time.time()
-        })
+        self._operation_stack.append({"id": operation_id, "operation": operation, "start_time": time.time()})
         return operation_id
 
     def end_operation(self, operation_id: str, cache_hit: bool = False, error: bool = False):
@@ -312,12 +312,7 @@ class PerformanceMonitor:
         for i, op_info in enumerate(self._operation_stack):
             if op_info["id"] == operation_id:
                 duration = end_time - op_info["start_time"]
-                self.tracker.record_operation(
-                    op_info["operation"],
-                    duration,
-                    cache_hit=cache_hit,
-                    error=error
-                )
+                self.tracker.record_operation(op_info["operation"], duration, cache_hit=cache_hit, error=error)
                 self._operation_stack.pop(i)
                 return duration
 
@@ -328,29 +323,24 @@ class PerformanceMonitor:
         return {
             "timestamp": datetime.now().isoformat(),
             "statistics": self.tracker.get_stats(),
-            "active_operations": len(self._operation_stack)
+            "active_operations": len(self._operation_stack),
         }
 
 
 class BenchmarkRunner:
     """Run benchmarks against legacy implementations."""
 
-    def __init__(self, unified_service: 'UnifiedIndicatorService'):
+    def __init__(self, unified_service: "UnifiedIndicatorService"):
         self.unified_service = unified_service
 
-    async def benchmark_single_ticker(
-        self,
-        ticker: str,
-        indicators: List[str],
-        iterations: int = 10
-    ) -> Dict[str, Any]:
+    async def benchmark_single_ticker(self, ticker: str, indicators: List[str], iterations: int = 10) -> Dict[str, Any]:
         """Benchmark single ticker calculation."""
         results = {
             "ticker": ticker,
             "indicators": indicators,
             "iterations": iterations,
             "unified_service": {"times": [], "errors": 0},
-            "comparison": {}
+            "comparison": {},
         }
 
         # Benchmark unified service
@@ -358,12 +348,7 @@ class BenchmarkRunner:
             try:
                 start_time = time.time()
 
-                request = IndicatorCalculationRequest(
-                    ticker=ticker,
-                    indicators=indicators,
-                    timeframe="1d",
-                    period="1y"
-                )
+                request = IndicatorCalculationRequest(ticker=ticker, indicators=indicators, timeframe="1d", period="1y")
 
                 await self.unified_service.get_indicators(request)
 
@@ -385,40 +370,24 @@ class BenchmarkRunner:
         return results
 
     async def benchmark_batch_processing(
-        self,
-        tickers: List[str],
-        indicators: List[str],
-        batch_sizes: List[int] = None
+        self, tickers: List[str], indicators: List[str], batch_sizes: List[int] = None
     ) -> Dict[str, Any]:
         """Benchmark batch processing with different batch sizes."""
         if batch_sizes is None:
             batch_sizes = [1, 5, 10, 20]
 
-        results = {
-            "tickers": tickers,
-            "indicators": indicators,
-            "batch_results": {}
-        }
+        results = {"tickers": tickers, "indicators": indicators, "batch_results": {}}
 
         for batch_size in batch_sizes:
             try:
                 start_time = time.time()
 
                 # Configure batch processing
-                batch_config = BatchProcessingConfig(
-                    max_concurrent=batch_size,
-                    batch_size=batch_size
-                )
+                batch_config = BatchProcessingConfig(max_concurrent=batch_size, batch_size=batch_size)
 
-                request = BatchIndicatorRequest(
-                    tickers=tickers,
-                    indicators=indicators,
-                    max_concurrent=batch_size
-                )
+                request = BatchIndicatorRequest(tickers=tickers, indicators=indicators, max_concurrent=batch_size)
 
-                batch_result = await self.unified_service.get_batch_indicators_enhanced(
-                    request, batch_config
-                )
+                batch_result = await self.unified_service.get_batch_indicators_enhanced(request, batch_config)
 
                 duration = time.time() - start_time
 
@@ -427,15 +396,11 @@ class BenchmarkRunner:
                     "success_rate": batch_result.success_rate,
                     "successful_count": len(batch_result.successful),
                     "failed_count": len(batch_result.failed),
-                    "throughput": len(tickers) / duration if duration > 0 else 0
+                    "throughput": len(tickers) / duration if duration > 0 else 0,
                 }
 
             except Exception as e:
-                results["batch_results"][batch_size] = {
-                    "error": str(e),
-                    "duration": 0,
-                    "success_rate": 0
-                }
+                results["batch_results"][batch_size] = {"error": str(e), "duration": 0, "success_rate": 0}
 
         return results
 
@@ -443,6 +408,7 @@ class BenchmarkRunner:
 @dataclass
 class BatchProcessingConfig:
     """Configuration for batch processing operations."""
+
     max_concurrent: int = 10
     batch_size: int = 50
     timeout_per_ticker: float = 30.0
@@ -455,6 +421,7 @@ class BatchProcessingConfig:
 @dataclass
 class BatchResult:
     """Result of a batch processing operation."""
+
     successful: Dict[str, IndicatorSet] = field(default_factory=dict)
     failed: Dict[str, Exception] = field(default_factory=dict)
     partial: Dict[str, IndicatorSet] = field(default_factory=dict)
@@ -480,11 +447,12 @@ class UnifiedIndicatorService:
 
     def __init__(self, prefer: Dict[str, int] | None = None, batch_config: BatchProcessingConfig = None):
         import warnings
+
         warnings.warn(
             "UnifiedIndicatorService is deprecated and will be removed in a future version. "
             "Use TALib functions directly or the simple TALib-based indicator architecture for Backtrader strategies.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         # Initialize adapters with graceful handling of missing dependencies
         self.adapters = {}
@@ -530,8 +498,11 @@ class UnifiedIndicatorService:
         self.performance_monitor = PerformanceMonitor()
         self.benchmark_runner = BenchmarkRunner(self)
 
-        _logger.info("Initialized UnifiedIndicatorService with %d adapters and %d circuit breakers",
-                    len(self.adapters), len(self.circuit_breakers))
+        _logger.info(
+            "Initialized UnifiedIndicatorService with %d adapters and %d circuit breakers",
+            len(self.adapters),
+            len(self.circuit_breakers),
+        )
 
     def _select_provider(self, name: str):
         meta = INDICATOR_META.get(name)
@@ -555,10 +526,7 @@ class UnifiedIndicatorService:
         return inputs
 
     async def compute(
-        self,
-        df: pd.DataFrame,
-        config: IndicatorBatchConfig,
-        fund_params: Dict[str, Any] | None = None
+        self, df: pd.DataFrame, config: IndicatorBatchConfig, fund_params: Dict[str, Any] | None = None
     ) -> pd.DataFrame:
         """Async compute supporting both tech and fundamental indicators"""
         validate_indicator_config(config)
@@ -572,11 +540,7 @@ class UnifiedIndicatorService:
             adapter = self._select_provider(spec.name)
 
             # Per-indicator resample (tech only)
-            working = (
-                out if meta.kind == "fund"
-                else resample_df(base, spec.timeframe) if spec.timeframe
-                else base
-            )
+            working = out if meta.kind == "fund" else resample_df(base, spec.timeframe) if spec.timeframe else base
 
             inputs = self._build_inputs(working, spec.name, spec)
             params = dict(spec.params)
@@ -587,10 +551,7 @@ class UnifiedIndicatorService:
             # Await async compute
             res = await adapter.compute(spec.name, working, inputs, params)
 
-            final_names = (
-                spec.output if isinstance(spec.output, dict)
-                else {"value": spec.output}
-            )
+            final_names = spec.output if isinstance(spec.output, dict) else {"value": spec.output}
 
             for k, s in res.items():
                 cname = final_names.get(k)
@@ -610,18 +571,14 @@ class UnifiedIndicatorService:
 
         return out
 
-    async def compute_for_ticker(
-        self,
-        req: TickerIndicatorsRequest
-    ) -> IndicatorResultSet:
+    async def compute_for_ticker(self, req: TickerIndicatorsRequest) -> IndicatorResultSet:
         """Compute indicators for a ticker (both technical and fundamental)"""
         try:
             provider = req.provider or determine_provider(req.ticker)
 
             # Fetch OHLCV with circuit breaker protection
             df = await self.circuit_breakers["data_provider"].call(
-                asyncio.to_thread,
-                get_ohlcv, req.ticker, req.timeframe, req.period, provider
+                asyncio.to_thread, get_ohlcv, req.ticker, req.timeframe, req.period, provider
             )
 
             # Validate data quality
@@ -629,14 +586,15 @@ class UnifiedIndicatorService:
                 raise DataError(
                     f"No data available for {req.ticker}",
                     error_code="NO_DATA",
-                    context={"ticker": req.ticker, "provider": provider}
+                    context={"ticker": req.ticker, "provider": provider},
                 )
 
             # Check minimum data requirements
             min_required_rows = 20  # Minimum for most technical indicators
             if len(df) < min_required_rows:
-                _logger.warning("Insufficient data for %s: %d rows (minimum %d)",
-                              req.ticker, len(df), min_required_rows)
+                _logger.warning(
+                    "Insufficient data for %s: %d rows (minimum %d)", req.ticker, len(df), min_required_rows
+                )
                 # Continue with available data but log warning
 
             # Build specs with error handling
@@ -647,19 +605,15 @@ class UnifiedIndicatorService:
                         raise ConfigurationError(
                             f"Unknown indicator: {name}",
                             error_code="UNKNOWN_INDICATOR",
-                            context={"indicator": name, "ticker": req.ticker}
+                            context={"indicator": name, "ticker": req.ticker},
                         )
 
                     meta = INDICATOR_META[name]
                     if meta.kind == "tech":
                         outmap = (
-                            {"value": name} if meta.outputs == ["value"]
-                            else {o: f"{name}_{o}" for o in meta.outputs}
+                            {"value": name} if meta.outputs == ["value"] else {o: f"{name}_{o}" for o in meta.outputs}
                         )
-                        specs.append(IndicatorSpec(
-                            name=name,
-                            output=outmap if len(outmap) > 1 else outmap["value"]
-                        ))
+                        specs.append(IndicatorSpec(name=name, output=outmap if len(outmap) > 1 else outmap["value"]))
                     else:
                         specs.append(IndicatorSpec(name=name, output=name))
 
@@ -672,22 +626,19 @@ class UnifiedIndicatorService:
                 raise ConfigurationError(
                     "No valid indicators specified",
                     error_code="NO_VALID_INDICATORS",
-                    context={"ticker": req.ticker, "requested_indicators": req.indicators}
+                    context={"ticker": req.ticker, "requested_indicators": req.indicators},
                 )
 
             cfg = IndicatorBatchConfig(timeframe=req.timeframe, indicators=specs)
 
             # Compute with error handling
             try:
-                df_all = await self.compute(
-                    df, cfg,
-                    fund_params={"ticker": req.ticker, "provider": provider}
-                )
+                df_all = await self.compute(df, cfg, fund_params={"ticker": req.ticker, "provider": provider})
             except Exception as e:
                 raise CalculationError(
                     f"Error computing indicators for {req.ticker}: {str(e)}",
                     error_code="COMPUTATION_FAILED",
-                    context={"ticker": req.ticker, "indicators": [s.name for s in specs]}
+                    context={"ticker": req.ticker, "indicators": [s.name for s in specs]},
                 ) from e
 
             # Build results with error handling
@@ -699,8 +650,7 @@ class UnifiedIndicatorService:
                     if name not in INDICATOR_META:
                         continue  # Skip unknown indicators
 
-                    cols = [c for c in df_all.columns
-                           if c == name or c.startswith(f"{name}_")]
+                    cols = [c for c in df_all.columns if c == name or c.startswith(f"{name}_")]
 
                     for c in cols:
                         try:
@@ -712,11 +662,7 @@ class UnifiedIndicatorService:
                                 v = None
 
                             target = tech if INDICATOR_META[name].kind == "tech" else fund
-                            target[c] = IndicatorValue(
-                                name=c,
-                                value=v,
-                                source="unified_service"
-                            )
+                            target[c] = IndicatorValue(name=c, value=v, source="unified_service")
                         except Exception as e:
                             _logger.error("Error processing result for %s.%s: %s", req.ticker, c, e)
                             # Continue with other results
@@ -726,11 +672,7 @@ class UnifiedIndicatorService:
                     _logger.error("Error processing indicator %s for %s: %s", name, req.ticker, e)
                     continue
 
-            return IndicatorResultSet(
-                ticker=req.ticker,
-                technical=tech,
-                fundamental=fund
-            )
+            return IndicatorResultSet(ticker=req.ticker, technical=tech, fundamental=fund)
 
         except IndicatorServiceError:
             # Re-raise our custom errors
@@ -740,7 +682,7 @@ class UnifiedIndicatorService:
             raise CalculationError(
                 f"Unexpected error computing indicators for {req.ticker}: {str(e)}",
                 error_code="UNEXPECTED_ERROR",
-                context={"ticker": req.ticker}
+                context={"ticker": req.ticker},
             ) from e
 
     # Legacy interface compatibility methods
@@ -767,7 +709,7 @@ class UnifiedIndicatorService:
                 provider=request.provider,
                 indicators=request.indicators,
                 include_recommendations=request.include_recommendations,
-                force_refresh=request.force_refresh
+                force_refresh=request.force_refresh,
             )
 
             # Get results using new interface
@@ -797,7 +739,7 @@ class UnifiedIndicatorService:
                         recommendation=recommendation,
                         category=IndicatorCategory.TECHNICAL,
                         last_updated=datetime.now(),
-                        source=indicator_value.source or "unified_service"
+                        source=indicator_value.source or "unified_service",
                     )
                     indicator_set.add_indicator(indicator_result)
 
@@ -807,9 +749,7 @@ class UnifiedIndicatorService:
                     # Get recommendation if requested
                     recommendation = None
                     if request.include_recommendations:
-                        recommendation = self.recommendation_engine.get_recommendation(
-                            name, indicator_value.value
-                        )
+                        recommendation = self.recommendation_engine.get_recommendation(name, indicator_value.value)
 
                     indicator_result = IndicatorResult(
                         name=name,
@@ -817,7 +757,7 @@ class UnifiedIndicatorService:
                         recommendation=recommendation,
                         category=IndicatorCategory.FUNDAMENTAL,
                         last_updated=datetime.now(),
-                        source=indicator_value.source or "unified_service"
+                        source=indicator_value.source or "unified_service",
                     )
                     indicator_set.add_indicator(indicator_result)
 
@@ -837,9 +777,7 @@ class UnifiedIndicatorService:
             self.performance_monitor.end_operation(operation_id, cache_hit=cache_hit, error=error_occurred)
 
     async def get_batch_indicators_enhanced(
-        self,
-        request: BatchIndicatorRequest,
-        config: Optional[BatchProcessingConfig] = None
+        self, request: BatchIndicatorRequest, config: BatchProcessingConfig | None = None
     ) -> BatchResult:
         """
         Enhanced batch processing with advanced error handling and partial results.
@@ -865,7 +803,7 @@ class UnifiedIndicatorService:
             batch_size = min(batch_config.batch_size, len(request.tickers))
 
             for i in range(0, len(request.tickers), batch_size):
-                batch_tickers = request.tickers[i:i + batch_size]
+                batch_tickers = request.tickers[i : i + batch_size]
 
                 # Create semaphore to limit concurrent operations
                 semaphore = asyncio.Semaphore(batch_config.max_concurrent)
@@ -873,20 +811,18 @@ class UnifiedIndicatorService:
                 # Create tasks for concurrent processing with timeout
                 tasks = []
                 for ticker in batch_tickers:
-                    task = self._process_ticker_with_retry(
-                        ticker, request, batch_config, semaphore
-                    )
+                    task = self._process_ticker_with_retry(ticker, request, batch_config, semaphore)
                     tasks.append(task)
 
                 # Execute batch with timeout
                 try:
                     batch_results = await asyncio.wait_for(
                         asyncio.gather(*tasks, return_exceptions=True),
-                        timeout=batch_config.timeout_per_ticker * len(batch_tickers)
+                        timeout=batch_config.timeout_per_ticker * len(batch_tickers),
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     _logger.warning("Batch timeout for tickers %s", batch_tickers)
-                    batch_results = [asyncio.TimeoutError("Batch timeout")] * len(batch_tickers)
+                    batch_results = [TimeoutError("Batch timeout")] * len(batch_tickers)
 
                 # Process batch results
                 for ticker, batch_result in zip(batch_tickers, batch_results):
@@ -930,13 +866,16 @@ class UnifiedIndicatorService:
                     "max_concurrent": batch_config.max_concurrent,
                     "success_rate": result.success_rate,
                     "failed_count": len(result.failed),
-                    "partial_count": len(result.partial)
-                }
+                    "partial_count": len(result.partial),
+                },
             )
 
             _logger.info(
                 "Batch processing completed: %d successful, %d failed, %d partial (%.2f%% success rate)",
-                len(result.successful), len(result.failed), len(result.partial), result.success_rate * 100
+                len(result.successful),
+                len(result.failed),
+                len(result.partial),
+                result.success_rate * 100,
             )
 
             return result
@@ -950,11 +889,7 @@ class UnifiedIndicatorService:
             self.performance_monitor.end_operation(operation_id, cache_hit=False, error=error_occurred)
 
     async def _process_ticker_with_retry(
-        self,
-        ticker: str,
-        request: BatchIndicatorRequest,
-        config: BatchProcessingConfig,
-        semaphore: asyncio.Semaphore
+        self, ticker: str, request: BatchIndicatorRequest, config: BatchProcessingConfig, semaphore: asyncio.Semaphore
     ) -> IndicatorSet:
         """Process a single ticker with retry logic and concurrency control."""
         async with semaphore:
@@ -970,13 +905,12 @@ class UnifiedIndicatorService:
                         period=request.period,
                         provider=request.provider,
                         force_refresh=request.force_refresh,
-                        include_recommendations=request.include_recommendations
+                        include_recommendations=request.include_recommendations,
                     )
 
                     # Process with timeout
                     result = await asyncio.wait_for(
-                        self.get_indicators(task_request),
-                        timeout=config.timeout_per_ticker
+                        self.get_indicators(task_request), timeout=config.timeout_per_ticker
                     )
 
                     return result
@@ -986,8 +920,7 @@ class UnifiedIndicatorService:
                     error_category = self.error_recovery.categorize_error(e)
 
                     _logger.warning(
-                        "Attempt %d failed for %s (category: %s): %s",
-                        attempt + 1, ticker, error_category, e
+                        "Attempt %d failed for %s (category: %s): %s", attempt + 1, ticker, error_category, e
                     )
 
                     # Check if we should retry
@@ -1008,7 +941,7 @@ class UnifiedIndicatorService:
                 raise CalculationError(
                     f"All retry attempts failed for {ticker}",
                     error_code="RETRY_EXHAUSTED",
-                    context={"ticker": ticker, "attempts": config.retry_attempts + 1}
+                    context={"ticker": ticker, "attempts": config.retry_attempts + 1},
                 ) from last_exception
 
     async def get_batch_indicators(self, request: BatchIndicatorRequest) -> Dict[str, IndicatorSet]:
@@ -1046,10 +979,7 @@ class UnifiedIndicatorService:
             _logger.exception("Error in get_batch_indicators: %s", e)
             return {}
 
-    def aggregate_batch_results(
-        self,
-        batch_results: List[BatchResult]
-    ) -> BatchResult:
+    def aggregate_batch_results(self, batch_results: List[BatchResult]) -> BatchResult:
         """
         Aggregate multiple batch results into a single result.
 
@@ -1097,8 +1027,8 @@ class UnifiedIndicatorService:
                 "success_rate": aggregated.success_rate,
                 "total_successful": len(aggregated.successful),
                 "total_failed": len(aggregated.failed),
-                "total_partial": len(aggregated.partial)
-            }
+                "total_partial": len(aggregated.partial),
+            },
         )
 
         return aggregated
@@ -1112,9 +1042,11 @@ class UnifiedIndicatorService:
                 "failure_count": breaker.state.failure_count,
                 "success_count": breaker.state.success_count,
                 "total_requests": breaker.state.total_requests,
-                "last_failure_time": breaker.state.last_failure_time.isoformat() if breaker.state.last_failure_time else None,
+                "last_failure_time": breaker.state.last_failure_time.isoformat()
+                if breaker.state.last_failure_time
+                else None,
                 "failure_threshold": breaker.state.failure_threshold,
-                "recovery_timeout": breaker.state.recovery_timeout
+                "recovery_timeout": breaker.state.recovery_timeout,
             }
         return status
 
@@ -1136,31 +1068,27 @@ class UnifiedIndicatorService:
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
             "components": {},
-            "circuit_breakers": self.get_circuit_breaker_status()
+            "circuit_breakers": self.get_circuit_breaker_status(),
         }
 
         # Check adapters
         for name, adapter in self.adapters.items():
             try:
                 # Simple health check - try to get supported indicators
-                if hasattr(adapter, 'get_supported_indicators'):
+                if hasattr(adapter, "get_supported_indicators"):
                     indicators = adapter.get_supported_indicators()
                     health_status["components"][name] = {
                         "status": "healthy",
-                        "supported_indicators": len(indicators) if indicators else 0
+                        "supported_indicators": len(indicators) if indicators else 0,
                     }
                 else:
                     health_status["components"][name] = {"status": "healthy"}
             except Exception as e:
-                health_status["components"][name] = {
-                    "status": "unhealthy",
-                    "error": str(e)
-                }
+                health_status["components"][name] = {"status": "unhealthy", "error": str(e)}
                 health_status["status"] = "degraded"
 
         # Check if any circuit breakers are open
-        open_breakers = [name for name, status in health_status["circuit_breakers"].items()
-                        if status["is_open"]]
+        open_breakers = [name for name, status in health_status["circuit_breakers"].items() if status["is_open"]]
         if open_breakers:
             health_status["status"] = "degraded"
             health_status["open_circuit_breakers"] = open_breakers
@@ -1172,24 +1100,16 @@ class UnifiedIndicatorService:
         return self.performance_monitor.get_performance_report()
 
     async def run_benchmark(
-        self,
-        ticker: str = "AAPL",
-        indicators: List[str] = None,
-        iterations: int = 10
+        self, ticker: str = "AAPL", indicators: List[str] = None, iterations: int = 10
     ) -> Dict[str, Any]:
         """Run performance benchmark."""
         if indicators is None:
             indicators = ["RSI", "MACD", "BB_UPPER", "BB_MIDDLE", "BB_LOWER"]
 
-        return await self.benchmark_runner.benchmark_single_ticker(
-            ticker, indicators, iterations
-        )
+        return await self.benchmark_runner.benchmark_single_ticker(ticker, indicators, iterations)
 
     async def run_batch_benchmark(
-        self,
-        tickers: List[str] = None,
-        indicators: List[str] = None,
-        batch_sizes: List[int] = None
+        self, tickers: List[str] = None, indicators: List[str] = None, batch_sizes: List[int] = None
     ) -> Dict[str, Any]:
         """Run batch processing benchmark."""
         if tickers is None:
@@ -1197,9 +1117,7 @@ class UnifiedIndicatorService:
         if indicators is None:
             indicators = ["RSI", "MACD", "SMA_FAST"]
 
-        return await self.benchmark_runner.benchmark_batch_processing(
-            tickers, indicators, batch_sizes
-        )
+        return await self.benchmark_runner.benchmark_batch_processing(tickers, indicators, batch_sizes)
 
     def reset_performance_metrics(self):
         """Reset all performance metrics."""
@@ -1208,7 +1126,7 @@ class UnifiedIndicatorService:
 
     def shutdown(self):
         """Shutdown the service and cleanup resources."""
-        if hasattr(self, '_thread_pool'):
+        if hasattr(self, "_thread_pool"):
             self._thread_pool.shutdown(wait=True)
             _logger.info("Thread pool shutdown completed")
 
@@ -1239,10 +1157,10 @@ class UnifiedIndicatorService:
         return {
             "technical": sorted(set(technical)),
             "fundamental": sorted(set(fundamental)),
-            "all": sorted(set(technical + fundamental))
+            "all": sorted(set(technical + fundamental)),
         }
 
-    def get_indicator_description(self, indicator_name: str) -> Optional[str]:
+    def get_indicator_description(self, indicator_name: str) -> str | None:
         """Get description for an indicator."""
         canonical_name = get_canonical_name(indicator_name)
         meta = get_indicator_meta(canonical_name)
@@ -1258,27 +1176,31 @@ class UnifiedIndicatorService:
             "available_indicators": {
                 "technical_count": len([m for m in INDICATOR_META.values() if m.kind == "tech"]),
                 "fundamental_count": len([m for m in INDICATOR_META.values() if m.kind == "fund"]),
-                "total_count": len(INDICATOR_META)
+                "total_count": len(INDICATOR_META),
             },
-            "performance_summary": self.performance_monitor.tracker.get_stats("_overall") if hasattr(self.performance_monitor.tracker, 'get_stats') else {},
+            "performance_summary": self.performance_monitor.tracker.get_stats("_overall")
+            if hasattr(self.performance_monitor.tracker, "get_stats")
+            else {},
             "circuit_breaker_status": self.get_circuit_breaker_status(),
             "batch_config": {
                 "max_concurrent": self.batch_config.max_concurrent,
                 "batch_size": self.batch_config.batch_size,
                 "timeout_per_ticker": self.batch_config.timeout_per_ticker,
-                "retry_attempts": self.batch_config.retry_attempts
-            }
+                "retry_attempts": self.batch_config.retry_attempts,
+            },
         }
 
 
 # Maintain backward compatibility with existing class name
 class IndicatorService(UnifiedIndicatorService):
     """Backward compatibility alias for UnifiedIndicatorService."""
+
     pass
 
 
 # Global instance for easy access
 _unified_service = None
+
 
 def get_unified_indicator_service() -> UnifiedIndicatorService:
     """
@@ -1288,10 +1210,9 @@ def get_unified_indicator_service() -> UnifiedIndicatorService:
     Use TALib functions directly instead.
     """
     import warnings
+
     warnings.warn(
-        "get_unified_indicator_service() is deprecated. Use TALib functions directly.",
-        DeprecationWarning,
-        stacklevel=2
+        "get_unified_indicator_service() is deprecated. Use TALib functions directly.", DeprecationWarning, stacklevel=2
     )
     global _unified_service
     if _unified_service is None:

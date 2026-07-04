@@ -7,8 +7,9 @@ This script checks:
 2. All conftest.py files use TEST_DB_URL or ALEMBIC_DB_URL
 3. No hardcoded database URLs pointing to production
 """
-import sys
+
 import re
+import sys
 from pathlib import Path
 from typing import List, Tuple
 
@@ -18,56 +19,58 @@ RED = "\033[91m"
 YELLOW = "\033[93m"
 RESET = "\033[0m"
 
+
 def check_file_for_production_imports(file_path: Path) -> List[str]:
     """Check if file imports production DB_URL."""
     issues = []
 
     # Skip the verification script itself
-    if file_path.name == 'verify_test_db_config.py':
+    if file_path.name == "verify_test_db_config.py":
         return issues
 
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, encoding="utf-8") as f:
         content = f.read()
-        lines = content.split('\n')
+        lines = content.split("\n")
 
     # Check for production DB_URL imports
     production_patterns = [
-        r'from\s+config\.donotshare\.donotshare\s+import\s+DB_URL',
-        r'from\s+config\.donotshare\s+import\s+.*DB_URL',
-        r'donotshare\.DB_URL',
+        r"from\s+config\.donotshare\.donotshare\s+import\s+DB_URL",
+        r"from\s+config\.donotshare\s+import\s+.*DB_URL",
+        r"donotshare\.DB_URL",
     ]
 
     for i, line in enumerate(lines, 1):
         # Skip comments
-        if line.strip().startswith('#'):
+        if line.strip().startswith("#"):
             continue
 
         for pattern in production_patterns:
             if re.search(pattern, line):
                 # Check if it's explicitly marked as safe (with TEST override)
-                surrounding = '\n'.join(lines[max(0, i-5):i+5])
-                if 'TEST' in line or 'NEVER' in surrounding or 'DB_URL = TEST_DB_URL' in surrounding:
+                surrounding = "\n".join(lines[max(0, i - 5) : i + 5])
+                if "TEST" in line or "NEVER" in surrounding or "DB_URL = TEST_DB_URL" in surrounding:
                     continue
                 issues.append(f"Line {i}: Potential production DB import: {line.strip()}")
 
     return issues
 
+
 def check_conftest_uses_test_db(file_path: Path) -> List[str]:
     """Check if conftest.py uses TEST_DB_URL or ALEMBIC_DB_URL."""
     issues = []
 
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, encoding="utf-8") as f:
         content = f.read()
 
     # Check for test database configuration
-    has_test_db_url = 'TEST_DB_URL' in content
-    has_alembic_db_url = 'ALEMBIC_DB_URL' in content
-    has_postgres_test = 'POSTGRES_TEST' in content
-    inherits_from_repos = 'pytest_plugins' in content and 'repos.conftest' in content
+    has_test_db_url = "TEST_DB_URL" in content
+    has_alembic_db_url = "ALEMBIC_DB_URL" in content
+    has_postgres_test = "POSTGRES_TEST" in content
+    inherits_from_repos = "pytest_plugins" in content and "repos.conftest" in content
 
     # Check for production database usage
-    has_production_import = 'from config.donotshare.donotshare import DB_URL' in content
-    has_database_url = 'DATABASE_URL' in content and 'TEST' not in content
+    has_production_import = "from config.donotshare.donotshare import DB_URL" in content
+    has_database_url = "DATABASE_URL" in content and "TEST" not in content
 
     if has_production_import:
         issues.append("[CRITICAL] Imports production DB_URL from donotshare!")
@@ -76,7 +79,7 @@ def check_conftest_uses_test_db(file_path: Path) -> List[str]:
         issues.append("[WARNING] No TEST_DB_URL, ALEMBIC_DB_URL, or POSTGRES_TEST_* configuration found")
 
     # Look for comments about production safety
-    if 'NEVER' in content and 'production' in content:
+    if "NEVER" in content and "production" in content:
         # Good - has safety warnings
         pass
     elif not inherits_from_repos:
@@ -84,14 +87,15 @@ def check_conftest_uses_test_db(file_path: Path) -> List[str]:
 
     return issues
 
+
 def scan_test_directory(test_dir: Path) -> Tuple[int, int, List[str]]:
     """Scan all Python files in test directory for issues."""
     files_checked = 0
     issues_found = []
 
-    for py_file in test_dir.rglob('*.py'):
+    for py_file in test_dir.rglob("*.py"):
         # Skip __pycache__ and .venv
-        if '__pycache__' in str(py_file) or '.venv' in str(py_file):
+        if "__pycache__" in str(py_file) or ".venv" in str(py_file):
             continue
 
         files_checked += 1
@@ -103,19 +107,20 @@ def scan_test_directory(test_dir: Path) -> Tuple[int, int, List[str]]:
             issues_found.extend(file_issues)
 
         # Extra checks for conftest.py files
-        if py_file.name == 'conftest.py':
+        if py_file.name == "conftest.py":
             conftest_issues = check_conftest_uses_test_db(py_file)
             if conftest_issues:
                 issues_found.append(f"\n{YELLOW}Conftest: {py_file}{RESET}")
                 issues_found.extend(conftest_issues)
 
-    return files_checked, len([i for i in issues_found if i.startswith('\n')]), issues_found
+    return files_checked, len([i for i in issues_found if i.startswith("\n")]), issues_found
+
 
 def main():
     """Run verification checks."""
-    print(f"\n{GREEN}{'='*60}{RESET}")
+    print(f"\n{GREEN}{'=' * 60}{RESET}")
     print(f"{GREEN}Test Database Configuration Verification{RESET}")
-    print(f"{GREEN}{'='*60}{RESET}\n")
+    print(f"{GREEN}{'=' * 60}{RESET}\n")
 
     # Get test directory
     script_dir = Path(__file__).parent
@@ -125,7 +130,7 @@ def main():
 
     files_checked, files_with_issues, issues = scan_test_directory(test_dir)
 
-    print(f"\n{GREEN}{'='*60}{RESET}")
+    print(f"\n{GREEN}{'=' * 60}{RESET}")
     print(f"Files checked: {files_checked}")
     print(f"Files with issues: {files_with_issues}")
 
@@ -133,13 +138,13 @@ def main():
         print("\nIssues found:")
         for issue in issues:
             # Remove ANSI codes for Windows compatibility
-            clean_issue = issue.replace(RED, '').replace(YELLOW, '').replace(GREEN, '').replace(RESET, '')
+            clean_issue = issue.replace(RED, "").replace(YELLOW, "").replace(GREEN, "").replace(RESET, "")
             print(clean_issue)
-        print(f"\n{YELLOW}{'='*60}{RESET}")
+        print(f"\n{YELLOW}{'=' * 60}{RESET}")
         print(f"{YELLOW}[!] Please review the issues above{RESET}")
 
         # Check if any critical issues
-        critical = any('CRITICAL' in i for i in issues)
+        critical = any("CRITICAL" in i for i in issues)
         if critical:
             print(f"{RED}[ERROR] CRITICAL ISSUES FOUND - Tests may use production database!{RESET}")
             return 1
@@ -149,8 +154,9 @@ def main():
     else:
         print(f"\n{GREEN}[OK] All checks passed!{RESET}")
         print(f"{GREEN}All test files properly use TEST database configuration{RESET}")
-        print(f"{GREEN}{'='*60}{RESET}\n")
+        print(f"{GREEN}{'=' * 60}{RESET}\n")
         return 0
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     sys.exit(main())

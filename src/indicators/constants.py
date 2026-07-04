@@ -6,11 +6,12 @@ for all indicators across the unified indicator system.
 """
 
 from typing import Dict, List, Set
+
 from src.indicators.models import (
-    TECHNICAL_INDICATORS,
     FUNDAMENTAL_INDICATORS,
     LEGACY_INDICATOR_NAMES,
-    get_canonical_name
+    TECHNICAL_INDICATORS,
+    get_canonical_name,
 )
 
 # Multi-output indicator mappings
@@ -20,7 +21,7 @@ MULTI_OUTPUT_INDICATORS = {
     "stoch": ["k", "d"],
     "aroon": ["aroon_up", "aroon_down"],
     "ichimoku": ["tenkan", "kijun", "senkou_a", "senkou_b", "chikou"],
-    "support_resistance": ["resistance", "support"]
+    "support_resistance": ["resistance", "support"],
 }
 
 # Legacy multi-output mappings for backward compatibility
@@ -34,75 +35,46 @@ LEGACY_MULTI_OUTPUT_MAPPING = {
     "STOCH_K": "stoch",
     "STOCH_D": "stoch",
     "AROON_UP": "aroon",
-    "AROON_DOWN": "aroon"
+    "AROON_DOWN": "aroon",
 }
 
 # Parameter aliases for different naming conventions
 PARAMETER_ALIASES = {
     # RSI
-    "rsi": {
-        "timeperiod": ["period", "length", "window"],
-        "price": ["close", "source"]
-    },
-
+    "rsi": {"timeperiod": ["period", "length", "window"], "price": ["close", "source"]},
     # MACD
     "macd": {
         "fastperiod": ["fast", "fast_period", "fast_length"],
         "slowperiod": ["slow", "slow_period", "slow_length"],
-        "signalperiod": ["signal", "signal_period", "signal_length"]
+        "signalperiod": ["signal", "signal_period", "signal_length"],
     },
-
     # Bollinger Bands
     "bbands": {
         "timeperiod": ["period", "length", "window"],
         "nbdevup": ["std_up", "std_dev_up", "upper_std"],
-        "nbdevdn": ["std_down", "std_dev_down", "lower_std"]
+        "nbdevdn": ["std_down", "std_dev_down", "lower_std"],
     },
-
     # Stochastic
     "stoch": {
         "fastk_period": ["k_period", "fastk", "k_length"],
         "slowk_period": ["slowk", "slowk_length"],
-        "slowd_period": ["slowd", "slowd_length", "d_period"]
+        "slowd_period": ["slowd", "slowd_length", "d_period"],
     },
-
     # Moving Averages
-    "sma": {
-        "timeperiod": ["period", "length", "window"]
-    },
-    "ema": {
-        "timeperiod": ["period", "length", "window"]
-    },
-
+    "sma": {"timeperiod": ["period", "length", "window"]},
+    "ema": {"timeperiod": ["period", "length", "window"]},
     # ADX
-    "adx": {
-        "timeperiod": ["period", "length", "window"]
-    },
-
+    "adx": {"timeperiod": ["period", "length", "window"]},
     # ATR
-    "atr": {
-        "timeperiod": ["period", "length", "window"]
-    },
-
+    "atr": {"timeperiod": ["period", "length", "window"]},
     # Williams %R
-    "williams_r": {
-        "timeperiod": ["period", "length", "window"]
-    },
-
+    "williams_r": {"timeperiod": ["period", "length", "window"]},
     # CCI
-    "cci": {
-        "timeperiod": ["period", "length", "window"]
-    },
-
+    "cci": {"timeperiod": ["period", "length", "window"]},
     # ROC
-    "roc": {
-        "timeperiod": ["period", "length", "window"]
-    },
-
+    "roc": {"timeperiod": ["period", "length", "window"]},
     # MFI
-    "mfi": {
-        "timeperiod": ["period", "length", "window"]
-    }
+    "mfi": {"timeperiod": ["period", "length", "window"]},
 }
 
 # Default parameter values
@@ -131,7 +103,7 @@ DEFAULT_PARAMETERS = {
     "adosc": {"fastperiod": 3, "slowperiod": 10},
     "bop": {},
     "eom": {"timeperiod": 14, "scale": 100000000.0},
-    "support_resistance": {"lookback_bars": 2, "max_swings": 50}
+    "support_resistance": {"lookback_bars": 2, "max_swings": 50},
 }
 
 # Input requirements for each indicator
@@ -162,9 +134,8 @@ INDICATOR_INPUTS = {
     "bop": ["open", "high", "low", "close"],
     "eom": ["high", "low", "volume"],
     "support_resistance": ["high", "low", "close"],
-
     # Fundamental indicators (no OHLCV inputs required)
-    **{name: [] for name in FUNDAMENTAL_INDICATORS.keys()}
+    **{name: [] for name in FUNDAMENTAL_INDICATORS.keys()},
 }
 
 # Output specifications for each indicator
@@ -187,7 +158,6 @@ INDICATOR_OUTPUTS = {
     "ad": ["value"],
     "adosc": ["value"],
     "bop": ["value"],
-
     # Multi-output technical indicators
     "macd": ["macd", "signal", "hist"],
     "bbands": ["upper", "middle", "lower"],
@@ -197,9 +167,8 @@ INDICATOR_OUTPUTS = {
     "super_trend": ["value", "trend"],
     "eom": ["value"],
     "support_resistance": ["resistance", "support"],
-
     # Fundamental indicators (all single-output)
-    **{name: ["value"] for name in FUNDAMENTAL_INDICATORS.keys()}
+    **{name: ["value"] for name in FUNDAMENTAL_INDICATORS.keys()},
 }
 
 # Indicator categories
@@ -211,25 +180,25 @@ ALL_INDICATOR_NAMES = TECHNICAL_INDICATOR_NAMES | FUNDAMENTAL_INDICATOR_NAMES
 PROVIDER_SUPPORT = {
     # Technical indicators - most support multiple providers
     **{name: ["ta-lib", "pandas-ta"] for name in TECHNICAL_INDICATOR_NAMES},
-
     # Some indicators only support specific providers
     "ichimoku": ["pandas-ta"],
     "super_trend": ["pandas-ta"],
-
     # Fundamental indicators only support fundamentals provider
-    **{name: ["fundamentals"] for name in FUNDAMENTAL_INDICATOR_NAMES}
+    **{name: ["fundamentals"] for name in FUNDAMENTAL_INDICATOR_NAMES},
 }
 
 # Special cases for provider support
-PROVIDER_SUPPORT.update({
-    "aroon": ["ta-lib", "pandas-ta"],
-    "sar": ["ta-lib", "pandas-ta"],
-    "ad": ["ta-lib", "pandas-ta"],
-    "adosc": ["ta-lib", "pandas-ta"],
-    "bop": ["ta-lib", "pandas-ta"],
-    "eom": ["custom"],
-    "support_resistance": ["custom"]
-})
+PROVIDER_SUPPORT.update(
+    {
+        "aroon": ["ta-lib", "pandas-ta"],
+        "sar": ["ta-lib", "pandas-ta"],
+        "ad": ["ta-lib", "pandas-ta"],
+        "adosc": ["ta-lib", "pandas-ta"],
+        "bop": ["ta-lib", "pandas-ta"],
+        "eom": ["custom"],
+        "support_resistance": ["custom"],
+    }
+)
 
 
 def is_technical_indicator(indicator_name: str) -> bool:

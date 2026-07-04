@@ -1,9 +1,8 @@
-import pytest
-from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
-from sqlalchemy import or_
+from datetime import UTC, datetime
+from unittest.mock import MagicMock
+
 from src.data.db.repos.repo_notification import MessageRepository
-from src.data.db.models.model_notification import Message, MessageStatus
+
 
 def test_get_pending_messages_with_channels():
     # Setup mock session and query
@@ -15,7 +14,7 @@ def test_get_pending_messages_with_channels():
     mock_query.all.return_value = []
 
     repo = MessageRepository(mock_session)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     channels = ["email", "sms"]
 
     # Execute
@@ -48,6 +47,7 @@ def test_get_pending_messages_with_channels():
 
     # Let's just verify the method was called without making it too fragile
     assert mock_query.filter.called
+
 
 def test_get_pending_messages_with_lock_channels():
     # Setup mock session

@@ -1,4 +1,4 @@
-"""
+r"""
 Repo-layer test fixtures using a separate Postgres TEST database.
 
 Safety rules:
@@ -14,18 +14,20 @@ Usage:
 """
 
 from __future__ import annotations
+
+import contextlib
 import os
+import pathlib
 import sys
 import uuid
-import pathlib
-import contextlib
+from typing import Generator
+from urllib.parse import quote_plus
+
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
-from sqlalchemy.orm import sessionmaker, Session
-from typing import Generator
-from urllib.parse import quote_plus
+from sqlalchemy.orm import Session, sessionmaker
 
 # Ensure repository root is on sys.path so "src" package can be imported
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[5]
@@ -40,6 +42,7 @@ def _load_donotshare_env() -> None:
         return
     try:
         from dotenv import load_dotenv
+
         # override=False means existing env vars take precedence
         load_dotenv(dotenv_path=env_path, override=False)
     except ImportError:
@@ -134,7 +137,6 @@ def _drop_test_database(admin_engine: Engine, db_name: str):
                 conn.execute(text(f'DROP DATABASE IF EXISTS "{db_name}"'))
 
 
-
 @pytest.fixture(scope="session")
 def _db_admin_engine() -> Engine:
     """Admin engine connected to server-level DB (postgres)."""
@@ -191,8 +193,8 @@ def _apply_migrations(engine: Engine, _test_db_url: str):
     os.environ["ALEMBIC_DB_URL"] = _test_db_url
     try:
         try:
-            from alembic.config import Config
             from alembic import command
+            from alembic.config import Config
 
             # Locate the repo root alembic.ini
             repo_root = pathlib.Path(__file__).resolve().parents[5]

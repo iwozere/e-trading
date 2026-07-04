@@ -7,13 +7,11 @@ API services, web UI, and trading components.
 """
 
 from __future__ import annotations
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Optional
 
-from sqlalchemy import (
-    BigInteger, CheckConstraint, DateTime, Integer, String, Text, func
-)
+from datetime import UTC, datetime
+from enum import Enum
+
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.data.db.core.base import Base
@@ -68,21 +66,17 @@ class SystemHealth(Base):
             f"'{SystemHealthStatus.DEGRADED.value}', "
             f"'{SystemHealthStatus.DOWN.value}', "
             f"'{SystemHealthStatus.UNKNOWN.value}')",
-            name="check_system_health_status"
+            name="check_system_health_status",
         ),
         CheckConstraint("failure_count >= 0", name="check_failure_count_positive"),
         CheckConstraint("avg_response_time_ms >= 0", name="check_avg_response_time_positive"),
         # Unique constraint on system + component combination
-        CheckConstraint(
-            "(system, COALESCE(component, '')) IS NOT NULL",
-            name="check_system_component_unique"
-        ),
+        CheckConstraint("(system, COALESCE(component, '')) IS NOT NULL", name="check_system_component_unique"),
     )
 
     def __repr__(self):
         component_str = f", component='{self.component}'" if self.component else ""
-        return (f"<SystemHealth(id={self.id}, system='{self.system}'"
-                f"{component_str}, status='{self.status}')>")
+        return f"<SystemHealth(id={self.id}, system='{self.system}'{component_str}, status='{self.status}')>"
 
     @property
     def is_healthy(self) -> bool:
@@ -109,9 +103,9 @@ class SystemHealth(Base):
     def update_health_status(
         self,
         status: SystemHealthStatus,
-        response_time_ms: Optional[int] = None,
-        error_message: Optional[str] = None,
-        metadata: Optional[str] = None
+        response_time_ms: int | None = None,
+        error_message: str | None = None,
+        metadata: str | None = None,
     ) -> None:
         """
         Update the health status of the system.
@@ -123,7 +117,7 @@ class SystemHealth(Base):
             metadata: Additional system-specific metadata as JSON string
         """
         self.status = status.value
-        self.checked_at = datetime.now(timezone.utc)
+        self.checked_at = datetime.now(UTC)
 
         if status == SystemHealthStatus.HEALTHY:
             self.last_success = self.checked_at
@@ -141,15 +135,13 @@ class SystemHealth(Base):
                 self.avg_response_time_ms = response_time_ms
             else:
                 # Weighted average favoring recent measurements
-                self.avg_response_time_ms = int(
-                    (self.avg_response_time_ms * 0.7) + (response_time_ms * 0.3)
-                )
+                self.avg_response_time_ms = int((self.avg_response_time_ms * 0.7) + (response_time_ms * 0.3))
 
         if metadata:
             self.metadata = metadata
 
     @classmethod
-    def get_system_status(cls, session, system: str, component: Optional[str] = None):
+    def get_system_status(cls, session, system: str, component: str | None = None):
         """
         Get the current health status for a specific system/component.
 
@@ -193,6 +185,9 @@ class SystemHealth(Base):
         Returns:
             List of SystemHealth instances with non-healthy status
         """
-        return session.query(cls).filter(
-            cls.status != SystemHealthStatus.HEALTHY.value
-        ).order_by(cls.system, cls.component).all()
+        return (
+            session.query(cls)
+            .filter(cls.status != SystemHealthStatus.HEALTHY.value)
+            .order_by(cls.system, cls.component)
+            .all()
+        )

@@ -1,19 +1,18 @@
-import re
-import pandas as pd
-from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Tuple, Optional, Dict, Any
 import sys
+from pathlib import Path
+
+import pandas as pd
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.ml.pipeline.p07_combined.data_loader import P07DataLoader
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class P08DataLoader(P07DataLoader):
     """
@@ -22,22 +21,16 @@ class P08DataLoader(P07DataLoader):
     """
 
     # Primary mapping for MTF Anchor/Execution pairs
-    TF_MAPPING = {
-        "5m": "1h",
-        "15m": "4h",
-        "30m": "4h",
-        "1h": "1d",
-        "4h": "1d"
-    }
+    TF_MAPPING = {"5m": "1h", "15m": "4h", "30m": "4h", "1h": "1d", "4h": "1d"}
 
     def __init__(self, data_root: Path = Path("data")):
         super().__init__(data_root)
 
-    def get_anchor_tf(self, execution_tf: str) -> Optional[str]:
+    def get_anchor_tf(self, execution_tf: str) -> str | None:
         """Returns the mapped anchor timeframe for a given execution timeframe."""
         return self.TF_MAPPING.get(execution_tf)
 
-    def find_anchor_file(self, ticker: str, anchor_tf: str, start_date: str, end_date: str) -> Optional[Path]:
+    def find_anchor_file(self, ticker: str, anchor_tf: str, start_date: str, end_date: str) -> Path | None:
         """Attempts to find a matching anchor data file in the data root."""
         # Schema: {ticker}_{timeframe}_{start}_{end}.csv
         pattern = f"{ticker}_{anchor_tf}_{start_date}_{end_date}.csv"
@@ -47,7 +40,7 @@ class P08DataLoader(P07DataLoader):
 
         # Fallback: find any file for ticker/tf that covers the range (simplified)
         for f in self.data_root.glob(f"{ticker}_{anchor_tf}_*.csv"):
-            return f # For now, return the first match for simplicity
+            return f  # For now, return the first match for simplicity
 
         return None
 
@@ -71,13 +64,7 @@ class P08DataLoader(P07DataLoader):
 
         # Point-in-time join using merge_asof
         # direction='backward' matches the execution bar with the nearest preceding anchor bar
-        merged = pd.merge_asof(
-            df_exec,
-            df_anchor_safe,
-            left_index=True,
-            right_index=True,
-            direction='backward'
-        )
+        merged = pd.merge_asof(df_exec, df_anchor_safe, left_index=True, right_index=True, direction="backward")
 
         return merged
 
@@ -115,11 +102,14 @@ class P08DataLoader(P07DataLoader):
                 df_anchor = self.load_ohlcv(anchor_file)
                 df_exec = self.merge_mtf(df_exec, df_anchor)
             else:
-                _logger.warning("No matching Anchor file found for %s %s. Proceeding without MTF features.", ticker, anchor_tf)
+                _logger.warning(
+                    "No matching Anchor file found for %s %s. Proceeding without MTF features.", ticker, anchor_tf
+                )
         else:
             _logger.info("No Anchor TF mapped for %s. Skipping MTF join.", timeframe)
 
         return df_exec
+
 
 if __name__ == "__main__":
     # Quick test

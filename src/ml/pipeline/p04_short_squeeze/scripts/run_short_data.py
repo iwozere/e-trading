@@ -17,21 +17,23 @@ Usage:
 import argparse
 import sys
 import time
-from datetime import datetime, date
+from datetime import date, datetime
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List
+
 import pandas as pd
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from sqlalchemy import func, select
+
 from src.data.db.core.database import session_scope
-from src.data.db.services.short_squeeze_service import ShortSqueezeService
 from src.data.db.models.model_short_squeeze import ScreenerSnapshot
+from src.data.db.services.short_squeeze_service import ShortSqueezeService
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.notification.logger import setup_logger
-from sqlalchemy import select, func
 
 _logger = setup_logger(__name__)
 
@@ -44,7 +46,7 @@ class ShortDataCollector:
     from Yahoo Finance, then upserts into ss_finra_short_interest table.
     """
 
-    def __init__(self, batch_size: int = 50, settlement_date: Optional[date] = None):
+    def __init__(self, batch_size: int = 50, settlement_date: date | None = None):
         """
         Initialize the collector.
 
@@ -69,8 +71,7 @@ class ShortDataCollector:
             with session_scope() as session:
                 # Get all distinct tickers from ss_snapshot table
                 result = session.execute(
-                    select(func.distinct(ScreenerSnapshot.ticker))
-                    .order_by(ScreenerSnapshot.ticker)
+                    select(func.distinct(ScreenerSnapshot.ticker)).order_by(ScreenerSnapshot.ticker)
                 )
                 tickers = [row[0] for row in result.fetchall()]
 
@@ -91,19 +92,19 @@ class ShortDataCollector:
         Returns:
             List of dictionaries with short interest data formatted for ss_finra_short_interest table
         """
-        _logger.info("Collecting short interest data for %d tickers using settlement_date %s",
-                    len(tickers), self.settlement_date)
+        _logger.info(
+            "Collecting short interest data for %d tickers using settlement_date %s", len(tickers), self.settlement_date
+        )
 
         all_records = []
 
         # Process in batches to respect rate limits
         for i in range(0, len(tickers), self.batch_size):
-            batch = tickers[i:i + self.batch_size]
+            batch = tickers[i : i + self.batch_size]
             batch_num = i // self.batch_size + 1
             total_batches = (len(tickers) + self.batch_size - 1) // self.batch_size
 
-            _logger.info("Processing batch %d/%d (%d tickers)",
-                        batch_num, total_batches, len(batch))
+            _logger.info("Processing batch %d/%d (%d tickers)", batch_num, total_batches, len(batch))
 
             try:
                 # Get fundamentals for this batch (includes short interest data)
@@ -138,9 +139,14 @@ class ShortDataCollector:
                         # Data validation: short interest percentage should not exceed 100%
                         # If it does, there's likely a data quality issue
                         if short_interest_pct and short_interest_pct > 100.0:
-                            _logger.warning("Invalid short interest percentage for %s: %.2f%% (shares_short=%d, outstanding=%s, float=%s). Capping at 100%%",
-                                          ticker, short_interest_pct, shares_short,
-                                          fund.shares_outstanding, fund.float_shares)
+                            _logger.warning(
+                                "Invalid short interest percentage for %s: %.2f%% (shares_short=%d, outstanding=%s, float=%s). Capping at 100%%",
+                                ticker,
+                                short_interest_pct,
+                                shares_short,
+                                fund.shares_outstanding,
+                                fund.float_shares,
+                            )
                             short_interest_pct = min(short_interest_pct, 100.0)
 
                     # Get days to cover from short_ratio (if available)
@@ -148,39 +154,41 @@ class ShortDataCollector:
 
                     # Create raw data payload for audit trail
                     raw_data = {
-                        'company_name': fund.company_name,
-                        'current_price': fund.current_price,
-                        'market_cap': fund.market_cap,
-                        'sector': fund.sector,
-                        'industry': fund.industry,
-                        'data_source': 'Yahoo Finance',
-                        'collection_timestamp': datetime.now().isoformat(),
-                        'short_ratio': fund.short_ratio,
-                        'shares_short_raw': shares_short
+                        "company_name": fund.company_name,
+                        "current_price": fund.current_price,
+                        "market_cap": fund.market_cap,
+                        "sector": fund.sector,
+                        "industry": fund.industry,
+                        "data_source": "Yahoo Finance",
+                        "collection_timestamp": datetime.now().isoformat(),
+                        "short_ratio": fund.short_ratio,
+                        "shares_short_raw": shares_short,
                     }
 
                     # Format record for ss_finra_short_interest table
                     record = {
-                        'ticker': ticker.upper(),
-                        'settlement_date': self.settlement_date,
-                        'short_interest_shares': shares_short or 0,
-                        'total_shares_outstanding': fund.shares_outstanding,
-                        'float_shares': fund.float_shares,
-                        'short_interest_pct': short_interest_pct,
-                        'days_to_cover': days_to_cover,
-                        'data_source': 'Yahoo Finance',
-                        'data_quality_score': 0.8,  # Yahoo Finance data quality score
-                        'raw_data': raw_data
+                        "ticker": ticker.upper(),
+                        "settlement_date": self.settlement_date,
+                        "short_interest_shares": shares_short or 0,
+                        "total_shares_outstanding": fund.shares_outstanding,
+                        "float_shares": fund.float_shares,
+                        "short_interest_pct": short_interest_pct,
+                        "days_to_cover": days_to_cover,
+                        "data_source": "Yahoo Finance",
+                        "data_quality_score": 0.8,  # Yahoo Finance data quality score
+                        "raw_data": raw_data,
                     }
 
                     all_records.append(record)
 
-                    _logger.debug("✓ %s: SI_shares=%s, SI%%=%.2f%%, DTC=%.2f, Float=%s",
-                                ticker,
-                                shares_short or 0,
-                                short_interest_pct if short_interest_pct else 0,
-                                days_to_cover if days_to_cover else 0,
-                                f"{fund.float_shares:,}" if fund.float_shares else "N/A")
+                    _logger.debug(
+                        "✓ %s: SI_shares=%s, SI%%=%.2f%%, DTC=%.2f, Float=%s",
+                        ticker,
+                        shares_short or 0,
+                        short_interest_pct if short_interest_pct else 0,
+                        days_to_cover if days_to_cover else 0,
+                        f"{fund.float_shares:,}" if fund.float_shares else "N/A",
+                    )
 
                 # Rate limiting between batches
                 if i + self.batch_size < len(tickers):
@@ -193,7 +201,7 @@ class ShortDataCollector:
         _logger.info("Collected data for %d/%d tickers", len(all_records), len(tickers))
         return all_records
 
-    def _get_shares_short(self, ticker: str) -> Optional[int]:
+    def _get_shares_short(self, ticker: str) -> int | None:
         """
         Get shares short for a single ticker.
         This requires an individual API call as it's not in the batch fundamentals.
@@ -206,9 +214,10 @@ class ShortDataCollector:
         """
         try:
             import yfinance as yf
+
             yf_ticker = yf.Ticker(ticker)
             info = yf_ticker.info
-            shares_short = info.get('sharesShort', None)
+            shares_short = info.get("sharesShort", None)
 
             # Validate the data
             if shares_short is not None and shares_short < 0:
@@ -220,8 +229,9 @@ class ShortDataCollector:
             _logger.debug("Could not get shares short for %s: %s", ticker, e)
             return None
 
-    def filter_by_short_interest_pct(self, records: List[Dict[str, Any]],
-                                     min_pct: float = 15.0) -> List[Dict[str, Any]]:
+    def filter_by_short_interest_pct(
+        self, records: List[Dict[str, Any]], min_pct: float = 15.0
+    ) -> List[Dict[str, Any]]:
         """
         Filter records by minimum short interest percentage.
 
@@ -233,13 +243,10 @@ class ShortDataCollector:
             Filtered list of records
         """
         filtered = [
-            r for r in records
-            if r.get('short_interest_pct') is not None
-            and r['short_interest_pct'] >= min_pct
+            r for r in records if r.get("short_interest_pct") is not None and r["short_interest_pct"] >= min_pct
         ]
 
-        _logger.info("Filtered to %d/%d tickers with SI%% >= %.1f%%",
-                    len(filtered), len(records), min_pct)
+        _logger.info("Filtered to %d/%d tickers with SI%% >= %.1f%%", len(filtered), len(records), min_pct)
 
         return filtered
 
@@ -255,31 +262,31 @@ class ShortDataCollector:
             # Flatten the records for CSV export
             csv_records = []
             for record in records:
-                raw_data = record.get('raw_data', {})
+                raw_data = record.get("raw_data", {})
                 csv_record = {
-                    'ticker': record['ticker'],
-                    'settlement_date': record['settlement_date'],
-                    'short_interest_shares': record.get('short_interest_shares', 0),
-                    'short_interest_pct': record.get('short_interest_pct'),
-                    'days_to_cover': record.get('days_to_cover'),
-                    'float_shares': record.get('float_shares'),
-                    'total_shares_outstanding': record.get('total_shares_outstanding'),
-                    'data_source': record.get('data_source', 'Yahoo Finance'),
-                    'data_quality_score': record.get('data_quality_score', 0.8),
-                    'company_name': raw_data.get('company_name'),
-                    'current_price': raw_data.get('current_price'),
-                    'market_cap': raw_data.get('market_cap'),
-                    'sector': raw_data.get('sector'),
-                    'industry': raw_data.get('industry'),
-                    'collection_timestamp': raw_data.get('collection_timestamp')
+                    "ticker": record["ticker"],
+                    "settlement_date": record["settlement_date"],
+                    "short_interest_shares": record.get("short_interest_shares", 0),
+                    "short_interest_pct": record.get("short_interest_pct"),
+                    "days_to_cover": record.get("days_to_cover"),
+                    "float_shares": record.get("float_shares"),
+                    "total_shares_outstanding": record.get("total_shares_outstanding"),
+                    "data_source": record.get("data_source", "Yahoo Finance"),
+                    "data_quality_score": record.get("data_quality_score", 0.8),
+                    "company_name": raw_data.get("company_name"),
+                    "current_price": raw_data.get("current_price"),
+                    "market_cap": raw_data.get("market_cap"),
+                    "sector": raw_data.get("sector"),
+                    "industry": raw_data.get("industry"),
+                    "collection_timestamp": raw_data.get("collection_timestamp"),
                 }
                 csv_records.append(csv_record)
 
             df = pd.DataFrame(csv_records)
 
             # Sort by short interest percentage (descending)
-            if 'short_interest_pct' in df.columns:
-                df = df.sort_values('short_interest_pct', ascending=False, na_last=True)
+            if "short_interest_pct" in df.columns:
+                df = df.sort_values("short_interest_pct", ascending=False, na_last=True)
 
             df.to_csv(filepath, index=False)
             _logger.info("Saved %d records to %s", len(records), filepath)
@@ -288,8 +295,7 @@ class ShortDataCollector:
             _logger.exception("Error saving to CSV:")
             raise
 
-    def save_to_database(self, records: List[Dict[str, Any]],
-                        dry_run: bool = False) -> int:
+    def save_to_database(self, records: List[Dict[str, Any]], dry_run: bool = False) -> int:
         """
         Save records to ss_finra_short_interest table using upsert logic.
 
@@ -304,9 +310,13 @@ class ShortDataCollector:
             _logger.info("DRY RUN: Would upsert %d records to ss_finra_short_interest table", len(records))
             if records:
                 sample = records[0]
-                _logger.info("Sample record: ticker=%s, settlement_date=%s, short_interest_shares=%s, short_interest_pct=%s",
-                           sample.get('ticker'), sample.get('settlement_date'),
-                           sample.get('short_interest_shares'), sample.get('short_interest_pct'))
+                _logger.info(
+                    "Sample record: ticker=%s, settlement_date=%s, short_interest_shares=%s, short_interest_pct=%s",
+                    sample.get("ticker"),
+                    sample.get("settlement_date"),
+                    sample.get("short_interest_shares"),
+                    sample.get("short_interest_pct"),
+                )
             return len(records)
 
         try:
@@ -340,22 +350,31 @@ class ShortDataCollector:
         _logger.info("Total Tickers Processed: %d", len(records))
 
         # Calculate statistics
-        valid_si = [r['short_interest_pct'] for r in records
-                   if r.get('short_interest_pct') is not None and r['short_interest_pct'] > 0]
+        valid_si = [
+            r["short_interest_pct"]
+            for r in records
+            if r.get("short_interest_pct") is not None and r["short_interest_pct"] > 0
+        ]
 
-        valid_shares = [r['short_interest_shares'] for r in records
-                       if r.get('short_interest_shares') is not None and r['short_interest_shares'] > 0]
+        valid_shares = [
+            r["short_interest_shares"]
+            for r in records
+            if r.get("short_interest_shares") is not None and r["short_interest_shares"] > 0
+        ]
 
-        _logger.info("Records with Short Interest Data: %d/%d (%.1f%%)",
-                    len(valid_si), len(records),
-                    (len(valid_si) / len(records) * 100) if records else 0)
+        _logger.info(
+            "Records with Short Interest Data: %d/%d (%.1f%%)",
+            len(valid_si),
+            len(records),
+            (len(valid_si) / len(records) * 100) if records else 0,
+        )
 
         if valid_si:
             _logger.info("Short Interest %% Stats:")
             _logger.info("  Min:    %.2f%%", min(valid_si))
             _logger.info("  Max:    %.2f%%", max(valid_si))
             _logger.info("  Avg:    %.2f%%", sum(valid_si) / len(valid_si))
-            _logger.info("  Median: %.2f%%", sorted(valid_si)[len(valid_si)//2])
+            _logger.info("  Median: %.2f%%", sorted(valid_si)[len(valid_si) // 2])
 
         if valid_shares:
             _logger.info("Short Interest Shares Stats:")
@@ -365,28 +384,27 @@ class ShortDataCollector:
 
         # Top 10 by short interest percentage
         sorted_records = sorted(
-            [r for r in records if r.get('short_interest_pct') is not None and r['short_interest_pct'] > 0],
-            key=lambda x: x['short_interest_pct'],
-            reverse=True
+            [r for r in records if r.get("short_interest_pct") is not None and r["short_interest_pct"] > 0],
+            key=lambda x: x["short_interest_pct"],
+            reverse=True,
         )[:10]
 
         if sorted_records:
             _logger.info("\nTop 10 Tickers by Short Interest %%:")
             _logger.info("-" * 60)
             for i, record in enumerate(sorted_records, 1):
-                company_name = record.get('raw_data', {}).get('company_name', 'Unknown')
-                _logger.info("%2d. %-6s %6.2f%%  DTC: %5.1f  SI_Shares: %s  %s",
-                           i,
-                           record['ticker'],
-                           record['short_interest_pct'],
-                           record.get('days_to_cover', 0) or 0,
-                           f"{record.get('short_interest_shares', 0):,}",
-                           company_name[:25])
+                company_name = record.get("raw_data", {}).get("company_name", "Unknown")
+                _logger.info(
+                    "%2d. %-6s %6.2f%%  DTC: %5.1f  SI_Shares: %s  %s",
+                    i,
+                    record["ticker"],
+                    record["short_interest_pct"],
+                    record.get("days_to_cover", 0) or 0,
+                    f"{record.get('short_interest_shares', 0):,}",
+                    company_name[:25],
+                )
 
         _logger.info("=" * 60)
-
-
-
 
 
 def main():
@@ -414,56 +432,35 @@ Examples:
 Note: This script fetches all tickers from ss_snapshot table and collects
       current short interest data from Yahoo Finance, then upserts into
       ss_finra_short_interest table with ticker/settlement_date as primary key.
-        """
+        """,
     )
 
     # Settlement date option
     parser.add_argument(
-        '--settlement-date',
-        type=str,
-        help='Settlement date to use (YYYY-MM-DD format, default: today)'
+        "--settlement-date", type=str, help="Settlement date to use (YYYY-MM-DD format, default: today)"
     )
 
     # Filter options
     parser.add_argument(
-        '--min-si-pct',
-        type=float,
-        default=0.0,
-        help='Minimum short interest percentage threshold (default: 0.0)'
+        "--min-si-pct", type=float, default=0.0, help="Minimum short interest percentage threshold (default: 0.0)"
     )
 
     # Output options
-    parser.add_argument(
-        '--output', '-o',
-        type=str,
-        help='Output CSV file path'
-    )
+    parser.add_argument("--output", "-o", type=str, help="Output CSV file path")
 
-    parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='Dry run mode (no database writes)'
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Dry run mode (no database writes)")
 
     # Processing options
-    parser.add_argument(
-        '--batch-size',
-        type=int,
-        default=50,
-        help='Batch size for processing (default: 50)'
-    )
+    parser.add_argument("--batch-size", type=int, default=50, help="Batch size for processing (default: 50)")
 
-    parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help='Enable verbose logging'
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
 
     args = parser.parse_args()
 
     # Setup logging
     if args.verbose:
         import logging
+
         logging.getLogger().setLevel(logging.DEBUG)
 
     try:
@@ -471,7 +468,7 @@ Note: This script fetches all tickers from ss_snapshot table and collects
         settlement_date = None
         if args.settlement_date:
             try:
-                settlement_date = datetime.strptime(args.settlement_date, '%Y-%m-%d').date()
+                settlement_date = datetime.strptime(args.settlement_date, "%Y-%m-%d").date()
             except ValueError:
                 _logger.error("Invalid settlement date format '%s', expected YYYY-MM-DD", args.settlement_date)
                 return 1
@@ -480,10 +477,7 @@ Note: This script fetches all tickers from ss_snapshot table and collects
         _logger.info("Settlement date: %s", settlement_date or date.today())
 
         # Initialize collector
-        collector = ShortDataCollector(
-            batch_size=args.batch_size,
-            settlement_date=settlement_date
-        )
+        collector = ShortDataCollector(batch_size=args.batch_size, settlement_date=settlement_date)
 
         # Get tickers from ss_snapshot table
         tickers = collector.get_tickers_from_snapshot()

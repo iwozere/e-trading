@@ -7,21 +7,26 @@ All models use Pydantic for validation and serialization.
 """
 
 from __future__ import annotations
+
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Union, Literal
 from enum import Enum
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from typing import Any, Dict, List, Literal, Union
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Import comprehensive type definitions
 from src.indicators.types import (
-    TickerSymbol, IndicatorName, TimeFrame, Period, ProviderName,
-    RecommendationLiteral, IndicatorCategoryLiteral, FillMethodLiteral,
-    IndicatorParameters, CalculationContext
+    IndicatorName,
+    Period,
+    ProviderName,
+    TickerSymbol,
+    TimeFrame,
 )
 
 
 class RecommendationType(str, Enum):
     """Types of recommendations."""
+
     BUY = "BUY"
     SELL = "SELL"
     HOLD = "HOLD"
@@ -33,36 +38,40 @@ class RecommendationType(str, Enum):
 
 class IndicatorCategory(str, Enum):
     """Categories of indicators."""
+
     TECHNICAL = "technical"
     FUNDAMENTAL = "fundamental"
 
 
 class Recommendation(BaseModel):
     """A recommendation for an indicator."""
+
     model_config = ConfigDict(use_enum_values=True)
 
     recommendation: RecommendationType
     confidence: float = Field(ge=0.0, le=1.0, description="Confidence score between 0.0 and 1.0")
     reason: str = Field(min_length=1, description="Explanation for the recommendation")
-    threshold_used: Optional[float] = Field(default=None, description="Threshold value used for recommendation")
-    context: Optional[Dict[str, Any]] = Field(default=None, description="Additional context data")
+    threshold_used: float | None = Field(default=None, description="Threshold value used for recommendation")
+    context: Dict[str, Any] | None = Field(default=None, description="Additional context data")
 
 
 class IndicatorValue(BaseModel):
     """Simple indicator value container."""
+
     name: str = Field(min_length=1, description="Indicator name")
     value: Union[float, Dict[str, float]] = Field(description="Indicator value(s)")
-    source: Optional[str] = Field(default=None, description="Data source")
+    source: str | None = Field(default=None, description="Data source")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
 
 class IndicatorResult(BaseModel):
     """Result of a single indicator calculation."""
+
     model_config = ConfigDict(use_enum_values=True)
 
     name: str = Field(min_length=1, description="Indicator name")
     value: Union[float, Dict[str, float]] = Field(description="Indicator value(s)")
-    recommendation: Optional[Recommendation] = Field(default=None, description="Trading recommendation")
+    recommendation: Recommendation | None = Field(default=None, description="Trading recommendation")
     category: IndicatorCategory = Field(description="Indicator category")
     last_updated: datetime = Field(default_factory=datetime.now, description="Last calculation time")
     source: str = Field(min_length=1, description="Calculation source/backend")
@@ -71,6 +80,7 @@ class IndicatorResult(BaseModel):
 
 class CompositeRecommendation(BaseModel):
     """Overall recommendation based on multiple indicators."""
+
     model_config = ConfigDict(use_enum_values=True)
 
     recommendation: RecommendationType
@@ -84,22 +94,20 @@ class CompositeRecommendation(BaseModel):
 
 class IndicatorSet(BaseModel):
     """Collection of indicators for a ticker."""
+
     model_config = ConfigDict(use_enum_values=True)
 
     ticker: str = Field(min_length=1, description="Stock ticker symbol")
     technical_indicators: Dict[str, IndicatorResult] = Field(default_factory=dict)
     fundamental_indicators: Dict[str, IndicatorResult] = Field(default_factory=dict)
     composite_score: float = Field(default=0.0, description="Overall composite score")
-    overall_recommendation: Optional[CompositeRecommendation] = Field(default=None)
+    overall_recommendation: CompositeRecommendation | None = Field(default=None)
     last_updated: datetime = Field(default_factory=datetime.now)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    def get_indicator(self, name: str) -> Optional[IndicatorResult]:
+    def get_indicator(self, name: str) -> IndicatorResult | None:
         """Get an indicator by name from either category."""
-        return (
-            self.technical_indicators.get(name) or
-            self.fundamental_indicators.get(name)
-        )
+        return self.technical_indicators.get(name) or self.fundamental_indicators.get(name)
 
     def get_indicators_by_category(self, category: IndicatorCategory) -> Dict[str, IndicatorResult]:
         """Get all indicators of a specific category."""
@@ -128,31 +136,35 @@ class IndicatorSet(BaseModel):
 # Request models
 class FillNASpec(BaseModel):
     """Specification for handling missing data."""
-    method: Optional[Literal["ffill", "bfill", "zero"]] = Field(default=None)
-    limit: Optional[int] = Field(default=None, ge=1)
+
+    method: Literal["ffill", "bfill", "zero"] | None = Field(default=None)
+    limit: int | None = Field(default=None, ge=1)
 
 
 class WarmupSpec(BaseModel):
     """Specification for indicator warmup period."""
+
     min_bars: int = Field(default=0, ge=0, description="Minimum bars required")
     mask_to_nan: bool = Field(default=True, description="Mask insufficient data to NaN")
 
 
 class IndicatorSpec(BaseModel):
     """Specification for a single indicator calculation."""
+
     name: str = Field(min_length=1, description="Canonical indicator name")
     params: Dict[str, Any] = Field(default_factory=dict, description="Indicator parameters")
     input_map: Dict[str, str] = Field(default_factory=dict, description="Input column mapping")
     output: Union[str, Dict[str, str]] = Field(description="Output column name(s)")
     depends_on: List[str] = Field(default_factory=list, description="Dependencies on other indicators")
-    timeframe: Optional[str] = Field(default=None, description="Override timeframe for this indicator")
+    timeframe: str | None = Field(default=None, description="Override timeframe for this indicator")
 
 
 class IndicatorBatchConfig(BaseModel):
     """Configuration for batch indicator calculation."""
-    timeframe: Optional[str] = Field(default=None, description="Default timeframe")
-    fillna: Optional[FillNASpec] = Field(default=None)
-    warmup: Optional[WarmupSpec] = Field(default=None)
+
+    timeframe: str | None = Field(default=None, description="Default timeframe")
+    fillna: FillNASpec | None = Field(default=None)
+    warmup: WarmupSpec | None = Field(default=None)
     dropna_after: bool = Field(default=False, description="Drop NaN values after calculation")
     indicators: List[IndicatorSpec] = Field(description="List of indicators to calculate")
 
@@ -172,31 +184,33 @@ class IndicatorBatchConfig(BaseModel):
 
 class IndicatorCalculationRequest(BaseModel):
     """Request for indicator calculation."""
+
     ticker: TickerSymbol = Field(min_length=1, description="Stock ticker symbol")
     indicators: List[IndicatorName] = Field(min_length=1, description="List of indicator names")
     timeframe: TimeFrame = Field(default="1d", description="Data timeframe")
     period: Period = Field(default="2y", description="Data period")
-    provider: Optional[ProviderName] = Field(default=None, description="Data provider")
+    provider: ProviderName | None = Field(default=None, description="Data provider")
     force_refresh: bool = Field(default=False, description="Force cache refresh")
     include_recommendations: bool = Field(default=True, description="Include trading recommendations")
 
-    @field_validator('ticker')
+    @field_validator("ticker")
     @classmethod
     def validate_ticker(cls, v):
         """Validate ticker symbol format."""
         if not v.isupper():
             v = v.upper()
-        if not v.replace('.', '').replace('-', '').isalnum():
+        if not v.replace(".", "").replace("-", "").isalnum():
             raise ValueError("Ticker must contain only alphanumeric characters, dots, and hyphens")
         return v
 
-    @field_validator('indicators')
+    @field_validator("indicators")
     @classmethod
     def validate_indicators(cls, v):
         """Validate indicator names."""
         # Use lazy import to avoid circular dependency
         try:
             from src.indicators.constants import validate_indicator_name
+
             for indicator in v:
                 if not validate_indicator_name(indicator):
                     raise ValueError(f"Unknown indicator: {indicator}")
@@ -213,16 +227,17 @@ class IndicatorCalculationRequest(BaseModel):
 
 class BatchIndicatorRequest(BaseModel):
     """Request for batch indicator calculation."""
+
     tickers: List[TickerSymbol] = Field(min_length=1, description="List of ticker symbols")
     indicators: List[IndicatorName] = Field(min_length=1, description="List of indicator names")
     timeframe: TimeFrame = Field(default="1d", description="Data timeframe")
     period: Period = Field(default="2y", description="Data period")
-    provider: Optional[ProviderName] = Field(default=None, description="Data provider")
+    provider: ProviderName | None = Field(default=None, description="Data provider")
     force_refresh: bool = Field(default=False, description="Force cache refresh")
     include_recommendations: bool = Field(default=True, description="Include trading recommendations")
     max_concurrent: int = Field(default=10, ge=1, le=50, description="Maximum concurrent requests")
 
-    @field_validator('tickers')
+    @field_validator("tickers")
     @classmethod
     def validate_tickers(cls, v):
         """Validate ticker symbols."""
@@ -230,18 +245,19 @@ class BatchIndicatorRequest(BaseModel):
         for ticker in v:
             if not ticker.isupper():
                 ticker = ticker.upper()
-            if not ticker.replace('.', '').replace('-', '').isalnum():
+            if not ticker.replace(".", "").replace("-", "").isalnum():
                 raise ValueError(f"Invalid ticker format: {ticker}")
             validated.append(ticker)
         return validated
 
-    @field_validator('indicators')
+    @field_validator("indicators")
     @classmethod
     def validate_indicators(cls, v):
         """Validate indicator names."""
         # Use lazy import to avoid circular dependency
         try:
             from src.indicators.constants import validate_indicator_name
+
             for indicator in v:
                 if not validate_indicator_name(indicator):
                     raise ValueError(f"Unknown indicator: {indicator}")
@@ -258,33 +274,35 @@ class BatchIndicatorRequest(BaseModel):
 
 class TickerIndicatorsRequest(BaseModel):
     """Request for ticker-based computation (tech + fundamentals)."""
+
     ticker: TickerSymbol = Field(min_length=1, description="Stock ticker symbol")
     timeframe: TimeFrame = Field(default="1d", description="OHLCV timeframe")
     period: Period = Field(default="1y", description="Data period")
-    provider: Optional[ProviderName] = Field(default=None, description="Data provider")
+    provider: ProviderName | None = Field(default=None, description="Data provider")
     indicators: List[IndicatorName] = Field(min_length=1, description="Indicator names from registry")
-    fillna: Optional[FillNASpec] = Field(default=None)
-    warmup: Optional[WarmupSpec] = Field(default=None)
+    fillna: FillNASpec | None = Field(default=None)
+    warmup: WarmupSpec | None = Field(default=None)
     include_recommendations: bool = Field(default=True)
     force_refresh: bool = Field(default=False)
 
-    @field_validator('ticker')
+    @field_validator("ticker")
     @classmethod
     def validate_ticker(cls, v):
         """Validate ticker symbol format."""
         if not v.isupper():
             v = v.upper()
-        if not v.replace('.', '').replace('-', '').isalnum():
+        if not v.replace(".", "").replace("-", "").isalnum():
             raise ValueError("Ticker must contain only alphanumeric characters, dots, and hyphens")
         return v
 
-    @field_validator('indicators')
+    @field_validator("indicators")
     @classmethod
     def validate_indicators(cls, v):
         """Validate indicator names."""
         # Use lazy import to avoid circular dependency
         try:
             from src.indicators.constants import validate_indicator_name
+
             for indicator in v:
                 if not validate_indicator_name(indicator):
                     raise ValueError(f"Unknown indicator: {indicator}")
@@ -302,14 +320,16 @@ class TickerIndicatorsRequest(BaseModel):
 # Result containers
 class IndicatorResultSet(BaseModel):
     """Result container for indicator calculations."""
-    ticker: Optional[str] = Field(default=None, description="Ticker symbol")
+
+    ticker: str | None = Field(default=None, description="Ticker symbol")
     technical: Dict[str, IndicatorValue] = Field(default_factory=dict)
     fundamental: Dict[str, IndicatorValue] = Field(default_factory=dict)
-    overall: Optional[Dict[str, Any]] = Field(default=None, description="Overall metrics")
+    overall: Dict[str, Any] | None = Field(default=None, description="Overall metrics")
 
 
 class CacheEntry(BaseModel):
     """Cache entry for indicator data."""
+
     key: str = Field(min_length=1, description="Cache key")
     data: Any = Field(description="Cached data")
     created_at: datetime = Field(default_factory=datetime.now)
@@ -320,6 +340,7 @@ class CacheEntry(BaseModel):
 
 class PerformanceMetrics(BaseModel):
     """Performance metrics for indicator calculations."""
+
     operation: str = Field(min_length=1, description="Operation name")
     duration: float = Field(ge=0.0, description="Duration in seconds")
     cache_hit: bool = Field(description="Whether cache was hit")
@@ -359,7 +380,7 @@ TECHNICAL_INDICATORS = {
     "adosc": "Chaikin A/D Oscillator",
     "bop": "Balance of Power",
     "eom": "Ease of Movement",
-    "support_resistance": "Support and Resistance Levels"
+    "support_resistance": "Support and Resistance Levels",
 }
 
 # Fundamental indicators (canonical names in lowercase)
@@ -384,11 +405,11 @@ FUNDAMENTAL_INDICATORS = {
     "beta": "Beta",
     "market_cap": "Market Capitalization",
     "enterprise_value": "Enterprise Value",
-    "ev_to_ebitda": "Enterprise Value to EBITDA"
+    "ev_to_ebitda": "Enterprise Value to EBITDA",
 }
 
 # Legacy indicator names for backward compatibility
-    # Technical indicators - legacy uppercase names
+# Technical indicators - legacy uppercase names
 LEGACY_INDICATOR_NAMES = {
     "RSI": "rsi",
     "MACD": "macd",
@@ -429,7 +450,6 @@ LEGACY_INDICATOR_NAMES = {
     "EOM": "eom",
     "SUPPORT_RESISTANCE": "support_resistance",
     "SR": "support_resistance",
-
     # Fundamental indicators - legacy uppercase names
     "PE_RATIO": "pe_ratio",
     "FORWARD_PE": "forward_pe",
@@ -451,7 +471,7 @@ LEGACY_INDICATOR_NAMES = {
     "BETA": "beta",
     "MARKET_CAP": "market_cap",
     "ENTERPRISE_VALUE": "enterprise_value",
-    "EV_TO_EBITDA": "ev_to_ebitda"
+    "EV_TO_EBITDA": "ev_to_ebitda",
 }
 
 # Combined indicators dictionary
@@ -460,12 +480,20 @@ ALL_INDICATORS = {**TECHNICAL_INDICATORS, **FUNDAMENTAL_INDICATORS}
 # Legacy combined dictionary for backward compatibility
 INDICATOR_DESCRIPTIONS = {
     **{k.upper(): v for k, v in TECHNICAL_INDICATORS.items()},
-    **{legacy: ALL_INDICATORS[canonical] for legacy, canonical in LEGACY_INDICATOR_NAMES.items() if canonical in TECHNICAL_INDICATORS}
+    **{
+        legacy: ALL_INDICATORS[canonical]
+        for legacy, canonical in LEGACY_INDICATOR_NAMES.items()
+        if canonical in TECHNICAL_INDICATORS
+    },
 }
 
 FUNDAMENTAL_INDICATORS_LEGACY = {
     **{k.upper(): v for k, v in FUNDAMENTAL_INDICATORS.items()},
-    **{legacy: ALL_INDICATORS[canonical] for legacy, canonical in LEGACY_INDICATOR_NAMES.items() if canonical in FUNDAMENTAL_INDICATORS}
+    **{
+        legacy: ALL_INDICATORS[canonical]
+        for legacy, canonical in LEGACY_INDICATOR_NAMES.items()
+        if canonical in FUNDAMENTAL_INDICATORS
+    },
 }
 
 ALL_INDICATORS_LEGACY = {**INDICATOR_DESCRIPTIONS, **FUNDAMENTAL_INDICATORS_LEGACY}
@@ -486,7 +514,7 @@ def get_canonical_name(indicator_name: str) -> str:
     return indicator_name.lower()
 
 
-def get_indicator_description(indicator_name: str) -> Optional[str]:
+def get_indicator_description(indicator_name: str) -> str | None:
     """Get description for an indicator by name."""
     canonical_name = get_canonical_name(indicator_name)
     return ALL_INDICATORS.get(canonical_name)
@@ -502,7 +530,6 @@ __all__ = [
     "IndicatorResult",
     "CompositeRecommendation",
     "IndicatorSet",
-
     # Request models
     "FillNASpec",
     "WarmupSpec",
@@ -511,15 +538,12 @@ __all__ = [
     "IndicatorCalculationRequest",
     "BatchIndicatorRequest",
     "TickerIndicatorsRequest",
-
     # Result models
     "IndicatorResultSet",
     "CacheEntry",
     "PerformanceMetrics",
-
     # Type aliases
     "OutputName",
-
     # Constants and utilities
     "TECHNICAL_INDICATORS",
     "FUNDAMENTAL_INDICATORS",
@@ -529,5 +553,5 @@ __all__ = [
     "FUNDAMENTAL_INDICATORS_LEGACY",
     "ALL_INDICATORS_LEGACY",
     "get_canonical_name",
-    "get_indicator_description"
+    "get_indicator_description",
 ]

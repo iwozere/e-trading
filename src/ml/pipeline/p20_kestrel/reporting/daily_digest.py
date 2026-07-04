@@ -11,13 +11,13 @@ from __future__ import annotations
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.ml.pipeline.p20_kestrel.config import REVISIONS_FEED_AVAILABLE
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+from src.ml.pipeline.p20_kestrel.config import REVISIONS_FEED_AVAILABLE
 
 _kestrel = _KestrelService()
 finish_job_run = _kestrel.finish_job_run
@@ -74,10 +74,7 @@ def _build_positions_section() -> str:
             dist = (float(stop_px) - close_px) / close_px
             dist_to_stop = f" | stop {dist:+.1%} away"
 
-        lines.append(
-            f"  {ticker} ({p.get('sleeve','?')}): {pnl_str}{dist_to_stop}"
-            f" | t1={t1_px or 'n/a'}"
-        )
+        lines.append(f"  {ticker} ({p.get('sleeve', '?')}): {pnl_str}{dist_to_stop} | t1={t1_px or 'n/a'}")
 
     return "\n".join(lines)
 
@@ -90,10 +87,7 @@ def _build_catalysts_section() -> str:
 
     lines = ["Catalysts next 5d:"]
     for c in catalysts:
-        lines.append(
-            f"  {c.get('event_date')} — {c.get('ticker')} {c.get('event_type')} "
-            f"[{c.get('state','?')}]"
-        )
+        lines.append(f"  {c.get('event_date')} — {c.get('ticker')} {c.get('event_type')} [{c.get('state', '?')}]")
     return "\n".join(lines)
 
 
@@ -115,7 +109,7 @@ def _build_candidates_section() -> str:
         verdict = c.get("llm_verdict") or "pending"
         thesis = c.get("thesis_short") or ""
         lines.append(
-            f"  {c['ticker']} (Sleeve {c.get('sleeve','?')}): "
+            f"  {c['ticker']} (Sleeve {c.get('sleeve', '?')}): "
             f"score {c.get('score') or 0:.0f}{interim_tag} | {verdict} | {thesis[:80]}"
         )
     return "\n".join(lines)
@@ -159,7 +153,7 @@ def build_digest(as_of_date: date) -> str:
     return "\n".join(sections)
 
 
-def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
+def run(as_of_date: date | None = None) -> Dict[str, Any]:
     """
     Build and send the daily digest.
 
@@ -179,13 +173,17 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
 
         # Send via notification service
         try:
-            from src.notification.service.client import NotificationServiceClient
             import asyncio
+
+            from src.notification.service.client import NotificationServiceClient
+
             client = NotificationServiceClient()
-            asyncio.run(client.send_to_admins(
-                title=f"Kestrel Daily Digest — {target_date}",
-                message=digest_text,
-            ))
+            asyncio.run(
+                client.send_to_admins(
+                    title=f"Kestrel Daily Digest — {target_date}",
+                    message=digest_text,
+                )
+            )
             sent = True
         except Exception:
             _logger.exception("Failed to send digest notification")

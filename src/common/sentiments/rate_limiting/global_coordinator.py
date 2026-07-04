@@ -6,20 +6,21 @@ to prevent system overload and ensure fair resource allocation.
 """
 
 import asyncio
-import time
-from typing import Dict, List, Optional, Any, Set
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
 import sys
 import threading
+import time
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Set
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
-from .adaptive_limiter import AdaptiveRateLimiter, AdaptiveConfig
+
+from .adaptive_limiter import AdaptiveConfig, AdaptiveRateLimiter
 
 _logger = setup_logger(__name__)
 
@@ -27,14 +28,15 @@ _logger = setup_logger(__name__)
 @dataclass
 class GlobalLimitConfig:
     """Configuration for global rate limiting coordination."""
+
     max_global_requests_per_second: float = 10.0
     max_concurrent_requests: int = 20
     adapter_priority_weights: Dict[str, float] = None
     enable_fair_sharing: bool = True
     enable_adaptive_global_limit: bool = True
     system_load_threshold: float = 0.9  # 90% CPU
-    memory_threshold_mb: int = 4096    # 4GB (more realistic)
-    memory_percent_threshold: float = 0.95 # 95% RAM
+    memory_threshold_mb: int = 4096  # 4GB (more realistic)
+    memory_percent_threshold: float = 0.95  # 95% RAM
 
     def __post_init__(self):
         if self.adapter_priority_weights is None:
@@ -44,6 +46,7 @@ class GlobalLimitConfig:
 @dataclass
 class AdapterAllocation:
     """Resource allocation for an adapter."""
+
     adapter_name: str
     allocated_rate: float
     max_concurrent: int
@@ -78,7 +81,7 @@ class GlobalRateLimitCoordinator:
         # Global statistics
         self.total_global_requests = 0
         self.total_global_rejections = 0
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
 
         # System monitoring
         self._reallocation_interval = timedelta(minutes=5)
@@ -88,11 +91,11 @@ class GlobalRateLimitCoordinator:
         self._cached_memory_percent = 0.0
         self._cached_memory_available_mb = 0.0
         self._last_health_check = 0.0
-        self._health_check_task: Optional[asyncio.Task] = None
+        self._health_check_task: asyncio.Task | None = None
 
-    def register_adapter(self, name: str,
-                        adaptive_config: Optional[AdaptiveConfig] = None,
-                        priority_weight: float = 1.0) -> AdaptiveRateLimiter:
+    def register_adapter(
+        self, name: str, adaptive_config: AdaptiveConfig | None = None, priority_weight: float = 1.0
+    ) -> AdaptiveRateLimiter:
         """
         Register an adapter with the global coordinator.
 
@@ -120,15 +123,14 @@ class GlobalRateLimitCoordinator:
                 adapter_name=name,
                 allocated_rate=adaptive_config.base_requests_per_second,
                 max_concurrent=max(2, int(adaptive_config.base_requests_per_second)),
-                priority_weight=priority_weight
+                priority_weight=priority_weight,
             )
             self._allocations[name] = allocation
 
             # Reallocate resources
             self._reallocate_resources()
 
-            _logger.info("Registered adapter %s with global coordinator (weight: %.2f)",
-                        name, priority_weight)
+            _logger.info("Registered adapter %s with global coordinator (weight: %.2f)", name, priority_weight)
             return limiter
 
     def unregister_adapter(self, name: str) -> bool:
@@ -154,8 +156,7 @@ class GlobalRateLimitCoordinator:
             _logger.info("Unregistered adapter %s from global coordinator", name)
             return True
 
-    async def acquire_global_permission(self, adapter_name: str,
-                                      timeout: Optional[float] = None) -> bool:
+    async def acquire_global_permission(self, adapter_name: str, timeout: float | None = None) -> bool:
         """
         Acquire global permission for a request.
 
@@ -179,15 +180,12 @@ class GlobalRateLimitCoordinator:
 
         # Acquire global semaphore
         try:
-            acquired = await asyncio.wait_for(
-                self._global_semaphore.acquire(),
-                timeout=timeout
-            )
+            acquired = await asyncio.wait_for(self._global_semaphore.acquire(), timeout=timeout)
             if not acquired:
                 with self._lock:
                     self.total_global_rejections += 1
                 return False
-        except asyncio.TimeoutError:
+        except TimeoutError:
             with self._lock:
                 self.total_global_rejections += 1
             return False
@@ -229,11 +227,14 @@ class GlobalRateLimitCoordinator:
                     0, self._allocations[adapter_name].active_requests - 1
                 )
 
-    def record_adapter_response(self, adapter_name: str,
-                              response_time_ms: float,
-                              success: bool,
-                              status_code: Optional[int] = None,
-                              error_type: Optional[str] = None) -> None:
+    def record_adapter_response(
+        self,
+        adapter_name: str,
+        response_time_ms: float,
+        success: bool,
+        status_code: int | None = None,
+        error_type: str | None = None,
+    ) -> None:
         """
         Record response metrics for an adapter.
 
@@ -252,14 +253,16 @@ class GlobalRateLimitCoordinator:
         adapter_limiter.record_response(response_time_ms, success, status_code, error_type)
 
         # Record global metrics
-        self._request_history.append({
-            'adapter': adapter_name,
-            'timestamp': datetime.now(timezone.utc),
-            'response_time_ms': response_time_ms,
-            'success': success,
-            'status_code': status_code,
-            'error_type': error_type
-        })
+        self._request_history.append(
+            {
+                "adapter": adapter_name,
+                "timestamp": datetime.now(UTC),
+                "response_time_ms": response_time_ms,
+                "success": success,
+                "status_code": status_code,
+                "error_type": error_type,
+            }
+        )
 
         # Keep history manageable
         if len(self._request_history) > 1000:
@@ -289,7 +292,7 @@ class GlobalRateLimitCoordinator:
                     perf_metrics = adapter_limiter.get_performance_metrics()
 
                     if perf_metrics:
-                        error_rate = perf_metrics.get('error_rate', 0)
+                        error_rate = perf_metrics.get("error_rate", 0)
 
                         # Reduce allocation for adapters with high error rates
                         if error_rate > 0.2:
@@ -304,22 +307,25 @@ class GlobalRateLimitCoordinator:
                 # Use a burst factor to allow adapters to use more RPS if the global budget allows.
                 # The GlobalPermission semaphore and system overload checks will still provide safety.
                 burst_factor = 2.0
-                allocation.allocated_rate = max(0.1, min(base_rate * burst_factor, self.config.max_global_requests_per_second))
+                allocation.allocated_rate = max(
+                    0.1, min(base_rate * burst_factor, self.config.max_global_requests_per_second)
+                )
                 allocation.max_concurrent = max(5, int(allocation.allocated_rate * 2))
 
                 # Update adapter's rate limiter
                 adapter_limiter = self._adapters[name]
                 adapter_limiter.force_rate_adjustment(allocation.allocated_rate, "global_reallocation")
 
-            self._last_reallocation = datetime.now(timezone.utc)
+            self._last_reallocation = datetime.now(UTC)
 
-            _logger.debug("Reallocated resources: %s",
-                         {name: f"{alloc.allocated_rate:.2f} req/s"
-                          for name, alloc in self._allocations.items()})
+            _logger.debug(
+                "Reallocated resources: %s",
+                {name: f"{alloc.allocated_rate:.2f} req/s" for name, alloc in self._allocations.items()},
+            )
 
     def _check_reallocation_schedule(self) -> None:
         """Check if it's time for resource reallocation."""
-        if datetime.now(timezone.utc) - self._last_reallocation > self._reallocation_interval:
+        if datetime.now(UTC) - self._last_reallocation > self._reallocation_interval:
             self._reallocate_resources()
 
     async def start_monitoring(self):
@@ -344,6 +350,7 @@ class GlobalRateLimitCoordinator:
         """Periodically check system health in a non-blocking way."""
         try:
             import psutil
+
             while True:
                 # Use psutil without interval (instantaneous) or run in thread
                 self._cached_cpu_usage = psutil.cpu_percent()
@@ -361,7 +368,7 @@ class GlobalRateLimitCoordinator:
         """Check if the system is currently overloaded using cached values."""
         # Use cached values to avoid blocking calls in request path
         # If monitoring hasn't started or cache is stale, assume not overloaded to avoid blocking.
-        if not hasattr(self, '_cached_cpu_usage') or (time.time() - self._last_health_check > 10):
+        if not hasattr(self, "_cached_cpu_usage") or (time.time() - self._last_health_check > 10):
             _logger.debug("System health cache is stale or not initialized, assuming not overloaded for now.")
             return False
 
@@ -385,39 +392,40 @@ class GlobalRateLimitCoordinator:
     def get_global_statistics(self) -> Dict[str, Any]:
         """Get comprehensive global coordination statistics."""
         with self._lock:
-            uptime = (datetime.now(timezone.utc) - self.created_at).total_seconds()
+            uptime = (datetime.now(UTC) - self.created_at).total_seconds()
             total_active = sum(alloc.active_requests for alloc in self._allocations.values())
 
             stats = {
-                'global_metrics': {
-                    'total_requests': self.total_global_requests,
-                    'total_rejections': self.total_global_rejections,
-                    'success_rate': (self.total_global_requests - self.total_global_rejections) / max(1, self.total_global_requests),
-                    'active_requests': total_active,
-                    'max_concurrent': self.config.max_concurrent_requests,
-                    'utilization': total_active / self.config.max_concurrent_requests,
-                    'uptime_seconds': uptime
+                "global_metrics": {
+                    "total_requests": self.total_global_requests,
+                    "total_rejections": self.total_global_rejections,
+                    "success_rate": (self.total_global_requests - self.total_global_rejections)
+                    / max(1, self.total_global_requests),
+                    "active_requests": total_active,
+                    "max_concurrent": self.config.max_concurrent_requests,
+                    "utilization": total_active / self.config.max_concurrent_requests,
+                    "uptime_seconds": uptime,
                 },
-                'adapter_allocations': {
+                "adapter_allocations": {
                     name: {
-                        'allocated_rate': alloc.allocated_rate,
-                        'max_concurrent': alloc.max_concurrent,
-                        'priority_weight': alloc.priority_weight,
-                        'active_requests': alloc.active_requests,
-                        'utilization': alloc.active_requests / max(1, alloc.max_concurrent)
+                        "allocated_rate": alloc.allocated_rate,
+                        "max_concurrent": alloc.max_concurrent,
+                        "priority_weight": alloc.priority_weight,
+                        "active_requests": alloc.active_requests,
+                        "utilization": alloc.active_requests / max(1, alloc.max_concurrent),
                     }
                     for name, alloc in self._allocations.items()
                 },
-                'system_status': {
-                    'overloaded': self._is_system_overloaded(),
-                    'last_reallocation': self._last_reallocation,
-                    'registered_adapters': len(self._adapters)
-                }
+                "system_status": {
+                    "overloaded": self._is_system_overloaded(),
+                    "last_reallocation": self._last_reallocation,
+                    "registered_adapters": len(self._adapters),
+                },
             }
 
         return stats
 
-    def get_adapter_statistics(self, adapter_name: str) -> Optional[Dict[str, Any]]:
+    def get_adapter_statistics(self, adapter_name: str) -> Dict[str, Any] | None:
         """
         Get statistics for a specific adapter.
 
@@ -434,13 +442,13 @@ class GlobalRateLimitCoordinator:
         allocation = self._allocations[adapter_name]
 
         return {
-            'allocation': {
-                'allocated_rate': allocation.allocated_rate,
-                'max_concurrent': allocation.max_concurrent,
-                'priority_weight': allocation.priority_weight,
-                'active_requests': allocation.active_requests
+            "allocation": {
+                "allocated_rate": allocation.allocated_rate,
+                "max_concurrent": allocation.max_concurrent,
+                "priority_weight": allocation.priority_weight,
+                "active_requests": allocation.active_requests,
             },
-            'adaptive_stats': adapter_limiter.get_comprehensive_stats()
+            "adaptive_stats": adapter_limiter.get_comprehensive_stats(),
         }
 
     def update_adapter_priority(self, adapter_name: str, new_weight: float) -> bool:
@@ -464,8 +472,7 @@ class GlobalRateLimitCoordinator:
             # Trigger reallocation
             self._reallocate_resources()
 
-            _logger.info("Updated priority for %s: %.2f -> %.2f",
-                        adapter_name, old_weight, new_weight)
+            _logger.info("Updated priority for %s: %.2f -> %.2f", adapter_name, old_weight, new_weight)
             return True
 
     def force_global_rate_limit(self, new_limit: float) -> None:
@@ -481,18 +488,17 @@ class GlobalRateLimitCoordinator:
         # Reallocate with new limit
         self._reallocate_resources()
 
-        _logger.info("Updated global rate limit: %.2f -> %.2f req/s",
-                    old_limit, new_limit)
+        _logger.info("Updated global rate limit: %.2f -> %.2f req/s", old_limit, new_limit)
 
     def get_system_health(self) -> Dict[str, Any]:
         """Get system health indicators."""
         return {
-            'system_overloaded': self._is_system_overloaded(),
-            'global_utilization': len(self._active_requests) / self.config.max_concurrent_requests,
-            'adapter_count': len(self._adapters),
-            'total_active_requests': len(self._active_requests),
-            'recent_error_rate': self._calculate_recent_error_rate(),
-            'avg_response_time_ms': self._calculate_avg_response_time()
+            "system_overloaded": self._is_system_overloaded(),
+            "global_utilization": len(self._active_requests) / self.config.max_concurrent_requests,
+            "adapter_count": len(self._adapters),
+            "total_active_requests": len(self._active_requests),
+            "recent_error_rate": self._calculate_recent_error_rate(),
+            "avg_response_time_ms": self._calculate_avg_response_time(),
         }
 
     def _calculate_recent_error_rate(self) -> float:
@@ -500,13 +506,13 @@ class GlobalRateLimitCoordinator:
         if not self._request_history:
             return 0.0
 
-        recent_cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
-        recent_requests = [r for r in self._request_history if r['timestamp'] > recent_cutoff]
+        recent_cutoff = datetime.now(UTC) - timedelta(minutes=5)
+        recent_requests = [r for r in self._request_history if r["timestamp"] > recent_cutoff]
 
         if not recent_requests:
             return 0.0
 
-        error_count = sum(1 for r in recent_requests if not r['success'])
+        error_count = sum(1 for r in recent_requests if not r["success"])
         return error_count / len(recent_requests)
 
     def _calculate_avg_response_time(self) -> float:
@@ -514,22 +520,21 @@ class GlobalRateLimitCoordinator:
         if not self._request_history:
             return 0.0
 
-        recent_cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
-        recent_requests = [r for r in self._request_history
-                          if r['timestamp'] > recent_cutoff and r['success']]
+        recent_cutoff = datetime.now(UTC) - timedelta(minutes=5)
+        recent_requests = [r for r in self._request_history if r["timestamp"] > recent_cutoff and r["success"]]
 
         if not recent_requests:
             return 0.0
 
-        total_time = sum(r['response_time_ms'] for r in recent_requests)
+        total_time = sum(r["response_time_ms"] for r in recent_requests)
         return total_time / len(recent_requests)
 
 
 # Global coordinator instance
-_global_coordinator: Optional[GlobalRateLimitCoordinator] = None
+_global_coordinator: GlobalRateLimitCoordinator | None = None
 
 
-def get_global_coordinator() -> Optional[GlobalRateLimitCoordinator]:
+def get_global_coordinator() -> GlobalRateLimitCoordinator | None:
     """Get the global rate limit coordinator instance."""
     return _global_coordinator
 

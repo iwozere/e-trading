@@ -4,23 +4,27 @@ Integration Tests for Delivery History API
 Integration tests that use the actual PostgreSQL database.
 """
 
-import pytest
-from datetime import datetime, timedelta, timezone
-from fastapi.testclient import TestClient
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.service.main import app
-from src.data.db.models.model_notification import (
-    Message, MessageDeliveryStatus, MessageStatus, DeliveryStatus, MessagePriority
-)
-from src.data.db.core.database import session_scope
 from src.data.db.core.base import Base
-from src.data.db.core.database import engine
+from src.data.db.core.database import engine, session_scope
+from src.data.db.models.model_notification import (
+    DeliveryStatus,
+    Message,
+    MessageDeliveryStatus,
+    MessagePriority,
+    MessageStatus,
+)
+from src.notification.service.main import app
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -51,13 +55,13 @@ def sample_data():
             template_name="alert_template",
             content={"title": "Test Alert", "message": "This is a test"},
             message_metadata={"source": "test"},
-            created_at=datetime.now(timezone.utc),
-            scheduled_for=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            scheduled_for=datetime.now(UTC),
             status=MessageStatus.DELIVERED.value,
             retry_count=0,
             max_retries=3,
             last_error=None,
-            processed_at=datetime.now(timezone.utc)
+            processed_at=datetime.now(UTC),
         )
         session.add(message)
         session.flush()  # Get the ID
@@ -67,32 +71,29 @@ def sample_data():
             message_id=message.id,
             channel="telegram",
             status=DeliveryStatus.DELIVERED.value,
-            delivered_at=datetime.now(timezone.utc),
+            delivered_at=datetime.now(UTC),
             response_time_ms=150,
             error_message=None,
             external_id="tg_msg_123",
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(UTC),
         )
 
         delivery2 = MessageDeliveryStatus(
             message_id=message.id,
             channel="email",
             status=DeliveryStatus.DELIVERED.value,
-            delivered_at=datetime.now(timezone.utc),
+            delivered_at=datetime.now(UTC),
             response_time_ms=250,
             error_message=None,
             external_id="email_msg_456",
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(UTC),
         )
 
         session.add(delivery1)
         session.add(delivery2)
         session.commit()
 
-        return {
-            "message": message,
-            "deliveries": [delivery1, delivery2]
-        }
+        return {"message": message, "deliveries": [delivery1, delivery2]}
 
 
 class TestDeliveryHistoryIntegration:
@@ -124,12 +125,7 @@ class TestDeliveryHistoryIntegration:
         """Test message history with filters."""
         response = client.get(
             "/api/v1/history/messages",
-            params={
-                "user_id": "user123",
-                "status": "DELIVERED",
-                "message_type": "test_alert",
-                "limit": 50
-            }
+            params={"user_id": "user123", "status": "DELIVERED", "message_type": "test_alert", "limit": 50},
         )
 
         assert response.status_code == 200
@@ -144,13 +140,7 @@ class TestDeliveryHistoryIntegration:
 
     def test_get_message_history_with_channel_filter(self, client, sample_data):
         """Test message history with channel filter."""
-        response = client.get(
-            "/api/v1/history/messages",
-            params={
-                "channel": "telegram",
-                "limit": 50
-            }
-        )
+        response = client.get("/api/v1/history/messages", params={"channel": "telegram", "limit": 50})
 
         assert response.status_code == 200
         data = response.json()
@@ -181,10 +171,7 @@ class TestDeliveryHistoryIntegration:
 
     def test_get_delivery_history_with_user_filter(self, client, sample_data):
         """Test delivery history with user filter (requires join)."""
-        response = client.get(
-            "/api/v1/history/deliveries",
-            params={"user_id": "user123"}
-        )
+        response = client.get("/api/v1/history/deliveries", params={"user_id": "user123"})
 
         assert response.status_code == 200
         data = response.json()
@@ -194,10 +181,7 @@ class TestDeliveryHistoryIntegration:
 
     def test_get_delivery_history_with_channel_filter(self, client, sample_data):
         """Test delivery history with channel filter."""
-        response = client.get(
-            "/api/v1/history/deliveries",
-            params={"channel": "telegram"}
-        )
+        response = client.get("/api/v1/history/deliveries", params={"channel": "telegram"})
 
         assert response.status_code == 200
         data = response.json()
@@ -211,10 +195,7 @@ class TestDeliveryHistoryIntegration:
 
     def test_export_history_json_small(self, client, sample_data):
         """Test small JSON export (immediate)."""
-        response = client.get(
-            "/api/v1/history/export",
-            params={"format": "json", "limit": 100}
-        )
+        response = client.get("/api/v1/history/export", params={"format": "json", "limit": 100})
 
         assert response.status_code == 200
         data = response.json()
@@ -233,10 +214,7 @@ class TestDeliveryHistoryIntegration:
 
     def test_export_history_csv_small(self, client, sample_data):
         """Test small CSV export (immediate)."""
-        response = client.get(
-            "/api/v1/history/export",
-            params={"format": "csv", "limit": 100}
-        )
+        response = client.get("/api/v1/history/export", params={"format": "csv", "limit": 100})
 
         assert response.status_code == 200
         data = response.json()
@@ -254,10 +232,7 @@ class TestDeliveryHistoryIntegration:
 
     def test_get_history_summary(self, client, sample_data):
         """Test history summary endpoint."""
-        response = client.get(
-            "/api/v1/history/summary",
-            params={"days": 30}
-        )
+        response = client.get("/api/v1/history/summary", params={"days": 30})
 
         assert response.status_code == 200
         data = response.json()
@@ -274,12 +249,7 @@ class TestDeliveryHistoryIntegration:
     def test_get_history_summary_with_filters(self, client, sample_data):
         """Test history summary with filters."""
         response = client.get(
-            "/api/v1/history/summary",
-            params={
-                "days": 30,
-                "user_id": "user123",
-                "channel": "telegram"
-            }
+            "/api/v1/history/summary", params={"days": 30, "user_id": "user123", "channel": "telegram"}
         )
 
         assert response.status_code == 200
@@ -295,10 +265,7 @@ class TestDeliveryHistoryIntegration:
     def test_pagination_functionality(self, client, sample_data):
         """Test pagination works correctly."""
         # Test with small limit
-        response = client.get(
-            "/api/v1/history/messages",
-            params={"limit": 1, "offset": 0}
-        )
+        response = client.get("/api/v1/history/messages", params={"limit": 1, "offset": 0})
 
         assert response.status_code == 200
         data = response.json()
@@ -313,16 +280,10 @@ class TestDeliveryHistoryIntegration:
     def test_date_range_filtering(self, client, sample_data):
         """Test date range filtering."""
         # Test with date range that should include our test data
-        start_date = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-        end_date = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+        start_date = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+        end_date = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
 
-        response = client.get(
-            "/api/v1/history/messages",
-            params={
-                "start_date": start_date,
-                "end_date": end_date
-            }
-        )
+        response = client.get("/api/v1/history/messages", params={"start_date": start_date, "end_date": end_date})
 
         assert response.status_code == 200
         data = response.json()
@@ -334,13 +295,7 @@ class TestDeliveryHistoryIntegration:
     def test_ordering_functionality(self, client, sample_data):
         """Test ordering functionality."""
         # Test ascending order
-        response = client.get(
-            "/api/v1/history/messages",
-            params={
-                "order_by": "created_at",
-                "order_desc": False
-            }
-        )
+        response = client.get("/api/v1/history/messages", params={"order_by": "created_at", "order_desc": False})
 
         assert response.status_code == 200
         data = response.json()

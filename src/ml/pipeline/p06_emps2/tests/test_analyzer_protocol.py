@@ -5,8 +5,7 @@ ScreenerAnalyzer structural protocol.
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-import pytest
+from unittest.mock import MagicMock
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 if str(PROJECT_ROOT) not in sys.path:
@@ -45,7 +44,7 @@ def test_volatility_filter_satisfies_protocol():
     """VolatilityFilter must satisfy ScreenerAnalyzer without inheriting from it."""
     from src.ml.pipeline.shared.volatility_filter import VolatilityFilter
 
-    assert hasattr(VolatilityFilter, 'apply_filters'), (
+    assert hasattr(VolatilityFilter, "apply_filters"), (
         "VolatilityFilter must have apply_filters() to satisfy ScreenerAnalyzer"
     )
 
@@ -55,19 +54,17 @@ def test_volatility_filter_satisfies_protocol():
 
     try:
         vf = VolatilityFilter(mock_dm, mock_cfg, results_dir=mock_results)
-        assert isinstance(vf, ScreenerAnalyzer), (
-            "VolatilityFilter instance does not satisfy ScreenerAnalyzer protocol"
-        )
+        assert isinstance(vf, ScreenerAnalyzer), "VolatilityFilter instance does not satisfy ScreenerAnalyzer protocol"
     except Exception:
         # If constructor fails due to missing deps, at least check the class API
-        assert callable(getattr(VolatilityFilter, 'apply_filters', None))
+        assert callable(getattr(VolatilityFilter, "apply_filters", None))
 
 
 def test_accumulation_analyzer_satisfies_protocol():
     """AccumulationAnalyzer must satisfy ScreenerAnalyzer without inheriting from it."""
     from src.ml.pipeline.p06_emps2.accumulation_analyzer import AccumulationAnalyzer
 
-    assert hasattr(AccumulationAnalyzer, 'apply_filters'), (
+    assert hasattr(AccumulationAnalyzer, "apply_filters"), (
         "AccumulationAnalyzer must have apply_filters() to satisfy ScreenerAnalyzer"
     )
 
@@ -82,4 +79,4 @@ def test_accumulation_analyzer_satisfies_protocol():
             "AccumulationAnalyzer instance does not satisfy ScreenerAnalyzer protocol"
         )
     except Exception:
-        assert callable(getattr(AccumulationAnalyzer, 'apply_filters', None))
+        assert callable(getattr(AccumulationAnalyzer, "apply_filters", None))

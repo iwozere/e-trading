@@ -1,8 +1,9 @@
-import vectorbt as vbt
-import pandas as pd
-import numpy as np
-from pathlib import Path
 import sys
+from pathlib import Path
+
+import pandas as pd
+
+import vectorbt as vbt
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
@@ -13,6 +14,7 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
+
 def run_vbt_diagnostics():
     """
     Research and Diagnostic script for VectorBT Portfolio operations.
@@ -21,7 +23,7 @@ def run_vbt_diagnostics():
     _logger.info("Running VectorBT Diagnostics...")
 
     # 1. Setup Mock Data
-    close = pd.Series([10, 11, 15, 8, 10, 15, 12], name='close')
+    close = pd.Series([10, 11, 15, 8, 10, 15, 12], name="close")
     # Trade 1: Buy (0), Sell (2). PnL = 5
     # Trade 2: Buy (4), Sell (6). PnL = 2
     entries = pd.Series([True, False, False, False, True, False, False])
@@ -34,7 +36,7 @@ def run_vbt_diagnostics():
     assets = pf.assets()
     diff = assets.diff()
     if not diff.empty:
-        diff.iloc[0] = assets.iloc[0] # Capture initial entry
+        diff.iloc[0] = assets.iloc[0]  # Capture initial entry
 
     plot_sigs = pd.Series(0, index=close.index)
     plot_sigs[diff > 0] = 1
@@ -51,11 +53,12 @@ def run_vbt_diagnostics():
     _logger.info("Realized Equity Curve:\n%s", realized_equity)
 
     # 4. Correctness Check
-    expected_final = 100 + 5 + 2 # (15-10) + (12-10) assuming 1 unit
+    expected_final = 100 + 5 + 2  # (15-10) + (12-10) assuming 1 unit
     # Note: VectorBT might use fractional units/compounding if not specified
     # but for this simple case:
     _logger.info("Final Portfolio Value: %.2f", pf.value().iloc[-1])
     _logger.info("Final Realized Equity: %.2f", realized_equity.iloc[-1])
+
 
 if __name__ == "__main__":
     run_vbt_diagnostics()

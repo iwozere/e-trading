@@ -5,11 +5,13 @@ Test script to verify CNN + XGBoost pipeline structure and imports.
 
 import sys
 from pathlib import Path
+
 import yaml
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
+
 
 def test_config_loading():
     """Test configuration file loading."""
@@ -17,11 +19,11 @@ def test_config_loading():
 
     try:
         config_path = Path("config/pipeline/p03.yaml")
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             config = yaml.safe_load(f)
 
         # Check required sections
-        required_sections = ['data', 'cnn', 'xgboost', 'technical_indicators', 'targets']
+        required_sections = ["data", "cnn", "xgboost", "technical_indicators", "targets"]
         for section in required_sections:
             assert section in config, f"Missing required section: {section}"
 
@@ -31,6 +33,7 @@ def test_config_loading():
     except Exception as e:
         print(f"❌ Configuration loading failed: {e}")
         return False
+
 
 def test_directory_structure():
     """Test directory structure creation."""
@@ -44,7 +47,7 @@ def test_directory_structure():
             "src/ml/pipeline/p03_cnn_xgboost/models",
             "src/ml/pipeline/p03_cnn_xgboost/models/cnn",
             "src/ml/pipeline/p03_cnn_xgboost/models/xgboost",
-            "src/ml/pipeline/p03_cnn_xgboost/tests"
+            "src/ml/pipeline/p03_cnn_xgboost/tests",
         ]
 
         for directory in directories:
@@ -58,13 +61,14 @@ def test_directory_structure():
         print(f"❌ Directory structure verification failed: {e}")
         return False
 
+
 def test_documentation_files():
     """Test documentation files exist."""
     print("Testing documentation files...")
 
     try:
         docs_dir = Path("src/ml/pipeline/p03_cnn_xgboost/docs")
-        required_files = ['README.md', 'Design.md', 'Requirements.md', 'Tasks.md']
+        required_files = ["README.md", "Design.md", "Requirements.md", "Tasks.md"]
 
         for file_name in required_files:
             file_path = docs_dir / file_name
@@ -76,6 +80,7 @@ def test_documentation_files():
     except Exception as e:
         print(f"❌ Documentation files verification failed: {e}")
         return False
+
 
 def test_pipeline_runner():
     """Test pipeline runner import."""
@@ -91,6 +96,7 @@ def test_pipeline_runner():
         print(f"❌ Pipeline runner import failed: {e}")
         return False
 
+
 def test_data_loader():
     """Test data loader import."""
     print("Testing data loader...")
@@ -105,20 +111,21 @@ def test_data_loader():
         print(f"❌ Data loader import failed: {e}")
         return False
 
+
 def test_configuration_validation():
     """Test configuration validation."""
     print("Testing configuration validation...")
 
     try:
         config_path = Path("config/pipeline/p03.yaml")
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             config = yaml.safe_load(f)
 
         # Validate key configuration parameters
-        assert 'symbols' in config['data'], "Missing symbols in data config"
-        assert 'timeframes' in config['data'], "Missing timeframes in data config"
-        assert 'sequence_length' in config['cnn'], "Missing sequence_length in CNN config"
-        assert 'n_trials' in config['xgboost'], "Missing n_trials in XGBoost config"
+        assert "symbols" in config["data"], "Missing symbols in data config"
+        assert "timeframes" in config["data"], "Missing timeframes in data config"
+        assert "sequence_length" in config["cnn"], "Missing sequence_length in CNN config"
+        assert "n_trials" in config["xgboost"], "Missing n_trials in XGBoost config"
 
         print("✅ Configuration validation successful")
         return True
@@ -126,6 +133,7 @@ def test_configuration_validation():
     except Exception as e:
         print(f"❌ Configuration validation failed: {e}")
         return False
+
 
 def main():
     """Run all tests."""
@@ -139,7 +147,7 @@ def main():
         test_config_loading,
         test_configuration_validation,
         test_pipeline_runner,
-        test_data_loader
+        test_data_loader,
     ]
 
     passed = 0
@@ -161,6 +169,7 @@ def main():
     else:
         print("⚠️  Some tests failed. Please check the issues above.")
         return False
+
 
 if __name__ == "__main__":
     success = main()

@@ -6,25 +6,27 @@ Provides a simple interface for sending notifications and checking delivery stat
 """
 
 import asyncio
-import aiohttp
-from typing import List, Dict, Any, Optional, Union
-from datetime import datetime, timezone
+import sys
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-import sys
+from typing import Any, Dict, List, Union
+
+import aiohttp
 
 # Add project root to path if needed (P3.3 Fix)
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger # noqa: E402
+from src.notification.logger import setup_logger  # noqa: E402
+
 # Import canonical enum definitions from model.py.  The local re-exports below keep
 # backward-compatible names for callers that do:
 #   from src.notification.service.client import MessageType, MessagePriority
-from src.notification.model import NotificationType, NotificationPriority  # noqa: E402
+from src.notification.model import NotificationPriority, NotificationType  # noqa: E402
 
-MessageType = NotificationType        # backward-compat re-export
+MessageType = NotificationType  # backward-compat re-export
 MessagePriority = NotificationPriority  # backward-compat re-export
 
 _logger = setup_logger(__name__)
@@ -32,11 +34,13 @@ _logger = setup_logger(__name__)
 
 class NotificationServiceError(Exception):
     """Base exception for notification service errors."""
+
     pass
 
 
 class NotificationServiceUnavailableError(NotificationServiceError):
     """Raised when the notification service is unavailable."""
+
     pass
 
 
@@ -61,6 +65,7 @@ class NotificationResponse:
 
 class CircuitBreakerState(str, Enum):
     """Circuit breaker states."""
+
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half_open"
@@ -113,7 +118,7 @@ class CircuitBreaker:
         """Check if we should attempt to reset the circuit breaker."""
         if self.last_failure_time is None:
             return True
-        return (datetime.now(timezone.utc) - self.last_failure_time).seconds > self.recovery_timeout
+        return (datetime.now(UTC) - self.last_failure_time).seconds > self.recovery_timeout
 
     def _on_success(self):
         """Handle successful call."""
@@ -123,7 +128,7 @@ class CircuitBreaker:
     def _on_failure(self):
         """Handle failed call."""
         self.failure_count += 1
-        self.last_failure_time = datetime.now(timezone.utc)
+        self.last_failure_time = datetime.now(UTC)
         if self.failure_count >= self.failure_threshold:
             self.state = CircuitBreakerState.OPEN
 
@@ -136,11 +141,13 @@ class NotificationServiceClient:
     Compatible with AsyncNotificationManager interface for easy migration.
     """
 
-    def __init__(self,
-                 service_url: Optional[str] = None,
-                 base_url: Optional[str] = None,  # For backward compatibility
-                 timeout: int = 30,
-                 max_retries: int = 3):
+    def __init__(
+        self,
+        service_url: str | None = None,
+        base_url: str | None = None,  # For backward compatibility
+        timeout: int = 30,
+        max_retries: int = 3,
+    ):
         """
         Initialize the notification service client.
 
@@ -154,6 +161,7 @@ class NotificationServiceClient:
             max_retries: Maximum number of retry attempts
         """
         import os
+
         if service_url is None:
             service_url = os.environ.get("NOTIFICATION_SERVICE_URL", "http://localhost:5003")
         # Handle backward compatibility
@@ -169,15 +177,14 @@ class NotificationServiceClient:
         else:
             if ":8080" in service_url:
                 _logger.warning(
-                    "Service URL %s uses the legacy port 8080. The Main API runs at http://localhost:5003.",
-                    service_url
+                    "Service URL %s uses the legacy port 8080. The Main API runs at http://localhost:5003.", service_url
                 )
 
-            self.service_url = service_url.rstrip('/')
+            self.service_url = service_url.rstrip("/")
 
         self.timeout = aiohttp.ClientTimeout(total=timeout)
         self.max_retries = max_retries
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
 
         if self.database_only_mode:
             _logger.info("NotificationServiceClient initialized for database-only mode")
@@ -229,26 +236,35 @@ class NotificationServiceClient:
                     raise Exception(f"Request failed after {self.max_retries + 1} attempts: {e}")
 
                 # Wait before retry (exponential backoff)
-                wait_time = 2 ** attempt
-                _logger.warning("Request failed (attempt %d/%d), retrying in %ds: %s",
-                              attempt + 1, self.max_retries + 1, wait_time, e)
+                wait_time = 2**attempt
+                _logger.warning(
+                    "Request failed (attempt %d/%d), retrying in %ds: %s",
+                    attempt + 1,
+                    self.max_retries + 1,
+                    wait_time,
+                    e,
+                )
                 await asyncio.sleep(wait_time)
 
-        raise Exception(f"No successful response from {self.service_url}{endpoint} after {self.max_retries + 1} attempts")
+        raise Exception(
+            f"No successful response from {self.service_url}{endpoint} after {self.max_retries + 1} attempts"
+        )
 
-    async def send_notification(self,
-                              notification_type: Union[str, MessageType],
-                              title: str,
-                              message: str,
-                              priority: Union[str, MessagePriority] = MessagePriority.NORMAL,
-                              data: Optional[Dict[str, Any]] = None,
-                              source: str = "trading_bot",
-                              channels: Optional[List[str]] = None,
-                              attachments: Optional[dict] = None,
-                              email_receiver: Optional[str] = None,
-                              reply_to_message_id: Optional[int] = None,
-                              telegram_chat_id: Optional[int] = None,
-                              recipient_id: Optional[str] = None) -> bool:
+    async def send_notification(
+        self,
+        notification_type: Union[str, MessageType],
+        title: str,
+        message: str,
+        priority: Union[str, MessagePriority] = MessagePriority.NORMAL,
+        data: Dict[str, Any] | None = None,
+        source: str = "trading_bot",
+        channels: List[str] | None = None,
+        attachments: dict | None = None,
+        email_receiver: str | None = None,
+        reply_to_message_id: int | None = None,
+        telegram_chat_id: int | None = None,
+        recipient_id: str | None = None,
+    ) -> bool:
         """
         Send a notification through the service.
 
@@ -285,12 +301,8 @@ class NotificationServiceClient:
                 "channels": channels or ["telegram", "email"],
                 "recipient_id": recipient_id or email_receiver,
                 "template_name": None,
-                "content": {
-                    "title": title,
-                    "message": message,
-                    "source": source
-                },
-                "message_metadata": data or {}
+                "content": {"title": title, "message": message, "source": source},
+                "message_metadata": data or {},
             }
 
             # Add compatibility data for legacy parameters
@@ -313,10 +325,7 @@ class NotificationServiceClient:
                 # Try HTTP API first
                 try:
                     response = await self._make_request(
-                        "POST",
-                        "/api/notifications",
-                        json=message_data,
-                        headers={"Content-Type": "application/json"}
+                        "POST", "/api/notifications", json=message_data, headers={"Content-Type": "application/json"}
                     )
 
                     _logger.info("Notification sent successfully via HTTP API: %s", response.get("message_id"))
@@ -360,10 +369,11 @@ class NotificationServiceClient:
         """
         try:
             # Import here to avoid circular dependencies and reduce startup time
-            from src.data.db.services.database_service import get_database_service
-            from src.data.db.repos.repo_notification import MessageRepository
-            from datetime import datetime, timezone
             import base64
+            from datetime import datetime
+
+            from src.data.db.repos.repo_notification import MessageRepository
+            from src.data.db.services.database_service import get_database_service
 
             # Use the database service directly
             db_service = get_database_service()
@@ -382,16 +392,13 @@ class NotificationServiceClient:
                         if isinstance(file_data, bytes):
                             # Convert bytes to base64 for JSON storage
                             processed_attachments[filename] = {
-                                "data": base64.b64encode(file_data).decode('utf-8'),
+                                "data": base64.b64encode(file_data).decode("utf-8"),
                                 "type": "base64",
-                                "size": len(file_data)
+                                "size": len(file_data),
                             }
                         elif isinstance(file_data, str):
                             # File path
-                            processed_attachments[filename] = {
-                                "path": file_data,
-                                "type": "file_path"
-                            }
+                            processed_attachments[filename] = {"path": file_data, "type": "file_path"}
                         else:
                             # Already processed attachment data
                             processed_attachments[filename] = file_data
@@ -404,7 +411,7 @@ class NotificationServiceClient:
                 metadata_copy = {**message_data.get("message_metadata", {})}
                 metadata_copy.pop("attachments", None)  # Remove attachments from metadata
                 metadata_copy["fallback_method"] = "direct_db"
-                metadata_copy["fallback_timestamp"] = datetime.now(timezone.utc).isoformat()
+                metadata_copy["fallback_timestamp"] = datetime.now(UTC).isoformat()
 
                 db_message_data = {
                     "message_type": message_data["message_type"],
@@ -412,14 +419,13 @@ class NotificationServiceClient:
                     "channels": message_data["channels"],
                     "recipient_id": message_data["recipient_id"],
                     "template_name": message_data.get("template_name"),
-                    "content": {
-                        **message_data["content"],
-                        "attachments": processed_attachments
-                    } if processed_attachments else message_data["content"],
+                    "content": {**message_data["content"], "attachments": processed_attachments}
+                    if processed_attachments
+                    else message_data["content"],
                     "message_metadata": metadata_copy,
-                    "scheduled_for": datetime.now(timezone.utc),
+                    "scheduled_for": datetime.now(UTC),
                     "max_retries": 3,
-                    "retry_count": 0
+                    "retry_count": 0,
                 }
 
                 # Create the message in database
@@ -431,15 +437,17 @@ class NotificationServiceClient:
             _logger.exception("Failed to insert notification directly to database:")
             raise
 
-    async def send_trade_notification(self,
-                                    symbol: str,
-                                    side: str,
-                                    price: float,
-                                    quantity: float,
-                                    entry_price: Optional[float] = None,
-                                    pnl: Optional[float] = None,
-                                    exit_type: Optional[str] = None,
-                                    recipient_id: Optional[str] = None) -> bool:
+    async def send_trade_notification(
+        self,
+        symbol: str,
+        side: str,
+        price: float,
+        quantity: float,
+        entry_price: float | None = None,
+        pnl: float | None = None,
+        exit_type: str | None = None,
+        recipient_id: str | None = None,
+    ) -> bool:
         """
         Send a trade notification.
 
@@ -479,7 +487,7 @@ class NotificationServiceClient:
             "entry_price": entry_price,
             "pnl": pnl,
             "exit_type": exit_type,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         return await self.send_notification(
@@ -489,13 +497,12 @@ class NotificationServiceClient:
             priority=MessagePriority.HIGH,
             data=data,
             source="trading_bot",
-            recipient_id=recipient_id
+            recipient_id=recipient_id,
         )
 
-    async def send_error_notification(self,
-                                    error_message: str,
-                                    source: str = "trading_bot",
-                                    recipient_id: Optional[str] = None) -> bool:
+    async def send_error_notification(
+        self, error_message: str, source: str = "trading_bot", recipient_id: str | None = None
+    ) -> bool:
         """
         Send an error notification.
 
@@ -515,10 +522,10 @@ class NotificationServiceClient:
             message=error_message,
             priority=MessagePriority.CRITICAL,
             source=source,
-            recipient_id=recipient_id
+            recipient_id=recipient_id,
         )
 
-    async def get_message_status(self, message_id: int) -> Optional[Dict[str, Any]]:
+    async def get_message_status(self, message_id: int) -> Dict[str, Any] | None:
         """
         Get message status and details.
 
@@ -554,13 +561,15 @@ class NotificationServiceClient:
             _logger.exception("Failed to get delivery status:")
             return []
 
-    async def list_messages(self,
-                          status: Optional[str] = None,
-                          priority: Optional[str] = None,
-                          recipient_id: Optional[str] = None,
-                          message_type: Optional[str] = None,
-                          limit: int = 100,
-                          offset: int = 0) -> List[Dict[str, Any]]:
+    async def list_messages(
+        self,
+        status: str | None = None,
+        priority: str | None = None,
+        recipient_id: str | None = None,
+        message_type: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
         """
         List messages with optional filtering.
 
@@ -624,13 +633,15 @@ class NotificationServiceClient:
             _logger.exception("Failed to get channels health:")
             return []
 
-    async def send_to_admins(self,
-                           title: str,
-                           message: str,
-                           notification_type: Union[str, MessageType] = MessageType.SYSTEM,
-                           priority: Union[str, MessagePriority] = MessagePriority.HIGH,
-                           data: Optional[Dict[str, Any]] = None,
-                           channels: Optional[List[str]] = None) -> Dict[str, Any]:
+    async def send_to_admins(
+        self,
+        title: str,
+        message: str,
+        notification_type: Union[str, MessageType] = MessageType.SYSTEM,
+        priority: Union[str, MessagePriority] = MessagePriority.HIGH,
+        data: Dict[str, Any] | None = None,
+        channels: List[str] | None = None,
+    ) -> Dict[str, Any]:
         """
         Send notification to all admin users.
 
@@ -659,12 +670,7 @@ class NotificationServiceClient:
 
             if not admin_ids:
                 _logger.warning("No admin users found for notification")
-                return {
-                    "success": False,
-                    "error": "No admin users found",
-                    "success_count": 0,
-                    "total_count": 0
-                }
+                return {"success": False, "error": "No admin users found", "success_count": 0, "total_count": 0}
 
             success_count = 0
             total_count = len(admin_ids)
@@ -715,7 +721,7 @@ class NotificationServiceClient:
                 "success": success_count > 0,
                 "success_count": success_count,
                 "total_count": total_count,
-                "message": f"Notification sent to {success_count}/{total_count} admin users"
+                "message": f"Notification sent to {success_count}/{total_count} admin users",
             }
 
             if failed_admins:
@@ -726,12 +732,7 @@ class NotificationServiceClient:
 
         except Exception as e:
             _logger.exception("Error sending notification to admins:")
-            return {
-                "success": False,
-                "error": str(e),
-                "success_count": 0,
-                "total_count": 0
-            }
+            return {"success": False, "error": str(e), "success_count": 0, "total_count": 0}
 
     # Context manager support
     async def __aenter__(self):
@@ -758,20 +759,22 @@ class NotificationServiceClient:
             "service_url": self.service_url,
             "timeout": self.timeout.total,
             "max_retries": self.max_retries,
-            "session_active": self._session is not None and not self._session.closed
+            "session_active": self._session is not None and not self._session.closed,
         }
 
 
 # Global client instance for easy access
-_notification_client: Optional[NotificationServiceClient] = None
+_notification_client: NotificationServiceClient | None = None
 
 
-def get_notification_client() -> Optional[NotificationServiceClient]:
+def get_notification_client() -> NotificationServiceClient | None:
     """Get the global notification client instance."""
     return _notification_client
 
 
-async def initialize_notification_client(service_url: str = "http://localhost:5003", **kwargs) -> NotificationServiceClient:
+async def initialize_notification_client(
+    service_url: str = "http://localhost:5003", **kwargs
+) -> NotificationServiceClient:
     """
     Initialize the global notification client.
 

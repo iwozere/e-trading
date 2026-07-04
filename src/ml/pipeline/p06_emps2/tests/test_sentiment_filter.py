@@ -18,9 +18,9 @@ from src.ml.pipeline.shared.sentiment_filter import SentimentFilter, SentimentFi
 
 def test_sentiment_single_ticker():
     """Test sentiment filter with single ticker and print results."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Testing Sentiment Filter with Single Ticker")
-    print("="*70)
+    print("=" * 70)
 
     # Create config with relaxed filters for testing
     config = SentimentFilterConfig(
@@ -29,7 +29,7 @@ def test_sentiment_single_ticker():
         max_bot_pct=1.0,  # Accept high bot activity
         min_virality_index=0.0,  # No virality requirement
         min_unique_authors=1,  # Minimum unique authors
-        enabled=True
+        enabled=True,
     )
 
     # Create sentiment filter
@@ -60,14 +60,15 @@ def test_sentiment_single_ticker():
                 value = result_df.iloc[0][col]
                 print(f"  {col:25s}: {value}")
 
-            print("\n" + "="*70)
+            print("\n" + "=" * 70)
             print("Test Complete")
-            print("="*70)
+            print("=" * 70)
 
     except Exception as e:
         print(f"❌ Error during sentiment analysis: {e}")
         print(f"\nException type: {type(e).__name__}")
         import traceback
+
         print("\nFull traceback:")
         traceback.print_exc()
 

@@ -63,22 +63,22 @@ import logging.handlers
 import re
 import sys
 import time
-from datetime import date as _Date, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from datetime import date as _Date
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
-
-import requests
+from typing import Any, Callable, Dict, List, Tuple
 
 import pandas as pd
+import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from config.donotshare.donotshare import DATA_CACHE_DIR as _cache_root
-from src.data.downloader.finra_trf_downloader import FinraTRFDownloader
 from src.data.downloader.cboe_downloader import CboeDownloader
 from src.data.downloader.edgar_downloader import EdgarDownloader, EftsUnavailableError
 from src.data.downloader.fear_greed_downloader import FearGreedDownloader
+from src.data.downloader.finra_trf_downloader import FinraTRFDownloader
 from src.data.downloader.fred_downloader import FredDownloader
 from src.data.downloader.gdelt_downloader import GdeltDownloader
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
@@ -91,20 +91,21 @@ _logger = setup_logger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-_CUTOFF_DATE = _Date(2010, 1, 1)        # absolute historical floor for all sources
-_GAP_CAP_DAYS = 60                       # max calendar days backfilled per run
+_CUTOFF_DATE = _Date(2010, 1, 1)  # absolute historical floor for all sources
+_GAP_CAP_DAYS = 60  # max calendar days backfilled per run
 
-_YFINANCE_START  = _Date(2010, 1, 1)
-_GDELT_V2_START  = _Date(2015, 2, 18)   # GDELT 2.0 launch date
-_FINRA_TRF_START = _Date(2014, 4, 1)    # approximate Reg SHO API availability
-_EDGAR_8K_START  = _Date(2020, 1, 1)    # only recent 8-Ks matter for catalyst tracking
+_YFINANCE_START = _Date(2010, 1, 1)
+_GDELT_V2_START = _Date(2015, 2, 18)  # GDELT 2.0 launch date
+_FINRA_TRF_START = _Date(2014, 4, 1)  # approximate Reg SHO API availability
+_EDGAR_8K_START = _Date(2020, 1, 1)  # only recent 8-Ks matter for catalyst tracking
 _EDGAR_FORM4_START = _Date(2024, 1, 1)  # Form 4 cache start for P20 Kestrel
-_EDGAR_13DG_START  = _Date(2024, 1, 1)  # 13D/G cache start for P20 Kestrel
+_EDGAR_13DG_START = _Date(2024, 1, 1)  # 13D/G cache start for P20 Kestrel
 
 
 # ---------------------------------------------------------------------------
 # File logging
 # ---------------------------------------------------------------------------
+
 
 def _setup_file_logging() -> None:
     """Attach a daily-rotating file handler to the root logger (pipeline.log)."""
@@ -119,10 +120,12 @@ def _setup_file_logging() -> None:
         encoding="utf-8",
     )
     handler.suffix = "%Y-%m-%d"
-    handler.setFormatter(logging.Formatter(
-        "%(asctime)s %(levelname)-8s %(name)-40s %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    ))
+    handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s %(levelname)-8s %(name)-40s %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
     logging.getLogger().addHandler(handler)
 
 
@@ -132,7 +135,7 @@ def _setup_file_logging() -> None:
 
 
 def _gap_window(
-    watermark: Optional[_Date],
+    watermark: _Date | None,
     source_start: _Date,
     yesterday: _Date,
     cap_days: int = _GAP_CAP_DAYS,
@@ -161,9 +164,9 @@ def _gap_window(
     """
     natural_start = (watermark + timedelta(days=1)) if watermark is not None else source_start
     natural_start = max(natural_start, source_start, _CUTOFF_DATE)
-    hard_floor    = yesterday - timedelta(days=cap_days - 1)
+    hard_floor = yesterday - timedelta(days=cap_days - 1)
     start = max(natural_start, hard_floor)
-    start = min(start, yesterday)   # safety: never overshoot yesterday
+    start = min(start, yesterday)  # safety: never overshoot yesterday
     return start, yesterday
 
 
@@ -171,10 +174,12 @@ def _gap_window(
 # Misc helpers
 # ---------------------------------------------------------------------------
 
+
 def _check_finra_available() -> bool:
     """Return True if FINRA TRF credentials are importable."""
     try:
         import src.data.downloader.finra_trf_downloader  # noqa: F401
+
         return True
     except Exception:
         return False
@@ -182,7 +187,7 @@ def _check_finra_available() -> bool:
 
 def _yesterday_utc() -> datetime:
     """Return yesterday at midnight, timezone-naive (UTC)."""
-    dt = datetime.now(timezone.utc) - timedelta(days=1)
+    dt = datetime.now(UTC) - timedelta(days=1)
     return dt.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
 
 
@@ -204,13 +209,13 @@ def _is_edgar_facts_day(today: datetime) -> bool:
     weekday_of_15 = today.replace(day=15).weekday()  # 0=Mon … 6=Sun
     if weekday_of_15 < 5:
         return today.day == 15
-    elif weekday_of_15 == 5:    # Saturday → trigger Monday the 17th
+    elif weekday_of_15 == 5:  # Saturday → trigger Monday the 17th
         return today.day == 17
-    else:                       # Sunday   → trigger Monday the 16th
+    else:  # Sunday   → trigger Monday the 16th
         return today.day == 16
 
 
-def _gdelt_watermark(gdelt_dir: Path, suffix: str) -> Optional[_Date]:
+def _gdelt_watermark(gdelt_dir: Path, suffix: str) -> _Date | None:
     """
     Return the most recent cached date in gdelt_dir by scanning YYYYMMDD{suffix} filenames.
 
@@ -232,7 +237,7 @@ def _gdelt_watermark(gdelt_dir: Path, suffix: str) -> Optional[_Date]:
     return max(dates) if dates else None
 
 
-def _trf_watermark(trf_dir: Path) -> Optional[_Date]:
+def _trf_watermark(trf_dir: Path) -> _Date | None:
     """
     Return the most recent trading date cached in trf_dir.
 
@@ -255,7 +260,7 @@ def _trf_watermark(trf_dir: Path) -> Optional[_Date]:
     return max(dates) if dates else None
 
 
-def _edgar_8k_watermark(index_dir: Path) -> Optional[_Date]:
+def _edgar_8k_watermark(index_dir: Path) -> _Date | None:
     """
     Return the most recent date cached in the 8-K index dir.
 
@@ -278,7 +283,7 @@ def _edgar_8k_watermark(index_dir: Path) -> Optional[_Date]:
     return max(dates) if dates else None
 
 
-def _run_job(name: str, fn: Callable[[], Optional[Dict[str, Any]]]) -> Dict[str, Any]:
+def _run_job(name: str, fn: Callable[[], Dict[str, Any] | None]) -> Dict[str, Any]:
     """
     Run a single job function, catching all exceptions.
 
@@ -306,7 +311,8 @@ def _run_job(name: str, fn: Callable[[], Optional[Dict[str, Any]]]) -> Dict[str,
 # Job functions — each returns a plain dict or None
 # ---------------------------------------------------------------------------
 
-def _job_cboe() -> Optional[Dict[str, Any]]:
+
+def _job_cboe() -> Dict[str, Any] | None:
     dl = CboeDownloader()
     directory = dl.download()
     if directory is not None:
@@ -315,7 +321,7 @@ def _job_cboe() -> Optional[Dict[str, Any]]:
     return None
 
 
-def _job_fear_greed() -> Optional[Dict[str, Any]]:
+def _job_fear_greed() -> Dict[str, Any] | None:
     # _append_recent fetches from last cached date forward, healing end-gaps naturally.
     # Deep historical gaps (> CNN API window) are covered by the weekly full rebuild.
     path = FearGreedDownloader().download(full_rebuild=False)
@@ -324,7 +330,7 @@ def _job_fear_greed() -> Optional[Dict[str, Any]]:
     return None
 
 
-def _job_gdelt_gkg(yesterday: _Date) -> Optional[Dict[str, Any]]:
+def _job_gdelt_gkg(yesterday: _Date) -> Dict[str, Any] | None:
 
     gkg_dir = Path(_cache_root) / "gdelt" / "gkg"
     watermark = _gdelt_watermark(gkg_dir, ".gkg.csv.gz")
@@ -334,12 +340,12 @@ def _job_gdelt_gkg(yesterday: _Date) -> Optional[Dict[str, Any]]:
     dl = GdeltDownloader()
     summary = dl.download_gkg_range(
         datetime(start.year, start.month, start.day),
-        datetime(end.year,   end.month,   end.day),
+        datetime(end.year, end.month, end.day),
     )
     return dict(summary)
 
 
-def _job_gdelt_events(yesterday: _Date) -> Optional[Dict[str, Any]]:
+def _job_gdelt_events(yesterday: _Date) -> Dict[str, Any] | None:
     events_dir = Path(_cache_root) / "gdelt" / "events"
     watermark = _gdelt_watermark(events_dir, ".events.csv.gz")
     start, end = _gap_window(watermark, _GDELT_V2_START, yesterday)
@@ -348,16 +354,16 @@ def _job_gdelt_events(yesterday: _Date) -> Optional[Dict[str, Any]]:
     dl = GdeltDownloader()
     summary = dl.download_events_range(
         datetime(start.year, start.month, start.day),
-        datetime(end.year,   end.month,   end.day),
+        datetime(end.year, end.month, end.day),
     )
     return dict(summary)
 
 
-def _job_fred_daily(dl: FredDownloader) -> Optional[Dict[str, Any]]:
+def _job_fred_daily(dl: FredDownloader) -> Dict[str, Any] | None:
     return dl.update_by_freq(["daily"])  # type: ignore[return-value]
 
 
-def _job_fred_combined(dl: FredDownloader) -> Optional[Dict[str, Any]]:
+def _job_fred_combined(dl: FredDownloader) -> Dict[str, Any] | None:
     df = dl.build_combined()
     return {"rows": len(df)}
 
@@ -365,282 +371,322 @@ def _job_fred_combined(dl: FredDownloader) -> Optional[Dict[str, Any]]:
 # Full P15 price universe from library.md §4
 _P15_TICKERS: List[str] = [
     # Sector ETFs
-    "XLF", "XLE", "XLK", "XLV", "XLI", "XLB", "XLU", "XLP", "XLRE", "XLY", "XLC",
+    "XLF",
+    "XLE",
+    "XLK",
+    "XLV",
+    "XLI",
+    "XLB",
+    "XLU",
+    "XLP",
+    "XLRE",
+    "XLY",
+    "XLC",
     # Sub-sector ETFs
-    "KRE", "KBE", "XBI", "IBB", "ITB", "JETS", "XOP", "OIH", "SOXX", "SMH", "IYR", "XHB",
+    "KRE",
+    "KBE",
+    "XBI",
+    "IBB",
+    "ITB",
+    "JETS",
+    "XOP",
+    "OIH",
+    "SOXX",
+    "SMH",
+    "IYR",
+    "XHB",
     # Broad market
-    "SPY", "QQQ", "IWM", "DIA", "MDY",
+    "SPY",
+    "QQQ",
+    "IWM",
+    "DIA",
+    "MDY",
     # Commodities (ETFs + continuous futures)
-    "GLD", "SLV", "USO", "BNO", "PDBC", "DBA", "CPER", "UNG", "WEAT",
-    "CL=F", "BZ=F", "GC=F", "NG=F",
+    "GLD",
+    "SLV",
+    "USO",
+    "BNO",
+    "PDBC",
+    "DBA",
+    "CPER",
+    "UNG",
+    "WEAT",
+    "CL=F",
+    "BZ=F",
+    "GC=F",
+    "NG=F",
     # Bonds
-    "TLT", "IEF", "SHY", "TIP", "HYG", "LQD", "EMB", "MBB",
+    "TLT",
+    "IEF",
+    "SHY",
+    "TIP",
+    "HYG",
+    "LQD",
+    "EMB",
+    "MBB",
     # Currencies & international
-    "UUP", "FXE", "FXY", "EEM", "EFA", "FXI", "EWJ", "EWG",
-    "EURUSD=X", "USDJPY=X", "GBPUSD=X",
+    "UUP",
+    "FXE",
+    "FXY",
+    "EEM",
+    "EFA",
+    "FXI",
+    "EWJ",
+    "EWG",
+    "EURUSD=X",
+    "USDJPY=X",
+    "GBPUSD=X",
     # Volatility & sentiment
-    "^VIX", "^VXN", "^SKEW", "VIXY",
+    "^VIX",
+    "^VXN",
+    "^SKEW",
+    "VIXY",
 ]
 
 # Options-eligible subset of _P15_TICKERS: excludes continuous futures (CL=F …),
 # forex pairs (EURUSD=X …), and VIX index series (^VIX, ^VXN, ^SKEW) because
 # yfinance does not provide standard exchange-listed options chains for those.
 _OPTIONS_TICKERS: List[str] = [
-    t for t in _P15_TICKERS
-    if not (t.endswith("=F") or t.endswith("=X") or t.startswith("^"))
+    t for t in _P15_TICKERS if not (t.endswith("=F") or t.endswith("=X") or t.startswith("^"))
 ]
 
 # Tier-1 EDGAR watchlist: sector-bellwether stocks whose 8-K filings move sector ETFs.
 # Submissions are refreshed daily for these ~160 companies only (not the full SEC universe).
 # Organized by the P15 sector ETF each company primarily drives.
 _TIER1_WATCHLIST: Dict[str, List[str]] = {
-
     # ── XLF: Financials ─────────────────────────────────────────────────────
     # BRK-B (11.75%), JPM (11.23%), V (7.20%), MA (5.76%), BAC (4.58%),
     # GS (3.59%), WFC (3.49%), C (2.81%), MS (2.80%), AXP (2.29%)
     # + key sub-sector representatives: BLK (asset mgmt), SPGI (ratings), CME (exchange)
     "XLF": [
         "BRK-B",  # Berkshire — systemic bellwether
-        "JPM",    # largest US bank, earnings move entire sector
-        "V",      # payments — rate-insensitive growth within financials
-        "MA",     # payments duopoly
-        "BAC",    # rate-sensitive commercial bank
-        "GS",     # capital markets / investment banking cycle
-        "WFC",    # consumer banking, mortgage exposure
-        "C",      # global wholesale bank, EM exposure
-        "MS",     # wealth management + capital markets
-        "AXP",    # consumer credit, spending indicator
-        "BLK",    # largest asset manager, AUM as market sentiment proxy
-        "SPGI",   # S&P Global — credit ratings, financial data
-        "CME",    # exchange — volatility → volume → revenue
-        "USB",    # US Bancorp — large regional bank proxy
-        "PGR",    # Progressive — insurance cycle indicator
+        "JPM",  # largest US bank, earnings move entire sector
+        "V",  # payments — rate-insensitive growth within financials
+        "MA",  # payments duopoly
+        "BAC",  # rate-sensitive commercial bank
+        "GS",  # capital markets / investment banking cycle
+        "WFC",  # consumer banking, mortgage exposure
+        "C",  # global wholesale bank, EM exposure
+        "MS",  # wealth management + capital markets
+        "AXP",  # consumer credit, spending indicator
+        "BLK",  # largest asset manager, AUM as market sentiment proxy
+        "SPGI",  # S&P Global — credit ratings, financial data
+        "CME",  # exchange — volatility → volume → revenue
+        "USB",  # US Bancorp — large regional bank proxy
+        "PGR",  # Progressive — insurance cycle indicator
     ],
-
     # ── XLE: Energy ──────────────────────────────────────────────────────────
     # XOM (22%), CVX (17%), COP (7%), WMB (4.4%), SLB (4.5%),
     # EOG (4%), PSX (3.8%), VLO (3.7%), KMI (3.7%), MPC (3.6%)
     # + oilfield services (HAL), E&P pure-play (OXY), midstream (OKE)
     "XLE": [
-        "XOM",    # largest US oil major, global integrated
-        "CVX",    # second major, Permian + international
-        "COP",    # pure E&P, price-sensitive upstream
-        "WMB",    # Williams Cos — natural gas midstream/pipeline
-        "SLB",    # oilfield services leader, capex cycle proxy
-        "EOG",    # Permian pure-play E&P, shale bellwether
-        "PSX",    # Phillips 66 — refining margin indicator
-        "VLO",    # Valero — crack spread proxy
-        "KMI",    # Kinder Morgan — gas pipeline infrastructure
-        "MPC",    # Marathon Petroleum — refining
-        "OXY",    # Occidental — Buffett holding, Permian
-        "HAL",    # Halliburton — oilfield services #2
-        "BKR",    # Baker Hughes — services + LNG equipment
-        "OKE",    # ONEOK — gas gathering/processing
-        "FANG",   # Diamondback Energy — Permian pure-play
+        "XOM",  # largest US oil major, global integrated
+        "CVX",  # second major, Permian + international
+        "COP",  # pure E&P, price-sensitive upstream
+        "WMB",  # Williams Cos — natural gas midstream/pipeline
+        "SLB",  # oilfield services leader, capex cycle proxy
+        "EOG",  # Permian pure-play E&P, shale bellwether
+        "PSX",  # Phillips 66 — refining margin indicator
+        "VLO",  # Valero — crack spread proxy
+        "KMI",  # Kinder Morgan — gas pipeline infrastructure
+        "MPC",  # Marathon Petroleum — refining
+        "OXY",  # Occidental — Buffett holding, Permian
+        "HAL",  # Halliburton — oilfield services #2
+        "BKR",  # Baker Hughes — services + LNG equipment
+        "OKE",  # ONEOK — gas gathering/processing
+        "FANG",  # Diamondback Energy — Permian pure-play
     ],
-
     # ── XLK: Technology ──────────────────────────────────────────────────────
     # NVDA (14.78%), AAPL (12.14%), MSFT (9.23%), AVGO (6.03%),
     # MU (4.32%) — weights shift frequently due to AI rally
     # + enterprise software (CRM, ORCL), semis (AMD, QCOM, TXN), infra (ACN)
     "XLK": [
-        "NVDA",   # AI/GPU — dominant signal for AI capex cycle
-        "AAPL",   # largest market cap, consumer hardware + services
-        "MSFT",   # cloud (Azure) + enterprise software
-        "AVGO",   # Broadcom — networking chips, AI accelerators
-        "MU",     # Micron — memory cycle, leading indicator for semis
-        "AMD",    # CPU/GPU competitor to Intel/NVDA
-        "ORCL",   # Oracle — enterprise cloud, database
-        "CRM",    # Salesforce — enterprise SaaS spending indicator
-        "ACN",    # Accenture — IT services, consulting capex
-        "QCOM",   # Qualcomm — mobile chips, handset cycle
-        "TXN",    # Texas Instruments — analog semis, industrial demand
-        "AMAT",   # Applied Materials — semiconductor equipment
-        "PLTR",   # Palantir — government AI/defense tech
-        "NOW",    # ServiceNow — enterprise workflow automation
-        "PANW",   # Palo Alto Networks — cybersecurity cycle
+        "NVDA",  # AI/GPU — dominant signal for AI capex cycle
+        "AAPL",  # largest market cap, consumer hardware + services
+        "MSFT",  # cloud (Azure) + enterprise software
+        "AVGO",  # Broadcom — networking chips, AI accelerators
+        "MU",  # Micron — memory cycle, leading indicator for semis
+        "AMD",  # CPU/GPU competitor to Intel/NVDA
+        "ORCL",  # Oracle — enterprise cloud, database
+        "CRM",  # Salesforce — enterprise SaaS spending indicator
+        "ACN",  # Accenture — IT services, consulting capex
+        "QCOM",  # Qualcomm — mobile chips, handset cycle
+        "TXN",  # Texas Instruments — analog semis, industrial demand
+        "AMAT",  # Applied Materials — semiconductor equipment
+        "PLTR",  # Palantir — government AI/defense tech
+        "NOW",  # ServiceNow — enterprise workflow automation
+        "PANW",  # Palo Alto Networks — cybersecurity cycle
     ],
-
     # ── XLV: Health Care ─────────────────────────────────────────────────────
     # LLY (14%), JNJ (10%), ABBV (7%), UNH (6%), MRK (5%),
     # AMGN (3.5%), TMO (3.5%), ISRG (3.2%), ABT (3.1%), GILD (3.1%)
     "XLV": [
-        "LLY",    # Eli Lilly — GLP-1/obesity drugs, dominant weight
-        "JNJ",    # Johnson & Johnson — diversified, defensive
-        "ABBV",   # AbbVie — Humira/Skyrizi, income proxy
-        "UNH",    # UnitedHealth — managed care, insurance cycle
-        "MRK",    # Merck — Keytruda oncology, vaccines
-        "AMGN",   # Amgen — biotech large-cap
-        "TMO",    # Thermo Fisher — lab equipment, biotech capex proxy
-        "ISRG",   # Intuitive Surgical — robotic surgery, procedure volume
-        "ABT",    # Abbott Labs — devices + diagnostics
-        "GILD",   # Gilead — HIV/oncology, cash flow story
-        "BSX",    # Boston Scientific — cardiac devices
-        "SYK",    # Stryker — orthopedic implants, elective surgery
-        "BMY",    # Bristol-Myers Squibb — oncology pipeline
-        "CVS",    # CVS Health — PBM + retail pharmacy + insurance
-        "HCA",    # HCA Healthcare — hospital utilization indicator
+        "LLY",  # Eli Lilly — GLP-1/obesity drugs, dominant weight
+        "JNJ",  # Johnson & Johnson — diversified, defensive
+        "ABBV",  # AbbVie — Humira/Skyrizi, income proxy
+        "UNH",  # UnitedHealth — managed care, insurance cycle
+        "MRK",  # Merck — Keytruda oncology, vaccines
+        "AMGN",  # Amgen — biotech large-cap
+        "TMO",  # Thermo Fisher — lab equipment, biotech capex proxy
+        "ISRG",  # Intuitive Surgical — robotic surgery, procedure volume
+        "ABT",  # Abbott Labs — devices + diagnostics
+        "GILD",  # Gilead — HIV/oncology, cash flow story
+        "BSX",  # Boston Scientific — cardiac devices
+        "SYK",  # Stryker — orthopedic implants, elective surgery
+        "BMY",  # Bristol-Myers Squibb — oncology pipeline
+        "CVS",  # CVS Health — PBM + retail pharmacy + insurance
+        "HCA",  # HCA Healthcare — hospital utilization indicator
     ],
-
     # ── XLI: Industrials ─────────────────────────────────────────────────────
     # CAT (7%), GE (6.6%), RTX (5%), GEV (4.4%), BA (3.3%),
     # UBER (3%), UNP (2.9%), DE (2.9%), HON (2.9%), ETN (2.6%)
     "XLI": [
-        "CAT",    # Caterpillar — global construction/mining capex
-        "GE",     # GE Aerospace — commercial aviation cycle
-        "RTX",    # RTX Corp — defense + aircraft engines
-        "GEV",    # GE Vernova — power generation, energy transition
-        "BA",     # Boeing — commercial/defense aviation
-        "UNP",    # Union Pacific — rail freight, economic activity
-        "DE",     # Deere — agricultural capex, commodity cycle
-        "HON",    # Honeywell — industrial conglomerate
-        "ETN",    # Eaton — electrical components, data center power
-        "LMT",    # Lockheed Martin — defense budget indicator
-        "NOC",    # Northrop Grumman — defense
-        "UPS",    # UPS — parcel volume, consumer + B2B indicator
-        "EMR",    # Emerson Electric — automation/process control
-        "CSX",    # CSX — eastern rail freight
-        "PWR",    # Quanta Services — grid infrastructure buildout
+        "CAT",  # Caterpillar — global construction/mining capex
+        "GE",  # GE Aerospace — commercial aviation cycle
+        "RTX",  # RTX Corp — defense + aircraft engines
+        "GEV",  # GE Vernova — power generation, energy transition
+        "BA",  # Boeing — commercial/defense aviation
+        "UNP",  # Union Pacific — rail freight, economic activity
+        "DE",  # Deere — agricultural capex, commodity cycle
+        "HON",  # Honeywell — industrial conglomerate
+        "ETN",  # Eaton — electrical components, data center power
+        "LMT",  # Lockheed Martin — defense budget indicator
+        "NOC",  # Northrop Grumman — defense
+        "UPS",  # UPS — parcel volume, consumer + B2B indicator
+        "EMR",  # Emerson Electric — automation/process control
+        "CSX",  # CSX — eastern rail freight
+        "PWR",  # Quanta Services — grid infrastructure buildout
     ],
-
     # ── XLB: Materials ───────────────────────────────────────────────────────
     # LIN (17%), NEM (7.3%), SHW (6.2%), FCX (5.3%), CRH (5%),
     # ECL (4.8%), APD (4.7%), CTVA (4.8%), MLM (4.4%), NUE (3.5%)
     "XLB": [
-        "LIN",    # Linde — industrial gases, largest weight
-        "NEM",    # Newmont — gold mining, safe-haven proxy
-        "SHW",    # Sherwin-Williams — housing/construction indicator
-        "FCX",    # Freeport-McMoRan — copper, China demand proxy
-        "CRH",    # CRH — cement/construction materials
-        "APD",    # Air Products — industrial gases, hydrogen
-        "ECL",    # Ecolab — water treatment, specialty chemicals
-        "CTVA",   # Corteva — agricultural chemicals/seeds
-        "MLM",    # Martin Marietta — aggregates, construction
-        "NUE",    # Nucor — steel, manufacturing demand
-        "DOW",    # Dow Inc — commodity chemicals
-        "PPG",    # PPG Industries — coatings, auto/industrial
-        "VMC",    # Vulcan Materials — aggregates, infrastructure
-        "ALB",    # Albemarle — lithium, EV battery supply chain
-        "CF",     # CF Industries — nitrogen fertilizers, nat gas spread
+        "LIN",  # Linde — industrial gases, largest weight
+        "NEM",  # Newmont — gold mining, safe-haven proxy
+        "SHW",  # Sherwin-Williams — housing/construction indicator
+        "FCX",  # Freeport-McMoRan — copper, China demand proxy
+        "CRH",  # CRH — cement/construction materials
+        "APD",  # Air Products — industrial gases, hydrogen
+        "ECL",  # Ecolab — water treatment, specialty chemicals
+        "CTVA",  # Corteva — agricultural chemicals/seeds
+        "MLM",  # Martin Marietta — aggregates, construction
+        "NUE",  # Nucor — steel, manufacturing demand
+        "DOW",  # Dow Inc — commodity chemicals
+        "PPG",  # PPG Industries — coatings, auto/industrial
+        "VMC",  # Vulcan Materials — aggregates, infrastructure
+        "ALB",  # Albemarle — lithium, EV battery supply chain
+        "CF",  # CF Industries — nitrogen fertilizers, nat gas spread
     ],
-
     # ── XLU: Utilities ───────────────────────────────────────────────────────
     # NEE (13.8%), SO (7.3%), DUK (6.9%), CEG (6.5%), AEP (5.1%),
     # SRE (4.2%), VST (3.8%), D (3.7%), XEL (3.4%), EXC (3.4%)
     "XLU": [
-        "NEE",    # NextEra — renewable energy leader, rate-sensitive
-        "SO",     # Southern Company — regulated, nuclear
-        "DUK",    # Duke Energy — large regulated utility
-        "CEG",    # Constellation Energy — nuclear, AI power demand
-        "AEP",    # American Electric Power — transmission grid
-        "SRE",    # Sempra Energy — gas utility + LNG export
-        "VST",    # Vistra — power generation, merchant energy
-        "D",      # Dominion Energy — regulated, rate-sensitive
-        "XEL",    # Xcel Energy — renewables transition
-        "EXC",    # Exelon — nuclear + regulated distribution
-        "PCG",    # PG&E — California utility, wildfire risk proxy
-        "ED",     # Consolidated Edison — NYC utility, stable
-        "EIX",    # Edison International — California utility
-        "ETR",    # Entergy — nuclear + regulated South
-        "FE",     # FirstEnergy — mid-Atlantic regulated
+        "NEE",  # NextEra — renewable energy leader, rate-sensitive
+        "SO",  # Southern Company — regulated, nuclear
+        "DUK",  # Duke Energy — large regulated utility
+        "CEG",  # Constellation Energy — nuclear, AI power demand
+        "AEP",  # American Electric Power — transmission grid
+        "SRE",  # Sempra Energy — gas utility + LNG export
+        "VST",  # Vistra — power generation, merchant energy
+        "D",  # Dominion Energy — regulated, rate-sensitive
+        "XEL",  # Xcel Energy — renewables transition
+        "EXC",  # Exelon — nuclear + regulated distribution
+        "PCG",  # PG&E — California utility, wildfire risk proxy
+        "ED",  # Consolidated Edison — NYC utility, stable
+        "EIX",  # Edison International — California utility
+        "ETR",  # Entergy — nuclear + regulated South
+        "FE",  # FirstEnergy — mid-Atlantic regulated
     ],
-
     # ── XLP: Consumer Staples ────────────────────────────────────────────────
     # WMT (11.9%), COST (9.4%), PG (7.4%), KO (6.5%), PM (5.5%),
     # CL (4.75%), PEP (4.7%), MO (4.7%), MDLZ (4.4%), MNST (3.7%)
     "XLP": [
-        "WMT",    # Walmart — consumer spending bellwether
-        "COST",   # Costco — membership model, affluent consumer
-        "PG",     # Procter & Gamble — household staples pricing power
-        "KO",     # Coca-Cola — global beverage, defensive
-        "PM",     # Philip Morris — international tobacco, EM exposure
-        "PEP",    # PepsiCo — beverages + snacks (Frito-Lay)
-        "MO",     # Altria — domestic tobacco, high yield
-        "CL",     # Colgate-Palmolive — oral/personal care
-        "MDLZ",   # Mondelez — global snack foods
-        "MNST",   # Monster Beverage — energy drinks growth story
-        "TGT",    # Target — discretionary/staples overlap
-        "KR",     # Kroger — grocery chain, food inflation proxy
-        "GIS",    # General Mills — packaged food
-        "KHC",    # Kraft Heinz — packaged food, pricing pressure
-        "STZ",    # Constellation Brands — beer/wine/spirits
+        "WMT",  # Walmart — consumer spending bellwether
+        "COST",  # Costco — membership model, affluent consumer
+        "PG",  # Procter & Gamble — household staples pricing power
+        "KO",  # Coca-Cola — global beverage, defensive
+        "PM",  # Philip Morris — international tobacco, EM exposure
+        "PEP",  # PepsiCo — beverages + snacks (Frito-Lay)
+        "MO",  # Altria — domestic tobacco, high yield
+        "CL",  # Colgate-Palmolive — oral/personal care
+        "MDLZ",  # Mondelez — global snack foods
+        "MNST",  # Monster Beverage — energy drinks growth story
+        "TGT",  # Target — discretionary/staples overlap
+        "KR",  # Kroger — grocery chain, food inflation proxy
+        "GIS",  # General Mills — packaged food
+        "KHC",  # Kraft Heinz — packaged food, pricing pressure
+        "STZ",  # Constellation Brands — beer/wine/spirits
     ],
-
     # ── XLRE: Real Estate ────────────────────────────────────────────────────
     # WELL (10.3%), PLD (9.1%), EQIX (7.25%), AMT (5.8%), DLR (4.8%),
     # SPG (4.6%), CBRE (4.5%), VTR (4.4%), O (4.4%), PSA (3.5%)
     "XLRE": [
-        "WELL",   # Welltower — healthcare REIT, aging demographics
-        "PLD",    # Prologis — industrial/warehouse REIT, e-commerce
-        "EQIX",   # Equinix — data center REIT, AI infrastructure
-        "AMT",    # American Tower — cell tower REIT
-        "DLR",    # Digital Realty — data center REIT
-        "SPG",    # Simon Property Group — retail/mall REIT
-        "CBRE",   # CBRE Group — CRE services, transaction volume
-        "VTR",    # Ventas — senior housing + medical office
-        "O",      # Realty Income — net lease, monthly dividend
-        "PSA",    # Public Storage — self-storage
-        "CCI",    # Crown Castle — cell tower infrastructure
-        "EQR",    # Equity Residential — apartment REIT, rents
-        "AVB",    # AvalonBay — apartment REIT, coastal markets
-        "ARE",    # Alexandria RE — life science lab REIT
-        "VICI",   # VICI Properties — gaming/entertainment REIT
+        "WELL",  # Welltower — healthcare REIT, aging demographics
+        "PLD",  # Prologis — industrial/warehouse REIT, e-commerce
+        "EQIX",  # Equinix — data center REIT, AI infrastructure
+        "AMT",  # American Tower — cell tower REIT
+        "DLR",  # Digital Realty — data center REIT
+        "SPG",  # Simon Property Group — retail/mall REIT
+        "CBRE",  # CBRE Group — CRE services, transaction volume
+        "VTR",  # Ventas — senior housing + medical office
+        "O",  # Realty Income — net lease, monthly dividend
+        "PSA",  # Public Storage — self-storage
+        "CCI",  # Crown Castle — cell tower infrastructure
+        "EQR",  # Equity Residential — apartment REIT, rents
+        "AVB",  # AvalonBay — apartment REIT, coastal markets
+        "ARE",  # Alexandria RE — life science lab REIT
+        "VICI",  # VICI Properties — gaming/entertainment REIT
     ],
-
     # ── XLY: Consumer Discretionary ─────────────────────────────────────────
     # AMZN (21-28% depending on date), TSLA (15-20%), HD (5-7%),
     # TJX (4%), MCD (4%), BKNG (4%), LOW (3%), SBUX (2.3%), ORLY (2.1%)
     "XLY": [
-        "AMZN",   # Amazon — e-commerce + AWS, dominant weight
-        "TSLA",   # Tesla — EV cycle, volatile weight
-        "HD",     # Home Depot — housing/renovation indicator
-        "MCD",    # McDonald's — consumer spending health
-        "BKNG",   # Booking Holdings — travel demand
-        "TJX",    # TJX Companies — value retail, trade-down indicator
-        "LOW",    # Lowe's — housing/DIY, rate sensitivity
-        "SBUX",   # Starbucks — discretionary spending indicator
-        "ORLY",   # O'Reilly Auto — auto aftermarket, aging fleet
-        "NKE",    # Nike — global consumer brand, China exposure
-        "CMG",    # Chipotle — fast casual restaurant cycle
-        "ABNB",   # Airbnb — short-term rental, travel
-        "LVS",    # Las Vegas Sands — Macau/Singapore gaming
-        "GM",     # General Motors — auto cycle, EV transition
-        "F",      # Ford — auto + EV, labor cost indicator
+        "AMZN",  # Amazon — e-commerce + AWS, dominant weight
+        "TSLA",  # Tesla — EV cycle, volatile weight
+        "HD",  # Home Depot — housing/renovation indicator
+        "MCD",  # McDonald's — consumer spending health
+        "BKNG",  # Booking Holdings — travel demand
+        "TJX",  # TJX Companies — value retail, trade-down indicator
+        "LOW",  # Lowe's — housing/DIY, rate sensitivity
+        "SBUX",  # Starbucks — discretionary spending indicator
+        "ORLY",  # O'Reilly Auto — auto aftermarket, aging fleet
+        "NKE",  # Nike — global consumer brand, China exposure
+        "CMG",  # Chipotle — fast casual restaurant cycle
+        "ABNB",  # Airbnb — short-term rental, travel
+        "LVS",  # Las Vegas Sands — Macau/Singapore gaming
+        "GM",  # General Motors — auto cycle, EV transition
+        "F",  # Ford — auto + EV, labor cost indicator
     ],
-
     # ── XLC: Communication Services ──────────────────────────────────────────
     # META (14-23%), GOOGL (8.6%), GOOG (6.9%), DIS (4.6%), CMCSA (4.5%),
     # NFLX (5.9%), T (5%), VZ (4.7%), TMUS (4.6%), WBD (4.7%)
     "XLC": [
-        "META",   # Meta — digital advertising, AI investment cycle
+        "META",  # Meta — digital advertising, AI investment cycle
         "GOOGL",  # Alphabet A — search + cloud + YouTube
-        "GOOG",   # Alphabet C — same economic exposure
-        "NFLX",   # Netflix — streaming, subscriber growth
-        "T",      # AT&T — telecom, high yield, capex
-        "VZ",     # Verizon — wireless, dividend yield proxy
-        "TMUS",   # T-Mobile — wireless subscriber growth
-        "DIS",    # Disney — streaming + parks + content
+        "GOOG",  # Alphabet C — same economic exposure
+        "NFLX",  # Netflix — streaming, subscriber growth
+        "T",  # AT&T — telecom, high yield, capex
+        "VZ",  # Verizon — wireless, dividend yield proxy
+        "TMUS",  # T-Mobile — wireless subscriber growth
+        "DIS",  # Disney — streaming + parks + content
         "CMCSA",  # Comcast — cable + NBC + streaming
-        "WBD",    # Warner Bros Discovery — media/streaming
-        "EA",     # Electronic Arts — gaming cycle
-        "TTWO",   # Take-Two Interactive — GTA cycle
-        "LYV",    # Live Nation — live events, concert demand
-        "CHTR",   # Charter Communications — cable broadband
-        "OMC",    # Omnicom — advertising industry indicator
+        "WBD",  # Warner Bros Discovery — media/streaming
+        "EA",  # Electronic Arts — gaming cycle
+        "TTWO",  # Take-Two Interactive — GTA cycle
+        "LYV",  # Live Nation — live events, concert demand
+        "CHTR",  # Charter Communications — cable broadband
+        "OMC",  # Omnicom — advertising industry indicator
     ],
 }
 
 # Flat sorted list of all Tier-1 tickers for CIK resolution
-_EDGAR_WATCHLIST_TICKERS: List[str] = sorted(set(
-    ticker
-    for tickers in _TIER1_WATCHLIST.values()
-    for ticker in tickers
-))
+_EDGAR_WATCHLIST_TICKERS: List[str] = sorted(set(ticker for tickers in _TIER1_WATCHLIST.values() for ticker in tickers))
 
 
 # ---------------------------------------------------------------------------
 # Options put/call helpers
 # ---------------------------------------------------------------------------
+
 
 def _options_append_summary(putcall_dir: Path, ticker: str, row: Dict[str, Any]) -> None:
     """
@@ -671,7 +717,7 @@ def _options_append_summary(putcall_dir: Path, ticker: str, row: Dict[str, Any])
     combined.to_csv(path, compression="gzip")
 
 
-def _job_options_putcall(yesterday: _Date) -> Optional[Dict[str, Any]]:
+def _job_options_putcall(yesterday: _Date) -> Dict[str, Any] | None:
     """
     Snapshot yesterday's options chain for all options-eligible P15 tickers.
 
@@ -689,9 +735,9 @@ def _job_options_putcall(yesterday: _Date) -> Optional[Dict[str, Any]]:
     Returns:
         Dict with symbols_ok, symbols_skipped, symbols_empty, date.
     """
-    options_dir  = Path(_cache_root) / "options"
-    chains_dir   = options_dir / "chains"
-    putcall_dir  = options_dir / "putcall"
+    options_dir = Path(_cache_root) / "options"
+    chains_dir = options_dir / "chains"
+    putcall_dir = options_dir / "putcall"
     putcall_dir.mkdir(parents=True, exist_ok=True)
 
     dl = YahooDataDownloader()
@@ -724,7 +770,8 @@ def _job_options_putcall(yesterday: _Date) -> Optional[Dict[str, Any]]:
         symbols_ok += 1
         _logger.debug(
             "options: %s %s  pc_vol=%.3f  pc_oi=%.3f  n_exp=%d",
-            ticker, date_str,
+            ticker,
+            date_str,
             summary.get("pc_volume_ratio") or 0,
             summary.get("pc_oi_ratio") or 0,
             summary.get("n_expirations", 0),
@@ -733,17 +780,21 @@ def _job_options_putcall(yesterday: _Date) -> Optional[Dict[str, Any]]:
 
     _logger.info(
         "options_putcall %s: ok=%d  skipped=%d  empty=%d / %d tickers",
-        date_str, symbols_ok, symbols_skipped, symbols_empty, len(_OPTIONS_TICKERS),
+        date_str,
+        symbols_ok,
+        symbols_skipped,
+        symbols_empty,
+        len(_OPTIONS_TICKERS),
     )
     return {
-        "symbols_ok":      symbols_ok,
+        "symbols_ok": symbols_ok,
         "symbols_skipped": symbols_skipped,
-        "symbols_empty":   symbols_empty,
-        "date":            date_str,
+        "symbols_empty": symbols_empty,
+        "date": date_str,
     }
 
 
-def _job_yfinance_prices(yesterday: _Date) -> Optional[Dict[str, Any]]:
+def _job_yfinance_prices(yesterday: _Date) -> Dict[str, Any] | None:
     """
     Download P15 OHLCV data for all tickers via DataManager.
 
@@ -759,32 +810,35 @@ def _job_yfinance_prices(yesterday: _Date) -> Optional[Dict[str, Any]]:
     from src.data.data_manager import DataManager
 
     start_dt = datetime(_YFINANCE_START.year, _YFINANCE_START.month, _YFINANCE_START.day)
-    end_dt   = datetime(yesterday.year, yesterday.month, yesterday.day)
+    end_dt = datetime(yesterday.year, yesterday.month, yesterday.day)
 
     dm = DataManager()
     batch = dm.get_ohlcv_batch(_P15_TICKERS, "1d", start_dt, end_dt)
 
-    symbols_ok  = sum(1 for df in batch.values() if df is not None and not df.empty)
-    rows_total  = sum(len(df) for df in batch.values() if df is not None and not df.empty)
+    symbols_ok = sum(1 for df in batch.values() if df is not None and not df.empty)
+    rows_total = sum(len(df) for df in batch.values() if df is not None and not df.empty)
     _logger.info(
         "yfinance OHLCV: %d/%d symbols cached, %d rows total",
-        symbols_ok, len(_P15_TICKERS), rows_total,
+        symbols_ok,
+        len(_P15_TICKERS),
+        rows_total,
     )
     return {"symbols_ok": symbols_ok, "rows_total": rows_total}
 
 
-def _job_edgar_submissions() -> Optional[Dict[str, Any]]:
+def _job_edgar_submissions() -> Dict[str, Any] | None:
     dl = EdgarDownloader()
     cik_list = dl.resolve_tickers_to_ciks(_EDGAR_WATCHLIST_TICKERS)
     _logger.info(
         "edgar_submissions: %d watchlist tickers → %d CIKs",
-        len(_EDGAR_WATCHLIST_TICKERS), len(cik_list),
+        len(_EDGAR_WATCHLIST_TICKERS),
+        len(cik_list),
     )
     summary = dl.download_all_submissions(cik_list=cik_list, force=True)
     return summary  # type: ignore[return-value]
 
 
-def _job_edgar_8k_index(yesterday: _Date) -> Optional[Dict[str, Any]]:
+def _job_edgar_8k_index(yesterday: _Date) -> Dict[str, Any] | None:
     """
     Cache the universe-wide daily 8-K filing index, gap-filled self-healingly.
 
@@ -831,7 +885,7 @@ def _job_edgar_8k_index(yesterday: _Date) -> Optional[Dict[str, Any]]:
     failed_dates: List[str] = []
     current = start
     while current <= end:
-        if current.weekday() < 5:   # Mon–Fri only (no EDGAR weekend filings)
+        if current.weekday() < 5:  # Mon–Fri only (no EDGAR weekend filings)
             try:
                 df = edgar.download_8k_filings(as_of_date=current)
                 if df is not None and not df.empty:
@@ -841,15 +895,16 @@ def _job_edgar_8k_index(yesterday: _Date) -> Optional[Dict[str, Any]]:
                 days_failed += 1
                 failed_dates.append(current.isoformat())
                 _logger.warning(
-                    "edgar_8k_index: EFTS unavailable for %s — skipping; "
-                    "will retry on the next run", current,
+                    "edgar_8k_index: EFTS unavailable for %s — skipping; will retry on the next run",
+                    current,
                 )
         current += timedelta(days=1)
 
     if days_failed:
         _logger.warning(
-            "edgar_8k_index: %d day(s) failed this run and will self-heal next "
-            "run: %s", days_failed, ", ".join(failed_dates),
+            "edgar_8k_index: %d day(s) failed this run and will self-heal next run: %s",
+            days_failed,
+            ", ".join(failed_dates),
         )
 
     return {
@@ -860,12 +915,12 @@ def _job_edgar_8k_index(yesterday: _Date) -> Optional[Dict[str, Any]]:
     }
 
 
-def _job_edgar_facts() -> Optional[Dict[str, Any]]:
+def _job_edgar_facts() -> Dict[str, Any] | None:
     summary = EdgarDownloader().download_all_company_facts(force=True)
     return summary  # type: ignore[return-value]
 
 
-def _job_edgar_form4(yesterday: _Date) -> Optional[Dict[str, Any]]:
+def _job_edgar_form4(yesterday: _Date) -> Dict[str, Any] | None:
     """
     Download Form 4 insider filings for the gap window ending at yesterday.
 
@@ -897,7 +952,7 @@ def _job_edgar_form4(yesterday: _Date) -> Optional[Dict[str, Any]]:
     return {"rows": total_rows, "days_downloaded": days_downloaded}
 
 
-def _job_edgar_13dg(yesterday: _Date) -> Optional[Dict[str, Any]]:
+def _job_edgar_13dg(yesterday: _Date) -> Dict[str, Any] | None:
     """
     Download SC 13D/G activist filings for the gap window ending at yesterday.
 
@@ -929,7 +984,7 @@ def _job_edgar_13dg(yesterday: _Date) -> Optional[Dict[str, Any]]:
     return {"rows": total_rows, "days_downloaded": days_downloaded}
 
 
-def _job_p18_13f_index_seed(today: _Date) -> Optional[Dict[str, Any]]:
+def _job_p18_13f_index_seed(today: _Date) -> Dict[str, Any] | None:
     """
     Seed the P18 quarterly 13F-HR index cache from EDGAR bulk files when missing.
 
@@ -1002,7 +1057,9 @@ def _job_p18_13f_index_seed(today: _Date) -> Optional[Dict[str, Any]]:
     if not records:
         _logger.warning(
             "p18_13f_index: no 13F-HR records found in window %s → %s — EDGAR QTR%d may not be ready yet",
-            window_start, window_end, edgar_qtr,
+            window_start,
+            window_end,
+            edgar_qtr,
         )
         return {"seeded": False, "reason": "no_records"}
 
@@ -1011,12 +1068,15 @@ def _job_p18_13f_index_seed(today: _Date) -> Optional[Dict[str, Any]]:
     df.to_csv(dest, index=False, compression="gzip")
     _logger.info(
         "p18_13f_index: seeded %d Q%d with %d filers → %s",
-        rep_year, rep_quarter, len(df), dest,
+        rep_year,
+        rep_quarter,
+        len(df),
+        dest,
     )
     return {"seeded": True, "filers": len(df), "quarter": f"{rep_year}_Q{rep_quarter}"}
 
 
-def _job_finra_trf(yesterday: _Date) -> Optional[Dict[str, Any]]:
+def _job_finra_trf(yesterday: _Date) -> Dict[str, Any] | None:
     """
     Download FINRA TRF short-sale volume for the gap window ending at yesterday.
 
@@ -1039,7 +1099,7 @@ def _job_finra_trf(yesterday: _Date) -> Optional[Dict[str, Any]]:
     days_downloaded = 0
     current = start
     while current <= end:
-        if current.weekday() < 5:   # Mon–Fri only
+        if current.weekday() < 5:  # Mon–Fri only
             dl = FinraTRFDownloader(date=current.strftime("%Y-%m-%d"), fetch_yfinance_data=False)
             df = dl.run()
             if df is not None and not df.empty:
@@ -1050,13 +1110,14 @@ def _job_finra_trf(yesterday: _Date) -> Optional[Dict[str, Any]]:
     return {"rows": total_rows, "days_downloaded": days_downloaded}
 
 
-def _job_index_changes(yesterday: _Date) -> Optional[Dict[str, Any]]:
+def _job_index_changes(yesterday: _Date) -> Dict[str, Any] | None:
     """
     Download Wikipedia index changes (S&P 500 and Nasdaq-100 constituent additions/removals)
     and cache them as YYYY-MM-DD.csv.gz.
     """
     try:
         from src.data.downloader.wikipedia_downloader import WikipediaDownloader
+
         dl = WikipediaDownloader()
         df = dl.download_index_changes(yesterday)
         return {"records": len(df)}
@@ -1069,51 +1130,52 @@ def _job_index_changes(yesterday: _Date) -> Optional[Dict[str, Any]]:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     """Run all daily P15 jobs and emit a structured scheduler result."""
     _setup_file_logging()
 
     yesterday_dt = _yesterday_utc()
-    yesterday    = yesterday_dt.date()
+    yesterday = yesterday_dt.date()
     _logger.info("=== P15 Daily Bundle  date=%s ===", yesterday)
 
     fred_dl = FredDownloader()
     results: Dict[str, Dict[str, Any]] = {}
 
-    results["yfinance_prices"]   = _run_job("yfinance_prices",   lambda: _job_yfinance_prices(yesterday))
-    results["cboe"]              = _run_job("cboe",              _job_cboe)
-    results["options_putcall"]   = _run_job("options_putcall",   lambda: _job_options_putcall(yesterday))
-    results["fear_greed"]        = _run_job("fear_greed",        _job_fear_greed)
-    results["gdelt_gkg"]         = _run_job("gdelt_gkg",         lambda: _job_gdelt_gkg(yesterday))
-    results["gdelt_events"]      = _run_job("gdelt_events",      lambda: _job_gdelt_events(yesterday))
-    results["fred_daily"]        = _run_job("fred_daily",        lambda: _job_fred_daily(fred_dl))
-    results["fred_combined"]     = _run_job("fred_combined",     lambda: _job_fred_combined(fred_dl))
+    results["yfinance_prices"] = _run_job("yfinance_prices", lambda: _job_yfinance_prices(yesterday))
+    results["cboe"] = _run_job("cboe", _job_cboe)
+    results["options_putcall"] = _run_job("options_putcall", lambda: _job_options_putcall(yesterday))
+    results["fear_greed"] = _run_job("fear_greed", _job_fear_greed)
+    results["gdelt_gkg"] = _run_job("gdelt_gkg", lambda: _job_gdelt_gkg(yesterday))
+    results["gdelt_events"] = _run_job("gdelt_events", lambda: _job_gdelt_events(yesterday))
+    results["fred_daily"] = _run_job("fred_daily", lambda: _job_fred_daily(fred_dl))
+    results["fred_combined"] = _run_job("fred_combined", lambda: _job_fred_combined(fred_dl))
     results["edgar_submissions"] = _run_job("edgar_submissions", _job_edgar_submissions)
-    results["edgar_8k_index"]    = _run_job("edgar_8k_index",    lambda: _job_edgar_8k_index(yesterday))
-    results["edgar_form4"]       = _run_job("edgar_form4",       lambda: _job_edgar_form4(yesterday))
-    results["edgar_13dg"]        = _run_job("edgar_13dg",        lambda: _job_edgar_13dg(yesterday))
-    results["p18_13f_index"]     = _run_job("p18_13f_index",     lambda: _job_p18_13f_index_seed(yesterday))
-    results["index_changes"]     = _run_job("index_changes",     lambda: _job_index_changes(yesterday))
+    results["edgar_8k_index"] = _run_job("edgar_8k_index", lambda: _job_edgar_8k_index(yesterday))
+    results["edgar_form4"] = _run_job("edgar_form4", lambda: _job_edgar_form4(yesterday))
+    results["edgar_13dg"] = _run_job("edgar_13dg", lambda: _job_edgar_13dg(yesterday))
+    results["p18_13f_index"] = _run_job("p18_13f_index", lambda: _job_p18_13f_index_seed(yesterday))
+    results["index_changes"] = _run_job("index_changes", lambda: _job_index_changes(yesterday))
     if _is_edgar_facts_day(yesterday_dt + timedelta(days=1)):
-        results["edgar_facts"]   = _run_job("edgar_facts",       _job_edgar_facts)
+        results["edgar_facts"] = _run_job("edgar_facts", _job_edgar_facts)
 
     if _check_finra_available():
-        results["finra_trf"]     = _run_job("finra_trf",         lambda: _job_finra_trf(yesterday))
+        results["finra_trf"] = _run_job("finra_trf", lambda: _job_finra_trf(yesterday))
     else:
         _logger.debug("FINRA TRF skipped — credentials not available")
 
-    n_ok   = sum(1 for r in results.values() if r["success"])
+    n_ok = sum(1 for r in results.values() if r["success"])
     n_fail = len(results) - n_ok
     _logger.info("=== P15 Daily Bundle done: %d ok / %d failed ===", n_ok, n_fail)
 
     summary = {
-        "success":     n_fail == 0,
-        "bundle":      "p15_daily",
-        "date":        str(yesterday),
-        "jobs_ok":     n_ok,
+        "success": n_fail == 0,
+        "bundle": "p15_daily",
+        "date": str(yesterday),
+        "jobs_ok": n_ok,
         "jobs_failed": n_fail,
-        "jobs":        results,
-        "run_at":      datetime.now(timezone.utc).isoformat(),
+        "jobs": results,
+        "run_at": datetime.now(UTC).isoformat(),
     }
     print(f"__SCHEDULER_RESULT__:{json.dumps(summary)}")
 

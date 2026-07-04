@@ -7,33 +7,34 @@ and token management.
 """
 
 import secrets
+import sys
 import time
-from fastapi import APIRouter, HTTPException, status, Depends, Request
+from pathlib import Path
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from typing import Literal, Optional
-from pathlib import Path
-import sys
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.api.services.webui_app_service import webui_app_service
-from src.data.db.models.model_users import User, AuthIdentity, VerificationCode
 from src.api.auth import (
+    AuthenticationError,
     create_access_token,
     create_refresh_token,
-    verify_token,
     get_current_user,
     revoke_token,
     security,
-    AuthenticationError
+    verify_token,
 )
+from src.api.rate_limiter import limiter
+from src.api.services.webui_app_service import webui_app_service
+from src.data.db.models.model_users import AuthIdentity, User, VerificationCode
 from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
 from src.notification.service.client import NotificationServiceClient
-from src.api.rate_limiter import limiter
 
 _logger = setup_logger(__name__)
 
@@ -44,12 +45,14 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 # Pydantic models
 class LoginRequest(BaseModel):
     """Login request model."""
+
     username: str
     password: str
 
 
 class LoginResponse(BaseModel):
     """Login response model."""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -59,18 +62,20 @@ class LoginResponse(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     """Refresh token request model."""
+
     refresh_token: str
 
 
 class UserResponse(BaseModel):
     """User response model."""
+
     id: int
     username: str
-    email: Optional[str]
+    email: str | None
     role: str
     is_active: bool
-    created_at: Optional[str]
-    last_login: Optional[str]
+    created_at: str | None
+    last_login: str | None
 
 
 _CODE_TTL_SECONDS = 600  # 10-minute window for verification codes
@@ -78,16 +83,19 @@ _CODE_TTL_SECONDS = 600  # 10-minute window for verification codes
 
 class SendCodeRequest(BaseModel):
     """Request body for POST /auth/2fa/send."""
+
     channel: Literal["telegram", "email"]
 
 
 class VerifyCodeRequest(BaseModel):
     """Request body for POST /auth/2fa/verify."""
+
     code: str
 
 
 class VerifyCodeResponse(BaseModel):
     """Response returned after successful 2FA verification."""
+
     access_token: str
     token_type: str = "bearer"
     expires_in: int
@@ -95,12 +103,10 @@ class VerifyCodeResponse(BaseModel):
 
 # Authentication endpoints
 
+
 @router.post("/login", response_model=LoginResponse)
 @limiter.limit("5/minute")
-async def login(
-    request: Request,
-    login_data: LoginRequest
-):
+async def login(request: Request, login_data: LoginRequest):
     """
     Authenticate user and return JWT tokens.
 
@@ -124,7 +130,7 @@ async def login(
             _logger.warning(
                 "Failed login attempt for username: %s from IP: %s",
                 login_data.username,
-                request.client.host if request.client else "unknown"
+                request.client.host if request.client else "unknown",
             )
 
             raise HTTPException(
@@ -134,7 +140,11 @@ async def login(
             )
 
         # Create tokens
-        token_data = {"sub": str(user["id"]), "username": user.get("username") or user.get("email", ""), "role": user["role"]}
+        token_data = {
+            "sub": str(user["id"]),
+            "username": user.get("username") or user.get("email", ""),
+            "role": user["role"],
+        }
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
 
@@ -143,7 +153,7 @@ async def login(
             user_id=user["id"],
             action="login",
             ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent")
+            user_agent=request.headers.get("user-agent"),
         )
 
         _logger.info("User %s logged in successfully", user.get("username") or user.get("email", "unknown"))
@@ -152,25 +162,19 @@ async def login(
             access_token=access_token,
             refresh_token=refresh_token,
             expires_in=30 * 60,  # 30 minutes in seconds
-            user=user
+            user=user,
         )
 
     except HTTPException:
         raise
     except Exception:
         _logger.exception("Login error:")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
 @router.post("/refresh", response_model=LoginResponse)
 @limiter.limit("10/minute")
-async def refresh_token(
-    request: Request,
-    refresh_data: RefreshTokenRequest
-):
+async def refresh_token(request: Request, refresh_data: RefreshTokenRequest):
     """
     Refresh access token using refresh token.
 
@@ -215,7 +219,11 @@ async def refresh_token(
         }
 
         # Create new tokens
-        token_data = {"sub": str(user["id"]), "username": user.get("username") or user.get("email", ""), "role": user["role"]}
+        token_data = {
+            "sub": str(user["id"]),
+            "username": user.get("username") or user.get("email", ""),
+            "role": user["role"],
+        }
         access_token = create_access_token(token_data)
         new_refresh_token = create_refresh_token(token_data)
 
@@ -224,14 +232,14 @@ async def refresh_token(
             user_id=user["id"],
             action="token_refresh",
             ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent")
+            user_agent=request.headers.get("user-agent"),
         )
 
         return LoginResponse(
             access_token=access_token,
             refresh_token=new_refresh_token,
             expires_in=30 * 60,  # 30 minutes in seconds
-            user=user
+            user=user,
         )
 
     except AuthenticationError as e:
@@ -242,17 +250,14 @@ async def refresh_token(
         )
     except Exception:
         _logger.exception("Token refresh error:")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
 @router.post("/logout")
 async def logout(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Logout user — revokes the current access token server-side.
@@ -281,7 +286,7 @@ async def logout(
             user_id=current_user.id,
             action="logout",
             ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent")
+            user_agent=request.headers.get("user-agent"),
         )
 
         _logger.info("User %s logged out", current_user.username or current_user.email or f"ID:{current_user.id}")
@@ -290,10 +295,7 @@ async def logout(
 
     except Exception:
         _logger.exception("Logout error:")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
 @router.get("/me", response_model=UserResponse)
@@ -334,7 +336,7 @@ async def send_2fa_code(
     """
     try:
         db_service = get_database_service()
-        telegram_chat_id: Optional[int] = None
+        telegram_chat_id: int | None = None
 
         # Step 1: read — validate that the requested channel is available for this user
         with db_service.uow() as r:
@@ -364,18 +366,20 @@ async def send_2fa_code(
             )
 
         # Step 2: write — atomically replace any existing code and store the new one
-        code = f"{secrets.randbelow(10 ** 6):06d}"
+        code = f"{secrets.randbelow(10**6):06d}"
         with db_service.uow() as r:
             r.s.query(VerificationCode).filter(
                 VerificationCode.user_id == current_user.id,
                 VerificationCode.provider == body.channel,
             ).delete(synchronize_session=False)
-            r.s.add(VerificationCode(
-                user_id=current_user.id,
-                code=code,
-                sent_time=int(time.time()),
-                provider=body.channel,
-            ))
+            r.s.add(
+                VerificationCode(
+                    user_id=current_user.id,
+                    code=code,
+                    sent_time=int(time.time()),
+                    provider=body.channel,
+                )
+            )
 
         # Step 3: dispatch notification (queues into msg_messages for the processor)
         async with NotificationServiceClient(service_url="database://") as notify_client:

@@ -74,19 +74,19 @@ def setup_run_logging(run_date: date | None = None) -> Path:
         encoding="utf-8",
     )
     handler.setLevel(logging.DEBUG)
-    handler.setFormatter(logging.Formatter(
-        "%(asctime)s - [PID %(process)d] - %(levelname)-8s - %(name)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    ))
+    handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s - [PID %(process)d] - %(levelname)-8s - %(name)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
 
     # Attach to ROOT logger so every logger in the entire process propagates here.
     # This covers src.data.*, src.common.*, yfinance internals, etc.
     root_logger = logging.getLogger()
     # Guard against double-adding the same file on repeated calls (e.g. in tests)
     existing_files = {
-        getattr(h, "baseFilename", None)
-        for h in root_logger.handlers
-        if isinstance(h, RotatingFileHandler)
+        getattr(h, "baseFilename", None) for h in root_logger.handlers if isinstance(h, RotatingFileHandler)
     }
     if str(log_file) not in existing_files:
         root_logger.addHandler(handler)
@@ -99,8 +99,6 @@ def setup_run_logging(run_date: date | None = None) -> Path:
     sys.stdout = _TeeStream(sys.__stdout__, log_file)  # type: ignore[assignment]
     sys.stderr = _TeeStream(sys.__stderr__, log_file)  # type: ignore[assignment]
 
-    logging.getLogger(__name__).info(
-        "Run logging active — all output going to %s", log_file
-    )
+    logging.getLogger(__name__).info("Run logging active — all output going to %s", log_file)
 
     return results_dir

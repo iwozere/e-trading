@@ -7,10 +7,11 @@ Tests cover core functionality:
 - Data retrieval
 - Statistics
 """
+
 from datetime import date
 
-from src.data.db.services.short_squeeze_service import ShortSqueezeService
 from src.data.db.models.model_short_squeeze import AlertLevel
+from src.data.db.services.short_squeeze_service import ShortSqueezeService
 
 
 class TestShortSqueezeServiceCandidates:
@@ -20,11 +21,7 @@ class TestShortSqueezeServiceCandidates:
         """Test adding an ad-hoc candidate."""
         service = ShortSqueezeService(db_service=mock_database_service)
 
-        success = service.add_adhoc_candidate(
-            ticker="AAPL",
-            reason="High short interest detected",
-            ttl_days=7
-        )
+        success = service.add_adhoc_candidate(ticker="AAPL", reason="High short interest detected", ttl_days=7)
 
         assert isinstance(success, bool)
 
@@ -64,7 +61,7 @@ class TestShortSqueezeServiceAlerts:
             ticker="AAPL",
             alert_level=AlertLevel.MEDIUM,
             reason="Short interest spike",
-            analysis_data={"short_interest": 25.5}
+            analysis_data={"short_interest": 25.5},
         )
 
         assert alert_id is not None
@@ -76,17 +73,11 @@ class TestShortSqueezeServiceAlerts:
 
         # Create alert first
         alert_id = service.create_alert(
-            ticker="AAPL",
-            alert_level=AlertLevel.HIGH,
-            reason="Test alert",
-            analysis_data={}
+            ticker="AAPL", alert_level=AlertLevel.HIGH, reason="Test alert", analysis_data={}
         )
 
         # Mark as sent
-        success = service.mark_alert_sent(
-            alert_id=alert_id,
-            notification_id="notif_123"
-        )
+        success = service.mark_alert_sent(alert_id=alert_id, notification_id="notif_123")
 
         assert isinstance(success, bool)
 
@@ -127,12 +118,7 @@ class TestShortSqueezeServiceFINRA:
         service = ShortSqueezeService(db_service=mock_database_service)
 
         finra_data = [
-            {
-                "ticker": "AAPL",
-                "settlement_date": date.today(),
-                "short_interest": 1000000,
-                "avg_daily_volume": 50000000
-            }
+            {"ticker": "AAPL", "settlement_date": date.today(), "short_interest": 1000000, "avg_daily_volume": 50000000}
         ]
 
         count = service.store_finra_data(finra_data_list=finra_data)
@@ -145,12 +131,9 @@ class TestShortSqueezeServiceFINRA:
         service = ShortSqueezeService(db_service=mock_database_service)
 
         # Store some data first
-        finra_data = [{
-            "ticker": "AAPL",
-            "settlement_date": date.today(),
-            "short_interest": 1000000,
-            "avg_daily_volume": 50000000
-        }]
+        finra_data = [
+            {"ticker": "AAPL", "settlement_date": date.today(), "short_interest": 1000000, "avg_daily_volume": 50000000}
+        ]
         service.store_finra_data(finra_data_list=finra_data)
 
         # Get latest

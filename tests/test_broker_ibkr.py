@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from src.trading.broker.ibkr_broker import IBKRBroker
 
 
@@ -42,9 +43,7 @@ def test_cancel_order(mock_ib_class, broker):
 @patch("src.trading.ibkr_broker.IB")
 def test_get_balance(mock_ib_class, broker):
     mock_ib = mock_ib_class.return_value
-    mock_ib.accountSummary.return_value = [
-        MagicMock(tag="TotalCashValue", value="1000")
-    ]
+    mock_ib.accountSummary.return_value = [MagicMock(tag="TotalCashValue", value="1000")]
     result = broker.get_balance("TotalCashValue")
     assert result == "1000"
 

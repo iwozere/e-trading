@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from typing import Any, Generator, Optional
+from typing import Any, Generator
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 
+from config.donotshare.donotshare import DB_URL as CONFIG_DB_URL
+from config.donotshare.donotshare import SQL_ECHO
 from src.data.db.core.base import Base
-from config.donotshare.donotshare import SQL_ECHO, DB_URL as CONFIG_DB_URL
-
-
 
 # --- Config ------------------------------------------------------------------
 
@@ -31,8 +30,10 @@ def get_database_url() -> str:
 
 # --- Engine / Session --------------------------------------------------------
 
+
 def _is_sqlite(url: str) -> bool:
     return url.startswith("sqlite:")
+
 
 def make_engine(url: str | None = None, *, echo: bool | None = None) -> Engine:
     """
@@ -83,6 +84,7 @@ def make_engine(url: str | None = None, *, echo: bool | None = None) -> Engine:
 
 def _attach_sqlite_pragmas(engine: Engine) -> None:
     """Apply SQLite PRAGMAs on every new connection."""
+
     @event.listens_for(engine, "connect")
     def _set_sqlite_pragma(dbapi_conn, _):
         cur = dbapi_conn.cursor()
@@ -92,7 +94,7 @@ def _attach_sqlite_pragmas(engine: Engine) -> None:
         # Enforce referential integrity
         cur.execute("PRAGMA foreign_keys=ON;")
         # Helpful extras (tune as needed)
-        cur.execute("PRAGMA busy_timeout=5000;")   # 5s wait on locks
+        cur.execute("PRAGMA busy_timeout=5000;")  # 5s wait on locks
         cur.execute("PRAGMA temp_store=MEMORY;")
         cur.close()
 
@@ -104,8 +106,8 @@ def _attach_sqlite_pragmas(engine: Engine) -> None:
 import threading
 
 _engine_lock = threading.RLock()
-_engine: Optional[Engine] = None
-_session_factory: Optional[sessionmaker] = None
+_engine: Engine | None = None
+_session_factory: sessionmaker | None = None
 
 
 def get_engine() -> Engine:
@@ -113,7 +115,7 @@ def get_engine() -> Engine:
     global _engine
     if _engine is None:
         with _engine_lock:
-            if _engine is None:          # double-checked locking
+            if _engine is None:  # double-checked locking
                 _engine = make_engine(DB_URL)
     return _engine
 
@@ -125,8 +127,7 @@ def get_session_factory() -> sessionmaker:
         with _engine_lock:
             if _session_factory is None:
                 _session_factory = sessionmaker(
-                    bind=get_engine(), autoflush=False, autocommit=False, future=True,
-                    expire_on_commit=False
+                    bind=get_engine(), autoflush=False, autocommit=False, future=True, expire_on_commit=False
                 )
     return _session_factory
 
@@ -136,6 +137,7 @@ def get_session_factory() -> sessionmaker:
 # to work because calling SessionLocal() delegates to get_session_factory()().
 class _LazySessionLocal:
     """Proxy that behaves like a sessionmaker but initialises lazily."""
+
     def __call__(self, *args, **kwargs):
         return get_session_factory()(*args, **kwargs)
 
@@ -167,6 +169,7 @@ def session_scope() -> Generator[Session, None, None]:
 
 
 # --- Utilities ---------------------------------------------------------------
+
 
 def create_all_tables(*bases: Any) -> None:
     """
@@ -207,4 +210,3 @@ def drop_all_tables(*bases: Any) -> None:
     else:
         for base in bases:
             base.metadata.drop_all(get_engine())
-

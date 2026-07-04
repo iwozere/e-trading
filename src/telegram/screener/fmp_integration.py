@@ -7,7 +7,8 @@ for all screener types. It handles FMP-based initial screening and criteria mana
 
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Any, Dict, List, Tuple
+
 from config.donotshare.donotshare import FMP_API_KEY
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.notification.logger import setup_logger
@@ -31,7 +32,7 @@ class FMPIntegration:
         """Load FMP configuration from JSON file."""
         try:
             if self.config_path.exists():
-                with open(self.config_path, 'r') as f:
+                with open(self.config_path) as f:
                     config = json.load(f)
                 _logger.info("FMP configuration loaded successfully")
                 return config
@@ -52,8 +53,8 @@ class FMPIntegration:
                         "marketCapMoreThan": 1000000000,
                         "peRatioLessThan": 20,
                         "returnOnEquityMoreThan": 0.10,
-                        "limit": 100
-                    }
+                        "limit": 100,
+                    },
                 },
                 "hybrid": {
                     "description": "Default FMP criteria for hybrid screening",
@@ -61,21 +62,18 @@ class FMPIntegration:
                         "marketCapMoreThan": 2000000000,
                         "peRatioLessThan": 25,
                         "returnOnEquityMoreThan": 0.12,
-                        "limit": 80
-                    }
+                        "limit": 80,
+                    },
                 },
                 "technical": {
                     "description": "Default FMP criteria for technical screening",
-                    "fmp_criteria": {
-                        "marketCapMoreThan": 500000000,
-                        "limit": 150
-                    }
-                }
+                    "fmp_criteria": {"marketCapMoreThan": 500000000, "limit": 150},
+                },
             },
-            "predefined_strategies": {}
+            "predefined_strategies": {},
         }
 
-    def _get_fmp_downloader(self) -> Optional[FMPDataDownloader]:
+    def _get_fmp_downloader(self) -> FMPDataDownloader | None:
         """Get FMP downloader instance, initializing if needed."""
         if self.fmp_downloader is None:
             try:
@@ -157,7 +155,7 @@ class FMPIntegration:
             fmp_results = fmp_downloader.get_stock_screener(fmp_criteria)
 
             if fmp_results:
-                ticker_list = [stock['symbol'] for stock in fmp_results]
+                ticker_list = [stock["symbol"] for stock in fmp_results]
                 _logger.info("FMP screening completed: %d tickers found", len(ticker_list))
                 return ticker_list, {"fmp_results": fmp_results, "fmp_criteria": fmp_criteria}
             else:
@@ -220,20 +218,38 @@ class FMPIntegration:
             else:
                 # Basic validation without FMP downloader
                 supported_criteria = {
-                    "marketCapMoreThan", "marketCapLowerThan",
-                    "peRatioLessThan", "peRatioMoreThan",
-                    "priceToBookRatioLessThan", "priceToBookRatioMoreThan",
-                    "priceToSalesRatioLessThan", "priceToSalesRatioMoreThan",
-                    "debtToEquityLessThan", "debtToEquityMoreThan",
-                    "currentRatioMoreThan", "currentRatioLessThan",
-                    "quickRatioMoreThan", "quickRatioLessThan",
-                    "returnOnEquityMoreThan", "returnOnEquityLessThan",
-                    "returnOnAssetsMoreThan", "returnOnAssetsLessThan",
-                    "returnOnCapitalEmployedMoreThan", "returnOnCapitalEmployedLessThan",
-                    "dividendYieldMoreThan", "dividendYieldLessThan",
-                    "payoutRatioLessThan", "payoutRatioMoreThan",
-                    "betaLessThan", "betaMoreThan",
-                    "exchange", "Country", "isETF", "isFund", "isActivelyTrading", "limit"
+                    "marketCapMoreThan",
+                    "marketCapLowerThan",
+                    "peRatioLessThan",
+                    "peRatioMoreThan",
+                    "priceToBookRatioLessThan",
+                    "priceToBookRatioMoreThan",
+                    "priceToSalesRatioLessThan",
+                    "priceToSalesRatioMoreThan",
+                    "debtToEquityLessThan",
+                    "debtToEquityMoreThan",
+                    "currentRatioMoreThan",
+                    "currentRatioLessThan",
+                    "quickRatioMoreThan",
+                    "quickRatioLessThan",
+                    "returnOnEquityMoreThan",
+                    "returnOnEquityLessThan",
+                    "returnOnAssetsMoreThan",
+                    "returnOnAssetsLessThan",
+                    "returnOnCapitalEmployedMoreThan",
+                    "returnOnCapitalEmployedLessThan",
+                    "dividendYieldMoreThan",
+                    "dividendYieldLessThan",
+                    "payoutRatioLessThan",
+                    "payoutRatioMoreThan",
+                    "betaLessThan",
+                    "betaMoreThan",
+                    "exchange",
+                    "Country",
+                    "isETF",
+                    "isFund",
+                    "isActivelyTrading",
+                    "limit",
                 }
 
                 invalid_criteria = set(fmp_criteria.keys()) - supported_criteria
@@ -278,6 +294,7 @@ class FMPIntegration:
 
 # Global FMP integration instance
 _fmp_integration = None
+
 
 def get_fmp_integration() -> FMPIntegration:
     """Get global FMP integration instance."""

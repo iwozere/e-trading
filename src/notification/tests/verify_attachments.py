@@ -1,10 +1,8 @@
 import asyncio
-import json
 from pathlib import Path
+
 from src.notification.channels.email_channel import EmailChannel
-from src.notification.channels.base import MessageContent
-from src.data.db.services.users_service import users_service
-from src.notification.service.config import config
+
 
 async def test_attachment_resolution():
     print("Testing attachment resolution logic...")
@@ -16,7 +14,7 @@ async def test_attachment_resolution():
         "smtp_port": 587,
         "smtp_username": "test@example.com",
         "smtp_password": "test",
-        "from_email": "test@example.com"
+        "from_email": "test@example.com",
     }
     channel = EmailChannel("email", channel_config)
 
@@ -33,8 +31,11 @@ async def test_attachment_resolution():
 
         # We'll just test the internal _add_attachments logic by mocking MIMEMultipart
         class MockMIME:
-            def __init__(self): self.parts = []
-            def attach(self, part): self.parts.append(part)
+            def __init__(self):
+                self.parts = []
+
+            def attach(self, part):
+                self.parts.append(part)
 
         msg = MockMIME()
         await channel._add_attachments(msg, attachments_nested)
@@ -53,7 +54,7 @@ async def test_attachment_resolution():
         # 3. Test wrapped format (the current DB structure)
         attachments_wrapped = {
             p1.name: {"path": str(p1), "type": "file_path"},
-            p2.name: {"path": str(p2), "type": "file_path"}
+            p2.name: {"path": str(p2), "type": "file_path"},
         }
         print(f"Testing wrapped format: {attachments_wrapped}")
 
@@ -66,8 +67,11 @@ async def test_attachment_resolution():
 
     finally:
         # Cleanup
-        if p1.exists(): p1.unlink()
-        if p2.exists(): p2.unlink()
+        if p1.exists():
+            p1.unlink()
+        if p2.exists():
+            p2.unlink()
+
 
 if __name__ == "__main__":
     asyncio.run(test_attachment_resolution())

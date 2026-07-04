@@ -6,23 +6,22 @@ for the notification service. Provides automatic failover when primary channels
 are unavailable and recovery mechanisms for failed messages.
 """
 
-from typing import Dict, Any, List, Optional, Set, Tuple
-from datetime import datetime, timedelta, timezone
-from dataclasses import dataclass, field
-from enum import Enum
 from collections import defaultdict, deque
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any, Dict, List, Set, Tuple
 
-from src.notification.service.health_monitor import HealthMonitor, HealthStatus
-from src.notification.channels.base import (
-    NotificationChannel, DeliveryResult, DeliveryStatus, MessageContent
-)
+from src.notification.channels.base import DeliveryResult, DeliveryStatus, MessageContent, NotificationChannel
 from src.notification.logger import setup_logger
+from src.notification.service.health_monitor import HealthMonitor, HealthStatus
 
 _logger = setup_logger(__name__)
 
 
 class FallbackStrategy(str, Enum):
     """Fallback strategy options."""
+
     ROUND_ROBIN = "round_robin"
     PRIORITY_ORDER = "priority_order"
     HEALTH_BASED = "health_based"
@@ -31,6 +30,7 @@ class FallbackStrategy(str, Enum):
 
 class MessageFailureReason(str, Enum):
     """Reasons for message failure."""
+
     CHANNEL_DOWN = "channel_down"
     CHANNEL_UNHEALTHY = "channel_unhealthy"
     RATE_LIMITED = "rate_limited"
@@ -43,6 +43,7 @@ class MessageFailureReason(str, Enum):
 @dataclass
 class FallbackRule:
     """Configuration for channel fallback behavior."""
+
     primary_channel: str
     fallback_channels: List[str]
     strategy: FallbackStrategy = FallbackStrategy.PRIORITY_ORDER
@@ -66,6 +67,7 @@ class FallbackRule:
 @dataclass
 class FailedMessage:
     """Information about a failed message."""
+
     message_id: int
     original_channels: List[str]
     content: MessageContent
@@ -75,7 +77,7 @@ class FailedMessage:
     failure_details: str
     failed_at: datetime
     retry_count: int = 0
-    last_retry_at: Optional[datetime] = None
+    last_retry_at: datetime | None = None
     attempted_channels: Set[str] = field(default_factory=set)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -88,7 +90,7 @@ class FailedMessage:
                 "text": self.content.text,
                 "subject": self.content.subject,
                 "html": self.content.html,
-                "has_attachments": self.content.has_attachments
+                "has_attachments": self.content.has_attachments,
             },
             "recipient": self.recipient,
             "priority": self.priority,
@@ -98,13 +100,14 @@ class FailedMessage:
             "retry_count": self.retry_count,
             "last_retry_at": self.last_retry_at.isoformat() if self.last_retry_at else None,
             "attempted_channels": list(self.attempted_channels),
-            "metadata": self.metadata
+            "metadata": self.metadata,
         }
 
 
 @dataclass
 class FallbackAttempt:
     """Record of a fallback attempt."""
+
     message_id: int
     original_channel: str
     fallback_channel: str
@@ -165,7 +168,7 @@ class FallbackManager:
             "failed_fallbacks": 0,
             "dead_letter_messages": 0,
             "retry_attempts": 0,
-            "manual_reprocessing": 0
+            "manual_reprocessing": 0,
         }
 
     def configure_fallback_rule(self, rule: FallbackRule):
@@ -178,7 +181,8 @@ class FallbackManager:
         self._fallback_rules[rule.primary_channel] = rule
         self._logger.info(
             "Configured fallback rule for channel %s: %s fallback channels",
-            rule.primary_channel, len(rule.fallback_channels)
+            rule.primary_channel,
+            len(rule.fallback_channels),
         )
 
     def set_global_fallback_channels(self, channels: List[str]):
@@ -214,8 +218,8 @@ class FallbackManager:
         recipient: str,
         content: MessageContent,
         priority: str = "NORMAL",
-        channel_instances: Dict[str, NotificationChannel] = None
-    ) -> Tuple[bool, List[DeliveryResult], Optional[FailedMessage]]:
+        channel_instances: Dict[str, NotificationChannel] = None,
+    ) -> Tuple[bool, List[DeliveryResult], FailedMessage | None]:
         """
         Attempt message delivery with automatic fallback.
 
@@ -239,7 +243,7 @@ class FallbackManager:
                 priority=priority,
                 failure_reason=MessageFailureReason.CONFIGURATION_ERROR,
                 failure_details="No channels specified",
-                failed_at=datetime.now(timezone.utc)
+                failed_at=datetime.now(UTC),
             )
             return False, [], failed_msg
 
@@ -250,9 +254,7 @@ class FallbackManager:
         for primary_channel in channels:
             try:
                 # Get channels to try (primary + fallbacks)
-                channels_to_try = await self._get_channels_to_try(
-                    primary_channel, attempted_channels
-                )
+                channels_to_try = await self._get_channels_to_try(primary_channel, attempted_channels)
 
                 # Attempt delivery through available channels
                 for channel_name in channels_to_try:
@@ -263,22 +265,17 @@ class FallbackManager:
 
                     # Check channel health
                     if not await self._is_channel_available(channel_name):
-                        self._logger.warning(
-                            "Skipping unhealthy channel %s for message %s",
-                            channel_name, message_id
-                        )
+                        self._logger.warning("Skipping unhealthy channel %s for message %s", channel_name, message_id)
                         continue
 
                     # Get channel instance
                     if not channel_instances or channel_name not in channel_instances:
-                        self._logger.error(
-                            "Channel instance not available: %s", channel_name
-                        )
+                        self._logger.error("Channel instance not available: %s", channel_name)
                         # Create failed result for unavailable channel
                         failed_result = DeliveryResult(
                             success=False,
                             status=DeliveryStatus.FAILED,
-                            error_message=f"Channel instance not available: {channel_name}"
+                            error_message=f"Channel instance not available: {channel_name}",
                         )
                         delivery_results.append(failed_result)
                         self._update_channel_stats(channel_name, False)
@@ -288,52 +285,44 @@ class FallbackManager:
 
                     # Attempt delivery
                     try:
-                        result = await channel_instance.send_message(
-                            recipient, content, str(message_id), priority
-                        )
+                        result = await channel_instance.send_message(recipient, content, str(message_id), priority)
 
                         delivery_results.append(result)
                         self._update_channel_stats(channel_name, result.success)
 
                         # Record fallback attempt if not primary channel
                         if channel_name != primary_channel:
-                            self._record_fallback_attempt(
-                                message_id, primary_channel, channel_name, result
-                            )
+                            self._record_fallback_attempt(message_id, primary_channel, channel_name, result)
 
                         if result.success:
                             self._logger.info(
-                                "Message %s delivered successfully via channel %s",
-                                message_id, channel_name
+                                "Message %s delivered successfully via channel %s", message_id, channel_name
                             )
                             return True, delivery_results, None
 
                         self._logger.warning(
                             "Delivery failed for message %s via channel %s: %s",
-                            message_id, channel_name, result.error_message
+                            message_id,
+                            channel_name,
+                            result.error_message,
                         )
 
                     except Exception as e:
                         error_msg = f"Channel delivery exception: {str(e)}"
                         self._logger.error(
                             "Exception during delivery for message %s via channel %s: %s",
-                            message_id, channel_name, error_msg
+                            message_id,
+                            channel_name,
+                            error_msg,
                         )
 
                         # Create failed result
-                        result = DeliveryResult(
-                            success=False,
-                            status=DeliveryStatus.FAILED,
-                            error_message=error_msg
-                        )
+                        result = DeliveryResult(success=False, status=DeliveryStatus.FAILED, error_message=error_msg)
                         delivery_results.append(result)
                         self._update_channel_stats(channel_name, False)
 
             except Exception as e:
-                self._logger.error(
-                    "Error processing fallback for channel %s: %s",
-                    primary_channel, e
-                )
+                self._logger.error("Error processing fallback for channel %s: %s", primary_channel, e)
 
         # All channels failed - create failed message
         failed_msg = FailedMessage(
@@ -344,8 +333,8 @@ class FallbackManager:
             priority=priority,
             failure_reason=MessageFailureReason.DELIVERY_FAILED,
             failure_details=f"All channels failed. Attempted: {list(attempted_channels)}",
-            failed_at=datetime.now(timezone.utc),
-            attempted_channels=attempted_channels
+            failed_at=datetime.now(UTC),
+            attempted_channels=attempted_channels,
         )
 
         # Add to retry queue if retryable
@@ -356,11 +345,7 @@ class FallbackManager:
 
         return False, delivery_results, failed_msg
 
-    async def _get_channels_to_try(
-        self,
-        primary_channel: str,
-        already_attempted: Set[str]
-    ) -> List[str]:
+    async def _get_channels_to_try(self, primary_channel: str, already_attempted: Set[str]) -> List[str]:
         """
         Get ordered list of channels to try for delivery.
 
@@ -394,8 +379,7 @@ class FallbackManager:
         elif self._global_fallback_channels:
             # Use global fallback channels
             global_fallbacks = [
-                ch for ch in self._global_fallback_channels
-                if ch != primary_channel and ch not in already_attempted
+                ch for ch in self._global_fallback_channels if ch != primary_channel and ch not in already_attempted
             ]
             channels_to_try.extend(global_fallbacks)
 
@@ -426,8 +410,12 @@ class FallbackManager:
                 self._logger.debug("No channel status found for %s, assuming available", channel_name)
                 return True  # Assume available if no status information
 
-            self._logger.debug("Channel %s status: enabled=%s, overall_status=%s",
-                             channel_name, channel_status.is_enabled, channel_status.overall_status)
+            self._logger.debug(
+                "Channel %s status: enabled=%s, overall_status=%s",
+                channel_name,
+                channel_status.is_enabled,
+                channel_status.overall_status,
+            )
 
             # Check if channel is enabled and healthy enough
             if not channel_status.is_enabled:
@@ -435,10 +423,7 @@ class FallbackManager:
                 return False
 
             # Allow delivery if channel is healthy or degraded
-            is_available = channel_status.overall_status in [
-                HealthStatus.HEALTHY,
-                HealthStatus.DEGRADED
-            ]
+            is_available = channel_status.overall_status in [HealthStatus.HEALTHY, HealthStatus.DEGRADED]
 
             self._logger.debug("Channel %s availability: %s", channel_name, is_available)
             return is_available
@@ -461,7 +446,7 @@ class FallbackManager:
                     HealthStatus.UNHEALTHY: 2,
                     HealthStatus.CRITICAL: 1,
                     HealthStatus.DISABLED: 0,
-                    HealthStatus.UNKNOWN: 0
+                    HealthStatus.UNKNOWN: 0,
                 }.get(status.overall_status, 0)
 
                 channel_health.append((channel, health_score, status.uptime_percentage))
@@ -481,6 +466,7 @@ class FallbackManager:
         """Apply round-robin selection to channels."""
         # Simple round-robin based on current time
         import time
+
         current_time = int(time.time())
         start_index = current_time % len(channels)
 
@@ -507,10 +493,16 @@ class FallbackManager:
             if result.error_message:
                 error_lower = result.error_message.lower()
                 # Non-retryable errors
-                if any(term in error_lower for term in [
-                    "unauthorized", "forbidden", "invalid token",
-                    "authentication failed", "permission denied"
-                ]):
+                if any(
+                    term in error_lower
+                    for term in [
+                        "unauthorized",
+                        "forbidden",
+                        "invalid token",
+                        "authentication failed",
+                        "permission denied",
+                    ]
+                ):
                     return False
 
         return True
@@ -526,7 +518,9 @@ class FallbackManager:
 
         self._logger.info(
             "Added message %s to retry queue (attempt %s/%s)",
-            failed_message.message_id, failed_message.retry_count + 1, self._max_retry_attempts
+            failed_message.message_id,
+            failed_message.retry_count + 1,
+            self._max_retry_attempts,
         )
 
     async def _add_to_dead_letter_queue(self, failed_message: FailedMessage):
@@ -534,10 +528,7 @@ class FallbackManager:
         # Check queue size limit
         if len(self._dead_letter_queue) >= self._max_dead_letter_size:
             # Remove oldest messages
-            oldest_messages = sorted(
-                self._dead_letter_queue.items(),
-                key=lambda x: x[1].failed_at
-            )
+            oldest_messages = sorted(self._dead_letter_queue.items(), key=lambda x: x[1].failed_at)
 
             for msg_id, _ in oldest_messages[:100]:  # Remove 100 oldest
                 del self._dead_letter_queue[msg_id]
@@ -546,25 +537,20 @@ class FallbackManager:
         self._stats["dead_letter_messages"] += 1
 
         self._logger.warning(
-            "Added message %s to dead letter queue: %s",
-            failed_message.message_id, failed_message.failure_details
+            "Added message %s to dead letter queue: %s", failed_message.message_id, failed_message.failure_details
         )
 
     def _record_fallback_attempt(
-        self,
-        message_id: int,
-        original_channel: str,
-        fallback_channel: str,
-        result: DeliveryResult
+        self, message_id: int, original_channel: str, fallback_channel: str, result: DeliveryResult
     ):
         """Record a fallback attempt for analytics."""
         attempt = FallbackAttempt(
             message_id=message_id,
             original_channel=original_channel,
             fallback_channel=fallback_channel,
-            attempted_at=datetime.now(timezone.utc),
+            attempted_at=datetime.now(UTC),
             result=result,
-            strategy_used=self._default_strategy
+            strategy_used=self._default_strategy,
         )
 
         self._fallback_attempts.append(attempt)
@@ -585,10 +571,7 @@ class FallbackManager:
         else:
             stats["failures"] += 1
 
-    async def process_retry_queue(
-        self,
-        channel_instances: Dict[str, NotificationChannel]
-    ) -> Dict[str, Any]:
+    async def process_retry_queue(self, channel_instances: Dict[str, NotificationChannel]) -> Dict[str, Any]:
         """
         Process messages in the retry queue.
 
@@ -601,15 +584,13 @@ class FallbackManager:
         if not self._retry_queue:
             return {"processed": 0, "succeeded": 0, "failed": 0, "requeued": 0}
 
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
         messages_to_retry = []
 
         # Find messages ready for retry
         for message_id, failed_msg in list(self._retry_queue.items()):
             # Calculate retry delay with exponential backoff
-            retry_delay = self._base_retry_delay * (
-                self._retry_backoff_multiplier ** failed_msg.retry_count
-            )
+            retry_delay = self._base_retry_delay * (self._retry_backoff_multiplier**failed_msg.retry_count)
 
             next_retry_time = failed_msg.last_retry_at or failed_msg.failed_at
             next_retry_time += timedelta(seconds=retry_delay)
@@ -636,7 +617,7 @@ class FallbackManager:
                     failed_msg.recipient,
                     failed_msg.content,
                     failed_msg.priority,
-                    channel_instances
+                    channel_instances,
                 )
 
                 results["processed"] += 1
@@ -645,7 +626,8 @@ class FallbackManager:
                     results["succeeded"] += 1
                     self._logger.info(
                         "Retry successful for message %s after %s attempts",
-                        failed_msg.message_id, failed_msg.retry_count
+                        failed_msg.message_id,
+                        failed_msg.retry_count,
                     )
                 else:
                     results["failed"] += 1
@@ -658,10 +640,7 @@ class FallbackManager:
                         await self._add_to_dead_letter_queue(failed_msg)
 
             except Exception as e:
-                self._logger.error(
-                    "Error processing retry for message %s: %s",
-                    failed_msg.message_id, e
-                )
+                self._logger.error("Error processing retry for message %s: %s", failed_msg.message_id, e)
                 results["failed"] += 1
 
         return results
@@ -670,7 +649,7 @@ class FallbackManager:
         self,
         message_id: int,
         channel_instances: Dict[str, NotificationChannel],
-        force_channels: Optional[List[str]] = None
+        force_channels: List[str] | None = None,
     ) -> Tuple[bool, str]:
         """
         Manually reprocess a message from the dead letter queue.
@@ -703,7 +682,7 @@ class FallbackManager:
                 failed_msg.recipient,
                 failed_msg.content,
                 failed_msg.priority,
-                channel_instances
+                channel_instances,
             )
 
             self._stats["manual_reprocessing"] += 1
@@ -719,18 +698,17 @@ class FallbackManager:
                     failed_msg.attempted_channels.update(new_failed_msg.attempted_channels)
                     failed_msg.failure_details = new_failed_msg.failure_details
 
-                return False, f"Message {message_id} reprocessing failed: {new_failed_msg.failure_details if new_failed_msg else 'Unknown error'}"
+                return (
+                    False,
+                    f"Message {message_id} reprocessing failed: {new_failed_msg.failure_details if new_failed_msg else 'Unknown error'}",
+                )
 
         except Exception as e:
             error_msg = f"Error reprocessing message {message_id}: {str(e)}"
             self._logger.error(error_msg)
             return False, error_msg
 
-    def get_dead_letter_messages(
-        self,
-        limit: int = 100,
-        offset: int = 0
-    ) -> List[Dict[str, Any]]:
+    def get_dead_letter_messages(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         """
         Get messages from dead letter queue.
 
@@ -742,11 +720,7 @@ class FallbackManager:
             List of dead letter messages
         """
         # Sort by failed_at timestamp (newest first)
-        sorted_messages = sorted(
-            self._dead_letter_queue.values(),
-            key=lambda x: x.failed_at,
-            reverse=True
-        )
+        sorted_messages = sorted(self._dead_letter_queue.values(), key=lambda x: x.failed_at, reverse=True)
 
         # Apply pagination
         start_idx = offset
@@ -758,20 +732,14 @@ class FallbackManager:
     def get_retry_queue_status(self) -> Dict[str, Any]:
         """Get retry queue status information."""
         if not self._retry_queue:
-            return {
-                "total_messages": 0,
-                "ready_for_retry": 0,
-                "next_retry_time": None
-            }
+            return {"total_messages": 0, "ready_for_retry": 0, "next_retry_time": None}
 
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
         ready_count = 0
         next_retry_times = []
 
         for failed_msg in self._retry_queue.values():
-            retry_delay = self._base_retry_delay * (
-                self._retry_backoff_multiplier ** failed_msg.retry_count
-            )
+            retry_delay = self._base_retry_delay * (self._retry_backoff_multiplier**failed_msg.retry_count)
 
             next_retry_time = failed_msg.last_retry_at or failed_msg.failed_at
             next_retry_time += timedelta(seconds=retry_delay)
@@ -784,7 +752,7 @@ class FallbackManager:
         return {
             "total_messages": len(self._retry_queue),
             "ready_for_retry": ready_count,
-            "next_retry_time": min(next_retry_times).isoformat() if next_retry_times else None
+            "next_retry_time": min(next_retry_times).isoformat() if next_retry_times else None,
         }
 
     def get_fallback_statistics(self) -> Dict[str, Any]:
@@ -798,20 +766,22 @@ class FallbackManager:
                     "success_rate": round(success_rate, 2),
                     "total_attempts": stats["attempts"],
                     "successes": stats["successes"],
-                    "failures": stats["failures"]
+                    "failures": stats["failures"],
                 }
 
         # Recent fallback attempts
         recent_attempts = []
         for attempt in list(self._fallback_attempts)[-10:]:  # Last 10 attempts
-            recent_attempts.append({
-                "message_id": attempt.message_id,
-                "original_channel": attempt.original_channel,
-                "fallback_channel": attempt.fallback_channel,
-                "attempted_at": attempt.attempted_at.isoformat(),
-                "success": attempt.result.success,
-                "strategy": attempt.strategy_used.value
-            })
+            recent_attempts.append(
+                {
+                    "message_id": attempt.message_id,
+                    "original_channel": attempt.original_channel,
+                    "fallback_channel": attempt.fallback_channel,
+                    "attempted_at": attempt.attempted_at.isoformat(),
+                    "success": attempt.result.success,
+                    "strategy": attempt.strategy_used.value,
+                }
+            )
 
         return {
             "statistics": self._stats.copy(),
@@ -819,7 +789,7 @@ class FallbackManager:
             "recent_fallback_attempts": recent_attempts,
             "dead_letter_queue_size": len(self._dead_letter_queue),
             "retry_queue_size": len(self._retry_queue),
-            "configured_fallback_rules": len(self._fallback_rules)
+            "configured_fallback_rules": len(self._fallback_rules),
         }
 
     async def cleanup_old_dead_letters(self) -> int:
@@ -829,20 +799,16 @@ class FallbackManager:
         Returns:
             Number of messages cleaned up
         """
-        cutoff_time = datetime.now(timezone.utc) - timedelta(days=self._dead_letter_retention_days)
+        cutoff_time = datetime.now(UTC) - timedelta(days=self._dead_letter_retention_days)
 
         messages_to_remove = [
-            msg_id for msg_id, failed_msg in self._dead_letter_queue.items()
-            if failed_msg.failed_at < cutoff_time
+            msg_id for msg_id, failed_msg in self._dead_letter_queue.items() if failed_msg.failed_at < cutoff_time
         ]
 
         for msg_id in messages_to_remove:
             del self._dead_letter_queue[msg_id]
 
         if messages_to_remove:
-            self._logger.info(
-                "Cleaned up %s old messages from dead letter queue",
-                len(messages_to_remove)
-            )
+            self._logger.info("Cleaned up %s old messages from dead letter queue", len(messages_to_remove))
 
         return len(messages_to_remove)

@@ -23,23 +23,42 @@ Classes:
 """
 
 import asyncio
-import time
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Tuple
 import threading
+import time
+from datetime import UTC, datetime
+from typing import Any, Dict, List, Tuple
 
-from ib_insync import IB, Stock, Option, Future, Forex, Contract, Order as IBOrder
-from ib_insync import MarketOrder, LimitOrder, StopOrder, StopLimitOrder
-from ib_insync import Trade, Position as IBPosition, PortfolioItem, AccountValue
-from ib_insync import Ticker
-
-from src.trading.broker.base_broker import (
-    BaseBroker, Order, Position, Portfolio, OrderStatus, OrderSide,
-    OrderType, TradingMode
+from ib_insync import (
+    IB,
+    AccountValue,
+    Contract,
+    Forex,
+    Future,
+    LimitOrder,
+    MarketOrder,
+    Option,
+    PortfolioItem,
+    Stock,
+    StopLimitOrder,
+    StopOrder,
+    Ticker,
+    Trade,
 )
-from src.trading.broker.paper_trading_mixin import PaperTradingMixin
+from ib_insync import Order as IBOrder
+from ib_insync import Position as IBPosition
 
 from src.notification.logger import setup_logger
+from src.trading.broker.base_broker import (
+    BaseBroker,
+    Order,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    Portfolio,
+    Position,
+    TradingMode,
+)
+from src.trading.broker.paper_trading_mixin import PaperTradingMixin
 
 _logger = setup_logger(__name__)
 
@@ -58,15 +77,21 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
     - IBKR-specific margin calculation and requirements
     """
 
-    def __init__(self, host: str = '127.0.0.1', port: Optional[int] = None,
-                 client_id: int = 1, cash: float = 10000.0, config: Dict[str, Any] = None):
+    def __init__(
+        self,
+        host: str = "127.0.0.1",
+        port: int | None = None,
+        client_id: int = 1,
+        cash: float = 10000.0,
+        config: Dict[str, Any] = None,
+    ):
         # Initialize configuration
         if config is None:
             config = {}
 
         # Set default IBKR configuration
-        config.setdefault('name', 'ibkr_broker')
-        config.setdefault('type', 'ibkr')
+        config.setdefault("name", "ibkr_broker")
+        config.setdefault("type", "ibkr")
 
         # Initialize parent classes
         super().__init__(config)
@@ -103,8 +128,12 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
         self.market_data_thread = None
         self.market_data_running = False
 
-        _logger.info("Enhanced IBKR broker initialized - Mode: %s, Host: %s, Port: %s",
-                    self.trading_mode.value, self.host, self.port)
+        _logger.info(
+            "Enhanced IBKR broker initialized - Mode: %s, Host: %s, Port: %s",
+            self.trading_mode.value,
+            self.host,
+            self.port,
+        )
 
     async def connect(self) -> bool:
         """Connect to IBKR TWS/Gateway."""
@@ -184,23 +213,27 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                 symbol = self._get_symbol_from_contract(position.contract)
                 self.ibkr_positions[symbol] = position
 
-            _logger.info("Loaded IBKR account info - Portfolio items: %d, Positions: %d",
-                        len(self.portfolio_items), len(self.ibkr_positions))
+            _logger.info(
+                "Loaded IBKR account info - Portfolio items: %d, Positions: %d",
+                len(self.portfolio_items),
+                len(self.ibkr_positions),
+            )
 
         except Exception:
             _logger.exception("Failed to load IBKR account info:")
 
     def _get_symbol_from_contract(self, contract: Contract) -> str:
         """Extract symbol from IBKR contract."""
-        if hasattr(contract, 'symbol'):
+        if hasattr(contract, "symbol"):
             return contract.symbol
-        elif hasattr(contract, 'localSymbol'):
+        elif hasattr(contract, "localSymbol"):
             return contract.localSymbol
         else:
             return str(contract.conId)
 
-    def _create_contract(self, symbol: str, asset_class: str = 'STK',
-                        exchange: str = 'SMART', currency: str = 'USD') -> Contract:
+    def _create_contract(
+        self, symbol: str, asset_class: str = "STK", exchange: str = "SMART", currency: str = "USD"
+    ) -> Contract:
         """
         Create IBKR contract for a symbol.
 
@@ -213,16 +246,16 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
         Returns:
             IBKR Contract object
         """
-        if asset_class == 'STK':
+        if asset_class == "STK":
             return Stock(symbol, exchange, currency)
-        elif asset_class == 'CASH':
+        elif asset_class == "CASH":
             # For forex pairs like EURUSD
             base, quote = symbol[:3], symbol[3:]
             return Forex(base + quote)
-        elif asset_class == 'OPT':
+        elif asset_class == "OPT":
             # Options would need more parameters (strike, expiry, etc.)
             return Option(symbol, exchange=exchange, currency=currency)
-        elif asset_class == 'FUT':
+        elif asset_class == "FUT":
             # Futures would need more parameters (expiry, etc.)
             return Future(symbol, exchange=exchange, currency=currency)
         else:
@@ -235,6 +268,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
             return
 
         try:
+
             def market_data_worker():
                 """Worker thread for market data updates."""
                 self.market_data_running = True
@@ -247,11 +281,10 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                                 self.update_market_data_cache(symbol, float(ticker.last))
 
                         # Process pending paper orders
-                        if hasattr(self, 'market_data_cache') and self.market_data_cache:
-                            market_data = {symbol: data['price'] for symbol, data in self.market_data_cache.items()}
+                        if hasattr(self, "market_data_cache") and self.market_data_cache:
+                            market_data = {symbol: data["price"] for symbol, data in self.market_data_cache.items()}
                             asyncio.run_coroutine_threadsafe(
-                                self.process_pending_paper_orders(market_data),
-                                asyncio.get_event_loop()
+                                self.process_pending_paper_orders(market_data), asyncio.get_event_loop()
                             )
 
                         time.sleep(1)  # Update every second
@@ -269,7 +302,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
         except Exception:
             _logger.exception("Failed to start market data updates:")
 
-    def _subscribe_market_data(self, symbol: str, asset_class: str = 'STK') -> bool:
+    def _subscribe_market_data(self, symbol: str, asset_class: str = "STK") -> bool:
         """Subscribe to market data for a symbol."""
         try:
             if symbol in self.market_data_subscriptions:
@@ -279,7 +312,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
             contract = self._create_contract(symbol, asset_class)
 
             # Request market data
-            ticker = self.ib.reqMktData(contract, '', False, False)
+            ticker = self.ib.reqMktData(contract, "", False, False)
 
             if ticker:
                 self.market_data_subscriptions[symbol] = ticker
@@ -300,7 +333,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
             is_valid, validation_message = await self.validate_order(order)
             if not is_valid:
                 order.status = OrderStatus.REJECTED
-                order.metadata['rejection_reason'] = validation_message
+                order.metadata["rejection_reason"] = validation_message
                 _logger.warning("Order validation failed: %s", validation_message)
                 return order.order_id
 
@@ -308,7 +341,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
             ibkr_validation = await self._validate_ibkr_order(order)
             if not ibkr_validation[0]:
                 order.status = OrderStatus.REJECTED
-                order.metadata['rejection_reason'] = ibkr_validation[1]
+                order.metadata["rejection_reason"] = ibkr_validation[1]
                 _logger.warning("IBKR validation failed: %s", ibkr_validation[1])
                 return order.order_id
 
@@ -325,7 +358,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                     return await self.paper_place_order(order, current_price)
                 else:
                     order.status = OrderStatus.REJECTED
-                    order.metadata['rejection_reason'] = "Unable to get current market price"
+                    order.metadata["rejection_reason"] = "Unable to get current market price"
                     return order.order_id
             else:
                 # Handle live trading
@@ -334,8 +367,8 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
         except Exception as e:
             _logger.exception("Error placing order:")
             order.status = OrderStatus.REJECTED
-            order.metadata['rejection_reason'] = f"Order placement error: {str(e)}"
-            await self.notify_error(f"Order placement failed: {str(e)}", {'order_id': order.order_id})
+            order.metadata["rejection_reason"] = f"Order placement error: {str(e)}"
+            await self.notify_error(f"Order placement failed: {str(e)}", {"order_id": order.order_id})
             return order.order_id
 
     async def _validate_ibkr_order(self, order: Order) -> Tuple[bool, str]:
@@ -359,14 +392,16 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                 return False, "OCO orders not directly supported by IBKR (use bracket orders)"
 
             # Check minimum order size (typically 1 share for stocks)
-            if order.quantity < 1 and order.symbol not in ['EUR', 'GBP', 'JPY']:  # Forex exceptions
+            if order.quantity < 1 and order.symbol not in ["EUR", "GBP", "JPY"]:  # Forex exceptions
                 return False, f"Order quantity {order.quantity} below minimum (1 share)"
 
             # Validate price parameters
             if order.order_type == OrderType.LIMIT and (order.price is None or order.price <= 0):
                 return False, "Limit order requires valid price"
 
-            if order.order_type in [OrderType.STOP, OrderType.STOP_LIMIT] and (order.stop_price is None or order.stop_price <= 0):
+            if order.order_type in [OrderType.STOP, OrderType.STOP_LIMIT] and (
+                order.stop_price is None or order.stop_price <= 0
+            ):
                 return False, "Stop order requires valid stop price"
 
             return True, "Order validated successfully"
@@ -392,8 +427,8 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
             trade = self.ib.placeOrder(contract, ibkr_order)
 
             # Update order with IBKR information
-            order.metadata['ibkr_order_id'] = ibkr_order.orderId
-            order.metadata['ibkr_trade'] = trade
+            order.metadata["ibkr_order_id"] = ibkr_order.orderId
+            order.metadata["ibkr_trade"] = trade
             order.status = OrderStatus.PENDING
 
             # Store trade for tracking
@@ -402,28 +437,31 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
             _logger.info("Live order placed on IBKR: %s -> %s", order.order_id, ibkr_order.orderId)
 
             # Send position notification for live trading
-            await self.notify_position_event("opened", {
-                'symbol': order.symbol,
-                'side': order.side.value,
-                'price': order.price or 0,
-                'size': order.quantity,
-                'timestamp': datetime.now(timezone.utc),
-                'order_id': order.order_id,
-                'ibkr_order_id': ibkr_order.orderId
-            })
+            await self.notify_position_event(
+                "opened",
+                {
+                    "symbol": order.symbol,
+                    "side": order.side.value,
+                    "price": order.price or 0,
+                    "size": order.quantity,
+                    "timestamp": datetime.now(UTC),
+                    "order_id": order.order_id,
+                    "ibkr_order_id": ibkr_order.orderId,
+                },
+            )
 
             return order.order_id
 
         except Exception as e:
             _logger.exception("Error placing live order:")
             order.status = OrderStatus.REJECTED
-            order.metadata['rejection_reason'] = f"Live order error: {str(e)}"
-            await self.notify_error(f"Live order failed: {str(e)}", {'order_id': order.order_id})
+            order.metadata["rejection_reason"] = f"Live order error: {str(e)}"
+            await self.notify_error(f"Live order failed: {str(e)}", {"order_id": order.order_id})
             return order.order_id
 
     def _create_ibkr_order(self, order: Order) -> IBOrder:
         """Create IBKR order from our order format."""
-        action = 'BUY' if order.side == OrderSide.BUY else 'SELL'
+        action = "BUY" if order.side == OrderSide.BUY else "SELL"
 
         if order.order_type == OrderType.MARKET:
             ibkr_order = MarketOrder(action, order.quantity)
@@ -477,7 +515,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
             _logger.exception("Error cancelling order %s:", order_id)
             return False
 
-    async def get_order_status(self, order_id: str) -> Optional[Order]:
+    async def get_order_status(self, order_id: str) -> Order | None:
         """Get order status."""
         try:
             if self.paper_trading_enabled:
@@ -490,33 +528,33 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                     # Get the most recent status from the ib_insync Trade object
                     # ib_insync automatically updates trade status in the background
                     ib_status = trade.status
-                    
+
                     status_map = {
-                        'Submitted': OrderStatus.PENDING,
-                        'PreSubmitted': OrderStatus.PENDING,
-                        'PendingSubmit': OrderStatus.PENDING,
-                        'PendingCancel': OrderStatus.PENDING,
-                        'Filled': OrderStatus.FILLED,
-                        'Cancelled': OrderStatus.CANCELLED,
-                        'Inactive': OrderStatus.REJECTED
+                        "Submitted": OrderStatus.PENDING,
+                        "PreSubmitted": OrderStatus.PENDING,
+                        "PendingSubmit": OrderStatus.PENDING,
+                        "PendingCancel": OrderStatus.PENDING,
+                        "Filled": OrderStatus.FILLED,
+                        "Cancelled": OrderStatus.CANCELLED,
+                        "Inactive": OrderStatus.REJECTED,
                     }
-                    
+
                     # Create Order object
                     order = Order(
                         symbol=trade.contract.symbol,
-                        side=OrderSide.BUY if trade.order.action == 'BUY' else OrderSide.SELL,
+                        side=OrderSide.BUY if trade.order.action == "BUY" else OrderSide.SELL,
                         quantity=float(trade.order.totalQuantity),
                         price=float(trade.order.lmtPrice) if trade.order.lmtPrice > 0 else None,
                         order_id=order_id,
-                        status=status_map.get(ib_status, OrderStatus.PENDING)
+                        status=status_map.get(ib_status, OrderStatus.PENDING),
                     )
-                    
+
                     # Add execution details
-                    order.metadata['ibkr_status'] = ib_status
-                    order.metadata['filled_quantity'] = trade.filled()
-                    order.metadata['remaining_quantity'] = trade.remaining()
-                    order.metadata['average_fill_price'] = trade.avgFillPrice()
-                    
+                    order.metadata["ibkr_status"] = ib_status
+                    order.metadata["filled_quantity"] = trade.filled()
+                    order.metadata["remaining_quantity"] = trade.remaining()
+                    order.metadata["average_fill_price"] = trade.avgFillPrice()
+
                     return order
                 else:
                     return None
@@ -542,7 +580,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
 
                     # Get current market value
                     market_value = pos.position * pos.avgCost
-                    unrealized_pnl = pos.unrealizedPNL if hasattr(pos, 'unrealizedPNL') else 0.0
+                    unrealized_pnl = pos.unrealizedPNL if hasattr(pos, "unrealizedPNL") else 0.0
 
                     positions[symbol] = Position(
                         symbol=symbol,
@@ -551,7 +589,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                         market_value=market_value,
                         unrealized_pnl=unrealized_pnl,
                         paper_trading=False,
-                        timestamp=datetime.now(timezone.utc)
+                        timestamp=datetime.now(UTC),
                     )
 
                 return positions
@@ -576,13 +614,13 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                 realized_pnl = 0.0
 
                 for tag, account_value in self.account_values.items():
-                    if 'NetLiquidation' in tag:
+                    if "NetLiquidation" in tag:
                         net_liquidation = float(account_value.value)
-                    elif 'CashBalance' in tag:
+                    elif "CashBalance" in tag:
                         cash_balance = float(account_value.value)
-                    elif 'UnrealizedPnL' in tag:
+                    elif "UnrealizedPnL" in tag:
                         unrealized_pnl = float(account_value.value)
-                    elif 'RealizedPnL' in tag:
+                    elif "RealizedPnL" in tag:
                         realized_pnl = float(account_value.value)
 
                 portfolio = Portfolio(
@@ -592,7 +630,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                     unrealized_pnl=unrealized_pnl,
                     realized_pnl=realized_pnl,
                     paper_trading=False,
-                    timestamp=datetime.now(timezone.utc)
+                    timestamp=datetime.now(UTC),
                 )
 
                 return portfolio
@@ -600,12 +638,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
         except Exception:
             _logger.exception("Error getting portfolio:")
             return Portfolio(
-                total_value=0.0,
-                cash=0.0,
-                positions={},
-                unrealized_pnl=0.0,
-                realized_pnl=0.0,
-                paper_trading=False
+                total_value=0.0, cash=0.0, positions={}, unrealized_pnl=0.0, realized_pnl=0.0, paper_trading=False
             )
 
     async def get_account_info(self) -> Dict[str, Any]:
@@ -615,49 +648,45 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                 # Return paper trading account info
                 portfolio = await self.get_paper_portfolio()
                 return {
-                    'account_type': 'paper',
-                    'trading_mode': self.trading_mode.value,
-                    'total_value': portfolio.total_value,
-                    'cash': portfolio.cash,
-                    'positions_count': len(portfolio.positions),
-                    'paper_trading_config': {
-                        'mode': self.paper_trading_config.mode.value,
-                        'initial_balance': self.paper_trading_config.initial_balance,
-                        'commission_rate': self.paper_trading_config.commission_rate
+                    "account_type": "paper",
+                    "trading_mode": self.trading_mode.value,
+                    "total_value": portfolio.total_value,
+                    "cash": portfolio.cash,
+                    "positions_count": len(portfolio.positions),
+                    "paper_trading_config": {
+                        "mode": self.paper_trading_config.mode.value,
+                        "initial_balance": self.paper_trading_config.initial_balance,
+                        "commission_rate": self.paper_trading_config.commission_rate,
                     },
-                    'connection_info': {
-                        'host': self.host,
-                        'port': self.port,
-                        'client_id': self.client_id
-                    }
+                    "connection_info": {"host": self.host, "port": self.port, "client_id": self.client_id},
                 }
             else:
                 # Return live account info
                 account_info = {
-                    'account_type': 'live',
-                    'trading_mode': self.trading_mode.value,
-                    'connection_info': {
-                        'host': self.host,
-                        'port': self.port,
-                        'client_id': self.client_id,
-                        'connected': self.ib.isConnected()
+                    "account_type": "live",
+                    "trading_mode": self.trading_mode.value,
+                    "connection_info": {
+                        "host": self.host,
+                        "port": self.port,
+                        "client_id": self.client_id,
+                        "connected": self.ib.isConnected(),
                     },
-                    'account_values': {}
+                    "account_values": {},
                 }
 
                 # Add account values
                 for tag, account_value in self.account_values.items():
-                    account_info['account_values'][tag] = {
-                        'value': account_value.value,
-                        'currency': account_value.currency,
-                        'account': account_value.account
+                    account_info["account_values"][tag] = {
+                        "value": account_value.value,
+                        "currency": account_value.currency,
+                        "account": account_value.account,
                     }
 
                 return account_info
 
         except Exception as e:
             _logger.exception("Error getting account info:")
-            return {'error': str(e)}
+            return {"error": str(e)}
 
     def get_supported_order_types(self) -> List[OrderType]:
         """Get list of supported order types for IBKR."""
@@ -667,14 +696,14 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
             OrderType.STOP,
             OrderType.STOP_LIMIT,
             OrderType.TRAILING_STOP,
-            OrderType.BRACKET  # IBKR bracket orders
+            OrderType.BRACKET,  # IBKR bracket orders
         ]
 
     def get_supported_asset_classes(self) -> List[str]:
         """Get list of supported asset classes."""
-        return ['STK', 'OPT', 'FUT', 'CASH', 'IND', 'BOND', 'FUND']
+        return ["STK", "OPT", "FUT", "CASH", "IND", "BOND", "FUND"]
 
-    async def get_contract_details(self, symbol: str, asset_class: str = 'STK') -> Optional[Dict[str, Any]]:
+    async def get_contract_details(self, symbol: str, asset_class: str = "STK") -> Dict[str, Any] | None:
         """Get contract details for a symbol."""
         try:
             contract = self._create_contract(symbol, asset_class)
@@ -683,15 +712,15 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
             if details:
                 detail = details[0]
                 return {
-                    'symbol': symbol,
-                    'contract_id': detail.contract.conId,
-                    'exchange': detail.contract.exchange,
-                    'currency': detail.contract.currency,
-                    'asset_class': asset_class,
-                    'market_name': detail.marketName,
-                    'min_tick': detail.minTick,
-                    'trading_hours': detail.tradingHours,
-                    'liquid_hours': detail.liquidHours
+                    "symbol": symbol,
+                    "contract_id": detail.contract.conId,
+                    "exchange": detail.contract.exchange,
+                    "currency": detail.contract.currency,
+                    "asset_class": asset_class,
+                    "market_name": detail.marketName,
+                    "min_tick": detail.minTick,
+                    "trading_hours": detail.tradingHours,
+                    "liquid_hours": detail.liquidHours,
                 }
 
             return None
@@ -700,7 +729,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
             _logger.exception("Error getting contract details for %s:", symbol)
             return None
 
-    async def get_market_data(self, symbol: str, asset_class: str = 'STK') -> Optional[Dict[str, Any]]:
+    async def get_market_data(self, symbol: str, asset_class: str = "STK") -> Dict[str, Any] | None:
         """Get current market data for a symbol."""
         try:
             # Subscribe to market data if not already subscribed
@@ -714,25 +743,26 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
             await asyncio.sleep(1)
 
             return {
-                'symbol': symbol,
-                'last': float(ticker.last) if ticker.last else None,
-                'bid': float(ticker.bid) if ticker.bid else None,
-                'ask': float(ticker.ask) if ticker.ask else None,
-                'bid_size': int(ticker.bidSize) if ticker.bidSize else None,
-                'ask_size': int(ticker.askSize) if ticker.askSize else None,
-                'volume': int(ticker.volume) if ticker.volume else None,
-                'high': float(ticker.high) if ticker.high else None,
-                'low': float(ticker.low) if ticker.low else None,
-                'close': float(ticker.close) if ticker.close else None,
-                'timestamp': datetime.now(timezone.utc)
+                "symbol": symbol,
+                "last": float(ticker.last) if ticker.last else None,
+                "bid": float(ticker.bid) if ticker.bid else None,
+                "ask": float(ticker.ask) if ticker.ask else None,
+                "bid_size": int(ticker.bidSize) if ticker.bidSize else None,
+                "ask_size": int(ticker.askSize) if ticker.askSize else None,
+                "volume": int(ticker.volume) if ticker.volume else None,
+                "high": float(ticker.high) if ticker.high else None,
+                "low": float(ticker.low) if ticker.low else None,
+                "close": float(ticker.close) if ticker.close else None,
+                "timestamp": datetime.now(UTC),
             }
 
         except Exception:
             _logger.exception("Error getting market data for %s:", symbol)
             return None
 
-    async def get_historical_data(self, symbol: str, duration: str = '1 D',
-                                bar_size: str = '1 min', asset_class: str = 'STK') -> Optional[List[Dict[str, Any]]]:
+    async def get_historical_data(
+        self, symbol: str, duration: str = "1 D", bar_size: str = "1 min", asset_class: str = "STK"
+    ) -> List[Dict[str, Any]] | None:
         """
         Get historical data for a symbol.
 
@@ -756,23 +786,26 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
             # Request historical data
             bars = self.ib.reqHistoricalData(
                 contract,
-                endDateTime='',
+                endDateTime="",
                 durationStr=duration,
                 barSizeSetting=bar_size,
-                whatToShow='TRADES',
+                whatToShow="TRADES",
                 useRTH=True,
-                formatDate=1
+                formatDate=1,
             )
 
             if bars:
-                return [{
-                    'timestamp': bar.date,
-                    'open': float(bar.open),
-                    'high': float(bar.high),
-                    'low': float(bar.low),
-                    'close': float(bar.close),
-                    'volume': int(bar.volume)
-                } for bar in bars]
+                return [
+                    {
+                        "timestamp": bar.date,
+                        "open": float(bar.open),
+                        "high": float(bar.high),
+                        "low": float(bar.low),
+                        "close": float(bar.close),
+                        "volume": int(bar.volume),
+                    }
+                    for bar in bars
+                ]
 
             return None
 
@@ -783,26 +816,26 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
     async def get_ibkr_specific_info(self) -> Dict[str, Any]:
         """Get IBKR-specific broker information."""
         return {
-            'broker_type': 'ibkr',
-            'connection_info': {
-                'host': self.host,
-                'port': self.port,
-                'client_id': self.client_id,
-                'connected': self.ib.isConnected() if self.ib else False
+            "broker_type": "ibkr",
+            "connection_info": {
+                "host": self.host,
+                "port": self.port,
+                "client_id": self.client_id,
+                "connected": self.ib.isConnected() if self.ib else False,
             },
-            'trading_mode': self.trading_mode.value,
-            'paper_trading': self.paper_trading_enabled,
-            'supported_order_types': [ot.value for ot in self.get_supported_order_types()],
-            'supported_asset_classes': self.get_supported_asset_classes(),
-            'market_data_subscriptions': len(self.market_data_subscriptions),
-            'active_contracts': len(self.contracts),
-            'account_values_count': len(self.account_values),
-            'positions_count': len(self.ibkr_positions),
-            'market_data_running': self.market_data_running
+            "trading_mode": self.trading_mode.value,
+            "paper_trading": self.paper_trading_enabled,
+            "supported_order_types": [ot.value for ot in self.get_supported_order_types()],
+            "supported_asset_classes": self.get_supported_asset_classes(),
+            "market_data_subscriptions": len(self.market_data_subscriptions),
+            "active_contracts": len(self.contracts),
+            "account_values_count": len(self.account_values),
+            "positions_count": len(self.ibkr_positions),
+            "market_data_running": self.market_data_running,
         }
 
     async def process_market_data_update(self):
         """Process pending orders against current market data (for paper trading)."""
-        if self.paper_trading_enabled and hasattr(self, 'market_data_cache'):
-            market_data = {symbol: data['price'] for symbol, data in self.market_data_cache.items()}
+        if self.paper_trading_enabled and hasattr(self, "market_data_cache"):
+            market_data = {symbol: data["price"] for symbol, data in self.market_data_cache.items()}
             await self.process_pending_paper_orders(market_data)

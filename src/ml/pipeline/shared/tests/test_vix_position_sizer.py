@@ -4,6 +4,7 @@ Tests for shared/risk_overlay/VixPositionSizer (Phase 7.1).
 
 import sys
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -21,11 +22,12 @@ def _make_vix_series(n: int = 200, seed: int = 0) -> pd.Series:
 
 
 class TestVixPositionSizer:
-
     def _make_sizer(self):
         from src.ml.pipeline.shared.risk_overlay.vix_position_sizer import (
-            VixPositionSizer, VixPositionSizerConfig,
+            VixPositionSizer,
+            VixPositionSizerConfig,
         )
+
         config = VixPositionSizerConfig(z_lookback=20)
         return VixPositionSizer(config)
 

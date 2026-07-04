@@ -8,7 +8,6 @@ for parallelism.
 
 import logging
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import Optional
 
 import pandas as pd
 
@@ -23,6 +22,7 @@ _CRISIS_DRAWDOWN = -0.15
 # ---------------------------------------------------------------------------
 # Summary statistics helper
 # ---------------------------------------------------------------------------
+
 
 def _summarize(
     sim: pd.DataFrame,
@@ -70,28 +70,29 @@ def _summarize(
     sharpe_analog = float(pnl_pct.mean() / pnl_pct.std()) if pnl_pct.std() > 0 else 0.0
 
     return {
-        "moneyness":           moneyness,
-        "strike_otm_pct":      round((1.0 - moneyness) * 100.0, 1),
-        "T_days":              T_days,
-        "rebalance_days":      rebalance_days,
-        "n_periods":           n_periods,
-        "total_cost":          total_cost,
-        "total_payoff":        total_payoff,
-        "total_pnl":           total_pnl,
-        "net_roi_pct":         net_roi_pct,
-        "win_rate_pct":        win_rate_pct,
-        "avg_premium_pct":     avg_premium_pct,
-        "max_single_payoff":   max_single_payoff,
+        "moneyness": moneyness,
+        "strike_otm_pct": round((1.0 - moneyness) * 100.0, 1),
+        "T_days": T_days,
+        "rebalance_days": rebalance_days,
+        "n_periods": n_periods,
+        "total_cost": total_cost,
+        "total_payoff": total_payoff,
+        "total_pnl": total_pnl,
+        "net_roi_pct": net_roi_pct,
+        "win_rate_pct": win_rate_pct,
+        "avg_premium_pct": avg_premium_pct,
+        "max_single_payoff": max_single_payoff,
         "payoff_to_cost_ratio": payoff_to_cost_ratio,
         "crisis_capture_rate": crisis_capture_rate,
-        "sharpe_analog":       sharpe_analog,
-        "n_crisis_periods":    n_crisis,
+        "sharpe_analog": sharpe_analog,
+        "n_crisis_periods": n_crisis,
     }
 
 
 # ---------------------------------------------------------------------------
 # Worker (module-level so ProcessPoolExecutor can pickle it)
 # ---------------------------------------------------------------------------
+
 
 def _worker(args: tuple) -> dict:
     """Run one simulation and return summary statistics."""
@@ -114,11 +115,12 @@ def _worker(args: tuple) -> dict:
 # Public optimizer
 # ---------------------------------------------------------------------------
 
+
 def optimize_strikes(
     df: pd.DataFrame,
-    moneyness_grid: Optional[list] = None,
-    T_days_grid: Optional[list] = None,
-    rebalance_days_grid: Optional[list] = None,
+    moneyness_grid: list | None = None,
+    T_days_grid: list | None = None,
+    rebalance_days_grid: list | None = None,
     budget_pct: float = 0.02,
     initial_capital: float = 100_000.0,
     skew_slope: float = 0.015,
@@ -142,8 +144,22 @@ def optimize_strikes(
     """
     if moneyness_grid is None:
         moneyness_grid = [
-            0.70, 0.72, 0.74, 0.76, 0.78, 0.80, 0.82,
-            0.84, 0.85, 0.86, 0.87, 0.88, 0.90, 0.92, 0.94, 0.95,
+            0.70,
+            0.72,
+            0.74,
+            0.76,
+            0.78,
+            0.80,
+            0.82,
+            0.84,
+            0.85,
+            0.86,
+            0.87,
+            0.88,
+            0.90,
+            0.92,
+            0.94,
+            0.95,
         ]
     if T_days_grid is None:
         T_days_grid = [60, 90, 120]
@@ -181,11 +197,7 @@ def optimize_strikes(
         _logger.error("Optimizer produced no results")
         return pd.DataFrame()
 
-    opt_df = (
-        pd.DataFrame(results)
-        .sort_values("net_roi_pct", ascending=False)
-        .reset_index(drop=True)
-    )
+    opt_df = pd.DataFrame(results).sort_values("net_roi_pct", ascending=False).reset_index(drop=True)
 
     _logger.info(
         "Optimizer complete: %d results. Best: moneyness=%.2f T=%d → ROI=%.1f%%",

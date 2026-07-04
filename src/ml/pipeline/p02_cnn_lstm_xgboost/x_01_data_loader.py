@@ -13,23 +13,26 @@ Features:
 - Error handling for failed downloads
 """
 
-import pandas as pd
-import yaml
-from pathlib import Path
-from datetime import datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, List, Tuple
+
+import pandas as pd
+import yaml
 
 # Add project root to path to import common utilities
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
 from src.common import get_ohlcv
-from src.notification.logger import setup_logger
 from src.data.downloader.data_downloader_factory import DataDownloaderFactory
+from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
+
 
 class DataLoader:
     def __init__(self, config_path: str = "config/pipeline/x02.yaml"):
@@ -41,7 +44,7 @@ class DataLoader:
         """
         self.config_path = Path(config_path)
         self.config = self._load_config()
-        self.data_dir = Path(self.config['paths']['data_raw'])
+        self.data_dir = Path(self.config["paths"]["data_raw"])
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
     def _load_config(self) -> dict:
@@ -49,7 +52,7 @@ class DataLoader:
         if not self.config_path.exists():
             raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
 
-        with open(self.config_path, 'r') as f:
+        with open(self.config_path) as f:
             config = yaml.safe_load(f)
 
         _logger.info("Loaded configuration from %s", self.config_path)
@@ -74,7 +77,9 @@ class DataLoader:
         _logger.warning("Unknown provider name: %s, using as-is", provider_name)
         return provider_name
 
-    def _generate_filename(self, symbol: str, timeframe: str, start_date: datetime, end_date: datetime, provider: str = None) -> str:
+    def _generate_filename(
+        self, symbol: str, timeframe: str, start_date: datetime, end_date: datetime, provider: str = None
+    ) -> str:
         """
         Generate filename for downloaded data.
 
@@ -88,8 +93,8 @@ class DataLoader:
         Returns:
             Generated filename
         """
-        start_str = start_date.strftime('%Y%m%d')
-        end_str = end_date.strftime('%Y%m%d')
+        start_str = start_date.strftime("%Y%m%d")
+        end_str = end_date.strftime("%Y%m%d")
 
         if provider:
             return f"{provider}_{symbol}_{timeframe}_{start_str}_{end_str}.csv"
@@ -112,17 +117,17 @@ class DataLoader:
             provider_code = self._map_provider_name_to_code(provider)
 
             # Calculate date range
-            period = self.config['data']['period']
+            period = self.config["data"]["period"]
             end_date = datetime.now()
 
             # Parse period and calculate start date
-            if period.endswith('y'):
+            if period.endswith("y"):
                 years = int(period[:-1])
                 start_date = end_date - timedelta(days=years * 365)
-            elif period.endswith('m'):
+            elif period.endswith("m"):
                 months = int(period[:-1])
                 start_date = end_date - timedelta(days=months * 30)
-            elif period.endswith('d'):
+            elif period.endswith("d"):
                 days = int(period[:-1])
                 start_date = end_date - timedelta(days=days)
             else:
@@ -145,8 +150,8 @@ class DataLoader:
                 symbol=symbol,
                 timeframe=timeframe,
                 provider=provider_code,
-                start_date=start_date.strftime('%Y-%m-%d'),
-                end_date=end_date.strftime('%Y-%m-%d')
+                start_date=start_date.strftime("%Y-%m-%d"),
+                end_date=end_date.strftime("%Y-%m-%d"),
             )
 
             if df is None or df.empty:
@@ -159,7 +164,7 @@ class DataLoader:
             _logger.info("Successfully downloaded %s (%d rows)", filename, len(df))
 
             # Rate limiting delay
-            delay = self.config['data'].get('rate_limit_delay', 1.0)
+            delay = self.config["data"].get("rate_limit_delay", 1.0)
             if delay > 0:
                 time.sleep(delay)
 
@@ -178,11 +183,11 @@ class DataLoader:
             List of (provider, symbol, timeframe) tuples
         """
         tasks = []
-        data_sources = self.config.get('data_sources', {})
+        data_sources = self.config.get("data_sources", {})
 
         for provider, config in data_sources.items():
-            symbols = config.get('symbols', [])
-            timeframes = config.get('timeframes', [])
+            symbols = config.get("symbols", [])
+            timeframes = config.get("timeframes", [])
 
             for symbol in symbols:
                 for timeframe in timeframes:
@@ -204,7 +209,7 @@ class DataLoader:
 
         if not tasks:
             _logger.warning("No download tasks found in configuration")
-            return {'success': [], 'failed': []}
+            return {"success": [], "failed": []}
 
         _logger.info("Found %d download tasks", len(tasks))
 
@@ -213,12 +218,16 @@ class DataLoader:
         failed_downloads = []
 
         # Parallel downloading
-        max_workers = self.config['data'].get('parallel_downloads', 4)
+        max_workers = self.config["data"].get("parallel_downloads", 4)
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all tasks
             future_to_task = {
-                executor.submit(self._download_single_dataset, provider, symbol, timeframe): (provider, symbol, timeframe)
+                executor.submit(self._download_single_dataset, provider, symbol, timeframe): (
+                    provider,
+                    symbol,
+                    timeframe,
+                )
                 for provider, symbol, timeframe in tasks
             }
 
@@ -248,10 +257,7 @@ class DataLoader:
         if failed_downloads:
             _logger.warning("Failed downloads: %s", failed_downloads)
 
-        return {
-            'success': successful_downloads,
-            'failed': failed_downloads
-        }
+        return {"success": successful_downloads, "failed": failed_downloads}
 
     def validate_downloaded_data(self) -> Dict[str, List[str]]:
         """
@@ -276,7 +282,7 @@ class DataLoader:
                     continue
 
                 # Check for required columns
-                required_columns = ['open', 'high', 'low', 'close', 'volume']
+                required_columns = ["open", "high", "low", "close", "volume"]
                 missing_columns = [col for col in required_columns if col not in df.columns]
 
                 if missing_columns:
@@ -301,18 +307,16 @@ class DataLoader:
         _logger.info("  Valid files: %d", len(valid_files))
         _logger.info("  Invalid files: %d", len(invalid_files))
 
-        return {
-            'valid': valid_files,
-            'invalid': invalid_files
-        }
+        return {"valid": valid_files, "invalid": invalid_files}
+
 
 def main():
     """Main entry point for data loading."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Download OHLCV data for CNN-LSTM-XGBoost pipeline')
-    parser.add_argument('--config', default='config/pipeline/p02.yaml', help='Configuration file path')
-    parser.add_argument('--validate-only', action='store_true', help='Only validate existing data')
+    parser = argparse.ArgumentParser(description="Download OHLCV data for CNN-LSTM-XGBoost pipeline")
+    parser.add_argument("--config", default="config/pipeline/p02.yaml", help="Configuration file path")
+    parser.add_argument("--validate-only", action="store_true", help="Only validate existing data")
 
     args = parser.parse_args()
 
@@ -325,13 +329,14 @@ def main():
             results = data_loader.run()
             # Also validate the downloaded data
             validation_results = data_loader.validate_downloaded_data()
-            results['validation'] = validation_results
+            results["validation"] = validation_results
 
         print("Data loading results:", results)
 
     except Exception:
         _logger.exception("Data loading failed:")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

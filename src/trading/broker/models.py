@@ -6,21 +6,23 @@ engine, and the Backtrader adapter layer.  Keeping them here avoids the circular
 imports that arise when the adapter classes live in the same file as BaseBroker.
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Dict, List, Optional, Any
 import uuid
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import Enum
+from typing import Any, Dict, List
 
 
 class TradingMode(Enum):
     """Trading mode enumeration."""
+
     PAPER = "paper"
     LIVE = "live"
 
 
 class OrderStatus(Enum):
     """Order status enumeration."""
+
     PENDING = "pending"
     FILLED = "filled"
     PARTIALLY_FILLED = "partially_filled"
@@ -33,6 +35,7 @@ class OrderStatus(Enum):
 
 class OrderType(Enum):
     """Order type enumeration."""
+
     MARKET = "market"
     LIMIT = "limit"
     STOP = "stop"
@@ -44,12 +47,14 @@ class OrderType(Enum):
 
 class OrderSide(Enum):
     """Order side enumeration."""
+
     BUY = "buy"
     SELL = "sell"
 
 
 class PaperTradingMode(Enum):
     """Paper trading simulation modes."""
+
     DISABLED = "disabled"  # Live trading mode
     BASIC = "basic"  # Simple paper trading
     REALISTIC = "realistic"  # Realistic simulation with slippage/latency
@@ -58,6 +63,7 @@ class PaperTradingMode(Enum):
 
 class ExecutionQuality(Enum):
     """Execution quality metrics for paper trading."""
+
     EXCELLENT = "excellent"  # < 0.1% slippage
     GOOD = "good"  # 0.1% - 0.5% slippage
     FAIR = "fair"  # 0.5% - 1.0% slippage
@@ -67,6 +73,7 @@ class ExecutionQuality(Enum):
 @dataclass
 class PaperTradingConfig:
     """Configuration for paper trading simulation."""
+
     mode: PaperTradingMode = PaperTradingMode.REALISTIC
     initial_balance: float = 10000.0
     commission_rate: float = 0.001  # 0.1%
@@ -86,13 +93,14 @@ class PaperTradingConfig:
 @dataclass
 class ExecutionMetrics:
     """Execution quality metrics for paper trading analysis."""
+
     execution_id: str
     order_id: str
     symbol: str
     side: OrderSide
     requested_quantity: float
     executed_quantity: float
-    requested_price: Optional[float]
+    requested_price: float | None
     executed_price: float
     slippage_bps: float  # Basis points
     latency_ms: int
@@ -107,27 +115,28 @@ class ExecutionMetrics:
 @dataclass
 class Order:
     """Enhanced order class with paper trading support."""
+
     symbol: str
     side: OrderSide
     order_type: OrderType
     quantity: float
-    price: Optional[float] = None
-    stop_price: Optional[float] = None
+    price: float | None = None
+    stop_price: float | None = None
     time_in_force: str = "GTC"
-    order_id: Optional[str] = None
-    client_order_id: Optional[str] = None
+    order_id: str | None = None
+    client_order_id: str | None = None
     status: OrderStatus = OrderStatus.PENDING
     filled_quantity: float = 0.0
-    average_price: Optional[float] = None
-    timestamp: Optional[datetime] = None
+    average_price: float | None = None
+    timestamp: datetime | None = None
     commission: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     # Enhanced paper trading fields
     paper_trading: bool = False
-    simulation_config: Optional[PaperTradingConfig] = None
+    simulation_config: PaperTradingConfig | None = None
     execution_metrics: List[ExecutionMetrics] = field(default_factory=list)
-    parent_order_id: Optional[str] = None  # For bracket/OCO orders
+    parent_order_id: str | None = None  # For bracket/OCO orders
     child_order_ids: List[str] = field(default_factory=list)
 
     def __post_init__(self):
@@ -136,52 +145,52 @@ class Order:
         if self.client_order_id is None:
             self.client_order_id = f"client_{self.order_id[:8]}"
         if self.timestamp is None:
-            self.timestamp = datetime.now(timezone.utc)
+            self.timestamp = datetime.now(UTC)
 
 
 @dataclass
 class Position:
     """Enhanced position class with paper trading support."""
+
     symbol: str
     quantity: float
     average_price: float
     market_value: float
     unrealized_pnl: float
     realized_pnl: float = 0.0
-    timestamp: Optional[datetime] = None
+    timestamp: datetime | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     # Enhanced paper trading fields
     paper_trading: bool = False
-    entry_timestamp: Optional[datetime] = None
+    entry_timestamp: datetime | None = None
     entry_orders: List[str] = field(default_factory=list)  # Order IDs that created this position
     commission_paid: float = 0.0
     slippage_cost: float = 0.0
-    holding_period_seconds: Optional[int] = None
+    holding_period_seconds: int | None = None
 
     def __post_init__(self):
         if self.entry_timestamp is None:
-            self.entry_timestamp = datetime.now(timezone.utc)
+            self.entry_timestamp = datetime.now(UTC)
         if self.timestamp is None:
-            self.timestamp = datetime.now(timezone.utc)
+            self.timestamp = datetime.now(UTC)
 
     def update_holding_period(self):
         """Update holding period in seconds."""
         if self.entry_timestamp:
-            self.holding_period_seconds = int(
-                (datetime.now(timezone.utc) - self.entry_timestamp).total_seconds()
-            )
+            self.holding_period_seconds = int((datetime.now(UTC) - self.entry_timestamp).total_seconds())
 
 
 @dataclass
 class Portfolio:
     """Enhanced portfolio class with paper trading support."""
+
     total_value: float
     cash: float
     positions: Dict[str, Position]
     unrealized_pnl: float
     realized_pnl: float
-    timestamp: Optional[datetime] = None
+    timestamp: datetime | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     # Enhanced paper trading fields
@@ -199,7 +208,7 @@ class Portfolio:
 
     def __post_init__(self):
         if self.timestamp is None:
-            self.timestamp = datetime.now(timezone.utc)
+            self.timestamp = datetime.now(UTC)
         if self.initial_balance == 0.0:
             self.initial_balance = self.total_value
         if self.max_portfolio_value < self.total_value:
@@ -215,21 +224,21 @@ class Portfolio:
             self.max_drawdown = current_drawdown
 
         return {
-            'total_return': total_return,
-            'total_return_pct': total_return * 100,
-            'unrealized_pnl': self.unrealized_pnl,
-            'realized_pnl': self.realized_pnl,
-            'total_pnl': self.unrealized_pnl + self.realized_pnl,
-            'win_rate': win_rate,
-            'win_rate_pct': win_rate * 100,
-            'total_trades': self.total_trades,
-            'winning_trades': self.winning_trades,
-            'losing_trades': self.losing_trades,
-            'largest_win': self.largest_win,
-            'largest_loss': self.largest_loss,
-            'max_drawdown': self.max_drawdown,
-            'max_drawdown_pct': self.max_drawdown * 100,
-            'total_commission': self.total_commission,
-            'total_slippage': self.total_slippage,
-            'net_pnl': self.realized_pnl + self.unrealized_pnl - self.total_commission - self.total_slippage
+            "total_return": total_return,
+            "total_return_pct": total_return * 100,
+            "unrealized_pnl": self.unrealized_pnl,
+            "realized_pnl": self.realized_pnl,
+            "total_pnl": self.unrealized_pnl + self.realized_pnl,
+            "win_rate": win_rate,
+            "win_rate_pct": win_rate * 100,
+            "total_trades": self.total_trades,
+            "winning_trades": self.winning_trades,
+            "losing_trades": self.losing_trades,
+            "largest_win": self.largest_win,
+            "largest_loss": self.largest_loss,
+            "max_drawdown": self.max_drawdown,
+            "max_drawdown_pct": self.max_drawdown * 100,
+            "total_commission": self.total_commission,
+            "total_slippage": self.total_slippage,
+            "net_pnl": self.realized_pnl + self.unrealized_pnl - self.total_commission - self.total_slippage,
         }

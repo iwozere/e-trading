@@ -1,5 +1,6 @@
 from __future__ import annotations
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -7,8 +8,7 @@ from sqlalchemy.orm import Session
 from src.data.db.repos.repo_trading import BotsRepo, MetricsRepo, PositionsRepo
 from src.data.db.repos.repo_users import UsersRepo
 
-
-UTC = timezone.utc
+UTC = UTC
 
 
 def test_bots_metrics_positions(db_session: Session):
@@ -29,8 +29,12 @@ def test_bots_metrics_positions(db_session: Session):
     bots.heartbeat(1)
 
     # metrics add / latest
-    m1 = metrics.add({"bot_id": 1, "trade_type": "paper", "calculated_at": datetime.now(UTC), "metrics": {"pnl": {"net": 0}}})
-    m2 = metrics.add({"bot_id": 1, "trade_type": "paper", "calculated_at": datetime.now(UTC), "metrics": {"pnl": {"net": 1}}})
+    m1 = metrics.add(
+        {"bot_id": 1, "trade_type": "paper", "calculated_at": datetime.now(UTC), "metrics": {"pnl": {"net": 0}}}
+    )
+    m2 = metrics.add(
+        {"bot_id": 1, "trade_type": "paper", "calculated_at": datetime.now(UTC), "metrics": {"pnl": {"net": 1}}}
+    )
     latest = metrics.latest_for_bot(1, limit=1)
     assert len(latest) == 1
     assert latest[0].id in {m1.id, m2.id}

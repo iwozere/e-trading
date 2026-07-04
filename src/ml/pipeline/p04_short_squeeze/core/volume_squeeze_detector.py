@@ -6,20 +6,21 @@ to traditional short interest analysis. It identifies potential squeeze candidat
 based on volume spikes, price momentum, and technical indicators.
 """
 
-from pathlib import Path
 import sys
-from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime, timedelta
-import numpy as np
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+import numpy as np
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader
-from src.ml.pipeline.p04_short_squeeze.core.models import StructuralMetrics, Candidate, CandidateSource
+from src.ml.pipeline.p04_short_squeeze.core.models import Candidate, CandidateSource, StructuralMetrics
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -27,6 +28,7 @@ _logger = setup_logger(__name__)
 @dataclass
 class VolumeMetrics:
     """Volume-based metrics for squeeze detection."""
+
     avg_volume_14d: float
     current_volume: float
     volume_spike_ratio: float
@@ -46,6 +48,7 @@ class VolumeMetrics:
 @dataclass
 class MomentumMetrics:
     """Price momentum metrics for squeeze detection."""
+
     price_change_1d: float
     price_change_3d: float
     price_change_7d: float
@@ -61,6 +64,7 @@ class MomentumMetrics:
 @dataclass
 class SqueezeIndicators:
     """Combined squeeze indicators."""
+
     volume_score: float
     momentum_score: float
     float_score: float
@@ -92,26 +96,21 @@ class VolumeSqueezeDetector:
         self.fmp_downloader = fmp_downloader
 
         # Scoring weights
-        self.weights = {
-            'volume_spike': 0.4,
-            'momentum': 0.3,
-            'float_size': 0.2,
-            'consistency': 0.1
-        }
+        self.weights = {"volume_spike": 0.4, "momentum": 0.3, "float_size": 0.2, "consistency": 0.1}
 
         # Thresholds
         self.thresholds = {
-            'high_volume_spike': 3.0,      # 3x average volume
-            'medium_volume_spike': 2.0,    # 2x average volume
-            'high_momentum': 0.15,         # 15% price increase
-            'medium_momentum': 0.08,       # 8% price increase
-            'small_float': 50_000_000,     # 50M shares
-            'medium_float': 100_000_000    # 100M shares
+            "high_volume_spike": 3.0,  # 3x average volume
+            "medium_volume_spike": 2.0,  # 2x average volume
+            "high_momentum": 0.15,  # 15% price increase
+            "medium_momentum": 0.08,  # 8% price increase
+            "small_float": 50_000_000,  # 50M shares
+            "medium_float": 100_000_000,  # 100M shares
         }
 
         _logger.info("Volume Squeeze Detector initialized")
 
-    def analyze_ticker(self, ticker: str) -> Optional[Tuple[Candidate, SqueezeIndicators]]:
+    def analyze_ticker(self, ticker: str) -> Tuple[Candidate, SqueezeIndicators] | None:
         """
         Analyze a ticker for volume-based squeeze potential.
 
@@ -140,9 +139,7 @@ class VolumeSqueezeDetector:
                 return None
 
             # Calculate squeeze indicators
-            squeeze_indicators = self._calculate_squeeze_indicators(
-                volume_metrics, momentum_metrics, profile
-            )
+            squeeze_indicators = self._calculate_squeeze_indicators(volume_metrics, momentum_metrics, profile)
 
             # Create structural metrics (using available data)
             structural_metrics = self._create_structural_metrics(profile, volume_metrics)
@@ -155,11 +152,15 @@ class VolumeSqueezeDetector:
                 screener_score=squeeze_indicators.combined_score,
                 structural_metrics=structural_metrics,
                 last_updated=datetime.now(),
-                source=CandidateSource.VOLUME_SCREENER
+                source=CandidateSource.VOLUME_SCREENER,
             )
 
-            _logger.debug("Volume analysis for %s: score=%.3f, probability=%s",
-                         ticker, squeeze_indicators.combined_score, squeeze_indicators.squeeze_probability)
+            _logger.debug(
+                "Volume analysis for %s: score=%.3f, probability=%s",
+                ticker,
+                squeeze_indicators.combined_score,
+                squeeze_indicators.squeeze_probability,
+            )
 
             return candidate, squeeze_indicators
 
@@ -167,7 +168,7 @@ class VolumeSqueezeDetector:
             _logger.warning("Error analyzing ticker %s: %s", ticker, e)
             return None
 
-    def _calculate_volume_metrics(self, ticker: str) -> Optional[VolumeMetrics]:
+    def _calculate_volume_metrics(self, ticker: str) -> VolumeMetrics | None:
         """
         Calculate volume-based metrics for a ticker.
 
@@ -182,11 +183,11 @@ class VolumeSqueezeDetector:
             end_date = datetime.now()
             start_date = end_date - timedelta(days=30)
 
-            df = self.fmp_downloader.get_ohlcv(ticker, '1d', start_date, end_date)
+            df = self.fmp_downloader.get_ohlcv(ticker, "1d", start_date, end_date)
             if df is None or df.empty or len(df) < 14:
                 return None
 
-            volumes = df['volume'].values
+            volumes = df["volume"].values
 
             # Calculate metrics
             avg_volume_14d = np.mean(volumes[-14:])  # Last 14 days
@@ -209,14 +210,14 @@ class VolumeSqueezeDetector:
                 current_volume=current_volume,
                 volume_spike_ratio=volume_spike_ratio,
                 volume_trend_7d=volume_trend_7d,
-                volume_consistency=volume_consistency
+                volume_consistency=volume_consistency,
             )
 
         except Exception as e:
             _logger.warning("Error calculating volume metrics for %s: %s", ticker, e)
             return None
 
-    def _calculate_momentum_metrics(self, ticker: str) -> Optional[MomentumMetrics]:
+    def _calculate_momentum_metrics(self, ticker: str) -> MomentumMetrics | None:
         """
         Calculate price momentum metrics for a ticker.
 
@@ -231,11 +232,11 @@ class VolumeSqueezeDetector:
             end_date = datetime.now()
             start_date = end_date - timedelta(days=14)
 
-            df = self.fmp_downloader.get_ohlcv(ticker, '1d', start_date, end_date)
+            df = self.fmp_downloader.get_ohlcv(ticker, "1d", start_date, end_date)
             if df is None or df.empty or len(df) < 7:
                 return None
 
-            closes = df['close'].values
+            closes = df["close"].values
 
             # Price changes
             price_change_1d = (closes[-1] - closes[-2]) / closes[-2] if len(closes) >= 2 else 0
@@ -247,27 +248,23 @@ class VolumeSqueezeDetector:
             price_volatility = np.std(returns) if len(returns) > 0 else 0
 
             # Momentum score (weighted combination of price changes)
-            momentum_score = (
-                price_change_1d * 0.5 +
-                price_change_3d * 0.3 +
-                price_change_7d * 0.2
-            )
+            momentum_score = price_change_1d * 0.5 + price_change_3d * 0.3 + price_change_7d * 0.2
 
             return MomentumMetrics(
                 price_change_1d=price_change_1d,
                 price_change_3d=price_change_3d,
                 price_change_7d=price_change_7d,
                 price_volatility=price_volatility,
-                momentum_score=momentum_score
+                momentum_score=momentum_score,
             )
 
         except Exception as e:
             _logger.warning("Error calculating momentum metrics for %s: %s", ticker, e)
             return None
 
-    def _calculate_squeeze_indicators(self, volume_metrics: VolumeMetrics,
-                                    momentum_metrics: MomentumMetrics,
-                                    profile: Dict[str, Any]) -> SqueezeIndicators:
+    def _calculate_squeeze_indicators(
+        self, volume_metrics: VolumeMetrics, momentum_metrics: MomentumMetrics, profile: Dict[str, Any]
+    ) -> SqueezeIndicators:
         """
         Calculate combined squeeze indicators.
 
@@ -291,37 +288,33 @@ class VolumeSqueezeDetector:
 
             # Combined score
             combined_score = (
-                volume_score * self.weights['volume_spike'] +
-                momentum_score * self.weights['momentum'] +
-                float_score * self.weights['float_size'] +
-                volume_metrics.volume_consistency * self.weights['consistency']
+                volume_score * self.weights["volume_spike"]
+                + momentum_score * self.weights["momentum"]
+                + float_score * self.weights["float_size"]
+                + volume_metrics.volume_consistency * self.weights["consistency"]
             )
 
             # Determine squeeze probability
             if combined_score >= 0.7:
-                squeeze_probability = 'HIGH'
+                squeeze_probability = "HIGH"
             elif combined_score >= 0.5:
-                squeeze_probability = 'MEDIUM'
+                squeeze_probability = "MEDIUM"
             else:
-                squeeze_probability = 'LOW'
+                squeeze_probability = "LOW"
 
             return SqueezeIndicators(
                 volume_score=volume_score,
                 momentum_score=momentum_score,
                 float_score=float_score,
                 combined_score=combined_score,
-                squeeze_probability=squeeze_probability
+                squeeze_probability=squeeze_probability,
             )
 
         except Exception as e:
             _logger.warning("Error calculating squeeze indicators: %s", e)
             # Return default low-probability indicators
             return SqueezeIndicators(
-                volume_score=0.0,
-                momentum_score=0.0,
-                float_score=0.0,
-                combined_score=0.0,
-                squeeze_probability='LOW'
+                volume_score=0.0, momentum_score=0.0, float_score=0.0, combined_score=0.0, squeeze_probability="LOW"
             )
 
     def _normalize_volume_score(self, volume_metrics: VolumeMetrics) -> float:
@@ -358,8 +351,8 @@ class VolumeSqueezeDetector:
     def _calculate_float_score(self, profile: Dict[str, Any]) -> float:
         """Calculate float-based score (smaller float = higher squeeze potential)."""
         try:
-            market_cap = profile.get('mktCap', 0)
-            price = profile.get('price', 1)
+            market_cap = profile.get("mktCap", 0)
+            price = profile.get("price", 1)
 
             # Estimate shares outstanding from market cap and price
             shares_outstanding = market_cap / max(price, 1) if price > 0 else 0
@@ -368,9 +361,9 @@ class VolumeSqueezeDetector:
             estimated_float = shares_outstanding * 0.8
 
             # Score based on float size (smaller = better for squeezes)
-            if estimated_float <= self.thresholds['small_float']:
+            if estimated_float <= self.thresholds["small_float"]:
                 return 1.0
-            elif estimated_float <= self.thresholds['medium_float']:
+            elif estimated_float <= self.thresholds["medium_float"]:
                 return 0.7
             elif estimated_float <= 200_000_000:  # 200M
                 return 0.4
@@ -380,12 +373,13 @@ class VolumeSqueezeDetector:
         except Exception:
             return 0.5  # Default middle score
 
-    def _create_structural_metrics(self, profile: Dict[str, Any],
-                                 volume_metrics: VolumeMetrics) -> Optional[StructuralMetrics]:
+    def _create_structural_metrics(
+        self, profile: Dict[str, Any], volume_metrics: VolumeMetrics
+    ) -> StructuralMetrics | None:
         """Create structural metrics from available data."""
         try:
-            market_cap = profile.get('mktCap', 0)
-            price = profile.get('price', 1)
+            market_cap = profile.get("mktCap", 0)
+            price = profile.get("price", 1)
 
             if market_cap <= 0 or price <= 0:
                 return None
@@ -403,7 +397,7 @@ class VolumeSqueezeDetector:
                 days_to_cover=days_to_cover,
                 float_shares=estimated_float,
                 avg_volume_14d=int(volume_metrics.avg_volume_14d),
-                market_cap=int(market_cap)
+                market_cap=int(market_cap),
             )
 
         except Exception as e:
@@ -436,8 +430,7 @@ class VolumeSqueezeDetector:
 
                     # Log progress
                     if i % 50 == 0:
-                        _logger.info("Screened %d/%d tickers, found %d candidates",
-                                   i, len(universe), len(results))
+                        _logger.info("Screened %d/%d tickers, found %d candidates", i, len(universe), len(results))
 
                 except Exception as e:
                     _logger.warning("Error screening ticker %s: %s", ticker, e)
@@ -482,7 +475,7 @@ if __name__ == "__main__":
         detector = create_volume_squeeze_detector(fmp_downloader)
 
         # Test with known volatile stocks
-        test_tickers = ['GME', 'AMC', 'TSLA', 'AAPL', 'NVDA']
+        test_tickers = ["GME", "AMC", "TSLA", "AAPL", "NVDA"]
 
         print(f"Testing volume squeeze detection on {len(test_tickers)} tickers...")
 
@@ -490,10 +483,12 @@ if __name__ == "__main__":
             analysis = detector.analyze_ticker(ticker)
             if analysis:
                 candidate, indicators = analysis
-                print(f"{ticker}: Score={indicators.combined_score:.3f}, "
-                      f"Probability={indicators.squeeze_probability}, "
-                      f"Volume={indicators.volume_score:.3f}, "
-                      f"Momentum={indicators.momentum_score:.3f}")
+                print(
+                    f"{ticker}: Score={indicators.combined_score:.3f}, "
+                    f"Probability={indicators.squeeze_probability}, "
+                    f"Volume={indicators.volume_score:.3f}, "
+                    f"Momentum={indicators.momentum_score:.3f}"
+                )
             else:
                 print(f"{ticker}: Analysis failed")
 

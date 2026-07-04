@@ -1,6 +1,6 @@
 from datetime import date
 
-from src.data.db.models.model_short_squeeze import ScreenerSnapshot, FINRAShortInterest
+from src.data.db.models.model_short_squeeze import FINRAShortInterest, ScreenerSnapshot
 
 
 def test_screener_snapshot_repr_and_conversion():

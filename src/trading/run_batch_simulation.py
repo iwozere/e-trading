@@ -1,44 +1,62 @@
-import os
-import sys
-import json
 import glob
+import json
 import logging
-from pathlib import Path
-from datetime import datetime
+import os
 import shutil
+import sys
 import uuid
+from pathlib import Path
 
 # Add src to path if running directly
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # Real imports
-from src.trading.tools.plot_simulation import plot_result_file
 from src.model.config_models import TradingBotConfig
 from src.trading.dto.created_trade import CreatedTrade
+from src.trading.tools.plot_simulation import plot_result_file
 
 # Setup simple logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("batch_simulation")
+
 
 # -----------------------------------------------------------------------------
 # MOCKING INFRASTRUCTURE
 # -----------------------------------------------------------------------------
 class MockRepository:
     """Mock repository to bypass database calls."""
-    def get_bot_instance(self, bot_id): return None
-    def create_bot_instance(self, data): return None
-    def update_bot_instance(self, bot_id, data): return None
-    def get_open_trades(self, bot_id, symbol): return []
+
+    def get_bot_instance(self, bot_id):
+        return None
+
+    def create_bot_instance(self, data):
+        return None
+
+    def update_bot_instance(self, bot_id, data):
+        return None
+
+    def get_open_trades(self, bot_id, symbol):
+        return []
+
     def create_trade(self, data):
         return CreatedTrade.synthetic(str(uuid.uuid4()))
 
     def create_partial_exit_trade(self, trade_data, original_trade_id):
         return CreatedTrade.synthetic(str(uuid.uuid4()), {"original_trade_id": original_trade_id})
-    def update_trade(self, trade_id, data): return None
-    def ensure_open_position(self, *args, **kwargs): return None
-    def get_open_positions(self, *args, **kwargs): return []
-    def heartbeat(self, *args, **kwargs): return None
+
+    def update_trade(self, trade_id, data):
+        return None
+
+    def ensure_open_position(self, *args, **kwargs):
+        return None
+
+    def get_open_positions(self, *args, **kwargs):
+        return []
+
+    def heartbeat(self, *args, **kwargs):
+        return None
+
 
 # Create instance for DI
 mock_repo = MockRepository()
@@ -46,8 +64,8 @@ mock_repo = MockRepository()
 # -----------------------------------------------------------------------------
 # REAL IMPORTS
 # -----------------------------------------------------------------------------
-from src.trading.base_trading_bot import BaseTradingBot
 from src.config.configuration_factory import config_factory
+from src.trading.base_trading_bot import BaseTradingBot
 
 # -----------------------------------------------------------------------------
 # BATCH SIMULATION BOT
@@ -59,17 +77,19 @@ class BatchSimulationBot(BaseTradingBot):
     Subclass of BaseTradingBot for batch simulation.
     Overrides configuration loading and execution loop.
     """
+
     def __init__(self, config_file):
         """Initialize simulation bot."""
         self.config_file = config_file
         self.config = self._load_configuration()
- 
+
         # Create components
         broker = self._create_broker()
         from src.strategy.custom_strategy import CustomStrategy
+
         strategy_class = CustomStrategy
         parameters = self._create_strategy_parameters()
-        
+
         # BaseTradingBot expects a dict for config
         config_dict = self.config.model_dump()
 
@@ -87,7 +107,7 @@ class BatchSimulationBot(BaseTradingBot):
             broker=broker,
             paper_trading=True,
             bot_id=self.config.bot_id,
-            trade_repository=mock_repo
+            trade_repository=mock_repo,
         )
 
         # Simulation attributes
@@ -103,15 +123,17 @@ class BatchSimulationBot(BaseTradingBot):
     def _create_broker(self):
         """Create a file-based broker for simulation."""
         from src.trading.broker.broker_factory import get_broker
+
         broker_config = self.config.broker.model_dump()
         return get_broker(broker_config)
 
     def _create_data_feed(self):
         """Create a CSV data feed for simulation."""
         from src.data.feed.data_feed_factory import DataFeedFactory
+
         broker_cfg = self.config.broker.model_dump()
         data_source = broker_cfg.get("data_source", {})
-        
+
         data_config = {
             "data_source": "file",
             "symbol": self.config.symbol,
@@ -130,7 +152,7 @@ class BatchSimulationBot(BaseTradingBot):
         try:
             hydrated_config = config_factory.load_manifest(self.config_file)
             return TradingBotConfig.model_validate(hydrated_config)
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to load/validate configuration")
             raise
 
@@ -162,6 +184,7 @@ class BatchSimulationBot(BaseTradingBot):
         """Setup Backtrader engine for simulation."""
         try:
             import backtrader as bt
+
             self.cerebro = bt.Cerebro()
 
             # Add data feed
@@ -173,7 +196,7 @@ class BatchSimulationBot(BaseTradingBot):
             # Setup initial cash on DEFAULT broker
             initial_balance = self.config.broker.cash
             self.cerebro.broker.setcash(initial_balance)
- 
+
             # Setup commission on DEFAULT broker
             # Try to get from paper_trading_config, otherwise default
             pt_config = self.config.broker.paper_trading_config
@@ -190,21 +213,26 @@ class BatchSimulationBot(BaseTradingBot):
     def _create_strategy_parameters(self):
         """Override to handle strategy parameters more flexibly."""
         strat_params = self.config.strategy.parameters
-        return {
-            "strategy_config": strat_params
-        }
+        return {"strategy_config": strat_params}
 
     # Override notification methods to do nothing
-    def notify_trade_event(self, *args, **kwargs): pass
-    def notify_bot_event(self, *args, **kwargs): pass
-    def notify_error(self, *args, **kwargs): pass
-    def _initialize_bot_instance(self): pass # Skip DB init
+    def notify_trade_event(self, *args, **kwargs):
+        pass
+
+    def notify_bot_event(self, *args, **kwargs):
+        pass
+
+    def notify_error(self, *args, **kwargs):
+        pass
+
+    def _initialize_bot_instance(self):
+        pass  # Skip DB init
 
     def get_simulation_results(self):
         if self.strategy_instance is not None:
             # Extract results from strategy instance
             stats = self.strategy_instance.get_performance_summary()
-            trades = getattr(self.strategy_instance, 'trades', [])
+            trades = getattr(self.strategy_instance, "trades", [])
 
             # Format results
             return {
@@ -218,7 +246,7 @@ class BatchSimulationBot(BaseTradingBot):
                 "win_rate": stats.get("win_rate", 0.0),
                 "max_drawdown": stats.get("max_drawdown", 0.0),
                 "strategy_config": self.config.strategy.model_dump(),
-                "data_file": self.config.broker.model_dump().get("data_source", {}).get("file_path", "")
+                "data_file": self.config.broker.model_dump().get("data_source", {}).get("file_path", ""),
             }
 
         return {
@@ -230,7 +258,7 @@ class BatchSimulationBot(BaseTradingBot):
             "total_trades": len(self.trade_history),
             "trades": self.trade_history,
             "strategy_config": self.config.strategy.model_dump(),
-            "data_file": self.config.broker.model_dump().get("data_source", {}).get("file_path", "")
+            "data_file": self.config.broker.model_dump().get("data_source", {}).get("file_path", ""),
         }
 
 
@@ -249,10 +277,10 @@ def run_batch_simulation():
 
     # Load templates
     try:
-        with open(template_path, 'r') as f:
+        with open(template_path) as f:
             manifest_template = json.load(f)
 
-        with open(broker_template_path, 'r') as f:
+        with open(broker_template_path) as f:
             broker_template = json.load(f)
     except FileNotFoundError as e:
         logger.error(f"Template not found: {e}")
@@ -262,7 +290,9 @@ def run_batch_simulation():
     csv_files = glob.glob(str(data_dir / "*.csv"))
     strategy_files = glob.glob(str(strategy_dir / "*.json"))
 
-    logger.info(f"Found {len(csv_files)} data files and {len(strategy_files)} strategies. Total combinations: {len(csv_files) * len(strategy_files)}")
+    logger.info(
+        f"Found {len(csv_files)} data files and {len(strategy_files)} strategies. Total combinations: {len(csv_files) * len(strategy_files)}"
+    )
 
     if not csv_files:
         logger.warning(f"No CSV files found in {data_dir}")
@@ -273,7 +303,7 @@ def run_batch_simulation():
 
     for csv_file in csv_files:
         csv_path = Path(csv_file)
-        filename_parts = csv_path.name.split('_')
+        filename_parts = csv_path.name.split("_")
         symbol = filename_parts[0] if filename_parts else "UNKNOWN"
         data_name = csv_path.stem
 
@@ -292,12 +322,12 @@ def run_batch_simulation():
             # Prepare Broker Config
             current_broker = broker_template.copy()
             if "broker" in current_broker:
-                 current_broker["broker"]["data_source"]["file_path"] = str(csv_path)
+                current_broker["broker"]["data_source"]["file_path"] = str(csv_path)
 
             # Write temp broker
             temp_broker_path = temp_dir / f"{data_name}-broker.json"
             temp_dir.mkdir(parents=True, exist_ok=True)
-            with open(temp_broker_path, 'w') as f:
+            with open(temp_broker_path, "w") as f:
                 json.dump(current_broker, f, indent=2)
 
             # Prepare Manifest
@@ -307,24 +337,26 @@ def run_batch_simulation():
             manifest["symbol"] = symbol
 
             if "modules" not in manifest:
-                 manifest["modules"] = {}
+                manifest["modules"] = {}
 
             if "components" in manifest:
                 comps = manifest.pop("components")
                 if "strategy_logic" in comps:
-                     manifest["modules"]["strategy"] = comps["strategy_logic"]
+                    manifest["modules"]["strategy"] = comps["strategy_logic"]
 
                 # Copy other components
                 for k, v in comps.items():
                     if k != "strategy_logic" and k != "broker":
-                         manifest["modules"][k] = v
+                        manifest["modules"][k] = v
 
             # Verify and fix specific modules
             manifest["modules"]["broker"] = str(temp_broker_path)
             manifest["modules"]["strategy"] = str(strategy_path)
 
             # Fix incorrect paths from template
-            manifest["modules"]["strategy_risk"] = "config/contracts/instances/strategy-risks/risk-strategy-standard.json"
+            manifest["modules"]["strategy_risk"] = (
+                "config/contracts/instances/strategy-risks/risk-strategy-standard.json"
+            )
             manifest["modules"]["global_risk"] = "config/contracts/instances/risk/risk-global-aggressive.json"
             manifest["modules"]["portfolio_manager"] = "config/contracts/instances/portfolio/portfolio-standard.json"
             manifest["modules"]["notifications"] = "config/contracts/instances/notifications/notifications-file.json"
@@ -332,7 +364,7 @@ def run_batch_simulation():
             # Write temp manifest
             temp_manifest_path = temp_dir / f"{manifest['bot_id']}.json"
             temp_dir.mkdir(parents=True, exist_ok=True)
-            with open(temp_manifest_path, 'w') as f:
+            with open(temp_manifest_path, "w") as f:
                 json.dump(manifest, f, indent=2)
 
             try:
@@ -344,7 +376,7 @@ def run_batch_simulation():
                 results = bot.get_simulation_results()
 
                 # Save Report
-                with open(report_path, 'w') as f:
+                with open(report_path, "w") as f:
                     json.dump(results, f, indent=2, default=str)
 
                 logger.info(f"Report saved to {report_path}. PnL: {results['total_pnl']:.2f}%")
@@ -357,7 +389,7 @@ def run_batch_simulation():
                 except Exception as pe:
                     logger.error(f"Failed to generate plot for {report_path}: {pe}")
 
-            except BaseException as e:
+            except BaseException:
                 logger.exception(f"Error running simulation for {data_name} - {strategy_name}")
 
     # Cleanup temp
@@ -365,6 +397,7 @@ def run_batch_simulation():
         shutil.rmtree(temp_dir)
     except Exception as e:
         logger.warning(f"Failed to clean up temp dir: {e}")
+
 
 if __name__ == "__main__":
     run_batch_simulation()

@@ -40,17 +40,18 @@ Usage:
 
 import sys
 from pathlib import Path
-PROJECT_ROOT = Path(__file__).resolve().parents[3] # Go up 3 levels from 'src/ml/hmm'
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]  # Go up 3 levels from 'src/ml/hmm'
 sys.path.append(str(PROJECT_ROOT))
 
-import pandas as pd
-import numpy as np
-import os
 import argparse
 import json
-import joblib
-import optuna
+import os
 
+import joblib
+import numpy as np
+import optuna
+import pandas as pd
 from hmmlearn.hmm import GaussianHMM
 from sklearn.preprocessing import StandardScaler
 
@@ -78,8 +79,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeframe", required=True, help="A base name for output files (e.g., 'btcusdt_1h').")
     parser.add_argument("--optimize", action="store_true", help="Enable hyperparameter optimization with Optuna.")
     parser.add_argument("--n_trials", type=int, default=30, help="Number of Optuna trials to run if --optimize is set.")
-    parser.add_argument("--features", nargs="*", default=DEFAULT_FEATURES, help="A list of features to use for the model.")
-    parser.add_argument("--backend", choices=["gaussian", "pomegranate"], default="gaussian", help="The HMM library to use.")
+    parser.add_argument(
+        "--features", nargs="*", default=DEFAULT_FEATURES, help="A list of features to use for the model."
+    )
+    parser.add_argument(
+        "--backend", choices=["gaussian", "pomegranate"], default="gaussian", help="The HMM library to use."
+    )
     return parser.parse_args()
 
 
@@ -102,10 +107,7 @@ def objective(trial: optuna.trial.Trial, df: pd.DataFrame, features: list[str]) 
         float: The score for this set of hyperparameters. A higher score is better.
     """
     # Suggest HMM and feature engineering parameters
-    params = {
-        "n_components": 3,
-        "vol_window": trial.suggest_int("vol_window", 5, 50)
-    }
+    params = {"n_components": 3, "vol_window": trial.suggest_int("vol_window", 5, 50)}
     if "rsi" in features:
         params["rsi_period"] = trial.suggest_int("rsi_period", 10, 30)
     if "macd" in features:
@@ -123,7 +125,7 @@ def objective(trial: optuna.trial.Trial, df: pd.DataFrame, features: list[str]) 
     if args.backend == "pomegranate":
         model = HiddenMarkovModel.from_samples(NormalDistribution, n_components=params["n_components"], X=[X])
         hidden_states = model.predict(X)
-    else: # Default to gaussian
+    else:  # Default to gaussian
         model = GaussianHMM(n_components=params["n_components"], covariance_type="full", n_iter=100)
         model.fit(X)
         hidden_states = model.predict(X)
@@ -132,13 +134,15 @@ def objective(trial: optuna.trial.Trial, df: pd.DataFrame, features: list[str]) 
     regime_means = [X[hidden_states == state][:, 0].mean() for state in np.unique(hidden_states)]
 
     if len(regime_means) < params["n_components"]:
-        return -1e9 # Penalize if model collapses states
+        return -1e9  # Penalize if model collapses states
 
     score = -np.std(regime_means)
     return score
 
 
-def train_model(df: pd.DataFrame, features: list[str], params: dict, backend: str = "gaussian") -> tuple[object, pd.DataFrame]:
+def train_model(
+    df: pd.DataFrame, features: list[str], params: dict, backend: str = "gaussian"
+) -> tuple[object, pd.DataFrame]:
     """
     Trains a final HMM using the specified parameters and backend.
 
@@ -176,7 +180,7 @@ def train_model(df: pd.DataFrame, features: list[str], params: dict, backend: st
         raise ValueError(f"Unsupported backend: {backend}")
 
     # Align the states with the feature DataFrame (which had NaNs dropped)
-    df_full = df_full.iloc[-len(states):].copy()
+    df_full = df_full.iloc[-len(states) :].copy()
     df_full["regime"] = states
     return model, df_full
 
@@ -194,8 +198,8 @@ def main():
     # Lazily import pomegranate only if needed to avoid mandatory installation
     if args.backend == "pomegranate":
         try:
-            from pomegranate.hmm import HiddenMarkovModel
             from pomegranate.distributions import MultivariateGaussianDistribution as NormalDistribution
+            from pomegranate.hmm import HiddenMarkovModel
         except ImportError:
             _logger.error("'pomegranate' backend was chosen but the library is not installed.")
             _logger.error("Please run: pip install pomegranate")
@@ -219,7 +223,7 @@ def main():
             "macd_fast": 12,
             "macd_slow": 26,
             "macd_signal": 9,
-            "boll_window": 20
+            "boll_window": 20,
         }
 
     # Train the final model with the determined parameters

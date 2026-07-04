@@ -7,26 +7,27 @@ clean separation of concerns.
 """
 
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Any, Dict, Tuple, Optional, List
-from datetime import datetime, timezone, timedelta
+
 import asyncio
+import hashlib
 import json
 import math
-import hashlib
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Any, Dict, List, Tuple
 
 import pandas as pd
 
-from src.data.data_manager import DataManager
-from src.indicators.service import IndicatorService
-from src.data.db.services.jobs_service import JobsService
-from src.common.alerts.schema_validator import AlertSchemaValidator
-from src.notification.logger import setup_logger
 from src.common.alerts.plugins import registry as plugin_registry
+from src.common.alerts.schema_validator import AlertSchemaValidator
+from src.data.data_manager import DataManager
+from src.data.db.services.jobs_service import JobsService
+from src.indicators.service import IndicatorService
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-UTC = timezone.utc
+UTC = UTC
 
 
 def utcnow() -> datetime:
@@ -37,10 +38,11 @@ def utcnow() -> datetime:
 @dataclass
 class AlertConfig:
     """Configuration for an alert evaluation."""
+
     ticker: str
     timeframe: str
     rule: Dict[str, Any]
-    rearm: Optional[Dict[str, Any]]
+    rearm: Dict[str, Any] | None
     options: Dict[str, Any]
     notify: Dict[str, Any]
 
@@ -48,16 +50,18 @@ class AlertConfig:
 @dataclass
 class AlertEvaluationResult:
     """Result of alert evaluation."""
+
     triggered: bool
     rearmed: bool
     state_updates: Dict[str, Any]
-    notification_data: Optional[Dict[str, Any]]
-    error: Optional[str]
+    notification_data: Dict[str, Any] | None
+    error: str | None
 
 
 @dataclass
 class RearmResult:
     """Result of rearm logic evaluation."""
+
     should_rearm: bool
     new_status: str  # "ARMED", "TRIGGERED", "INACTIVE"
     state_updates: Dict[str, Any]
@@ -72,11 +76,13 @@ class AlertEvaluator:
     data and indicator services.
     """
 
-    def __init__(self,
-                 data_manager: DataManager,
-                 indicator_service: IndicatorService,
-                 jobs_service: JobsService,
-                 schema_validator: AlertSchemaValidator):
+    def __init__(
+        self,
+        data_manager: DataManager,
+        indicator_service: IndicatorService,
+        jobs_service: JobsService,
+        schema_validator: AlertSchemaValidator,
+    ):
         """
         Initialize the alert evaluator.
 
@@ -114,19 +120,17 @@ class AlertEvaluator:
                     rearmed=False,
                     state_updates={},
                     notification_data=None,
-                    error="Invalid schedule_id in job_run"
+                    error="Invalid schedule_id in job_run",
                 )
 
-            schedule = await asyncio.to_thread(
-                lambda: self.jobs_service.get_schedule(schedule_id)
-            )
+            schedule = await asyncio.to_thread(lambda: self.jobs_service.get_schedule(schedule_id))
             if not schedule:
                 return AlertEvaluationResult(
                     triggered=False,
                     rearmed=False,
                     state_updates={},
                     notification_data=None,
-                    error=f"Schedule {schedule_id} not found"
+                    error=f"Schedule {schedule_id} not found",
                 )
 
             # Parse and validate alert configuration
@@ -137,7 +141,7 @@ class AlertEvaluator:
                     rearmed=False,
                     state_updates={},
                     notification_data=None,
-                    error="Failed to parse alert configuration"
+                    error="Failed to parse alert configuration",
                 )
 
             # Load current alert state
@@ -147,11 +151,7 @@ class AlertEvaluator:
             if not self._should_evaluate(alert_config, current_state):
                 _logger.debug("Skipping evaluation for job %s - already processed this bar", schedule.id)
                 return AlertEvaluationResult(
-                    triggered=False,
-                    rearmed=False,
-                    state_updates={},
-                    notification_data=None,
-                    error=None
+                    triggered=False, rearmed=False, state_updates={}, notification_data=None, error=None
                 )
 
             # Fetch market data
@@ -162,7 +162,7 @@ class AlertEvaluator:
                     rearmed=False,
                     state_updates={},
                     notification_data=None,
-                    error="No market data available"
+                    error="No market data available",
                 )
 
             # Calculate required indicators
@@ -184,9 +184,7 @@ class AlertEvaluator:
                 )
 
             # Apply rearm logic to determine final state
-            rearm_result = self._apply_rearm_logic(
-                alert_config, current_state, triggered, rearmed
-            )
+            rearm_result = self._apply_rearm_logic(alert_config, current_state, triggered, rearmed)
 
             # Merge sides for persistence
             all_sides = {**rule_sides, **rearm_sides}
@@ -196,7 +194,7 @@ class AlertEvaluator:
                 **current_state,
                 "sides": all_sides,
                 "last_bar_ts": market_data.index[-1].isoformat(),
-                "last_evaluation": utcnow().isoformat()
+                "last_evaluation": utcnow().isoformat(),
             }
             new_state.update(rearm_result.state_updates)
 
@@ -212,20 +210,16 @@ class AlertEvaluator:
                 rearmed=rearmed,
                 state_updates=new_state,
                 notification_data=notification_data,
-                error=None
+                error=None,
             )
 
         except Exception as e:
-            _logger.exception("Error evaluating alert for job %s", getattr(job_run, 'id', 'unknown'))
+            _logger.exception("Error evaluating alert for job %s", getattr(job_run, "id", "unknown"))
             return AlertEvaluationResult(
-                triggered=False,
-                rearmed=False,
-                state_updates={},
-                notification_data=None,
-                error=str(e)
+                triggered=False, rearmed=False, state_updates={}, notification_data=None, error=str(e)
             )
 
-    def _parse_alert_config(self, task_params: Dict[str, Any]) -> Optional[AlertConfig]:
+    def _parse_alert_config(self, task_params: Dict[str, Any]) -> AlertConfig | None:
         """
         Parse and validate alert configuration from task_params.
 
@@ -252,8 +246,9 @@ class AlertEvaluator:
             rule = task_params.get("rule")
 
             if not all([ticker, timeframe, rule]):
-                _logger.error("Missing required fields in alert config: ticker=%s, timeframe=%s, rule=%s",
-                            ticker, timeframe, rule)
+                _logger.error(
+                    "Missing required fields in alert config: ticker=%s, timeframe=%s, rule=%s", ticker, timeframe, rule
+                )
                 return None
 
             # Extract optional fields with defaults
@@ -262,19 +257,14 @@ class AlertEvaluator:
             notify = task_params.get("notify", {})
 
             return AlertConfig(
-                ticker=ticker,
-                timeframe=timeframe,
-                rule=rule,
-                rearm=rearm,
-                options=options,
-                notify=notify
+                ticker=ticker, timeframe=timeframe, rule=rule, rearm=rearm, options=options, notify=notify
             )
 
         except Exception:
             _logger.exception("Error parsing alert configuration:")
             return None
 
-    def _load_alert_state(self, state_json: Optional[str]) -> Dict[str, Any]:
+    def _load_alert_state(self, state_json: str | None) -> Dict[str, Any]:
         """
         Load alert state from JSON string with comprehensive error recovery.
 
@@ -311,7 +301,7 @@ class AlertEvaluator:
         # will be implemented when we have market data
         return True
 
-    async def _fetch_market_data(self, alert_config: AlertConfig) -> Optional[pd.DataFrame]:
+    async def _fetch_market_data(self, alert_config: AlertConfig) -> pd.DataFrame | None:
         """
         Fetch market data for alert evaluation with provider failover.
 
@@ -343,9 +333,16 @@ class AlertEvaluator:
                 buffer_multiplier = 1.5 if timeframe_minutes >= 1440 else 1.2  # More buffer for daily+ data
                 start_date = end_date - timedelta(minutes=timeframe_minutes * lookback_bars * buffer_multiplier)
 
-                _logger.debug("Fetching market data for %s %s (attempt %d/%d): %d bars from %s to %s",
-                            alert_config.ticker, alert_config.timeframe, retry_count + 1, max_retries,
-                            lookback_bars, start_date.isoformat(), end_date.isoformat())
+                _logger.debug(
+                    "Fetching market data for %s %s (attempt %d/%d): %d bars from %s to %s",
+                    alert_config.ticker,
+                    alert_config.timeframe,
+                    retry_count + 1,
+                    max_retries,
+                    lookback_bars,
+                    start_date.isoformat(),
+                    end_date.isoformat(),
+                )
 
                 # Fetch data using DataManager with provider failover
                 df = self.data_manager.get_ohlcv(
@@ -353,19 +350,24 @@ class AlertEvaluator:
                     timeframe=alert_config.timeframe,
                     start_date=start_date,
                     end_date=end_date,
-                    force_refresh=retry_count > 0  # Force refresh on retries
+                    force_refresh=retry_count > 0,  # Force refresh on retries
                 )
 
                 # Validate data quality
                 if not self._validate_market_data(df, alert_config, lookback_bars):
                     retry_count += 1
                     if retry_count < max_retries:
-                        _logger.warning("Data validation failed for %s %s, retrying...",
-                                      alert_config.ticker, alert_config.timeframe)
+                        _logger.warning(
+                            "Data validation failed for %s %s, retrying...", alert_config.ticker, alert_config.timeframe
+                        )
                         continue
                     else:
-                        _logger.error("Data validation failed for %s %s after %d attempts",
-                                    alert_config.ticker, alert_config.timeframe, max_retries)
+                        _logger.error(
+                            "Data validation failed for %s %s after %d attempts",
+                            alert_config.ticker,
+                            alert_config.timeframe,
+                            max_retries,
+                        )
                         return None
 
                 # Trim to closed bars only
@@ -373,33 +375,47 @@ class AlertEvaluator:
 
                 # Final validation after trimming
                 if df is None or len(df) < min(10, lookback_bars // 2):
-                    _logger.warning("Insufficient data after trimming for %s %s: %d bars",
-                                  alert_config.ticker, alert_config.timeframe, len(df) if df is not None else 0)
+                    _logger.warning(
+                        "Insufficient data after trimming for %s %s: %d bars",
+                        alert_config.ticker,
+                        alert_config.timeframe,
+                        len(df) if df is not None else 0,
+                    )
                     retry_count += 1
                     continue
 
-                _logger.debug("Successfully fetched %d bars for %s %s", len(df),
-                             alert_config.ticker, alert_config.timeframe)
+                _logger.debug(
+                    "Successfully fetched %d bars for %s %s", len(df), alert_config.ticker, alert_config.timeframe
+                )
 
                 return df
 
             except Exception as e:
                 retry_count += 1
-                _logger.warning("Error fetching market data for %s %s (attempt %d/%d): %s",
-                              alert_config.ticker, alert_config.timeframe, retry_count, max_retries, str(e))
+                _logger.warning(
+                    "Error fetching market data for %s %s (attempt %d/%d): %s",
+                    alert_config.ticker,
+                    alert_config.timeframe,
+                    retry_count,
+                    max_retries,
+                    str(e),
+                )
 
                 if retry_count >= max_retries:
-                    _logger.error("Failed to fetch market data for %s %s after %d attempts",
-                                alert_config.ticker, alert_config.timeframe, max_retries)
+                    _logger.error(
+                        "Failed to fetch market data for %s %s after %d attempts",
+                        alert_config.ticker,
+                        alert_config.timeframe,
+                        max_retries,
+                    )
                     return None
 
                 # Wait before retry (exponential backoff)
-                await asyncio.sleep(2 ** retry_count)
+                await asyncio.sleep(2**retry_count)
 
         return None
 
-    def _validate_market_data(self, df: Optional[pd.DataFrame], alert_config: AlertConfig,
-                            expected_bars: int) -> bool:
+    def _validate_market_data(self, df: pd.DataFrame | None, alert_config: AlertConfig, expected_bars: int) -> bool:
         """
         Validate market data quality and completeness.
 
@@ -425,8 +441,7 @@ class AlertEvaluator:
         # Check minimum data requirements
         min_required_bars = min(50, expected_bars // 4)  # At least 25% of expected or 50 bars
         if len(df) < min_required_bars:
-            _logger.warning("Insufficient market data: %d bars (minimum %d required)",
-                          len(df), min_required_bars)
+            _logger.warning("Insufficient market data: %d bars (minimum %d required)", len(df), min_required_bars)
             return False
 
         # Check for excessive NaN values
@@ -460,10 +475,7 @@ class AlertEvaluator:
 
     def _timeframe_to_minutes(self, timeframe: str) -> int:
         """Convert timeframe string to minutes."""
-        timeframe_map = {
-            "1m": 1, "5m": 5, "15m": 15, "30m": 30,
-            "1h": 60, "4h": 240, "1d": 1440
-        }
+        timeframe_map = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "4h": 240, "1d": 1440}
         return timeframe_map.get(timeframe, 60)  # Default to 1 hour
 
     def _trim_to_closed_bars(self, df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
@@ -544,8 +556,20 @@ class AlertEvaluator:
             return 100
 
         # Handle comparison operators
-        for op in ("gt", "gte", "lt", "lte", "eq", "ne", "between", "outside",
-                  "inside_band", "outside_band", "crosses_above", "crosses_below"):
+        for op in (
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "eq",
+            "ne",
+            "between",
+            "outside",
+            "inside_band",
+            "outside_band",
+            "crosses_above",
+            "crosses_below",
+        ):
             if op in expr:
                 node = expr[op]
                 lhs_lookback = self._calculate_operand_lookback(node.get("lhs"))
@@ -554,12 +578,11 @@ class AlertEvaluator:
                 lower_lookback = self._calculate_operand_lookback(node.get("lower"))
                 upper_lookback = self._calculate_operand_lookback(node.get("upper"))
 
-                return max(lhs_lookback, rhs_lookback, value_lookback,
-                          lower_lookback, upper_lookback)
+                return max(lhs_lookback, rhs_lookback, value_lookback, lower_lookback, upper_lookback)
 
         return 0
 
-    def _calculate_operand_lookback(self, operand: Optional[Dict[str, Any]]) -> int:
+    def _calculate_operand_lookback(self, operand: Dict[str, Any] | None) -> int:
         """
         Calculate lookback needed for an operand.
 
@@ -593,8 +616,7 @@ class AlertEvaluator:
         else:
             return 100  # Conservative default
 
-    async def _calculate_indicators(self, alert_config: AlertConfig,
-                                  market_data: pd.DataFrame) -> Dict[str, pd.Series]:
+    async def _calculate_indicators(self, alert_config: AlertConfig, market_data: pd.DataFrame) -> Dict[str, pd.Series]:
         """
         Calculate all indicators needed for alert evaluation.
 
@@ -623,8 +645,9 @@ class AlertEvaluator:
 
         return indicators
 
-    def _calculate_basic_indicators(self, market_data: pd.DataFrame,
-                                  specs: List[Dict[str, Any]]) -> Dict[str, pd.Series]:
+    def _calculate_basic_indicators(
+        self, market_data: pd.DataFrame, specs: List[Dict[str, Any]]
+    ) -> Dict[str, pd.Series]:
         """
         Calculate basic indicators using simple implementations.
 
@@ -723,8 +746,20 @@ class AlertEvaluator:
                 _logger.warning("Plugin %s not found in registry during indicator extraction.", expr["plugin"])
         else:
             # Handle comparison operators
-            for op in ("gt", "gte", "lt", "lte", "eq", "ne", "between", "outside",
-                      "inside_band", "outside_band", "crosses_above", "crosses_below"):
+            for op in (
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "eq",
+                "ne",
+                "between",
+                "outside",
+                "inside_band",
+                "outside_band",
+                "crosses_above",
+                "crosses_below",
+            ):
                 if op in expr:
                     node = expr[op]
                     self._extract_operand_indicators(node.get("lhs"), specs)
@@ -733,8 +768,7 @@ class AlertEvaluator:
                     self._extract_operand_indicators(node.get("lower"), specs)
                     self._extract_operand_indicators(node.get("upper"), specs)
 
-    def _extract_operand_indicators(self, operand: Optional[Dict[str, Any]],
-                                  specs: List[Dict[str, Any]]) -> None:
+    def _extract_operand_indicators(self, operand: Dict[str, Any] | None, specs: List[Dict[str, Any]]) -> None:
         """
         Extract indicator specs from an operand.
 
@@ -749,9 +783,13 @@ class AlertEvaluator:
         if indicator and indicator not in specs:
             specs.append(indicator)
 
-    def _evaluate_rule_tree(self, rule: Dict[str, Any], market_data: pd.DataFrame,
-                           indicators: Dict[str, pd.Series],
-                           sides_state: Dict[str, str]) -> Tuple[bool, Dict[str, str], Dict[str, float]]:
+    def _evaluate_rule_tree(
+        self,
+        rule: Dict[str, Any],
+        market_data: pd.DataFrame,
+        indicators: Dict[str, pd.Series],
+        sides_state: Dict[str, str],
+    ) -> Tuple[bool, Dict[str, str], Dict[str, float]]:
         """
         Evaluate a rule tree with logical operators.
 
@@ -793,9 +831,7 @@ class AlertEvaluator:
             return False, sides, snapshot
 
         if "not" in rule:
-            result, sides, snapshot = self._evaluate_rule_tree(
-                rule["not"], market_data, indicators, sides_state
-            )
+            result, sides, snapshot = self._evaluate_rule_tree(rule["not"], market_data, indicators, sides_state)
             return not result, sides, snapshot
 
         if "plugin" in rule:
@@ -808,7 +844,7 @@ class AlertEvaluator:
                     plugin_side_key = f"{plugin_name}_{str(params)}"
                     result = plugin.evaluate(params, market_data, indicators)
                     return result, {}, {}
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error evaluating plugin %s:", plugin_name)
                     return False, {}, {}
             else:
@@ -816,17 +852,34 @@ class AlertEvaluator:
                 return False, {}, {}
 
         # Handle leaf nodes (comparison operators)
-        for op in ("gt", "gte", "lt", "lte", "eq", "ne", "between", "outside",
-                  "inside_band", "outside_band", "crosses_above", "crosses_below"):
+        for op in (
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "eq",
+            "ne",
+            "between",
+            "outside",
+            "inside_band",
+            "outside_band",
+            "crosses_above",
+            "crosses_below",
+        ):
             if op in rule:
                 return self._evaluate_comparison(op, rule[op], market_data, indicators, sides_state)
 
         _logger.error("Unknown rule structure: %s", rule)
         return False, {}, {}
 
-    def _evaluate_comparison(self, op: str, node: Dict[str, Any], market_data: pd.DataFrame,
-                           indicators: Dict[str, pd.Series],
-                           sides_state: Dict[str, str]) -> Tuple[bool, Dict[str, str], Dict[str, float]]:
+    def _evaluate_comparison(
+        self,
+        op: str,
+        node: Dict[str, Any],
+        market_data: pd.DataFrame,
+        indicators: Dict[str, pd.Series],
+        sides_state: Dict[str, str],
+    ) -> Tuple[bool, Dict[str, str], Dict[str, float]]:
         """
         Evaluate a comparison operation.
 
@@ -840,7 +893,8 @@ class AlertEvaluator:
         Returns:
             Tuple of (result, updated_sides, snapshot_values)
         """
-        def resolve_operand(operand) -> Tuple[Optional[float], Dict[str, float]]:
+
+        def resolve_operand(operand) -> Tuple[float | None, Dict[str, float]]:
             """Resolve an operand to a numeric value."""
             if operand is None:
                 return None, {}
@@ -904,7 +958,7 @@ class AlertEvaluator:
                 "lt": lhs < rhs,
                 "lte": lhs <= rhs,
                 "eq": lhs == rhs,
-                "ne": lhs != rhs
+                "ne": lhs != rhs,
             }
 
             return comparisons[op], sides, snapshot
@@ -1000,8 +1054,9 @@ class AlertEvaluator:
         payload = json.dumps(node, sort_keys=True)
         return hashlib.md5(payload.encode()).hexdigest()
 
-    def _apply_rearm_logic(self, alert_config: AlertConfig, current_state: Dict[str, Any],
-                          triggered: bool, rearmed: bool) -> RearmResult:
+    def _apply_rearm_logic(
+        self, alert_config: AlertConfig, current_state: Dict[str, Any], triggered: bool, rearmed: bool
+    ) -> RearmResult:
         """
         Apply rearm logic to determine final alert state.
 
@@ -1029,14 +1084,10 @@ class AlertEvaluator:
                 return RearmResult(
                     should_rearm=False,
                     new_status="TRIGGERED",
-                    state_updates={"status": "TRIGGERED", "last_triggered": utcnow().isoformat()}
+                    state_updates={"status": "TRIGGERED", "last_triggered": utcnow().isoformat()},
                 )
             else:
-                return RearmResult(
-                    should_rearm=False,
-                    new_status=current_status,
-                    state_updates={}
-                )
+                return RearmResult(should_rearm=False, new_status=current_status, state_updates={})
 
         # Get rearm configuration
         rearm_config = alert_config.rearm
@@ -1048,71 +1099,46 @@ class AlertEvaluator:
                 return RearmResult(
                     should_rearm=False,
                     new_status="TRIGGERED",
-                    state_updates={"status": "TRIGGERED", "last_triggered": utcnow().isoformat()}
+                    state_updates={"status": "TRIGGERED", "last_triggered": utcnow().isoformat()},
                 )
             else:
-                return RearmResult(
-                    should_rearm=False,
-                    new_status=current_status,
-                    state_updates={}
-                )
+                return RearmResult(should_rearm=False, new_status=current_status, state_updates={})
 
         # Check cooldown period
         if not self._check_cooldown(current_state, rearm_config):
-            return RearmResult(
-                should_rearm=False,
-                new_status="COOLDOWN",
-                state_updates={"status": "COOLDOWN"}
-            )
+            return RearmResult(should_rearm=False, new_status="COOLDOWN", state_updates={"status": "COOLDOWN"})
 
         # Check persistence bars requirement
         if not self._check_persistence_bars(current_state, rearm_config, triggered, rearmed):
             # Update persistence counters but don't change status yet
             persistence_updates = self._update_persistence_counters(current_state, triggered, rearmed)
-            return RearmResult(
-                should_rearm=False,
-                new_status=current_status,
-                state_updates=persistence_updates
-            )
+            return RearmResult(should_rearm=False, new_status=current_status, state_updates=persistence_updates)
 
         # Apply main rearm state machine
         if current_status == "ARMED":
             if triggered:
-                state_updates.update({
-                    "status": "TRIGGERED",
-                    "last_triggered": utcnow().isoformat(),
-                    "trigger_count": current_state.get("trigger_count", 0) + 1
-                })
+                state_updates.update(
+                    {
+                        "status": "TRIGGERED",
+                        "last_triggered": utcnow().isoformat(),
+                        "trigger_count": current_state.get("trigger_count", 0) + 1,
+                    }
+                )
                 # Reset persistence counters
                 state_updates.update(self._reset_persistence_counters())
 
-                return RearmResult(
-                    should_rearm=False,
-                    new_status="TRIGGERED",
-                    state_updates=state_updates
-                )
+                return RearmResult(should_rearm=False, new_status="TRIGGERED", state_updates=state_updates)
 
         elif current_status in ("TRIGGERED", "COOLDOWN"):
             if rearmed:
-                state_updates.update({
-                    "status": "ARMED",
-                    "last_rearmed": utcnow().isoformat()
-                })
+                state_updates.update({"status": "ARMED", "last_rearmed": utcnow().isoformat()})
                 # Reset persistence counters
                 state_updates.update(self._reset_persistence_counters())
 
-                return RearmResult(
-                    should_rearm=True,
-                    new_status="ARMED",
-                    state_updates=state_updates
-                )
+                return RearmResult(should_rearm=True, new_status="ARMED", state_updates=state_updates)
 
         # No state change
-        return RearmResult(
-            should_rearm=False,
-            new_status=current_status,
-            state_updates={}
-        )
+        return RearmResult(should_rearm=False, new_status=current_status, state_updates={})
 
     def _check_cooldown(self, current_state: Dict[str, Any], rearm_config: Dict[str, Any]) -> bool:
         """
@@ -1135,7 +1161,7 @@ class AlertEvaluator:
 
         try:
             if isinstance(last_triggered, str):
-                last_triggered_dt = datetime.fromisoformat(last_triggered.replace('Z', '+00:00'))
+                last_triggered_dt = datetime.fromisoformat(last_triggered.replace("Z", "+00:00"))
             else:
                 last_triggered_dt = last_triggered
 
@@ -1151,8 +1177,9 @@ class AlertEvaluator:
             _logger.warning("Error checking cooldown: %s", str(e))
             return True  # Allow if we can't parse timestamp
 
-    def _check_persistence_bars(self, current_state: Dict[str, Any], rearm_config: Dict[str, Any],
-                               triggered: bool, rearmed: bool) -> bool:
+    def _check_persistence_bars(
+        self, current_state: Dict[str, Any], rearm_config: Dict[str, Any], triggered: bool, rearmed: bool
+    ) -> bool:
         """
         Check if persistence bar requirements are met.
 
@@ -1181,8 +1208,9 @@ class AlertEvaluator:
 
         return False
 
-    def _update_persistence_counters(self, current_state: Dict[str, Any],
-                                   triggered: bool, rearmed: bool) -> Dict[str, Any]:
+    def _update_persistence_counters(
+        self, current_state: Dict[str, Any], triggered: bool, rearmed: bool
+    ) -> Dict[str, Any]:
         """
         Update persistence bar counters.
 
@@ -1216,14 +1244,15 @@ class AlertEvaluator:
         Returns:
             Dictionary with reset persistence counters
         """
-        return {
-            "consecutive_trigger_bars": 0,
-            "consecutive_rearm_bars": 0
-        }
+        return {"consecutive_trigger_bars": 0, "consecutive_rearm_bars": 0}
 
-    def _prepare_notification_data(self, alert_config: AlertConfig, market_data: pd.DataFrame,
-                                 indicators: Dict[str, pd.Series],
-                                 rule_snapshot: Optional[Dict[str, float]]) -> Dict[str, Any]:
+    def _prepare_notification_data(
+        self,
+        alert_config: AlertConfig,
+        market_data: pd.DataFrame,
+        indicators: Dict[str, pd.Series],
+        rule_snapshot: Dict[str, float] | None,
+    ) -> Dict[str, Any]:
         """
         Prepare notification data for triggered alert.
 
@@ -1246,7 +1275,7 @@ class AlertEvaluator:
             "price": float(current_bar["close"]),
             "volume": float(current_bar["volume"]),
             "rule_snapshot": rule_snapshot or {},
-            "notify_config": alert_config.notify
+            "notify_config": alert_config.notify,
         }
 
         # Add indicator values if available
@@ -1259,8 +1288,7 @@ class AlertEvaluator:
 
         return notification_data
 
-    def _calculate_hysteresis_level(self, alert_config: AlertConfig,
-                                  market_data: pd.DataFrame) -> Optional[float]:
+    def _calculate_hysteresis_level(self, alert_config: AlertConfig, market_data: pd.DataFrame) -> float | None:
         """
         Calculate hysteresis level for rearm logic.
 
@@ -1308,7 +1336,7 @@ class AlertEvaluator:
             _logger.exception("Error calculating hysteresis level:")
             return None
 
-    def _calculate_atr(self, market_data: pd.DataFrame, period: int = 14) -> Optional[float]:
+    def _calculate_atr(self, market_data: pd.DataFrame, period: int = 14) -> float | None:
         """
         Calculate Average True Range for ATR-based hysteresis.
 
@@ -1378,25 +1406,28 @@ class AlertEvaluator:
                     "status": sanitized_state.get("status", "ARMED"),
                     "sides": sanitized_state.get("sides", {}),
                     "last_evaluation": utcnow().isoformat(),
-                    "error": "State serialization failed"
+                    "error": "State serialization failed",
                 }
                 state_json = json.dumps(minimal_state, ensure_ascii=False)
 
             # Validate JSON size (prevent excessive state growth)
             if len(state_json) > 10000:  # 10KB limit
-                _logger.warning("Alert state too large for job %s (%d bytes), truncating",
-                              job_id, len(state_json))
+                _logger.warning("Alert state too large for job %s (%d bytes), truncating", job_id, len(state_json))
                 # Keep only essential state
                 essential_state = {
                     "status": sanitized_state.get("status", "ARMED"),
                     "sides": {},  # Reset sides to prevent growth
                     "last_evaluation": utcnow().isoformat(),
-                    "truncated": True
+                    "truncated": True,
                 }
                 state_json = json.dumps(essential_state, ensure_ascii=False)
 
-            _logger.debug("Updating alert state for job %s (%d bytes): %s",
-                         job_id, len(state_json), state_json[:200] + "..." if len(state_json) > 200 else state_json)
+            _logger.debug(
+                "Updating alert state for job %s (%d bytes): %s",
+                job_id,
+                len(state_json),
+                state_json[:200] + "..." if len(state_json) > 200 else state_json,
+            )
 
             # TODO: Implement actual database update through jobs service
             # This would be something like:
@@ -1459,7 +1490,7 @@ class AlertEvaluator:
                         # Validate timestamp format
                         timestamp_str = str(state[timestamp_field])
                         # Try to parse it to validate
-                        datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                        datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
                         sanitized[timestamp_field] = timestamp_str
                     except (ValueError, TypeError) as e:
                         _logger.warning("Invalid timestamp for %s: %s", timestamp_field, str(e))
@@ -1494,12 +1525,12 @@ class AlertEvaluator:
                 "status": "ERROR",
                 "sides": {},
                 "last_evaluation": utcnow().isoformat(),
-                "error": f"State sanitization failed: {str(e)}"
+                "error": f"State sanitization failed: {str(e)}",
             }
 
         return sanitized
 
-    def _load_alert_state_with_recovery(self, state_json: Optional[str]) -> Dict[str, Any]:
+    def _load_alert_state_with_recovery(self, state_json: str | None) -> Dict[str, Any]:
         """
         Load alert state with comprehensive error recovery.
 
@@ -1521,7 +1552,7 @@ class AlertEvaluator:
             "last_evaluation": None,
             "trigger_count": 0,
             "consecutive_trigger_bars": 0,
-            "consecutive_rearm_bars": 0
+            "consecutive_rearm_bars": 0,
         }
 
         if not state_json:
@@ -1556,7 +1587,7 @@ class AlertEvaluator:
                     try:
                         timestamp_str = str(state[timestamp_field])
                         # Validate by parsing
-                        datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                        datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
                         validated_state[timestamp_field] = timestamp_str
                     except (ValueError, TypeError):
                         _logger.warning("Invalid timestamp in state for %s", timestamp_field)
@@ -1619,7 +1650,7 @@ class AlertEvaluator:
 
         return state
 
-    async def evaluate_all_alerts(self, user_id: Optional[int] = None, limit: Optional[int] = None) -> Dict[str, Any]:
+    async def evaluate_all_alerts(self, user_id: int | None = None, limit: int | None = None) -> Dict[str, Any]:
         """
         Evaluate all active alerts for a user or globally.
 
@@ -1642,21 +1673,12 @@ class AlertEvaluator:
 
             _logger.info("Evaluating %d active alert(s) for user %s", len(active_jobs), user_id or "all")
 
-            results = {
-                "total_evaluated": 0,
-                "triggered": 0,
-                "rearmed": 0,
-                "errors": 0,
-                "results": []
-            }
+            results = {"total_evaluated": 0, "triggered": 0, "rearmed": 0, "errors": 0, "results": []}
 
             for job in active_jobs:
                 try:
                     # Create a mock job run for evaluation
-                    job_run = type('JobRun', (), {
-                        'schedule': job,
-                        'id': f"eval_{job.id}_{utcnow().timestamp()}"
-                    })()
+                    job_run = type("JobRun", (), {"schedule": job, "id": f"eval_{job.id}_{utcnow().timestamp()}"})()
 
                     # Evaluate the alert
                     result = await self.evaluate_alert(job_run)
@@ -1670,14 +1692,16 @@ class AlertEvaluator:
                         results["errors"] += 1
 
                     # Store individual result
-                    results["results"].append({
-                        "job_id": job.id,
-                        "ticker": job.task_params.get("ticker"),
-                        "triggered": result.triggered,
-                        "rearmed": result.rearmed,
-                        "error": result.error,
-                        "notification_data": result.notification_data
-                    })
+                    results["results"].append(
+                        {
+                            "job_id": job.id,
+                            "ticker": job.task_params.get("ticker"),
+                            "triggered": result.triggered,
+                            "rearmed": result.rearmed,
+                            "error": result.error,
+                            "notification_data": result.notification_data,
+                        }
+                    )
 
                     # Update job state if needed
                     if result.state_updates:
@@ -1688,17 +1712,23 @@ class AlertEvaluator:
                 except Exception as e:
                     _logger.exception("Failed to evaluate alert job %s", job.id)
                     results["errors"] += 1
-                    results["results"].append({
-                        "job_id": job.id,
-                        "ticker": job.task_params.get("ticker", "unknown"),
-                        "triggered": False,
-                        "rearmed": False,
-                        "error": str(e),
-                        "notification_data": None
-                    })
+                    results["results"].append(
+                        {
+                            "job_id": job.id,
+                            "ticker": job.task_params.get("ticker", "unknown"),
+                            "triggered": False,
+                            "rearmed": False,
+                            "error": str(e),
+                            "notification_data": None,
+                        }
+                    )
 
-            _logger.info("Alert evaluation complete: %d evaluated, %d triggered, %d errors",
-                        results["total_evaluated"], results["triggered"], results["errors"])
+            _logger.info(
+                "Alert evaluation complete: %d evaluated, %d triggered, %d errors",
+                results["total_evaluated"],
+                results["triggered"],
+                results["errors"],
+            )
 
             return results
 
@@ -1710,5 +1740,5 @@ class AlertEvaluator:
                 "rearmed": 0,
                 "errors": 1,
                 "results": [],
-                "batch_error": str(e)
+                "batch_error": str(e),
             }

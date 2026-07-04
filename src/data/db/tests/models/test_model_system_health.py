@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.data.db.models.model_system_health import SystemHealth, SystemHealthStatus
 
@@ -8,7 +8,7 @@ def test_system_health_record_and_helpers(db_session):
     sh.system = "test_service"
     sh.component = None
     sh.status = SystemHealthStatus.HEALTHY.value
-    sh.checked_at = datetime.now(timezone.utc)
+    sh.checked_at = datetime.now(UTC)
 
     db_session.add(sh)
     db_session.flush()

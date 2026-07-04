@@ -15,29 +15,32 @@ How to run:
 Or to run specific test:
     pytest tests/test_data_downloaders.py::test_yahoo_downloader -v
 """
-import sys
+
 import os
+import sys
 
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 import tempfile
 import unittest
-from unittest.mock import patch, MagicMock
-import pandas as pd
 from datetime import datetime
+from unittest.mock import MagicMock, patch
+
+import pandas as pd
+
+from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
+from src.data.downloader.binance_data_downloader import BinanceDataDownloader
+from src.data.downloader.coingecko_data_downloader import CoinGeckoDataDownloader
+from src.data.downloader.data_downloader_factory import DataDownloaderFactory
+from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
+from src.data.downloader.fmp_data_downloader import FMPDataDownloader
+from src.data.downloader.polygon_data_downloader import PolygonDataDownloader
+from src.data.downloader.tiingo_data_downloader import TiingoDataDownloader
+from src.data.downloader.twelvedata_data_downloader import TwelveDataDataDownloader
 
 # Import all data downloaders
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
-from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
-from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
-from src.data.downloader.polygon_data_downloader import PolygonDataDownloader
-from src.data.downloader.twelvedata_data_downloader import TwelveDataDataDownloader
-from src.data.downloader.binance_data_downloader import BinanceDataDownloader
-from src.data.downloader.coingecko_data_downloader import CoinGeckoDataDownloader
-from src.data.downloader.fmp_data_downloader import FMPDataDownloader
-from src.data.downloader.tiingo_data_downloader import TiingoDataDownloader
-from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 from src.model.telegram_bot import Fundamentals
 
 
@@ -55,6 +58,7 @@ class TestDataDownloaders(unittest.TestCase):
     def tearDown(self):
         """Clean up test fixtures."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def assert_valid_ohlcv_data(self, df):
@@ -62,13 +66,13 @@ class TestDataDownloaders(unittest.TestCase):
         self.assertIsInstance(df, pd.DataFrame)
         self.assertGreater(len(df), 0)
 
-        required_columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+        required_columns = ["timestamp", "open", "high", "low", "close", "volume"]
         for col in required_columns:
             self.assertIn(col, df.columns)
 
         # Check data types
-        self.assertTrue(pd.api.types.is_datetime64_any_dtype(df['timestamp']))
-        numeric_columns = ['open', 'high', 'low', 'close', 'volume']
+        self.assertTrue(pd.api.types.is_datetime64_any_dtype(df["timestamp"]))
+        numeric_columns = ["open", "high", "low", "close", "volume"]
         for col in numeric_columns:
             self.assertTrue(pd.api.types.is_numeric_dtype(df[col]))
 
@@ -90,7 +94,7 @@ class TestYahooDataDownloader(TestDataDownloaders):
         super().setUp()
         self.downloader = YahooDataDownloader()
         # Patch yf.Ticker for all tests in this class
-        self.ticker_patcher = patch('src.data.downloader.yahoo_data_downloader.yf.Ticker')
+        self.ticker_patcher = patch("src.data.downloader.yahoo_data_downloader.yf.Ticker")
         self.mock_ticker_class = self.ticker_patcher.start()
         self.addCleanup(self.ticker_patcher.stop)
 
@@ -98,13 +102,16 @@ class TestYahooDataDownloader(TestDataDownloaders):
         """Test OHLCV data retrieval."""
         # Mock ticker.history to return a DataFrame with correct columns and index
         mock_ticker_instance = MagicMock()
-        mock_history_df = pd.DataFrame({
-            'Open': [150.0, 151.0, 152.0],
-            'High': [155.0, 156.0, 157.0],
-            'Low': [149.0, 150.0, 151.0],
-            'Close': [151.0, 152.0, 153.0],
-            'Volume': [1000000, 1100000, 1200000]
-        }, index=pd.date_range('2023-01-01', periods=3, freq='D'))
+        mock_history_df = pd.DataFrame(
+            {
+                "Open": [150.0, 151.0, 152.0],
+                "High": [155.0, 156.0, 157.0],
+                "Low": [149.0, 150.0, 151.0],
+                "Close": [151.0, 152.0, 153.0],
+                "Volume": [1000000, 1100000, 1200000],
+            },
+            index=pd.date_range("2023-01-01", periods=3, freq="D"),
+        )
         mock_ticker_instance.history.return_value = mock_history_df
         self.mock_ticker_class.return_value = mock_ticker_instance
         df = self.downloader.get_ohlcv(self.test_symbol, self.interval, self.start_date, self.end_date)
@@ -115,47 +122,47 @@ class TestYahooDataDownloader(TestDataDownloaders):
         # Mock ticker.info
         mock_ticker_instance = MagicMock()
         mock_ticker_instance.info = {
-            'longName': 'Apple Inc.',
-            'regularMarketPrice': 150.0,
-            'marketCap': 2500000000000,
-            'trailingPE': 25.0,
-            'forwardPE': 24.0,
-            'dividendYield': 0.5,
-            'trailingEps': 6.0,
-            'priceToBook': 15.0,
-            'returnOnEquity': 0.15,
-            'returnOnAssets': 0.10,
-            'debtToEquity': 0.5,
-            'currentRatio': 1.5,
-            'quickRatio': 1.2,
-            'totalRevenue': 400000000000,
-            'revenueGrowth': 0.08,
-            'netIncomeToCommon': 100000000000,
-            'netIncomeGrowth': 0.12,
-            'freeCashflow': 80000000000,
-            'operatingMargins': 0.25,
-            'profitMargins': 0.20,
-            'beta': 1.2,
-            'sector': 'Technology',
-            'industry': 'Consumer Electronics',
-            'country': 'US',
-            'exchange': 'NASDAQ',
-            'currency': 'USD',
-            'sharesOutstanding': 16000000000,
-            'floatShares': 15000000000,
-            'shortRatio': 2.0,
-            'payoutRatio': 0.25,
-            'pegRatio': 1.5,
-            'priceToSalesTrailing12Months': 5.0,
-            'enterpriseValue': 2600000000000,
-            'enterpriseToEbitda': 20.0
+            "longName": "Apple Inc.",
+            "regularMarketPrice": 150.0,
+            "marketCap": 2500000000000,
+            "trailingPE": 25.0,
+            "forwardPE": 24.0,
+            "dividendYield": 0.5,
+            "trailingEps": 6.0,
+            "priceToBook": 15.0,
+            "returnOnEquity": 0.15,
+            "returnOnAssets": 0.10,
+            "debtToEquity": 0.5,
+            "currentRatio": 1.5,
+            "quickRatio": 1.2,
+            "totalRevenue": 400000000000,
+            "revenueGrowth": 0.08,
+            "netIncomeToCommon": 100000000000,
+            "netIncomeGrowth": 0.12,
+            "freeCashflow": 80000000000,
+            "operatingMargins": 0.25,
+            "profitMargins": 0.20,
+            "beta": 1.2,
+            "sector": "Technology",
+            "industry": "Consumer Electronics",
+            "country": "US",
+            "exchange": "NASDAQ",
+            "currency": "USD",
+            "sharesOutstanding": 16000000000,
+            "floatShares": 15000000000,
+            "shortRatio": 2.0,
+            "payoutRatio": 0.25,
+            "pegRatio": 1.5,
+            "priceToSalesTrailing12Months": 5.0,
+            "enterpriseValue": 2600000000000,
+            "enterpriseToEbitda": 20.0,
         }
         self.mock_ticker_class.return_value = mock_ticker_instance
         fundamentals = self.downloader.get_fundamentals(self.test_symbol)
         self.assert_valid_fundamentals(fundamentals)
-        self.assertEqual(fundamentals.company_name, 'Apple Inc.')
+        self.assertEqual(fundamentals.company_name, "Apple Inc.")
         self.assertEqual(fundamentals.current_price, 150.0)
-        self.assertEqual(fundamentals.data_source, 'Yahoo Finance')
+        self.assertEqual(fundamentals.data_source, "Yahoo Finance")
 
     def test_get_periods(self):
         """Test get_periods method."""
@@ -178,7 +185,7 @@ class TestAlphaVantageDataDownloader(TestDataDownloaders):
         self.api_key = "test_api_key"
         self.downloader = AlphaVantageDataDownloader(api_key=self.api_key)
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_ohlcv(self, mock_get):
         """Test OHLCV data retrieval."""
         # Mock API response with correct keys for AlphaVantage
@@ -193,15 +200,15 @@ class TestAlphaVantageDataDownloader(TestDataDownloaders):
                     "2. high": "155.0",
                     "3. low": "149.0",
                     "4. close": "151.0",
-                    "5. volume": "1000000"
+                    "5. volume": "1000000",
                 },
                 "2023-01-02": {
                     "1. open": "151.0",
                     "2. high": "156.0",
                     "3. low": "150.0",
                     "4. close": "152.0",
-                    "5. volume": "1100000"
-                }
+                    "5. volume": "1100000",
+                },
             }
         }
         mock_get.return_value = mock_response
@@ -212,7 +219,7 @@ class TestAlphaVantageDataDownloader(TestDataDownloaders):
         self.assert_valid_ohlcv_data(df)
         mock_get.assert_called_once()
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_fundamentals(self, mock_get):
         """Test fundamental data retrieval."""
         # Mock API responses
@@ -252,14 +259,14 @@ class TestAlphaVantageDataDownloader(TestDataDownloaders):
             "PEGRatio": "1.5",
             "PriceToSalesRatioTTM": "5.0",
             "MarketCapitalization": "2500000000000",
-            "EVToEBITDA": "20.0"
+            "EVToEBITDA": "20.0",
         }
         mock_get.return_value = mock_response
 
         fundamentals = self.downloader.get_fundamentals(self.test_symbol)
 
         self.assert_valid_fundamentals(fundamentals)
-        self.assertEqual(fundamentals.data_source, 'Alpha Vantage')
+        self.assertEqual(fundamentals.data_source, "Alpha Vantage")
 
     def test_missing_api_key(self):
         """Test error handling for missing API key."""
@@ -278,7 +285,7 @@ class TestFinnhubDataDownloader(TestDataDownloaders):
         self.api_key = "test_api_key"
         self.downloader = FinnhubDataDownloader(api_key=self.api_key)
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_ohlcv(self, mock_get):
         """Test OHLCV data retrieval."""
         # Mock API response for Finnhub with 's': 'ok'
@@ -291,14 +298,14 @@ class TestFinnhubDataDownloader(TestDataDownloaders):
             "c": [151.0, 152.0],
             "v": [1000000, 1100000],
             "t": [1672531200, 1672617600],
-            "s": "ok"
+            "s": "ok",
         }
         mock_get.return_value = mock_response
         df = self.downloader.get_ohlcv(self.test_symbol, self.interval, self.start_date, self.end_date)
         self.assert_valid_ohlcv_data(df)
         mock_get.assert_called_once()
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_fundamentals(self, mock_get):
         """Test fundamental data retrieval."""
         # Mock API response
@@ -337,14 +344,14 @@ class TestFinnhubDataDownloader(TestDataDownloaders):
             "pegRatio": 1.5,
             "priceToSales": 5.0,
             "enterpriseValue": 2600000000000,
-            "enterpriseValueToEbitda": 20.0
+            "enterpriseValueToEbitda": 20.0,
         }
         mock_get.return_value = mock_response
 
         fundamentals = self.downloader.get_fundamentals(self.test_symbol)
 
         self.assert_valid_fundamentals(fundamentals)
-        self.assertEqual(fundamentals.data_source, 'Finnhub')
+        self.assertEqual(fundamentals.data_source, "Finnhub")
 
 
 class TestPolygonDataDownloader(TestDataDownloaders):
@@ -355,7 +362,7 @@ class TestPolygonDataDownloader(TestDataDownloaders):
         self.api_key = "test_api_key"
         self.downloader = PolygonDataDownloader(api_key=self.api_key)
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_ohlcv(self, mock_get):
         """Test OHLCV data retrieval."""
         # Mock API response
@@ -369,7 +376,7 @@ class TestPolygonDataDownloader(TestDataDownloaders):
                     "h": 155.0,
                     "l": 149.0,
                     "c": 151.0,
-                    "v": 1000000
+                    "v": 1000000,
                 }
             ]
         }
@@ -380,7 +387,7 @@ class TestPolygonDataDownloader(TestDataDownloaders):
         self.assert_valid_ohlcv_data(df)
         mock_get.assert_called_once()
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_fundamentals(self, mock_get):
         """Test fundamental data retrieval."""
         # Mock API response
@@ -395,7 +402,7 @@ class TestPolygonDataDownloader(TestDataDownloaders):
                 "industry": "Consumer Electronics",
                 "country": "US",
                 "exchange": "NASDAQ",
-                "currency": "USD"
+                "currency": "USD",
             }
         }
         mock_get.return_value = mock_response
@@ -403,7 +410,7 @@ class TestPolygonDataDownloader(TestDataDownloaders):
         fundamentals = self.downloader.get_fundamentals(self.test_symbol)
 
         self.assert_valid_fundamentals(fundamentals)
-        self.assertEqual(fundamentals.data_source, 'Polygon.io')
+        self.assertEqual(fundamentals.data_source, "Polygon.io")
 
 
 class TestTwelveDataDataDownloader(TestDataDownloaders):
@@ -414,7 +421,7 @@ class TestTwelveDataDataDownloader(TestDataDownloaders):
         self.api_key = "test_api_key"
         self.downloader = TwelveDataDataDownloader(api_key=self.api_key)
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_ohlcv(self, mock_get):
         """Test OHLCV data retrieval."""
         # Mock API response
@@ -428,7 +435,7 @@ class TestTwelveDataDataDownloader(TestDataDownloaders):
                     "high": "155.0",
                     "low": "149.0",
                     "close": "151.0",
-                    "volume": "1000000"
+                    "volume": "1000000",
                 }
             ]
         }
@@ -439,7 +446,7 @@ class TestTwelveDataDataDownloader(TestDataDownloaders):
         self.assert_valid_ohlcv_data(df)
         mock_get.assert_called_once()
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_fundamentals(self, mock_get):
         """Test fundamental data retrieval."""
         # Mock API responses
@@ -456,14 +463,14 @@ class TestTwelveDataDataDownloader(TestDataDownloaders):
             "industry": "Consumer Electronics",
             "country": "US",
             "exchange": "NASDAQ",
-            "currency": "USD"
+            "currency": "USD",
         }
         mock_get.return_value = mock_response
 
         fundamentals = self.downloader.get_fundamentals(self.test_symbol)
 
         self.assert_valid_fundamentals(fundamentals)
-        self.assertEqual(fundamentals.data_source, 'Twelve Data')
+        self.assertEqual(fundamentals.data_source, "Twelve Data")
 
 
 class TestBinanceDataDownloader(TestDataDownloaders):
@@ -475,7 +482,7 @@ class TestBinanceDataDownloader(TestDataDownloaders):
         self.api_secret = "test_secret_key"
         self.downloader = BinanceDataDownloader(api_key=self.api_key, api_secret=self.api_secret)
 
-    @patch('binance.client.Client.get_historical_klines')
+    @patch("binance.client.Client.get_historical_klines")
     def test_get_ohlcv(self, mock_klines):
         """Test OHLCV data retrieval."""
         # Mock Binance API response
@@ -499,21 +506,15 @@ class TestCoinGeckoDataDownloader(TestDataDownloaders):
         super().setUp()
         self.downloader = CoinGeckoDataDownloader()
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_ohlcv(self, mock_get):
         """Test OHLCV data retrieval."""
         # Mock API response
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "prices": [
-                [1672531200000, 150.0],
-                [1672617600000, 151.0]
-            ],
-            "total_volumes": [
-                [1672531200000, 1000000],
-                [1672617600000, 1100000]
-            ]
+            "prices": [[1672531200000, 150.0], [1672617600000, 151.0]],
+            "total_volumes": [[1672531200000, 1000000], [1672617600000, 1100000]],
         }
         mock_get.return_value = mock_response
 
@@ -536,7 +537,7 @@ class TestFMPDataDownloader(TestDataDownloaders):
         self.api_key = "test_api_key"
         self.downloader = FMPDataDownloader(api_key=self.api_key)
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_ohlcv(self, mock_get):
         """Test OHLCV data retrieval."""
         # Mock API response for daily data (FMP returns {"historical": [...]})
@@ -544,22 +545,8 @@ class TestFMPDataDownloader(TestDataDownloaders):
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "historical": [
-                {
-                    "date": "2023-01-01",
-                    "open": 150.0,
-                    "high": 155.0,
-                    "low": 149.0,
-                    "close": 151.0,
-                    "volume": 1000000
-                },
-                {
-                    "date": "2023-01-02",
-                    "open": 151.0,
-                    "high": 156.0,
-                    "low": 150.0,
-                    "close": 152.0,
-                    "volume": 1100000
-                }
+                {"date": "2023-01-01", "open": 150.0, "high": 155.0, "low": 149.0, "close": 151.0, "volume": 1000000},
+                {"date": "2023-01-02", "open": 151.0, "high": 156.0, "low": 150.0, "close": 152.0, "volume": 1100000},
             ]
         }
         mock_get.return_value = mock_response
@@ -571,18 +558,18 @@ class TestFMPDataDownloader(TestDataDownloaders):
         self.assertGreater(len(df), 0)
 
         # Check that timestamp is the index
-        self.assertEqual(df.index.name, 'timestamp')
+        self.assertEqual(df.index.name, "timestamp")
         self.assertTrue(pd.api.types.is_datetime64_any_dtype(df.index))
 
         # Check required columns exist
-        required_columns = ['open', 'high', 'low', 'close', 'volume']
+        required_columns = ["open", "high", "low", "close", "volume"]
         for col in required_columns:
             self.assertIn(col, df.columns)
             self.assertTrue(pd.api.types.is_numeric_dtype(df[col]))
 
         mock_get.assert_called_once()
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_fundamentals(self, mock_get):
         """Test fundamental data retrieval."""
         # Mock API response for company profile
@@ -597,7 +584,7 @@ class TestFMPDataDownloader(TestDataDownloaders):
                 "industry": "Consumer Electronics",
                 "country": "US",
                 "exchange": "NASDAQ",
-                "currency": "USD"
+                "currency": "USD",
             }
         ]
         mock_get.return_value = mock_response
@@ -605,9 +592,9 @@ class TestFMPDataDownloader(TestDataDownloaders):
         fundamentals = self.downloader.get_fundamentals(self.test_symbol)
 
         self.assertIsInstance(fundamentals, dict)
-        self.assertIn('symbol', fundamentals)
-        self.assertIn('profile', fundamentals)
-        self.assertEqual(fundamentals['symbol'], self.test_symbol)
+        self.assertIn("symbol", fundamentals)
+        self.assertIn("profile", fundamentals)
+        self.assertEqual(fundamentals["symbol"], self.test_symbol)
 
     def test_missing_api_key(self):
         """Test error handling for missing API key."""
@@ -625,7 +612,7 @@ class TestTiingoDataDownloader(TestDataDownloaders):
         self.api_key = "test_api_key"
         self.downloader = TiingoDataDownloader(api_key=self.api_key)
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_ohlcv(self, mock_get):
         """Test OHLCV data retrieval."""
         # Mock API response
@@ -645,7 +632,7 @@ class TestTiingoDataDownloader(TestDataDownloaders):
                 "adjClose": 151.0,
                 "adjVolume": 1000000,
                 "divCash": 0.0,
-                "splitFactor": 1.0
+                "splitFactor": 1.0,
             },
             {
                 "date": "2023-01-02T00:00:00.000Z",
@@ -660,8 +647,8 @@ class TestTiingoDataDownloader(TestDataDownloaders):
                 "adjClose": 152.0,
                 "adjVolume": 1100000,
                 "divCash": 0.0,
-                "splitFactor": 1.0
-            }
+                "splitFactor": 1.0,
+            },
         ]
         mock_get.return_value = mock_response
 
@@ -672,18 +659,18 @@ class TestTiingoDataDownloader(TestDataDownloaders):
         self.assertGreater(len(df), 0)
 
         # Check that timestamp is the index
-        self.assertEqual(df.index.name, 'timestamp')
+        self.assertEqual(df.index.name, "timestamp")
         self.assertTrue(pd.api.types.is_datetime64_any_dtype(df.index))
 
         # Check required columns exist
-        required_columns = ['open', 'high', 'low', 'close', 'volume']
+        required_columns = ["open", "high", "low", "close", "volume"]
         for col in required_columns:
             self.assertIn(col, df.columns)
             self.assertTrue(pd.api.types.is_numeric_dtype(df[col]))
 
         mock_get.assert_called_once()
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_fundamentals(self, mock_get):
         """Test fundamental data retrieval."""
         # Mock API response for company metadata
@@ -696,16 +683,16 @@ class TestTiingoDataDownloader(TestDataDownloaders):
             "startDate": "1980-12-12",
             "endDate": "2024-01-01",
             "exchangeCode": "NASDAQ",
-            "ticker": "AAPL"
+            "ticker": "AAPL",
         }
         mock_get.return_value = mock_response
 
         fundamentals = self.downloader.get_fundamentals(self.test_symbol)
 
         self.assertIsInstance(fundamentals, dict)
-        self.assertIn('symbol', fundamentals)
-        self.assertIn('name', fundamentals)
-        self.assertEqual(fundamentals['symbol'], self.test_symbol)
+        self.assertIn("symbol", fundamentals)
+        self.assertIn("name", fundamentals)
+        self.assertEqual(fundamentals["symbol"], self.test_symbol)
 
     def test_missing_api_key(self):
         """Test error handling for missing API key."""
@@ -723,6 +710,7 @@ class TestDataDownloaderFactory(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def test_create_yahoo_downloader(self):
@@ -798,5 +786,5 @@ class TestDataDownloaderFactory(unittest.TestCase):
         self.assertIn("tiingo", info)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -6,23 +6,24 @@ in-memory caching when Redis is unavailable. Includes cache warming,
 intelligent key strategies, and comprehensive monitoring.
 """
 
-import hashlib
 import asyncio
-from typing import Any, Optional, Dict, List, Callable
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-import sys
+import hashlib
 import os
+import sys
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any, Callable, Dict, List
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
+
+from .cache_metrics import get_cache_metrics
 from .memory_cache import MemoryCache
 from .redis_cache import RedisCache
-from .cache_metrics import get_cache_metrics
 
 _logger = setup_logger(__name__)
 
@@ -30,6 +31,7 @@ _logger = setup_logger(__name__)
 @dataclass
 class CacheConfig:
     """Configuration for cache manager."""
+
     # Memory cache settings
     memory_max_size: int = 1000
     memory_default_ttl: int = 3600  # 1 hour
@@ -39,7 +41,7 @@ class CacheConfig:
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
-    redis_password: Optional[str] = None
+    redis_password: str | None = None
     redis_max_connections: int = 10
     redis_key_prefix: str = "sentiment:"
     redis_default_ttl: int = 7200  # 2 hours
@@ -55,7 +57,7 @@ class CacheConfig:
     cleanup_interval_seconds: int = 300  # 5 minutes
 
     @classmethod
-    def from_env(cls) -> 'CacheConfig':
+    def from_env(cls) -> "CacheConfig":
         """Create configuration from environment variables."""
         return cls(
             memory_max_size=int(os.getenv("CACHE_MEMORY_MAX_SIZE", "1000")),
@@ -73,7 +75,7 @@ class CacheConfig:
             warming_interval_seconds=int(os.getenv("CACHE_WARMING_INTERVAL", "1800")),
             fallback_enabled=os.getenv("CACHE_FALLBACK_ENABLED", "true").lower() == "true",
             metrics_enabled=os.getenv("CACHE_METRICS_ENABLED", "true").lower() == "true",
-            cleanup_interval_seconds=int(os.getenv("CACHE_CLEANUP_INTERVAL", "300"))
+            cleanup_interval_seconds=int(os.getenv("CACHE_CLEANUP_INTERVAL", "300")),
         )
 
 
@@ -95,7 +97,7 @@ class CacheKeyStrategy:
         """Generate key for HuggingFace predictions based on text hash."""
         # Create hash of all texts to use as key
         text_content = "|".join(sorted(texts))
-        text_hash = hashlib.md5(text_content.encode('utf-8')).hexdigest()
+        text_hash = hashlib.md5(text_content.encode("utf-8")).hexdigest()
         return f"hf_predictions:{text_hash}"
 
     @staticmethod
@@ -107,9 +109,9 @@ class CacheKeyStrategy:
     def config_hash(config: Dict[str, Any]) -> str:
         """Generate hash for configuration to use in cache keys."""
         # Create deterministic hash of relevant config parameters
-        relevant_keys = ['providers', 'weights', 'heuristic', 'min_mentions_for_hf']
+        relevant_keys = ["providers", "weights", "heuristic", "min_mentions_for_hf"]
         config_str = str(sorted((k, v) for k, v in config.items() if k in relevant_keys))
-        return hashlib.md5(config_str.encode('utf-8')).hexdigest()[:8]
+        return hashlib.md5(config_str.encode("utf-8")).hexdigest()[:8]
 
 
 class CacheManager:
@@ -121,7 +123,7 @@ class CacheManager:
     cache warming, key strategies, and comprehensive monitoring.
     """
 
-    def __init__(self, config: Optional[CacheConfig] = None):
+    def __init__(self, config: CacheConfig | None = None):
         """
         Initialize cache manager.
 
@@ -133,12 +135,11 @@ class CacheManager:
 
         # Initialize memory cache (always available)
         self._memory_cache = MemoryCache(
-            max_size=self.config.memory_max_size,
-            default_ttl_seconds=self.config.memory_default_ttl
+            max_size=self.config.memory_max_size, default_ttl_seconds=self.config.memory_default_ttl
         )
 
         # Initialize Redis cache (optional)
-        self._redis_cache: Optional[RedisCache] = None
+        self._redis_cache: RedisCache | None = None
         if self.config.redis_enabled:
             try:
                 self._redis_cache = RedisCache(
@@ -147,7 +148,7 @@ class CacheManager:
                     db=self.config.redis_db,
                     password=self.config.redis_password,
                     max_connections=self.config.redis_max_connections,
-                    key_prefix=self.config.redis_key_prefix
+                    key_prefix=self.config.redis_key_prefix,
                 )
                 if self._redis_cache.is_available():
                     _logger.info("Redis cache initialized and available")
@@ -160,10 +161,10 @@ class CacheManager:
         # Cache warming state
         self._warming_enabled = self.config.warming_enabled
         self._warming_data: Dict[str, Any] = {}
-        self._last_warming_time: Optional[datetime] = None
-        self._last_cleanup_time: Optional[datetime] = None
+        self._last_warming_time: datetime | None = None
+        self._last_cleanup_time: datetime | None = None
 
-    def get(self, key: str, use_redis: bool = True) -> Optional[Any]:
+    def get(self, key: str, use_redis: bool = True) -> Any | None:
         """
         Get value from cache with automatic tier fallback.
 
@@ -188,8 +189,7 @@ class CacheManager:
         # Fallback to memory cache
         return self._memory_cache.get(key)
 
-    def set(self, key: str, value: Any, ttl_seconds: Optional[int] = None,
-            use_redis: bool = True) -> bool:
+    def set(self, key: str, value: Any, ttl_seconds: int | None = None, use_redis: bool = True) -> bool:
         """
         Set value in cache across all available tiers.
 
@@ -267,8 +267,7 @@ class CacheManager:
         # Check memory cache
         return self._memory_cache.exists(key)
 
-    def get_or_set(self, key: str, factory: Callable[[], Any],
-                   ttl_seconds: Optional[int] = None) -> Any:
+    def get_or_set(self, key: str, factory: Callable[[], Any], ttl_seconds: int | None = None) -> Any:
         """
         Get value from cache or set it using factory function.
 
@@ -295,8 +294,7 @@ class CacheManager:
             _logger.warning("Cache factory function failed for key %s: %s", key, e)
             return None
 
-    async def get_or_set_async(self, key: str, factory: Callable[[], Any],
-                              ttl_seconds: Optional[int] = None) -> Any:
+    async def get_or_set_async(self, key: str, factory: Callable[[], Any], ttl_seconds: int | None = None) -> Any:
         """
         Async version of get_or_set.
 
@@ -345,7 +343,7 @@ class CacheManager:
             except Exception as e:
                 _logger.debug("Failed to warm cache key %s: %s", key, e)
 
-        self._last_warming_time = datetime.now(timezone.utc)
+        self._last_warming_time = datetime.now(UTC)
 
     def should_warm_cache(self) -> bool:
         """Check if cache warming should be performed."""
@@ -355,8 +353,9 @@ class CacheManager:
         if self._last_warming_time is None:
             return True
 
-        return (datetime.now(timezone.utc) - self._last_warming_time >
-                timedelta(seconds=self.config.warming_interval_seconds))
+        return datetime.now(UTC) - self._last_warming_time > timedelta(
+            seconds=self.config.warming_interval_seconds
+        )
 
     def cleanup_expired(self) -> Dict[str, int]:
         """
@@ -370,15 +369,15 @@ class CacheManager:
         # Cleanup memory cache
         try:
             memory_cleaned = self._memory_cache.cleanup_expired()
-            results['memory'] = memory_cleaned
+            results["memory"] = memory_cleaned
         except Exception as e:
             _logger.debug("Memory cache cleanup failed: %s", e)
-            results['memory'] = 0
+            results["memory"] = 0
 
         # Redis cleanup is handled automatically by Redis TTL
-        results['redis'] = 0
+        results["redis"] = 0
 
-        self._last_cleanup_time = datetime.now(timezone.utc)
+        self._last_cleanup_time = datetime.now(UTC)
         return results
 
     def should_cleanup(self) -> bool:
@@ -386,32 +385,33 @@ class CacheManager:
         if self._last_cleanup_time is None:
             return True
 
-        return (datetime.now(timezone.utc) - self._last_cleanup_time >
-                timedelta(seconds=self.config.cleanup_interval_seconds))
+        return datetime.now(UTC) - self._last_cleanup_time > timedelta(
+            seconds=self.config.cleanup_interval_seconds
+        )
 
     def get_stats(self) -> Dict[str, Any]:
         """Get comprehensive cache statistics."""
         stats = {
-            'config': {
-                'redis_enabled': self.config.redis_enabled,
-                'redis_available': self._redis_cache.is_available() if self._redis_cache else False,
-                'warming_enabled': self._warming_enabled,
-                'fallback_enabled': self.config.fallback_enabled
+            "config": {
+                "redis_enabled": self.config.redis_enabled,
+                "redis_available": self._redis_cache.is_available() if self._redis_cache else False,
+                "warming_enabled": self._warming_enabled,
+                "fallback_enabled": self.config.fallback_enabled,
             },
-            'memory': self._memory_cache.get_stats()
+            "memory": self._memory_cache.get_stats(),
         }
 
         # Add Redis stats if available
         if self._redis_cache and self._redis_cache.is_available():
             try:
-                stats['redis'] = self._redis_cache.get_info()
+                stats["redis"] = self._redis_cache.get_info()
             except Exception as e:
                 _logger.debug("Failed to get Redis stats: %s", e)
-                stats['redis'] = {'error': str(e)}
+                stats["redis"] = {"error": str(e)}
 
         # Add metrics if enabled
         if self._metrics:
-            stats['metrics'] = self._metrics.get_summary()
+            stats["metrics"] = self._metrics.get_summary()
 
         return stats
 
@@ -436,7 +436,7 @@ class CacheManager:
 
 
 # Global cache manager instance
-_global_cache_manager: Optional[CacheManager] = None
+_global_cache_manager: CacheManager | None = None
 
 
 def get_cache_manager() -> CacheManager:

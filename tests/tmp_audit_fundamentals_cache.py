@@ -31,7 +31,7 @@ except ImportError:
     DATA_CACHE_DIR = "data-cache"
 
 
-def _liquidity_snapshot(data: Dict[str, Any]) -> Tuple[Optional[Any], Optional[Any]]:
+def _liquidity_snapshot(data: Dict[str, Any]) -> Tuple[Any | None, Any | None]:
     """Match FundamentalFilter-style resolution for cap and avg volume."""
     profile = data.get("profile", {}) or {}
     if not isinstance(profile, dict):

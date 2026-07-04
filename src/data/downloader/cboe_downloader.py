@@ -24,10 +24,10 @@ Classes:
 
 import io
 import json
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Dict, List, Union
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
@@ -48,27 +48,27 @@ except ImportError:
 # Each entry: url to fetch, target column name in the merged output.
 # Current files (suffix *_current) take priority; archive fills gaps.
 _CBOE_SOURCES: Dict[str, Dict[str, str]] = {
-    "total_current":   {
+    "total_current": {
         "url": "https://cdn.cboe.com/resources/options/volume_and_call_put_ratios/totalpc.csv",
         "col": "pc_total",
     },
-    "equity_current":  {
+    "equity_current": {
         "url": "https://cdn.cboe.com/resources/options/volume_and_call_put_ratios/equitypc.csv",
         "col": "pc_equity",
     },
-    "index_current":   {
+    "index_current": {
         "url": "https://cdn.cboe.com/resources/options/volume_and_call_put_ratios/indexpc.csv",
         "col": "pc_index",
     },
-    "total_archive":   {
+    "total_archive": {
         "url": "https://cdn.cboe.com/resources/options/volume_and_call_put_ratios/totalpcarchive.csv",
         "col": "pc_total_archive",
     },
-    "equity_archive":  {
+    "equity_archive": {
         "url": "https://cdn.cboe.com/resources/options/volume_and_call_put_ratios/equitypcarchive.csv",
         "col": "pc_equity_archive",
     },
-    "index_archive":   {
+    "index_archive": {
         "url": "https://cdn.cboe.com/resources/options/volume_and_call_put_ratios/indexpcarchive.csv",
         "col": "pc_index_archive",
     },
@@ -77,7 +77,14 @@ _CBOE_SOURCES: Dict[str, Dict[str, str]] = {
 # Possible date column names across different CBOE file versions
 _DATE_COLUMN_CANDIDATES = ["Trade Date", "Trade_date", "DATE", "Date", "date"]
 # Possible P/C ratio column names
-_PC_COLUMN_CANDIDATES = ["P/C Ratio", "P/C RATIO", "Put/Call Ratio", "Total P/C Ratio", "Equity P/C Ratio", "Index P/C Ratio"]
+_PC_COLUMN_CANDIDATES = [
+    "P/C Ratio",
+    "P/C RATIO",
+    "Put/Call Ratio",
+    "Total P/C Ratio",
+    "Equity P/C Ratio",
+    "Index P/C Ratio",
+]
 
 _OUTPUT_COLUMNS = ["pc_total", "pc_equity", "pc_index"]
 
@@ -97,7 +104,7 @@ class CboeDownloader(BaseDataDownloader):
 
     def __init__(
         self,
-        cache_dir: Optional[Union[str, Path]] = None,
+        cache_dir: Union[str, Path] | None = None,
         request_timeout: int = 30,
     ):
         """
@@ -114,9 +121,11 @@ class CboeDownloader(BaseDataDownloader):
         self._cboe_file = self._cboe_dir / "cboe_putcall.csv.gz"
         self._timeout = request_timeout
         self._session = requests.Session()
-        self._session.headers.update({
-            "User-Agent": "e-trading-research cboe-downloader akossyrev@gmail.com",
-        })
+        self._session.headers.update(
+            {
+                "User-Agent": "e-trading-research cboe-downloader akossyrev@gmail.com",
+            }
+        )
 
     # ------------------------------------------------------------------
     # BaseDataDownloader interface
@@ -159,7 +168,7 @@ class CboeDownloader(BaseDataDownloader):
     # Main download
     # ------------------------------------------------------------------
 
-    def download(self, force: bool = False) -> Optional[Path]:
+    def download(self, force: bool = False) -> Path | None:
         """
         Download all six CBOE put/call CSV files, merge, and save as a single CSV.gz.
 
@@ -215,7 +224,8 @@ class CboeDownloader(BaseDataDownloader):
 
         _logger.info(
             "Saved CBOE putcall: %d rows × %d cols, %s → %s → %s",
-            len(combined), len(combined.columns),
+            len(combined),
+            len(combined.columns),
             pd.Timestamp(combined.index.min()).date(),  # type: ignore[arg-type]
             pd.Timestamp(combined.index.max()).date(),  # type: ignore[arg-type]
             self._cboe_file,
@@ -250,7 +260,7 @@ class CboeDownloader(BaseDataDownloader):
         url: str,
         col_name: str,
         source_key: str,
-    ) -> Optional[pd.Series]:
+    ) -> pd.Series | None:
         """
         Fetch a single CBOE put/call CSV and return the P/C ratio as a Series.
 
@@ -288,24 +298,22 @@ class CboeDownloader(BaseDataDownloader):
             df.columns = [c.strip() for c in df.columns]
 
             # Find the date column
-            date_col = next(
-                (c for c in _DATE_COLUMN_CANDIDATES if c in df.columns), None
-            )
+            date_col = next((c for c in _DATE_COLUMN_CANDIDATES if c in df.columns), None)
             if date_col is None:
                 _logger.warning(
                     "%s: could not find date column. Available: %s",
-                    source_key, list(df.columns),
+                    source_key,
+                    list(df.columns),
                 )
                 return None
 
             # Find the P/C ratio column
-            pc_col = next(
-                (c for c in _PC_COLUMN_CANDIDATES if c in df.columns), None
-            )
+            pc_col = next((c for c in _PC_COLUMN_CANDIDATES if c in df.columns), None)
             if pc_col is None:
                 _logger.warning(
                     "%s: could not find P/C ratio column. Available: %s",
-                    source_key, list(df.columns),
+                    source_key,
+                    list(df.columns),
                 )
                 return None
 
@@ -317,8 +325,13 @@ class CboeDownloader(BaseDataDownloader):
             series.name = col_name
             series = pd.Series(series[~series.index.duplicated(keep="last")])
 
-            _logger.debug("%s: %d rows, %s – %s", source_key, len(series),
-                          str(series.index.min())[:10], str(series.index.max())[:10])
+            _logger.debug(
+                "%s: %d rows, %s – %s",
+                source_key,
+                len(series),
+                str(series.index.min())[:10],
+                str(series.index.max())[:10],
+            )
             return series
 
         except Exception:
@@ -340,11 +353,15 @@ if __name__ == "__main__":
     p_download.add_argument("--force", action="store_true", help="Re-download even if cache exists")
 
     parser.add_argument(
-        "--cache-dir", type=str, default=None,
+        "--cache-dir",
+        type=str,
+        default=None,
         help=f"Cache root directory (default: {DATA_CACHE_DIR})",
     )
     parser.add_argument(
-        "--timeout", type=int, default=30,
+        "--timeout",
+        type=int,
+        default=30,
         help="HTTP request timeout in seconds (default: 30)",
     )
 
@@ -358,6 +375,6 @@ if __name__ == "__main__":
             "success": directory is not None,
             "path": str(directory) if directory else None,
             "rows": rows,
-            "downloaded_at": datetime.now(timezone.utc).isoformat(),
+            "downloaded_at": datetime.now(UTC).isoformat(),
         }
         print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")

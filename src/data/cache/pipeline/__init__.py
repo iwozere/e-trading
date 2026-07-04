@@ -27,23 +27,23 @@ __author__ = "E-Trading Platform"
 # Pipeline step information
 PIPELINE_STEPS = {
     1: {
-        'name': 'Download 1-Minute Data',
-        'script': 'step01_download_alpaca_1m.py',
-        'description': 'Download 1-minute OHLCV data from Alpaca Markets'
+        "name": "Download 1-Minute Data",
+        "script": "step01_download_alpaca_1m.py",
+        "description": "Download 1-minute OHLCV data from Alpaca Markets",
     },
     2: {
-        'name': 'Calculate Higher Timeframes',
-        'script': 'step02_calculate_timeframes.py',
-        'description': 'Calculate 5m, 15m, 1h, 4h, 1d timeframes from 1m data'
-    }
+        "name": "Calculate Higher Timeframes",
+        "script": "step02_calculate_timeframes.py",
+        "description": "Calculate 5m, 15m, 1h, 4h, 1d timeframes from 1m data",
+    },
 }
 
 # Supported timeframes
-SUPPORTED_TIMEFRAMES = ['5m', '15m', '1h', '4h', '1d']
+SUPPORTED_TIMEFRAMES = ["5m", "15m", "1h", "4h", "1d"]
 
 # Trading hours configuration
 TRADING_HOURS = {
-    'start_hour': 4,  # 4:00 AM ET
-    'end_hour': 20,   # 8:00 PM ET
-    'duration_hours': 16
+    "start_hour": 4,  # 4:00 AM ET
+    "end_hour": 20,  # 8:00 PM ET
+    "duration_hours": 16,
 }

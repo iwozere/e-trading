@@ -26,7 +26,7 @@ from src.ml.pipeline.p19_penny_intraday.models.watchlist_entry import WatchlistE
 _ET = ZoneInfo("America/New_York")
 _OPEN = time(9, 30)
 _CLOSE = time(16, 0)
-_SESSION_MINUTES = 6 * 60 + 30   # 390
+_SESSION_MINUTES = 6 * 60 + 30  # 390
 
 
 def session_fraction(ts_utc: datetime) -> float:
@@ -39,7 +39,7 @@ def session_fraction(ts_utc: datetime) -> float:
     et = ts_utc.astimezone(_ET)
     now = et.time()
     if now <= _OPEN:
-        return 0.05                      # pre/at open: avoid div-by-zero, treat as early
+        return 0.05  # pre/at open: avoid div-by-zero, treat as early
     if now >= _CLOSE:
         return 1.0
     elapsed = (et.hour * 60 + et.minute) - (_OPEN.hour * 60 + _OPEN.minute)

@@ -5,7 +5,8 @@
 # ---------------------------------------------------------------------------
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict
+
 import pandas as pd
 
 try:
@@ -21,9 +22,8 @@ except ImportError:
 
 from src.indicators.adapters.base import BaseAdapter  # optional base
 from src.indicators.registry import INDICATOR_META
-
-
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
 
 
@@ -46,7 +46,8 @@ def _validate_and_collect_inputs(indicator: str, inputs: Dict[str, pd.Series]) -
         out[k] = s
     return out
 
-def _norm_params(indicator: str, params: Optional[dict]) -> dict:
+
+def _norm_params(indicator: str, params: dict | None) -> dict:
     """Canonical → pandas_ta_classic param normalization (mostly pass-through)."""
     p = dict(params or {})
 
@@ -97,28 +98,17 @@ class PandasTaAdapter(BaseAdapter):
         return hasattr(pta, name) or name in ("bbands", "stoch", "plus_di", "minus_di")
 
     async def compute(
-        self,
-        name: str,
-        df: pd.DataFrame,
-        inputs: Dict[str, pd.Series],
-        params: Optional[dict]
+        self, name: str, df: pd.DataFrame, inputs: Dict[str, pd.Series], params: dict | None
     ) -> Dict[str, pd.Series]:
         """Wrap synchronous TA-Lib calls in async context"""
         # TA-Lib is CPU-bound, run in thread pool to not block event loop
         import asyncio
+
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            None,
-            self._compute_sync,
-            name, df, inputs, params
-        )
+        return await loop.run_in_executor(None, self._compute_sync, name, df, inputs, params)
 
     def _compute_sync(
-        self,
-        name: str,
-        df: pd.DataFrame,
-        inputs: Dict[str, pd.Series],
-        params: Optional[dict]
+        self, name: str, df: pd.DataFrame, inputs: Dict[str, pd.Series], params: dict | None
     ) -> Dict[str, pd.Series]:
         src = _validate_and_collect_inputs(name, inputs)
         p = _norm_params(name, params)
@@ -132,10 +122,14 @@ class PandasTaAdapter(BaseAdapter):
         if name == "macd":
             macd_df = getattr(pta, "macd")(close, **p)
             cols = {c.lower(): c for c in macd_df.columns}
-            macd_col = next((c for k, c in cols.items() if "macd" in k and "h" not in k and "s" not in k), macd_df.columns[0])
+            macd_col = next(
+                (c for k, c in cols.items() if "macd" in k and "h" not in k and "s" not in k), macd_df.columns[0]
+            )
             signal_col = next((c for k, c in cols.items() if "macds" in k or "signal" in k), macd_df.columns[-1])
-            hist_col = next((c for k, c in cols.items() if "macdh" in k or "hist" in k),
-                            macd_df.columns[1] if macd_df.shape[1] > 1 else macd_df.columns[0])
+            hist_col = next(
+                (c for k, c in cols.items() if "macdh" in k or "hist" in k),
+                macd_df.columns[1] if macd_df.shape[1] > 1 else macd_df.columns[0],
+            )
             return {
                 "macd": macd_df[macd_col].rename("macd").reindex(df.index),
                 "signal": macd_df[signal_col].rename("signal").reindex(df.index),
@@ -145,7 +139,9 @@ class PandasTaAdapter(BaseAdapter):
         if name == "bbands":
             bb = getattr(pta, "bbands")(close, **p)  # often [BBL, BBM, BBU]
             if bb.shape[1] >= 3:
-                lower = bb.iloc[:, 0]; middle = bb.iloc[:, 1]; upper = bb.iloc[:, 2]
+                lower = bb.iloc[:, 0]
+                middle = bb.iloc[:, 1]
+                upper = bb.iloc[:, 2]
                 return {
                     "upper": upper.rename("upper").reindex(df.index),
                     "middle": middle.rename("middle").reindex(df.index),

@@ -8,41 +8,42 @@ This test suite covers:
 - Service orchestration and adapter coordination
 """
 
-import pytest
-import pandas as pd
-import numpy as np
 import asyncio
+import sys
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 
-from pathlib import Path
-import sys
+import numpy as np
+import pandas as pd
+import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.indicators.service import (
-    IndicatorService, ConfigurationError, DataError
-)
-from src.indicators.config_manager import UnifiedConfigManager
 from src.common.recommendation.engine import RecommendationEngine
+from src.indicators.config_manager import UnifiedConfigManager
 from src.indicators.models import (
-    IndicatorBatchConfig, IndicatorSpec, TickerIndicatorsRequest,
-    IndicatorResultSet
+    CompositeRecommendation,
+    IndicatorBatchConfig,
+    IndicatorResult,
+    IndicatorResultSet,
+    IndicatorSet,
+    IndicatorSpec,
+    RecommendationType,
+    TickerIndicatorsRequest,
 )
-from src.indicators.models import (
-    IndicatorResult, IndicatorSet, RecommendationType, CompositeRecommendation
-)
-
+from src.indicators.service import ConfigurationError, DataError, IndicatorService
 
 # ---------------------------------------------------------------------------
 # Test Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def sample_ohlcv_data():
     """Create realistic OHLCV data for testing."""
-    dates = pd.date_range(start='2024-01-01', periods=100, freq='D', tz='UTC')
+    dates = pd.date_range(start="2024-01-01", periods=100, freq="D", tz="UTC")
     np.random.seed(42)
 
     # Generate realistic price movements
@@ -50,17 +51,20 @@ def sample_ohlcv_data():
     returns = np.random.randn(100) * 0.02
     close_prices = base_price * np.exp(np.cumsum(returns))
 
-    df = pd.DataFrame({
-        'open': close_prices * (1 + np.random.randn(100) * 0.005),
-        'high': close_prices * (1 + np.abs(np.random.randn(100)) * 0.01),
-        'low': close_prices * (1 - np.abs(np.random.randn(100)) * 0.01),
-        'close': close_prices,
-        'volume': np.random.randint(1000000, 10000000, 100)
-    }, index=dates)
+    df = pd.DataFrame(
+        {
+            "open": close_prices * (1 + np.random.randn(100) * 0.005),
+            "high": close_prices * (1 + np.abs(np.random.randn(100)) * 0.01),
+            "low": close_prices * (1 - np.abs(np.random.randn(100)) * 0.01),
+            "close": close_prices,
+            "volume": np.random.randint(1000000, 10000000, 100),
+        },
+        index=dates,
+    )
 
     # Ensure OHLC relationships are valid
-    df['high'] = df[['high', 'close', 'open']].max(axis=1)
-    df['low'] = df[['low', 'close', 'open']].min(axis=1)
+    df["high"] = df[["high", "close", "open"]].max(axis=1)
+    df["low"] = df[["low", "close", "open"]].min(axis=1)
 
     return df
 
@@ -68,6 +72,7 @@ def sample_ohlcv_data():
 @pytest.fixture
 def mock_fundamentals():
     """Mock fundamentals data for testing."""
+
     class MockFundamentals:
         pe_ratio = 15.5
         forward_pe = 14.2
@@ -96,7 +101,7 @@ def indicator_service():
 @pytest.fixture
 def config_manager():
     """Create config manager instance for testing."""
-    with patch('src.indicators.config_manager.Path.exists', return_value=False):
+    with patch("src.indicators.config_manager.Path.exists", return_value=False):
         return UnifiedConfigManager()
 
 
@@ -110,17 +115,18 @@ def recommendation_engine():
 # Core Service Tests
 # ---------------------------------------------------------------------------
 
+
 class TestIndicatorService:
     """Test core indicator service functionality."""
 
     def test_service_initialization(self, indicator_service):
         """Test service initializes correctly with all adapters."""
         assert indicator_service is not None
-        assert hasattr(indicator_service, '_ta_lib_adapter')
-        assert hasattr(indicator_service, '_pandas_ta_adapter')
-        assert hasattr(indicator_service, '_fundamentals_adapter')
-        assert hasattr(indicator_service, '_config_manager')
-        assert hasattr(indicator_service, '_recommendation_engine')
+        assert hasattr(indicator_service, "_ta_lib_adapter")
+        assert hasattr(indicator_service, "_pandas_ta_adapter")
+        assert hasattr(indicator_service, "_fundamentals_adapter")
+        assert hasattr(indicator_service, "_config_manager")
+        assert hasattr(indicator_service, "_recommendation_engine")
 
     def test_compute_single_indicator_rsi(self, indicator_service, sample_ohlcv_data):
         """Test computing single RSI indicator with known reference values."""
@@ -142,9 +148,7 @@ class TestIndicatorService:
 
     def test_compute_multi_output_indicator_macd(self, indicator_service, sample_ohlcv_data):
         """Test computing MACD with multiple outputs."""
-        config = IndicatorBatchConfig(
-            indicators=[IndicatorSpec(name="macd", output="macd")]
-        )
+        config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="macd", output="macd")])
 
         result = indicator_service.compute(sample_ohlcv_data, config)
 
@@ -158,9 +162,7 @@ class TestIndicatorService:
 
     def test_compute_bollinger_bands(self, indicator_service, sample_ohlcv_data):
         """Test Bollinger Bands calculation with proper band relationships."""
-        config = IndicatorBatchConfig(
-            indicators=[IndicatorSpec(name="bbands", output="bb")]
-        )
+        config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="bbands", output="bb")])
 
         result = indicator_service.compute(sample_ohlcv_data, config)
 
@@ -185,17 +187,12 @@ class TestIndicatorService:
     def test_compute_with_insufficient_data(self, indicator_service):
         """Test service handles insufficient data gracefully."""
         # Create very small dataset
-        small_df = pd.DataFrame({
-            'open': [100, 101],
-            'high': [102, 103],
-            'low': [99, 100],
-            'close': [101, 102],
-            'volume': [1000, 1100]
-        }, index=pd.date_range('2024-01-01', periods=2, freq='D', tz='UTC'))
-
-        config = IndicatorBatchConfig(
-            indicators=[IndicatorSpec(name="rsi", output="rsi", params={"timeperiod": 14})]
+        small_df = pd.DataFrame(
+            {"open": [100, 101], "high": [102, 103], "low": [99, 100], "close": [101, 102], "volume": [1000, 1100]},
+            index=pd.date_range("2024-01-01", periods=2, freq="D", tz="UTC"),
         )
+
+        config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="rsi", output="rsi", params={"timeperiod": 14})])
 
         # Should not crash, but may return mostly NaN values
         result = indicator_service.compute(small_df, config)
@@ -204,9 +201,7 @@ class TestIndicatorService:
 
     def test_compute_with_invalid_parameters(self, indicator_service, sample_ohlcv_data):
         """Test service handles invalid parameters appropriately."""
-        config = IndicatorBatchConfig(
-            indicators=[IndicatorSpec(name="rsi", output="rsi", params={"timeperiod": -1})]
-        )
+        config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="rsi", output="rsi", params={"timeperiod": -1})])
 
         # Should handle invalid parameters gracefully
         with pytest.raises((ValueError, ConfigurationError)):
@@ -216,22 +211,21 @@ class TestIndicatorService:
     async def test_compute_for_ticker_async(self, indicator_service):
         """Test async ticker computation."""
         request = TickerIndicatorsRequest(
-            ticker="AAPL",
-            timeframe="1D",
-            period="1M",
-            indicators=["rsi", "ema"],
-            include_recommendations=False
+            ticker="AAPL", timeframe="1D", period="1M", indicators=["rsi", "ema"], include_recommendations=False
         )
 
-        with patch('src.common.get_ohlcv') as mock_get_ohlcv:
+        with patch("src.common.get_ohlcv") as mock_get_ohlcv:
             # Mock the data retrieval
-            mock_get_ohlcv.return_value = pd.DataFrame({
-                'open': [100, 101, 102],
-                'high': [102, 103, 104],
-                'low': [99, 100, 101],
-                'close': [101, 102, 103],
-                'volume': [1000, 1100, 1200]
-            }, index=pd.date_range('2024-01-01', periods=3, freq='D', tz='UTC'))
+            mock_get_ohlcv.return_value = pd.DataFrame(
+                {
+                    "open": [100, 101, 102],
+                    "high": [102, 103, 104],
+                    "low": [99, 100, 101],
+                    "close": [101, 102, 103],
+                    "volume": [1000, 1100, 1200],
+                },
+                index=pd.date_range("2024-01-01", periods=3, freq="D", tz="UTC"),
+            )
 
             result = await indicator_service.compute_for_ticker(request)
 
@@ -243,23 +237,23 @@ class TestIndicatorService:
         """Test batch processing capabilities."""
         tickers = ["AAPL", "GOOGL", "MSFT"]
 
-        with patch('src.common.get_ohlcv') as mock_get_ohlcv:
+        with patch("src.common.get_ohlcv") as mock_get_ohlcv:
             # Mock data for each ticker
-            mock_get_ohlcv.return_value = pd.DataFrame({
-                'open': [100, 101, 102],
-                'high': [102, 103, 104],
-                'low': [99, 100, 101],
-                'close': [101, 102, 103],
-                'volume': [1000, 1100, 1200]
-            }, index=pd.date_range('2024-01-01', periods=3, freq='D', tz='UTC'))
+            mock_get_ohlcv.return_value = pd.DataFrame(
+                {
+                    "open": [100, 101, 102],
+                    "high": [102, 103, 104],
+                    "low": [99, 100, 101],
+                    "close": [101, 102, 103],
+                    "volume": [1000, 1100, 1200],
+                },
+                index=pd.date_range("2024-01-01", periods=3, freq="D", tz="UTC"),
+            )
 
             # Test batch processing
-            results = asyncio.run(indicator_service.compute_batch(
-                tickers=tickers,
-                indicators=["rsi", "ema"],
-                timeframe="1D",
-                period="1M"
-            ))
+            results = asyncio.run(
+                indicator_service.compute_batch(tickers=tickers, indicators=["rsi", "ema"], timeframe="1D", period="1M")
+            )
 
             assert len(results) == len(tickers)
             for ticker, result in results.items():
@@ -268,22 +262,15 @@ class TestIndicatorService:
 
     def test_error_handling_data_retrieval_failure(self, indicator_service):
         """Test error handling when data retrieval fails."""
-        request = TickerIndicatorsRequest(
-            ticker="INVALID",
-            timeframe="1D",
-            period="1M",
-            indicators=["rsi"]
-        )
+        request = TickerIndicatorsRequest(ticker="INVALID", timeframe="1D", period="1M", indicators=["rsi"])
 
-        with patch('src.common.get_ohlcv', side_effect=Exception("Data not found")):
+        with patch("src.common.get_ohlcv", side_effect=Exception("Data not found")):
             with pytest.raises(DataError):
                 asyncio.run(indicator_service.compute_for_ticker(request))
 
     def test_performance_metrics_collection(self, indicator_service, sample_ohlcv_data):
         """Test that performance metrics are collected during computation."""
-        config = IndicatorBatchConfig(
-            indicators=[IndicatorSpec(name="rsi", output="rsi")]
-        )
+        config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="rsi", output="rsi")])
 
         start_time = datetime.now()
         result = indicator_service.compute(sample_ohlcv_data, config)
@@ -297,6 +284,7 @@ class TestIndicatorService:
 # ---------------------------------------------------------------------------
 # Configuration Manager Tests
 # ---------------------------------------------------------------------------
+
 
 class TestUnifiedConfigManager:
     """Test configuration management functionality."""
@@ -375,6 +363,7 @@ class TestUnifiedConfigManager:
 # Recommendation Engine Tests
 # ---------------------------------------------------------------------------
 
+
 class TestRecommendationEngine:
     """Test recommendation engine functionality."""
 
@@ -431,11 +420,9 @@ class TestRecommendationEngine:
             ticker="AAPL",
             technical={
                 "rsi": IndicatorResult(name="rsi", value=25.0, timestamp=datetime.now()),
-                "macd": IndicatorResult(name="macd", value=0.5, timestamp=datetime.now())
+                "macd": IndicatorResult(name="macd", value=0.5, timestamp=datetime.now()),
             },
-            fundamental={
-                "pe": IndicatorResult(name="pe", value=15.0, timestamp=datetime.now())
-            }
+            fundamental={"pe": IndicatorResult(name="pe", value=15.0, timestamp=datetime.now())},
         )
 
         composite_rec = recommendation_engine.get_composite_recommendation(indicator_set)
@@ -458,12 +445,7 @@ class TestRecommendationEngine:
     def test_contextual_recommendations(self, recommendation_engine):
         """Test context-aware recommendations."""
         # MACD with context should provide more nuanced recommendations
-        context = {
-            "macd": 0.1,
-            "signal": 0.05,
-            "hist": 0.05,
-            "trend": "bullish"
-        }
+        context = {"macd": 0.1, "signal": 0.05, "hist": 0.05, "trend": "bullish"}
 
         contextual_rec = recommendation_engine.get_recommendation("macd", 0.1, context)
 
@@ -476,15 +458,14 @@ class TestRecommendationEngine:
 # Error Handling Tests
 # ---------------------------------------------------------------------------
 
+
 class TestErrorHandling:
     """Test comprehensive error handling mechanisms."""
 
     def test_configuration_error_handling(self, indicator_service, sample_ohlcv_data):
         """Test configuration error handling."""
         # Invalid indicator name
-        config = IndicatorBatchConfig(
-            indicators=[IndicatorSpec(name="invalid_indicator", output="invalid")]
-        )
+        config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="invalid_indicator", output="invalid")])
 
         with pytest.raises((ValueError, ConfigurationError)):
             indicator_service.compute(sample_ohlcv_data, config)
@@ -493,21 +474,17 @@ class TestErrorHandling:
         """Test data error handling."""
         # Empty DataFrame
         empty_df = pd.DataFrame()
-        config = IndicatorBatchConfig(
-            indicators=[IndicatorSpec(name="rsi", output="rsi")]
-        )
+        config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="rsi", output="rsi")])
 
         with pytest.raises((ValueError, DataError)):
             indicator_service.compute(empty_df, config)
 
     def test_adapter_failure_recovery(self, indicator_service, sample_ohlcv_data):
         """Test adapter failure and recovery mechanisms."""
-        config = IndicatorBatchConfig(
-            indicators=[IndicatorSpec(name="rsi", output="rsi")]
-        )
+        config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="rsi", output="rsi")])
 
         # Mock adapter failure
-        with patch.object(indicator_service._ta_lib_adapter, 'compute', side_effect=Exception("Adapter failed")):
+        with patch.object(indicator_service._ta_lib_adapter, "compute", side_effect=Exception("Adapter failed")):
             # Should attempt fallback to other adapters
             try:
                 result = indicator_service.compute(sample_ohlcv_data, config)
@@ -523,21 +500,19 @@ class TestErrorHandling:
             ticker="AAPL",
             timeframe="1D",
             period="10Y",  # Large dataset
-            indicators=["rsi", "ema", "macd", "bbands"]
+            indicators=["rsi", "ema", "macd", "bbands"],
         )
 
-        with patch('src.common.get_ohlcv', side_effect=lambda *args, **kwargs: asyncio.sleep(10)):
+        with patch("src.common.get_ohlcv", side_effect=lambda *args, **kwargs: asyncio.sleep(10)):
             # Should handle timeout appropriately
             with pytest.raises((asyncio.TimeoutError, DataError)):
-                asyncio.run(asyncio.wait_for(
-                    indicator_service.compute_for_ticker(request),
-                    timeout=2.0
-                ))
+                asyncio.run(asyncio.wait_for(indicator_service.compute_for_ticker(request), timeout=2.0))
 
 
 # ---------------------------------------------------------------------------
 # Integration Tests
 # ---------------------------------------------------------------------------
+
 
 class TestServiceIntegration:
     """Test integration between service components."""
@@ -545,9 +520,7 @@ class TestServiceIntegration:
     def test_service_config_integration(self, indicator_service, sample_ohlcv_data):
         """Test service integrates properly with config manager."""
         # Service should use config manager for parameters
-        config = IndicatorBatchConfig(
-            indicators=[IndicatorSpec(name="rsi", output="rsi")]
-        )
+        config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="rsi", output="rsi")])
 
         result = indicator_service.compute(sample_ohlcv_data, config)
         assert isinstance(result, pd.DataFrame)
@@ -555,25 +528,19 @@ class TestServiceIntegration:
 
     def test_service_recommendation_integration(self, indicator_service, sample_ohlcv_data):
         """Test service integrates with recommendation engine."""
-        config = IndicatorBatchConfig(
-            indicators=[IndicatorSpec(name="rsi", output="rsi")]
-        )
+        config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="rsi", output="rsi")])
 
         # Test with recommendations enabled
-        request = TickerIndicatorsRequest(
-            ticker="TEST",
-            indicators=["rsi"],
-            include_recommendations=True
-        )
+        request = TickerIndicatorsRequest(ticker="TEST", indicators=["rsi"], include_recommendations=True)
 
-        with patch('src.common.get_ohlcv', return_value=sample_ohlcv_data):
+        with patch("src.common.get_ohlcv", return_value=sample_ohlcv_data):
             result = asyncio.run(indicator_service.compute_for_ticker(request))
 
             assert isinstance(result, IndicatorResultSet)
             # Should include recommendations when requested
             if result.technical:
                 for indicator_result in result.technical.values():
-                    if hasattr(indicator_result, 'recommendation'):
+                    if hasattr(indicator_result, "recommendation"):
                         assert indicator_result.recommendation is not None
 
     def test_adapter_coordination(self, indicator_service, sample_ohlcv_data):
@@ -581,12 +548,12 @@ class TestServiceIntegration:
         config = IndicatorBatchConfig(
             indicators=[
                 IndicatorSpec(name="rsi", output="rsi"),  # Technical
-                IndicatorSpec(name="pe", output="pe")     # Fundamental (if available)
+                IndicatorSpec(name="pe", output="pe"),  # Fundamental (if available)
             ]
         )
 
         # Mock fundamentals for testing
-        with patch.object(indicator_service._fundamentals_adapter, 'compute') as mock_fund:
+        with patch.object(indicator_service._fundamentals_adapter, "compute") as mock_fund:
             mock_fund.return_value = {"value": pd.Series([15.0])}
 
             result = indicator_service.compute(sample_ohlcv_data, config)
@@ -595,5 +562,5 @@ class TestServiceIntegration:
             assert "rsi" in result.columns
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

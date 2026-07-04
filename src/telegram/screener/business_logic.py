@@ -1,17 +1,19 @@
 import asyncio
 from typing import Any, Dict, Optional
-from src.telegram.command_parser import ParsedCommand
+
 from src.notification.logger import setup_logger
+from src.telegram.command_parser import ParsedCommand
+from src.telegram.lifecycle import get_service_instances
+from src.telegram.screener.alert_manager import AlertManager
+from src.telegram.screener.report_engine import ReportEngine
+from src.telegram.screener.schedule_manager import ScheduleManager
+from src.telegram.screener.screener_engine import ScreenerEngine
 
 # Import specialized service modules
 from src.telegram.screener.user_service import UserService
-from src.telegram.screener.alert_manager import AlertManager
-from src.telegram.screener.schedule_manager import ScheduleManager
-from src.telegram.screener.report_engine import ReportEngine
-from src.telegram.screener.screener_engine import ScreenerEngine
-from src.telegram.lifecycle import get_service_instances, set_service_instances
 
 _logger = setup_logger(__name__)
+
 
 class TelegramBusinessLogic:
     """
@@ -22,7 +24,7 @@ class TelegramBusinessLogic:
     def __init__(self, telegram_service, indicator_service=None):
         self.telegram_service = telegram_service
         self.indicator_service = indicator_service
-        
+
         # Initialize specialized services
         self.user_service = UserService(telegram_service)
         self.alert_manager = AlertManager(telegram_service)
@@ -33,7 +35,7 @@ class TelegramBusinessLogic:
     async def handle_command(self, parsed: ParsedCommand) -> Dict[str, Any]:
         """Dispatches commands to the appropriate service handler."""
         try:
-            cmd = parsed.command.lstrip('/')
+            cmd = parsed.command.lstrip("/")
             if cmd == "report":
                 return await self.report_engine.handle_report(parsed)
             if cmd == "screener":
@@ -45,25 +47,36 @@ class TelegramBusinessLogic:
 
     def _dispatch_sync(self, parsed: ParsedCommand) -> Dict[str, Any]:
         """Synchronous dispatch for non-async command handlers (runs in thread pool)."""
-        cmd = parsed.command.lstrip('/')
-        if cmd == "register": return self.user_service.handle_register(parsed)
-        elif cmd == "verify": return self.user_service.handle_verify(parsed)
-        elif cmd == "info": return self.user_service.handle_info(parsed)
-        elif cmd == "language": return self.user_service.handle_language(parsed)
-        elif cmd == "request_approval": return self.user_service.handle_request_approval(parsed)
-        elif cmd == "alerts": return self.alert_manager.handle_alerts(parsed)
-        elif cmd == "schedules": return self.schedule_manager.handle_schedules(parsed)
-        elif cmd == "admin": return self.handle_admin(parsed)
-        elif cmd == "help": return self.handle_help(parsed)
-        elif cmd == "feedback": return self.handle_feedback(parsed)
-        elif cmd == "feature": return self.handle_feature(parsed)
+        cmd = parsed.command.lstrip("/")
+        if cmd == "register":
+            return self.user_service.handle_register(parsed)
+        elif cmd == "verify":
+            return self.user_service.handle_verify(parsed)
+        elif cmd == "info":
+            return self.user_service.handle_info(parsed)
+        elif cmd == "language":
+            return self.user_service.handle_language(parsed)
+        elif cmd == "request_approval":
+            return self.user_service.handle_request_approval(parsed)
+        elif cmd == "alerts":
+            return self.alert_manager.handle_alerts(parsed)
+        elif cmd == "schedules":
+            return self.schedule_manager.handle_schedules(parsed)
+        elif cmd == "admin":
+            return self.handle_admin(parsed)
+        elif cmd == "help":
+            return self.handle_help(parsed)
+        elif cmd == "feedback":
+            return self.handle_feedback(parsed)
+        elif cmd == "feature":
+            return self.handle_feature(parsed)
         return {"status": "error", "message": f"Unknown command: {cmd}"}
 
     def handle_help(self, parsed: ParsedCommand) -> Dict[str, Any]:
         """Business logic for /help command."""
         telegram_user_id = parsed.args.get("telegram_user_id")
         is_admin = self.user_service.is_admin_user(telegram_user_id)
-        
+
         help_text = (
             "**Screener Bot Help**\n\n"
             "**Commands:**\n"
@@ -80,10 +93,10 @@ class TelegramBusinessLogic:
             "/request_approval - Request access to restricted features\n"
             "/help - Show this help message"
         )
-        
+
         if is_admin:
             help_text += "\n\n**Admin Commands:**\n/admin users - List users\n/admin pending - Pending approvals"
-            
+
         return {"status": "ok", "title": "Help", "message": help_text}
 
     def handle_feedback(self, parsed: ParsedCommand) -> Dict[str, Any]:
@@ -113,21 +126,31 @@ class TelegramBusinessLogic:
     def handle_admin(self, parsed: ParsedCommand) -> Dict[str, Any]:
         """Delegates admin commands to user_service."""
         access_check = self.user_service.check_admin_access(parsed.args.get("telegram_user_id"))
-        if access_check["status"] != "ok": return access_check
+        if access_check["status"] != "ok":
+            return access_check
 
         action = parsed.positionals[0] if parsed.positionals else None
         params = parsed.positionals[1:] if len(parsed.positionals) > 1 else []
-        
-        if action in ["users", "listusers"]: return self.user_service.handle_admin_list_users(parsed.args.get("telegram_user_id"))
-        elif action == "pending": return self.user_service.handle_admin_list_pending_approvals(parsed.args.get("telegram_user_id"))
-        elif action == "resetemail" and params: return self.user_service.handle_admin_reset_email(params[0])
-        elif action == "verify" and params: return self.user_service.handle_admin_verify_user(params[0])
-        elif action == "approve" and params: return self.user_service.handle_admin_approve_user(params[0])
-        elif action == "reject" and params: return self.user_service.handle_admin_reject_user(params[0])
+
+        if action in ["users", "listusers"]:
+            return self.user_service.handle_admin_list_users(parsed.args.get("telegram_user_id"))
+        elif action == "pending":
+            return self.user_service.handle_admin_list_pending_approvals(parsed.args.get("telegram_user_id"))
+        elif action == "resetemail" and params:
+            return self.user_service.handle_admin_reset_email(params[0])
+        elif action == "verify" and params:
+            return self.user_service.handle_admin_verify_user(params[0])
+        elif action == "approve" and params:
+            return self.user_service.handle_admin_approve_user(params[0])
+        elif action == "reject" and params:
+            return self.user_service.handle_admin_reject_user(params[0])
         elif action == "setlimit" and len(params) >= 2:
-            return self.user_service.handle_admin_set_limit(params[0], params[1], params[2] if len(params) > 2 else None)
-        
+            return self.user_service.handle_admin_set_limit(
+                params[0], params[1], params[2] if len(params) > 2 else None
+            )
+
         return {"status": "error", "message": f"Unknown admin action: {action}"}
+
 
 # Service instances are now managed in src.telegram.lifecycle
 
@@ -137,7 +160,7 @@ class TelegramBusinessLogic:
 # instances change (e.g. after a lifecycle restart).
 
 _cached_logic: Optional["TelegramBusinessLogic"] = None
-_cached_ts = None   # telegram_service identity used to detect staleness
+_cached_ts = None  # telegram_service identity used to detect staleness
 _cached_ids = None  # indicator_service identity used to detect staleness
 
 
@@ -161,18 +184,24 @@ async def handle_command(parsed: ParsedCommand) -> Dict[str, Any]:
         return {"status": "error", "message": "Service temporarily unavailable"}
     return await logic.handle_command(parsed)
 
+
 # Legacy / Exported functions for backward compatibility if needed
 def is_admin_user(user_id: str) -> bool:
     ts, _ = get_service_instances()
     return UserService(ts).is_admin_user(user_id) if ts else False
 
+
 def is_approved_user(user_id: str) -> bool:
     ts, _ = get_service_instances()
     return UserService(ts).is_approved_user(user_id) if ts else False
 
+
 def check_approved_access(user_id: str) -> Dict[str, Any]:
     ts, _ = get_service_instances()
-    return UserService(ts).check_approved_access(user_id) if ts else {"status": "error", "message": "Service unavailable"}
+    return (
+        UserService(ts).check_approved_access(user_id) if ts else {"status": "error", "message": "Service unavailable"}
+    )
+
 
 async def get_ohlcv(ticker: str, period: str = "1y", interval: str = "1d", provider: str = None) -> Any:
     """Wrapper for IndicatorService.get_ohlcv."""
@@ -181,18 +210,24 @@ async def get_ohlcv(ticker: str, period: str = "1y", interval: str = "1d", provi
         return await isvc.get_ohlcv(ticker, period, interval, provider)
     return None
 
+
 async def get_indicator_data(ticker: str, indicators: list, period: str = "1y", interval: str = "1d") -> Dict[str, Any]:
     """Wrapper for IndicatorService.analyze_ticker."""
     _, isvc = get_service_instances()
     if isvc:
         return await isvc.analyze_ticker(ticker, indicators, period, interval)
     return {"status": "error", "message": "Service unavailable"}
+
+
 async def get_fundamentals(ticker: str, provider: str = None) -> Any:
     """Wrapper for src.common.fundamentals.get_fundamentals."""
     from src.common.fundamentals import get_fundamentals as gf
+
     return gf(ticker, provider)
+
 
 async def analyze_ticker_business(ticker: str, provider: str = None, period: str = "2y", interval: str = "1d") -> Any:
     """Legacy wrapper for TickerAnalyzer.analyze_ticker."""
     from src.common.ticker_analyzer import analyze_ticker
+
     return await analyze_ticker(ticker=ticker, provider=provider, period=period, interval=interval)

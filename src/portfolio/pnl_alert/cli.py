@@ -11,7 +11,7 @@ import asyncio
 import json
 import sys
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
@@ -24,7 +24,7 @@ from src.portfolio.pnl_alert.runner import run_once, summary_to_dict  # noqa: E4
 _logger = setup_logger(__name__)
 
 
-def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse CLI arguments."""
     parser = argparse.ArgumentParser(
         prog="python -m src.portfolio.pnl_alert",
@@ -70,7 +70,7 @@ async def _run(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point."""
     args = _parse_args(argv)
     return asyncio.run(_run(args))

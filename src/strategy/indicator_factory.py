@@ -21,13 +21,14 @@ by using the full absolute path (``from src.strategy.indicator_factory import ..
 vs ``from src.indicators.indicator_factory import ...``).
 """
 
-import backtrader as bt
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
-from src.notification.logger import setup_logger
+import backtrader as bt
+
+from src.indicators.adapters.backtrader_wrappers import UnifiedSuperTrendIndicator
 from src.indicators.eom_indicator import EOMIndicator
 from src.indicators.support_resistance_indicator import SupportResistanceIndicator
-from src.indicators.adapters.backtrader_wrappers import UnifiedSuperTrendIndicator
+from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
 
@@ -42,79 +43,71 @@ class IndicatorFactory:
 
     # Mapping of indicator types to their TALib classes and output fields
     INDICATOR_MAP = {
-        'RSI': {
-            'class': bt.talib.RSI,
-            'outputs': ['rsi'],
-            'required_params': ['timeperiod'],
-            'data_inputs': ['close']  # Only close price needed
+        "RSI": {
+            "class": bt.talib.RSI,
+            "outputs": ["rsi"],
+            "required_params": ["timeperiod"],
+            "data_inputs": ["close"],  # Only close price needed
         },
-        'BBANDS': {
-            'class': bt.talib.BBANDS,
-            'outputs': ['upperband', 'middleband', 'lowerband'],
-            'required_params': ['timeperiod'],
-            'data_inputs': ['close']  # Only close price needed
+        "BBANDS": {
+            "class": bt.talib.BBANDS,
+            "outputs": ["upperband", "middleband", "lowerband"],
+            "required_params": ["timeperiod"],
+            "data_inputs": ["close"],  # Only close price needed
         },
-        'ATR': {
-            'class': bt.talib.ATR,
-            'outputs': ['atr'],
-            'required_params': ['timeperiod'],
-            'data_inputs': ['high', 'low', 'close']  # Needs HLC
+        "ATR": {
+            "class": bt.talib.ATR,
+            "outputs": ["atr"],
+            "required_params": ["timeperiod"],
+            "data_inputs": ["high", "low", "close"],  # Needs HLC
         },
-        'MACD': {
-            'class': bt.talib.MACD,
-            'outputs': ['macd', 'macdsignal', 'macdhist'],
-            'required_params': ['fastperiod', 'slowperiod', 'signalperiod'],
-            'data_inputs': ['close']  # Only close price needed
+        "MACD": {
+            "class": bt.talib.MACD,
+            "outputs": ["macd", "macdsignal", "macdhist"],
+            "required_params": ["fastperiod", "slowperiod", "signalperiod"],
+            "data_inputs": ["close"],  # Only close price needed
         },
-        'SMA': {
-            'class': bt.talib.SMA,
-            'outputs': ['sma'],
-            'required_params': ['timeperiod'],
-            'data_inputs': ['close']  # Only close price needed
+        "SMA": {
+            "class": bt.talib.SMA,
+            "outputs": ["sma"],
+            "required_params": ["timeperiod"],
+            "data_inputs": ["close"],  # Only close price needed
         },
-        'EMA': {
-            'class': bt.talib.EMA,
-            'outputs': ['ema'],
-            'required_params': ['timeperiod'],
-            'data_inputs': ['close']  # Only close price needed
+        "EMA": {
+            "class": bt.talib.EMA,
+            "outputs": ["ema"],
+            "required_params": ["timeperiod"],
+            "data_inputs": ["close"],  # Only close price needed
         },
-        'STOCH': {
-            'class': bt.talib.STOCH,
-            'outputs': ['slowk', 'slowd'],
-            'required_params': ['fastk_period', 'slowk_period', 'slowd_period'],
-            'data_inputs': ['high', 'low', 'close']  # Needs HLC
+        "STOCH": {
+            "class": bt.talib.STOCH,
+            "outputs": ["slowk", "slowd"],
+            "required_params": ["fastk_period", "slowk_period", "slowd_period"],
+            "data_inputs": ["high", "low", "close"],  # Needs HLC
         },
-        'ICHIMOKU': {
-            'class': bt.indicators.Ichimoku,
-            'outputs': ['tenkan_sen', 'kijun_sen', 'senkou_span_a', 'senkou_span_b', 'chikou_span'],
-            'required_params': ['tenkan', 'kijun', 'senkou'],
-            'data_inputs': ['data']  # Uses full data feed
+        "ICHIMOKU": {
+            "class": bt.indicators.Ichimoku,
+            "outputs": ["tenkan_sen", "kijun_sen", "senkou_span_a", "senkou_span_b", "chikou_span"],
+            "required_params": ["tenkan", "kijun", "senkou"],
+            "data_inputs": ["data"],  # Uses full data feed
         },
-        'EOM': {
-            'class': EOMIndicator,
-            'outputs': ['eom'],
-            'required_params': ['timeperiod'],
-            'data_inputs': ['data']
+        "EOM": {"class": EOMIndicator, "outputs": ["eom"], "required_params": ["timeperiod"], "data_inputs": ["data"]},
+        "SupportResistance": {
+            "class": SupportResistanceIndicator,
+            "outputs": ["resistance", "support"],
+            "required_params": ["lookback_bars"],
+            "data_inputs": ["data"],
         },
-        'SupportResistance': {
-            'class': SupportResistanceIndicator,
-            'outputs': ['resistance', 'support'],
-            'required_params': ['lookback_bars'],
-            'data_inputs': ['data']
+        "SUPERTREND": {
+            "class": UnifiedSuperTrendIndicator,
+            "outputs": ["super_trend", "direction"],
+            "required_params": ["length", "multiplier"],
+            "data_inputs": ["data"],
         },
-        'SUPERTREND': {
-            'class': UnifiedSuperTrendIndicator,
-            'outputs': ['super_trend', 'direction'],
-            'required_params': ['length', 'multiplier'],
-            'data_inputs': ['data']
-        }
     }
 
     @staticmethod
-    def create_indicators(
-        data: bt.feeds.DataBase,
-        indicator_configs: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    def create_indicators(data: bt.feeds.DataBase, indicator_configs: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Create TALib indicators from configuration.
 
@@ -144,16 +137,13 @@ class IndicatorFactory:
             IndicatorFactory.validate_config(ind_config)
 
             # Create indicator and get mapped outputs
-            indicator_outputs = IndicatorFactory._create_single_indicator(
-                data, ind_config, all_indicators
-            )
+            indicator_outputs = IndicatorFactory._create_single_indicator(data, ind_config, all_indicators)
 
             # Check for duplicate aliases
             for alias in indicator_outputs.keys():
                 if alias in used_aliases:
                     raise ValueError(
-                        f"Duplicate indicator alias '{alias}'. "
-                        "Each field mapping must have a unique alias."
+                        f"Duplicate indicator alias '{alias}'. Each field mapping must have a unique alias."
                     )
                 used_aliases.add(alias)
 
@@ -161,15 +151,15 @@ class IndicatorFactory:
             all_indicators.update(indicator_outputs)
 
         result_aliases = list(all_indicators.keys())
-        logger.info(f"Created {len(all_indicators)} indicator outputs from {len(indicator_configs)} indicators. Aliases: {result_aliases}")
+        logger.info(
+            f"Created {len(all_indicators)} indicator outputs from {len(indicator_configs)} indicators. Aliases: {result_aliases}"
+        )
 
         return all_indicators
 
     @staticmethod
     def _create_single_indicator(
-        data: bt.feeds.DataBase,
-        ind_config: Dict[str, Any],
-        existing_indicators: Dict[str, Any] = None
+        data: bt.feeds.DataBase, ind_config: Dict[str, Any], existing_indicators: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
         Create a single indicator and return mapped outputs.
@@ -181,15 +171,15 @@ class IndicatorFactory:
         Returns:
             Dictionary mapping aliases to indicator line objects
         """
-        ind_type = ind_config['type']
-        params = ind_config['params']
-        fields_mapping = ind_config['fields_mapping']
-        data_field = ind_config.get('data_field')
+        ind_type = ind_config["type"]
+        params = ind_config["params"]
+        fields_mapping = ind_config["fields_mapping"]
+        data_field = ind_config.get("data_field")
 
         # Get indicator metadata
         ind_meta = IndicatorFactory.INDICATOR_MAP[ind_type]
-        ind_class = ind_meta['class']
-        data_inputs = ind_meta.get('data_inputs', ['close'])  # Default to close if not specified
+        ind_class = ind_meta["class"]
+        data_inputs = ind_meta.get("data_inputs", ["close"])  # Default to close if not specified
 
         # Prepare data inputs for the indicator
         if data_field:
@@ -207,7 +197,7 @@ class IndicatorFactory:
                     "Ensure the field exists on the data feed (open, high, low, close, volume) "
                     "or is a derived indicator defined earlier in the configuration."
                 )
-        elif data_inputs == ['data']:
+        elif data_inputs == ["data"]:
             data_args = [data]
         else:
             data_args = [getattr(data, field) for field in data_inputs]
@@ -222,23 +212,20 @@ class IndicatorFactory:
             indicator = ind_class(*data_args, **params)
             logger.debug(f"Created {ind_type} indicator with params: {params}")
         except Exception as e:
-            raise ValueError(
-                f"Failed to create {ind_type} indicator with params {params}: {e}"
-            )
+            raise ValueError(f"Failed to create {ind_type} indicator with params {params}: {e}")
 
         # Map outputs to aliases
         result = {}
 
         for output_field, alias in fields_mapping.items():
             # Validate output field exists
-            if output_field not in ind_meta['outputs']:
+            if output_field not in ind_meta["outputs"]:
                 raise ValueError(
-                    f"Invalid output field '{output_field}' for {ind_type}. "
-                    f"Valid fields: {ind_meta['outputs']}"
+                    f"Invalid output field '{output_field}' for {ind_type}. Valid fields: {ind_meta['outputs']}"
                 )
 
             # Get the indicator line for this output
-            if len(ind_meta['outputs']) == 1:
+            if len(ind_meta["outputs"]) == 1:
                 # Single output indicator (RSI, ATR, SMA, EMA)
                 result[alias] = indicator
             else:
@@ -249,7 +236,9 @@ class IndicatorFactory:
                     result[alias] = indicator_line
                     logger.debug(f"Mapped field '{output_field}' to alias '{alias}'")
                 except AttributeError:
-                    logger.error(f"Failed to find output field '{output_field}' on {ind_type} object. Available lines: {indicator.lines.getlinealias(0)}")
+                    logger.error(
+                        f"Failed to find output field '{output_field}' on {ind_type} object. Available lines: {indicator.lines.getlinealias(0)}"
+                    )
                     raise
 
         return result
@@ -266,45 +255,33 @@ class IndicatorFactory:
             ValueError: If configuration is invalid
         """
         # Check required top-level fields
-        required_fields = ['type', 'params', 'fields_mapping']
+        required_fields = ["type", "params", "fields_mapping"]
         for field in required_fields:
             if field not in ind_config:
-                raise ValueError(
-                    f"Indicator config missing required field: '{field}'"
-                )
+                raise ValueError(f"Indicator config missing required field: '{field}'")
 
-        ind_type = ind_config['type']
+        ind_type = ind_config["type"]
 
         # Check if indicator type is supported
         if ind_type not in IndicatorFactory.INDICATOR_MAP:
-            supported = ', '.join(IndicatorFactory.INDICATOR_MAP.keys())
-            raise ValueError(
-                f"Unsupported indicator type: '{ind_type}'. "
-                f"Supported types: {supported}"
-            )
+            supported = ", ".join(IndicatorFactory.INDICATOR_MAP.keys())
+            raise ValueError(f"Unsupported indicator type: '{ind_type}'. Supported types: {supported}")
 
         # Validate required parameters
         ind_meta = IndicatorFactory.INDICATOR_MAP[ind_type]
-        params = ind_config['params']
+        params = ind_config["params"]
 
-        for required_param in ind_meta['required_params']:
+        for required_param in ind_meta["required_params"]:
             if required_param not in params:
-                raise ValueError(
-                    f"{ind_type} indicator missing required parameter: '{required_param}'"
-                )
+                raise ValueError(f"{ind_type} indicator missing required parameter: '{required_param}'")
 
         # Validate fields_mapping
-        fields_mapping = ind_config['fields_mapping']
+        fields_mapping = ind_config["fields_mapping"]
         if not fields_mapping:
-            raise ValueError(
-                f"{ind_type} indicator must have at least one field mapping"
-            )
+            raise ValueError(f"{ind_type} indicator must have at least one field mapping")
 
         # Check that mapped output fields are valid
-        valid_outputs = ind_meta['outputs']
+        valid_outputs = ind_meta["outputs"]
         for output_field in fields_mapping.keys():
             if output_field not in valid_outputs:
-                raise ValueError(
-                    f"Invalid output field '{output_field}' for {ind_type}. "
-                    f"Valid fields: {valid_outputs}"
-                )
+                raise ValueError(f"Invalid output field '{output_field}' for {ind_type}. Valid fields: {valid_outputs}")

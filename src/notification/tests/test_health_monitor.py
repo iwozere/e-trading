@@ -3,20 +3,28 @@
 Test script for Channel Health Monitoring System.
 Tests health checks, status evaluation, auto-disable/enable, and monitoring features.
 """
+
 import asyncio
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.service.health_monitor import (
-    HealthMonitor, HealthCheckConfig, HealthStatus, HealthCheckType,
-    HealthThreshold, HealthMetric, create_default_health_config, create_strict_health_config, create_lenient_health_config
-)
 from src.notification.logger import setup_logger
+from src.notification.service.health_monitor import (
+    HealthCheckConfig,
+    HealthCheckType,
+    HealthMetric,
+    HealthMonitor,
+    HealthStatus,
+    HealthThreshold,
+    create_default_health_config,
+    create_lenient_health_config,
+    create_strict_health_config,
+)
 
 _logger = setup_logger(__name__)
 
@@ -33,7 +41,7 @@ async def test_basic_health_monitoring():
         config = create_default_health_config(
             "test_channel",
             check_interval_seconds=1,  # Fast interval for testing
-            enabled_checks={HealthCheckType.CONNECTIVITY, HealthCheckType.RESPONSE_TIME}
+            enabled_checks={HealthCheckType.CONNECTIVITY, HealthCheckType.RESPONSE_TIME},
         )
         monitor.configure_channel(config)
         print("✓ Configured health monitoring for test channel")
@@ -78,7 +86,7 @@ async def test_health_threshold_evaluation():
             healthy_min=95.0,
             degraded_min=85.0,
             unhealthy_min=70.0,
-            critical_min=50.0
+            critical_min=50.0,
         )
 
         # Test different values
@@ -87,12 +95,14 @@ async def test_health_threshold_evaluation():
             (90.0, HealthStatus.DEGRADED),
             (65.0, HealthStatus.UNHEALTHY),  # Below unhealthy_min of 70.0
             (40.0, HealthStatus.CRITICAL),
-            (30.0, HealthStatus.CRITICAL)
+            (30.0, HealthStatus.CRITICAL),
         ]
 
         for value, expected_status in test_cases:
             actual_status = threshold.evaluate_status(value)
-            assert actual_status == expected_status, f"Value {value} should be {expected_status.value}, got {actual_status.value}"
+            assert actual_status == expected_status, (
+                f"Value {value} should be {expected_status.value}, got {actual_status.value}"
+            )
 
         print("✓ Success rate threshold evaluation works correctly")
 
@@ -102,19 +112,21 @@ async def test_health_threshold_evaluation():
             healthy_max=1000.0,
             degraded_max=3000.0,
             unhealthy_max=10000.0,
-            critical_max=30000.0
+            critical_max=30000.0,
         )
 
         response_test_cases = [
             (500.0, HealthStatus.HEALTHY),
             (2000.0, HealthStatus.DEGRADED),
             (15000.0, HealthStatus.UNHEALTHY),  # Above unhealthy_max of 10000.0
-            (45000.0, HealthStatus.CRITICAL)
+            (45000.0, HealthStatus.CRITICAL),
         ]
 
         for value, expected_status in response_test_cases:
             actual_status = response_threshold.evaluate_status(value)
-            assert actual_status == expected_status, f"Response time {value}ms should be {expected_status.value}, got {actual_status.value}"
+            assert actual_status == expected_status, (
+                f"Response time {value}ms should be {expected_status.value}, got {actual_status.value}"
+            )
 
         print("✓ Response time threshold evaluation works correctly")
         return True
@@ -137,15 +149,13 @@ async def test_auto_disable_enable():
             channel="auto_test_channel",
             check_interval_seconds=1,
             auto_disable_threshold=3,  # Disable after 3 failures
-            auto_enable_threshold=2,   # Enable after 2 successes
+            auto_enable_threshold=2,  # Enable after 2 successes
             enabled_checks={HealthCheckType.SUCCESS_RATE},
             thresholds={
                 HealthCheckType.SUCCESS_RATE: HealthThreshold(
-                    metric_type=HealthCheckType.SUCCESS_RATE,
-                    healthy_min=95.0,
-                    critical_min=50.0
+                    metric_type=HealthCheckType.SUCCESS_RATE, healthy_min=95.0, critical_min=50.0
                 )
-            }
+            },
         )
         monitor.configure_channel(config)
 
@@ -160,8 +170,8 @@ async def test_auto_disable_enable():
             bad_metric = HealthMetric(
                 metric_type=HealthCheckType.SUCCESS_RATE,
                 value=30.0,  # Critical value
-                timestamp=datetime.now(timezone.utc),
-                channel="auto_test_channel"
+                timestamp=datetime.now(UTC),
+                channel="auto_test_channel",
             )
 
             # Manually update status to simulate failures
@@ -186,8 +196,8 @@ async def test_auto_disable_enable():
             good_metric = HealthMetric(
                 metric_type=HealthCheckType.SUCCESS_RATE,
                 value=98.0,  # Healthy value
-                timestamp=datetime.now(timezone.utc),
-                channel="auto_test_channel"
+                timestamp=datetime.now(UTC),
+                channel="auto_test_channel",
             )
 
             # Manually update status to simulate recovery
@@ -298,18 +308,10 @@ async def test_health_callbacks():
             old_status = status.overall_status
 
             # Trigger status change callback
-            await monitor._trigger_status_change_callbacks(
-                "callback_test_channel",
-                old_status,
-                HealthStatus.DEGRADED
-            )
+            await monitor._trigger_status_change_callbacks("callback_test_channel", old_status, HealthStatus.DEGRADED)
 
             # Trigger health alert callback
-            await monitor._trigger_health_alert_callbacks(
-                "callback_test_channel",
-                "test_alert",
-                "This is a test alert"
-            )
+            await monitor._trigger_health_alert_callbacks("callback_test_channel", "test_alert", "This is a test alert")
 
         # Check callbacks were invoked
         assert len(status_changes) == 1
@@ -396,10 +398,7 @@ async def test_metric_history_and_trends():
         await monitor.start()
 
         # Configure channel
-        config = create_default_health_config(
-            "history_test_channel",
-            metric_history_size=50
-        )
+        config = create_default_health_config("history_test_channel", metric_history_size=50)
         monitor.configure_channel(config)
 
         # Simulate metric collection over time
@@ -409,15 +408,15 @@ async def test_metric_history_and_trends():
             connectivity_metric = HealthMetric(
                 metric_type=HealthCheckType.CONNECTIVITY,
                 value=90.0 + (i % 3) * 5.0,  # Values between 90-100
-                timestamp=datetime.now(timezone.utc),
-                channel="history_test_channel"
+                timestamp=datetime.now(UTC),
+                channel="history_test_channel",
             )
 
             response_time_metric = HealthMetric(
                 metric_type=HealthCheckType.RESPONSE_TIME,
                 value=500.0 + i * 100.0,  # Increasing response times
-                timestamp=datetime.now(timezone.utc),
-                channel="history_test_channel"
+                timestamp=datetime.now(UTC),
+                channel="history_test_channel",
             )
 
             # Add to history
@@ -488,7 +487,7 @@ async def test_configuration_presets():
         strict_config = create_strict_health_config("strict_channel")
         assert strict_config.channel == "strict_channel"
         assert strict_config.auto_disable_threshold == 3  # More aggressive
-        assert strict_config.auto_enable_threshold == 5   # More conservative
+        assert strict_config.auto_enable_threshold == 5  # More conservative
 
         # Check stricter thresholds
         success_threshold = strict_config.thresholds[HealthCheckType.SUCCESS_RATE]
@@ -499,7 +498,7 @@ async def test_configuration_presets():
         lenient_config = create_lenient_health_config("lenient_channel")
         assert lenient_config.channel == "lenient_channel"
         assert lenient_config.auto_disable_threshold == 10  # Less aggressive
-        assert lenient_config.auto_enable_threshold == 2    # Less conservative
+        assert lenient_config.auto_enable_threshold == 2  # Less conservative
 
         # Check more relaxed thresholds
         success_threshold = lenient_config.thresholds[HealthCheckType.SUCCESS_RATE]
@@ -595,7 +594,7 @@ async def test_concurrent_monitoring():
         for channel in channels:
             config = create_default_health_config(
                 channel,
-                check_interval_seconds=0.5  # Very fast for testing
+                check_interval_seconds=0.5,  # Very fast for testing
             )
             monitor.configure_channel(config)
 

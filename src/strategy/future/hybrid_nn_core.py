@@ -16,10 +16,11 @@ signal = core.predict_signal(ohlcv_df)
 
 import numpy as np
 import pandas as pd
+import talib
 import torch
 import torch.nn as nn
-import talib
 import xgboost as xgb
+
 
 # --- Bahdanau Attention ---
 class BahdanauAttention(nn.Module):
@@ -28,6 +29,7 @@ class BahdanauAttention(nn.Module):
         self.W1 = nn.Linear(hidden_size, hidden_size)
         self.W2 = nn.Linear(hidden_size, hidden_size)
         self.V = nn.Linear(hidden_size, 1)
+
     def forward(self, encoder_outputs, hidden):
         hidden = hidden.unsqueeze(1)
         score = torch.tanh(self.W1(encoder_outputs) + self.W2(hidden))
@@ -35,24 +37,26 @@ class BahdanauAttention(nn.Module):
         context = (attention_weights * encoder_outputs).sum(dim=1)
         return context, attention_weights.squeeze(-1)
 
+
 # --- CNN+LSTM+Attention Model ---
 class HybridModel(nn.Module):
     def __init__(self, cnn_params, lstm_params, tech_feat_dim, out_dim=1):
         super().__init__()
         self.cnn = nn.Sequential(
-            nn.Conv1d(5, cnn_params['filters'], cnn_params['kernel_size']),
+            nn.Conv1d(5, cnn_params["filters"], cnn_params["kernel_size"]),
             nn.ReLU(),
             nn.MaxPool1d(2),
         )
         self.lstm = nn.LSTM(
-            input_size=cnn_params['filters'],
-            hidden_size=lstm_params['hidden_size'],
-            num_layers=lstm_params['num_layers'],
+            input_size=cnn_params["filters"],
+            hidden_size=lstm_params["hidden_size"],
+            num_layers=lstm_params["num_layers"],
             batch_first=True,
-            dropout=lstm_params['dropout'] if lstm_params['num_layers'] > 1 else 0.0
+            dropout=lstm_params["dropout"] if lstm_params["num_layers"] > 1 else 0.0,
         )
-        self.attn = BahdanauAttention(lstm_params['hidden_size'])
-        self.fc = nn.Linear(lstm_params['hidden_size'], out_dim)
+        self.attn = BahdanauAttention(lstm_params["hidden_size"])
+        self.fc = nn.Linear(lstm_params["hidden_size"], out_dim)
+
     def forward(self, x):
         x = self.cnn(x)
         x = x.permute(0, 2, 1)
@@ -61,26 +65,27 @@ class HybridModel(nn.Module):
         out = self.fc(context)
         return out, context, attn_weights
 
+
 class HybridNNCore:
     def __init__(self, cnn_lstm_path, xgb_path, window_size=100, device=None):
         self.window_size = window_size
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         # Model params should match those used in training
-        cnn_params = {'filters': 64, 'kernel_size': 5}  # Update as needed
-        lstm_params = {'hidden_size': 128, 'num_layers': 2, 'dropout': 0.3}
+        cnn_params = {"filters": 64, "kernel_size": 5}  # Update as needed
+        lstm_params = {"hidden_size": 128, "num_layers": 2, "dropout": 0.3}
         self.model = HybridModel(cnn_params, lstm_params, tech_feat_dim=10).to(self.device)
         self.model.load_state_dict(torch.load(cnn_lstm_path, map_location=self.device))
         self.model.eval()
         self.xgb = xgb.XGBClassifier()
         self.xgb.load_model(xgb_path)
-        self.datafields = ['open', 'high', 'low', 'close', 'volume']
+        self.datafields = ["open", "high", "low", "close", "volume"]
 
     def compute_tech_indicators(self, df):
-        close = df['close'].values
-        high = df['high'].values
-        low = df['low'].values
-        open_ = df['open'].values
-        volume = df['volume'].values
+        close = df["close"].values
+        high = df["high"].values
+        low = df["low"].values
+        open_ = df["open"].values
+        volume = df["volume"].values
         rsi = talib.RSI(close, timeperiod=14)[-1]
         atr = talib.ATR(high, low, close, timeperiod=14)[-1]
         macd, macdsignal, macdhist = talib.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)
@@ -95,10 +100,10 @@ class HybridNNCore:
         period26_high = pd.Series(high).rolling(window=26).max().iloc[-1]
         period26_low = pd.Series(low).rolling(window=26).min().iloc[-1]
         kijun_sen = (period26_high + period26_low) / 2
-        ichimoku_a = ((tenkan_sen + kijun_sen) / 2)
+        ichimoku_a = (tenkan_sen + kijun_sen) / 2
         period52_high = pd.Series(high).rolling(window=52).max().iloc[-1]
         period52_low = pd.Series(low).rolling(window=52).min().iloc[-1]
-        ichimoku_b = ((period52_high + period52_low) / 2)
+        ichimoku_b = (period52_high + period52_low) / 2
         obv = talib.OBV(close, volume)[-1]
         slowk, slowd = talib.STOCH(high, low, close)
         stoch = slowk[-1]
@@ -116,8 +121,8 @@ class HybridNNCore:
         features = np.concatenate([lstm_features.cpu().numpy().flatten(), tech])
         pred = self.xgb.predict(features.reshape(1, -1))[0]
         if pred == 1:
-            return 'buy'
+            return "buy"
         elif pred == 0:
-            return 'sell'
+            return "sell"
         else:
-            return 'hold' 
+            return "hold"

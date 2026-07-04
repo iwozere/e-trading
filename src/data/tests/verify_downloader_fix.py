@@ -7,7 +7,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 # Setup logging to see DEBUG logs
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
+
 
 def test_downloader_initialization():
     from src.data.data_manager import get_provider_selector
@@ -43,6 +44,7 @@ def test_downloader_initialization():
     # 'AAPL' has primary 'yahoo' for 1d
     selector1.get_best_downloader("AAPL", "1d")
     print(f"Downloaders now: {list(selector1.downloaders.keys())}")
+
 
 if __name__ == "__main__":
     test_downloader_initialization()

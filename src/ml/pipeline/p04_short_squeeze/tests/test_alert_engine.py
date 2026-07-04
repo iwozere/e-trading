@@ -4,25 +4,33 @@ Unit tests for the alert engine.
 Tests alert threshold evaluation, cooldown logic, and notification integration.
 """
 
-import unittest
 import asyncio
+import sys
+import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
-import sys
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.data.db.models.model_short_squeeze import AlertLevel, CandidateSource
+from src.ml.pipeline.p04_short_squeeze.config.data_classes import (
+    AlertChannels,
+    AlertConfig,
+    AlertCooldown,
+    AlertThreshold,
+    AlertThresholds,
+)
 from src.ml.pipeline.p04_short_squeeze.core.alert_engine import AlertEngine
 from src.ml.pipeline.p04_short_squeeze.core.models import (
-    StructuralMetrics, TransientMetrics, Candidate, ScoredCandidate, Alert
+    Alert,
+    Candidate,
+    ScoredCandidate,
+    StructuralMetrics,
+    TransientMetrics,
 )
-from src.ml.pipeline.p04_short_squeeze.config.data_classes import (
-    AlertConfig, AlertThresholds, AlertThreshold, AlertCooldown, AlertChannels
-)
-from src.data.db.models.model_short_squeeze import AlertLevel, CandidateSource
 
 
 class TestAlertEngine(unittest.TestCase):
@@ -33,36 +41,17 @@ class TestAlertEngine(unittest.TestCase):
         # Create alert configuration
         self.alert_config = AlertConfig(
             thresholds=AlertThresholds(
-                high=AlertThreshold(
-                    squeeze_score=0.8,
-                    min_si_percent=0.25,
-                    min_volume_spike=4.0,
-                    min_sentiment=0.6
-                ),
-                medium=AlertThreshold(
-                    squeeze_score=0.6,
-                    min_si_percent=0.20,
-                    min_volume_spike=3.0,
-                    min_sentiment=0.5
-                ),
-                low=AlertThreshold(
-                    squeeze_score=0.4,
-                    min_si_percent=0.15,
-                    min_volume_spike=2.0,
-                    min_sentiment=0.4
-                )
+                high=AlertThreshold(squeeze_score=0.8, min_si_percent=0.25, min_volume_spike=4.0, min_sentiment=0.6),
+                medium=AlertThreshold(squeeze_score=0.6, min_si_percent=0.20, min_volume_spike=3.0, min_sentiment=0.5),
+                low=AlertThreshold(squeeze_score=0.4, min_si_percent=0.15, min_volume_spike=2.0, min_sentiment=0.4),
             ),
-            cooldown=AlertCooldown(
-                high_alert_days=7,
-                medium_alert_days=5,
-                low_alert_days=3
-            ),
+            cooldown=AlertCooldown(high_alert_days=7, medium_alert_days=5, low_alert_days=3),
             channels=AlertChannels(
                 telegram_enabled=True,
-                telegram_chat_ids=['@test_alerts'],
+                telegram_chat_ids=["@test_alerts"],
                 email_enabled=True,
-                email_recipients=['test@example.com']
-            )
+                email_recipients=["test@example.com"],
+            ),
         )
 
         # Mock notification client
@@ -78,28 +67,19 @@ class TestAlertEngine(unittest.TestCase):
             days_to_cover=8.5,
             float_shares=50_000_000,
             avg_volume_14d=1_000_000,
-            market_cap=500_000_000
+            market_cap=500_000_000,
         )
 
         self.transient_metrics_high = TransientMetrics(
-            volume_spike=5.0,
-            call_put_ratio=2.5,
-            sentiment_24h=0.7,
-            borrow_fee_pct=0.20
+            volume_spike=5.0, call_put_ratio=2.5, sentiment_24h=0.7, borrow_fee_pct=0.20
         )
 
         self.transient_metrics_medium = TransientMetrics(
-            volume_spike=3.2,
-            call_put_ratio=1.8,
-            sentiment_24h=0.55,
-            borrow_fee_pct=0.15
+            volume_spike=3.2, call_put_ratio=1.8, sentiment_24h=0.55, borrow_fee_pct=0.15
         )
 
         self.transient_metrics_low = TransientMetrics(
-            volume_spike=2.1,
-            call_put_ratio=1.2,
-            sentiment_24h=0.45,
-            borrow_fee_pct=0.10
+            volume_spike=2.1, call_put_ratio=1.2, sentiment_24h=0.45, borrow_fee_pct=0.10
         )
 
         self.candidate = Candidate(
@@ -107,7 +87,7 @@ class TestAlertEngine(unittest.TestCase):
             screener_score=0.75,
             structural_metrics=self.structural_metrics,
             last_updated=datetime.now(),
-            source=CandidateSource.SCREENER
+            source=CandidateSource.SCREENER,
         )
 
     def test_alert_engine_initialization(self):
@@ -121,10 +101,10 @@ class TestAlertEngine(unittest.TestCase):
             thresholds=AlertThresholds(
                 high=AlertThreshold(squeeze_score=0.5, min_si_percent=0.25, min_volume_spike=4.0, min_sentiment=0.6),
                 medium=AlertThreshold(squeeze_score=0.6, min_si_percent=0.20, min_volume_spike=3.0, min_sentiment=0.5),
-                low=AlertThreshold(squeeze_score=0.8, min_si_percent=0.15, min_volume_spike=2.0, min_sentiment=0.4)
+                low=AlertThreshold(squeeze_score=0.8, min_si_percent=0.15, min_volume_spike=2.0, min_sentiment=0.4),
             ),
             cooldown=self.alert_config.cooldown,
-            channels=self.alert_config.channels
+            channels=self.alert_config.channels,
         )
 
         with self.assertRaises(ValueError) as context:
@@ -135,9 +115,7 @@ class TestAlertEngine(unittest.TestCase):
     def test_determine_alert_level_high(self):
         """Test high alert level determination."""
         alert_level = self.alert_engine._determine_alert_level(
-            squeeze_score=0.85,
-            structural=self.structural_metrics,
-            transient=self.transient_metrics_high
+            squeeze_score=0.85, structural=self.structural_metrics, transient=self.transient_metrics_high
         )
 
         self.assertEqual(alert_level, AlertLevel.HIGH)
@@ -145,9 +123,7 @@ class TestAlertEngine(unittest.TestCase):
     def test_determine_alert_level_medium(self):
         """Test medium alert level determination."""
         alert_level = self.alert_engine._determine_alert_level(
-            squeeze_score=0.65,
-            structural=self.structural_metrics,
-            transient=self.transient_metrics_medium
+            squeeze_score=0.65, structural=self.structural_metrics, transient=self.transient_metrics_medium
         )
 
         self.assertEqual(alert_level, AlertLevel.MEDIUM)
@@ -155,9 +131,7 @@ class TestAlertEngine(unittest.TestCase):
     def test_determine_alert_level_low(self):
         """Test low alert level determination."""
         alert_level = self.alert_engine._determine_alert_level(
-            squeeze_score=0.45,
-            structural=self.structural_metrics,
-            transient=self.transient_metrics_low
+            squeeze_score=0.45, structural=self.structural_metrics, transient=self.transient_metrics_low
         )
 
         self.assertEqual(alert_level, AlertLevel.LOW)
@@ -166,9 +140,7 @@ class TestAlertEngine(unittest.TestCase):
         """Test no alert level when thresholds not met."""
         # Score too low
         alert_level = self.alert_engine._determine_alert_level(
-            squeeze_score=0.3,
-            structural=self.structural_metrics,
-            transient=self.transient_metrics_low
+            squeeze_score=0.3, structural=self.structural_metrics, transient=self.transient_metrics_low
         )
 
         self.assertIsNone(alert_level)
@@ -178,13 +150,11 @@ class TestAlertEngine(unittest.TestCase):
             volume_spike=5.0,
             call_put_ratio=2.5,
             sentiment_24h=0.3,  # Below high threshold
-            borrow_fee_pct=0.20
+            borrow_fee_pct=0.20,
         )
 
         alert_level = self.alert_engine._determine_alert_level(
-            squeeze_score=0.85,
-            structural=self.structural_metrics,
-            transient=low_sentiment_transient
+            squeeze_score=0.85, structural=self.structural_metrics, transient=low_sentiment_transient
         )
 
         # Should not be high level due to low sentiment
@@ -193,9 +163,7 @@ class TestAlertEngine(unittest.TestCase):
     def test_generate_alert_reason(self):
         """Test alert reason generation."""
         scored_candidate = ScoredCandidate(
-            candidate=self.candidate,
-            transient_metrics=self.transient_metrics_high,
-            squeeze_score=0.85
+            candidate=self.candidate, transient_metrics=self.transient_metrics_high, squeeze_score=0.85
         )
 
         reason = self.alert_engine._generate_alert_reason(scored_candidate, AlertLevel.HIGH)
@@ -205,9 +173,9 @@ class TestAlertEngine(unittest.TestCase):
         self.assertIn("TSLA", reason)
         self.assertIn("85.0%", reason)  # Squeeze score as percentage
         self.assertIn("30.0%", reason)  # Short interest
-        self.assertIn("8.5", reason)    # Days to cover
-        self.assertIn("5.0x", reason)   # Volume spike
-        self.assertIn("0.70", reason)   # Sentiment
+        self.assertIn("8.5", reason)  # Days to cover
+        self.assertIn("5.0x", reason)  # Volume spike
+        self.assertIn("0.70", reason)  # Sentiment
 
     def test_calculate_cooldown_expiration(self):
         """Test cooldown expiration calculation."""
@@ -219,28 +187,20 @@ class TestAlertEngine(unittest.TestCase):
         self.assertAlmostEqual(
             high_expiry.timestamp(),
             expected_high.timestamp(),
-            delta=60  # Within 1 minute
+            delta=60,  # Within 1 minute
         )
 
         # Medium alert cooldown
         medium_expiry = self.alert_engine._calculate_cooldown_expiration(AlertLevel.MEDIUM)
         expected_medium = now + timedelta(days=5)
-        self.assertAlmostEqual(
-            medium_expiry.timestamp(),
-            expected_medium.timestamp(),
-            delta=60
-        )
+        self.assertAlmostEqual(medium_expiry.timestamp(), expected_medium.timestamp(), delta=60)
 
         # Low alert cooldown
         low_expiry = self.alert_engine._calculate_cooldown_expiration(AlertLevel.LOW)
         expected_low = now + timedelta(days=3)
-        self.assertAlmostEqual(
-            low_expiry.timestamp(),
-            expected_low.timestamp(),
-            delta=60
-        )
+        self.assertAlmostEqual(low_expiry.timestamp(), expected_low.timestamp(), delta=60)
 
-    @patch('src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope')
+    @patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope")
     def test_is_in_cooldown_false(self, mock_session_scope):
         """Test cooldown check when not in cooldown."""
         # Mock database session and service
@@ -250,7 +210,7 @@ class TestAlertEngine(unittest.TestCase):
 
         mock_session_scope.return_value.__enter__.return_value = mock_session
 
-        with patch('src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService') as mock_service_class:
+        with patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
 
             result = self.alert_engine._is_in_cooldown("TSLA", AlertLevel.HIGH)
@@ -258,7 +218,7 @@ class TestAlertEngine(unittest.TestCase):
             self.assertFalse(result)
             mock_service.repo.alerts.check_cooldown.assert_called_once_with("TSLA", AlertLevel.HIGH)
 
-    @patch('src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope')
+    @patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope")
     def test_is_in_cooldown_true(self, mock_session_scope):
         """Test cooldown check when in cooldown."""
         # Mock database session and service
@@ -268,14 +228,14 @@ class TestAlertEngine(unittest.TestCase):
 
         mock_session_scope.return_value.__enter__.return_value = mock_session
 
-        with patch('src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService') as mock_service_class:
+        with patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
 
             result = self.alert_engine._is_in_cooldown("TSLA", AlertLevel.HIGH)
 
             self.assertTrue(result)
 
-    @patch('src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope')
+    @patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope")
     def test_evaluate_candidate_alert_success(self, mock_session_scope):
         """Test successful alert evaluation for a candidate."""
         # Mock database to return no cooldown
@@ -285,13 +245,11 @@ class TestAlertEngine(unittest.TestCase):
 
         mock_session_scope.return_value.__enter__.return_value = mock_session
 
-        with patch('src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService') as mock_service_class:
+        with patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
 
             scored_candidate = ScoredCandidate(
-                candidate=self.candidate,
-                transient_metrics=self.transient_metrics_high,
-                squeeze_score=0.85
+                candidate=self.candidate, transient_metrics=self.transient_metrics_high, squeeze_score=0.85
             )
 
             alert = self.alert_engine._evaluate_candidate_alert(scored_candidate)
@@ -302,7 +260,7 @@ class TestAlertEngine(unittest.TestCase):
             self.assertEqual(alert.squeeze_score, 0.85)
             self.assertIsNotNone(alert.cooldown_expires)
 
-    @patch('src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope')
+    @patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope")
     def test_evaluate_candidate_alert_cooldown(self, mock_session_scope):
         """Test alert evaluation when candidate is in cooldown."""
         # Mock database to return cooldown active
@@ -312,13 +270,11 @@ class TestAlertEngine(unittest.TestCase):
 
         mock_session_scope.return_value.__enter__.return_value = mock_session
 
-        with patch('src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService') as mock_service_class:
+        with patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
 
             scored_candidate = ScoredCandidate(
-                candidate=self.candidate,
-                transient_metrics=self.transient_metrics_high,
-                squeeze_score=0.85
+                candidate=self.candidate, transient_metrics=self.transient_metrics_high, squeeze_score=0.85
             )
 
             alert = self.alert_engine._evaluate_candidate_alert(scored_candidate)
@@ -327,7 +283,7 @@ class TestAlertEngine(unittest.TestCase):
 
     def test_evaluate_alerts_multiple_candidates(self):
         """Test evaluating alerts for multiple candidates."""
-        with patch.object(self.alert_engine, '_evaluate_candidate_alert') as mock_evaluate:
+        with patch.object(self.alert_engine, "_evaluate_candidate_alert") as mock_evaluate:
             # Mock return values
             mock_alert1 = Mock()
             mock_alert2 = None  # No alert for second candidate
@@ -335,20 +291,18 @@ class TestAlertEngine(unittest.TestCase):
 
             scored_candidates = [
                 ScoredCandidate(
-                    candidate=self.candidate,
-                    transient_metrics=self.transient_metrics_high,
-                    squeeze_score=0.85
+                    candidate=self.candidate, transient_metrics=self.transient_metrics_high, squeeze_score=0.85
                 ),
                 ScoredCandidate(
                     candidate=Candidate(
                         ticker="AAPL",
                         screener_score=0.5,
                         structural_metrics=self.structural_metrics,
-                        last_updated=datetime.now()
+                        last_updated=datetime.now(),
                     ),
                     transient_metrics=self.transient_metrics_low,
-                    squeeze_score=0.3
-                )
+                    squeeze_score=0.3,
+                ),
             ]
 
             alerts = self.alert_engine.evaluate_alerts(scored_candidates)
@@ -364,10 +318,10 @@ class TestAlertEngine(unittest.TestCase):
             reason="Test alert reason",
             squeeze_score=0.85,
             timestamp=datetime.now(),
-            cooldown_expires=datetime.now() + timedelta(days=7)
+            cooldown_expires=datetime.now() + timedelta(days=7),
         )
 
-        with patch.object(self.alert_engine, '_mark_alert_sent') as mock_mark_sent:
+        with patch.object(self.alert_engine, "_mark_alert_sent") as mock_mark_sent:
             mock_mark_sent.return_value = None
 
             result = await self.alert_engine.send_alert(alert)
@@ -377,26 +331,21 @@ class TestAlertEngine(unittest.TestCase):
 
             # Check notification call arguments
             call_args = self.mock_notification_client.send_notification.call_args
-            self.assertIn("HIGH Short Squeeze Alert: TSLA", call_args.kwargs['title'])
-            self.assertIn("Test alert reason", call_args.kwargs['message'])
-            self.assertEqual(call_args.kwargs['channels'], ['telegram', 'email'])
+            self.assertIn("HIGH Short Squeeze Alert: TSLA", call_args.kwargs["title"])
+            self.assertIn("Test alert reason", call_args.kwargs["message"])
+            self.assertEqual(call_args.kwargs["channels"], ["telegram", "email"])
 
     async def test_send_alert_failure(self):
         """Test alert sending failure."""
         self.mock_notification_client.send_notification.return_value = False
 
-        alert = Alert(
-            ticker="TSLA",
-            alert_level=AlertLevel.HIGH,
-            reason="Test alert reason",
-            squeeze_score=0.85
-        )
+        alert = Alert(ticker="TSLA", alert_level=AlertLevel.HIGH, reason="Test alert reason", squeeze_score=0.85)
 
         result = await self.alert_engine.send_alert(alert)
 
         self.assertFalse(result)
 
-    @patch('src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope')
+    @patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope")
     async def test_mark_alert_sent(self, mock_session_scope):
         """Test marking alert as sent in database."""
         # Mock database session and service
@@ -407,15 +356,10 @@ class TestAlertEngine(unittest.TestCase):
 
         mock_session_scope.return_value.__enter__.return_value = mock_session
 
-        with patch('src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService') as mock_service_class:
+        with patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
 
-            alert = Alert(
-                ticker="TSLA",
-                alert_level=AlertLevel.HIGH,
-                reason="Test alert reason",
-                squeeze_score=0.85
-            )
+            alert = Alert(ticker="TSLA", alert_level=AlertLevel.HIGH, reason="Test alert reason", squeeze_score=0.85)
 
             await self.alert_engine._mark_alert_sent(alert, "notification_123")
 
@@ -427,23 +371,15 @@ class TestAlertEngine(unittest.TestCase):
     async def test_process_alerts_complete_workflow(self):
         """Test complete alert processing workflow."""
         scored_candidates = [
-            ScoredCandidate(
-                candidate=self.candidate,
-                transient_metrics=self.transient_metrics_high,
-                squeeze_score=0.85
-            )
+            ScoredCandidate(candidate=self.candidate, transient_metrics=self.transient_metrics_high, squeeze_score=0.85)
         ]
 
-        with patch.object(self.alert_engine, 'evaluate_alerts') as mock_evaluate, \
-             patch.object(self.alert_engine, 'send_alert') as mock_send:
-
+        with (
+            patch.object(self.alert_engine, "evaluate_alerts") as mock_evaluate,
+            patch.object(self.alert_engine, "send_alert") as mock_send,
+        ):
             # Mock alert generation
-            mock_alert = Alert(
-                ticker="TSLA",
-                alert_level=AlertLevel.HIGH,
-                reason="Test alert",
-                squeeze_score=0.85
-            )
+            mock_alert = Alert(ticker="TSLA", alert_level=AlertLevel.HIGH, reason="Test alert", squeeze_score=0.85)
             mock_evaluate.return_value = [mock_alert]
 
             # Mock successful sending
@@ -452,13 +388,13 @@ class TestAlertEngine(unittest.TestCase):
 
             results = await self.alert_engine.process_alerts(scored_candidates)
 
-            self.assertEqual(results['candidates_processed'], 1)
-            self.assertEqual(results['alerts_generated'], 1)
-            self.assertEqual(results['alerts_sent'], 1)
-            self.assertEqual(results['alerts_failed'], 0)
-            self.assertEqual(len(results['alert_details']), 1)
+            self.assertEqual(results["candidates_processed"], 1)
+            self.assertEqual(results["alerts_generated"], 1)
+            self.assertEqual(results["alerts_sent"], 1)
+            self.assertEqual(results["alerts_failed"], 0)
+            self.assertEqual(len(results["alert_details"]), 1)
 
-    @patch('src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope')
+    @patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope")
     def test_get_alert_statistics(self, mock_session_scope):
         """Test getting alert statistics."""
         # Mock database session and service
@@ -469,25 +405,25 @@ class TestAlertEngine(unittest.TestCase):
         mock_alerts = [
             Mock(alert_level="HIGH", sent=True),
             Mock(alert_level="MEDIUM", sent=True),
-            Mock(alert_level="LOW", sent=False)
+            Mock(alert_level="LOW", sent=False),
         ]
         mock_service.repo.alerts.get_recent_alerts.return_value = mock_alerts
 
         mock_session_scope.return_value.__enter__.return_value = mock_session
 
-        with patch('src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService') as mock_service_class:
+        with patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
 
             stats = self.alert_engine.get_alert_statistics(7)
 
-            self.assertEqual(stats['period_days'], 7)
-            self.assertEqual(stats['total_alerts'], 3)
-            self.assertEqual(stats['alerts_sent'], 2)
-            self.assertEqual(stats['alerts_pending'], 1)
-            self.assertEqual(stats['by_level']['HIGH'], 1)
-            self.assertEqual(stats['by_level']['MEDIUM'], 1)
-            self.assertEqual(stats['by_level']['LOW'], 1)
-            self.assertAlmostEqual(stats['success_rate'], 2/3, places=2)
+            self.assertEqual(stats["period_days"], 7)
+            self.assertEqual(stats["total_alerts"], 3)
+            self.assertEqual(stats["alerts_sent"], 2)
+            self.assertEqual(stats["alerts_pending"], 1)
+            self.assertEqual(stats["by_level"]["HIGH"], 1)
+            self.assertEqual(stats["by_level"]["MEDIUM"], 1)
+            self.assertEqual(stats["by_level"]["LOW"], 1)
+            self.assertAlmostEqual(stats["success_rate"], 2 / 3, places=2)
 
     def test_get_cooldown_days(self):
         """Test getting cooldown days for different alert levels."""
@@ -521,10 +457,10 @@ class TestAlertEngineAsync(AsyncTestCase):
             thresholds=AlertThresholds(
                 high=AlertThreshold(squeeze_score=0.8, min_si_percent=0.25, min_volume_spike=4.0, min_sentiment=0.6),
                 medium=AlertThreshold(squeeze_score=0.6, min_si_percent=0.20, min_volume_spike=3.0, min_sentiment=0.5),
-                low=AlertThreshold(squeeze_score=0.4, min_si_percent=0.15, min_volume_spike=2.0, min_sentiment=0.4)
+                low=AlertThreshold(squeeze_score=0.4, min_si_percent=0.15, min_volume_spike=2.0, min_sentiment=0.4),
             ),
             cooldown=AlertCooldown(high_alert_days=7, medium_alert_days=5, low_alert_days=3),
-            channels=AlertChannels(telegram_enabled=True, email_enabled=True)
+            channels=AlertChannels(telegram_enabled=True, email_enabled=True),
         )
 
         # Mock notification client
@@ -537,14 +473,9 @@ class TestAlertEngineAsync(AsyncTestCase):
 
     def test_send_alert_async(self):
         """Test async alert sending."""
-        alert = Alert(
-            ticker="TSLA",
-            alert_level=AlertLevel.HIGH,
-            reason="Test alert reason",
-            squeeze_score=0.85
-        )
+        alert = Alert(ticker="TSLA", alert_level=AlertLevel.HIGH, reason="Test alert reason", squeeze_score=0.85)
 
-        with patch.object(self.alert_engine, '_mark_alert_sent') as mock_mark_sent:
+        with patch.object(self.alert_engine, "_mark_alert_sent") as mock_mark_sent:
             mock_mark_sent.return_value = None
 
             result = self.async_test(self.alert_engine.send_alert(alert))
@@ -557,5 +488,5 @@ class TestAlertEngineAsync(AsyncTestCase):
         self.mock_notification_client.close.assert_called_once()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

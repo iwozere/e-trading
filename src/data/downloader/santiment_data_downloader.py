@@ -1,12 +1,12 @@
-
-from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any
-import pandas as pd
 import asyncio
-import logging
+from datetime import datetime, timedelta
+from typing import List
+
+import pandas as pd
 
 try:
     import san
+
     SANPY_AVAILABLE = True
 except ImportError:
     SANPY_AVAILABLE = False
@@ -16,6 +16,7 @@ from src.model.schemas import SentimentData
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class SantimentDataDownloader(BaseDataDownloader):
     """
@@ -58,26 +59,22 @@ class SantimentDataDownloader(BaseDataDownloader):
             # For now, simplistic mapping
             slug = self._symbol_to_slug(symbol)
 
-            df = san.get(
-                "ohlcv",
-                slug=slug,
-                from_date=start_date,
-                to_date=end_date,
-                interval=interval
-            )
+            df = san.get("ohlcv", slug=slug, from_date=start_date, to_date=end_date, interval=interval)
 
             if df.empty:
                 return pd.DataFrame()
 
             # Rename columns to standard format
             df.index.name = "date"
-            df = df.rename(columns={
-                "openPriceUsd": "open",
-                "highPriceUsd": "high",
-                "lowPriceUsd": "low",
-                "closePriceUsd": "close",
-                "volume": "volume"
-            })
+            df = df.rename(
+                columns={
+                    "openPriceUsd": "open",
+                    "highPriceUsd": "high",
+                    "lowPriceUsd": "low",
+                    "closePriceUsd": "close",
+                    "volume": "volume",
+                }
+            )
 
             return df[["open", "high", "low", "close", "volume"]]
 
@@ -101,7 +98,7 @@ class SantimentDataDownloader(BaseDataDownloader):
                 symbol=symbol,
                 provider="santiment",
                 timestamp=datetime.now().isoformat(),
-                raw_data={"error": "sanpy not installed"}
+                raw_data={"error": "sanpy not installed"},
             )
 
         try:
@@ -114,20 +111,12 @@ class SantimentDataDownloader(BaseDataDownloader):
             df = await loop.run_in_executor(
                 None,
                 lambda: san.get(
-                    "social_volume_total",
-                    slug=slug,
-                    from_date=start_date,
-                    to_date=end_date,
-                    interval="1d"
-                )
+                    "social_volume_total", slug=slug, from_date=start_date, to_date=end_date, interval="1d"
+                ),
             )
 
             if df is None or df.empty:
-                 return SentimentData(
-                    symbol=symbol,
-                    provider="santiment",
-                    timestamp=datetime.now().isoformat()
-                )
+                return SentimentData(symbol=symbol, provider="santiment", timestamp=datetime.now().isoformat())
 
             # Calculate total mentions
             total_mentions = int(df["value"].sum()) if "value" in df.columns else 0
@@ -146,16 +135,13 @@ class SantimentDataDownloader(BaseDataDownloader):
                 timestamp=datetime.now().isoformat(),
                 mention_count=total_mentions,
                 buzz_ratio=buzz_ratio,
-                raw_data={"social_volume": df.to_dict()}
+                raw_data={"social_volume": df.to_dict()},
             )
 
         except Exception as e:
             _logger.error(f"Error fetching social volume for {symbol}: {e}")
             return SentimentData(
-                symbol=symbol,
-                provider="santiment",
-                timestamp=datetime.now().isoformat(),
-                raw_data={"error": str(e)}
+                symbol=symbol, provider="santiment", timestamp=datetime.now().isoformat(), raw_data={"error": str(e)}
             )
 
     async def get_sentiment_metrics(self, symbol: str, days_back: int = 7) -> SentimentData:
@@ -163,11 +149,11 @@ class SantimentDataDownloader(BaseDataDownloader):
         Get sentiment balance metrics.
         """
         if not SANPY_AVAILABLE:
-             return SentimentData(
+            return SentimentData(
                 symbol=symbol,
                 provider="santiment",
                 timestamp=datetime.now().isoformat(),
-                raw_data={"error": "sanpy not installed"}
+                raw_data={"error": "sanpy not installed"},
             )
 
         try:
@@ -202,19 +188,13 @@ class SantimentDataDownloader(BaseDataDownloader):
                 sentiment_score=sentiment_score,
                 bullish_score=total_pos,
                 bearish_score=total_neg,
-                raw_data={
-                    "positive_total": total_pos,
-                    "negative_total": total_neg
-                }
+                raw_data={"positive_total": total_pos, "negative_total": total_neg},
             )
 
         except Exception as e:
             _logger.error(f"Error fetching sentiment metrics for {symbol}: {e}")
             return SentimentData(
-                symbol=symbol,
-                provider="santiment",
-                timestamp=datetime.now().isoformat(),
-                raw_data={"error": str(e)}
+                symbol=symbol, provider="santiment", timestamp=datetime.now().isoformat(), raw_data={"error": str(e)}
             )
 
     def _symbol_to_slug(self, symbol: str) -> str:
@@ -226,4 +206,3 @@ class SantimentDataDownloader(BaseDataDownloader):
         # TODO: Implement proper mapping for stocks if needed
         # Commonly, crypto uses full names (bitcoin), stocks might use tickers
         return symbol.lower()
-

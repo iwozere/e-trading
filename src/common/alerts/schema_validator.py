@@ -6,16 +6,15 @@ ensuring configurations conform to expected schemas before execution.
 """
 
 import json
-from pathlib import Path
-from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List
+
 import jsonschema
 from jsonschema import Draft7Validator
 
-from jsonschema import Draft7Validator
-
-from src.notification.logger import setup_logger
 from src.common.alerts.plugins import registry as plugin_registry
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -23,6 +22,7 @@ _logger = setup_logger(__name__)
 @dataclass
 class ValidationResult:
     """Result of schema validation with error details."""
+
     is_valid: bool
     errors: List[str]
     warnings: List[str]
@@ -35,7 +35,7 @@ class AlertSchemaValidator:
     Provides caching of schemas and detailed error reporting for invalid configurations.
     """
 
-    def __init__(self, schema_dir: Optional[str] = None):
+    def __init__(self, schema_dir: str | None = None):
         """
         Initialize the schema validator.
 
@@ -92,9 +92,7 @@ class AlertSchemaValidator:
         """
         if job_type not in ["alert", "schedule"]:
             return ValidationResult(
-                is_valid=False,
-                errors=[f"Unknown job type: {job_type}. Must be 'alert' or 'schedule'"],
-                warnings=[]
+                is_valid=False, errors=[f"Unknown job type: {job_type}. Must be 'alert' or 'schedule'"], warnings=[]
             )
 
         return self._validate_config(task_params, job_type)
@@ -114,9 +112,7 @@ class AlertSchemaValidator:
             schema = self.load_schema(schema_type)
             if not schema:
                 return ValidationResult(
-                    is_valid=False,
-                    errors=[f"Could not load schema for type: {schema_type}"],
-                    warnings=[]
+                    is_valid=False, errors=[f"Could not load schema for type: {schema_type}"], warnings=[]
                 )
 
             # Create validator instance
@@ -144,22 +140,13 @@ class AlertSchemaValidator:
             if is_valid:
                 _logger.debug("Configuration validated successfully for %s", schema_type)
             else:
-                _logger.warning("Configuration validation failed for %s: %d errors",
-                              schema_type, len(errors))
+                _logger.warning("Configuration validation failed for %s: %d errors", schema_type, len(errors))
 
-            return ValidationResult(
-                is_valid=is_valid,
-                errors=errors,
-                warnings=warnings
-            )
+            return ValidationResult(is_valid=is_valid, errors=errors, warnings=warnings)
 
         except Exception as e:
             _logger.exception("Unexpected error during validation:")
-            return ValidationResult(
-                is_valid=False,
-                errors=[f"Validation error: {str(e)}"],
-                warnings=[]
-            )
+            return ValidationResult(is_valid=False, errors=[f"Validation error: {str(e)}"], warnings=[])
 
     def _validate_plugin_nodes(self, expr: Dict[str, Any]) -> List[str]:
         """
@@ -192,10 +179,10 @@ class AlertSchemaValidator:
                             errors.append(f"Plugin '{plugin_name}' param error: {error.message}")
                     except Exception as e:
                         errors.append(f"Plugin '{plugin_name}' schema validation crashed: {str(e)}")
-        
+
         return errors
 
-    def load_schema(self, job_type: str) -> Optional[Dict[str, Any]]:
+    def load_schema(self, job_type: str) -> Dict[str, Any] | None:
         """
         Load and cache JSON schema for the specified job type.
 
@@ -215,7 +202,7 @@ class AlertSchemaValidator:
             return None
 
         try:
-            with open(schema_file, 'r', encoding='utf-8') as f:
+            with open(schema_file, encoding="utf-8") as f:
                 schema = json.load(f)
 
             # Validate the schema itself
@@ -341,7 +328,7 @@ def get_schedule_summary(config_json: Any) -> Dict[str, Any]:
             "ticker": config.get("ticker", ""),
             "list_type": config.get("list_type", ""),
             "period": config.get("period", ""),
-            "email": config.get("email", False)
+            "email": config.get("email", False),
         }
     except Exception as e:
         return {"error": f"Error parsing schedule config: {str(e)}"}

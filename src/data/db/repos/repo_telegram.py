@@ -1,21 +1,21 @@
 # src/data/db/repos/repo_telegram.py
 from __future__ import annotations
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Sequence, List, Dict, Any
-from sqlalchemy import select, update, func
+
+from datetime import UTC, datetime, timedelta, timezone
+from typing import Any, Dict, List, Sequence
+
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from src.data.db.models.model_telegram import (
-    TelegramSetting,
-    TelegramFeedback,
-    TelegramCommandAudit,
     TelegramBroadcastLog,
+    TelegramCommandAudit,
+    TelegramFeedback,
+    TelegramSetting,
 )
-from src.data.db.core.constants import PROVIDER_TG
 
-UTC = timezone.utc
+UTC = UTC
 utcnow = lambda: datetime.now(UTC)
-
 
 
 # -------------------- Settings --------------------
@@ -25,11 +25,11 @@ class SettingsRepo:
     def __init__(self, s: Session) -> None:
         self.s = s
 
-    def get(self, key: str) -> Optional[TelegramSetting]:
+    def get(self, key: str) -> TelegramSetting | None:
         """Retrieve a setting by key."""
         return self.s.get(TelegramSetting, key)
 
-    def set(self, key: str, value: Optional[str]) -> None:
+    def set(self, key: str, value: str | None) -> None:
         """Create or update a setting."""
         row = self.s.get(TelegramSetting, key)
         if row is None:
@@ -50,9 +50,11 @@ class FeedbackRepo:
     def create(self, user_id: int, type_: str, message: str) -> TelegramFeedback:
         """Create a new feedback entry."""
         row = TelegramFeedback(user_id=user_id, type=type_, message=message, status="open", created_at=utcnow())
-        self.s.add(row); self.s.flush(); return row
+        self.s.add(row)
+        self.s.flush()
+        return row
 
-    def list(self, type_: Optional[str] = None) -> Sequence[TelegramFeedback]:
+    def list(self, type_: str | None = None) -> Sequence[TelegramFeedback]:
         """List feedback, optionally filtered by type."""
         q = select(TelegramFeedback)
         if type_:
@@ -75,11 +77,7 @@ class BroadcastRepo:
     def create(self, message: str, sent_by: str, success_count: int = 0, total_count: int = 0) -> TelegramBroadcastLog:
         """Create a new broadcast log entry."""
         row = TelegramBroadcastLog(
-            message=message,
-            sent_by=sent_by,
-            success_count=success_count,
-            total_count=total_count,
-            created_at=utcnow()
+            message=message, sent_by=sent_by, success_count=success_count, total_count=total_count, created_at=utcnow()
         )
         self.s.add(row)
         self.s.flush()
@@ -91,12 +89,7 @@ class BroadcastRepo:
 
     def list(self, limit: int = 50, offset: int = 0) -> List[TelegramBroadcastLog]:
         """Get broadcast history with pagination."""
-        q = (
-            select(TelegramBroadcastLog)
-            .order_by(TelegramBroadcastLog.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
+        q = select(TelegramBroadcastLog).order_by(TelegramBroadcastLog.created_at.desc()).limit(limit).offset(offset)
         return list(self.s.execute(q).scalars().all())
 
     def stats(self) -> Dict[str, Any]:
@@ -106,19 +99,14 @@ class BroadcastRepo:
         total_broadcasts = self.s.execute(total_q).scalar_one() or 0
 
         # Total recipients and successful deliveries
-        recipients_q = select(
-            func.sum(TelegramBroadcastLog.total_count),
-            func.sum(TelegramBroadcastLog.success_count)
-        )
+        recipients_q = select(func.sum(TelegramBroadcastLog.total_count), func.sum(TelegramBroadcastLog.success_count))
         result = self.s.execute(recipients_q).first()
         total_recipients = result[0] or 0
         successful_deliveries = result[1] or 0
 
         # Recent activity (last 24 hours)
         yesterday = datetime.now(timezone.utc) - timedelta(days=1)
-        recent_q = select(func.count(TelegramBroadcastLog.id)).where(
-            TelegramBroadcastLog.created_at >= yesterday
-        )
+        recent_q = select(func.count(TelegramBroadcastLog.id)).where(TelegramBroadcastLog.created_at >= yesterday)
         recent_broadcasts = self.s.execute(recent_q).scalar_one() or 0
 
         return {
@@ -127,7 +115,7 @@ class BroadcastRepo:
             "successful_deliveries": successful_deliveries,
             "failed_deliveries": total_recipients - successful_deliveries,
             "recent_broadcasts_24h": recent_broadcasts,
-            "average_delivery_rate": (successful_deliveries / total_recipients * 100) if total_recipients > 0 else 0
+            "average_delivery_rate": (successful_deliveries / total_recipients * 100) if total_recipients > 0 else 0,
         }
 
 
@@ -151,7 +139,9 @@ class CommandAuditRepo:
             response_time_ms=int(kwargs.get("response_time_ms") or 0),
             created_at=utcnow(),
         )
-        self.s.add(row); self.s.flush(); return row
+        self.s.add(row)
+        self.s.flush()
+        return row
 
     def last_commands(self, telegram_user_id: str, *, limit: int = 20) -> Sequence[TelegramCommandAudit]:
         """Get the last executed commands for a user."""
@@ -168,11 +158,11 @@ class CommandAuditRepo:
         *,
         limit: int = 100,
         offset: int = 0,
-        user_id: Optional[str] = None,
-        command: Optional[str] = None,
-        success_only: Optional[bool] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        user_id: str | None = None,
+        command: str | None = None,
+        success_only: bool | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> Sequence[TelegramCommandAudit]:
         """List audit logs with filtering."""
         q = select(TelegramCommandAudit)
@@ -193,10 +183,21 @@ class CommandAuditRepo:
         """Get command usage statistics."""
         total = int(self.s.execute(select(func.count(TelegramCommandAudit.id))).scalar_one() or 0)
         rows = self.s.execute(
-            select(TelegramCommandAudit.command, func.count(TelegramCommandAudit.id)).group_by(TelegramCommandAudit.command)
+            select(TelegramCommandAudit.command, func.count(TelegramCommandAudit.id)).group_by(
+                TelegramCommandAudit.command
+            )
         ).all()
-        success = int(self.s.execute(select(func.count(TelegramCommandAudit.id)).where(TelegramCommandAudit.success.is_(True))).scalar_one() or 0)
-        return {"total": total, "by_command": {cmd: int(cnt) for cmd, cnt in rows}, "success_rate": (success / total) if total else None}
+        success = int(
+            self.s.execute(
+                select(func.count(TelegramCommandAudit.id)).where(TelegramCommandAudit.success.is_(True))
+            ).scalar_one()
+            or 0
+        )
+        return {
+            "total": total,
+            "by_command": {cmd: int(cnt) for cmd, cnt in rows},
+            "success_rate": (success / total) if total else None,
+        }
 
     def unique_users_summary(self) -> List[Dict[str, str]]:
         """Get summary of unique users seen."""

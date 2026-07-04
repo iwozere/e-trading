@@ -8,15 +8,17 @@ Tests cover:
 - Rate limiting and error handling
 - Sentiment analysis and summary generation
 """
-import pytest
-import pytest_asyncio
+
 import asyncio
-import aiohttp
 import os
-from unittest.mock import Mock, AsyncMock, patch
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
+from unittest.mock import AsyncMock, Mock, patch
+
+import aiohttp
+import pytest
+import pytest_asyncio
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -37,11 +39,7 @@ class TestAsyncTwitterAdapter:
         mock_session.close = AsyncMock()
 
         adapter = AsyncTwitterAdapter(
-            bearer_token="test_token",
-            concurrency=2,
-            rate_limit_delay=0.01,
-            max_retries=1,
-            session=mock_session
+            bearer_token="test_token", concurrency=2, rate_limit_delay=0.01, max_retries=1, session=mock_session
         )
         yield adapter
         await adapter.close()
@@ -56,34 +54,17 @@ class TestAsyncTwitterAdapter:
                     "text": "AAPL to the moon! 🚀 Great earnings report, buying more shares #AAPL",
                     "created_at": "2023-01-01T12:00:00.000Z",
                     "author_id": "user123",
-                    "public_metrics": {
-                        "like_count": 150,
-                        "retweet_count": 45,
-                        "reply_count": 20,
-                        "quote_count": 10
-                    },
-                    "entities": {
-                        "hashtags": [{"tag": "AAPL"
-}],
-                        "mentions": [{"username": "elonmusk"}]
-                    }
+                    "public_metrics": {"like_count": 150, "retweet_count": 45, "reply_count": 20, "quote_count": 10},
+                    "entities": {"hashtags": [{"tag": "AAPL"}], "mentions": [{"username": "elonmusk"}]},
                 },
                 {
                     "id": "1234567891",
                     "text": "AAPL looks bearish, might crash soon. Selling my position #bearish",
                     "created_at": "2023-01-01T11:30:00.000Z",
                     "author_id": "user456",
-                    "public_metrics": {
-                        "like_count": 75,
-                        "retweet_count": 15,
-                        "reply_count": 8,
-                        "quote_count": 3
-                    },
-                    "entities": {
-                        "hashtags": [{"tag": "bearish"}],
-                        "mentions": []
-                    }
-                }
+                    "public_metrics": {"like_count": 75, "retweet_count": 15, "reply_count": 8, "quote_count": 3},
+                    "entities": {"hashtags": [{"tag": "bearish"}], "mentions": []},
+                },
             ],
             "includes": {
                 "users": [
@@ -91,22 +72,18 @@ class TestAsyncTwitterAdapter:
                         "id": "user123",
                         "username": "bullish_trader",
                         "name": "Bull Trader",
-                        "public_metrics": {
-                            "followers_count": 5000
-                        },
-                        "verified": True
+                        "public_metrics": {"followers_count": 5000},
+                        "verified": True,
                     },
                     {
                         "id": "user456",
                         "username": "bear_trader",
                         "name": "Bear Trader",
-                        "public_metrics": {
-                            "followers_count": 2000
-                        },
-                        "verified": False
-                    }
+                        "public_metrics": {"followers_count": 2000},
+                        "verified": False,
+                    },
                 ]
-            }
+            },
         }
 
     @pytest.mark.asyncio
@@ -137,8 +114,8 @@ class TestAsyncTwitterAdapter:
         """Test authentication header generation."""
         headers = adapter._get_headers()
 
-        assert headers['Authorization'] == 'Bearer test_token'
-        assert headers['Content-Type'] == 'application/json'
+        assert headers["Authorization"] == "Bearer test_token"
+        assert headers["Content-Type"] == "application/json"
 
     def test_get_headers_no_token(self):
         """Test header generation without token raises error."""
@@ -166,6 +143,7 @@ class TestAsyncTwitterAdapter:
 
         # Simulate many requests
         import time
+
         current_time = time.time()
         adapter._search_requests = [current_time - i for i in range(300)]
 
@@ -189,7 +167,7 @@ class TestAsyncTwitterAdapter:
     @pytest.mark.asyncio
     async def test_fetch_messages_success(self, adapter, sample_twitter_response):
         """Test successful tweet fetching."""
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = sample_twitter_response
 
             messages = await adapter.fetch_messages("AAPL", limit=10)
@@ -231,7 +209,7 @@ class TestAsyncTwitterAdapter:
     @pytest.mark.asyncio
     async def test_fetch_messages_empty_response(self, adapter):
         """Test handling of empty API response."""
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = {"data": []}
 
             messages = await adapter.fetch_messages("AAPL")
@@ -241,7 +219,7 @@ class TestAsyncTwitterAdapter:
     @pytest.mark.asyncio
     async def test_fetch_messages_no_payload(self, adapter):
         """Test handling when no payload is received."""
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None
 
             messages = await adapter.fetch_messages("AAPL")
@@ -270,12 +248,12 @@ class TestAsyncTwitterAdapter:
             "includes": {
                 "users": [
                     {"id": "user1", "username": "user1", "public_metrics": {"followers_count": 100}},
-                    {"id": "user2", "username": "user2", "public_metrics": {"followers_count": 200}}
+                    {"id": "user2", "username": "user2", "public_metrics": {"followers_count": 200}},
                 ]
-            }
+            },
         }
 
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = malformed_response
 
             messages = await adapter.fetch_messages("AAPL")
@@ -288,7 +266,7 @@ class TestAsyncTwitterAdapter:
     @pytest.mark.asyncio
     async def test_fetch_messages_with_since_ts(self, adapter, sample_twitter_response):
         """Test fetch messages with since_ts parameter."""
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = sample_twitter_response
 
             since_ts = 1672531200  # 2023-01-01 00:00:00
@@ -296,13 +274,13 @@ class TestAsyncTwitterAdapter:
 
             # Verify start_time parameter was added
             call_args = mock_get.call_args[1]
-            assert 'start_time' in call_args['params']
-            assert call_args['params']['start_time'].startswith('2023-01-01')
+            assert "start_time" in call_args["params"]
+            assert call_args["params"]["start_time"].startswith("2023-01-01")
 
     @pytest.mark.asyncio
     async def test_fetch_messages_limit_enforcement(self, adapter, sample_twitter_response):
         """Test that message limit is properly enforced."""
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = sample_twitter_response
 
             messages = await adapter.fetch_messages("AAPL", limit=1)
@@ -315,25 +293,53 @@ class TestAsyncTwitterAdapter:
         """Test successful summary generation."""
         # Create messages with clear sentiment patterns
         messages = [
-            {"body": "AAPL to the moon! 🚀 bullish rocket", "user": {"followers": 1000, "verified": True},
-             "likes": 100, "retweets": 50, "replies": 20, "quotes": 10, "hashtags": ["AAPL", "bullish"]},
-            {"body": "AAPL bearish outlook, might crash", "user": {"followers": 500, "verified": False},
-             "likes": 30, "retweets": 10, "replies": 5, "quotes": 2, "hashtags": ["bearish"]},
-            {"body": "AAPL neutral analysis", "user": {"followers": 200, "verified": False},
-             "likes": 10, "retweets": 2, "replies": 1, "quotes": 0, "hashtags": []},
-            {"body": "Another AAPL bullish rocket comment", "user": {"followers": 2000, "verified": True},
-             "likes": 200, "retweets": 80, "replies": 30, "quotes": 15, "hashtags": ["rocket"]},
+            {
+                "body": "AAPL to the moon! 🚀 bullish rocket",
+                "user": {"followers": 1000, "verified": True},
+                "likes": 100,
+                "retweets": 50,
+                "replies": 20,
+                "quotes": 10,
+                "hashtags": ["AAPL", "bullish"],
+            },
+            {
+                "body": "AAPL bearish outlook, might crash",
+                "user": {"followers": 500, "verified": False},
+                "likes": 30,
+                "retweets": 10,
+                "replies": 5,
+                "quotes": 2,
+                "hashtags": ["bearish"],
+            },
+            {
+                "body": "AAPL neutral analysis",
+                "user": {"followers": 200, "verified": False},
+                "likes": 10,
+                "retweets": 2,
+                "replies": 1,
+                "quotes": 0,
+                "hashtags": [],
+            },
+            {
+                "body": "Another AAPL bullish rocket comment",
+                "user": {"followers": 2000, "verified": True},
+                "likes": 200,
+                "retweets": 80,
+                "replies": 30,
+                "quotes": 15,
+                "hashtags": ["rocket"],
+            },
         ]
 
-        with patch.object(adapter, 'fetch_messages', new_callable=AsyncMock) as mock_fetch:
+        with patch.object(adapter, "fetch_messages", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = messages
 
             summary = await adapter.fetch_summary("AAPL")
 
             assert summary["mentions"] == 4
             assert summary["bullish"] == 2  # Two bullish tweets
-            assert summary["bearish"] == 1   # One bearish tweet
-            assert summary["neutral"] == 1   # One neutral tweet
+            assert summary["bearish"] == 1  # One bearish tweet
+            assert summary["neutral"] == 1  # One neutral tweet
             assert summary["sentiment_score"] == 0.25  # (2-1)/4 = 0.25
             assert summary["provider"] == "twitter"
             assert summary["verified_tweets"] == 2
@@ -352,7 +358,7 @@ class TestAsyncTwitterAdapter:
     @pytest.mark.asyncio
     async def test_fetch_summary_no_messages(self, adapter):
         """Test summary generation with no messages."""
-        with patch.object(adapter, 'fetch_messages', new_callable=AsyncMock) as mock_fetch:
+        with patch.object(adapter, "fetch_messages", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = []
 
             summary = await adapter.fetch_summary("AAPL")
@@ -380,10 +386,19 @@ class TestAsyncTwitterAdapter:
         ]
 
         for tweet_text, expected_sentiment in test_cases:
-            messages = [{"body": tweet_text, "user": {"followers": 100, "verified": False},
-                       "likes": 10, "retweets": 1, "replies": 0, "quotes": 0, "hashtags": []}]
+            messages = [
+                {
+                    "body": tweet_text,
+                    "user": {"followers": 100, "verified": False},
+                    "likes": 10,
+                    "retweets": 1,
+                    "replies": 0,
+                    "quotes": 0,
+                    "hashtags": [],
+                }
+            ]
 
-            with patch.object(adapter, 'fetch_messages', new_callable=AsyncMock) as mock_fetch:
+            with patch.object(adapter, "fetch_messages", new_callable=AsyncMock) as mock_fetch:
                 mock_fetch.return_value = messages
 
                 summary = await adapter.fetch_summary("TEST")
@@ -420,7 +435,7 @@ class TestAsyncTwitterAdapter:
         # First call returns 429, second call succeeds
         mock_response_429 = Mock()
         mock_response_429.status = 429
-        mock_response_429.headers = {'x-rate-limit-reset': str(int(time.time()) + 60)}
+        mock_response_429.headers = {"x-rate-limit-reset": str(int(time.time()) + 60)}
         mock_response_429.request_info = Mock()
         mock_response_429.history = []
 
@@ -430,9 +445,7 @@ class TestAsyncTwitterAdapter:
         mock_response_200.raise_for_status = Mock()
 
         mock_session = AsyncMock()
-        mock_session.get.return_value.__aenter__.side_effect = [
-            mock_response_429, mock_response_200
-        ]
+        mock_session.get.return_value.__aenter__.side_effect = [mock_response_429, mock_response_200]
         adapter._session = mock_session
 
         result = await adapter._get_with_retry("https://test.com")
@@ -478,22 +491,18 @@ class TestAsyncTwitterAdapter:
                 await asyncio.sleep(0.1)  # Simulate slow request
                 return {"data": []}
 
-            with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+            with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
                 mock_get.side_effect = mock_slow_request
 
                 # Start multiple concurrent requests
-                tasks = [
-                    adapter.fetch_messages("AAPL"),
-                    adapter.fetch_messages("TSLA"),
-                    adapter.fetch_messages("MSFT")
-                ]
+                tasks = [adapter.fetch_messages("AAPL"), adapter.fetch_messages("TSLA"), adapter.fetch_messages("MSFT")]
 
                 await asyncio.gather(*tasks)
 
                 # Verify requests were serialized (not truly concurrent)
                 assert len(call_times) == 3
                 # With concurrency=1, requests should be serialized
-                time_diffs = [call_times[i+1] - call_times[i] for i in range(len(call_times)-1)]
+                time_diffs = [call_times[i + 1] - call_times[i] for i in range(len(call_times) - 1)]
                 assert all(diff >= 0.05 for diff in time_diffs)
 
         finally:
@@ -528,18 +537,18 @@ class TestAsyncTwitterAdapter:
     @pytest.mark.asyncio
     async def test_ticker_normalization(self, adapter):
         """Test that tickers are properly normalized."""
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = {"data": []}
 
             # Test various ticker formats
             await adapter.fetch_messages("  aapl  ")  # Should be normalized to AAPL
-            await adapter.fetch_messages("tsla")      # Should be normalized to TSLA
+            await adapter.fetch_messages("tsla")  # Should be normalized to TSLA
 
             # Verify the API was called with normalized tickers
             calls = mock_get.call_args_list
             # Check that the query contains the normalized ticker
-            assert "$AAPL" in calls[0][1]['params']['query']
-            assert "$TSLA" in calls[1][1]['params']['query']
+            assert "$AAPL" in calls[0][1]["params"]["query"]
+            assert "$TSLA" in calls[1][1]["params"]["query"]
 
     @pytest.mark.asyncio
     async def test_hashtag_and_mention_extraction(self, adapter):
@@ -552,16 +561,16 @@ class TestAsyncTwitterAdapter:
                     "author_id": "user1",
                     "entities": {
                         "hashtags": [{"tag": "AAPL"}, {"tag": "stocks"}],
-                        "mentions": [{"username": "elonmusk"}, {"username": "tim_cook"}]
-                    }
+                        "mentions": [{"username": "elonmusk"}, {"username": "tim_cook"}],
+                    },
                 }
             ],
             "includes": {
                 "users": [{"id": "user1", "username": "testuser", "public_metrics": {"followers_count": 100}}]
-            }
+            },
         }
 
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = response_with_entities
 
             messages = await adapter.fetch_messages("AAPL")
@@ -578,16 +587,26 @@ class TestAsyncTwitterAdapter:
         """Test calculation of engagement metrics in summary."""
         messages = [
             {
-                "body": "Test tweet 1", "user": {"followers": 1000, "verified": True},
-                "likes": 100, "retweets": 50, "replies": 20, "quotes": 10, "hashtags": []
+                "body": "Test tweet 1",
+                "user": {"followers": 1000, "verified": True},
+                "likes": 100,
+                "retweets": 50,
+                "replies": 20,
+                "quotes": 10,
+                "hashtags": [],
             },
             {
-                "body": "Test tweet 2", "user": {"followers": 500, "verified": False},
-                "likes": 50, "retweets": 25, "replies": 10, "quotes": 5, "hashtags": []
-            }
+                "body": "Test tweet 2",
+                "user": {"followers": 500, "verified": False},
+                "likes": 50,
+                "retweets": 25,
+                "replies": 10,
+                "quotes": 5,
+                "hashtags": [],
+            },
         ]
 
-        with patch.object(adapter, 'fetch_messages', new_callable=AsyncMock) as mock_fetch:
+        with patch.object(adapter, "fetch_messages", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = messages
 
             summary = await adapter.fetch_summary("TEST")
@@ -602,4 +621,3 @@ class TestAsyncTwitterAdapter:
             assert summary["avg_followers"] == 750.0  # (1000 + 500) / 2
             assert summary["verified_tweets"] == 1
             assert summary["verified_ratio"] == 0.5
-

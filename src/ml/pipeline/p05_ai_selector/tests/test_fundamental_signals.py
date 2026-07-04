@@ -1,14 +1,13 @@
 """Tests for fundamental signal scoring."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-import pytest
 
-from src.ml.pipeline.p05_ai_selector.signals.fundamental import score_fundamentals, build_sector_medians
+from src.ml.pipeline.p05_ai_selector.signals.fundamental import build_sector_medians, score_fundamentals
 
 
 def _make_fund(
@@ -77,7 +76,7 @@ class TestBuildSectorMedians:
         funds = {
             "AAPL": _make_fund(pe_ratio=20.0, sector="Technology"),
             "MSFT": _make_fund(pe_ratio=30.0, sector="Technology"),
-            "JPM":  _make_fund(pe_ratio=12.0, sector="Financial Services"),
+            "JPM": _make_fund(pe_ratio=12.0, sector="Financial Services"),
         }
         medians = build_sector_medians(funds)
         assert medians["Technology"]["median_pe"] == 25.0

@@ -7,38 +7,39 @@ Optimizes processing efficiency while maintaining individual message tracking.
 
 import asyncio
 import time
-from typing import Dict, Any, List, Optional, Callable
-from datetime import datetime
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
+from typing import Any, Callable, Dict, List
 
 from src.data.db.models.model_notification import MessagePriority
-from src.notification.service.message_queue import QueuedMessage
 from src.notification.logger import setup_logger
+from src.notification.service.message_queue import QueuedMessage
 
 _logger = setup_logger(__name__)
 
 
 class BatchTrigger(Enum):
     """Batch processing trigger types."""
-    SIZE = "SIZE"           # Triggered by batch size
-    TIME = "TIME"           # Triggered by time elapsed
-    MANUAL = "MANUAL"       # Manually triggered
-    SHUTDOWN = "SHUTDOWN"   # Triggered by system shutdown
+
+    SIZE = "SIZE"  # Triggered by batch size
+    TIME = "TIME"  # Triggered by time elapsed
+    MANUAL = "MANUAL"  # Manually triggered
+    SHUTDOWN = "SHUTDOWN"  # Triggered by system shutdown
 
 
 @dataclass
 class BatchConfig:
     """Batch configuration for a channel."""
 
-    max_batch_size: int = 10        # Maximum messages per batch
+    max_batch_size: int = 10  # Maximum messages per batch
     max_wait_time_seconds: float = 30.0  # Maximum time to wait for batch
-    min_batch_size: int = 1         # Minimum messages to trigger batch
-    enabled: bool = True            # Whether batching is enabled
+    min_batch_size: int = 1  # Minimum messages to trigger batch
+    enabled: bool = True  # Whether batching is enabled
 
     # Channel-specific optimizations
     prefer_same_recipient: bool = False  # Group by recipient
-    prefer_same_type: bool = False       # Group by message type
+    prefer_same_type: bool = False  # Group by message type
 
     def __post_init__(self):
         """Validate configuration."""
@@ -60,11 +61,11 @@ class MessageBatch:
     channel: str
     messages: List[QueuedMessage] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
-    trigger: Optional[BatchTrigger] = None
+    trigger: BatchTrigger | None = None
 
     # Grouping criteria
-    recipient_id: Optional[str] = None
-    message_type: Optional[str] = None
+    recipient_id: str | None = None
+    message_type: str | None = None
 
     @property
     def size(self) -> int:
@@ -119,7 +120,7 @@ class MessageBatch:
             "recipient_id": self.recipient_id,
             "message_type": self.message_type,
             "message_ids": self.message_ids,
-            "created_at": datetime.fromtimestamp(self.created_at).isoformat()
+            "created_at": datetime.fromtimestamp(self.created_at).isoformat(),
         }
 
 
@@ -161,24 +162,15 @@ class BatchStats:
             self.avg_batch_size = batch.size
             self.avg_wait_time_seconds = batch.age_seconds
         else:
-            self.avg_batch_size = (
-                (self.avg_batch_size * (self.total_batches - 1) + batch.size) /
-                self.total_batches
-            )
+            self.avg_batch_size = (self.avg_batch_size * (self.total_batches - 1) + batch.size) / self.total_batches
             self.avg_wait_time_seconds = (
-                (self.avg_wait_time_seconds * (self.total_batches - 1) + batch.age_seconds) /
-                self.total_batches
-            )
+                self.avg_wait_time_seconds * (self.total_batches - 1) + batch.age_seconds
+            ) / self.total_batches
 
         # Update channel stats
         channel = batch.channel
         if channel not in self.channel_stats:
-            self.channel_stats[channel] = {
-                "batches": 0,
-                "messages": 0,
-                "avg_size": 0.0,
-                "avg_wait_time": 0.0
-            }
+            self.channel_stats[channel] = {"batches": 0, "messages": 0, "avg_size": 0.0, "avg_wait_time": 0.0}
 
         ch_stats = self.channel_stats[channel]
         ch_stats["batches"] += 1
@@ -188,14 +180,10 @@ class BatchStats:
             ch_stats["avg_size"] = batch.size
             ch_stats["avg_wait_time"] = batch.age_seconds
         else:
-            ch_stats["avg_size"] = (
-                (ch_stats["avg_size"] * (ch_stats["batches"] - 1) + batch.size) /
-                ch_stats["batches"]
-            )
+            ch_stats["avg_size"] = (ch_stats["avg_size"] * (ch_stats["batches"] - 1) + batch.size) / ch_stats["batches"]
             ch_stats["avg_wait_time"] = (
-                (ch_stats["avg_wait_time"] * (ch_stats["batches"] - 1) + batch.age_seconds) /
-                ch_stats["batches"]
-            )
+                ch_stats["avg_wait_time"] * (ch_stats["batches"] - 1) + batch.age_seconds
+            ) / ch_stats["batches"]
 
 
 class BatchProcessor:
@@ -225,30 +213,16 @@ class BatchProcessor:
         self._logger = setup_logger(f"{__name__}.BatchProcessor")
 
         # Processing callback
-        self._batch_processor_callback: Optional[Callable] = None
+        self._batch_processor_callback: Callable | None = None
 
         # Default configurations
         self._default_configs = {
-            "telegram_channel": BatchConfig(
-                max_batch_size=5,
-                max_wait_time_seconds=10.0,
-                prefer_same_recipient=True
-            ),
+            "telegram_channel": BatchConfig(max_batch_size=5, max_wait_time_seconds=10.0, prefer_same_recipient=True),
             "email_channel": BatchConfig(
-                max_batch_size=20,
-                max_wait_time_seconds=60.0,
-                prefer_same_recipient=True,
-                prefer_same_type=True
+                max_batch_size=20, max_wait_time_seconds=60.0, prefer_same_recipient=True, prefer_same_type=True
             ),
-            "sms_channel": BatchConfig(
-                max_batch_size=10,
-                max_wait_time_seconds=30.0,
-                prefer_same_recipient=True
-            ),
-            "default": BatchConfig(
-                max_batch_size=10,
-                max_wait_time_seconds=30.0
-            )
+            "sms_channel": BatchConfig(max_batch_size=10, max_wait_time_seconds=30.0, prefer_same_recipient=True),
+            "default": BatchConfig(max_batch_size=10, max_wait_time_seconds=30.0),
         }
 
         # State
@@ -279,15 +253,14 @@ class BatchProcessor:
         self._batch_configs[channel] = config
         self._logger.info(
             "Updated batch config for %s: max_size=%d, max_wait=%.1fs",
-            channel, config.max_batch_size, config.max_wait_time_seconds
+            channel,
+            config.max_batch_size,
+            config.max_wait_time_seconds,
         )
 
     def _get_config(self, channel: str) -> BatchConfig:
         """Get batch configuration for channel."""
-        return self._batch_configs.get(
-            channel,
-            self._default_configs.get(channel, self._default_configs["default"])
-        )
+        return self._batch_configs.get(channel, self._default_configs.get(channel, self._default_configs["default"]))
 
     def _generate_batch_id(self, channel: str) -> str:
         """Generate unique batch ID."""
@@ -352,10 +325,7 @@ class BatchProcessor:
         if current_batch is None:
             # Create new batch
             batch_id = self._generate_batch_id(channel)
-            current_batch = MessageBatch(
-                batch_id=batch_id,
-                channel=channel
-            )
+            current_batch = MessageBatch(batch_id=batch_id, channel=channel)
             self._batches[channel] = current_batch
 
             # Start timer for this batch
@@ -436,7 +406,11 @@ class BatchProcessor:
 
         self._logger.info(
             "Completed batch %s for channel %s: %d messages (trigger: %s, age: %.1fs)",
-            batch.batch_id, channel, batch.size, trigger.value, batch.age_seconds
+            batch.batch_id,
+            channel,
+            batch.size,
+            trigger.value,
+            batch.age_seconds,
         )
 
         # Process batch
@@ -449,7 +423,7 @@ class BatchProcessor:
         # Continue processing pending messages
         await self._process_pending_messages(channel)
 
-    async def flush_channel(self, channel: str) -> Optional[MessageBatch]:
+    async def flush_channel(self, channel: str) -> MessageBatch | None:
         """
         Flush current batch for a channel immediately.
 
@@ -517,8 +491,8 @@ class BatchProcessor:
                     "min_batch_size": config.min_batch_size,
                     "enabled": config.enabled,
                     "prefer_same_recipient": config.prefer_same_recipient,
-                    "prefer_same_type": config.prefer_same_type
-                }
+                    "prefer_same_type": config.prefer_same_type,
+                },
             }
 
         # Add channels with pending messages but no active batch
@@ -534,8 +508,8 @@ class BatchProcessor:
                         "min_batch_size": config.min_batch_size,
                         "enabled": config.enabled,
                         "prefer_same_recipient": config.prefer_same_recipient,
-                        "prefer_same_type": config.prefer_same_type
-                    }
+                        "prefer_same_type": config.prefer_same_type,
+                    },
                 }
 
         return {
@@ -549,10 +523,10 @@ class BatchProcessor:
                     "size": self._stats.size_triggered,
                     "time": self._stats.time_triggered,
                     "manual": self._stats.manual_triggered,
-                    "shutdown": self._stats.shutdown_triggered
+                    "shutdown": self._stats.shutdown_triggered,
                 },
-                "channel_stats": self._stats.channel_stats
-            }
+                "channel_stats": self._stats.channel_stats,
+            },
         }
 
     async def start(self):

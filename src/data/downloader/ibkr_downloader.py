@@ -8,16 +8,18 @@ delayed market data support.
 """
 
 import os
-import pandas as pd
 from datetime import datetime, timedelta
-from typing import List, Optional
-from ib_insync import IB, Stock, Contract, Forex
+from typing import List
 
+import pandas as pd
+from ib_insync import IB, Contract, Forex, Stock
+
+from config.donotshare.donotshare import DATA_CACHE_DIR, IBKR_CLIENT_ID, IBKR_HOST, IBKR_PORT
 from src.data.downloader.base_data_downloader import BaseDataDownloader
-from config.donotshare.donotshare import DATA_CACHE_DIR, IBKR_HOST, IBKR_PORT, IBKR_CLIENT_ID
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class IBKRDownloader(BaseDataDownloader):
     """
@@ -25,7 +27,7 @@ class IBKRDownloader(BaseDataDownloader):
     Checks local CSV cache -> Identifies missing gaps -> Fetches from IBKR -> Merges -> Returns.
     """
 
-    def __init__(self, ib_instance: Optional[IB] = None):
+    def __init__(self, ib_instance: IB | None = None):
         """
         Initialize the downloader.
 
@@ -59,7 +61,7 @@ class IBKRDownloader(BaseDataDownloader):
         return "ibkr"
 
     def get_supported_intervals(self) -> List[str]:
-        return ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
+        return ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
 
     def _get_cache_path(self, symbol: str, interval: str) -> str:
         """Construct the file path for the cached CSV."""
@@ -68,23 +70,23 @@ class IBKRDownloader(BaseDataDownloader):
     def _map_interval(self, interval: str) -> str:
         """Map project interval to IBKR bar size."""
         mapping = {
-            '1m': '1 min',
-            '5m': '5 mins',
-            '15m': '15 mins',
-            '30m': '30 mins',
-            '1h': '1 hour',
-            '4h': '4 hours',
-            '1d': '1 day'
+            "1m": "1 min",
+            "5m": "5 mins",
+            "15m": "15 mins",
+            "30m": "30 mins",
+            "1h": "1 hour",
+            "4h": "4 hours",
+            "1d": "1 day",
         }
-        return mapping.get(interval, '1 min')
+        return mapping.get(interval, "1 min")
 
     def _get_contract(self, symbol: str) -> Contract:
         """Simple contract creation. Defaults to Stock then Forex."""
         # For simplicity in screener, we assume STK/SMART/USD.
         # In a real scenario, this would be more robust.
-        if len(symbol) == 6 and any(x in symbol for x in ['USD', 'EUR', 'GBP', 'JPY']):
+        if len(symbol) == 6 and any(x in symbol for x in ["USD", "EUR", "GBP", "JPY"]):
             return Forex(symbol)
-        return Stock(symbol.upper(), 'SMART', 'USD')
+        return Stock(symbol.upper(), "SMART", "USD")
 
     def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> pd.DataFrame:
         """
@@ -131,7 +133,7 @@ class IBKRDownloader(BaseDataDownloader):
                 else:
                     df_combined = pd.concat([df_cached, df_new])
                     # Remove duplicates (e.g., overlapping bars)
-                    df_combined = df_combined[~df_combined.index.duplicated(keep='last')]
+                    df_combined = df_combined[~df_combined.index.duplicated(keep="last")]
 
                 df_combined.sort_index(inplace=True)
                 df_combined.to_csv(cache_path)
@@ -143,7 +145,7 @@ class IBKRDownloader(BaseDataDownloader):
         return df_cached.loc[mask]
 
     def _get_interval_minutes(self, interval: str) -> int:
-        mult = {'m': 1, 'h': 60, 'd': 1440}
+        mult = {"m": 1, "h": 60, "d": 1440}
         return int(interval[:-1]) * mult[interval[-1]]
 
     def _fetch_from_ibkr(self, symbol: str, interval: str, start: datetime, end: datetime) -> pd.DataFrame:
@@ -165,29 +167,34 @@ class IBKRDownloader(BaseDataDownloader):
         try:
             bars = ib.reqHistoricalData(
                 contract,
-                endDateTime='', # most recent
+                endDateTime="",  # most recent
                 durationStr=duration,
                 barSizeSetting=ib_interval,
-                whatToShow='TRADES',
+                whatToShow="TRADES",
                 useRTH=True,
                 formatDate=1,
-                keepUpToDate=False
+                keepUpToDate=False,
             )
 
             if not bars:
                 _logger.warning("No data returned for %s from IBKR", symbol)
                 return pd.DataFrame()
 
-            df = pd.DataFrame([{
-                'timestamp': b.date,
-                'open': b.open,
-                'high': b.high,
-                'low': b.low,
-                'close': b.close,
-                'volume': b.volume
-            } for b in bars])
+            df = pd.DataFrame(
+                [
+                    {
+                        "timestamp": b.date,
+                        "open": b.open,
+                        "high": b.high,
+                        "low": b.low,
+                        "close": b.close,
+                        "volume": b.volume,
+                    }
+                    for b in bars
+                ]
+            )
 
-            df.set_index('timestamp', inplace=True)
+            df.set_index("timestamp", inplace=True)
             df.index = pd.to_datetime(df.index)
             return df
 
@@ -196,5 +203,8 @@ class IBKRDownloader(BaseDataDownloader):
             return pd.DataFrame()
 
     # Stub implementations for other abstract methods
-    def get_periods(self) -> List[str]: return ['1 D', '1 W', '1 M', '1 Y']
-    def get_intervals(self) -> List[str]: return self.get_supported_intervals()
+    def get_periods(self) -> List[str]:
+        return ["1 D", "1 W", "1 M", "1 Y"]
+
+    def get_intervals(self) -> List[str]:
+        return self.get_supported_intervals()

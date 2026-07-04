@@ -11,11 +11,11 @@ which is also shared across pipelines.
 """
 
 import dataclasses
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
 import sys
-from typing import Dict, List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Dict, List, Tuple
 
 import pandas as pd
 import yfinance as yf
@@ -24,16 +24,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
-from src.ml.pipeline.p17_penny_stocks.config import P17FilterConfig
-from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.data.cache.fundamentals_cache import FundamentalsCache
 from src.data.cache.unified_cache import get_unified_cache
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from src.ml.pipeline.p17_penny_stocks.config import P17FilterConfig
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
 
-def _safe_float(value, default: Optional[float] = None) -> Optional[float]:
+def _safe_float(value, default: float | None = None) -> float | None:
     try:
         v = float(value)
         return v if v == v else default
@@ -94,7 +94,7 @@ class MarketAgent:
         Cache-first: reads from UnifiedCache (DATA_CACHE_DIR/ohlcv/<symbol>/1d/).
         Cache misses are batch-downloaded and written back to the cache.
         """
-        end_dt = datetime.now(timezone.utc)
+        end_dt = datetime.now(UTC)
         start_dt = end_dt - timedelta(days=self.config.ohlcv_lookback_days + 10)
         # Data is considered fresh when it reaches within 5 calendar days of target_date
         min_fresh = pd.Timestamp(self.target_date) - timedelta(days=5)
@@ -107,10 +107,7 @@ class MarketAgent:
             for ticker in tickers:
                 cached = cache.get(ticker, "1d", start_dt, end_dt)
                 if (
-                    cached is not None
-                    and not cached.empty
-                    and len(cached) >= 20
-                    and cached.index[-1] >= min_fresh  # type: ignore[operator]
+                    cached is not None and not cached.empty and len(cached) >= 20 and cached.index[-1] >= min_fresh  # type: ignore[operator]
                 ):
                     result[ticker] = self._to_technical_format(cached)
                 else:
@@ -121,7 +118,8 @@ class MarketAgent:
         if missing:
             _logger.info(
                 "Batch OHLCV download: %d cache misses (cache hits: %d)",
-                len(missing), len(result),
+                len(missing),
+                len(result),
             )
             batch = self._downloader.get_ohlcv_batch(missing, "1d", start_dt, end_dt)
             for ticker, df in batch.items():
@@ -185,10 +183,7 @@ class MarketAgent:
         for i in range(0, len(tickers), chunk_size):
             chunk = tickers[i : i + chunk_size]
             with ThreadPoolExecutor(max_workers=6) as pool:
-                futures = {
-                    pool.submit(self._fetch_ticker_fundamentals, t, force_refresh): t
-                    for t in chunk
-                }
+                futures = {pool.submit(self._fetch_ticker_fundamentals, t, force_refresh): t for t in chunk}
                 for future in as_completed(futures):
                     ticker = futures[future]
                     data = future.result()
@@ -198,11 +193,9 @@ class MarketAgent:
         _logger.info("Fundamentals fetched: %d/%d tickers", len(results), len(tickers))
         return results
 
-    def _fetch_ticker_fundamentals(self, ticker: str, force_refresh: bool = False) -> Optional[dict]:
+    def _fetch_ticker_fundamentals(self, ticker: str, force_refresh: bool = False) -> dict | None:
         if not force_refresh:
-            cache_meta = self._fundamentals_cache.find_latest_json(
-                ticker, provider="yahoo", max_age_days=1
-            )
+            cache_meta = self._fundamentals_cache.find_latest_json(ticker, provider="yahoo", max_age_days=1)
             if cache_meta:
                 cached = self._fundamentals_cache.read_json(cache_meta.file_path)
                 if cached:
@@ -222,7 +215,7 @@ class MarketAgent:
             _logger.debug("Failed to fetch fundamentals for %s", ticker)
             return None
 
-    def _fundamentals_to_market_record(self, ticker: str, f: dict) -> Optional[dict]:
+    def _fundamentals_to_market_record(self, ticker: str, f: dict) -> dict | None:
         """Map a cached Fundamentals dict to the market agent record format."""
         operating_cf = _safe_float(f.get("operating_cashflow"))
         total_cash = _safe_float(f.get("total_cash"))
@@ -246,12 +239,10 @@ class MarketAgent:
             "institutional_pct": _safe_float(f.get("institutional_pct")),
             "high_52w": _safe_float(f.get("fifty_two_week_high")),
             "low_52w": _safe_float(f.get("fifty_two_week_low")),
-            "data_as_of": f.get("last_updated") or datetime.now(timezone.utc).isoformat(),
+            "data_as_of": f.get("last_updated") or datetime.now(UTC).isoformat(),
         }
 
-    def _compute_revenue_growth(
-        self, ticker: str, revenue_growth_fallback: Optional[float] = None
-    ) -> Optional[float]:
+    def _compute_revenue_growth(self, ticker: str, revenue_growth_fallback: float | None = None) -> float | None:
         """
         Compute YoY revenue growth from quarterly income statements.
         Falls back to the TTM revenueGrowth value already in the Fundamentals object.

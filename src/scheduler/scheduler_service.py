@@ -5,47 +5,57 @@ Main APScheduler-based service for job scheduling and execution.
 Provides centralized scheduling with database persistence and error handling.
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from typing import Dict, Any, Optional
-from datetime import datetime, timezone
 import asyncio
-import traceback
-import asyncpg
 import json
-import subprocess
+import traceback
+from datetime import UTC, datetime
+from typing import Any, Dict, Optional
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from apscheduler.executors.asyncio import AsyncIOExecutor
-from apscheduler.triggers.cron import CronTrigger
+import asyncpg
 from apscheduler.events import (
-    JobExecutionEvent, JobSubmissionEvent, EVENT_JOB_SUBMITTED, EVENT_JOB_EXECUTED, EVENT_JOB_ERROR,
-    EVENT_JOB_MISSED
+    EVENT_JOB_ERROR,
+    EVENT_JOB_EXECUTED,
+    EVENT_JOB_MISSED,
+    EVENT_JOB_SUBMITTED,
+    JobExecutionEvent,
+    JobSubmissionEvent,
 )
+from apscheduler.executors.asyncio import AsyncIOExecutor
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
+from src.common.alerts.alert_evaluator import AlertEvaluator
+from src.common.alerts.cron_parser import CronParser
+from src.data.db.models.model_jobs import JobType, RunStatus, ScheduleResponse, ScheduleRunResponse
 from src.data.db.services.jobs_service import JobsService
 from src.data.db.services.notification_service import NotificationService
-from src.data.db.models.model_jobs import Schedule, RunStatus, JobType, ScheduleResponse, ScheduleRunResponse
-from src.common.alerts.cron_parser import CronParser
-from src.common.alerts.alert_evaluator import AlertEvaluator
 from src.notification.logger import setup_logger
 from src.notification.service.client import MessagePriority
 
 _logger = setup_logger(__name__)
-UTC = timezone.utc
+UTC = UTC
 
 # Global service instance reference for pickle-safe job execution
-_service_instance: Optional['SchedulerService'] = None
+_service_instance: Optional["SchedulerService"] = None
 
 # Standard crontab numbers weekdays as 0/7=Sunday, 1=Monday ... 6=Saturday.
 _CRONTAB_WEEKDAY_NAMES = {
-    0: "sun", 1: "mon", 2: "tue", 3: "wed", 4: "thu", 5: "fri", 6: "sat", 7: "sun",
+    0: "sun",
+    1: "mon",
+    2: "tue",
+    3: "wed",
+    4: "thu",
+    5: "fri",
+    6: "sat",
+    7: "sun",
 }
 
 
@@ -115,13 +125,15 @@ class SchedulerService:
     - Manages service lifecycle
     """
 
-    def __init__(self,
-                 jobs_service: JobsService,
-                 alert_evaluator: AlertEvaluator,
-                 notification_db_service: NotificationService,
-                 database_url: str,
-                 max_workers: int = 10,
-                 job_timeout_seconds: int = 300):
+    def __init__(
+        self,
+        jobs_service: JobsService,
+        alert_evaluator: AlertEvaluator,
+        notification_db_service: NotificationService,
+        database_url: str,
+        max_workers: int = 10,
+        job_timeout_seconds: int = 300,
+    ):
         """
         Initialize the scheduler service.
 
@@ -140,15 +152,15 @@ class SchedulerService:
         self.max_workers = max_workers
 
         # APScheduler components
-        self.scheduler: Optional[AsyncIOScheduler] = None
-        self.jobstore: Optional[SQLAlchemyJobStore] = None
+        self.scheduler: AsyncIOScheduler | None = None
+        self.jobstore: SQLAlchemyJobStore | None = None
         # notification_client intentionally removed — notifications go via notification_db_service
 
         # DB Listener
-        self._db_listener_task: Optional[asyncio.Task] = None
+        self._db_listener_task: asyncio.Task | None = None
 
         # Debounce task: collapses burst NOTIFY events into a single reload (P2-SCHED-2)
-        self._reload_debounce_task: Optional[asyncio.Task] = None
+        self._reload_debounce_task: asyncio.Task | None = None
 
         # Job execution timeout in seconds applied via asyncio.wait_for (P2-SCHED-3)
         self.job_timeout_seconds = job_timeout_seconds
@@ -245,15 +257,19 @@ class SchedulerService:
 
             except Exception as e:
                 self.startup_retry_count += 1
-                _logger.error("Failed to start scheduler service (attempt %d/%d): %s",
-                            self.startup_retry_count, self.max_startup_retries, str(e))
+                _logger.error(
+                    "Failed to start scheduler service (attempt %d/%d): %s",
+                    self.startup_retry_count,
+                    self.max_startup_retries,
+                    str(e),
+                )
 
                 if self.startup_retry_count >= self.max_startup_retries:
                     _logger.error("Maximum startup retries exceeded, giving up")
                     raise RuntimeError(f"Failed to start scheduler after {self.max_startup_retries} attempts") from e
 
                 # Wait before retry with exponential backoff
-                wait_time = 2 ** self.startup_retry_count
+                wait_time = 2**self.startup_retry_count
                 _logger.info("Retrying startup in %d seconds...", wait_time)
                 await asyncio.sleep(wait_time)
 
@@ -333,9 +349,7 @@ class SchedulerService:
 
         try:
             # Step 1 — fetch desired state from DB *before* touching APScheduler
-            schedules = await asyncio.to_thread(
-                lambda: self.jobs_service.list_schedules(enabled=True, limit=1000)
-            )
+            schedules = await asyncio.to_thread(lambda: self.jobs_service.list_schedules(enabled=True, limit=1000))
             desired_job_ids = {f"schedule_{s.id}" for s in schedules}
 
             # Step 2 — add/replace each schedule (jobs keep firing during this phase)
@@ -345,8 +359,12 @@ class SchedulerService:
                     await self._register_schedule(schedule)  # uses replace_existing=True
                     registered_count += 1
                 except Exception:
-                    _logger.error("Failed to register schedule %s (ID: %d) during reload",
-                                  schedule.name, schedule.id, exc_info=True)
+                    _logger.error(
+                        "Failed to register schedule %s (ID: %d) during reload",
+                        schedule.name,
+                        schedule.id,
+                        exc_info=True,
+                    )
 
             # Step 3 — remove jobs that are no longer in the enabled set
             if self.scheduler:
@@ -379,7 +397,7 @@ class SchedulerService:
             "scheduler_state": None,
             "job_count": 0,
             "datastore_url": self.database_url,
-            "notification_client": None  # removed; use notification_db_service directly
+            "notification_client": None,  # removed; use notification_db_service directly
         }
 
         if self.scheduler:
@@ -409,12 +427,8 @@ class SchedulerService:
             executor = AsyncIOExecutor()
 
             # Configure jobstores and executors
-            jobstores = {
-                'default': self.jobstore
-            }
-            executors = {
-                'default': executor
-            }
+            jobstores = {"default": self.jobstore}
+            executors = {"default": executor}
 
             # Job defaults
             job_defaults = {
@@ -423,43 +437,28 @@ class SchedulerService:
                 # not just the latest one, so we don't miss a trigger during downtime.
                 # If downtime could produce many missed runs that aren't useful to replay,
                 # set coalesce=True in the environment config.
-                'coalesce': False,
+                "coalesce": False,
                 # misfire_grace_time caps missed-run replay (P3-SCHED-3): APScheduler will
                 # only replay a missed execution if it is within this window of its scheduled
                 # time. Runs older than misfire_grace_time are silently discarded, preventing
                 # an avalanche of catch-up executions after a long outage.
-                'misfire_grace_time': 300,  # 5 minutes — tune per env if needed
-                'max_instances': self.max_workers
+                "misfire_grace_time": 300,  # 5 minutes — tune per env if needed
+                "max_instances": self.max_workers,
             }
 
             # Create scheduler with jobstore and executor
             self.scheduler = AsyncIOScheduler(
-                jobstores=jobstores,
-                executors=executors,
-                job_defaults=job_defaults,
-                timezone=UTC
+                jobstores=jobstores, executors=executors, job_defaults=job_defaults, timezone=UTC
             )
 
             # Add event listeners for job execution tracking
-            self.scheduler.add_listener(
-                self._on_job_submitted,
-                EVENT_JOB_SUBMITTED
-            )
+            self.scheduler.add_listener(self._on_job_submitted, EVENT_JOB_SUBMITTED)
 
-            self.scheduler.add_listener(
-                self._on_job_executed,
-                EVENT_JOB_EXECUTED
-            )
+            self.scheduler.add_listener(self._on_job_executed, EVENT_JOB_EXECUTED)
 
-            self.scheduler.add_listener(
-                self._on_job_error,
-                EVENT_JOB_ERROR
-            )
+            self.scheduler.add_listener(self._on_job_error, EVENT_JOB_ERROR)
 
-            self.scheduler.add_listener(
-                self._on_job_missed,
-                EVENT_JOB_MISSED
-            )
+            self.scheduler.add_listener(self._on_job_missed, EVENT_JOB_MISSED)
 
             _logger.debug("APScheduler initialized successfully")
 
@@ -479,9 +478,7 @@ class SchedulerService:
         """
         try:
             # Get all enabled schedules
-            schedules = await asyncio.to_thread(
-                lambda: self.jobs_service.list_schedules(enabled=True, limit=1000)
-            )
+            schedules = await asyncio.to_thread(lambda: self.jobs_service.list_schedules(enabled=True, limit=1000))
 
             registered_count = 0
 
@@ -491,13 +488,11 @@ class SchedulerService:
                     registered_count += 1
 
                 except Exception as e:
-                    _logger.error("Failed to register schedule %s (ID: %d): %s",
-                                schedule.name, schedule.id, str(e))
+                    _logger.error("Failed to register schedule %s (ID: %d): %s", schedule.name, schedule.id, str(e))
                     # Continue with other schedules
                     continue
 
-            _logger.info("Registered %d out of %d enabled schedules",
-                        registered_count, len(schedules))
+            _logger.info("Registered %d out of %d enabled schedules", registered_count, len(schedules))
 
             return registered_count
 
@@ -530,7 +525,7 @@ class SchedulerService:
                     day=cron_fields[2],
                     month=cron_fields[3],
                     day_of_week=crontab_weekday_to_apscheduler(cron_fields[4]),
-                    timezone=UTC
+                    timezone=UTC,
                 )
             elif len(cron_fields) == 6:
                 # 6-field cron: second minute hour day month weekday
@@ -541,7 +536,7 @@ class SchedulerService:
                     day=cron_fields[3],
                     month=cron_fields[4],
                     day_of_week=crontab_weekday_to_apscheduler(cron_fields[5]),
-                    timezone=UTC
+                    timezone=UTC,
                 )
             else:
                 raise ValueError(f"Cron expression must have 5 or 6 fields: {schedule.cron}")
@@ -572,18 +567,20 @@ class SchedulerService:
             next_run_time = getattr(job, "next_run_time", None)
             if next_run_time is not None:
                 try:
-                    await asyncio.to_thread(
-                        lambda: self.jobs_service.update_schedule_next_run(schedule.id)
-                    )
+                    await asyncio.to_thread(lambda: self.jobs_service.update_schedule_next_run(schedule.id))
                 except Exception:
                     _logger.warning("Could not update next_run_at for schedule %d", schedule.id)
 
-            _logger.debug("Registered schedule %s (ID: %d) with job ID: %s, next_run_at: %s",
-                         schedule.name, schedule.id, job_id, next_run_time)
+            _logger.debug(
+                "Registered schedule %s (ID: %d) with job ID: %s, next_run_at: %s",
+                schedule.name,
+                schedule.id,
+                job_id,
+                next_run_time,
+            )
 
         except Exception as e:
-            _logger.error("Failed to register schedule %s (ID: %d): %s",
-                         schedule.name, schedule.id, str(e))
+            _logger.error("Failed to register schedule %s (ID: %d): %s", schedule.name, schedule.id, str(e))
             raise
 
     async def _execute_job(self, schedule_id: int) -> None:
@@ -603,9 +600,7 @@ class SchedulerService:
 
         try:
             # Get schedule details
-            schedule = await asyncio.to_thread(
-                lambda: self.jobs_service.get_schedule(schedule_id)
-            )
+            schedule = await asyncio.to_thread(lambda: self.jobs_service.get_schedule(schedule_id))
             if not schedule:
                 _logger.error("Schedule %d not found for execution", schedule_id)
                 return
@@ -617,8 +612,7 @@ class SchedulerService:
             # Create run record
             run_record = await self._create_run_record(schedule)
 
-            _logger.info("Executing job for schedule %s (ID: %d, Run: %d)",
-                        schedule.name, schedule.id, run_record.id)
+            _logger.info("Executing job for schedule %s (ID: %d, Run: %d)", schedule.name, schedule.id, run_record.id)
 
             # Build the job coroutine for this job type
             if schedule.job_type == JobType.ALERT.value:
@@ -649,10 +643,9 @@ class SchedulerService:
 
             try:
                 result = await asyncio.wait_for(job_coro, timeout=effective_timeout)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 timeout_msg = (
-                    f"Job timed out after {effective_timeout}s "
-                    f"(schedule: {schedule.name!r}, type: {schedule.job_type})"
+                    f"Job timed out after {effective_timeout}s (schedule: {schedule.name!r}, type: {schedule.job_type})"
                 )
                 _logger.error(timeout_msg)
                 if run_record:
@@ -663,12 +656,9 @@ class SchedulerService:
             await self._complete_run_record(run_record, RunStatus.COMPLETED, result)
 
             # Update schedule's next run time
-            await asyncio.to_thread(
-                lambda: self.jobs_service.update_schedule_next_run(schedule_id)
-            )
+            await asyncio.to_thread(lambda: self.jobs_service.update_schedule_next_run(schedule_id))
 
-            _logger.info("Successfully completed job for schedule %s (ID: %d)",
-                        schedule.name, schedule.id)
+            _logger.info("Successfully completed job for schedule %s (ID: %d)", schedule.name, schedule.id)
 
         except Exception as e:
             error_msg = f"Job execution failed: {str(e)}"
@@ -707,7 +697,7 @@ class SchedulerService:
                 "triggered": result.triggered,
                 "rearmed": result.rearmed,
                 "error": result.error,
-                "notification_sent": notification_sent
+                "notification_sent": notification_sent,
             }
 
         except Exception:
@@ -750,7 +740,9 @@ class SchedulerService:
 
         raise ValueError(f"Unsupported portfolio target: {target!r}")
 
-    async def _execute_screener_job(self, schedule: ScheduleResponse, run_record: ScheduleRunResponse) -> Dict[str, Any]:
+    async def _execute_screener_job(
+        self, schedule: ScheduleResponse, run_record: ScheduleRunResponse
+    ) -> Dict[str, Any]:
         """
         Execute a screener job.
 
@@ -784,7 +776,9 @@ class SchedulerService:
             "This job type will be supported in a future release."
         )
 
-    async def _execute_data_processing_job(self, schedule: ScheduleResponse, run_record: ScheduleRunResponse) -> Dict[str, Any]:
+    async def _execute_data_processing_job(
+        self, schedule: ScheduleResponse, run_record: ScheduleRunResponse
+    ) -> Dict[str, Any]:
         """
         Execute data processing job via subprocess.
 
@@ -828,25 +822,18 @@ class SchedulerService:
         script_rel = str(script_full_path.relative_to(resolved_root)).replace("\\", "/")
         if not any(script_rel.startswith(d) for d in _ALLOWED_SCRIPT_DIRS):
             raise ValueError(
-                f"script_path '{script_path}' is not in an allowed directory. "
-                f"Allowed prefixes: {_ALLOWED_SCRIPT_DIRS}"
+                f"script_path '{script_path}' is not in an allowed directory. Allowed prefixes: {_ALLOWED_SCRIPT_DIRS}"
             )
 
         # 2. script_args validation — must be a list of plain strings with no
         #    null bytes (null bytes terminate C-string argv entries unexpectedly).
         if not isinstance(script_args, list):
-            raise ValueError(
-                f"script_args must be a list, got {type(script_args).__name__}"
-            )
+            raise ValueError(f"script_args must be a list, got {type(script_args).__name__}")
         for idx, arg in enumerate(script_args):
             if not isinstance(arg, str):
-                raise ValueError(
-                    f"script_args[{idx}] must be a string, got {type(arg).__name__}"
-                )
+                raise ValueError(f"script_args[{idx}] must be a string, got {type(arg).__name__}")
             if "\x00" in arg:
-                raise ValueError(
-                    f"script_args[{idx}] contains a null byte, which is not permitted"
-                )
+                raise ValueError(f"script_args[{idx}] contains a null byte, which is not permitted")
         # ── end validation ────────────────────────────────────────────────────
 
         _logger.info("Executing data processing job: %s with args: %s", script_path, script_args)
@@ -870,25 +857,19 @@ class SchedulerService:
 
             # Run subprocess
             process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=str(PROJECT_ROOT)
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=str(PROJECT_ROOT)
             )
 
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=timeout_seconds
-                )
-            except asyncio.TimeoutError:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout_seconds)
+            except TimeoutError:
                 process.kill()
                 await process.wait()
                 raise TimeoutError(f"Script execution timed out after {timeout_seconds} seconds")
 
             exit_code = process.returncode
-            stdout_str = stdout.decode('utf-8', errors='replace') if stdout else ""
-            stderr_str = stderr.decode('utf-8', errors='replace') if stderr else ""
+            stdout_str = stdout.decode("utf-8", errors="replace") if stdout else ""
+            stderr_str = stderr.decode("utf-8", errors="replace") if stderr else ""
 
             _logger.info("Script exit code: %d", exit_code)
             if stderr_str:
@@ -906,19 +887,17 @@ class SchedulerService:
                 "script_result": script_result,
                 "stdout_preview": stdout_str[-500:] if len(stdout_str) > 500 else stdout_str,  # Last 500 chars
                 "stderr_preview": stderr_str[-500:] if len(stderr_str) > 500 else stderr_str,
-                "notification_sent": False
+                "notification_sent": False,
             }
 
             # Evaluate notification rules if script succeeded
             if success:
-                notification_sent = await self._evaluate_notification_rules(
-                    schedule, script_result, task_params
-                )
+                notification_sent = await self._evaluate_notification_rules(schedule, script_result, task_params)
                 result["notification_sent"] = notification_sent
 
             return result
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error executing data processing job:")
             raise
 
@@ -951,10 +930,7 @@ class SchedulerService:
         return result
 
     async def _evaluate_notification_rules(
-        self,
-        schedule: ScheduleResponse,
-        script_result: Dict[str, Any],
-        task_params: Dict[str, Any]
+        self, schedule: ScheduleResponse, script_result: Dict[str, Any], task_params: Dict[str, Any]
     ) -> bool:
         """
         Evaluate notification rules and send notifications if conditions are met.
@@ -984,8 +960,11 @@ class SchedulerService:
             _logger.warning("No notification channels found for user %d", schedule.user_id)
             return False
 
-        _logger.debug("User notification channels: email=%s, telegram=%s",
-                     user_channels.get("email"), user_channels.get("telegram_chat_id"))
+        _logger.debug(
+            "User notification channels: email=%s, telegram=%s",
+            user_channels.get("email"),
+            user_channels.get("telegram_chat_id"),
+        )
 
         # Evaluate conditions and collect matching channels
         matching_channels = set()
@@ -994,8 +973,7 @@ class SchedulerService:
             if self._check_condition(condition, script_result):
                 channels = condition.get("channels", [])
                 matching_channels.update(channels)
-                _logger.info("Notification condition met: %s -> channels: %s",
-                           condition, channels)
+                _logger.info("Notification condition met: %s -> channels: %s", condition, channels)
 
         if not matching_channels:
             _logger.debug("No notification conditions met")
@@ -1007,7 +985,7 @@ class SchedulerService:
             f"**Scheduled Job:** {schedule.name}",
             f"**Job Type:** {schedule.job_type}",
             f"**Execution Time:** {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}",
-            ""
+            "",
         ]
 
         # Add script results to message
@@ -1029,7 +1007,7 @@ class SchedulerService:
             "job_type": schedule.job_type,
             "script_result": script_result,
             "channels": list(matching_channels),
-            "user_id": schedule.user_id
+            "user_id": schedule.user_id,
         }
 
         # Add channel-specific recipients
@@ -1046,23 +1024,19 @@ class SchedulerService:
                 "message_type": "REPORT",
                 "channels": list(matching_channels),
                 "recipient_id": str(schedule.user_id),
-                "content": {
-                    "title": message_title,
-                    "message": message_body,
-                    "metadata": notification_data
-                },
+                "content": {"title": message_title, "message": message_body, "metadata": notification_data},
                 "priority": "NORMAL",
-                "message_metadata": {
-                    "source": "scheduler_data_processing"
-                }
+                "message_metadata": {"source": "scheduler_data_processing"},
             }
 
-            message = await asyncio.to_thread(
-                lambda: self.notification_db_service.create_message(message_data)
-            )
+            message = await asyncio.to_thread(lambda: self.notification_db_service.create_message(message_data))
 
-            _logger.info("Created notification message %d for schedule %d to channels: %s",
-                       message.id, schedule.id, matching_channels)
+            _logger.info(
+                "Created notification message %d for schedule %d to channels: %s",
+                message.id,
+                schedule.id,
+                matching_channels,
+            )
 
             return True
 
@@ -1088,7 +1062,7 @@ class SchedulerService:
         while self.is_running:
             try:
                 # SSL is not required for local network connection, bypassing permission issues with keys
-                conn = await asyncpg.connect(current_db_url, ssl='disable')
+                conn = await asyncpg.connect(current_db_url, ssl="disable")
 
                 # P2-SCHED-1: use get_running_loop() (get_event_loop() is deprecated in 3.10+)
                 # and create_task() (ensure_future() is deprecated in 3.10+).
@@ -1098,11 +1072,9 @@ class SchedulerService:
 
                 def _on_scheduler_notify(*_args):
                     """Named NOTIFY callback: schedule a debounced reload on the event loop."""
-                    loop.call_soon_threadsafe(
-                        loop.create_task, self._schedule_debounced_reload()
-                    )
+                    loop.call_soon_threadsafe(loop.create_task, self._schedule_debounced_reload())
 
-                await conn.add_listener('scheduler_updates', _on_scheduler_notify)
+                await conn.add_listener("scheduler_updates", _on_scheduler_notify)
 
                 _logger.info("Listening for 'scheduler_updates' notifications")
                 retry_count = 0
@@ -1118,7 +1090,7 @@ class SchedulerService:
             except Exception as e:
                 retry_count += 1
                 _logger.error("Database listener error (retry %d): %s", retry_count, e)
-                await asyncio.sleep(min(30, 2 ** retry_count)) # Exponential backoff capped at 30s
+                await asyncio.sleep(min(30, 2**retry_count))  # Exponential backoff capped at 30s
             finally:
                 if conn and not conn.is_closed():
                     try:
@@ -1202,7 +1174,7 @@ class SchedulerService:
             "target": schedule.target,
             "task_params": schedule.task_params,
             "cron": schedule.cron,
-            "execution_time": datetime.now(UTC).isoformat()
+            "execution_time": datetime.now(UTC).isoformat(),
         }
 
         # Create run data
@@ -1210,29 +1182,27 @@ class SchedulerService:
             job_type=JobType(schedule.job_type),
             job_id=str(schedule.id),
             scheduled_for=datetime.now(UTC),
-            job_snapshot=job_snapshot
+            job_snapshot=job_snapshot,
         )
 
         # Create run record
-        run_record = await asyncio.to_thread(
-            lambda: self.jobs_service.create_run(schedule.user_id, run_data)
-        )
+        run_record = await asyncio.to_thread(lambda: self.jobs_service.create_run(schedule.user_id, run_data))
 
         # Update status to RUNNING
         from src.data.db.models.model_jobs import ScheduleRunUpdate
-        update_data = ScheduleRunUpdate(
-            status=RunStatus.RUNNING,
-            started_at=datetime.now(UTC)
-        )
 
-        updated_run = await asyncio.to_thread(
-            lambda: self.jobs_service.update_run(run_record.id, update_data)
-        )
+        update_data = ScheduleRunUpdate(status=RunStatus.RUNNING, started_at=datetime.now(UTC))
+
+        updated_run = await asyncio.to_thread(lambda: self.jobs_service.update_run(run_record.id, update_data))
         return updated_run or run_record
 
-    async def _complete_run_record(self, run_record: ScheduleRunResponse, status: RunStatus,
-                                 result: Optional[Dict[str, Any]] = None,
-                                 error: Optional[str] = None) -> None:
+    async def _complete_run_record(
+        self,
+        run_record: ScheduleRunResponse,
+        status: RunStatus,
+        result: Dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> None:
         """
         Complete a ScheduleRun record with final status and results.
 
@@ -1244,12 +1214,7 @@ class SchedulerService:
         """
         from src.data.db.models.model_jobs import ScheduleRunUpdate
 
-        update_data = ScheduleRunUpdate(
-            status=status,
-            finished_at=datetime.now(UTC),
-            result=result,
-            error=error
-        )
+        update_data = ScheduleRunUpdate(status=status, finished_at=datetime.now(UTC), result=result, error=error)
 
         await asyncio.to_thread(lambda: self.jobs_service.update_run(run_record.id, update_data))
 
@@ -1263,11 +1228,9 @@ class SchedulerService:
         """
         try:
             _logger.debug("Updating schedule %d state: %s", schedule_id, state_updates)
-            
+
             # Use jobs_service to update the state_json field
-            await asyncio.to_thread(
-                lambda: self.jobs_service.update_schedule_state(schedule_id, state_updates)
-            )
+            await asyncio.to_thread(lambda: self.jobs_service.update_schedule_state(schedule_id, state_updates))
 
         except Exception:
             _logger.exception("Error updating schedule state for %d:", schedule_id)
@@ -1305,7 +1268,7 @@ class SchedulerService:
             f"📈 Symbol: {ticker}",
             f"⏱️ Timeframe: {timeframe}",
             f"💰 Current Price: ${price_float:.4f}",
-            f"🕐 Triggered At: {notification_data.get('timestamp', datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC'))}"
+            f"🕐 Triggered At: {notification_data.get('timestamp', datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC'))}",
         ]
 
         # Market context
@@ -1320,12 +1283,14 @@ class SchedulerService:
                     volume = float(market_data.get("volume", 0))
                     price_change = ((price_float - open_price) / open_price * 100) if open_price > 0 else 0
                     change_emoji = "📈" if price_change >= 0 else "📉"
-                    message_parts.extend([
-                        f"  • Open: ${open_price:.4f}",
-                        f"  • High: ${high_price:.4f}",
-                        f"  • Low: ${low_price:.4f}",
-                        f"  • Change: {change_emoji} {price_change:+.2f}%"
-                    ])
+                    message_parts.extend(
+                        [
+                            f"  • Open: ${open_price:.4f}",
+                            f"  • High: ${high_price:.4f}",
+                            f"  • Low: ${low_price:.4f}",
+                            f"  • Change: {change_emoji} {price_change:+.2f}%",
+                        ]
+                    )
                     if volume > 0:
                         message_parts.append(f"  • Volume: {volume:,.0f}")
                 except (ValueError, TypeError):
@@ -1397,15 +1362,17 @@ class SchedulerService:
                 message_parts.append(f"  • Priority: {alert_config['priority']}")
 
         # Footer
-        message_parts.extend([
-            "\n" + "─" * 30,
-            "💡 **Next Steps:**",
-            "• Review your trading strategy",
-            "• Check market conditions",
-            "• Consider position sizing",
-            "",
-            f"🤖 Generated by Scheduler Service at {datetime.now(UTC).strftime('%H:%M:%S UTC')}"
-        ])
+        message_parts.extend(
+            [
+                "\n" + "─" * 30,
+                "💡 **Next Steps:**",
+                "• Review your trading strategy",
+                "• Check market conditions",
+                "• Consider position sizing",
+                "",
+                f"🤖 Generated by Scheduler Service at {datetime.now(UTC).strftime('%H:%M:%S UTC')}",
+            ]
+        )
 
         return title, "\n".join(message_parts)
 
@@ -1474,8 +1441,9 @@ class SchedulerService:
                 message_record = await asyncio.to_thread(
                     lambda: self.notification_db_service.create_message(message_data)
                 )
-                _logger.info("Created alert notification message %d for %s to channels: %s",
-                             message_record.id, ticker, channels)
+                _logger.info(
+                    "Created alert notification message %d for %s to channels: %s", message_record.id, ticker, channels
+                )
                 return True
             except Exception as e:
                 _logger.error("Error creating alert notification for %s: %s", ticker, str(e))
@@ -1515,7 +1483,9 @@ class SchedulerService:
 
     def _on_job_submitted(self, event: JobSubmissionEvent) -> None:
         """Handle job submission events."""
-        _logger.debug("Job submitted: %s (scheduled for: %s)", event.job_id, event.scheduled_run_times) # here is plural scheduled_run_times
+        _logger.debug(
+            "Job submitted: %s (scheduled for: %s)", event.job_id, event.scheduled_run_times
+        )  # here is plural scheduled_run_times
 
     def _on_job_executed(self, event: JobExecutionEvent) -> None:
         """Handle job execution completion events."""
@@ -1527,4 +1497,6 @@ class SchedulerService:
 
     def _on_job_missed(self, event: JobExecutionEvent) -> None:
         """Handle missed job events."""
-        _logger.warning("Job missed: %s (scheduled for: %s)", event.job_id, event.scheduled_run_time) # Here is scheduled_run_time (singular)
+        _logger.warning(
+            "Job missed: %s (scheduled for: %s)", event.job_id, event.scheduled_run_time
+        )  # Here is scheduled_run_time (singular)

@@ -35,4 +35,6 @@ if __name__ == "__main__":
     _logger.info("Selected %d stocks", len(df))
     df.to_csv("sp500_selected_stocks.csv", index=False)
     _logger.info("Results saved to sp500_selected_stocks.csv")
-    print(f"__SCHEDULER_RESULT__: {json.dumps({'result_count': len(df), 'tickers': list(df['Ticker'].head(10)) if not df.empty else []})}")
+    print(
+        f"__SCHEDULER_RESULT__: {json.dumps({'result_count': len(df), 'tickers': list(df['Ticker'].head(10)) if not df.empty else []})}"
+    )

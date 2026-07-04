@@ -5,24 +5,25 @@ This module implements the CNN training stage that extracts features from OHLCV 
 The CNN is designed as a 1D convolutional network optimized for financial time series analysis.
 Each data file gets its own trained model with individual artifacts.
 """
-import sys
+
 import json
 import pickle
-from pathlib import Path
-from typing import Dict, List, Tuple, Any
+import sys
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
+import matplotlib.pyplot as plt
 import numpy as np
+import optuna
 import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
-import optuna
+import yaml
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
-import matplotlib.pyplot as plt
-import yaml
+from torch.utils.data import DataLoader, TensorDataset
 
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
@@ -40,12 +41,14 @@ class CNN1D(nn.Module):
     architecture parameters for optimal feature extraction.
     """
 
-    def __init__(self,
-                 input_channels: int = 5,
-                 sequence_length: int = 120,
-                 num_filters: List[int] = [32, 64, 128],
-                 kernel_sizes: List[int] = [3, 5, 7],
-                 dropout_rate: float = 0.3) -> None:
+    def __init__(
+        self,
+        input_channels: int = 5,
+        sequence_length: int = 120,
+        num_filters: List[int] = [32, 64, 128],
+        kernel_sizes: List[int] = [3, 5, 7],
+        dropout_rate: float = 0.3,
+    ) -> None:
         """
         Initialize the 1D CNN architecture.
 
@@ -56,7 +59,7 @@ class CNN1D(nn.Module):
             kernel_sizes: List of kernel sizes for each convolutional layer
             dropout_rate: Dropout rate for regularization
         """
-        super(CNN1D, self).__init__()
+        super().__init__()
 
         self.input_channels = input_channels
         self.sequence_length = sequence_length
@@ -66,12 +69,14 @@ class CNN1D(nn.Module):
         in_channels = input_channels
 
         for i, (filters, kernel_size) in enumerate(zip(num_filters, kernel_sizes)):
-            layers.extend([
-                nn.Conv1d(in_channels, filters, kernel_size, padding=kernel_size//2),
-                nn.BatchNorm1d(filters),
-                nn.ReLU(),
-                nn.Dropout(dropout_rate)
-            ])
+            layers.extend(
+                [
+                    nn.Conv1d(in_channels, filters, kernel_size, padding=kernel_size // 2),
+                    nn.BatchNorm1d(filters),
+                    nn.ReLU(),
+                    nn.Dropout(dropout_rate),
+                ]
+            )
             in_channels = filters
 
         self.conv_layers = nn.Sequential(*layers)
@@ -247,7 +252,7 @@ class CNNTrainer:
             "model_path": str(self.models_dir / f"{model_id}.pth"),
             "config_path": str(self.models_dir / f"{model_id}_config.json"),
             "report_path": str(self.reports_dir / f"{model_id}_report.json"),
-            "visualization_path": str(self.visualizations_dir / f"{model_id}.png")
+            "visualization_path": str(self.visualizations_dir / f"{model_id}.png"),
         }
 
     def _parse_filename(self, filename: str) -> Dict[str, str]:
@@ -258,10 +263,10 @@ class CNNTrainer:
         Example: yfinance_VT_1d_20210829_20250828.csv
         """
         # Remove .csv extension
-        name = filename.replace('.csv', '')
+        name = filename.replace(".csv", "")
 
         # Split by underscore
-        parts = name.split('_')
+        parts = name.split("_")
 
         if len(parts) >= 5:
             return {
@@ -269,7 +274,7 @@ class CNNTrainer:
                 "symbol": parts[1],
                 "timeframe": parts[2],
                 "start_date": parts[3],
-                "end_date": parts[4]
+                "end_date": parts[4],
             }
         else:
             # Fallback for non-standard filenames
@@ -278,7 +283,7 @@ class CNNTrainer:
                 "symbol": "unknown",
                 "timeframe": "unknown",
                 "start_date": "unknown",
-                "end_date": "unknown"
+                "end_date": "unknown",
             }
 
     def _discover_raw_data(self) -> List[Path]:
@@ -373,7 +378,7 @@ class CNNTrainer:
 
         for i in range(len(data) - sequence_length):
             # Create sequence
-            sequence = data[i:i + sequence_length]
+            sequence = data[i : i + sequence_length]
             sequences.append(sequence)
 
             # Create target (simple binary classification: price goes up or down)
@@ -384,10 +389,7 @@ class CNNTrainer:
 
         return sequences, targets
 
-    def _optimize_hyperparameters(self,
-                                 X_train: np.ndarray,
-                                 y_train: np.ndarray,
-                                 model_id: str) -> Dict[str, Any]:
+    def _optimize_hyperparameters(self, X_train: np.ndarray, y_train: np.ndarray, model_id: str) -> Dict[str, Any]:
         """
         Optimize CNN hyperparameters using Optuna.
 
@@ -406,12 +408,12 @@ class CNNTrainer:
             num_filters = [
                 trial.suggest_int("filters_1", 16, 32),
                 trial.suggest_int("filters_2", 32, 64),
-                trial.suggest_int("filters_3", 64, 128)
+                trial.suggest_int("filters_3", 64, 128),
             ]
             kernel_sizes = [
                 trial.suggest_int("kernel_1", 3, 5),
                 trial.suggest_int("kernel_2", 3, 7),
-                trial.suggest_int("kernel_3", 3, 9)
+                trial.suggest_int("kernel_3", 3, 9),
             ]
             dropout_rate = trial.suggest_float("dropout_rate", 0.1, 0.3)
             learning_rate = trial.suggest_float("learning_rate", 1e-4, 1e-2, log=True)
@@ -422,7 +424,7 @@ class CNNTrainer:
                 sequence_length=X_train.shape[1],
                 num_filters=num_filters,
                 kernel_sizes=kernel_sizes,
-                dropout_rate=dropout_rate
+                dropout_rate=dropout_rate,
             ).to(self.device)
 
             # Train model
@@ -470,12 +472,14 @@ class CNNTrainer:
         _logger.info("Best parameters for %s: %s", model_id, study.best_trial.params)
 
         # Save optimization results
-        self.optimization_results.append({
-            "model_id": model_id,
-            "best_value": study.best_trial.value,
-            "best_params": study.best_trial.params,
-            "n_trials": n_trials
-        })
+        self.optimization_results.append(
+            {
+                "model_id": model_id,
+                "best_value": study.best_trial.value,
+                "best_params": study.best_trial.params,
+                "n_trials": n_trials,
+            }
+        )
 
         return study.best_trial.params
 
@@ -507,7 +511,7 @@ class CNNTrainer:
             sequence_length=X_train.shape[1],
             num_filters=num_filters,
             kernel_sizes=kernel_sizes,
-            dropout_rate=dropout_rate
+            dropout_rate=dropout_rate,
         ).to(self.device)
 
         # Training parameters
@@ -524,10 +528,7 @@ class CNNTrainer:
             num_epochs = num_epochs[0]
 
         # Create data loader
-        dataset = TensorDataset(
-            torch.FloatTensor(X_train),
-            torch.FloatTensor(y_train)
-        )
+        dataset = TensorDataset(torch.FloatTensor(X_train), torch.FloatTensor(y_train))
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
         # Setup training
@@ -536,7 +537,7 @@ class CNNTrainer:
 
         # Training loop
         training_history = []
-        best_loss = float('inf')
+        best_loss = float("inf")
 
         for epoch in range(num_epochs):
             epoch_loss = 0.0
@@ -574,11 +575,16 @@ class CNNTrainer:
             "model_parameters": sum(p.numel() for p in self.model.parameters()),
             "num_epochs": num_epochs,
             "batch_size": batch_size,
-            "learning_rate": learning_rate
+            "learning_rate": learning_rate,
         }
 
-    def _save_model_and_artifacts(self, training_results: Dict[str, Any], model_id: str,
-                                 file_metadata: Dict[str, str], best_params: Dict[str, Any]) -> None:
+    def _save_model_and_artifacts(
+        self,
+        training_results: Dict[str, Any],
+        model_id: str,
+        file_metadata: Dict[str, str],
+        best_params: Dict[str, Any],
+    ) -> None:
         """
         Save the trained model and training artifacts.
 
@@ -612,8 +618,8 @@ class CNNTrainer:
             "training_config": {
                 "learning_rate": training_results.get("learning_rate"),
                 "batch_size": training_results.get("batch_size"),
-                "num_epochs": training_results.get("num_epochs")
-            }
+                "num_epochs": training_results.get("num_epochs"),
+            },
         }
         with open(config_path, "w") as f:
             json.dump(model_config, f, indent=2)
@@ -626,15 +632,16 @@ class CNNTrainer:
             "training_results": training_results,
             "best_params": best_params,
             "device_used": str(self.device),
-            "training_timestamp": datetime.now().isoformat()
+            "training_timestamp": datetime.now().isoformat(),
         }
         with open(report_path, "w") as f:
             json.dump(report, f, indent=2)
 
         _logger.info("Model and artifacts saved for %s", model_id)
 
-    def _create_visualization(self, training_results: Dict[str, Any], model_id: str,
-                            file_metadata: Dict[str, str]) -> None:
+    def _create_visualization(
+        self, training_results: Dict[str, Any], model_id: str, file_metadata: Dict[str, str]
+    ) -> None:
         """
         Create training visualization.
 
@@ -651,39 +658,38 @@ class CNNTrainer:
             training_history = training_results["training_history"]
             epochs = range(1, len(training_history) + 1)
 
-            ax1.plot(epochs, training_history, 'b-', label='Training Loss')
-            ax1.set_title(f'Training Loss - {file_metadata["symbol"]} ({file_metadata["timeframe"]})')
-            ax1.set_xlabel('Epoch')
-            ax1.set_ylabel('Loss')
+            ax1.plot(epochs, training_history, "b-", label="Training Loss")
+            ax1.set_title(f"Training Loss - {file_metadata['symbol']} ({file_metadata['timeframe']})")
+            ax1.set_xlabel("Epoch")
+            ax1.set_ylabel("Loss")
             ax1.legend()
             ax1.grid(True)
 
             # Plot loss distribution
-            ax2.hist(training_history, bins=20, alpha=0.7, color='skyblue', edgecolor='black')
-            ax2.set_title(f'Loss Distribution - {file_metadata["symbol"]}')
-            ax2.set_xlabel('Loss')
-            ax2.set_ylabel('Frequency')
+            ax2.hist(training_history, bins=20, alpha=0.7, color="skyblue", edgecolor="black")
+            ax2.set_title(f"Loss Distribution - {file_metadata['symbol']}")
+            ax2.set_xlabel("Loss")
+            ax2.set_ylabel("Frequency")
             ax2.grid(True)
 
             # Add model info text
             info_text = f"""
             Model: {model_id}
-            Symbol: {file_metadata['symbol']}
-            Timeframe: {file_metadata['timeframe']}
-            Provider: {file_metadata['provider']}
-            Final Loss: {training_results['final_loss']:.4f}
-            Best Loss: {training_results['best_loss']:.4f}
-            Parameters: {training_results['model_parameters']:,}
+            Symbol: {file_metadata["symbol"]}
+            Timeframe: {file_metadata["timeframe"]}
+            Provider: {file_metadata["provider"]}
+            Final Loss: {training_results["final_loss"]:.4f}
+            Best Loss: {training_results["best_loss"]:.4f}
+            Parameters: {training_results["model_parameters"]:,}
             """
 
-            plt.figtext(0.02, 0.02, info_text, fontsize=8,
-                       bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray"))
+            plt.figtext(0.02, 0.02, info_text, fontsize=8, bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray"))
 
             plt.tight_layout()
 
             # Save visualization
             viz_path = self.visualizations_dir / f"{model_id}.png"
-            plt.savefig(viz_path, dpi=300, bbox_inches='tight')
+            plt.savefig(viz_path, dpi=300, bbox_inches="tight")
             plt.close()
 
             _logger.info("Visualization saved: %s", viz_path)
@@ -703,7 +709,9 @@ class CNNTrainer:
         """
         # Save optimization summary report
         if self.optimization_results:
-            optimization_report_path = self.reports_dir / f"full_cnn_optimization_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            optimization_report_path = (
+                self.reports_dir / f"full_cnn_optimization_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            )
             opt_df = pd.DataFrame(self.optimization_results)
             opt_df.to_csv(optimization_report_path, index=False)
             _logger.info("Optimization report saved: %s", optimization_report_path)
@@ -721,7 +729,7 @@ class CNNTrainer:
             "average_final_loss": avg_final_loss,
             "device_used": str(self.device),
             "models": [r["model_id"] for r in all_results],
-            "optimization_report_path": str(optimization_report_path) if self.optimization_results else None
+            "optimization_report_path": str(optimization_report_path) if self.optimization_results else None,
         }
 
 
@@ -741,8 +749,9 @@ def train_cnn(config: Dict[str, Any]) -> Dict[str, Any]:
 
 def load_config(config_path: str) -> Dict[str, Any]:
     """Load configuration from YAML file."""
-    with open(config_path, 'r') as f:
+    with open(config_path) as f:
         return yaml.safe_load(f)
+
 
 if __name__ == "__main__":
     # Load configuration

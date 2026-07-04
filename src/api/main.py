@@ -15,23 +15,21 @@ Features:
 - Integration with enhanced trading system
 """
 
-from fastapi import FastAPI, HTTPException, Depends
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
-from fastapi.security import HTTPBearer
-from contextlib import asynccontextmanager
 import asyncio
 import logging
 import re
-from pathlib import Path
-from typing import List, Dict, Any, Optional
 import sys
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any, Dict, List
+
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.security import HTTPBearer
+from fastapi.staticfiles import StaticFiles
 
 # Add project root to path
-from pathlib import Path
-import sys
-import os
 
 # -----------------------------------------------------------------------------
 # CRITICAL: Path Setup must be at the very top before any src.* imports
@@ -55,25 +53,26 @@ if SRC_ROOT in sys.path:
 
 # Now we can safely import logger and others
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Sensitive-data log filter — redacts JWT bearer tokens from all log records
 # so they never appear in log files even if an exception message carries them.
 # ---------------------------------------------------------------------------
-_JWT_RE = re.compile(r'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+')
+_JWT_RE = re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
 _PASSWORD_RE = re.compile(r'("password"\s*:\s*")[^"]*"', re.IGNORECASE)
 
 
 class _SensitiveDataFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         if isinstance(record.msg, str):
-            record.msg = _JWT_RE.sub('[JWT]', record.msg)
+            record.msg = _JWT_RE.sub("[JWT]", record.msg)
             record.msg = _PASSWORD_RE.sub(r'\1[REDACTED]"', record.msg)
         if record.args:
             try:
                 sanitized = tuple(
-                    _JWT_RE.sub('[JWT]', str(a)) if isinstance(a, str) else a
+                    _JWT_RE.sub("[JWT]", str(a)) if isinstance(a, str) else a
                     for a in (record.args if isinstance(record.args, tuple) else (record.args,))
                 )
                 record.args = sanitized
@@ -87,35 +86,40 @@ logging.getLogger().addFilter(_SensitiveDataFilter())
 # Make trading system import optional for testing
 try:
     from src.trading.strategy_manager import StrategyManager
+
     TRADING_SYSTEM_AVAILABLE = True
 except ImportError as e:
     _logger.warning("Trading system not available: %s", e)
     StrategyManager = None
     TRADING_SYSTEM_AVAILABLE = False
-from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
-from src.api.config import settings
-from src.api.rate_limiter import limiter
-from src.api.exceptions import AppError, app_error_handler
-from src.api.services.webui_app_service import webui_app_service
+from slowapi.errors import RateLimitExceeded
+
+from src.api.auth import get_current_user, require_trader_or_admin
 from src.api.auth_routes import router as auth_router
-from src.api.telegram_routes import router as telegram_router
-from src.api.jobs_routes import router as jobs_router
-from src.api.notification_routes import router as notification_router
+from src.api.config import settings
+from src.api.exceptions import AppError, app_error_handler
 from src.api.health_routes import router as health_router
 from src.api.internal_routes import router as internal_router
+from src.api.jobs_routes import router as jobs_router
 from src.api.monitoring_routes import router as monitoring_router
-from src.api.auth import get_current_user, require_trader_or_admin
-from src.data.db.models.model_users import User
+from src.api.notification_routes import router as notification_router
+from src.api.rate_limiter import limiter
 from src.api.services import (
-    StrategyManagementService, StrategyValidationError, StrategyOperationError,
-    SystemMonitoringService
+    StrategyManagementService,
+    StrategyOperationError,
+    StrategyValidationError,
+    SystemMonitoringService,
 )
+from src.api.services.webui_app_service import webui_app_service
+from src.api.telegram_routes import router as telegram_router
+from src.data.db.models.model_users import User
 
 # Global strategy manager and service instances
-strategy_manager: Optional[StrategyManager] = None
-strategy_service: Optional[StrategyManagementService] = None
-monitoring_service: Optional[SystemMonitoringService] = None
+strategy_manager: StrategyManager | None = None
+strategy_service: StrategyManagementService | None = None
+monitoring_service: SystemMonitoringService | None = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -168,42 +172,36 @@ async def lifespan(app: FastAPI):
                 trading_system_healthy = TRADING_SYSTEM_AVAILABLE and strategy_manager is not None
 
                 if strategy_service_healthy and monitoring_service_healthy:
-                    status = 'HEALTHY' if trading_system_healthy else 'DEGRADED'
-                    error_msg = None if trading_system_healthy else 'Trading system not available'
+                    status = "HEALTHY" if trading_system_healthy else "DEGRADED"
+                    error_msg = None if trading_system_healthy else "Trading system not available"
 
                     return {
-                        'status': status,
-                        'error_message': error_msg,
-                        'metadata': {
-                            'strategy_service_initialized': strategy_service_healthy,
-                            'monitoring_service_initialized': monitoring_service_healthy,
-                            'trading_system_available': TRADING_SYSTEM_AVAILABLE,
-                            'strategy_manager_initialized': strategy_manager is not None,
-                            'api_port': settings.trading_api_port,
-                            'webgui_port': settings.trading_webgui_port
-                        }
+                        "status": status,
+                        "error_message": error_msg,
+                        "metadata": {
+                            "strategy_service_initialized": strategy_service_healthy,
+                            "monitoring_service_initialized": monitoring_service_healthy,
+                            "trading_system_available": TRADING_SYSTEM_AVAILABLE,
+                            "strategy_manager_initialized": strategy_manager is not None,
+                            "api_port": settings.trading_api_port,
+                            "webgui_port": settings.trading_webgui_port,
+                        },
                     }
                 else:
                     return {
-                        'status': 'DOWN',
-                        'error_message': 'Core services not initialized',
-                        'metadata': {
-                            'strategy_service_initialized': strategy_service_healthy,
-                            'monitoring_service_initialized': monitoring_service_healthy,
-                            'trading_system_available': TRADING_SYSTEM_AVAILABLE
-                        }
+                        "status": "DOWN",
+                        "error_message": "Core services not initialized",
+                        "metadata": {
+                            "strategy_service_initialized": strategy_service_healthy,
+                            "monitoring_service_initialized": monitoring_service_healthy,
+                            "trading_system_available": TRADING_SYSTEM_AVAILABLE,
+                        },
                     }
             except Exception as e:
-                return {
-                    'status': 'DOWN',
-                    'error_message': f'Health check failed: {str(e)}'
-                }
+                return {"status": "DOWN", "error_message": f"Health check failed: {str(e)}"}
 
         # Create and start heartbeat manager
-        api_heartbeat_manager = HeartbeatManager(
-            system='api_service',
-            interval_seconds=30
-        )
+        api_heartbeat_manager = HeartbeatManager(system="api_service", interval_seconds=30)
         api_heartbeat_manager.set_health_check_function(api_service_health_check)
         api_heartbeat_manager.start_heartbeat()
 
@@ -227,12 +225,13 @@ async def lifespan(app: FastAPI):
     if strategy_manager:
         await strategy_manager.shutdown()
 
+
 # Create FastAPI application
 app = FastAPI(
     title="Trading Web UI API",
     description="REST API for managing multi-strategy trading system",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 app.state.limiter = limiter
@@ -280,12 +279,13 @@ app.include_router(monitoring_router)
 
 # Include trading bot management routes
 from src.api.trading_bot_routes import router as trading_bot_router
-app.include_router(trading_bot_router)
 
+app.include_router(trading_bot_router)
 
 
 # Add unified analytics endpoints
 from src.api.services.unified_analytics_service import unified_analytics_service
+
 
 @app.get("/api/analytics")
 async def get_available_analytics(current_user: User = Depends(get_current_user)):
@@ -296,11 +296,9 @@ async def get_available_analytics(current_user: User = Depends(get_current_user)
         _logger.exception("Error getting available analytics:")
         raise HTTPException(status_code=500, detail="Failed to get available analytics")
 
+
 @app.get("/api/analytics/dashboard")
-async def get_unified_dashboard_data(
-    days: int = 30,
-    current_user: User = Depends(get_current_user)
-):
+async def get_unified_dashboard_data(days: int = 30, current_user: User = Depends(get_current_user)):
     """Get unified dashboard data combining notifications and trading analytics."""
     try:
         if days < 1 or days > 365:
@@ -314,12 +312,13 @@ async def get_unified_dashboard_data(
         _logger.exception("Error getting unified dashboard data:")
         raise HTTPException(status_code=500, detail="Failed to get unified dashboard data")
 
+
 @app.get("/api/analytics/correlation")
 async def get_correlation_analysis(
     notification_metric: str = "success_rate",
     trading_metric: str = "win_rate",
     days: int = 30,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Analyze correlations between notification and trading metrics."""
     try:
@@ -327,9 +326,7 @@ async def get_correlation_analysis(
             raise HTTPException(status_code=400, detail="Days must be between 1 and 365")
 
         correlation_data = await unified_analytics_service.get_correlation_analysis(
-            notification_metric=notification_metric,
-            trading_metric=trading_metric,
-            days=days
+            notification_metric=notification_metric, trading_metric=trading_metric, days=days
         )
         return correlation_data
     except HTTPException:
@@ -338,14 +335,17 @@ async def get_correlation_analysis(
         _logger.exception("Error getting correlation analysis:")
         raise HTTPException(status_code=500, detail="Failed to get correlation analysis")
 
+
 # Security
 security = HTTPBearer()
 
 # Pydantic models for API
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
 
 class StrategyConfig(BaseModel):
     """Strategy configuration model."""
+
     id: str = Field(..., description="Unique strategy identifier")
     name: str = Field(..., description="Human-readable strategy name")
     enabled: bool = Field(True, description="Whether strategy is enabled")
@@ -357,21 +357,25 @@ class StrategyConfig(BaseModel):
     risk_management: Dict[str, Any] = Field(default_factory=dict, description="Risk management settings")
     notifications: Dict[str, Any] = Field(default_factory=dict, description="Notification settings")
 
+
 class StrategyStatus(BaseModel):
     """Strategy status model."""
+
     instance_id: str
     name: str
     status: str
     uptime_seconds: float
     error_count: int
-    last_error: Optional[str]
-    broker_type: Optional[str]
-    trading_mode: Optional[str]
-    symbol: Optional[str]
-    strategy_type: Optional[str]
+    last_error: str | None
+    broker_type: str | None
+    trading_mode: str | None
+    symbol: str | None
+    strategy_type: str | None
+
 
 class SystemStatus(BaseModel):
     """System status model."""
+
     service_name: str
     version: str
     status: str
@@ -380,25 +384,29 @@ class SystemStatus(BaseModel):
     total_strategies: int
     system_metrics: Dict[str, Any]
 
+
 class StrategyAction(BaseModel):
     """Strategy action model."""
+
     action: str = Field(..., description="Action to perform (start, stop, restart)")
     confirm_live_trading: bool = Field(False, description="Confirmation for live trading")
 
 
 class StrategyParametersBody(BaseModel):
     """Body for strategy parameter update — arbitrary key/value pairs."""
+
     model_config = ConfigDict(extra="allow")
 
 
 class ValidateConfigBody(BaseModel):
     """Body for strategy config validation — passes through to strategy service."""
+
     model_config = ConfigDict(extra="allow")
+
 
 # Remove old authentication dependency - now using proper JWT auth from auth.py
 
 # API Routes
-
 
 
 @app.get("/api/health/legacy")
@@ -412,18 +420,18 @@ async def health_check_legacy():
         "status": "healthy",
         "timestamp": asyncio.get_event_loop().time(),
         "trading_system_available": TRADING_SYSTEM_AVAILABLE,
-        "note": "This endpoint is deprecated. Use /api/health for unified health monitoring."
+        "note": "This endpoint is deprecated. Use /api/health for unified health monitoring.",
     }
+
 
 @app.get("/api/test-auth")
 async def test_auth(current_user: User = Depends(get_current_user)):
     """Test authentication endpoint."""
-    return {
-        "message": "Authentication successful",
-        "user": current_user.to_dict()
-    }
+    return {"message": "Authentication successful", "user": current_user.to_dict()}
+
 
 # Strategy Management Endpoints
+
 
 @app.get("/api/strategies", response_model=List[StrategyStatus])
 def list_strategies(current_user: User = Depends(get_current_user)):
@@ -431,15 +439,13 @@ def list_strategies(current_user: User = Depends(get_current_user)):
     try:
         strategies = strategy_service.get_all_strategies_status()
         return [StrategyStatus(**strategy) for strategy in strategies]
-    except Exception as e:
+    except Exception:
         _logger.exception("Error listing strategies:")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @app.post("/api/strategies", response_model=Dict[str, str])
-async def create_strategy(
-    strategy_config: StrategyConfig,
-    current_user: User = Depends(require_trader_or_admin)
-):
+async def create_strategy(strategy_config: StrategyConfig, current_user: User = Depends(require_trader_or_admin)):
     """Create a new strategy."""
     try:
         # Convert Pydantic model to dict
@@ -448,18 +454,16 @@ async def create_strategy(
         # Create strategy using service
         result = await strategy_service.create_strategy(config_dict)
 
-        return {
-            "message": result["message"],
-            "strategy_id": result["strategy_id"]
-        }
+        return {"message": result["message"], "strategy_id": result["strategy_id"]}
 
     except StrategyValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except StrategyOperationError as e:
         raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
+    except Exception:
         _logger.exception("Error creating strategy:")
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @app.get("/api/strategies/{strategy_id}", response_model=StrategyStatus)
 def get_strategy(strategy_id: str, current_user: User = Depends(get_current_user)):
@@ -473,15 +477,14 @@ def get_strategy(strategy_id: str, current_user: User = Depends(get_current_user
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting strategy %s:", strategy_id)
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @app.put("/api/strategies/{strategy_id}", response_model=Dict[str, str])
 async def update_strategy(
-    strategy_id: str,
-    strategy_config: StrategyConfig,
-    current_user: User = Depends(require_trader_or_admin)
+    strategy_id: str, strategy_config: StrategyConfig, current_user: User = Depends(require_trader_or_admin)
 ):
     """Update an existing strategy."""
     try:
@@ -491,18 +494,16 @@ async def update_strategy(
         # Update strategy using service
         result = await strategy_service.update_strategy(strategy_id, config_dict)
 
-        return {
-            "message": result["message"],
-            "strategy_id": result["strategy_id"]
-        }
+        return {"message": result["message"], "strategy_id": result["strategy_id"]}
 
     except StrategyValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except StrategyOperationError as e:
         raise HTTPException(status_code=404 if "not found" in str(e).lower() else 503, detail=str(e))
-    except Exception as e:
+    except Exception:
         _logger.exception("Error updating strategy %s:", strategy_id)
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @app.delete("/api/strategies/{strategy_id}", response_model=Dict[str, str])
 async def delete_strategy(strategy_id: str, current_user: User = Depends(require_trader_or_admin)):
@@ -511,37 +512,28 @@ async def delete_strategy(strategy_id: str, current_user: User = Depends(require
         # Delete strategy using service
         result = await strategy_service.delete_strategy(strategy_id)
 
-        return {
-            "message": result["message"],
-            "strategy_id": result["strategy_id"]
-        }
+        return {"message": result["message"], "strategy_id": result["strategy_id"]}
 
     except StrategyOperationError as e:
         raise HTTPException(status_code=404 if "not found" in str(e).lower() else 400, detail=str(e))
-    except Exception as e:
+    except Exception:
         _logger.exception("Error deleting strategy %s:", strategy_id)
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 # Strategy Lifecycle Endpoints
+
 
 @app.post("/api/strategies/{strategy_id}/start", response_model=Dict[str, str])
 async def start_strategy(
-    strategy_id: str,
-    action: StrategyAction,
-    current_user: User = Depends(require_trader_or_admin)
+    strategy_id: str, action: StrategyAction, current_user: User = Depends(require_trader_or_admin)
 ):
     """Start a strategy."""
     try:
         # Start strategy using service
-        result = await strategy_service.start_strategy(
-            strategy_id,
-            confirm_live_trading=action.confirm_live_trading
-        )
+        result = await strategy_service.start_strategy(strategy_id, confirm_live_trading=action.confirm_live_trading)
 
-        return {
-            "message": result["message"],
-            "strategy_id": result["strategy_id"]
-        }
+        return {"message": result["message"], "strategy_id": result["strategy_id"]}
 
     except StrategyOperationError as e:
         if "confirmation" in str(e).lower():
@@ -550,9 +542,10 @@ async def start_strategy(
             raise HTTPException(status_code=404, detail=str(e))
         else:
             raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
+    except Exception:
         _logger.exception("Error starting strategy %s:", strategy_id)
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @app.post("/api/strategies/{strategy_id}/stop", response_model=Dict[str, str])
 async def stop_strategy(strategy_id: str, current_user: User = Depends(require_trader_or_admin)):
@@ -561,35 +554,25 @@ async def stop_strategy(strategy_id: str, current_user: User = Depends(require_t
         # Stop strategy using service
         result = await strategy_service.stop_strategy(strategy_id)
 
-        return {
-            "message": result["message"],
-            "strategy_id": result["strategy_id"]
-        }
+        return {"message": result["message"], "strategy_id": result["strategy_id"]}
 
     except StrategyOperationError as e:
         raise HTTPException(status_code=404 if "not found" in str(e).lower() else 503, detail=str(e))
-    except Exception as e:
+    except Exception:
         _logger.exception("Error stopping strategy %s:", strategy_id)
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @app.post("/api/strategies/{strategy_id}/restart", response_model=Dict[str, str])
 async def restart_strategy(
-    strategy_id: str,
-    action: StrategyAction,
-    current_user: User = Depends(require_trader_or_admin)
+    strategy_id: str, action: StrategyAction, current_user: User = Depends(require_trader_or_admin)
 ):
     """Restart a strategy."""
     try:
         # Restart strategy using service
-        result = await strategy_service.restart_strategy(
-            strategy_id,
-            confirm_live_trading=action.confirm_live_trading
-        )
+        result = await strategy_service.restart_strategy(strategy_id, confirm_live_trading=action.confirm_live_trading)
 
-        return {
-            "message": result["message"],
-            "strategy_id": result["strategy_id"]
-        }
+        return {"message": result["message"], "strategy_id": result["strategy_id"]}
 
     except StrategyOperationError as e:
         if "confirmation" in str(e).lower():
@@ -598,11 +581,13 @@ async def restart_strategy(
             raise HTTPException(status_code=404, detail=str(e))
         else:
             raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
+    except Exception:
         _logger.exception("Error restarting strategy %s:", strategy_id)
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 # System Monitoring Endpoints
+
 
 @app.get("/api/system/status", response_model=SystemStatus)
 def get_system_status(current_user: User = Depends(get_current_user)):
@@ -614,36 +599,36 @@ def get_system_status(current_user: User = Depends(get_current_user)):
         # Get real system metrics
         metrics = monitoring_service.get_comprehensive_metrics()
         system_metrics = {
-            "cpu_percent": metrics['cpu']['usage_percent'],
-            "memory_percent": metrics['memory']['usage_percent'],
-            "temperature_c": metrics['temperature']['average_celsius'] or 0.0,
-            "disk_usage_percent": max([
-                disk['usage_percent'] for disk in metrics['disk']['partitions'].values()
-            ], default=0.0)
+            "cpu_percent": metrics["cpu"]["usage_percent"],
+            "memory_percent": metrics["memory"]["usage_percent"],
+            "temperature_c": metrics["temperature"]["average_celsius"] or 0.0,
+            "disk_usage_percent": max(
+                [disk["usage_percent"] for disk in metrics["disk"]["partitions"].values()], default=0.0
+            ),
         }
 
         return SystemStatus(
             service_name="Enhanced Multi-Strategy Trading System",
             version="2.0.0",
             status="running" if service_status_info["available"] else "unavailable",
-            uptime_seconds=metrics.get('uptime_seconds', 0.0),
+            uptime_seconds=metrics.get("uptime_seconds", 0.0),
             active_strategies=service_status_info["active_strategies"],
             total_strategies=service_status_info["total_strategies"],
-            system_metrics=system_metrics
+            system_metrics=system_metrics,
         )
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting system status:")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 # Configuration Management Endpoints
+
 
 # Strategy parameter update endpoint
 @app.put("/api/strategies/{strategy_id}/parameters", response_model=Dict[str, Any])
 async def update_strategy_parameters(
-    strategy_id: str,
-    body: StrategyParametersBody,
-    current_user: User = Depends(require_trader_or_admin)
+    strategy_id: str, body: StrategyParametersBody, current_user: User = Depends(require_trader_or_admin)
 ):
     """Update strategy parameters while running."""
     try:
@@ -654,9 +639,10 @@ async def update_strategy_parameters(
 
     except StrategyOperationError as e:
         raise HTTPException(status_code=404 if "not found" in str(e).lower() else 503, detail=str(e))
-    except Exception as e:
+    except Exception:
         _logger.exception("Error updating strategy parameters %s:", strategy_id)
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @app.get("/api/config/templates")
 def get_strategy_templates(current_user: User = Depends(get_current_user)):
@@ -665,15 +651,13 @@ def get_strategy_templates(current_user: User = Depends(get_current_user)):
         templates = strategy_service.get_strategy_templates()
         return {"templates": templates}
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error loading templates:")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @app.post("/api/config/validate")
-def validate_configuration(
-    body: ValidateConfigBody,
-    current_user: User = Depends(get_current_user)
-):
+def validate_configuration(body: ValidateConfigBody, current_user: User = Depends(get_current_user)):
     """Validate a strategy configuration."""
     try:
         config = body.model_dump()
@@ -682,9 +666,10 @@ def validate_configuration(
 
     except StrategyValidationError as e:
         return {"valid": False, "errors": [str(e)]}
-    except Exception as e:
+    except Exception:
         _logger.exception("Error validating configuration:")
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 # System monitoring endpoints
 @app.get("/api/monitoring/metrics")
@@ -693,28 +678,24 @@ def get_system_metrics(current_user: User = Depends(get_current_user)):
     try:
         metrics = monitoring_service.get_comprehensive_metrics()
         return metrics
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting system metrics:")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @app.get("/api/monitoring/alerts")
-def get_system_alerts(
-    unacknowledged_only: bool = False,
-    current_user: User = Depends(get_current_user)
-):
+def get_system_alerts(unacknowledged_only: bool = False, current_user: User = Depends(get_current_user)):
     """Get system alerts."""
     try:
         alerts = monitoring_service.get_alerts(unacknowledged_only)
         return {"alerts": alerts}
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting system alerts:")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @app.post("/api/monitoring/alerts/{alert_index}/acknowledge")
-def acknowledge_alert(
-    alert_index: int,
-    current_user: User = Depends(require_trader_or_admin)
-):
+def acknowledge_alert(alert_index: int, current_user: User = Depends(require_trader_or_admin)):
     """Acknowledge a system alert."""
     try:
         success = monitoring_service.acknowledge_alert(alert_index)
@@ -724,15 +705,13 @@ def acknowledge_alert(
             raise HTTPException(status_code=404, detail="Alert not found")
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         _logger.exception("Error acknowledging alert:")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @app.get("/api/monitoring/history")
-def get_performance_history(
-    hours: int = 1,
-    current_user: User = Depends(get_current_user)
-):
+def get_performance_history(hours: int = 1, current_user: User = Depends(get_current_user)):
     """Get performance history."""
     try:
         if hours < 1 or hours > 24:
@@ -742,7 +721,7 @@ def get_performance_history(
         return {"history": history}
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting performance history:")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -754,7 +733,7 @@ async def catch_all(full_path: str):
     # Skip if it is an API call
     if full_path.startswith("api/"):
         return JSONResponse(status_code=404, content={"detail": "API endpoint not found"})
-        
+
     # Check if a static file exists (e.g. for assets/...)
     dist_path = (PROJECT_ROOT / "src/web_ui/frontend/dist").resolve()
     local_path = (dist_path / full_path).resolve()
@@ -788,6 +767,7 @@ async def catch_all(full_path: str):
 
     return JSONResponse(status_code=404, content={"detail": "Frontend not found"})
 
+
 # Mount static files for the React frontend (fallback for root / and static assets)
 dist_path = PROJECT_ROOT / "src/web_ui/frontend/dist"
 if dist_path.exists():
@@ -803,10 +783,4 @@ if __name__ == "__main__":
     port = settings.trading_api_port
 
     # Run the server
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port,
-        reload=settings.api_reload,
-        log_level="info"
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=settings.api_reload, log_level="info")

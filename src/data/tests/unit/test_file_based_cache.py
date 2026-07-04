@@ -5,22 +5,27 @@ Tests the FileBasedCache class and related components to ensure
 proper functionality of the hierarchical cache structure.
 """
 
-import unittest
-import tempfile
-import shutil
 import os
-import time
-from datetime import datetime
-from pathlib import Path
-import pandas as pd
+import shutil
 
 # Add src to path for imports
 import sys
+import tempfile
+import time
+import unittest
+from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
 from src.data.utils.file_based_cache import (
-    FileBasedCache, FileCacheCompressor, TimeBasedInvalidation, VersionBasedInvalidation,
-    FileCacheMetrics
+    FileBasedCache,
+    FileCacheCompressor,
+    FileCacheMetrics,
+    TimeBasedInvalidation,
+    VersionBasedInvalidation,
 )
 
 
@@ -50,7 +55,7 @@ class TestFileCacheMetrics(unittest.TestCase):
 
         # Mixed hits and misses
         self.metrics.misses = 5
-        self.assertEqual(self.metrics.hit_rate, 2/3)  # 10/(10+5)
+        self.assertEqual(self.metrics.hit_rate, 2 / 3)  # 10/(10+5)
 
     def test_total_operations(self):
         """Test total operations calculation."""
@@ -141,19 +146,21 @@ class TestFileBasedCache(unittest.TestCase):
             cache_dir=self.temp_dir,
             max_size_gb=1.0,
             retention_days=7,
-            compression_enabled=False  # Disable for testing
+            compression_enabled=False,  # Disable for testing
         )
 
         # Create test data with proper CSV format
-        dates = pd.date_range('2023-01-01', periods=3, freq='D')
-        self.test_df = pd.DataFrame({
-            'timestamp': dates,
-            'open': [100.0, 101.0, 102.0],
-            'high': [102.0, 103.0, 104.0],
-            'low': [99.0, 100.0, 101.0],
-            'close': [101.0, 102.0, 103.0],
-            'volume': [1000, 1100, 1200]
-        })
+        dates = pd.date_range("2023-01-01", periods=3, freq="D")
+        self.test_df = pd.DataFrame(
+            {
+                "timestamp": dates,
+                "open": [100.0, 101.0, 102.0],
+                "high": [102.0, 103.0, 104.0],
+                "low": [99.0, 100.0, 101.0],
+                "close": [101.0, 102.0, 103.0],
+                "volume": [1000, 1100, 1200],
+            }
+        )
 
     def tearDown(self):
         """Clean up test fixtures."""
@@ -177,18 +184,18 @@ class TestFileBasedCache(unittest.TestCase):
         """Test putting and getting data."""
         # Put data
         success = self.cache.put(
-            self.test_df, "binance", "BTCUSDT", "1h",
+            self.test_df,
+            "binance",
+            "BTCUSDT",
+            "1h",
             format="csv",
             start_date=datetime(2023, 1, 1),
-            end_date=datetime(2023, 1, 3)
+            end_date=datetime(2023, 1, 3),
         )
         self.assertTrue(success)
 
         # Get data (without date filtering to test basic functionality)
-        retrieved_df = self.cache.get(
-            "binance", "BTCUSDT", "1h",
-            format="csv"
-        )
+        retrieved_df = self.cache.get("binance", "BTCUSDT", "1h", format="csv")
 
         self.assertIsNotNone(retrieved_df)
         # The data might be split by years, so we need to check if it contains our data
@@ -196,7 +203,7 @@ class TestFileBasedCache(unittest.TestCase):
         self.assertGreater(len(retrieved_df), 0)
         # Check that the columns match (the retrieved data will have timestamp as index)
         # Remove timestamp from comparison since it becomes the index
-        expected_cols = set(self.test_df.columns) - {'timestamp'}
+        expected_cols = set(self.test_df.columns) - {"timestamp"}
         actual_cols = set(retrieved_df.columns)
         self.assertEqual(actual_cols, expected_cols)
         # Check that we have data in the expected date range
@@ -245,13 +252,13 @@ class TestFileBasedCache(unittest.TestCase):
 
         stats = self.cache.get_stats()
 
-        self.assertIn('hits', stats)
-        self.assertIn('misses', stats)
-        self.assertIn('sets', stats)
-        self.assertIn('cache_dir', stats)
-        self.assertIn('cache_size_gb', stats)
-        self.assertIn('file_count', stats)
-        self.assertIn('directory_count', stats)
+        self.assertIn("hits", stats)
+        self.assertIn("misses", stats)
+        self.assertIn("sets", stats)
+        self.assertIn("cache_dir", stats)
+        self.assertIn("cache_size_gb", stats)
+        self.assertIn("file_count", stats)
+        self.assertIn("directory_count", stats)
 
     def test_get_cache_info(self):
         """Test getting cache information."""
@@ -260,20 +267,20 @@ class TestFileBasedCache(unittest.TestCase):
 
         # Create data for another year
         df_2024 = self.test_df.copy()
-        df_2024['timestamp'] = pd.date_range('2024-01-01', periods=3, freq='D')
+        df_2024["timestamp"] = pd.date_range("2024-01-01", periods=3, freq="D")
         self.cache.put(df_2024, "binance", "BTCUSDT", "1h", format="csv")
 
         info = self.cache.get_cache_info("binance", "BTCUSDT", "1h")
 
-        self.assertEqual(info['provider'], "binance")
-        self.assertEqual(info['symbol'], "BTCUSDT")
-        self.assertEqual(info['interval'], "1h")
+        self.assertEqual(info["provider"], "binance")
+        self.assertEqual(info["symbol"], "BTCUSDT")
+        self.assertEqual(info["interval"], "1h")
         # Check that we have the years from our test data
-        self.assertIn(2023, info['years_available'])
-        self.assertIn(2024, info['years_available'])
+        self.assertIn(2023, info["years_available"])
+        self.assertIn(2024, info["years_available"])
         # Check that we have at least one year
-        self.assertGreater(len(info['years_available']), 0)
-        self.assertGreater(info['total_rows'], 0)
+        self.assertGreater(len(info["years_available"]), 0)
+        self.assertGreater(info["total_rows"], 0)
 
     def test_cleanup_old_files(self):
         """Test cleanup of old files."""
@@ -303,17 +310,11 @@ class TestFileBasedCache(unittest.TestCase):
     def test_csv_format(self):
         """Test CSV format support."""
         # Put data in CSV format
-        success = self.cache.put(
-            self.test_df, "binance", "BTCUSDT", "1h",
-            format="csv"
-        )
+        success = self.cache.put(self.test_df, "binance", "BTCUSDT", "1h", format="csv")
         self.assertTrue(success)
 
         # Get data in CSV format
-        retrieved_df = self.cache.get(
-            "binance", "BTCUSDT", "1h",
-            format="csv"
-        )
+        retrieved_df = self.cache.get("binance", "BTCUSDT", "1h", format="csv")
 
         self.assertIsNotNone(retrieved_df)
         # The data might be split by years, so we need to check if it contains our data
@@ -321,7 +322,7 @@ class TestFileBasedCache(unittest.TestCase):
         self.assertGreater(len(retrieved_df), 0)
         # Check that the columns match (the retrieved data will have timestamp as index)
         # Remove timestamp from comparison since it becomes the index
-        expected_cols = set(self.test_df.columns) - {'timestamp'}
+        expected_cols = set(self.test_df.columns) - {"timestamp"}
         actual_cols = set(retrieved_df.columns)
         self.assertEqual(actual_cols, expected_cols)
 
@@ -334,12 +335,7 @@ class TestFileBasedCache(unittest.TestCase):
         start_date = datetime(2023, 1, 2)
         end_date = datetime(2023, 1, 3)
 
-        filtered_df = self.cache.get(
-            "binance", "BTCUSDT", "1h",
-            format="csv",
-            start_date=start_date,
-            end_date=end_date
-        )
+        filtered_df = self.cache.get("binance", "BTCUSDT", "1h", format="csv", start_date=start_date, end_date=end_date)
 
         # Date filtering might not work as expected with the new cache structure
         # For now, just check that we get some data
@@ -350,10 +346,7 @@ class TestFileBasedCache(unittest.TestCase):
             all_df = self.cache.get("binance", "BTCUSDT", "1h", format="csv")
             if all_df is not None:
                 # Filter manually
-                filtered_df = all_df[
-                    (all_df.index >= start_date) &
-                    (all_df.index <= end_date)
-                ]
+                filtered_df = all_df[(all_df.index >= start_date) & (all_df.index <= end_date)]
                 self.assertEqual(len(filtered_df), 2)
                 self.assertTrue(all(filtered_df.index >= start_date))
                 self.assertTrue(all(filtered_df.index <= end_date))
@@ -374,14 +367,11 @@ class TestGlobalFunctions(unittest.TestCase):
 
     def test_get_file_cache(self):
         """Test get_file_cache function."""
-        from src.data.utils.file_based_cache import get_file_cache, configure_file_cache
+        from src.data.utils.file_based_cache import configure_file_cache, get_file_cache
 
         # First configure the cache with specific parameters
         cache = configure_file_cache(
-            cache_dir=self.temp_dir,
-            max_size_gb=5.0,
-            retention_days=14,
-            compression_enabled=True
+            cache_dir=self.temp_dir, max_size_gb=5.0, retention_days=14, compression_enabled=True
         )
 
         self.assertIsInstance(cache, FileBasedCache)
@@ -396,17 +386,14 @@ class TestGlobalFunctions(unittest.TestCase):
 
     def test_configure_file_cache(self):
         """Test configure_file_cache function."""
-        from src.data.utils.file_based_cache import configure_file_cache, _file_cache_instance
+        from src.data.utils.file_based_cache import _file_cache_instance, configure_file_cache
 
         # Reset global instance
         _file_cache_instance = None
 
         # Configure cache
         cache = configure_file_cache(
-            cache_dir=self.temp_dir,
-            max_size_gb=10.0,
-            retention_days=30,
-            compression_enabled=False
+            cache_dir=self.temp_dir, max_size_gb=10.0, retention_days=30, compression_enabled=False
         )
 
         self.assertIsInstance(cache, FileBasedCache)
@@ -415,5 +402,5 @@ class TestGlobalFunctions(unittest.TestCase):
         self.assertFalse(cache.compression_enabled)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

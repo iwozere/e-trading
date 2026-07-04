@@ -1,10 +1,12 @@
-from typing import Optional, List, Dict, cast
 from datetime import datetime
+from typing import Dict, List, cast
+
 import pandas as pd
 import requests
-from src.notification.logger import setup_logger
-from src.model.schemas import Fundamentals, OptionalFundamentals
+
 from src.data.downloader.base_data_downloader import BaseDataDownloader
+from src.model.schemas import Fundamentals, OptionalFundamentals
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -32,6 +34,7 @@ API limits (free tier):
 Classes:
 - TwelveDataDataDownloader: Main class for interacting with Twelve Data and managing data downloads
 """
+
 
 class TwelveDataDataDownloader(BaseDataDownloader):
     """
@@ -76,16 +79,18 @@ class TwelveDataDataDownloader(BaseDataDownloader):
     >>> print(f"Earnings Per Share: {fundamentals.earnings_per_share}")
     """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         super().__init__()
         # Get API key from parameter or config
-        self.api_key = api_key or self._get_config_value('TWELVE_DATA_API_KEY', 'TWELVE_DATA_API_KEY')
+        self.api_key = api_key or self._get_config_value("TWELVE_DATA_API_KEY", "TWELVE_DATA_API_KEY")
         self.base_url = "https://api.twelvedata.com/time_series"
 
         if not self.api_key:
             raise ValueError("Twelve Data API key is required. Get one at: https://twelvedata.com/")
 
-    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> Optional[pd.DataFrame]:
+    def get_ohlcv(
+        self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs
+    ) -> pd.DataFrame | None:
         """
         Download historical data for a given symbol from Twelve Data.
 
@@ -100,23 +105,21 @@ class TwelveDataDataDownloader(BaseDataDownloader):
         """
         try:
             # Validate interval and period
-            if not self.is_valid_period_interval('1d', interval):
+            if not self.is_valid_period_interval("1d", interval):
                 raise ValueError(f"Unsupported interval: {interval}")
             # Twelve Data supports: 1min, 5min, 15min, 30min, 1h, 4h, 1d, 1wk, 1mo
-            interval_map = {
-                '1m': '1min', '5m': '5min', '15m': '15min', '1h': '1h', '1d': '1day'
-            }
-            td_interval = interval_map.get(interval, '1day')
+            interval_map = {"1m": "1min", "5m": "5min", "15m": "15min", "1h": "1h", "1d": "1day"}
+            td_interval = interval_map.get(interval, "1day")
             start_str = start_date.strftime("%Y-%m-%d")
             end_str = end_date.strftime("%Y-%m-%d")
             params = {
-                'symbol': symbol,
-                'interval': td_interval,
-                'start_date': start_str,
-                'end_date': end_str,
-                'apikey': self.api_key,
-                'format': 'JSON',
-                'outputsize': 5000  # max per request
+                "symbol": symbol,
+                "interval": td_interval,
+                "start_date": start_str,
+                "end_date": end_str,
+                "apikey": self.api_key,
+                "format": "JSON",
+                "outputsize": 5000,  # max per request
             }
             response = requests.get(self.base_url, params=params)
             if response.status_code == 429:
@@ -124,23 +127,41 @@ class TwelveDataDataDownloader(BaseDataDownloader):
             if response.status_code != 200:
                 raise RuntimeError(f"Twelve Data API error: {response.status_code} {response.text}")
             data = response.json()
-            if 'values' not in data:
+            if "values" not in data:
                 raise ValueError(f"No results in Twelve Data response: {data}")
-            df = pd.DataFrame(data['values'])
+            df = pd.DataFrame(data["values"])
             # Twelve Data returns: datetime, open, high, low, close, volume (all as strings)
-            df['timestamp'] = pd.to_datetime(df['datetime'])
-            df = df.rename(columns={'open': 'open', 'high': 'high', 'low': 'low', 'close': 'close', 'volume': 'volume'})
-            df = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
+            df["timestamp"] = pd.to_datetime(df["datetime"])
+            df = df.rename(columns={"open": "open", "high": "high", "low": "low", "close": "close", "volume": "volume"})
+            df = df[["timestamp", "open", "high", "low", "close", "volume"]]
             # Convert numeric columns
-            for col in ['open', 'high', 'low', 'close', 'volume']:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+            for col in ["open", "high", "low", "close", "volume"]:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
             # Resample if needed
-            if interval == '5m':
-                df = df.set_index('timestamp').resample('5T').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna().reset_index()
-            elif interval == '15m':
-                df = df.set_index('timestamp').resample('15T').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna().reset_index()
-            elif interval == '1h':
-                df = df.set_index('timestamp').resample('1h').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna().reset_index()
+            if interval == "5m":
+                df = (
+                    df.set_index("timestamp")
+                    .resample("5T")
+                    .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+                    .dropna()
+                    .reset_index()
+                )
+            elif interval == "15m":
+                df = (
+                    df.set_index("timestamp")
+                    .resample("15T")
+                    .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+                    .dropna()
+                    .reset_index()
+                )
+            elif interval == "1h":
+                df = (
+                    df.set_index("timestamp")
+                    .resample("1h")
+                    .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+                    .dropna()
+                    .reset_index()
+                )
             # For '1m' and '1d', no resampling needed
             return cast(pd.DataFrame, df)
         except Exception as e:
@@ -148,10 +169,10 @@ class TwelveDataDataDownloader(BaseDataDownloader):
             raise
 
     def get_periods(self) -> list:
-        return ['1d', '7d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y']
+        return ["1d", "7d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y"]
 
     def get_intervals(self) -> list:
-        return ['1m', '5m', '15m', '1h', '1d']
+        return ["1m", "5m", "15m", "1h", "1d"]
 
     def is_valid_period_interval(self, period, interval) -> bool:
         return interval in self.get_intervals() and period in self.get_periods()
@@ -169,10 +190,7 @@ class TwelveDataDataDownloader(BaseDataDownloader):
         try:
             # Get company profile
             profile_url = "https://api.twelvedata.com/profile"
-            profile_params = {
-                'symbol': symbol,
-                'apikey': self.api_key
-            }
+            profile_params = {"symbol": symbol, "apikey": self.api_key}
 
             profile_response = requests.get(profile_url, params=profile_params)
             if profile_response.status_code == 429:
@@ -182,7 +200,7 @@ class TwelveDataDataDownloader(BaseDataDownloader):
 
             profile_data = profile_response.json()
 
-            if not profile_data or 'status' in profile_data and profile_data['status'] == 'error':
+            if not profile_data or "status" in profile_data and profile_data["status"] == "error":
                 _logger.error("No data returned from Twelve Data for ticker %s", symbol)
                 return Fundamentals(
                     ticker=symbol.upper(),
@@ -194,32 +212,28 @@ class TwelveDataDataDownloader(BaseDataDownloader):
                     dividend_yield=0.0,
                     earnings_per_share=0.0,
                     data_source="Twelve Data",
-                    last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 )
 
             # Get current price
             quote_url = "https://api.twelvedata.com/quote"
-            quote_params = {
-                'symbol': symbol,
-                'apikey': self.api_key
-            }
+            quote_params = {"symbol": symbol, "apikey": self.api_key}
 
             quote_response = requests.get(quote_url, params=quote_params)
             quote_data = quote_response.json() if quote_response.status_code == 200 else {}
-            current_price = float(quote_data.get('close', 0)) if quote_data and 'close' in quote_data else 0.0
+            current_price = float(quote_data.get("close", 0)) if quote_data and "close" in quote_data else 0.0
 
             # Get earnings data
             earnings_url = "https://api.twelvedata.com/earnings"
-            earnings_params = {
-                'symbol': symbol,
-                'apikey': self.api_key
-            }
+            earnings_params = {"symbol": symbol, "apikey": self.api_key}
 
             earnings_response = requests.get(earnings_url, params=earnings_params)
             earnings_data = earnings_response.json() if earnings_response.status_code == 200 else {}
-            latest_earnings = earnings_data.get('earnings', [{}])[0] if earnings_data and 'earnings' in earnings_data else {}
+            latest_earnings = (
+                earnings_data.get("earnings", [{}])[0] if earnings_data and "earnings" in earnings_data else {}
+            )
 
-            _logger.debug("Retrieved fundamentals for %s: %s", symbol, profile_data.get('name', 'Unknown'))
+            _logger.debug("Retrieved fundamentals for %s: %s", symbol, profile_data.get("name", "Unknown"))
 
             return Fundamentals(
                 ticker=symbol.upper(),
@@ -228,7 +242,9 @@ class TwelveDataDataDownloader(BaseDataDownloader):
                 market_cap=float(profile_data.get("market_cap", 0)) if profile_data.get("market_cap") else 0.0,
                 pe_ratio=float(profile_data.get("pe_ratio", 0)) if profile_data.get("pe_ratio") else 0.0,
                 forward_pe=0.0,  # Twelve Data doesn't provide forward PE
-                dividend_yield=float(profile_data.get("dividend_yield", 0)) if profile_data.get("dividend_yield") else 0.0,
+                dividend_yield=float(profile_data.get("dividend_yield", 0))
+                if profile_data.get("dividend_yield")
+                else 0.0,
                 earnings_per_share=float(latest_earnings.get("eps", 0)) if latest_earnings.get("eps") else 0.0,
                 # Additional fields
                 price_to_book=float(profile_data.get("pb_ratio", 0)) if profile_data.get("pb_ratio") else None,
@@ -259,7 +275,7 @@ class TwelveDataDataDownloader(BaseDataDownloader):
                 enterprise_value=None,  # Twelve Data doesn't provide enterprise value
                 enterprise_value_to_ebitda=None,  # Twelve Data doesn't provide EV/EBITDA
                 data_source="Twelve Data",
-                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             )
 
         except Exception as e:
@@ -274,7 +290,7 @@ class TwelveDataDataDownloader(BaseDataDownloader):
                 dividend_yield=0.0,
                 earnings_per_share=0.0,
                 data_source="Twelve Data",
-                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             )
 
     def download_multiple_symbols(  # type: ignore[override]
@@ -282,9 +298,8 @@ class TwelveDataDataDownloader(BaseDataDownloader):
     ) -> Dict[str, pd.DataFrame]:
         def download_func(symbol, interval, start_date, end_date):
             return self.get_ohlcv(symbol, interval, start_date, end_date)
-        return super().download_multiple_symbols(
-            symbols, download_func, interval, start_date, end_date
-        )
+
+        return super().download_multiple_symbols(symbols, download_func, interval, start_date, end_date)
 
     def get_provider_name(self) -> str:
         """Return the canonical provider name for this downloader."""
@@ -292,4 +307,4 @@ class TwelveDataDataDownloader(BaseDataDownloader):
 
     def get_supported_intervals(self) -> List[str]:
         """Return list of supported intervals for Twelve Data."""
-        return ['1m', '5m', '15m', '1h', '1d']
+        return ["1m", "5m", "15m", "1h", "1d"]

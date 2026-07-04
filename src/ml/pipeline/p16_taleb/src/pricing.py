@@ -37,7 +37,10 @@ def skew_adjusted_sigma(
     if adjusted > _SIGMA_CAP:
         _logger.warning(
             "skew_adjusted_sigma clamped: %.3f -> %.1f (vix=%.1f, otm_pct=%.2f)",
-            adjusted, _SIGMA_CAP, vix_level, otm_pct,
+            adjusted,
+            _SIGMA_CAP,
+            vix_level,
+            otm_pct,
         )
         return _SIGMA_CAP
     return adjusted
@@ -52,7 +55,7 @@ def _d1_d2(
 ) -> tuple[float, float]:
     """Compute d1 and d2 for Black-Scholes."""
     sqrt_T = np.sqrt(T)
-    d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * sqrt_T)
+    d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * sqrt_T)
     d2 = d1 - sigma * sqrt_T
     return d1, d2
 
@@ -119,15 +122,12 @@ def bs_greeks(
     pdf_d1 = norm.pdf(d1)
     discount = np.exp(-r * T)
 
-    delta = norm.cdf(d1) - 1.0   # put delta ∈ [-1, 0]
+    delta = norm.cdf(d1) - 1.0  # put delta ∈ [-1, 0]
     gamma = pdf_d1 / (S * sigma * sqrt_T)
     # theta per calendar year (then divided by 365 for per-day)
-    theta_annual = (
-        -(S * pdf_d1 * sigma) / (2.0 * sqrt_T)
-        + r * K * discount * norm.cdf(-d2)
-    )
+    theta_annual = -(S * pdf_d1 * sigma) / (2.0 * sqrt_T) + r * K * discount * norm.cdf(-d2)
     theta = theta_annual / 365.0
-    vega = S * pdf_d1 * sqrt_T / 100.0    # per 1% vol move
+    vega = S * pdf_d1 * sqrt_T / 100.0  # per 1% vol move
     rho = -K * T * discount * norm.cdf(-d2) / 100.0  # per 1% rate move
 
     return {

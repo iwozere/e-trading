@@ -4,12 +4,12 @@ Cache metrics tracking for sentiment analysis caching.
 Provides statistics and performance monitoring for cache operations.
 """
 
+import sys
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Optional, List
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-import sys
+from typing import Dict, List
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -23,6 +23,7 @@ _logger = setup_logger(__name__)
 @dataclass
 class CacheStats:
     """Statistics for cache performance monitoring."""
+
     hits: int = 0
     misses: int = 0
     sets: int = 0
@@ -30,10 +31,10 @@ class CacheStats:
     evictions: int = 0
     total_response_time_ms: float = 0.0
     max_response_time_ms: float = 0.0
-    min_response_time_ms: float = float('inf')
+    min_response_time_ms: float = float("inf")
     cache_size: int = 0
     memory_usage_bytes: int = 0
-    last_reset: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_reset: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def hit_ratio(self) -> float:
@@ -61,8 +62,8 @@ class CacheStats:
         self.evictions = 0
         self.total_response_time_ms = 0.0
         self.max_response_time_ms = 0.0
-        self.min_response_time_ms = float('inf')
-        self.last_reset = datetime.now(timezone.utc)
+        self.min_response_time_ms = float("inf")
+        self.last_reset = datetime.now(UTC)
 
 
 class CacheMetrics:
@@ -82,7 +83,7 @@ class CacheMetrics:
         """
         self.report_interval = report_interval_seconds
         self.stats_by_tier: Dict[str, CacheStats] = {}
-        self.last_report_time: Optional[datetime] = None
+        self.last_report_time: datetime | None = None
         self._operation_start_times: Dict[str, float] = {}
 
     def get_stats(self, tier: str) -> CacheStats:
@@ -95,25 +96,25 @@ class CacheMetrics:
         """Start timing a cache operation."""
         self._operation_start_times[operation_id] = time.time()
 
-    def record_hit(self, tier: str, operation_id: Optional[str] = None) -> None:
+    def record_hit(self, tier: str, operation_id: str | None = None) -> None:
         """Record a cache hit."""
         stats = self.get_stats(tier)
         stats.hits += 1
         self._record_operation_time(stats, operation_id)
 
-    def record_miss(self, tier: str, operation_id: Optional[str] = None) -> None:
+    def record_miss(self, tier: str, operation_id: str | None = None) -> None:
         """Record a cache miss."""
         stats = self.get_stats(tier)
         stats.misses += 1
         self._record_operation_time(stats, operation_id)
 
-    def record_set(self, tier: str, operation_id: Optional[str] = None) -> None:
+    def record_set(self, tier: str, operation_id: str | None = None) -> None:
         """Record a cache set operation."""
         stats = self.get_stats(tier)
         stats.sets += 1
         self._record_operation_time(stats, operation_id)
 
-    def record_delete(self, tier: str, operation_id: Optional[str] = None) -> None:
+    def record_delete(self, tier: str, operation_id: str | None = None) -> None:
         """Record a cache delete operation."""
         stats = self.get_stats(tier)
         stats.deletes += 1
@@ -130,7 +131,7 @@ class CacheMetrics:
         stats.cache_size = size
         stats.memory_usage_bytes = memory_bytes
 
-    def _record_operation_time(self, stats: CacheStats, operation_id: Optional[str]) -> None:
+    def _record_operation_time(self, stats: CacheStats, operation_id: str | None) -> None:
         """Record operation timing if available."""
         if operation_id and operation_id in self._operation_start_times:
             elapsed_ms = (time.time() - self._operation_start_times[operation_id]) * 1000
@@ -144,14 +145,14 @@ class CacheMetrics:
         summary = {}
         for tier, stats in self.stats_by_tier.items():
             summary[tier] = {
-               'hit_ratio': stats.hit_ratio,
-                'miss_ratio': stats.miss_ratio,
-                'total_operations': stats.hits + stats.misses + stats.sets + stats.deletes,
-                'avg_response_time_ms': stats.avg_response_time_ms,
-                'max_response_time_ms': stats.max_response_time_ms,
-                'cache_size': stats.cache_size,
-                'memory_usage_mb': stats.memory_usage_bytes / (1024 * 1024),
-                'evictions': stats.evictions
+                "hit_ratio": stats.hit_ratio,
+                "miss_ratio": stats.miss_ratio,
+                "total_operations": stats.hits + stats.misses + stats.sets + stats.deletes,
+                "avg_response_time_ms": stats.avg_response_time_ms,
+                "max_response_time_ms": stats.max_response_time_ms,
+                "cache_size": stats.cache_size,
+                "memory_usage_mb": stats.memory_usage_bytes / (1024 * 1024),
+                "evictions": stats.evictions,
             }
         return summary
 
@@ -159,7 +160,7 @@ class CacheMetrics:
         """Check if it's time for automatic reporting."""
         if self.last_report_time is None:
             return True
-        return datetime.now(timezone.utc) - self.last_report_time > timedelta(seconds=self.report_interval)
+        return datetime.now(UTC) - self.last_report_time > timedelta(seconds=self.report_interval)
 
     def report_metrics(self) -> None:
         """Log current metrics summary."""
@@ -171,16 +172,16 @@ class CacheMetrics:
             _logger.info(
                 "Cache metrics [%s]: hit_ratio=%.3f, ops=%d, avg_time=%.2fms, size=%d, evictions=%d",
                 tier,
-                metrics['hit_ratio'],
-                metrics['total_operations'],
-                metrics['avg_response_time_ms'],
-                metrics['cache_size'],
-                metrics['evictions']
+                metrics["hit_ratio"],
+                metrics["total_operations"],
+                metrics["avg_response_time_ms"],
+                metrics["cache_size"],
+                metrics["evictions"],
             )
 
-        self.last_report_time = datetime.now(timezone.utc)
+        self.last_report_time = datetime.now(UTC)
 
-    def reset_stats(self, tier: Optional[str] = None) -> None:
+    def reset_stats(self, tier: str | None = None) -> None:
         """Reset statistics for a specific tier or all tiers."""
         if tier:
             if tier in self.stats_by_tier:
@@ -211,7 +212,7 @@ class CacheMetrics:
 
 
 # Global metrics instance
-_global_metrics: Optional[CacheMetrics] = None
+_global_metrics: CacheMetrics | None = None
 
 
 def get_cache_metrics() -> CacheMetrics:

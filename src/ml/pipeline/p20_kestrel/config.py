@@ -52,7 +52,7 @@ ACTIVISTS_JSON = PROJECT_ROOT / "config" / "pipeline" / "activists.json"
 # Sentiment staleness thresholds (days) — used by sentiment_aggregator.py
 # ---------------------------------------------------------------------------
 STALENESS_DAYS: dict[str, int] = {
-    "social": 3,    # stocktwits / reddit / apewisdom
+    "social": 3,  # stocktwits / reddit / apewisdom
     "gdelt": 2,
     "trends": 10,
     "av_news": 3,

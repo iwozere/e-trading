@@ -12,9 +12,10 @@ Verifies:
 import sys
 import warnings
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
-import pandas as pd
+from unittest.mock import MagicMock, patch
+
 import numpy as np
+import pandas as pd
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
@@ -26,17 +27,21 @@ if str(PROJECT_ROOT) not in sys.path:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_ohlcv(n: int = 100, freq: str = "15min") -> pd.DataFrame:
     idx = pd.date_range("2023-01-01", periods=n, freq=freq, tz="UTC")
     rng = np.random.default_rng(0)
     close = 100 + rng.standard_normal(n).cumsum()
-    df = pd.DataFrame({
-        "open": close - 0.1,
-        "high": close + 0.2,
-        "low": close - 0.2,
-        "close": close,
-        "volume": rng.integers(1000, 5000, size=n).astype(float),
-    }, index=idx)
+    df = pd.DataFrame(
+        {
+            "open": close - 0.1,
+            "high": close + 0.2,
+            "low": close - 0.2,
+            "close": close,
+            "volume": rng.integers(1000, 5000, size=n).astype(float),
+        },
+        index=idx,
+    )
     return df
 
 
@@ -44,13 +49,16 @@ def _make_anchor(n: int = 30, freq: str = "1h") -> pd.DataFrame:
     idx = pd.date_range("2023-01-01", periods=n, freq=freq, tz="UTC")
     rng = np.random.default_rng(42)
     close = 100 + rng.standard_normal(n).cumsum()
-    df = pd.DataFrame({
-        "open": close - 0.2,
-        "high": close + 0.3,
-        "low": close - 0.3,
-        "close": close,
-        "volume": rng.integers(2000, 8000, size=n).astype(float),
-    }, index=idx)
+    df = pd.DataFrame(
+        {
+            "open": close - 0.2,
+            "high": close + 0.3,
+            "low": close - 0.3,
+            "close": close,
+            "volume": rng.integers(2000, 8000, size=n).astype(float),
+        },
+        index=idx,
+    )
     return df
 
 
@@ -58,11 +66,13 @@ def _make_anchor(n: int = 30, freq: str = "1h") -> pd.DataFrame:
 # 1. merge_mtf() look-ahead safety
 # ---------------------------------------------------------------------------
 
+
 class TestMergeMtfLookaheadSafety:
     """merge_mtf must never let an execution bar see its own anchor bar's close."""
 
     def test_anchor_columns_are_present_after_merge(self):
         from src.ml.pipeline.p07_combined.data_loader import P07DataLoader
+
         loader = P07DataLoader()
         df_exec = _make_ohlcv(100, "15min")
         df_anchor = _make_anchor(30, "1h")
@@ -75,6 +85,7 @@ class TestMergeMtfLookaheadSafety:
     def test_first_execution_bar_has_nan_anchor(self):
         """Because anchor is shifted by 1 bar, the very first row must be NaN."""
         from src.ml.pipeline.p07_combined.data_loader import P07DataLoader
+
         loader = P07DataLoader()
         df_exec = _make_ohlcv(100, "15min")
         df_anchor = _make_anchor(30, "1h")
@@ -92,6 +103,7 @@ class TestMergeMtfLookaheadSafety:
         an anchor bar whose timestamp strictly < T (after 1-bar shift).
         """
         from src.ml.pipeline.p07_combined.data_loader import P07DataLoader
+
         loader = P07DataLoader()
         df_exec = _make_ohlcv(120, "15min")
         df_anchor = _make_anchor(40, "1h")
@@ -116,8 +128,8 @@ class TestMergeMtfLookaheadSafety:
 # 2. P07Pipeline uses get_mtf_dataset when enable_mtf=True
 # ---------------------------------------------------------------------------
 
-class TestP07PipelineMtfFlag:
 
+class TestP07PipelineMtfFlag:
     def test_load_dataset_calls_get_mtf_dataset_when_enabled(self):
         from src.ml.pipeline.p07_combined.pipeline import P07Pipeline
 
@@ -155,13 +167,14 @@ class TestP07PipelineMtfFlag:
 # 3. build_features enable_mtf flag
 # ---------------------------------------------------------------------------
 
-class TestBuildFeaturesEnableMtf:
 
+class TestBuildFeaturesEnableMtf:
     def _base_df(self, n: int = 80) -> pd.DataFrame:
         return _make_ohlcv(n)
 
     def test_mtf_disabled_produces_no_anchor_columns(self):
         from src.ml.pipeline.p07_combined.features import build_features
+
         df = self._base_df()
         X = build_features(df, {}, enable_mtf=False)
 
@@ -171,6 +184,7 @@ class TestBuildFeaturesEnableMtf:
     def test_mtf_enabled_without_anchor_data_uses_placeholders(self):
         """When anchor columns are absent, MTF adds placeholder zeros."""
         from src.ml.pipeline.p07_combined.features import build_features
+
         df = self._base_df()
         X = build_features(df, {}, enable_mtf=True)
 
@@ -183,8 +197,8 @@ class TestBuildFeaturesEnableMtf:
 
     def test_mtf_enabled_with_anchor_data_computes_real_features(self):
         """When anchor columns exist, MTF features are non-trivial."""
-        from src.ml.pipeline.p07_combined.features import build_features
         from src.ml.pipeline.p07_combined.data_loader import P07DataLoader
+        from src.ml.pipeline.p07_combined.features import build_features
 
         df_exec = _make_ohlcv(120, "15min")
         df_anchor = _make_anchor(40, "1h")
@@ -203,12 +217,13 @@ class TestBuildFeaturesEnableMtf:
 # 4. P08Pipeline deprecation shim
 # ---------------------------------------------------------------------------
 
-class TestP08PipelineDeprecationShim:
 
+class TestP08PipelineDeprecationShim:
     def test_p08_pipeline_emits_deprecation_warning(self):
         with pytest.warns(DeprecationWarning, match="P08Pipeline is deprecated"):
             with patch("src.ml.pipeline.p08_mtf.pipeline.P07Pipeline"):
                 from src.ml.pipeline.p08_mtf.pipeline import P08Pipeline
+
                 P08Pipeline()
 
     def test_p08_pipeline_run_batch_delegates_to_p07(self):
@@ -218,6 +233,7 @@ class TestP08PipelineDeprecationShim:
             warnings.simplefilter("ignore", DeprecationWarning)
             with patch("src.ml.pipeline.p08_mtf.pipeline.P07Pipeline", return_value=mock_delegate):
                 from src.ml.pipeline.p08_mtf.pipeline import P08Pipeline
+
                 p = P08Pipeline()
                 fake_files = [Path("BTC_15m_20230101_20231231.csv")]
                 p.run_batch(fake_files, train_years=["2023"])
@@ -236,6 +252,7 @@ class TestP08PipelineDeprecationShim:
             warnings.simplefilter("ignore", DeprecationWarning)
             with patch("src.ml.pipeline.p08_mtf.pipeline.P07Pipeline", side_effect=fake_p07):
                 from src.ml.pipeline.p08_mtf.pipeline import P08Pipeline
+
                 P08Pipeline()
 
         assert captured_kwargs.get("enable_mtf") is True, (

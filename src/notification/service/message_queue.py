@@ -5,21 +5,21 @@ Database-backed message queue with priority handling, validation, and scheduling
 Provides reliable message storage and retrieval for the notification service.
 """
 
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta, timezone
-from enum import Enum
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any, Dict, List
 
-from src.data.db.models.model_notification import (
-    Message, MessagePriority, MessageStatus
-)
+from src.data.db.models.model_notification import Message, MessagePriority, MessageStatus
 from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
 
 
 class QueuePriority(Enum):
     """Queue priority levels."""
+
     CRITICAL = 1
     HIGH = 2
     NORMAL = 3
@@ -29,21 +29,22 @@ class QueuePriority(Enum):
 @dataclass
 class QueuedMessage:
     """Queued message data structure."""
+
     id: int
     message_type: str
     priority: MessagePriority
     channels: List[str]
-    recipient_id: Optional[str]
-    template_name: Optional[str]
+    recipient_id: str | None
+    template_name: str | None
     content: Dict[str, Any]
-    metadata: Optional[Dict[str, Any]]
+    metadata: Dict[str, Any] | None
     scheduled_for: datetime
     retry_count: int
     max_retries: int
     created_at: datetime
 
     @classmethod
-    def from_db_message(cls, message: Message) -> 'QueuedMessage':
+    def from_db_message(cls, message: Message) -> "QueuedMessage":
         """
         Create QueuedMessage from database Message.
 
@@ -65,7 +66,7 @@ class QueuedMessage:
             scheduled_for=message.scheduled_for,
             retry_count=message.retry_count,
             max_retries=message.max_retries,
-            created_at=message.created_at
+            created_at=message.created_at,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -82,7 +83,7 @@ class QueuedMessage:
             "scheduled_for": self.scheduled_for.isoformat(),
             "retry_count": self.retry_count,
             "max_retries": self.max_retries,
-            "created_at": self.created_at.isoformat()
+            "created_at": self.created_at.isoformat(),
         }
 
     @property
@@ -102,7 +103,7 @@ class QueuedMessage:
             MessagePriority.CRITICAL: 1,
             MessagePriority.HIGH: 2,
             MessagePriority.NORMAL: 3,
-            MessagePriority.LOW: 4
+            MessagePriority.LOW: 4,
         }
         return priority_map.get(self.priority, 3)
 
@@ -123,7 +124,7 @@ class MessageQueue:
         self,
         message_data: Dict[str, Any],
         priority: MessagePriority = MessagePriority.NORMAL,
-        scheduled_for: Optional[datetime] = None
+        scheduled_for: datetime | None = None,
     ) -> int:
         """
         Enqueue a message for processing.
@@ -145,15 +146,13 @@ class MessageQueue:
 
             # Set default scheduled time
             if scheduled_for is None:
-                scheduled_for = datetime.now(timezone.utc)
+                scheduled_for = datetime.now(UTC)
 
             # Prepare message for database
             db_message_data = message_data.copy()
-            db_message_data.update({
-                'priority': priority.value,
-                'scheduled_for': scheduled_for,
-                'status': MessageStatus.PENDING.value
-            })
+            db_message_data.update(
+                {"priority": priority.value, "scheduled_for": scheduled_for, "status": MessageStatus.PENDING.value}
+            )
 
             # Store in database
             db_service = get_database_service()
@@ -162,8 +161,7 @@ class MessageQueue:
                 message_id = message.id
 
             self._logger.info(
-                "Message %s enqueued with priority %s, scheduled for %s",
-                message_id, priority.value, scheduled_for
+                "Message %s enqueued with priority %s, scheduled for %s", message_id, priority.value, scheduled_for
             )
 
             return message_id
@@ -173,10 +171,7 @@ class MessageQueue:
             raise
 
     def dequeue(
-        self,
-        limit: int = 10,
-        priority_filter: Optional[MessagePriority] = None,
-        channels: Optional[List[str]] = None
+        self, limit: int = 10, priority_filter: MessagePriority | None = None, channels: List[str] | None = None
     ) -> List[QueuedMessage]:
         """
         Dequeue messages ready for processing.
@@ -190,36 +185,29 @@ class MessageQueue:
             List of QueuedMessage objects
         """
         try:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
 
             db_service = get_database_service()
             with db_service.uow() as r:
                 # Get pending messages
                 messages = r.notifications.messages.get_pending_messages(
-                    current_time=current_time,
-                    priority=priority_filter,
-                    channels=channels,
-                    limit=limit
+                    current_time=current_time, priority=priority_filter, channels=channels, limit=limit
                 )
 
                 # Mark messages as processing
                 queued_messages = []
                 for message in messages:
                     # Update status to processing
-                    r.notifications.messages.update_message(message.id, {
-                        'status': MessageStatus.PROCESSING.value,
-                        'processed_at': current_time
-                    })
+                    r.notifications.messages.update_message(
+                        message.id, {"status": MessageStatus.PROCESSING.value, "processed_at": current_time}
+                    )
 
                     # Convert to QueuedMessage
                     queued_message = QueuedMessage.from_db_message(message)
                     queued_messages.append(queued_message)
 
                 if queued_messages:
-                    self._logger.info(
-                        "Dequeued %s messages for processing",
-                        len(queued_messages)
-                    )
+                    self._logger.info("Dequeued %s messages for processing", len(queued_messages))
 
                 return queued_messages
 
@@ -227,7 +215,7 @@ class MessageQueue:
             self._logger.exception("Failed to dequeue messages:")
             raise
 
-    def dequeue_high_priority(self, limit: int = 5, channels: Optional[List[str]] = None) -> List[QueuedMessage]:
+    def dequeue_high_priority(self, limit: int = 5, channels: List[str] | None = None) -> List[QueuedMessage]:
         """
         Dequeue only high priority messages (HIGH and CRITICAL).
 
@@ -239,7 +227,7 @@ class MessageQueue:
             List of high priority QueuedMessage objects
         """
         try:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
 
             db_service = get_database_service()
             with db_service.uow() as r:
@@ -248,10 +236,7 @@ class MessageQueue:
 
                 # Get CRITICAL messages first
                 critical_messages = r.notifications.messages.get_pending_messages(
-                    current_time=current_time,
-                    priority=MessagePriority.CRITICAL,
-                    channels=channels,
-                    limit=limit
+                    current_time=current_time, priority=MessagePriority.CRITICAL, channels=channels, limit=limit
                 )
                 high_priority_messages.extend(critical_messages)
 
@@ -262,26 +247,22 @@ class MessageQueue:
                         current_time=current_time,
                         priority=MessagePriority.HIGH,
                         channels=channels,
-                        limit=remaining_limit
+                        limit=remaining_limit,
                     )
                     high_priority_messages.extend(high_messages)
 
                 # Mark messages as processing and convert
                 queued_messages = []
                 for message in high_priority_messages:
-                    r.notifications.messages.update_message(message.id, {
-                        'status': MessageStatus.PROCESSING.value,
-                        'processed_at': current_time
-                    })
+                    r.notifications.messages.update_message(
+                        message.id, {"status": MessageStatus.PROCESSING.value, "processed_at": current_time}
+                    )
 
                     queued_message = QueuedMessage.from_db_message(message)
                     queued_messages.append(queued_message)
 
                 if queued_messages:
-                    self._logger.info(
-                        "Dequeued %s high priority messages",
-                        len(queued_messages)
-                    )
+                    self._logger.info("Dequeued %s high priority messages", len(queued_messages))
 
                 return queued_messages
 
@@ -289,11 +270,7 @@ class MessageQueue:
             self._logger.exception("Failed to dequeue high priority messages:")
             raise
 
-    def dequeue_for_retry(
-        self,
-        limit: int = 20,
-        retry_delay_minutes: int = 5
-    ) -> List[QueuedMessage]:
+    def dequeue_for_retry(self, limit: int = 20, retry_delay_minutes: int = 5) -> List[QueuedMessage]:
         """
         Dequeue failed messages that are ready for retry.
 
@@ -305,26 +282,27 @@ class MessageQueue:
             List of QueuedMessage objects ready for retry
         """
         try:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
 
             db_service = get_database_service()
             with db_service.uow() as r:
                 # Get failed messages ready for retry
                 messages = r.notifications.messages.get_failed_messages_for_retry(
-                    current_time=current_time,
-                    retry_delay_minutes=retry_delay_minutes,
-                    limit=limit
+                    current_time=current_time, retry_delay_minutes=retry_delay_minutes, limit=limit
                 )
 
                 # Mark messages as processing and increment retry count
                 queued_messages = []
                 for message in messages:
-                    r.notifications.messages.update_message(message.id, {
-                        'status': MessageStatus.PROCESSING.value,
-                        'retry_count': message.retry_count + 1,
-                        'processed_at': current_time,
-                        'last_error': None  # Clear previous error
-                    })
+                    r.notifications.messages.update_message(
+                        message.id,
+                        {
+                            "status": MessageStatus.PROCESSING.value,
+                            "retry_count": message.retry_count + 1,
+                            "processed_at": current_time,
+                            "last_error": None,  # Clear previous error
+                        },
+                    )
 
                     # Refresh message to get updated retry count
                     updated_message = r.notifications.messages.get_message(message.id)
@@ -332,10 +310,7 @@ class MessageQueue:
                     queued_messages.append(queued_message)
 
                 if queued_messages:
-                    self._logger.info(
-                        "Dequeued %s messages for retry",
-                        len(queued_messages)
-                    )
+                    self._logger.info("Dequeued %s messages for retry", len(queued_messages))
 
                 return queued_messages
 
@@ -356,10 +331,9 @@ class MessageQueue:
         try:
             db_service = get_database_service()
             with db_service.uow() as r:
-                message = r.notifications.messages.update_message(message_id, {
-                    'status': MessageStatus.DELIVERED.value,
-                    'processed_at': datetime.now(timezone.utc)
-                })
+                message = r.notifications.messages.update_message(
+                    message_id, {"status": MessageStatus.DELIVERED.value, "processed_at": datetime.now(UTC)}
+                )
 
                 if message:
                     self._logger.info("Message %s marked as delivered", message_id)
@@ -386,17 +360,17 @@ class MessageQueue:
         try:
             db_service = get_database_service()
             with db_service.uow() as r:
-                message = r.notifications.messages.update_message(message_id, {
-                    'status': MessageStatus.FAILED.value,
-                    'last_error': error_message,
-                    'processed_at': datetime.now(timezone.utc)
-                })
+                message = r.notifications.messages.update_message(
+                    message_id,
+                    {
+                        "status": MessageStatus.FAILED.value,
+                        "last_error": error_message,
+                        "processed_at": datetime.now(UTC),
+                    },
+                )
 
                 if message:
-                    self._logger.warning(
-                        "Message %s marked as failed: %s",
-                        message_id, error_message
-                    )
+                    self._logger.warning("Message %s marked as failed: %s", message_id, error_message)
                     return True
                 else:
                     self._logger.warning("Message %s not found for failure update", message_id)
@@ -420,31 +394,32 @@ class MessageQueue:
 
                 # Count messages by status
                 for status in MessageStatus:
-                    count = r.s.query(Message).filter(
-                        Message.status == status.value
-                    ).count()
+                    count = r.s.query(Message).filter(Message.status == status.value).count()
                     stats[f"{status.value.lower()}_count"] = count
 
                 # Count messages by priority
                 for priority in MessagePriority:
-                    count = r.s.query(Message).filter(
-                        Message.priority == priority.value
-                    ).count()
+                    count = r.s.query(Message).filter(Message.priority == priority.value).count()
                     stats[f"{priority.value.lower()}_priority_count"] = count
 
                 # Count overdue messages
-                current_time = datetime.now(timezone.utc)
-                overdue_count = r.s.query(Message).filter(
-                    Message.status == MessageStatus.PENDING.value,
-                    Message.scheduled_for < current_time - timedelta(minutes=5)
-                ).count()
+                current_time = datetime.now(UTC)
+                overdue_count = (
+                    r.s.query(Message)
+                    .filter(
+                        Message.status == MessageStatus.PENDING.value,
+                        Message.scheduled_for < current_time - timedelta(minutes=5),
+                    )
+                    .count()
+                )
                 stats["overdue_count"] = overdue_count
 
                 # Count retry-eligible messages
-                retry_eligible_count = r.s.query(Message).filter(
-                    Message.status == MessageStatus.FAILED.value,
-                    Message.retry_count < Message.max_retries
-                ).count()
+                retry_eligible_count = (
+                    r.s.query(Message)
+                    .filter(Message.status == MessageStatus.FAILED.value, Message.retry_count < Message.max_retries)
+                    .count()
+                )
                 stats["retry_eligible_count"] = retry_eligible_count
 
                 return stats
@@ -463,39 +438,39 @@ class MessageQueue:
         Raises:
             ValueError: If message data is invalid
         """
-        required_fields = ['message_type', 'channels', 'content']
+        required_fields = ["message_type", "channels", "content"]
 
         for field in required_fields:
             if field not in message_data:
                 raise ValueError(f"Missing required field: {field}")
 
         # Validate message_type
-        if not isinstance(message_data['message_type'], str) or not message_data['message_type'].strip():
+        if not isinstance(message_data["message_type"], str) or not message_data["message_type"].strip():
             raise ValueError("message_type must be a non-empty string")
 
         # Validate channels
-        if not isinstance(message_data['channels'], list) or not message_data['channels']:
+        if not isinstance(message_data["channels"], list) or not message_data["channels"]:
             raise ValueError("channels must be a non-empty list")
 
-        for channel in message_data['channels']:
+        for channel in message_data["channels"]:
             if not isinstance(channel, str) or not channel.strip():
                 raise ValueError("All channels must be non-empty strings")
 
         # Validate content
-        if not isinstance(message_data['content'], dict):
+        if not isinstance(message_data["content"], dict):
             raise ValueError("content must be a dictionary")
 
         # Validate optional fields
-        if 'recipient_id' in message_data and message_data['recipient_id'] is not None:
-            if not isinstance(message_data['recipient_id'], str):
+        if "recipient_id" in message_data and message_data["recipient_id"] is not None:
+            if not isinstance(message_data["recipient_id"], str):
                 raise ValueError("recipient_id must be a string")
 
-        if 'template_name' in message_data and message_data['template_name'] is not None:
-            if not isinstance(message_data['template_name'], str):
+        if "template_name" in message_data and message_data["template_name"] is not None:
+            if not isinstance(message_data["template_name"], str):
                 raise ValueError("template_name must be a string")
 
-        if 'message_metadata' in message_data and message_data['message_metadata'] is not None:
-            if not isinstance(message_data['message_metadata'], dict):
+        if "message_metadata" in message_data and message_data["message_metadata"] is not None:
+            if not isinstance(message_data["message_metadata"], dict):
                 raise ValueError("message_metadata must be a dictionary")
 
     def sanitize_message_content(self, content: Dict[str, Any]) -> Dict[str, Any]:
@@ -508,13 +483,15 @@ class MessageQueue:
         Returns:
             Sanitized content dictionary
         """
+
         def sanitize_value(value):
             """Recursively sanitize values."""
             if isinstance(value, str):
                 # Basic HTML/script tag removal
                 import re
-                value = re.sub(r'<script[^>]*>.*?</script>', '', value, flags=re.IGNORECASE | re.DOTALL)
-                value = re.sub(r'<[^>]+>', '', value)  # Remove HTML tags
+
+                value = re.sub(r"<script[^>]*>.*?</script>", "", value, flags=re.IGNORECASE | re.DOTALL)
+                value = re.sub(r"<[^>]+>", "", value)  # Remove HTML tags
                 return value.strip()
             elif isinstance(value, dict):
                 return {k: sanitize_value(v) for k, v in value.items()}

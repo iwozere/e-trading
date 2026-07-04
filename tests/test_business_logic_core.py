@@ -11,12 +11,11 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
-import pytest
 from unittest.mock import Mock
-from tests.fixtures.service_fixtures import (
-    setup_indicator_data_in_mock, create_parsed_command,
-    simulate_database_error
-)
+
+import pytest
+
+from tests.fixtures.service_fixtures import create_parsed_command, setup_indicator_data_in_mock, simulate_database_error
 
 
 class TestTelegramBusinessLogicCore:
@@ -125,7 +124,7 @@ class TestTelegramBusinessLogicCore:
             "verified": True,
             "email": "test@example.com",
             "language": "en",
-            "is_admin": False
+            "is_admin": False,
         }
         telegram_service_mock.add_test_user("test_user", **user_data)
 
@@ -182,9 +181,12 @@ class TestTelegramBusinessLogicCore:
         # Setup rate limit exceeded by adding verification codes to the mock
         # Simulate 6 codes sent in the last hour
         import time
+
         current_time = int(time.time())
         for i in range(6):
-            telegram_service_mock.verification_codes.setdefault("test_user", []).append(current_time - 300)  # 5 minutes ago
+            telegram_service_mock.verification_codes.setdefault("test_user", []).append(
+                current_time - 300
+            )  # 5 minutes ago
 
         register_command = create_parsed_command("register", "test_user", email="test@example.com")
         result = business_logic.handle_register(register_command)
@@ -198,13 +200,14 @@ class TestTelegramBusinessLogicCore:
 
         # Setup user with verification code
         import time
+
         current_time = int(time.time())
         user_data = {
             "approved": False,
             "verified": False,
             "email": "test@example.com",
             "verification_code": "123456",
-            "code_sent_time": current_time - 300  # 5 minutes ago
+            "code_sent_time": current_time - 300,  # 5 minutes ago
         }
         telegram_service_mock.add_test_user("test_user", **user_data)
         telegram_service_mock.configure_response("verify_user_email", True)
@@ -224,13 +227,14 @@ class TestTelegramBusinessLogicCore:
 
         # Setup user with different verification code
         import time
+
         current_time = int(time.time())
         user_data = {
             "approved": False,
             "verified": False,
             "email": "test@example.com",
             "verification_code": "123456",
-            "code_sent_time": current_time - 300
+            "code_sent_time": current_time - 300,
         }
         telegram_service_mock.add_test_user("test_user", **user_data)
 
@@ -246,13 +250,14 @@ class TestTelegramBusinessLogicCore:
 
         # Setup user with expired verification code
         import time
+
         current_time = int(time.time())
         user_data = {
             "approved": False,
             "verified": False,
             "email": "test@example.com",
             "verification_code": "123456",
-            "code_sent_time": current_time - 3700  # Over 1 hour ago
+            "code_sent_time": current_time - 3700,  # Over 1 hour ago
         }
         telegram_service_mock.add_test_user("test_user", **user_data)
 
@@ -337,10 +342,7 @@ class TestTelegramBusinessLogicCore:
         telegram_service_mock.add_test_user("test_user", approved=True)
 
         result = business_logic.safe_telegram_service_call(
-            telegram_service_mock.get_user_status,
-            "get_user_status",
-            "test_context",
-            "test_user"
+            telegram_service_mock.get_user_status, "get_user_status", "test_context", "test_user"
         )
 
         assert result is not None
@@ -353,6 +355,7 @@ class TestTelegramBusinessLogicCore:
 
         # Configure to fail first time, succeed second time
         call_count = 0
+
         def side_effect(*args, **kwargs):
             nonlocal call_count
             call_count += 1
@@ -363,10 +366,7 @@ class TestTelegramBusinessLogicCore:
         telegram_service_mock.get_user_status = Mock(side_effect=side_effect)
 
         result = business_logic.safe_telegram_service_call(
-            telegram_service_mock.get_user_status,
-            "get_user_status",
-            "test_context",
-            "test_user"
+            telegram_service_mock.get_user_status, "get_user_status", "test_context", "test_user"
         )
 
         assert result is not None
@@ -383,10 +383,7 @@ class TestTelegramBusinessLogicCore:
 
         with pytest.raises(ValueError, match="Invalid parameters"):
             business_logic.safe_telegram_service_call(
-                telegram_service_mock.add_alert,
-                "add_alert",
-                "test_context",
-                "test_user", "AAPL", 150.0, "above"
+                telegram_service_mock.add_alert, "add_alert", "test_context", "test_user", "AAPL", 150.0, "above"
             )
 
     @pytest.mark.asyncio
@@ -394,23 +391,17 @@ class TestTelegramBusinessLogicCore:
         """Test successful indicator service call wrapper."""
         business_logic, _, indicator_service_mock = business_logic_with_mocks
 
-        setup_indicator_data_in_mock(
-            indicator_service_mock,
-            "AAPL",
-            technical_indicators={"RSI": 65.5}
-        )
+        setup_indicator_data_in_mock(indicator_service_mock, "AAPL", technical_indicators={"RSI": 65.5})
 
         from src.indicators.models import TickerIndicatorsRequest
+
         request = TickerIndicatorsRequest(ticker="AAPL", indicators=["RSI"])
 
         result = await business_logic.safe_indicator_service_call(
-            indicator_service_mock.compute_for_ticker,
-            "compute_for_ticker",
-            "test_context",
-            request
+            indicator_service_mock.compute_for_ticker, "compute_for_ticker", "test_context", request
         )
 
-        assert hasattr(result, 'technical')
+        assert hasattr(result, "technical")
         assert "RSI" in result.technical
 
     @pytest.mark.asyncio
@@ -420,6 +411,7 @@ class TestTelegramBusinessLogicCore:
 
         # Configure to fail with retryable error first, then succeed
         call_count = 0
+
         async def side_effect(*args, **kwargs):
             nonlocal call_count
             call_count += 1
@@ -427,6 +419,7 @@ class TestTelegramBusinessLogicCore:
                 raise ConnectionError("Network timeout")
             # Return success result
             from src.indicators.models import IndicatorResultSet, IndicatorValue
+
             return IndicatorResultSet(ticker="AAPL", technical={"RSI": IndicatorValue("RSI", 65.5)}, fundamental={})
 
         # Replace the mock method with our side effect
@@ -434,17 +427,15 @@ class TestTelegramBusinessLogicCore:
         indicator_service_mock.compute_for_ticker = side_effect
 
         from src.indicators.models import TickerIndicatorsRequest
+
         request = TickerIndicatorsRequest(ticker="AAPL", indicators=["RSI"])
 
         result = await business_logic.safe_indicator_service_call(
-            indicator_service_mock.compute_for_ticker,
-            "compute_for_ticker",
-            "test_context",
-            request
+            indicator_service_mock.compute_for_ticker, "compute_for_ticker", "test_context", request
         )
 
         # Check if we got a successful result or error dict
-        if hasattr(result, 'technical'):
+        if hasattr(result, "technical"):
             # Success case
             assert call_count == 2  # Should have retried once
         else:
@@ -461,13 +452,11 @@ class TestTelegramBusinessLogicCore:
         indicator_service_mock.configure_error("compute_for_ticker", ValueError("Invalid ticker"))
 
         from src.indicators.models import TickerIndicatorsRequest
+
         request = TickerIndicatorsRequest(ticker="INVALID", indicators=["RSI"])
 
         result = await business_logic.safe_indicator_service_call(
-            indicator_service_mock.compute_for_ticker,
-            "compute_for_ticker",
-            "test_context",
-            request
+            indicator_service_mock.compute_for_ticker, "compute_for_ticker", "test_context", request
         )
 
         # Should return error dict instead of raising

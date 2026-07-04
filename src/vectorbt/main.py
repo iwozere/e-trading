@@ -11,30 +11,29 @@ Orchestrates the entire vectorbt optimization pipeline:
 5. Strategy promotion
 """
 
-import sys
 import argparse
 import os
+import sys
 from pathlib import Path
-from typing import Optional, List, Union
-from datetime import datetime
+from typing import List
 
 # Add project root to sys.path to allow absolute imports from 'src'
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.notification.logger import setup_logger, setup_multiprocessing_logging
 from src.vectorbt.pipeline.manager import StudyManager
 from src.vectorbt.tools.promoter import StrategyPromoter
-from src.notification.logger import setup_logger, setup_multiprocessing_logging
 
 # -----------------------------------------------------------------------------
 # DEBUG CONFIGURATION (VS CODE)
 # -----------------------------------------------------------------------------
 # This section allows running and debugging from VS Code (F5) without manually
 # entering CLI arguments. These will be used if CLI arguments are omitted.
-DEBUG_MODE = True # Set to False for production use
+DEBUG_MODE = True  # Set to False for production use
 DEFAULT_INTERVALS = "4h,1h,30min,15min,5min"  # Comma-separated
-DEFAULT_SYMBOLS = "BTC,XRP,LTC,ETH"   # Comma-separated
+DEFAULT_SYMBOLS = "BTC,XRP,LTC,ETH"  # Comma-separated
 DEFAULT_TRIALS = 200
 DEFAULT_STRATEGY = "src/vectorbt/configs/triple-filter-trend-rider.json"
 DEFAULT_BATCH = True
@@ -52,12 +51,13 @@ CLI_DEFAULT_MIN_TRADES = 20
 # Initialize component-level logger
 _logger = setup_logger("vectorbt_pipeline")
 
+
 def run_optimization(
     interval: str,
     n_trials: int = 100,
-    n_jobs: Optional[int] = None,
-    study_name: Optional[str] = None,
-    symbols: Optional[List[str]] = None,
+    n_jobs: int | None = None,
+    study_name: str | None = None,
+    symbols: List[str] | None = None,
     strategy_path: str = DEFAULT_STRATEGY,
     strategy_name: str = "triple-filter-trend-rider",
 ):
@@ -94,13 +94,9 @@ def promote_strategies(
     """
     Promote top strategies from SQLite to PostgreSQL.
     """
-    promoter = StrategyPromoter(
-        min_calmar=min_calmar, max_drawdown=max_drawdown, min_trades=min_trades
-    )
+    promoter = StrategyPromoter(min_calmar=min_calmar, max_drawdown=max_drawdown, min_trades=min_trades)
 
-    promoted_ids = promoter.promote_top_trials(
-        study_name=study_name, top_n=top_n, user_id=user_id
-    )
+    promoted_ids = promoter.promote_top_trials(study_name=study_name, top_n=top_n, user_id=user_id)
 
     if not promoted_ids:
         _logger.warning(f"No strategies were promoted from {study_name}")
@@ -136,7 +132,10 @@ def main():
     # Optimize command
     optimize_parser = subparsers.add_parser("optimize", help="Run optimization study")
     optimize_parser.add_argument(
-        "--interval", type=str, default=DEFAULT_INTERVALS, help=f"Data interval(s), comma-separated (default: {DEFAULT_INTERVALS})"
+        "--interval",
+        type=str,
+        default=DEFAULT_INTERVALS,
+        help=f"Data interval(s), comma-separated (default: {DEFAULT_INTERVALS})",
     )
     optimize_parser.add_argument(
         "--trials", type=int, default=DEFAULT_TRIALS, help=f"Number of trials (default: {DEFAULT_TRIALS})"
@@ -145,11 +144,12 @@ def main():
         "--jobs", type=int, default=DEFAULT_JOBS, help=f"Number of parallel jobs (default: {DEFAULT_JOBS})"
     )
     optimize_parser.add_argument(
-        "--symbols", type=str, default=DEFAULT_SYMBOLS, help=f"Comma-separated symbols to optimize (default: {DEFAULT_SYMBOLS})"
+        "--symbols",
+        type=str,
+        default=DEFAULT_SYMBOLS,
+        help=f"Comma-separated symbols to optimize (default: {DEFAULT_SYMBOLS})",
     )
-    optimize_parser.add_argument(
-        "--study-name", type=str, default=None, help="Custom study name (default: auto)"
-    )
+    optimize_parser.add_argument("--study-name", type=str, default=None, help="Custom study name (default: auto)")
     optimize_parser.add_argument(
         "--auto-promote",
         action="store_true",
@@ -165,21 +165,23 @@ def main():
         "--strategy",
         type=str,
         default=DEFAULT_STRATEGY,
-        help=f"Path to strategy JSON config (default: {DEFAULT_STRATEGY})"
+        help=f"Path to strategy JSON config (default: {DEFAULT_STRATEGY})",
     )
 
     # Promote command
-    promote_parser = subparsers.add_parser(
-        "promote", help="Promote strategies to production"
+    promote_parser = subparsers.add_parser("promote", help="Promote strategies to production")
+    promote_parser.add_argument("study_name", type=str, help="Name of the study to promote from")
+    promote_parser.add_argument(
+        "--top-n",
+        type=int,
+        default=CLI_DEFAULT_TOP_N,
+        help=f"Number of top trials to promote (default: {CLI_DEFAULT_TOP_N})",
     )
     promote_parser.add_argument(
-        "study_name", type=str, help="Name of the study to promote from"
-    )
-    promote_parser.add_argument(
-        "--top-n", type=int, default=CLI_DEFAULT_TOP_N, help=f"Number of top trials to promote (default: {CLI_DEFAULT_TOP_N})"
-    )
-    promote_parser.add_argument(
-        "--user-id", type=int, default=CLI_DEFAULT_USER_ID, help=f"User ID to associate (default: {CLI_DEFAULT_USER_ID})"
+        "--user-id",
+        type=int,
+        default=CLI_DEFAULT_USER_ID,
+        help=f"User ID to associate (default: {CLI_DEFAULT_USER_ID})",
     )
     promote_parser.add_argument(
         "--min-calmar",
@@ -216,7 +218,9 @@ def main():
     _logger.info("Initializing Vectorbt Trading Pipeline CLI")
 
     # 1. Extract clean strategy name from path
-    strategy_name = os.path.basename(args.strategy).replace(".json", "") if hasattr(args, 'strategy') else "default_strategy"
+    strategy_name = (
+        os.path.basename(args.strategy).replace(".json", "") if hasattr(args, "strategy") else "default_strategy"
+    )
 
     # Execute command
     if args.command == "optimize":
@@ -277,6 +281,7 @@ def main():
 
     # Explicitly shutdown logging to ensure clean exit of background threads
     from src.notification.logger import shutdown_multiprocessing_logging
+
     shutdown_multiprocessing_logging()
 
 

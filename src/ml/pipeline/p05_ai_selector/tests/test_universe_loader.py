@@ -1,27 +1,28 @@
 """Tests for UniverseLoader."""
 
+import sys
 from pathlib import Path
 from unittest.mock import patch
-import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
-import pytest
 
-from src.ml.pipeline.p05_ai_selector.stages.universe_loader import UniverseLoader
 from src.ml.pipeline.p05_ai_selector.config import CRYPTO_TICKERS
+from src.ml.pipeline.p05_ai_selector.stages.universe_loader import UniverseLoader
 
 
 def _mock_russell_df() -> pd.DataFrame:
-    return pd.DataFrame({
-        "ticker": ["AAPL", "MSFT", "TSLA"],
-        "name": ["Apple", "Microsoft", "Tesla"],
-        "sector": ["Technology", "Technology", "Consumer Cyclical"],
-        "industry": ["Consumer Electronics", "Software", "Auto"],
-        "exchange": ["NASDAQ", "NASDAQ", "NASDAQ"],
-    })
+    return pd.DataFrame(
+        {
+            "ticker": ["AAPL", "MSFT", "TSLA"],
+            "name": ["Apple", "Microsoft", "Tesla"],
+            "sector": ["Technology", "Technology", "Consumer Cyclical"],
+            "industry": ["Consumer Electronics", "Software", "Auto"],
+            "exchange": ["NASDAQ", "NASDAQ", "NASDAQ"],
+        }
+    )
 
 
 class TestUniverseLoader:
@@ -46,13 +47,15 @@ class TestUniverseLoader:
 
     def test_no_duplicates(self):
         """Result contains no duplicate tickers."""
-        russell_df = pd.DataFrame({
-            "ticker": ["AAPL", "MSFT", "BTC-USD"],  # BTC-USD also in crypto list
-            "name": ["Apple", "Microsoft", "Bitcoin"],
-            "sector": ["Tech", "Tech", "Crypto"],
-            "industry": ["", "", ""],
-            "exchange": ["NASDAQ", "NASDAQ", ""],
-        })
+        russell_df = pd.DataFrame(
+            {
+                "ticker": ["AAPL", "MSFT", "BTC-USD"],  # BTC-USD also in crypto list
+                "name": ["Apple", "Microsoft", "Bitcoin"],
+                "sector": ["Tech", "Tech", "Crypto"],
+                "industry": ["", "", ""],
+                "exchange": ["NASDAQ", "NASDAQ", ""],
+            }
+        )
         with patch("src.ml.pipeline.p05_ai_selector.stages.universe_loader.Russell3000Downloader") as MockDl:
             MockDl.return_value.load.return_value = russell_df
             result = UniverseLoader().load()

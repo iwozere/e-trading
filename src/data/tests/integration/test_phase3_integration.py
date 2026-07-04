@@ -8,29 +8,30 @@ This script tests the advanced features implemented in Phase 3:
 """
 
 import sys
-from pathlib import Path
-from datetime import datetime
-import pandas as pd
-import numpy as np
 import time
+from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.data import (
-    get_advanced_cache,
-    configure_advanced_cache,
     # get_stream_multiplexer,  # Not implemented yet
     # create_stream_config,    # Not implemented yet
     LazyDataLoader,
     ParallelProcessor,
-    get_performance_monitor,
-    get_memory_optimizer,
-    get_data_compressor,
-    optimize_dataframe_performance,
-    compress_dataframe_efficiently,
     TimeBasedInvalidation,
-    VersionBasedInvalidation
+    VersionBasedInvalidation,
+    compress_dataframe_efficiently,
+    configure_advanced_cache,
+    get_advanced_cache,
+    get_data_compressor,
+    get_memory_optimizer,
+    get_performance_monitor,
+    optimize_dataframe_performance,
 )
 
 
@@ -40,25 +41,25 @@ def test_advanced_caching():
 
     try:
         # Create sample data
-        sample_data = pd.DataFrame({
-            'timestamp': pd.date_range('2024-01-01', periods=1000, freq='1h'),
-            'open': np.random.uniform(100, 200, 1000),
-            'high': np.random.uniform(200, 300, 1000),
-            'low': np.random.uniform(50, 100, 1000),
-            'close': np.random.uniform(100, 200, 1000),
-            'volume': np.random.uniform(1000, 10000, 1000)
-        })
+        sample_data = pd.DataFrame(
+            {
+                "timestamp": pd.date_range("2024-01-01", periods=1000, freq="1h"),
+                "open": np.random.uniform(100, 200, 1000),
+                "high": np.random.uniform(200, 300, 1000),
+                "low": np.random.uniform(50, 100, 1000),
+                "close": np.random.uniform(100, 200, 1000),
+                "volume": np.random.uniform(1000, 10000, 1000),
+            }
+        )
 
         # Configure advanced cache with invalidation strategies
         invalidation_strategies = [
             TimeBasedInvalidation(max_age_hours=1),
-            VersionBasedInvalidation(current_version="1.0.0")
+            VersionBasedInvalidation(current_version="1.0.0"),
         ]
 
         cache = configure_advanced_cache(
-            cache_dir="test_cache",
-            invalidation_strategies=invalidation_strategies,
-            compression_enabled=True
+            cache_dir="test_cache", invalidation_strategies=invalidation_strategies, compression_enabled=True
         )
 
         # Test caching
@@ -71,7 +72,9 @@ def test_advanced_caching():
 
         # Test metrics
         metrics = cache.get_metrics()
-        print(f"✓ Cache metrics: {metrics['advanced_metrics']['sets']} sets, {metrics['advanced_metrics']['hits']} hits")
+        print(
+            f"✓ Cache metrics: {metrics['advanced_metrics']['sets']} sets, {metrics['advanced_metrics']['hits']} hits"
+        )
 
         assert True  # Test passed
 
@@ -131,15 +134,17 @@ def test_performance_optimization():
 
     try:
         # Create large sample data
-        large_data = pd.DataFrame({
-            'timestamp': pd.date_range('2024-01-01', periods=100000, freq='1h'),
-            'open': np.random.uniform(100, 200, 100000),
-            'high': np.random.uniform(200, 300, 100000),
-            'low': np.random.uniform(50, 100, 100000),
-            'close': np.random.uniform(100, 200, 100000),
-            'volume': np.random.uniform(1000, 10000, 100000),
-            'category': np.random.choice(['A', 'B', 'C'], 100000)
-        })
+        large_data = pd.DataFrame(
+            {
+                "timestamp": pd.date_range("2024-01-01", periods=100000, freq="1h"),
+                "open": np.random.uniform(100, 200, 100000),
+                "high": np.random.uniform(200, 300, 100000),
+                "low": np.random.uniform(50, 100, 100000),
+                "close": np.random.uniform(100, 200, 100000),
+                "volume": np.random.uniform(1000, 10000, 100000),
+                "category": np.random.choice(["A", "B", "C"], 100000),
+            }
+        )
 
         # Test memory optimization
         optimizer = get_memory_optimizer()
@@ -153,7 +158,7 @@ def test_performance_optimization():
         # Test data compression
         compressor = get_data_compressor()
         compressed_data = compressor.compress_dataframe(large_data, format="parquet")
-        compression_ratio = len(compressed_data) / (initial_usage['total_mb'] * 1024 * 1024)
+        compression_ratio = len(compressed_data) / (initial_usage["total_mb"] * 1024 * 1024)
         print(f"✓ Data compression: {compression_ratio:.3f} ratio")
 
         # Test performance monitoring
@@ -163,7 +168,7 @@ def test_performance_optimization():
         # Simulate some work
         time.sleep(0.1)
 
-        monitor.end_operation(metrics, data_size_mb=initial_usage['total_mb'])
+        monitor.end_operation(metrics, data_size_mb=initial_usage["total_mb"])
         summary = monitor.get_summary()
         print(f"✓ Performance monitoring: {summary['test_optimization']['avg_duration_ms']:.1f}ms avg")
 
@@ -180,10 +185,12 @@ def test_lazy_loading():
 
     try:
         # Create a temporary CSV file for testing
-        test_data = pd.DataFrame({
-            'timestamp': pd.date_range('2024-01-01', periods=10000, freq='1h'),
-            'value': np.random.uniform(100, 200, 10000)
-        })
+        test_data = pd.DataFrame(
+            {
+                "timestamp": pd.date_range("2024-01-01", periods=10000, freq="1h"),
+                "value": np.random.uniform(100, 200, 10000),
+            }
+        )
 
         test_file = Path("test_lazy_data.csv")
         test_data.to_csv(test_file, index=False)
@@ -219,10 +226,9 @@ def test_parallel_processing():
 
     try:
         # Create sample data
-        sample_data = pd.DataFrame({
-            'value': np.random.uniform(100, 200, 10000),
-            'category': np.random.choice(['A', 'B', 'C'], 10000)
-        })
+        sample_data = pd.DataFrame(
+            {"value": np.random.uniform(100, 200, 10000), "category": np.random.choice(["A", "B", "C"], 10000)}
+        )
 
         # Create parallel processor
         processor = ParallelProcessor(max_workers=2, chunk_size=1000, use_processes=False)
@@ -231,8 +237,8 @@ def test_parallel_processing():
         def process_chunk(chunk):
             # Create a copy to avoid SettingWithCopyWarning
             chunk_copy = chunk.copy()
-            chunk_copy['processed_value'] = chunk_copy['value'] * 2
-            chunk_copy['processed_at'] = datetime.now().isoformat()
+            chunk_copy["processed_value"] = chunk_copy["value"] * 2
+            chunk_copy["processed_at"] = datetime.now().isoformat()
             return chunk_copy
 
         # Process data in parallel
@@ -256,11 +262,13 @@ def test_integration_features():
 
     try:
         # Create sample data
-        data = pd.DataFrame({
-            'timestamp': pd.date_range('2024-01-01', periods=5000, freq='1h'),
-            'price': np.random.uniform(100, 200, 5000),
-            'volume': np.random.uniform(1000, 10000, 5000)
-        })
+        data = pd.DataFrame(
+            {
+                "timestamp": pd.date_range("2024-01-01", periods=5000, freq="1h"),
+                "price": np.random.uniform(100, 200, 5000),
+                "volume": np.random.uniform(1000, 10000, 5000),
+            }
+        )
 
         # Test complete workflow: optimize -> compress -> cache
         monitor = get_performance_monitor()
@@ -306,7 +314,7 @@ def main():
         test_performance_optimization,
         test_lazy_loading,
         test_parallel_processing,
-        test_integration_features
+        test_integration_features,
     ]
 
     passed = 0

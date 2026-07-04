@@ -20,10 +20,10 @@ from src.ml.pipeline.p20_kestrel.pos.pos_commands import (
 )
 from src.ml.pipeline.p20_kestrel.risk.risk_checker import _check_position
 
-
 # ---------------------------------------------------------------------------
 # /pos add parse
 # ---------------------------------------------------------------------------
+
 
 def test_parse_add_defaults():
     """/pos add with no optional args applies default stop/T1/T2/trail."""
@@ -61,6 +61,7 @@ def test_parse_add_invalid_syntax_raises():
 # echo_card
 # ---------------------------------------------------------------------------
 
+
 def test_echo_card_contains_ticker_and_prices():
     """Echo card string includes ticker, entry, stop, and T1/T2."""
     pos = _parse_add("/pos add MSFT A 300 2.0")
@@ -74,13 +75,13 @@ def test_echo_card_contains_ticker_and_prices():
 # confirm_add
 # ---------------------------------------------------------------------------
 
+
 def test_confirm_add_inserts_position_and_updates_watchlist():
     """confirm_add() calls insert_position and upsert_watchlist with correct args."""
     pending = _parse_add("/pos add TSLA C 200 1.0")
 
     with (
-        patch("src.ml.pipeline.p20_kestrel.pos.pos_commands.insert_position",
-              return_value=42) as mock_insert,
+        patch("src.ml.pipeline.p20_kestrel.pos.pos_commands.insert_position", return_value=42) as mock_insert,
         patch("src.ml.pipeline.p20_kestrel.pos.pos_commands.upsert_watchlist") as mock_watchlist,
     ):
         confirmed = confirm_add(pending)
@@ -88,16 +89,19 @@ def test_confirm_add_inserts_position_and_updates_watchlist():
     assert confirmed["id"] == 42
     assert confirmed["status"] == "open"
     mock_insert.assert_called_once()
-    mock_watchlist.assert_called_once_with({
-        "ticker": "TSLA",
-        "sleeve": "C",
-        "state": "active_position",
-    })
+    mock_watchlist.assert_called_once_with(
+        {
+            "ticker": "TSLA",
+            "sleeve": "C",
+            "state": "active_position",
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
 # Full roundtrip: parse → confirm → risk_check
 # ---------------------------------------------------------------------------
+
 
 def test_pos_add_then_risk_check_stop_hit():
     """After confirm_add, risk_check correctly fires a stop_hit alert."""
@@ -148,10 +152,10 @@ def test_pos_add_then_risk_check_no_alert_in_range():
 # handle_command dispatch
 # ---------------------------------------------------------------------------
 
+
 def test_handle_command_list_empty():
     """'/pos list' returns 'No open positions.' when DB is empty."""
-    with patch("src.ml.pipeline.p20_kestrel.pos.pos_commands.get_open_positions",
-               return_value=[]):
+    with patch("src.ml.pipeline.p20_kestrel.pos.pos_commands.get_open_positions", return_value=[]):
         reply, data = handle_command("/pos list")
 
     assert "No open positions" in reply

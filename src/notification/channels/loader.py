@@ -10,8 +10,8 @@ import importlib.util
 import inspect
 import pkgutil
 import sys
-from typing import Dict, List, Optional, Type
 from pathlib import Path
+from typing import Dict, List, Type
 
 from src.notification.channels.base import NotificationChannel, channel_registry
 from src.notification.logger import setup_logger
@@ -54,13 +54,14 @@ class PluginLoader:
         # Look for plugins in the channels package
         try:
             import src.notification.channels as channels_package
+
             package_path = Path(channels_package.__file__).parent
 
             for module_info in pkgutil.iter_modules([str(package_path)]):
                 module_name = module_info.name
 
                 # Skip base modules and private modules
-                if module_name in ['base', 'loader', '__init__'] or module_name.startswith('_'):
+                if module_name in ["base", "loader", "__init__"] or module_name.startswith("_"):
                     continue
 
                 plugins.append(f"src.notification.channels.{module_name}")
@@ -70,7 +71,7 @@ class PluginLoader:
 
         return plugins
 
-    def load_plugin_module(self, module_name: str) -> Optional[Type[NotificationChannel]]:
+    def load_plugin_module(self, module_name: str) -> Type[NotificationChannel] | None:
         """
         Load a plugin from a module.
 
@@ -85,10 +86,7 @@ class PluginLoader:
 
             # Look for classes that inherit from NotificationChannel
             for name, obj in inspect.getmembers(module, inspect.isclass):
-                if (issubclass(obj, NotificationChannel) and
-                    obj is not NotificationChannel and
-                    not name.startswith('_')):
-
+                if issubclass(obj, NotificationChannel) and obj is not NotificationChannel and not name.startswith("_"):
                     _logger.info("Found channel plugin: %s in module %s", name, module_name)
                     return obj
 
@@ -102,7 +100,7 @@ class PluginLoader:
             _logger.error("Error loading plugin from module %s: %s", module_name, e)
             return None
 
-    def load_plugin_from_file(self, file_path: str, channel_name: str) -> Optional[Type[NotificationChannel]]:
+    def load_plugin_from_file(self, file_path: str, channel_name: str) -> Type[NotificationChannel] | None:
         """
         Load a plugin from a Python file.
 
@@ -124,9 +122,7 @@ class PluginLoader:
 
             # Look for channel classes
             for name, obj in inspect.getmembers(module, inspect.isclass):
-                if (issubclass(obj, NotificationChannel) and
-                    obj is not NotificationChannel):
-
+                if issubclass(obj, NotificationChannel) and obj is not NotificationChannel:
                     _logger.info("Loaded channel plugin: %s from file %s", name, file_path)
                     return obj
 
@@ -171,7 +167,7 @@ class PluginLoader:
             channel_class = self.load_plugin_module(module_name)
             if channel_class:
                 # Extract channel name from module name
-                channel_name = module_name.split('.')[-1]
+                channel_name = module_name.split(".")[-1]
                 if self.register_plugin(channel_name, channel_class):
                     loaded[channel_name] = channel_class
 
@@ -179,7 +175,7 @@ class PluginLoader:
         for plugin_path in self._plugin_paths:
             try:
                 path_obj = Path(plugin_path)
-                if path_obj.is_file() and path_obj.suffix == '.py':
+                if path_obj.is_file() and path_obj.suffix == ".py":
                     # Single file
                     channel_name = path_obj.stem
                     channel_class = self.load_plugin_from_file(str(path_obj), channel_name)
@@ -188,8 +184,8 @@ class PluginLoader:
 
                 elif path_obj.is_dir():
                     # Directory with multiple plugins
-                    for py_file in path_obj.glob('*.py'):
-                        if py_file.name.startswith('_'):
+                    for py_file in path_obj.glob("*.py"):
+                        if py_file.name.startswith("_"):
                             continue
 
                         channel_name = py_file.stem
@@ -287,13 +283,7 @@ class PluginLoader:
             return errors
 
         # Check required methods are implemented
-        required_methods = [
-            'validate_config',
-            'send_message',
-            'check_health',
-            'get_rate_limit',
-            'supports_feature'
-        ]
+        required_methods = ["validate_config", "send_message", "check_health", "get_rate_limit", "supports_feature"]
 
         for method_name in required_methods:
             if not hasattr(channel_class, method_name):
@@ -306,7 +296,7 @@ class PluginLoader:
                 continue
 
             # Check if method is properly implemented (not just abstract)
-            if hasattr(method, '__isabstractmethod__') and method.__isabstractmethod__:
+            if hasattr(method, "__isabstractmethod__") and method.__isabstractmethod__:
                 errors.append(f"Method {method_name} is not implemented (still abstract)")
 
         # Check constructor signature
@@ -317,7 +307,7 @@ class PluginLoader:
             # Should have self, channel_name, config
             if len(params) < 3:
                 errors.append("Constructor must accept (self, channel_name, config) parameters")
-            elif params[1] != 'channel_name' or params[2] != 'config':
+            elif params[1] != "channel_name" or params[2] != "config":
                 errors.append("Constructor parameters should be (self, channel_name, config)")
 
         except Exception as e:

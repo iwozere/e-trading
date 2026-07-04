@@ -15,31 +15,33 @@ defaults, so existing callers are unaffected.
 """
 
 import asyncio
-from typing import List, Dict, Any, Optional, Set
-from datetime import datetime, timezone
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
 import signal
 import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any, Dict, List, Set
 
-from src.notification.service.message_queue import QueuedMessage, message_queue
+from src.data.db.models.model_notification import Message, MessageStatus
+from src.notification.channels.base import MessageContent, channel_registry
+from src.notification.logger import setup_logger
 from src.notification.service.config import config
 from src.notification.service.fallback_manager import FallbackManager
 from src.notification.service.health_monitor import health_monitor
-from src.notification.channels.base import channel_registry, MessageContent
-from src.data.db.models.model_notification import MessageStatus, Message
-from src.notification.logger import setup_logger
+from src.notification.service.message_queue import QueuedMessage, message_queue
+
 _logger = setup_logger(__name__)
 
 
 @dataclass
 class ProcessingResult:
     """Result of message processing."""
+
     message_id: int
     success: bool
-    error_message: Optional[str] = None
-    delivery_results: Optional[Dict[str, Any]] = None
-    processing_time_ms: Optional[int] = None
+    error_message: str | None = None
+    delivery_results: Dict[str, Any] | None = None
+    processing_time_ms: int | None = None
 
 
 class MessageProcessor:
@@ -97,19 +99,18 @@ class MessageProcessor:
 
         # Statistics
         self._stats = {
-            'messages_processed': 0,
-            'messages_delivered': 0,
-            'messages_failed': 0,
-            'processing_errors': 0,
-            'fallback_attempts': 0,
-            'dead_letter_messages': 0,
-            'start_time': None,
-            'last_activity': None
+            "messages_processed": 0,
+            "messages_delivered": 0,
+            "messages_failed": 0,
+            "processing_errors": 0,
+            "fallback_attempts": 0,
+            "dead_letter_messages": 0,
+            "start_time": None,
+            "last_activity": None,
         }
 
         self._logger.info(
-            "Message processor initialized: max_workers=%s, batch_size=%s",
-            self.max_workers, self.batch_size
+            "Message processor initialized: max_workers=%s, batch_size=%s", self.max_workers, self.batch_size
         )
 
     async def start(self):
@@ -120,7 +121,7 @@ class MessageProcessor:
 
         self._running = True
         self._shutdown_event.clear()
-        self._stats['start_time'] = datetime.now(timezone.utc)
+        self._stats["start_time"] = datetime.now(UTC)
 
         self._logger.info("Starting message processor...")
 
@@ -128,21 +129,11 @@ class MessageProcessor:
         await self._initialize_channel_instances()
 
         # Start worker tasks
-        self._worker_tasks.add(
-            asyncio.create_task(self._high_priority_worker())
-        )
-        self._worker_tasks.add(
-            asyncio.create_task(self._normal_priority_worker())
-        )
-        self._worker_tasks.add(
-            asyncio.create_task(self._retry_worker())
-        )
-        self._worker_tasks.add(
-            asyncio.create_task(self._fallback_retry_worker())
-        )
-        self._worker_tasks.add(
-            asyncio.create_task(self._cleanup_worker())
-        )
+        self._worker_tasks.add(asyncio.create_task(self._high_priority_worker()))
+        self._worker_tasks.add(asyncio.create_task(self._normal_priority_worker()))
+        self._worker_tasks.add(asyncio.create_task(self._retry_worker()))
+        self._worker_tasks.add(asyncio.create_task(self._fallback_retry_worker()))
+        self._worker_tasks.add(asyncio.create_task(self._cleanup_worker()))
 
         self._logger.info("Message processor started with %s workers", len(self._worker_tasks))
 
@@ -154,6 +145,7 @@ class MessageProcessor:
 
             # Load all available channel plugins
             from src.notification.channels.loader import load_all_channels
+
             load_all_channels()
 
             # Enabled channels come from config so the list is never hard-coded
@@ -162,20 +154,19 @@ class MessageProcessor:
             enabled_channels = config.enabled_channels
 
             self._logger.info(
-                "Notification Service - Enabled channels: %s (Telegram handled by telegram bot)",
-                enabled_channels
+                "Notification Service - Enabled channels: %s (Telegram handled by telegram bot)", enabled_channels
             )
 
             # Access channel configs as attributes
             channel_configs = {
-                'telegram': channels_config.telegram,
-                'email': channels_config.email,
-                'sms': channels_config.sms
+                "telegram": channels_config.telegram,
+                "email": channels_config.email,
+                "sms": channels_config.sms,
             }
 
             for channel_name, channel_config in channel_configs.items():
                 # Only initialize channels that are in the enabled list
-                if channel_name in enabled_channels and channel_config.get('enabled', True):
+                if channel_name in enabled_channels and channel_config.get("enabled", True):
                     try:
                         # Get channel instance from registry
                         channel_instance = channel_registry.get_channel(channel_name, channel_config)
@@ -183,12 +174,13 @@ class MessageProcessor:
 
                         # Configure health monitoring for this channel
                         from src.notification.service.health_monitor import HealthCheckConfig, HealthCheckType
+
                         health_config = HealthCheckConfig(
                             channel=channel_name,
                             check_interval_seconds=60,  # Check every minute
                             auto_disable_threshold=3,  # Disable after 3 consecutive failures
-                            auto_enable_threshold=2,   # Re-enable after 2 consecutive successes
-                            enabled_checks={HealthCheckType.CONNECTIVITY, HealthCheckType.RESPONSE_TIME}
+                            auto_enable_threshold=2,  # Re-enable after 2 consecutive successes
+                            enabled_checks={HealthCheckType.CONNECTIVITY, HealthCheckType.RESPONSE_TIME},
                         )
                         self._health_monitor.configure_channel(health_config)
 
@@ -209,22 +201,22 @@ class MessageProcessor:
             from src.notification.service.fallback_manager import FallbackRule, FallbackStrategy
 
             # Configure Telegram -> Email fallback
-            if 'telegram' in self._channel_instances and 'email' in self._channel_instances:
+            if "telegram" in self._channel_instances and "email" in self._channel_instances:
                 telegram_fallback = FallbackRule(
-                    primary_channel='telegram',
-                    fallback_channels=['email'],
+                    primary_channel="telegram",
+                    fallback_channels=["email"],
                     strategy=FallbackStrategy.PRIORITY_ORDER,
-                    max_attempts=2
+                    max_attempts=2,
                 )
                 self.fallback_manager.configure_fallback_rule(telegram_fallback)
 
             # Configure Email -> SMS fallback
-            if 'email' in self._channel_instances and 'sms' in self._channel_instances:
+            if "email" in self._channel_instances and "sms" in self._channel_instances:
                 email_fallback = FallbackRule(
-                    primary_channel='email',
-                    fallback_channels=['sms'],
+                    primary_channel="email",
+                    fallback_channels=["sms"],
                     strategy=FallbackStrategy.PRIORITY_ORDER,
-                    max_attempts=2
+                    max_attempts=2,
                 )
                 self.fallback_manager.configure_fallback_rule(email_fallback)
 
@@ -255,11 +247,8 @@ class MessageProcessor:
 
         # Wait for tasks to complete or timeout
         try:
-            await asyncio.wait_for(
-                asyncio.gather(*self._worker_tasks, return_exceptions=True),
-                timeout=timeout
-            )
-        except asyncio.TimeoutError:
+            await asyncio.wait_for(asyncio.gather(*self._worker_tasks, return_exceptions=True), timeout=timeout)
+        except TimeoutError:
             self._logger.warning("Shutdown timeout reached, forcing termination")
 
         # Shutdown executor — ThreadPoolExecutor.shutdown() has no timeout param;
@@ -291,7 +280,7 @@ class MessageProcessor:
                 break
             except Exception:
                 self._logger.exception("High priority worker error:")
-                self._stats['processing_errors'] += 1
+                self._stats["processing_errors"] += 1
                 await asyncio.sleep(5)  # Back off on error
 
         self._logger.info("High priority worker stopped")
@@ -318,7 +307,7 @@ class MessageProcessor:
                 break
             except Exception:
                 self._logger.exception("Normal priority worker error:")
-                self._stats['processing_errors'] += 1
+                self._stats["processing_errors"] += 1
                 await asyncio.sleep(10)  # Back off on error
 
         self._logger.info("Normal priority worker stopped")
@@ -330,10 +319,7 @@ class MessageProcessor:
         while self._running:
             try:
                 # Check for retry messages less frequently
-                messages = self.queue.dequeue_for_retry(
-                    limit=10,
-                    retry_delay_minutes=self.retry_delay_minutes
-                )
+                messages = self.queue.dequeue_for_retry(limit=10, retry_delay_minutes=self.retry_delay_minutes)
 
                 if messages:
                     self._logger.info("Processing %s retry messages", len(messages))
@@ -346,7 +332,7 @@ class MessageProcessor:
                 break
             except Exception:
                 self._logger.exception("Retry worker error:")
-                self._stats['processing_errors'] += 1
+                self._stats["processing_errors"] += 1
                 await asyncio.sleep(30)  # Back off on error
 
         self._logger.info("Retry worker stopped")
@@ -363,8 +349,10 @@ class MessageProcessor:
                 if results["processed"] > 0:
                     self._logger.info(
                         "Processed %s retry messages: %s succeeded, %s failed, %s requeued",
-                        results["processed"], results["succeeded"],
-                        results["failed"], results["requeued"]
+                        results["processed"],
+                        results["succeeded"],
+                        results["failed"],
+                        results["requeued"],
                     )
 
                     # Update stats
@@ -425,10 +413,7 @@ class MessageProcessor:
         self._logger.info("Cleanup worker stopped")
 
     async def _process_messages_batch(
-        self,
-        messages: List[QueuedMessage],
-        is_high_priority: bool = False,
-        is_retry: bool = False
+        self, messages: List[QueuedMessage], is_high_priority: bool = False, is_retry: bool = False
     ):
         """
         Process a batch of messages.
@@ -447,43 +432,38 @@ class MessageProcessor:
             # Process messages concurrently
             tasks = []
             for message in messages:
-                task = asyncio.create_task(
-                    self._process_single_message(message, is_high_priority, is_retry)
-                )
+                task = asyncio.create_task(self._process_single_message(message, is_high_priority, is_retry))
                 tasks.append(task)
 
             # Wait for all messages to complete with timeout
             timeout = self.batch_timeout_seconds if not is_high_priority else 10
-            results = await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True),
-                timeout=timeout
-            )
+            results = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=timeout)
 
             # Update statistics
             for result in results:
                 if isinstance(result, ProcessingResult):
-                    self._stats['messages_processed'] += 1
+                    self._stats["messages_processed"] += 1
                     if result.success:
-                        self._stats['messages_delivered'] += 1
+                        self._stats["messages_delivered"] += 1
                     else:
-                        self._stats['messages_failed'] += 1
+                        self._stats["messages_failed"] += 1
                 elif isinstance(result, Exception):
-                    self._stats['processing_errors'] += 1
+                    self._stats["processing_errors"] += 1
                     self._logger.error("Message processing exception: %s", result)
 
             processing_time = (time.time() - start_time) * 1000
-            self._stats['last_activity'] = datetime.now(timezone.utc)
+            self._stats["last_activity"] = datetime.now(UTC)
 
             self._logger.info(
                 "Batch processed: %s messages in %.2fms (high_priority=%s, retry=%s)",
-                len(messages), processing_time, is_high_priority, is_retry
+                len(messages),
+                processing_time,
+                is_high_priority,
+                is_retry,
             )
 
-        except asyncio.TimeoutError:
-            self._logger.error(
-                "Batch processing timeout after %ss for %s messages",
-                timeout, len(messages)
-            )
+        except TimeoutError:
+            self._logger.error("Batch processing timeout after %ss for %s messages", timeout, len(messages))
             # Mark timed-out messages as failed
             for message in messages:
                 self.queue.mark_failed(message.id, "Processing timeout")
@@ -494,10 +474,7 @@ class MessageProcessor:
                 self.queue.mark_failed(message.id, f"Batch processing error: {str(e)}")
 
     async def _process_single_message(
-        self,
-        message: QueuedMessage,
-        is_high_priority: bool = False,
-        is_retry: bool = False
+        self, message: QueuedMessage, is_high_priority: bool = False, is_retry: bool = False
     ) -> ProcessingResult:
         """
         Process a single message with fallback support.
@@ -515,39 +492,45 @@ class MessageProcessor:
         try:
             self._logger.debug(
                 "Processing message %s (type=%s, priority=%s, retry=%s)",
-                message.id, message.message_type, message.priority.value, is_retry
+                message.id,
+                message.message_type,
+                message.priority.value,
+                is_retry,
             )
 
             # Create message content from queued message
             # Map database content structure to MessageContent structure
             content = MessageContent(
-                text=message.content.get('message', message.content.get('text', '')),
-                subject=message.content.get('title', message.content.get('subject')),
-                html=message.content.get('html'),
-                attachments=message.content.get('attachments'),
-                metadata={
-                    **(message.metadata or {}),
-                    'source': message.content.get('source')
-                }
+                text=message.content.get("message", message.content.get("text", "")),
+                subject=message.content.get("title", message.content.get("subject")),
+                html=message.content.get("html"),
+                attachments=message.content.get("attachments"),
+                metadata={**(message.metadata or {}), "source": message.content.get("source")},
             )
 
             # Get recipient from metadata or use default
             # For Telegram messages, check telegram_chat_id in metadata first
             recipient = None
-            if 'telegram' in message.channels:
-                recipient = message.metadata.get('telegram_chat_id') if message.metadata else None
+            if "telegram" in message.channels:
+                recipient = message.metadata.get("telegram_chat_id") if message.metadata else None
                 self._logger.debug(
-                    "Message %s: Telegram channel - telegram_chat_id from metadata: %s",
-                    message.id, recipient
+                    "Message %s: Telegram channel - telegram_chat_id from metadata: %s", message.id, recipient
                 )
 
             # Fall back to recipient_id in metadata, then message.recipient_id
             if not recipient:
-                recipient = message.metadata.get('recipient_id', message.recipient_id) if message.metadata else message.recipient_id
+                recipient = (
+                    message.metadata.get("recipient_id", message.recipient_id)
+                    if message.metadata
+                    else message.recipient_id
+                )
 
             self._logger.info(
                 "Message %s: Using recipient=%s (message.recipient_id=%s, channels=%s)",
-                message.id, recipient, message.recipient_id, message.channels
+                message.id,
+                recipient,
+                message.recipient_id,
+                message.channels,
             )
 
             # Attempt delivery with fallback
@@ -557,7 +540,7 @@ class MessageProcessor:
                 recipient=recipient,
                 content=content,
                 priority=message.priority.value,
-                channel_instances=self._channel_instances
+                channel_instances=self._channel_instances,
             )
 
             processing_time_ms = int((time.time() - start_time) * 1000)
@@ -565,17 +548,11 @@ class MessageProcessor:
             # Update message status in queue
             if success:
                 self.queue.mark_delivered(message.id)
-                self._logger.info(
-                    "Message %s delivered successfully in %sms",
-                    message.id, processing_time_ms
-                )
+                self._logger.info("Message %s delivered successfully in %sms", message.id, processing_time_ms)
             else:
                 error_message = failed_message.failure_details if failed_message else "Delivery failed"
                 self.queue.mark_failed(message.id, error_message)
-                self._logger.warning(
-                    "Message %s failed: %s",
-                    message.id, error_message
-                )
+                self._logger.warning("Message %s failed: %s", message.id, error_message)
 
                 # Update fallback stats
                 if failed_message:
@@ -586,9 +563,7 @@ class MessageProcessor:
                         self._stats["dead_letter_messages"] += 1
 
             result_dict = self._build_delivery_result_dict(delivery_results)
-            return self._make_processing_result(
-                message.id, success, failed_message, result_dict, processing_time_ms
-            )
+            return self._make_processing_result(message.id, success, failed_message, result_dict, processing_time_ms)
 
         except Exception as e:
             processing_time_ms = int((time.time() - start_time) * 1000)
@@ -620,8 +595,8 @@ class MessageProcessor:
         """
         result_dict: Dict[str, Any] = {}
         for result in delivery_results:
-            if hasattr(result, 'metadata') and result.metadata:
-                channel_name = result.metadata.get('channel', 'unknown')
+            if hasattr(result, "metadata") and result.metadata:
+                channel_name = result.metadata.get("channel", "unknown")
                 result_dict[channel_name] = {
                     "status": result.status.value,
                     "external_id": result.external_id,
@@ -669,9 +644,9 @@ class MessageProcessor:
         stats = self._stats.copy()
 
         # Add runtime information
-        if stats['start_time']:
-            uptime_seconds = (datetime.now(timezone.utc) - stats['start_time']).total_seconds()
-            stats['uptime_seconds'] = uptime_seconds
+        if stats["start_time"]:
+            uptime_seconds = (datetime.now(UTC) - stats["start_time"]).total_seconds()
+            stats["uptime_seconds"] = uptime_seconds
 
         # Add queue statistics
         queue_stats = self.queue.get_queue_stats()
@@ -679,18 +654,18 @@ class MessageProcessor:
 
         # Add fallback statistics
         fallback_stats = self.fallback_manager.get_fallback_statistics()
-        stats['fallback_statistics'] = fallback_stats
+        stats["fallback_statistics"] = fallback_stats
 
         # Add retry queue status
         retry_status = self.fallback_manager.get_retry_queue_status()
-        stats['retry_queue'] = retry_status
+        stats["retry_queue"] = retry_status
 
         # Add worker information
-        stats['worker_count'] = len(self._worker_tasks)
-        stats['running'] = self._running
-        stats['max_workers'] = self.max_workers
-        stats['batch_size'] = self.batch_size
-        stats['channel_count'] = len(self._channel_instances)
+        stats["worker_count"] = len(self._worker_tasks)
+        stats["running"] = self._running
+        stats["max_workers"] = self.max_workers
+        stats["batch_size"] = self.batch_size
+        stats["channel_count"] = len(self._channel_instances)
 
         return stats
 
@@ -702,9 +677,9 @@ class MessageProcessor:
     @property
     def uptime_seconds(self) -> float:
         """Get processor uptime in seconds."""
-        if not self._stats['start_time']:
+        if not self._stats["start_time"]:
             return 0.0
-        return (datetime.now(timezone.utc) - self._stats['start_time']).total_seconds()
+        return (datetime.now(UTC) - self._stats["start_time"]).total_seconds()
 
     async def process_database_message(self, db_message) -> ProcessingResult:
         """
@@ -721,34 +696,39 @@ class MessageProcessor:
         try:
             self._logger.debug(
                 "Processing database message %s (type=%s, priority=%s)",
-                db_message.id, db_message.message_type, db_message.priority
+                db_message.id,
+                db_message.message_type,
+                db_message.priority,
             )
 
             # Create message content from database message
             from src.notification.channels.base import MessageContent
+
             # Map database content structure to MessageContent structure
             content = MessageContent(
-                text=db_message.content.get('message') or db_message.content.get('text') or db_message.content.get('body') or '',
-                subject=db_message.content.get('title', db_message.content.get('subject')),
-                html=db_message.content.get('html'),
-                attachments=db_message.content.get('attachments'),
-                metadata={
-                    **(db_message.message_metadata or {}),
-                    'source': db_message.content.get('source')
-                }
+                text=db_message.content.get("message")
+                or db_message.content.get("text")
+                or db_message.content.get("body")
+                or "",
+                subject=db_message.content.get("title", db_message.content.get("subject")),
+                html=db_message.content.get("html"),
+                attachments=db_message.content.get("attachments"),
+                metadata={**(db_message.message_metadata or {}), "source": db_message.content.get("source")},
             )
 
             # Get recipient - check metadata for email_receiver first (for email channels)
             # This allows different recipients for different channels (e.g., email vs Telegram)
-            recipient = db_message.message_metadata.get('email_receiver') if db_message.message_metadata else None
+            recipient = db_message.message_metadata.get("email_receiver") if db_message.message_metadata else None
             if not recipient:
                 recipient = db_message.recipient_id
 
             self._logger.debug(
                 "Message %s: recipient=%s, email_receiver=%s, recipient_id=%s, channels=%s",
-                db_message.id, recipient,
-                db_message.message_metadata.get('email_receiver') if db_message.message_metadata else None,
-                db_message.recipient_id, db_message.channels
+                db_message.id,
+                recipient,
+                db_message.message_metadata.get("email_receiver") if db_message.message_metadata else None,
+                db_message.recipient_id,
+                db_message.channels,
             )
 
             # Attempt delivery with fallback
@@ -758,28 +738,30 @@ class MessageProcessor:
                 recipient=recipient,
                 content=content,
                 priority=db_message.priority,
-                channel_instances=self._channel_instances
+                channel_instances=self._channel_instances,
             )
 
             processing_time_ms = int((time.time() - start_time) * 1000)
 
             # Update message status in database
             from src.data.db.services.database_service import get_database_service
+
             db_service = get_database_service()
 
             with db_service.uow() as uow:
                 if success:
                     # Update message status to delivered
-                    uow.s.query(Message).filter(Message.id == db_message.id).update({
-                        'status': MessageStatus.DELIVERED.value,
-                        'processed_at': datetime.now(timezone.utc),
-                        'locked_by': None,
-                        'locked_at': None
-                    })
+                    uow.s.query(Message).filter(Message.id == db_message.id).update(
+                        {
+                            "status": MessageStatus.DELIVERED.value,
+                            "processed_at": datetime.now(UTC),
+                            "locked_by": None,
+                            "locked_at": None,
+                        }
+                    )
 
                     self._logger.info(
-                        "Database message %s delivered successfully in %sms",
-                        db_message.id, processing_time_ms
+                        "Database message %s delivered successfully in %sms", db_message.id, processing_time_ms
                     )
                 else:
                     error_message = failed_message.failure_details if failed_message else "Delivery failed"
@@ -787,42 +769,49 @@ class MessageProcessor:
                     # Update message status to failed or increment retry count
                     if db_message.retry_count < db_message.max_retries:
                         # Increment retry count and reset lock
-                        uow.s.query(Message).filter(Message.id == db_message.id).update({
-                            'status': MessageStatus.PENDING.value,
-                            'retry_count': db_message.retry_count + 1,
-                            'last_error': error_message,
-                            'locked_by': None,
-                            'locked_at': None
-                        })
+                        uow.s.query(Message).filter(Message.id == db_message.id).update(
+                            {
+                                "status": MessageStatus.PENDING.value,
+                                "retry_count": db_message.retry_count + 1,
+                                "last_error": error_message,
+                                "locked_by": None,
+                                "locked_at": None,
+                            }
+                        )
                         self._logger.warning(
                             "Database message %s failed, retry %s/%s: %s",
-                            db_message.id, db_message.retry_count + 1, db_message.max_retries, error_message
+                            db_message.id,
+                            db_message.retry_count + 1,
+                            db_message.max_retries,
+                            error_message,
                         )
                     else:
                         # Mark as permanently failed
-                        uow.s.query(Message).filter(Message.id == db_message.id).update({
-                            'status': MessageStatus.FAILED.value,
-                            'last_error': error_message,
-                            'processed_at': datetime.now(timezone.utc),
-                            'locked_by': None,
-                            'locked_at': None
-                        })
+                        uow.s.query(Message).filter(Message.id == db_message.id).update(
+                            {
+                                "status": MessageStatus.FAILED.value,
+                                "last_error": error_message,
+                                "processed_at": datetime.now(UTC),
+                                "locked_by": None,
+                                "locked_at": None,
+                            }
+                        )
                         self._logger.error(
                             "Database message %s permanently failed after %s retries: %s",
-                            db_message.id, db_message.max_retries, error_message
+                            db_message.id,
+                            db_message.max_retries,
+                            error_message,
                         )
 
             # Update stats
-            self._stats['messages_processed'] += 1
+            self._stats["messages_processed"] += 1
             if success:
-                self._stats['messages_delivered'] += 1
+                self._stats["messages_delivered"] += 1
             else:
-                self._stats['messages_failed'] += 1
+                self._stats["messages_failed"] += 1
 
             result_dict = self._build_delivery_result_dict(delivery_results)
-            return self._make_processing_result(
-                db_message.id, success, failed_message, result_dict, processing_time_ms
-            )
+            return self._make_processing_result(db_message.id, success, failed_message, result_dict, processing_time_ms)
 
         except Exception as e:
             processing_time_ms = int((time.time() - start_time) * 1000)
@@ -831,29 +820,29 @@ class MessageProcessor:
             # Update message status in database
             try:
                 from src.data.db.services.database_service import get_database_service
+
                 db_service = get_database_service()
 
                 with db_service.uow() as uow:
-                    uow.s.query(Message).filter(Message.id == db_message.id).update({
-                        'status': MessageStatus.FAILED.value,
-                        'last_error': error_message,
-                        'processed_at': datetime.now(timezone.utc),
-                        'locked_by': None,
-                        'locked_at': None
-                    })
+                    uow.s.query(Message).filter(Message.id == db_message.id).update(
+                        {
+                            "status": MessageStatus.FAILED.value,
+                            "last_error": error_message,
+                            "processed_at": datetime.now(UTC),
+                            "locked_by": None,
+                            "locked_at": None,
+                        }
+                    )
             except Exception as db_error:
                 self._logger.error("Failed to update message status in database: %s", db_error)
 
-            self._logger.error(
-                "Database message %s processing failed: %s",
-                db_message.id, error_message
-            )
+            self._logger.error("Database message %s processing failed: %s", db_message.id, error_message)
 
             return ProcessingResult(
                 message_id=db_message.id,
                 success=False,
                 error_message=error_message,
-                processing_time_ms=processing_time_ms
+                processing_time_ms=processing_time_ms,
             )
 
 
@@ -864,6 +853,7 @@ message_processor = MessageProcessor()
 # Signal handlers for graceful shutdown
 def setup_signal_handlers():
     """Set up signal handlers for graceful shutdown."""
+
     def signal_handler(signum, frame):
         _logger.info("Received signal %s, initiating shutdown...", signum)
         if message_processor.is_running:

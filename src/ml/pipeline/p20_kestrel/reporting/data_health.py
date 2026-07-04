@@ -14,18 +14,18 @@ from __future__ import annotations
 import sys
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 from src.ml.pipeline.p20_kestrel.config import (
     AV_DAILY_QUOTA,
     DATA_CACHE_PATH,
     LLM_MONTHLY_BUDGET_USD,
     STALENESS_DAYS,
 )
-from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 
 _kestrel = _KestrelService()
 finish_job_run = _kestrel.finish_job_run
@@ -41,7 +41,7 @@ _JOB_NAME = "data_health"
 _P15_GKG_DIR = DATA_CACHE_PATH / "gdelt" / "gkg"
 
 
-def check_gdelt_freshness(today: date) -> Optional[str]:
+def check_gdelt_freshness(today: date) -> str | None:
     """
     Check whether today's or yesterday's GKG file is present.
 
@@ -70,12 +70,9 @@ def check_sentiment_staleness(today: date) -> List[str]:
     """
     warnings: List[str] = []
     for job in ("gdelt_process", "social_poll", "av_sentiment_budgeted"):
-        max_stale = STALENESS_DAYS.get(
-            "gdelt" if "gdelt" in job else "social", 3
-        )
+        max_stale = STALENESS_DAYS.get("gdelt" if "gdelt" in job else "social", 3)
         fresh = any(
-            get_job_run(job, today - timedelta(days=offset)) in ("ok", "skipped")
-            for offset in range(1, max_stale + 1)
+            get_job_run(job, today - timedelta(days=offset)) in ("ok", "skipped") for offset in range(1, max_stale + 1)
         )
         if not fresh:
             warnings.append(f"⚠ {job}: no ok run in the last {max_stale}d")
@@ -83,7 +80,7 @@ def check_sentiment_staleness(today: date) -> List[str]:
     return warnings
 
 
-def check_av_budget(today: date) -> Optional[str]:
+def check_av_budget(today: date) -> str | None:
     """Check AV request budget usage."""
     try:
         budget = get_or_create_budget("av_news", today, quota=AV_DAILY_QUOTA)
@@ -96,7 +93,7 @@ def check_av_budget(today: date) -> Optional[str]:
         return None
 
 
-def check_llm_budget() -> Optional[str]:
+def check_llm_budget() -> str | None:
     """Check LLM monthly spend vs cap."""
     try:
         spend = get_llm_monthly_spend()
@@ -108,7 +105,7 @@ def check_llm_budget() -> Optional[str]:
         return None
 
 
-def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
+def run(as_of_date: date | None = None) -> Dict[str, Any]:
     """
     Run all health checks and log warnings.
 

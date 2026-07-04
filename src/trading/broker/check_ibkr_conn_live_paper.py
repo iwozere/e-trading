@@ -1,8 +1,10 @@
-from ib_insync import IB, util, Stock
 import logging
+
+from ib_insync import IB, Stock
 
 # Setup basic logging to see connection details
 logging.basicConfig(level=logging.INFO)
+
 
 def test_connection(name, port):
     ib = IB()
@@ -10,8 +12,8 @@ def test_connection(name, port):
 
     try:
         # Connect to the Pi's localhost (or use the Pi's IP if running remotely)
-        ib.connect('raspberrypi', port, clientId=1, timeout=15)
-        ib.reqMarketDataType(3) # delayed 15-20 minutes
+        ib.connect("raspberrypi", port, clientId=1, timeout=15)
+        ib.reqMarketDataType(3)  # delayed 15-20 minutes
 
         # Check Account & Trading Mode
         account = ib.managedAccounts()[0]
@@ -29,10 +31,10 @@ def test_connection(name, port):
             print(f"   - {pos.contract.symbol}: {pos.position} shares @ {pos.avgCost}")
 
         # Basic Market Data Test (Apple Inc.)
-        contract = Stock('MSFT', 'SMART', 'USD')
+        contract = Stock("MSFT", "SMART", "USD")
         ib.qualifyContracts(contract)
         ticker = ib.reqMktData(contract)
-        ib.sleep(2) # Give it a moment to fetch
+        ib.sleep(2)  # Give it a moment to fetch
         print(f"🍏 AAPL Last Price: {ticker.last}")
 
     except Exception as e:
@@ -40,6 +42,7 @@ def test_connection(name, port):
     finally:
         ib.disconnect()
         print(f"--- {name} Test Complete ---")
+
 
 if __name__ == "__main__":
     # Test Live Instance

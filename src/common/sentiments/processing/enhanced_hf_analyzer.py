@@ -10,14 +10,14 @@ This module provides improved HuggingFace integration with:
 """
 
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from typing import List, Dict, Optional, Any, Union
-from pathlib import Path
 import sys
 import time
-from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Union
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -28,22 +28,27 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 try:
-    from transformers import pipeline
     import torch
+    from transformers import pipeline
+
     HF_AVAILABLE = True
 except Exception:
     HF_AVAILABLE = False
 
+
 class ContentType(Enum):
     """Content type for model selection."""
+
     SOCIAL_MEDIA = "social_media"
     NEWS = "news"
     FINANCIAL = "financial"
     GENERAL = "general"
 
+
 @dataclass
 class ModelConfig:
     """Configuration for a HuggingFace model."""
+
     name: str
     model_path: str
     content_types: List[ContentType]
@@ -51,15 +56,18 @@ class ModelConfig:
     batch_size: int = 16
     confidence_threshold: float = 0.6
 
+
 @dataclass
 class SentimentPrediction:
     """Enhanced sentiment prediction result."""
+
     label: str
     score: float
     confidence: float
     model_used: str
     processing_time_ms: float
     raw_output: Dict[str, Any]
+
 
 class EnhancedHFAnalyzer:
     """
@@ -73,7 +81,7 @@ class EnhancedHFAnalyzer:
     - Performance monitoring and caching
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Dict | None = None):
         """
         Initialize the enhanced HF analyzer.
 
@@ -112,7 +120,7 @@ class EnhancedHFAnalyzer:
         device_config = self.config.get("device", "auto")
 
         if device_config == "auto":
-            if HF_AVAILABLE and hasattr(torch, 'cuda') and torch.cuda.is_available():
+            if HF_AVAILABLE and hasattr(torch, "cuda") and torch.cuda.is_available():
                 return 0  # Use first GPU
             else:
                 return -1  # Use CPU
@@ -127,29 +135,29 @@ class EnhancedHFAnalyzer:
                 model_path="cardiffnlp/twitter-roberta-base-sentiment-latest",
                 content_types=[ContentType.GENERAL, ContentType.SOCIAL_MEDIA],
                 max_length=512,
-                batch_size=16
+                batch_size=16,
             ),
             "financial": ModelConfig(
                 name="financial",
                 model_path="ProsusAI/finbert",
                 content_types=[ContentType.FINANCIAL],
                 max_length=512,
-                batch_size=8
+                batch_size=8,
             ),
             "news": ModelConfig(
                 name="news",
                 model_path="cardiffnlp/twitter-roberta-base-sentiment-latest",
                 content_types=[ContentType.NEWS],
                 max_length=512,
-                batch_size=12
+                batch_size=12,
             ),
             "social": ModelConfig(
                 name="social",
                 model_path="cardiffnlp/twitter-roberta-base-sentiment-latest",
                 content_types=[ContentType.SOCIAL_MEDIA],
                 max_length=280,
-                batch_size=20
-            )
+                batch_size=20,
+            ),
         }
 
         # Load custom models from config
@@ -162,7 +170,7 @@ class EnhancedHFAnalyzer:
                 content_types=content_types,
                 max_length=model_config.get("max_length", 512),
                 batch_size=model_config.get("batch_size", 16),
-                confidence_threshold=model_config.get("confidence_threshold", 0.6)
+                confidence_threshold=model_config.get("confidence_threshold", 0.6),
             )
 
         return default_models
@@ -184,10 +192,7 @@ class EnhancedHFAnalyzer:
             # Run model initialization in thread pool
             loop = asyncio.get_event_loop()
             pipeline_obj = await loop.run_in_executor(
-                self._executor,
-                self._create_pipeline,
-                model_config.model_path,
-                model_config.max_length
+                self._executor, self._create_pipeline, model_config.model_path, model_config.max_length
             )
 
             self._pipelines[model_name] = pipeline_obj
@@ -198,11 +203,10 @@ class EnhancedHFAnalyzer:
                 "predictions_count": 0,
                 "total_processing_time_ms": 0.0,
                 "error_count": 0,
-                "last_used": None
+                "last_used": None,
             }
 
-            _logger.info("Successfully loaded model %s in %.2f seconds",
-                        model_name, time.time() - start_time)
+            _logger.info("Successfully loaded model %s in %.2f seconds", model_name, time.time() - start_time)
 
         except Exception as e:
             _logger.error("Failed to initialize model %s: %s", model_name, e)
@@ -217,10 +221,10 @@ class EnhancedHFAnalyzer:
             device=self.device,
             truncation=True,
             max_length=max_length,
-            return_all_scores=True
+            return_all_scores=True,
         )
 
-    def select_model(self, content_type: ContentType, text_length: Optional[int] = None) -> str:
+    def select_model(self, content_type: ContentType, text_length: int | None = None) -> str:
         """
         Select the best model for given content type and text characteristics.
 
@@ -255,7 +259,9 @@ class EnhancedHFAnalyzer:
         # Fallback to first suitable model
         return suitable_models[0][0]
 
-    async def predict_batch(self, texts: List[str], content_type: ContentType = ContentType.GENERAL) -> List[SentimentPrediction]:
+    async def predict_batch(
+        self, texts: List[str], content_type: ContentType = ContentType.GENERAL
+    ) -> List[SentimentPrediction]:
         """
         Predict sentiment for a batch of texts with optimized processing.
 
@@ -291,13 +297,15 @@ class EnhancedHFAnalyzer:
         all_predictions = []
 
         for i in range(0, len(texts), batch_size):
-            batch_texts = texts[i:i + batch_size]
+            batch_texts = texts[i : i + batch_size]
             batch_predictions = await self._process_batch(batch_texts, model_name, model_config)
             all_predictions.extend(batch_predictions)
 
         return all_predictions
 
-    async def _process_batch(self, texts: List[str], model_name: str, model_config: ModelConfig) -> List[SentimentPrediction]:
+    async def _process_batch(
+        self, texts: List[str], model_name: str, model_config: ModelConfig
+    ) -> List[SentimentPrediction]:
         """Process a single batch of texts."""
         start_time = time.time()
 
@@ -326,10 +334,7 @@ class EnhancedHFAnalyzer:
                 pipeline_obj = self._pipelines[model_name]
 
                 raw_results = await loop.run_in_executor(
-                    self._executor,
-                    self._predict_blocking,
-                    pipeline_obj,
-                    uncached_texts
+                    self._executor, self._predict_blocking, pipeline_obj, uncached_texts
                 )
 
                 # Convert to SentimentPrediction objects
@@ -349,7 +354,7 @@ class EnhancedHFAnalyzer:
                         # Manage cache size
                         if len(self._cache) > self.cache_max_size:
                             # Remove oldest entries (simple FIFO)
-                            keys_to_remove = list(self._cache.keys())[:len(self._cache) - self.cache_max_size + 100]
+                            keys_to_remove = list(self._cache.keys())[: len(self._cache) - self.cache_max_size + 100]
                             for key in keys_to_remove:
                                 del self._cache[key]
 
@@ -394,7 +399,9 @@ class EnhancedHFAnalyzer:
             # Return neutral fallback for all texts
             return [[{"label": "NEUTRAL", "score": 0.5}] for _ in texts]
 
-    def _convert_raw_result(self, raw_result: List[Dict], model_name: str, processing_time_ms: float) -> SentimentPrediction:
+    def _convert_raw_result(
+        self, raw_result: List[Dict], model_name: str, processing_time_ms: float
+    ) -> SentimentPrediction:
         """Convert raw HuggingFace result to SentimentPrediction."""
         try:
             # Find the prediction with highest score
@@ -420,7 +427,7 @@ class EnhancedHFAnalyzer:
                 confidence=score,
                 model_used=model_name,
                 processing_time_ms=processing_time_ms,
-                raw_output={"all_scores": raw_result, "best": best_prediction}
+                raw_output={"all_scores": raw_result, "best": best_prediction},
             )
 
         except Exception as e:
@@ -435,7 +442,7 @@ class EnhancedHFAnalyzer:
             confidence=0.0,
             model_used=f"{model_name}_fallback",
             processing_time_ms=0.0,
-            raw_output={"fallback": True}
+            raw_output={"fallback": True},
         )
 
     def _update_model_stats(self, model_name: str, batch_size: int, processing_time: float) -> None:
@@ -444,7 +451,7 @@ class EnhancedHFAnalyzer:
             stats = self._model_stats[model_name]
             stats["predictions_count"] += batch_size
             stats["total_processing_time_ms"] += processing_time * 1000
-            stats["last_used"] = datetime.now(timezone.utc).isoformat()
+            stats["last_used"] = datetime.now(UTC).isoformat()
 
     async def predict_single(self, text: str, content_type: ContentType = ContentType.GENERAL) -> SentimentPrediction:
         """
@@ -468,12 +475,11 @@ class EnhancedHFAnalyzer:
         stats = {}
         for model_name, model_stats in self._model_stats.items():
             if "error" not in model_stats:
-                avg_time = (model_stats["total_processing_time_ms"] /
-                           max(1, model_stats["predictions_count"]))
+                avg_time = model_stats["total_processing_time_ms"] / max(1, model_stats["predictions_count"])
                 stats[model_name] = {
                     **model_stats,
                     "avg_processing_time_ms": avg_time,
-                    "status": "healthy" if model_name in self._pipelines else "not_loaded"
+                    "status": "healthy" if model_name in self._pipelines else "not_loaded",
                 }
             else:
                 stats[model_name] = {**model_stats, "status": "failed"}

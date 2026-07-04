@@ -1,12 +1,15 @@
-import pandas as pd
+from typing import Any, Dict, List
+
 import numpy as np
+import pandas as pd
 import statsmodels.api as sm
-from statsmodels.tsa.stattools import coint
 from sklearn.model_selection import TimeSeriesSplit
-from typing import Tuple, Optional, Dict, Any, List
+from statsmodels.tsa.stattools import coint
+
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class CointegrationAnalyzer:
     """
@@ -22,30 +25,24 @@ class CointegrationAnalyzer:
         common_idx = series_a.index.intersection(series_b.index)
         y = series_a.loc[common_idx]
         x = series_b.loc[common_idx]
-        
+
         if len(common_idx) < 100:
-             return {"p_value": 1.0, "error": "Insufficient common data"}
+            return {"p_value": 1.0, "error": "Insufficient common data"}
 
         score, pvalue, _ = coint(y, x)
-        
+
         # Calculate Hedge Ratio (Beta) via OLS
         x_const = sm.add_constant(x)
         model = sm.OLS(y, x_const).fit()
-        beta = model.params.iloc[1] # hedge ratio
-        
+        beta = model.params.iloc[1]  # hedge ratio
+
         # Calculate residuals (spread)
         spread = y - beta * x
-        
+
         # Calculate Half-Life
         half_life = self.calculate_half_life(spread)
-        
-        return {
-            "p_value": pvalue,
-            "t_stat": score,
-            "beta": beta,
-            "half_life": half_life,
-            "n_obs": len(common_idx)
-        }
+
+        return {"p_value": pvalue, "t_stat": score, "beta": beta, "half_life": half_life, "n_obs": len(common_idx)}
 
     def walk_forward_backtest(
         self,
@@ -79,8 +76,13 @@ class CointegrationAnalyzer:
 
         if len(common_idx) < 100:
             _logger.warning("walk_forward_backtest: fewer than 100 common observations — skipping")
-            return {"fold_metrics": [], "avg_sharpe": float("nan"),
-                    "avg_total_return": float("nan"), "avg_half_life": float("nan"), "n_folds": 0}
+            return {
+                "fold_metrics": [],
+                "avg_sharpe": float("nan"),
+                "avg_total_return": float("nan"),
+                "avg_half_life": float("nan"),
+                "n_folds": 0,
+            }
 
         tscv = TimeSeriesSplit(n_splits=n_splits)
         fold_metrics: List[Dict[str, Any]] = []
@@ -118,7 +120,7 @@ class CointegrationAnalyzer:
                     if z_prev > entry_z:
                         position = -1  # short spread (expect reversion down)
                     elif z_prev < -entry_z:
-                        position = 1   # long spread (expect reversion up)
+                        position = 1  # long spread (expect reversion up)
                 # Exit
                 elif position == 1 and z_prev >= -exit_z:
                     position = 0
@@ -136,23 +138,34 @@ class CointegrationAnalyzer:
             sharpe = float(rets.mean() / rets.std() * np.sqrt(252)) if rets.std() > 0 else 0.0
             half_life = self.calculate_half_life(test_spread)
 
-            fold_metrics.append({
-                "fold": fold_idx,
-                "beta": beta,
-                "half_life": half_life,
-                "total_return": total_return,
-                "sharpe": sharpe,
-                "n_train": len(train_idx),
-                "n_test": len(test_idx),
-            })
+            fold_metrics.append(
+                {
+                    "fold": fold_idx,
+                    "beta": beta,
+                    "half_life": half_life,
+                    "total_return": total_return,
+                    "sharpe": sharpe,
+                    "n_train": len(train_idx),
+                    "n_test": len(test_idx),
+                }
+            )
             _logger.debug(
                 "WFB fold %d: beta=%.4f, half_life=%.1f, sharpe=%.3f, total_return=%.4f",
-                fold_idx, beta, half_life, sharpe, total_return,
+                fold_idx,
+                beta,
+                half_life,
+                sharpe,
+                total_return,
             )
 
         if not fold_metrics:
-            return {"fold_metrics": [], "avg_sharpe": float("nan"),
-                    "avg_total_return": float("nan"), "avg_half_life": float("nan"), "n_folds": 0}
+            return {
+                "fold_metrics": [],
+                "avg_sharpe": float("nan"),
+                "avg_total_return": float("nan"),
+                "avg_half_life": float("nan"),
+                "n_folds": 0,
+            }
 
         avg_sharpe = float(np.mean([f["sharpe"] for f in fold_metrics]))
         avg_total_return = float(np.mean([f["total_return"] for f in fold_metrics]))
@@ -160,7 +173,10 @@ class CointegrationAnalyzer:
 
         _logger.info(
             "Walk-forward backtest: avg_sharpe=%.3f, avg_return=%.4f, avg_half_life=%.1f over %d folds",
-            avg_sharpe, avg_total_return, avg_half_life, len(fold_metrics),
+            avg_sharpe,
+            avg_total_return,
+            avg_half_life,
+            len(fold_metrics),
         )
         return {
             "fold_metrics": fold_metrics,
@@ -176,7 +192,7 @@ class CointegrationAnalyzer:
         """
         spread_lag = spread.shift(1).iloc[1:]
         spread_diff = spread.diff().iloc[1:]
-        
+
         if spread_lag.empty or spread_diff.empty:
             return 999.0
 
@@ -184,12 +200,12 @@ class CointegrationAnalyzer:
         # dS = -lambda * S_lag * dt + noise
         x = sm.add_constant(spread_lag)
         model = sm.OLS(spread_diff, x).fit()
-        
+
         # lambda (mean reversion rate)
         lambda_val = -model.params.iloc[1]
-        
+
         if lambda_val <= 0:
-            return 999.0 # Non-stationary / Diverging
-        
+            return 999.0  # Non-stationary / Diverging
+
         half_life = np.log(2) / lambda_val
         return half_life

@@ -6,11 +6,13 @@ Provides the foundation for strategy implementation and risk management.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Any, Protocol
 from datetime import datetime
+from typing import Any, Dict, List, Protocol
+
 import pandas as pd
 
-from src.model.strategy import StrategySignal, MarketRegime, AggregationMethod, CompositeSignal
+from src.model.strategy import AggregationMethod, CompositeSignal, MarketRegime, StrategySignal
+
 
 class BaseStrategy(ABC):
     """Base class for all trading strategies."""
@@ -38,7 +40,7 @@ class BaseStrategy(ABC):
         """Add an indicator to the strategy."""
         self.indicators[name] = indicator
 
-    def get_indicator(self, name: str) -> Optional[Any]:
+    def get_indicator(self, name: str) -> Any | None:
         """Get an indicator by name."""
         return self.indicators.get(name)
 
@@ -83,10 +85,9 @@ class DataLoader(Protocol):
 class MarketRegimeDetector:
     """Detects market regimes based on volatility and trend conditions."""
 
-    def __init__(self,
-                 volatility_threshold: float = 0.02,
-                 trend_strength_threshold: float = 0.6,
-                 lookback_period: int = 20):
+    def __init__(
+        self, volatility_threshold: float = 0.02, trend_strength_threshold: float = 0.6, lookback_period: int = 20
+    ):
         self.volatility_threshold = volatility_threshold
         self.trend_strength_threshold = trend_strength_threshold
         self.lookback_period = lookback_period
@@ -99,12 +100,13 @@ class MarketRegimeDetector:
             return MarketRegime.RANGING_STABLE
 
         # Calculate volatility
-        returns = data['close'].pct_change().dropna()
+        returns = data["close"].pct_change().dropna()
         volatility = returns.std()
 
         # Calculate trend strength using linear regression R-squared
         import numpy as np
-        prices = data['close'].values
+
+        prices = data["close"].values
         x = np.arange(len(prices))
 
         # Fit linear regression
@@ -145,11 +147,7 @@ class SignalAggregator:
         """
         if not signals:
             return CompositeSignal(
-                signal_type="hold",
-                confidence=0.0,
-                contributing_strategies=[],
-                timestamp=datetime.now(),
-                metadata={}
+                signal_type="hold", confidence=0.0, contributing_strategies=[], timestamp=datetime.now(), metadata={}
             )
 
         if self.method == AggregationMethod.WEIGHTED_VOTING:
@@ -195,7 +193,7 @@ class SignalAggregator:
             confidence=confidence,
             contributing_strategies=[s.strategy_name for s in signals],
             timestamp=datetime.now(),
-            metadata={"weights": {"buy": buy_weight, "sell": sell_weight, "hold": hold_weight}}
+            metadata={"weights": {"buy": buy_weight, "sell": sell_weight, "hold": hold_weight}},
         )
 
     def _consensus_voting(self, signals: List[StrategySignal]) -> CompositeSignal:
@@ -225,7 +223,7 @@ class SignalAggregator:
             confidence=confidence,
             contributing_strategies=[s.strategy_name for s in signals],
             timestamp=datetime.now(),
-            metadata={"ratios": {"buy": buy_ratio, "sell": sell_ratio}}
+            metadata={"ratios": {"buy": buy_ratio, "sell": sell_ratio}},
         )
 
     def _majority_voting(self, signals: List[StrategySignal]) -> CompositeSignal:
@@ -250,7 +248,7 @@ class SignalAggregator:
             confidence=confidence,
             contributing_strategies=[s.strategy_name for s in signals],
             timestamp=datetime.now(),
-            metadata={"counts": {"buy": buy_count, "sell": sell_count, "hold": hold_count}}
+            metadata={"counts": {"buy": buy_count, "sell": sell_count, "hold": hold_count}},
         )
 
     def _weighted_average(self, signals: List[StrategySignal]) -> CompositeSignal:
@@ -277,5 +275,5 @@ class SignalAggregator:
             confidence=confidence,
             contributing_strategies=[s.strategy_name for s in signals],
             timestamp=datetime.now(),
-            metadata={"weighted_confidence": weighted_confidence, "total_weight": total_weight}
+            metadata={"weighted_confidence": weighted_confidence, "total_weight": total_weight},
         )

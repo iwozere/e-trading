@@ -9,17 +9,17 @@ All client interactions are handled through the Main API Service.
 import asyncio
 import signal
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.service.config import config
 from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
+from src.notification.service.config import config
 
 _logger = setup_logger(__name__)
 
@@ -48,7 +48,7 @@ class MessagePoller:
         self.processor = processor
         self.poll_interval_seconds = poll_interval_seconds
         self.running = False
-        self.instance_id = f"notification_service_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        self.instance_id = f"notification_service_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
         self._logger = setup_logger(f"{__name__}.MessagePoller")
 
     async def start(self):
@@ -103,14 +103,12 @@ class MessagePoller:
             with db_service.uow() as uow:
                 # Get enabled channels from the processor
                 enabled_channels = None
-                if self.processor and hasattr(self.processor, '_channel_instances'):
+                if self.processor and hasattr(self.processor, "_channel_instances"):
                     enabled_channels = list(self.processor._channel_instances.keys())
 
                 # Use repository method for atomic locking (this is acceptable at this level)
                 messages = uow.notifications.messages.get_pending_messages_with_lock(
-                    limit=10,
-                    lock_instance_id=self.instance_id,
-                    channels=enabled_channels
+                    limit=10, lock_instance_id=self.instance_id, channels=enabled_channels
                 )
 
                 # No manual commit needed - UoW auto-commits on successful exit
@@ -130,12 +128,9 @@ class MessagePoller:
         try:
             # Process each message using the database-centric method
             for message in messages:
-                if hasattr(self.processor, 'process_database_message'):
+                if hasattr(self.processor, "process_database_message"):
                     result = await self.processor.process_database_message(message)
-                    self._logger.debug(
-                        "Processed message %s: success=%s",
-                        message.id, result.success
-                    )
+                    self._logger.debug("Processed message %s: success=%s", message.id, result.success)
                 else:
                     self._logger.error("Message processor does not support database messages")
 
@@ -199,8 +194,8 @@ class HealthReporter:
     async def _report_service_health(self):
         """Report notification service health to database."""
         try:
-            from src.data.db.services.system_health_service import SystemHealthService
             from src.data.db.models.model_system_health import SystemHealthStatus
+            from src.data.db.services.system_health_service import SystemHealthService
 
             # Initialize health service (no arguments needed - uses @with_uow decorator)
             health_service = SystemHealthService()
@@ -209,23 +204,19 @@ class HealthReporter:
             status = SystemHealthStatus.HEALTHY
             error_message = None
             metadata = {
-                'service': config.service_name,
-                'version': config.version,
-                'message_processor_running': message_processor.is_running if message_processor else False,
-                'message_poller_running': message_poller.running if message_poller else False
+                "service": config.service_name,
+                "version": config.version,
+                "message_processor_running": message_processor.is_running if message_processor else False,
+                "message_poller_running": message_poller.running if message_poller else False,
             }
 
             if not (message_processor and message_processor.is_running):
                 status = SystemHealthStatus.DOWN
-                error_message = 'Message processor not running'
+                error_message = "Message processor not running"
 
             # Update service health (method manages its own UoW context)
             health_service.update_system_health(
-                system='notification',
-                component=None,
-                status=status,
-                error_message=error_message,
-                metadata=metadata
+                system="notification", component=None, status=status, error_message=error_message, metadata=metadata
             )
 
         except Exception:
@@ -234,11 +225,11 @@ class HealthReporter:
     async def _report_channel_health(self):
         """Report channel health to database."""
         try:
-            if not message_processor or not hasattr(message_processor, '_channel_instances'):
+            if not message_processor or not hasattr(message_processor, "_channel_instances"):
                 return
 
-            from src.data.db.services.system_health_service import SystemHealthService
             from src.data.db.models.model_system_health import SystemHealthStatus
+            from src.data.db.services.system_health_service import SystemHealthService
 
             # Initialize health service (no arguments needed - uses @with_uow decorator)
             health_service = SystemHealthService()
@@ -247,12 +238,16 @@ class HealthReporter:
             for channel_name, channel_instance in message_processor._channel_instances.items():
                 try:
                     # Perform channel health check
-                    if hasattr(channel_instance, 'health_check'):
+                    if hasattr(channel_instance, "health_check"):
                         health_result = await channel_instance.health_check()
 
-                        status = SystemHealthStatus.HEALTHY if health_result.get('healthy', False) else SystemHealthStatus.DOWN
-                        error_message = health_result.get('error')
-                        response_time_ms = health_result.get('response_time_ms')
+                        status = (
+                            SystemHealthStatus.HEALTHY
+                            if health_result.get("healthy", False)
+                            else SystemHealthStatus.DOWN
+                        )
+                        error_message = health_result.get("error")
+                        response_time_ms = health_result.get("response_time_ms")
                     else:
                         # Default to healthy if no health check method
                         status = SystemHealthStatus.HEALTHY
@@ -265,7 +260,7 @@ class HealthReporter:
                         status=status,
                         response_time_ms=response_time_ms,
                         error_message=error_message,
-                        metadata={'last_check': datetime.now(timezone.utc).isoformat()}
+                        metadata={"last_check": datetime.now(UTC).isoformat()},
                     )
 
                 except Exception as e:
@@ -275,7 +270,7 @@ class HealthReporter:
                     health_service.update_notification_channel_health(
                         channel=channel_name,
                         status=SystemHealthStatus.DOWN,
-                        error_message=f'Health check failed: {str(e)}'
+                        error_message=f"Health check failed: {str(e)}",
                     )
 
         except Exception:
@@ -291,15 +286,15 @@ async def _register_channel_plugins():
     """
     try:
         from src.notification.channels.base import channel_registry
-        from src.notification.channels.telegram_channel import TelegramChannel
         from src.notification.channels.email_channel import EmailChannel
         from src.notification.channels.sms_channel import SMSChannel
+        from src.notification.channels.telegram_channel import TelegramChannel
 
         # Map of all known channel classes
         _all_channel_classes = {
-            'telegram': TelegramChannel,
-            'email': EmailChannel,
-            'sms': SMSChannel,
+            "telegram": TelegramChannel,
+            "email": EmailChannel,
+            "sms": SMSChannel,
         }
 
         # Only register channels that are enabled in config
@@ -309,7 +304,8 @@ async def _register_channel_plugins():
 
         _logger.info(
             "Registered channel plugins (enabled_channels=%s): %s",
-            config.enabled_channels, channel_registry.list_channels()
+            config.enabled_channels,
+            channel_registry.list_channels(),
         )
 
     except Exception:
@@ -324,6 +320,7 @@ async def startup():
 
     # Initialize database
     from src.data.db.services.database_service import init_databases
+
     init_databases()
     _logger.info("Database initialized")
 
@@ -332,19 +329,20 @@ async def startup():
 
     # Initialize message processor
     from src.notification.service.processor import message_processor as mp
+
     message_processor = mp
     await message_processor.start()
     _logger.info("Message processor started")
 
     # Start health monitor for channel monitoring
     from src.notification.service.health_monitor import health_monitor
+
     await health_monitor.start()
     _logger.info("Health monitor started")
 
     # Initialize message poller with processor dependency injection
     message_poller = MessagePoller(
-        processor=message_processor,
-        poll_interval_seconds=config.processing.batch_timeout_seconds or 5
+        processor=message_processor, poll_interval_seconds=config.processing.batch_timeout_seconds or 5
     )
     await message_poller.start()
     _logger.info("Message poller started")
@@ -365,6 +363,7 @@ async def shutdown():
 
     # Stop health monitor
     from src.notification.service.health_monitor import health_monitor
+
     await health_monitor.stop()
 
     # Stop health reporter
@@ -388,6 +387,7 @@ def setup_signal_handlers(stop_event: asyncio.Event):
     Sets an asyncio.Event instead of stopping the loop directly so the
     main() coroutine can reach its finally block and run shutdown().
     """
+
     def signal_handler(signum, frame):
         _logger.info("Received signal %s, initiating shutdown...", signum)
         stop_event.set()

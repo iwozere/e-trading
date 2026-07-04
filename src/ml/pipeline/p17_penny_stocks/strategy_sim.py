@@ -45,17 +45,17 @@ import os
 import pickle
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
 
-from src.notification.logger import setup_logger
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -66,9 +66,10 @@ TRADEABLE_TIERS = ("A", "B", "C")
 
 # ── Data collection ─────────────────────────────────────────────────────────
 
+
 def collect_detections(
     results_dir: str,
-    since: Optional[str] = None,
+    since: str | None = None,
     tiers: Tuple[str, ...] = TRADEABLE_TIERS,
 ) -> List[Dict[str, Any]]:
     """
@@ -113,7 +114,7 @@ def collect_detections(
 
 def fetch_paths(
     records: List[Dict[str, Any]],
-    cache_path: Optional[str] = None,
+    cache_path: str | None = None,
 ) -> Dict[str, pd.DataFrame]:
     """
     Download daily OHLCV from each ticker's detection date to now, once.
@@ -131,7 +132,7 @@ def fetch_paths(
             _logger.warning("Could not load path cache %s — refetching", cache_path)
 
     dl = YahooDataDownloader()
-    end = datetime.now(timezone.utc).replace(tzinfo=None)
+    end = datetime.now(UTC).replace(tzinfo=None)
     paths: Dict[str, pd.DataFrame] = {}
     fetched = 0
     for i, rec in enumerate(records, 1):
@@ -163,20 +164,22 @@ def fetch_paths(
 
 # ── Simulation core ─────────────────────────────────────────────────────────
 
+
 @dataclass
 class StrategyParams:
     """Strategy knobs. ``stop``/``trail`` meaning depends on the *_mode fields."""
-    stop: float = 0.20         # pct, or ATR-multiple when stop_mode == "atr"
-    trail: float = 0.05        # pct, or ATR-multiple when trail_mode == "atr"
-    activate: float = 0.20     # +fraction above entry that arms the trailing stop
-    stop_mode: str = "pct"     # "pct" | "atr"
-    trail_mode: str = "pct"    # "pct" | "atr"
+
+    stop: float = 0.20  # pct, or ATR-multiple when stop_mode == "atr"
+    trail: float = 0.05  # pct, or ATR-multiple when trail_mode == "atr"
+    activate: float = 0.20  # +fraction above entry that arms the trailing stop
+    stop_mode: str = "pct"  # "pct" | "atr"
+    trail_mode: str = "pct"  # "pct" | "atr"
 
 
 def _resolve_frac(value: float, mode: str, atr: float) -> float:
     """Resolve a stop/trail setting to a fraction of price for one ticker."""
     frac = value if mode == "pct" else value * atr
-    return min(max(frac, 0.02), 0.90)   # clamp to a sane [2%, 90%] band
+    return min(max(frac, 0.02), 0.90)  # clamp to a sane [2%, 90%] band
 
 
 def simulate_trade(
@@ -227,7 +230,7 @@ def simulate_trade(
     return float(hold.iloc[-1].close), "open"
 
 
-def _holding(df: pd.DataFrame, entry: str) -> Tuple[Optional[float], Optional[pd.DataFrame]]:
+def _holding(df: pd.DataFrame, entry: str) -> Tuple[float | None, pd.DataFrame | None]:
     """Return (buy_price, holding-rows) for the chosen entry convention."""
     if df is None or len(df) < 2:
         return None, None
@@ -261,10 +264,16 @@ def evaluate(
         exit_price, reason = simulate_trade(buy, hold, params, rec["atr"])
         ret = exit_price / buy - 1.0
         size = sizing.get(rec["tier"], 0.0)
-        trades.append({
-            "ticker": rec["ticker"], "tier": rec["tier"], "reason": reason,
-            "return_pct": ret * 100.0, "size": size, "pnl": size * ret,
-        })
+        trades.append(
+            {
+                "ticker": rec["ticker"],
+                "tier": rec["tier"],
+                "reason": reason,
+                "return_pct": ret * 100.0,
+                "size": size,
+                "pnl": size * ret,
+            }
+        )
 
     def agg(rows: List[Dict[str, Any]], label: str) -> Dict[str, Any]:
         n = len(rows)
@@ -274,11 +283,13 @@ def evaluate(
         stops = sum(1 for r in rows if r["reason"] == "stop")
         avg = sum(r["return_pct"] for r in rows) / n if n else 0.0
         return {
-            "group": label, "n": n,
+            "group": label,
+            "n": n,
             "win_rate_pct": round(wins / n * 100, 1) if n else 0.0,
             "stop_rate_pct": round(stops / n * 100, 1) if n else 0.0,
             "avg_return_pct": round(avg, 1),
-            "invested": round(invested, 2), "pnl": round(pnl, 2),
+            "invested": round(invested, 2),
+            "pnl": round(pnl, 2),
             "roi_pct": round(pnl / invested * 100, 1) if invested else 0.0,
         }
 
@@ -291,6 +302,7 @@ def evaluate(
 
 
 # ── Objectives ──────────────────────────────────────────────────────────────
+
 
 def objective_value(result: Dict[str, Any], objective: str) -> float:
     """Scalar to maximise for a given evaluate() result."""
@@ -311,12 +323,10 @@ def objective_value(result: Dict[str, Any], objective: str) -> float:
 
 # ── CLI ─────────────────────────────────────────────────────────────────────
 
+
 def _print_result(result: Dict[str, Any]) -> None:
-    cols = ["group", "n", "win_rate_pct", "stop_rate_pct", "avg_return_pct",
-            "invested", "pnl", "roi_pct"]
-    rows = [result["per_tier"]["TOTAL"]] + [
-        result["per_tier"][t] for t in TRADEABLE_TIERS if t in result["per_tier"]
-    ]
+    cols = ["group", "n", "win_rate_pct", "stop_rate_pct", "avg_return_pct", "invested", "pnl", "roi_pct"]
+    rows = [result["per_tier"]["TOTAL"]] + [result["per_tier"][t] for t in TRADEABLE_TIERS if t in result["per_tier"]]
     print(pd.DataFrame(rows)[cols].to_string(index=False))
 
 
@@ -326,8 +336,7 @@ def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--entry", choices=["close", "next_open"], default="close")
     p.add_argument("--stop-mode", choices=["pct", "atr"], default="pct")
     p.add_argument("--trail-mode", choices=["pct", "atr"], default="pct")
-    p.add_argument("--cache", default=None,
-                   help="Pickle cache for price paths (speeds re-runs/optimisation)")
+    p.add_argument("--cache", default=None, help="Pickle cache for price paths (speeds re-runs/optimisation)")
     p.add_argument("--size-a", type=float, default=DEFAULT_SIZING["A"])
     p.add_argument("--size-b", type=float, default=DEFAULT_SIZING["B"])
     p.add_argument("--size-c", type=float, default=DEFAULT_SIZING["C"])
@@ -346,13 +355,14 @@ def _load(args) -> Tuple[List[Dict[str, Any]], Dict[str, pd.DataFrame]]:
 
 def _cmd_run(args) -> int:
     records, paths = _load(args)
-    params = StrategyParams(args.stop, args.trail, args.activate,
-                            args.stop_mode, args.trail_mode)
+    params = StrategyParams(args.stop, args.trail, args.activate, args.stop_mode, args.trail_mode)
     sizing = {"A": args.size_a, "B": args.size_b, "C": args.size_c}
     result = evaluate(records, paths, params, sizing, args.entry)
-    print(f"\n=== Strategy sim: stop={args.stop} ({args.stop_mode}) "
-          f"trail={args.trail} ({args.trail_mode}) activate={args.activate} "
-          f"entry={args.entry} ===")
+    print(
+        f"\n=== Strategy sim: stop={args.stop} ({args.stop_mode}) "
+        f"trail={args.trail} ({args.trail_mode}) activate={args.activate} "
+        f"entry={args.entry} ==="
+    )
     print(f"sizing: A=${args.size_a:.0f} B=${args.size_b:.0f} C=${args.size_c:.0f}\n")
     _print_result(result)
     return 0
@@ -360,6 +370,7 @@ def _cmd_run(args) -> int:
 
 def _cmd_optimize(args) -> int:
     import optuna
+
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
     records, paths = _load(args)
@@ -392,11 +403,10 @@ def _cmd_optimize(args) -> int:
     study.optimize(objective, n_trials=args.trials, show_progress_bar=False)
 
     best = study.best_params
-    sizing = base_sizing if not args.optimize_sizing else {
-        "A": best["size_a"], "B": best["size_b"], "C": best["size_c"]
-    }
-    params = StrategyParams(best["stop"], best["trail"], best["activate"],
-                            args.stop_mode, args.trail_mode)
+    sizing = (
+        base_sizing if not args.optimize_sizing else {"A": best["size_a"], "B": best["size_b"], "C": best["size_c"]}
+    )
+    params = StrategyParams(best["stop"], best["trail"], best["activate"], args.stop_mode, args.trail_mode)
     result = evaluate(records, paths, params, sizing, args.entry)
 
     print(f"\n=== Optuna best ({args.trials} trials, objective={args.objective}) ===")
@@ -428,8 +438,11 @@ def main() -> int:
     _add_common(op)
     op.add_argument("--trials", type=int, default=200)
     op.add_argument("--objective", choices=["total_pnl", "roi", "sharpe"], default="total_pnl")
-    op.add_argument("--optimize-sizing", action="store_true",
-                    help="Also optimise per-tier $ sizing (note: concentrates under total_pnl/roi)")
+    op.add_argument(
+        "--optimize-sizing",
+        action="store_true",
+        help="Also optimise per-tier $ sizing (note: concentrates under total_pnl/roi)",
+    )
     op.set_defaults(func=_cmd_optimize)
 
     args = parser.parse_args()

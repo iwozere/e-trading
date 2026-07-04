@@ -11,12 +11,13 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.service.rate_limiter import rate_limiter, RateLimitResult, RateLimitConfig
-from src.notification.service.priority_handler import priority_handler
-from src.notification.service.batch_processor import batch_processor, BatchConfig
-from src.notification.service.message_queue import QueuedMessage
+from datetime import UTC, datetime
+
 from src.data.db.models.model_notification import MessagePriority
-from datetime import datetime, timezone
+from src.notification.service.batch_processor import BatchConfig, batch_processor
+from src.notification.service.message_queue import QueuedMessage
+from src.notification.service.priority_handler import priority_handler
+from src.notification.service.rate_limiter import RateLimitConfig, RateLimitResult, rate_limiter
 
 
 def create_test_message(msg_id: int, priority: MessagePriority = MessagePriority.NORMAL) -> QueuedMessage:
@@ -30,10 +31,10 @@ def create_test_message(msg_id: int, priority: MessagePriority = MessagePriority
         template_name=None,
         content={"text": f"Test message {msg_id}"},
         metadata=None,
-        scheduled_for=datetime.now(timezone.utc),
+        scheduled_for=datetime.now(UTC),
         retry_count=0,
         max_retries=3,
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC),
     )
 
 

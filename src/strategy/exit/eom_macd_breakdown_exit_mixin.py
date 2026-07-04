@@ -54,11 +54,11 @@ Configuration Example (New architecture):
     }
 """
 
-from typing import Any, Dict, Optional, List
 import math
+from typing import Any, Dict, List
 
-from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
+from src.strategy.exit.base_exit_mixin import BaseExitMixin
 
 _logger = setup_logger(__name__)
 
@@ -69,7 +69,7 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
     New Architecture only.
     """
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
         self._exit_reason = ""
@@ -105,24 +105,20 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
             {
                 "type": "SupportResistance",
                 "params": {"lookback_bars": res_lookback},
-                "fields_mapping": {"resistance": "exit_resistance", "support": "exit_support"}
+                "fields_mapping": {"resistance": "exit_resistance", "support": "exit_support"},
             },
             {
                 "type": "MACD",
                 "params": {"fastperiod": macd_fast, "slowperiod": macd_slow, "signalperiod": macd_signal},
-                "fields_mapping": {"macd": "exit_macd", "macdsignal": "exit_macd_signal", "macdhist": "exit_macd_hist"}
+                "fields_mapping": {"macd": "exit_macd", "macdsignal": "exit_macd_signal", "macdhist": "exit_macd_hist"},
             },
-            {
-                "type": "EOM",
-                "params": {"timeperiod": eom_period},
-                "fields_mapping": {"eom": "exit_eom"}
-            },
+            {"type": "EOM", "params": {"timeperiod": eom_period}, "fields_mapping": {"eom": "exit_eom"}},
             {
                 "type": "SMA",
                 "params": {"timeperiod": vol_ma_period},
                 "data_field": "volume",
-                "fields_mapping": {"sma": "exit_volume_sma"}
-            }
+                "fields_mapping": {"sma": "exit_volume_sma"},
+            },
         ]
 
     def _init_indicators(self):
@@ -135,16 +131,14 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
             self.get_param("macd_slow_period", 26) + self.get_param("macd_signal_period", 9),
             self.get_param("eom_period", 14),
             self.get_param("vol_ma_period", 20),
-            self.get_param("resistance_lookback", 2) * 5
+            self.get_param("resistance_lookback", 2) * 5,
         ]
         return max(periods)
 
     def are_indicators_ready(self) -> bool:
         """Check if required indicators exist in the strategy registry."""
-        required = [
-            'exit_support', 'exit_macd', 'exit_macd_signal', 'exit_macd_hist', 'exit_eom', 'exit_volume_sma'
-        ]
-        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
+        required = ["exit_support", "exit_macd", "exit_macd_signal", "exit_macd_hist", "exit_eom", "exit_volume_sma"]
+        return all(alias in getattr(self.strategy, "indicators", {}) for alias in required)
 
     def should_exit(self) -> bool:
         """Determines if the mixin should exit a position."""
@@ -160,20 +154,20 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
             volume = self.strategy.data.volume[0]
 
             # Unified Indicator Access
-            support = self.get_indicator('exit_support')
-            macd = self.get_indicator('exit_macd')
-            macd_signal = self.get_indicator('exit_macd_signal')
-            macd_hist = self.get_indicator('exit_macd_hist')
+            support = self.get_indicator("exit_support")
+            macd = self.get_indicator("exit_macd")
+            macd_signal = self.get_indicator("exit_macd_signal")
+            macd_hist = self.get_indicator("exit_macd_hist")
 
-            macd_prev = self.get_indicator_prev('exit_macd', 1)
-            macd_signal_prev = self.get_indicator_prev('exit_macd_signal', 1)
-            macd_hist_prev = self.get_indicator_prev('exit_macd_hist', 1)
+            macd_prev = self.get_indicator_prev("exit_macd", 1)
+            macd_signal_prev = self.get_indicator_prev("exit_macd_signal", 1)
+            macd_hist_prev = self.get_indicator_prev("exit_macd_hist", 1)
 
-            eom = self.get_indicator('exit_eom')
-            volume_sma = self.get_indicator('exit_volume_sma')
+            eom = self.get_indicator("exit_eom")
+            volume_sma = self.get_indicator("exit_volume_sma")
 
             # Get parameters
-            support_threshold = self._resolve_param('support_threshold', 'x_support_threshold', 0.002)
+            support_threshold = self._resolve_param("support_threshold", "x_support_threshold", 0.002)
 
             # Check if support is valid (not NaN)
             if math.isnan(support):

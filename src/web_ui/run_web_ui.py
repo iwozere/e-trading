@@ -15,17 +15,18 @@ Examples:
 """
 
 import argparse
-import subprocess
-import sys
 import os
 import signal
-from pathlib import Path
-from typing import Optional, List
-import uvicorn
+import subprocess
+import sys
 import time
+from pathlib import Path
+from typing import List
+
+import uvicorn
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-# Ensure PROJECT_ROOT is at the absolute top of the path to prevent 
+# Ensure PROJECT_ROOT is at the absolute top of the path to prevent
 # shadowing of 'config' by 'src/config'
 if sys.path[0] != str(PROJECT_ROOT):
     if str(PROJECT_ROOT) in sys.path:
@@ -50,14 +51,14 @@ class WebUIRunner:
         self.dev_mode = dev_mode
         self.host = host
         self.port = port
-        self.backend_process: Optional[subprocess.Popen] = None
-        self.frontend_process: Optional[subprocess.Popen] = None
+        self.backend_process: subprocess.Popen | None = None
+        self.frontend_process: subprocess.Popen | None = None
         self.processes: List[subprocess.Popen] = []
 
     def setup_environment(self):
         """Setup environment variables and paths."""
         # Set environment variables
-        os.environ['PYTHONPATH'] = str(PROJECT_ROOT)
+        os.environ["PYTHONPATH"] = str(PROJECT_ROOT)
 
         # Create necessary directories
         directories = [
@@ -73,16 +74,18 @@ class WebUIRunner:
     def check_dependencies(self) -> bool:
         """Check if required dependencies are available."""
         try:
-            # Check Python dependencies
-            import fastapi
-            import uvicorn
+            # Check Python dependencies are available
+            import importlib.util
+
+            if importlib.util.find_spec("fastapi") is None or importlib.util.find_spec("uvicorn") is None:
+                raise ImportError("fastapi or uvicorn not installed")
+
             _logger.info("✅ Python dependencies available")
 
             # Check if Node.js is available for development mode
             if self.dev_mode:
-                use_shell = os.name == 'nt'
-                result = subprocess.run(['node', '--version'],
-                                      capture_output=True, text=True, shell=use_shell)
+                use_shell = os.name == "nt"
+                result = subprocess.run(["node", "--version"], capture_output=True, text=True, shell=use_shell)
                 if result.returncode == 0:
                     _logger.info("✅ Node.js available: %s", result.stdout.strip())
                 else:
@@ -90,8 +93,7 @@ class WebUIRunner:
                     return False
 
                 # Check if npm is available
-                result = subprocess.run(['npm', '--version'],
-                                      capture_output=True, text=True, shell=use_shell)
+                result = subprocess.run(["npm", "--version"], capture_output=True, text=True, shell=use_shell)
                 if result.returncode == 0:
                     _logger.info("✅ npm available: %s", result.stdout.strip())
                 else:
@@ -116,13 +118,13 @@ class WebUIRunner:
             _logger.info("Installing frontend dependencies...")
 
             try:
-                result = subprocess.run(
-                    ['npm', 'install'],
+                _result = subprocess.run(
+                    ["npm", "install"],
                     cwd=frontend_dir,
                     check=True,
                     capture_output=True,
                     text=True,
-                    shell=os.name == 'nt'
+                    shell=os.name == "nt",
                 )
                 _logger.info("✅ Frontend dependencies installed")
                 return True
@@ -157,13 +159,13 @@ class WebUIRunner:
                 return False
 
             # Build the frontend
-            result = subprocess.run(
-                ['npm', 'run', 'build'],
+            _result = subprocess.run(
+                ["npm", "run", "build"],
                 cwd=frontend_dir,
                 check=True,
                 capture_output=True,
                 text=True,
-                shell=os.name == 'nt'
+                shell=os.name == "nt",
             )
 
             if dist_dir.exists():
@@ -191,17 +193,11 @@ class WebUIRunner:
                 port=self.port,
                 reload=True,
                 reload_dirs=[str(PROJECT_ROOT / "src")],
-                log_level="info"
+                log_level="info",
             )
         else:
             # Production mode
-            uvicorn.run(
-                "src.api.main:app",
-                host=self.host,
-                port=self.port,
-                log_level="info",
-                access_log=True
-            )
+            uvicorn.run("src.api.main:app", host=self.host, port=self.port, log_level="info", access_log=True)
 
     def start_frontend_dev(self):
         """Start the frontend development server."""
@@ -216,14 +212,11 @@ class WebUIRunner:
             # Set environment variables for frontend
             env = os.environ.copy()
             frontend_host = self.host if self.host != "0.0.0.0" else "localhost"
-            env['VITE_API_BASE_URL'] = f'http://{frontend_host}:{self.port}'
-            env['VITE_WS_URL'] = f'ws://{frontend_host}:{self.port}'
+            env["VITE_API_BASE_URL"] = f"http://{frontend_host}:{self.port}"
+            env["VITE_WS_URL"] = f"ws://{frontend_host}:{self.port}"
 
             self.frontend_process = subprocess.Popen(
-                ['npm', 'run', 'dev'],
-                cwd=frontend_dir,
-                env=env,
-                shell=os.name == 'nt'
+                ["npm", "run", "dev"], cwd=frontend_dir, env=env, shell=os.name == "nt"
             )
 
             self.processes.append(self.frontend_process)
@@ -234,6 +227,7 @@ class WebUIRunner:
 
     def setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown."""
+
         def signal_handler(signum, frame):
             _logger.info("Received signal %s, shutting down...", signum)
             self.shutdown()
@@ -248,7 +242,7 @@ class WebUIRunner:
 
         # Stop heartbeat
         try:
-            if hasattr(self, 'heartbeat_manager') and self.heartbeat_manager:
+            if hasattr(self, "heartbeat_manager") and self.heartbeat_manager:
                 self.heartbeat_manager.stop_heartbeat()
                 _logger.info("Stopped web UI heartbeat")
         except Exception:
@@ -321,50 +315,46 @@ class WebUIRunner:
                         frontend_running = True  # In production, frontend is served by backend
 
                         if self.dev_mode:
-                            frontend_running = self.frontend_process is not None and self.frontend_process.poll() is None
+                            frontend_running = (
+                                self.frontend_process is not None and self.frontend_process.poll() is None
+                            )
 
                         if backend_running and frontend_running:
                             return {
-                                'status': 'HEALTHY',
-                                'metadata': {
-                                    'mode': 'development' if self.dev_mode else 'production',
-                                    'host': self.host,
-                                    'port': self.port,
-                                    'backend_running': backend_running,
-                                    'frontend_running': frontend_running
-                                }
+                                "status": "HEALTHY",
+                                "metadata": {
+                                    "mode": "development" if self.dev_mode else "production",
+                                    "host": self.host,
+                                    "port": self.port,
+                                    "backend_running": backend_running,
+                                    "frontend_running": frontend_running,
+                                },
                             }
                         elif backend_running:
                             return {
-                                'status': 'DEGRADED',
-                                'error_message': 'Frontend not running' if self.dev_mode else 'Backend only',
-                                'metadata': {
-                                    'mode': 'development' if self.dev_mode else 'production',
-                                    'backend_running': backend_running,
-                                    'frontend_running': frontend_running
-                                }
+                                "status": "DEGRADED",
+                                "error_message": "Frontend not running" if self.dev_mode else "Backend only",
+                                "metadata": {
+                                    "mode": "development" if self.dev_mode else "production",
+                                    "backend_running": backend_running,
+                                    "frontend_running": frontend_running,
+                                },
                             }
                         else:
                             return {
-                                'status': 'DOWN',
-                                'error_message': 'Backend not running',
-                                'metadata': {
-                                    'mode': 'development' if self.dev_mode else 'production',
-                                    'backend_running': backend_running,
-                                    'frontend_running': frontend_running
-                                }
+                                "status": "DOWN",
+                                "error_message": "Backend not running",
+                                "metadata": {
+                                    "mode": "development" if self.dev_mode else "production",
+                                    "backend_running": backend_running,
+                                    "frontend_running": frontend_running,
+                                },
                             }
                     except Exception as e:
-                        return {
-                            'status': 'DOWN',
-                            'error_message': f'Health check failed: {str(e)}'
-                        }
+                        return {"status": "DOWN", "error_message": f"Health check failed: {str(e)}"}
 
                 # Create and start heartbeat manager
-                self.heartbeat_manager = HeartbeatManager(
-                    system='web_ui',
-                    interval_seconds=30
-                )
+                self.heartbeat_manager = HeartbeatManager(system="web_ui", interval_seconds=30)
                 self.heartbeat_manager.set_health_check_function(web_ui_health_check)
                 self.heartbeat_manager.start_heartbeat()
 
@@ -390,22 +380,15 @@ class WebUIRunner:
 
 def main():
     """Main function."""
-    parser = argparse.ArgumentParser(description='Trading Web UI Runner')
-    parser.add_argument('--dev', action='store_true',
-                       help='Run in development mode with auto-reload')
-    parser.add_argument('--host', default='0.0.0.0',
-                       help='Host to bind to (default: 0.0.0.0)')
-    parser.add_argument('--port', type=int, default=5003,
-                        help='Port to bind to (default: 5003)')
+    parser = argparse.ArgumentParser(description="Trading Web UI Runner")
+    parser.add_argument("--dev", action="store_true", help="Run in development mode with auto-reload")
+    parser.add_argument("--host", default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)")
+    parser.add_argument("--port", type=int, default=5003, help="Port to bind to (default: 5003)")
 
     args = parser.parse_args()
 
     # Create and run the web UI
-    runner = WebUIRunner(
-        dev_mode=args.dev,
-        host=args.host,
-        port=args.port
-    )
+    runner = WebUIRunner(dev_mode=args.dev, host=args.host, port=args.port)
 
     success = runner.run()
     sys.exit(0 if success else 1)

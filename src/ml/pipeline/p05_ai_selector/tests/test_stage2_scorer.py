@@ -1,18 +1,17 @@
 """Tests for Stage2Scorer."""
 
+import sys
 from datetime import date
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-import sys
+from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
-import pytest
 
-from src.ml.pipeline.p05_ai_selector.stages.stage2_scorer import Stage2Scorer
 from src.ml.pipeline.p05_ai_selector.config import STAGE2_TOP_N
+from src.ml.pipeline.p05_ai_selector.stages.stage2_scorer import Stage2Scorer
 
 
 def _make_stage1_row(ticker: str, score: float = 30.0, vol_ratio: float = 1.2) -> dict:
@@ -47,7 +46,9 @@ class TestStage2Scorer:
             "13dg_tickers": set(),
         }
 
-        with patch.object(scorer, "_fetch_all_fundamentals", return_value={"BOOSTED": None, "TICK1": None, "TICK2": None}):
+        with patch.object(
+            scorer, "_fetch_all_fundamentals", return_value={"BOOSTED": None, "TICK1": None, "TICK2": None}
+        ):
             result = scorer.run(stage1, p18_data, {}, date(2026, 6, 14))
 
         boosted_row = result[result["ticker"] == "BOOSTED"]
@@ -60,12 +61,17 @@ class TestStage2Scorer:
         """Tickers without fundamentals still appear in the output (score 0)."""
         scorer = Stage2Scorer(cache_dir=tmp_path)
         stage1 = _make_stage1_df(3)
-        p18_data = {"high_score_count": 0, "tickers": {}, "consensus_tickers": set(),
-                    "form4_buy_tickers": set(), "13dg_tickers": set()}
+        p18_data = {
+            "high_score_count": 0,
+            "tickers": {},
+            "consensus_tickers": set(),
+            "form4_buy_tickers": set(),
+            "13dg_tickers": set(),
+        }
 
-        with patch.object(scorer, "_fetch_all_fundamentals", return_value={
-            "TICK0": None, "TICK1": None, "TICK2": None
-        }):
+        with patch.object(
+            scorer, "_fetch_all_fundamentals", return_value={"TICK0": None, "TICK1": None, "TICK2": None}
+        ):
             result = scorer.run(stage1, p18_data, {}, date(2026, 6, 14))
 
         assert len(result) == 3
@@ -75,8 +81,13 @@ class TestStage2Scorer:
         """Output is capped at STAGE2_TOP_N rows."""
         scorer = Stage2Scorer(cache_dir=tmp_path)
         stage1 = _make_stage1_df(40)
-        p18_data = {"high_score_count": 0, "tickers": {}, "consensus_tickers": set(),
-                    "form4_buy_tickers": set(), "13dg_tickers": set()}
+        p18_data = {
+            "high_score_count": 0,
+            "tickers": {},
+            "consensus_tickers": set(),
+            "form4_buy_tickers": set(),
+            "13dg_tickers": set(),
+        }
 
         fund_map = {f"TICK{i}": None for i in range(40)}
         with patch.object(scorer, "_fetch_all_fundamentals", return_value=fund_map):
@@ -92,8 +103,13 @@ class TestStage2Scorer:
         stage1.loc[1, "ticker"] = "NOEARNINGS"
 
         earnings_flags = {"EARNER": date(2026, 6, 18)}
-        p18_data = {"high_score_count": 0, "tickers": {}, "consensus_tickers": set(),
-                    "form4_buy_tickers": set(), "13dg_tickers": set()}
+        p18_data = {
+            "high_score_count": 0,
+            "tickers": {},
+            "consensus_tickers": set(),
+            "form4_buy_tickers": set(),
+            "13dg_tickers": set(),
+        }
 
         with patch.object(scorer, "_fetch_all_fundamentals", return_value={"EARNER": None, "NOEARNINGS": None}):
             result = scorer.run(stage1, earnings_flags=earnings_flags, p18_data=p18_data, as_of_date=date(2026, 6, 14))

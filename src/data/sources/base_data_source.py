@@ -5,11 +5,12 @@ This module defines the common interface and functionality that all data sources
 must implement, providing consistency and reducing code duplication.
 """
 
-from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
-import pandas as pd
 import logging
+from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
+from typing import Any, Dict, List
+
+import pandas as pd
 
 from src.data.utils import get_data_handler, get_provider_limiter
 
@@ -33,7 +34,7 @@ class BaseDataSource(ABC):
         provider_name: str,
         cache_enabled: bool = True,
         rate_limit_enabled: bool = True,
-        validation_enabled: bool = True
+        validation_enabled: bool = True,
     ):
         """
         Initialize base data source.
@@ -86,10 +87,10 @@ class BaseDataSource(ABC):
         self,
         symbol: str,
         interval: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        limit: Optional[int] = None
-    ) -> Optional[pd.DataFrame]:
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        limit: int | None = None,
+    ) -> pd.DataFrame | None:
         """
         Fetch historical OHLCV data.
 
@@ -106,12 +107,7 @@ class BaseDataSource(ABC):
         pass
 
     @abstractmethod
-    def start_realtime_feed(
-        self,
-        symbol: str,
-        interval: str,
-        callback: Optional[callable] = None
-    ) -> bool:
+    def start_realtime_feed(self, symbol: str, interval: str, callback: callable | None = None) -> bool:
         """
         Start real-time data feed.
 
@@ -142,11 +138,11 @@ class BaseDataSource(ABC):
         self,
         symbol: str,
         interval: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
         use_cache: bool = True,
-        force_refresh: bool = False
-    ) -> Optional[pd.DataFrame]:
+        force_refresh: bool = False,
+    ) -> pd.DataFrame | None:
         """
         Get data with caching support.
 
@@ -165,9 +161,7 @@ class BaseDataSource(ABC):
             return self._fetch_and_cache_data(symbol, interval, start_date, end_date)
 
         # Try to get from cache first
-        cached_data = self.data_handler.get_cached_data(
-            symbol, interval, start_date, end_date
-        )
+        cached_data = self.data_handler.get_cached_data(symbol, interval, start_date, end_date)
 
         if cached_data is not None:
             _logger.info("Retrieved cached data for %s %s", symbol, interval)
@@ -177,12 +171,8 @@ class BaseDataSource(ABC):
         return self._fetch_and_cache_data(symbol, interval, start_date, end_date)
 
     def _fetch_and_cache_data(
-        self,
-        symbol: str,
-        interval: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
-    ) -> Optional[pd.DataFrame]:
+        self, symbol: str, interval: str, start_date: datetime | None = None, end_date: datetime | None = None
+    ) -> pd.DataFrame | None:
         """
         Fetch data from source and cache it.
 
@@ -212,8 +202,8 @@ class BaseDataSource(ABC):
             # Validate data if enabled
             if self.validation_enabled:
                 validation_result = self.data_handler.validate_and_score_data(data, symbol)
-                if not validation_result['is_valid']:
-                    _logger.warning("Data validation failed for %s: %s", symbol, validation_result['errors'])
+                if not validation_result["is_valid"]:
+                    _logger.warning("Data validation failed for %s: %s", symbol, validation_result["errors"])
                     # Continue with invalid data but log warning
 
             # Standardize data format
@@ -249,9 +239,9 @@ class BaseDataSource(ABC):
         _logger.error("%s: %s", message, error)
 
         # Log additional context for debugging
-        if hasattr(error, 'response'):
-            _logger.error("Response status: %s", getattr(error.response, 'status_code', 'N/A'))
-            _logger.error("Response text: %s", getattr(error.response, 'text', 'N/A'))
+        if hasattr(error, "response"):
+            _logger.error("Response status: %s", getattr(error.response, "status_code", "N/A"))
+            _logger.error("Response text: %s", getattr(error.response, "text", "N/A"))
 
     def get_connection_status(self) -> Dict[str, Any]:
         """
@@ -261,14 +251,14 @@ class BaseDataSource(ABC):
             Dictionary with status information
         """
         return {
-            'provider': self.provider_name,
-            'is_connected': self._is_connected,
-            'error_count': self._error_count,
-            'last_error': str(self._last_error) if self._last_error else None,
-            'last_successful_fetch': self._last_successful_fetch.isoformat() if self._last_successful_fetch else None,
-            'cache_enabled': self.cache_enabled,
-            'rate_limit_enabled': self.rate_limit_enabled,
-            'validation_enabled': self.validation_enabled
+            "provider": self.provider_name,
+            "is_connected": self._is_connected,
+            "error_count": self._error_count,
+            "last_error": str(self._last_error) if self._last_error else None,
+            "last_successful_fetch": self._last_successful_fetch.isoformat() if self._last_successful_fetch else None,
+            "cache_enabled": self.cache_enabled,
+            "rate_limit_enabled": self.rate_limit_enabled,
+            "validation_enabled": self.validation_enabled,
         }
 
     def reset_error_count(self) -> None:
@@ -289,18 +279,13 @@ class BaseDataSource(ABC):
             return False
 
         # Consider unhealthy if no successful fetch in last hour
-        if (self._last_successful_fetch and
-            datetime.now() - self._last_successful_fetch > timedelta(hours=1)):
+        if self._last_successful_fetch and datetime.now() - self._last_successful_fetch > timedelta(hours=1):
             return False
 
         return True
 
     def get_data_quality_report(
-        self,
-        symbol: str,
-        interval: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+        self, symbol: str, interval: str, start_date: datetime | None = None, end_date: datetime | None = None
     ) -> Dict[str, Any]:
         """
         Get comprehensive data quality report.
@@ -318,24 +303,24 @@ class BaseDataSource(ABC):
 
         if data is None or data.empty:
             return {
-                'symbol': symbol,
-                'interval': interval,
-                'data_points': 0,
-                'quality_score': 0.0,
-                'errors': ['No data available'],
-                'timestamp_range': None,
-                'data_completeness': 0.0
+                "symbol": symbol,
+                "interval": interval,
+                "data_points": 0,
+                "quality_score": 0.0,
+                "errors": ["No data available"],
+                "timestamp_range": None,
+                "data_completeness": 0.0,
             }
 
         # Get validation results
         validation_result = self.data_handler.validate_and_score_data(data, symbol)
-        quality_score = validation_result['quality_score']
+        quality_score = validation_result["quality_score"]
 
         # Calculate additional metrics
         timestamp_range = {
-            'start': data['timestamp'].min().isoformat(),
-            'end': data['timestamp'].max().isoformat(),
-            'duration_days': (data['timestamp'].max() - data['timestamp'].min()).days
+            "start": data["timestamp"].min().isoformat(),
+            "end": data["timestamp"].max().isoformat(),
+            "duration_days": (data["timestamp"].max() - data["timestamp"].min()).days,
         }
 
         # Calculate data completeness (assuming regular intervals)
@@ -344,21 +329,18 @@ class BaseDataSource(ABC):
         data_completeness = actual_points / expected_points if expected_points > 0 else 0.0
 
         return {
-            'symbol': symbol,
-            'interval': interval,
-            'data_points': actual_points,
-            'quality_score': quality_score['quality_score'],
-            'errors': validation_result['errors'],
-            'timestamp_range': timestamp_range,
-            'data_completeness': data_completeness,
-            'validation_details': quality_score
+            "symbol": symbol,
+            "interval": interval,
+            "data_points": actual_points,
+            "quality_score": quality_score["quality_score"],
+            "errors": validation_result["errors"],
+            "timestamp_range": timestamp_range,
+            "data_completeness": data_completeness,
+            "validation_details": quality_score,
         }
 
     def _calculate_expected_points(
-        self,
-        interval: str,
-        start_date: Optional[datetime],
-        end_date: Optional[datetime]
+        self, interval: str, start_date: datetime | None, end_date: datetime | None
     ) -> int:
         """
         Calculate expected number of data points for given interval and date range.
@@ -396,13 +378,13 @@ class BaseDataSource(ABC):
         """
         interval = interval.lower()
 
-        if interval.endswith('m'):
+        if interval.endswith("m"):
             return int(interval[:-1])
-        elif interval.endswith('h'):
+        elif interval.endswith("h"):
             return int(interval[:-1]) * 60
-        elif interval.endswith('d'):
+        elif interval.endswith("d"):
             return int(interval[:-1]) * 24 * 60
-        elif interval.endswith('w'):
+        elif interval.endswith("w"):
             return int(interval[:-1]) * 7 * 24 * 60
         else:
             _logger.warning("Unknown interval format: %s", interval)
@@ -412,7 +394,7 @@ class BaseDataSource(ABC):
         """Clean up resources and connections."""
         try:
             # Stop all real-time feeds
-            symbols = getattr(self, '_active_feeds', [])
+            symbols = getattr(self, "_active_feeds", [])
             for symbol in symbols:
                 self.stop_realtime_feed(symbol)
 

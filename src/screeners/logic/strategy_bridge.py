@@ -6,16 +6,17 @@ A wrapper that runs a Backtrader strategy in 'one-shot' mode to extract
 the latest signals and indicator values without full trade simulation.
 """
 
+from datetime import UTC, datetime
+from typing import Any, Dict, Type
+
 import backtrader as bt
 import pandas as pd
-from typing import Dict, Any, Type, Optional
-import logging
-from datetime import datetime, timezone
 
-from src.strategy.base_strategy import BaseStrategy
 from src.notification.logger import setup_logger
+from src.strategy.base_strategy import BaseStrategy
 
 _logger = setup_logger(__name__)
+
 
 class ScreenerStrategyBridge:
     """
@@ -57,14 +58,10 @@ class ScreenerStrategyBridge:
         # 2. Add Strategy
         # Ensure optimization_mode is set to skip DB logging
         sc = self.strategy_config.copy()
-        sc['optimization_mode'] = True
-        sc['enable_database_logging'] = False
+        sc["optimization_mode"] = True
+        sc["enable_database_logging"] = False
 
-        cerebro.addstrategy(
-            self.strategy_class,
-            strategy_config=sc,
-            symbol=symbol
-        )
+        cerebro.addstrategy(self.strategy_class, strategy_config=sc, symbol=symbol)
 
         # 3. Setup minimal broker
         cerebro.broker.setcash(100000.0)
@@ -80,7 +77,7 @@ class ScreenerStrategyBridge:
 
         except Exception as e:
             _logger.exception("Error in StrategyBridge for %s: %s", symbol, e)
-            return {"symbol": symbol, "error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
+            return {"symbol": symbol, "error": str(e), "timestamp": datetime.now(UTC).isoformat()}
 
     def _harvest_results(self, strategy: BaseStrategy, symbol: str) -> Dict[str, Any]:
         """Extracts the state of the strategy at the current (last) bar."""
@@ -91,12 +88,12 @@ class ScreenerStrategyBridge:
             "timestamp": strategy.data.datetime.datetime(0).isoformat(),
             "price": strategy.data.close[0],
             "indicators": {},
-            "signal": "neutral"
+            "signal": "neutral",
         }
 
         # Extract Indicators
         # strategy.indicators stores the line objects created via IndicatorFactory
-        if hasattr(strategy, 'indicators'):
+        if hasattr(strategy, "indicators"):
             for alias, indicator in strategy.indicators.items():
                 try:
                     # Get current value (last bar)
@@ -106,12 +103,12 @@ class ScreenerStrategyBridge:
                     results["indicators"][alias] = None
 
         # Extract ML state (HMM-LSTM specific)
-        if hasattr(strategy, 'entry_mixin'):
+        if hasattr(strategy, "entry_mixin"):
             em = strategy.entry_mixin
             ml_state = {
-                "regime": getattr(em, 'current_regime', None),
-                "confidence": float(getattr(em, 'regime_confidence', 0.0)),
-                "prediction": float(getattr(em, 'current_prediction', 0.0))
+                "regime": getattr(em, "current_regime", None),
+                "confidence": float(getattr(em, "regime_confidence", 0.0)),
+                "prediction": float(getattr(em, "current_prediction", 0.0)),
             }
             results["ml_analysis"] = ml_state
 

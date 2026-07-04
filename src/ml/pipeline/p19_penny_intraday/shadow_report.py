@@ -19,13 +19,13 @@ import sqlite3
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.ml.pipeline.p19_penny_intraday.shadow_store import DEFAULT_DB_PATH
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -35,13 +35,20 @@ def _percentiles(vals: List[float]) -> Dict[str, float]:
         return {"n": 0, "min": 0.0, "median": 0.0, "p90": 0.0, "max": 0.0}
     s = sorted(vals)
     n = len(s)
+
     def at(p: float) -> float:
         return s[min(n - 1, int(p * n))]
-    return {"n": n, "min": round(s[0], 3), "median": round(at(0.5), 3),
-            "p90": round(at(0.9), 3), "max": round(s[-1], 3)}
+
+    return {
+        "n": n,
+        "min": round(s[0], 3),
+        "median": round(at(0.5), 3),
+        "p90": round(at(0.9), 3),
+        "max": round(s[-1], 3),
+    }
 
 
-def report(db_path: str = DEFAULT_DB_PATH, date: Optional[str] = None) -> Dict[str, Any]:
+def report(db_path: str = DEFAULT_DB_PATH, date: str | None = None) -> Dict[str, Any]:
     """Build a stats dict for one trading date (default: the latest present)."""
     if not os.path.exists(db_path):
         return {"db": db_path, "error": "no shadow store yet"}
@@ -50,14 +57,14 @@ def report(db_path: str = DEFAULT_DB_PATH, date: Optional[str] = None) -> Dict[s
         dates = [r[0] for r in conn.execute("SELECT DISTINCT date FROM shadow_log ORDER BY date")]
         total = conn.execute("SELECT COUNT(*) FROM shadow_log").fetchone()[0]
         target = date or (dates[-1] if dates else None)
-        out: Dict[str, Any] = {"db": db_path, "total_rows": total,
-                               "days_collected": len(dates), "date": target}
+        out: Dict[str, Any] = {"db": db_path, "total_rows": total, "days_collected": len(dates), "date": target}
         if not target:
             return out
 
         rows = conn.execute(
             "SELECT ticker, source, pct_from_open, rvol_so_far, day_volume, "
-            "avg_volume_30d, eod_close FROM shadow_log WHERE date = ?", (target,)
+            "avg_volume_30d, eod_close FROM shadow_log WHERE date = ?",
+            (target,),
         ).fetchall()
         out["rows"] = len(rows)
         if not rows:

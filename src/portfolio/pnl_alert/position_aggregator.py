@@ -6,7 +6,7 @@ of holdings used by the PnL evaluator.
 """
 
 from dataclasses import dataclass
-from typing import Any, Iterable, List, Optional, Tuple
+from typing import Any, Iterable, List, Tuple
 
 from src.notification.logger import setup_logger
 from src.portfolio.pnl_alert.watchlist_loader import WatchlistEntry
@@ -141,7 +141,9 @@ def merge_holdings(
         if pos.quantity <= 0 or pos.avg_price <= 0:
             _logger.debug(
                 "Skipping IBKR position with non-positive qty/price: %s qty=%s avg=%s",
-                pos.symbol, pos.quantity, pos.avg_price,
+                pos.symbol,
+                pos.quantity,
+                pos.avg_price,
             )
             continue
 
@@ -155,7 +157,8 @@ def merge_holdings(
     if skipped_non_stk:
         _logger.info(
             "Filtered out %d non-STK IBKR positions: %s",
-            len(skipped_non_stk), skipped_non_stk,
+            len(skipped_non_stk),
+            skipped_non_stk,
         )
 
     conflicts: List[str] = []
@@ -165,7 +168,9 @@ def merge_holdings(
             ibkr = holdings_by_symbol[symbol]
             _logger.warning(
                 "Symbol %s present in both IBKR (avg=%.4f) and watchlist (avg=%.4f); IBKR wins",
-                symbol, ibkr.avg_price, entry.avg_price,
+                symbol,
+                ibkr.avg_price,
+                entry.avg_price,
             )
             conflicts.append(symbol)
             continue
@@ -189,7 +194,7 @@ def merge_holdings(
 
 
 async def aggregate_holdings(
-    broker: Optional[Any],
+    broker: Any | None,
     watchlist: Iterable[WatchlistEntry],
     stk_only: bool = True,
 ) -> Tuple[List[Holding], List[str]]:

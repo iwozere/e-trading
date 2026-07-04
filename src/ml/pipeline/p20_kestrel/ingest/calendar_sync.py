@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
@@ -45,6 +45,7 @@ def _fetch_finnhub_earnings(ticker: str, api_key: str) -> List[Dict[str, Any]]:
         List of earnings event dicts from Finnhub.
     """
     import requests
+
     try:
         today = date.today()
         url = "https://finnhub.io/api/v1/calendar/earnings"
@@ -74,7 +75,11 @@ def _fire_countdown_alert(catalyst: Dict[str, Any], days_out: int) -> None:
     }
     _logger.info(
         "ALERT: %s %s T-%d: %s on %s",
-        trigger, catalyst["ticker"], days_out, catalyst["event_type"], catalyst.get("event_date"),
+        trigger,
+        catalyst["ticker"],
+        days_out,
+        catalyst["event_type"],
+        catalyst.get("event_date"),
     )
     log_alert(
         ticker=catalyst["ticker"],
@@ -85,15 +90,12 @@ def _fire_countdown_alert(catalyst: Dict[str, Any], days_out: int) -> None:
     send_push(
         title=f"Kestrel: {catalyst['ticker']} {catalyst['event_type']} in {days_out}d",
         message=(
-            f"T-{days_out} countdown: {catalyst['ticker']} "
-            f"{catalyst['event_type']} on {catalyst.get('event_date')}"
+            f"T-{days_out} countdown: {catalyst['ticker']} {catalyst['event_type']} on {catalyst.get('event_date')}"
         ),
     )
 
 
-def _check_idempotent_countdown(
-    catalyst: Dict[str, Any], today: date
-) -> None:
+def _check_idempotent_countdown(catalyst: Dict[str, Any], today: date) -> None:
     """
     Check if T-10 or T-3 countdown alert should fire for this catalyst.
 
@@ -118,7 +120,7 @@ def _check_idempotent_countdown(
         stamp_catalyst_alert(catalyst["id"], "t3_alerted_at")
 
 
-def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
+def run(as_of_date: date | None = None) -> Dict[str, Any]:
     """
     Sync the catalyst calendar and fire countdown alerts.
 
@@ -129,6 +131,7 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
         Summary dict.
     """
     import os
+
     target_date = as_of_date or date.today()
     _logger.info("Catalyst sync for %s", target_date)
     start_job_run(_JOB_NAME, target_date)
@@ -153,14 +156,16 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
                     except ValueError:
                         continue
 
-                    upsert_catalyst({
-                        "ticker": ticker,
-                        "event_type": "earnings",
-                        "event_date": event_date,
-                        "confidence": "confirmed",
-                        "source": "finnhub",
-                        "notes": f"EPS est: {e.get('epsEstimate')}",
-                    })
+                    upsert_catalyst(
+                        {
+                            "ticker": ticker,
+                            "event_type": "earnings",
+                            "event_date": event_date,
+                            "confidence": "confirmed",
+                            "source": "finnhub",
+                            "notes": f"EPS est: {e.get('epsEstimate')}",
+                        }
+                    )
                     catalysts_upserted += 1
 
         # Fire countdown alerts for all upcoming catalysts

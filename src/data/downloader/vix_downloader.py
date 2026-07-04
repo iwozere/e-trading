@@ -12,8 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from datetime import datetime, timedelta
-from typing import Optional, List
-
+from typing import List
 
 import pandas as pd
 import yfinance as yf
@@ -51,14 +50,7 @@ class VIXDataDownloader(BaseDataDownloader):
         """
         return []  # VIX doesn't provide interval-based OHLCV data
 
-    def get_ohlcv(
-        self,
-        symbol: str,
-        interval: str,
-        start_date: datetime,
-        end_date: datetime,
-        **kwargs
-    ) -> pd.DataFrame:
+    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> pd.DataFrame:
         """
         Download historical OHLCV data for a given symbol.
 
@@ -75,9 +67,7 @@ class VIXDataDownloader(BaseDataDownloader):
         Returns:
             Empty DataFrame (VIX doesn't provide OHLCV data)
         """
-        _logger.warning(
-            "VIX doesn't provide OHLCV data. Use update_vix() for VIX-specific volatility data."
-        )
+        _logger.warning("VIX doesn't provide OHLCV data. Use update_vix() for VIX-specific volatility data.")
         return pd.DataFrame()
 
     @staticmethod
@@ -94,13 +84,13 @@ class VIXDataDownloader(BaseDataDownloader):
         if pd.isna(vix_value):
             return "unknown"
         if vix_value < 15:
-            return "calm"      # Low volatility
+            return "calm"  # Low volatility
         elif vix_value < 25:
-            return "normal"    # Normal market
+            return "normal"  # Normal market
         else:
-            return "fear"      # Panic
+            return "fear"  # Panic
 
-    def update_vix(self, vix_file: Optional[Path] = None) -> None:
+    def update_vix(self, vix_file: Path | None = None) -> None:
         """
         Update VIX data by downloading the latest data from Yahoo Finance.
 
@@ -161,7 +151,12 @@ class VIXDataDownloader(BaseDataDownloader):
         # Extend end date by a few days to ensure we get the most recent trading data
         # This handles cases where the requested end date falls on a weekend/holiday
         end_date = today + timedelta(days=7)
-        _logger.info("Downloading VIX data from %s to %s (extended to %s to ensure we get recent trading data)", last_date, today, end_date)
+        _logger.info(
+            "Downloading VIX data from %s to %s (extended to %s to ensure we get recent trading data)",
+            last_date,
+            today,
+            end_date,
+        )
 
         try:
             vix_new = yf.download("^VIX", start=last_date, end=end_date)
@@ -227,7 +222,7 @@ if __name__ == "__main__":
                     "vix_current": float(latest["vix"]),
                     "regime": str(latest["regime"]),
                     "date": str(latest["date"]),
-                    "total_records": len(vix_data)
+                    "total_records": len(vix_data),
                 }
             else:
                 result = {"success": False, "error": "No VIX data available"}

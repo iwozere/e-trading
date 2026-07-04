@@ -6,21 +6,21 @@ Standalone script for evaluating alerts and sending notifications.
 Can be run manually or scheduled via cron/scheduler.
 """
 
-import sys
-from pathlib import Path
 import asyncio
-from datetime import datetime, timezone
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.data.data_manager import DataManager
 from src.data.db.services.alerts_service import AlertsService
 from src.data.db.services.jobs_service import JobsService
-from src.data.data_manager import DataManager
 from src.indicators.service import IndicatorService
-from src.notification.service.client import NotificationServiceClient
 from src.notification.logger import setup_logger
+from src.notification.service.client import NotificationServiceClient
 
 _logger = setup_logger(__name__)
 
@@ -35,11 +35,7 @@ class AlertRunner:
         self.data_manager = DataManager()
         self.indicator_service = IndicatorService()
         self.jobs_service = JobsService()
-        self.alerts_service = AlertsService(
-            self.jobs_service,
-            self.data_manager,
-            self.indicator_service
-        )
+        self.alerts_service = AlertsService(self.jobs_service, self.data_manager, self.indicator_service)
         self.notification_client = NotificationServiceClient(
             service_url="database://localhost"  # Use database-only mode
         )
@@ -74,12 +70,16 @@ class AlertRunner:
                         await self._send_alert_notification(result)
                         notifications_sent += 1
                     except Exception as e:
-                        _logger.error("Failed to send notification for alert %s: %s",
-                                    result["job_id"], e)
+                        _logger.error("Failed to send notification for alert %s: %s", result["job_id"], e)
 
             # Log summary
-            _logger.info("Alert evaluation complete: %d evaluated, %d triggered, %d notifications sent, %d errors",
-                        results["total_evaluated"], results["triggered"], notifications_sent, results["errors"])
+            _logger.info(
+                "Alert evaluation complete: %d evaluated, %d triggered, %d notifications sent, %d errors",
+                results["total_evaluated"],
+                results["triggered"],
+                notifications_sent,
+                results["errors"],
+            )
 
             results["notifications_sent"] = notifications_sent
             return results
@@ -92,7 +92,7 @@ class AlertRunner:
                 "rearmed": 0,
                 "errors": 1,
                 "notifications_sent": 0,
-                "error": str(e)
+                "error": str(e),
             }
 
     async def _send_alert_notification(self, alert_result: dict):
@@ -128,14 +128,13 @@ class AlertRunner:
                 data={
                     "alert_id": alert_result["job_id"],
                     "ticker": alert_result["ticker"],
-                    "trigger_time": datetime.now(timezone.utc).isoformat(),
-                    **notification_data
-                }
+                    "trigger_time": datetime.now(UTC).isoformat(),
+                    **notification_data,
+                },
             )
 
             if success:
-                _logger.info("Sent alert notification for job %s to user %s",
-                           alert_result["job_id"], user_id)
+                _logger.info("Sent alert notification for job %s to user %s", alert_result["job_id"], user_id)
             else:
                 _logger.error("Failed to send alert notification for job %s", alert_result["job_id"])
 
@@ -157,6 +156,7 @@ async def main():
 
     if args.verbose:
         import logging
+
         logging.getLogger().setLevel(logging.DEBUG)
 
     # Create and run alert runner

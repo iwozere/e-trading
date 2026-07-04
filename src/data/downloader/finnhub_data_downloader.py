@@ -1,13 +1,15 @@
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
-import pandas as pd
-import requests
-import aiohttp
 import asyncio
 import time
-from src.notification.logger import setup_logger
-from src.model.schemas import OptionalFundamentals, Fundamentals, SentimentData
+from datetime import datetime, timedelta
+from typing import Any, Dict, List
+
+import aiohttp
+import pandas as pd
+import requests
+
 from src.data.downloader.base_data_downloader import BaseDataDownloader
+from src.model.schemas import Fundamentals, OptionalFundamentals, SentimentData
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -35,6 +37,7 @@ API limits (free tier):
 Classes:
 - FinnhubDataDownloader: Main class for interacting with Finnhub and managing data downloads
 """
+
 
 class RateLimitException(Exception):
     """Raised when a provider enforces a rate limit and all retries are exhausted."""
@@ -87,10 +90,10 @@ class FinnhubDataDownloader(BaseDataDownloader):
     >>> print(f"Market Cap: ${fundamentals.market_cap:,.0f}")
     """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         super().__init__()
         # Get API key from parameter or config
-        self.api_key = api_key or self._get_config_value('FINNHUB_API_KEY', 'FINNHUB_API_KEY')
+        self.api_key = api_key or self._get_config_value("FINNHUB_API_KEY", "FINNHUB_API_KEY")
         self.base_url = "https://finnhub.io/api/v1/stock/candle"
 
         if not self.api_key:
@@ -100,7 +103,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
         self._last_request_time = 0
         self._request_delay = 1.1  # 1.1s delay to stay under 60 RPM
 
-    def _make_request(self, url: str, params: Dict[str, Any], max_retries: int = 3) -> Optional[Dict[str, Any]]:
+    def _make_request(self, url: str, params: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any] | None:
         """
         Make a throttled and retried API request to Finnhub.
 
@@ -127,23 +130,32 @@ class FinnhubDataDownloader(BaseDataDownloader):
 
                 if response.status_code == 429:
                     # Rate limit exceeded - exponential backoff
-                    wait_time = (2 ** retry) + 1
-                    
+                    wait_time = (2**retry) + 1
+
                     if retry == max_retries - 1:
                         # On last attempt, raise the exception for DataManager to handle
                         _logger.error("Finnhub rate limit reached after %d attempts", max_retries)
                         raise RateLimitException(url=url, retry_after=wait_time)
 
-                    _logger.warning("Finnhub rate limit exceeded (429). Retrying in %ds... (Attempt %d/%d)",
-                                  wait_time, retry + 1, max_retries)
+                    _logger.warning(
+                        "Finnhub rate limit exceeded (429). Retrying in %ds... (Attempt %d/%d)",
+                        wait_time,
+                        retry + 1,
+                        max_retries,
+                    )
                     time.sleep(wait_time)
                     continue
 
                 if response.status_code >= 500:
                     # Server error - exponential backoff
-                    wait_time = (2 ** retry) + 1
-                    _logger.warning("Finnhub server error (%d). Retrying in %ds... (Attempt %d/%d)",
-                                  response.status_code, wait_time, retry + 1, max_retries)
+                    wait_time = (2**retry) + 1
+                    _logger.warning(
+                        "Finnhub server error (%d). Retrying in %ds... (Attempt %d/%d)",
+                        response.status_code,
+                        wait_time,
+                        retry + 1,
+                        max_retries,
+                    )
                     time.sleep(wait_time)
                     continue
 
@@ -155,11 +167,13 @@ class FinnhubDataDownloader(BaseDataDownloader):
                 if isinstance(e, RateLimitException):
                     raise
                 _logger.error("Finnhub connection error: %s. Retrying...", str(e))
-                time.sleep(2 ** retry)
+                time.sleep(2**retry)
 
         return None
 
-    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> Optional[pd.DataFrame]:
+    def get_ohlcv(
+        self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs
+    ) -> pd.DataFrame | None:
         """
         Download historical data for a given symbol from Finnhub.
 
@@ -174,45 +188,63 @@ class FinnhubDataDownloader(BaseDataDownloader):
         """
         try:
             # Validate interval and period
-            if not self.is_valid_period_interval('1d', interval):
+            if not self.is_valid_period_interval("1d", interval):
                 raise ValueError(f"Unsupported interval: {interval}")
             # Finnhub supports: 1, 5, 15, 30, 60 minute, daily, weekly, monthly
-            interval_map = {
-                '1m': '1', '5m': '5', '15m': '15', '30m': '30', '1h': '60', '1d': 'D'
-            }
-            finnhub_interval = interval_map.get(interval, 'D')
+            interval_map = {"1m": "1", "5m": "5", "15m": "15", "30m": "30", "1h": "60", "1d": "D"}
+            finnhub_interval = interval_map.get(interval, "D")
             # Convert dates to UNIX timestamps (seconds)
             start_unix = int(start_date.timestamp())
             end_unix = int(end_date.timestamp())
             params = {
-                'symbol': symbol,
-                'resolution': finnhub_interval,
-                'from': start_unix,
-                'to': end_unix,
-                'token': self.api_key
+                "symbol": symbol,
+                "resolution": finnhub_interval,
+                "from": start_unix,
+                "to": end_unix,
+                "token": self.api_key,
             }
 
             data = self._make_request(self.base_url, params)
 
-            if not data or data.get('s') != 'ok':
+            if not data or data.get("s") != "ok":
                 _logger.warning("No results in Finnhub response for %s", symbol)
                 return pd.DataFrame()
             # Finnhub returns: t (timestamp), o (open), h (high), l (low), c (close), v (volume)
-            df = pd.DataFrame({
-                'timestamp': pd.to_datetime(data['t'], unit='s'),
-                'open': data['o'],
-                'high': data['h'],
-                'low': data['l'],
-                'close': data['c'],
-                'volume': data['v']
-            })
+            df = pd.DataFrame(
+                {
+                    "timestamp": pd.to_datetime(data["t"], unit="s"),
+                    "open": data["o"],
+                    "high": data["h"],
+                    "low": data["l"],
+                    "close": data["c"],
+                    "volume": data["v"],
+                }
+            )
             # Resample if needed
-            if interval == '5m':
-                df = df.set_index('timestamp').resample('5T').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna().reset_index()
-            elif interval == '15m':
-                df = df.set_index('timestamp').resample('15T').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna().reset_index()
-            elif interval == '1h':
-                df = df.set_index('timestamp').resample('1h').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna().reset_index()
+            if interval == "5m":
+                df = (
+                    df.set_index("timestamp")
+                    .resample("5T")
+                    .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+                    .dropna()
+                    .reset_index()
+                )
+            elif interval == "15m":
+                df = (
+                    df.set_index("timestamp")
+                    .resample("15T")
+                    .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+                    .dropna()
+                    .reset_index()
+                )
+            elif interval == "1h":
+                df = (
+                    df.set_index("timestamp")
+                    .resample("1h")
+                    .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+                    .dropna()
+                    .reset_index()
+                )
             # For '1m' and '1d', no resampling needed
             return df
         except Exception as e:
@@ -220,28 +252,28 @@ class FinnhubDataDownloader(BaseDataDownloader):
             raise
 
     def get_periods(self) -> list:
-        return ['1d', '7d', '1mo', '3mo', '6mo', '1y', '2y', '5y']
+        return ["1d", "7d", "1mo", "3mo", "6mo", "1y", "2y", "5y"]
 
     def get_intervals(self) -> list:
-        return ['1m', '5m', '15m', '1h', '1d']
+        return ["1m", "5m", "15m", "1h", "1d"]
 
     def is_valid_period_interval(self, period, interval) -> bool:
         return interval in self.get_intervals() and period in self.get_periods()
 
-    def get_company_profile(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_company_profile(self, symbol: str) -> Dict[str, Any] | None:
         """Fetch company profile (shares outstanding, sector, etc)."""
         url = "https://finnhub.io/api/v1/stock/profile2"
-        return self._make_request(url, {'symbol': symbol, 'token': self.api_key})
+        return self._make_request(url, {"symbol": symbol, "token": self.api_key})
 
-    def get_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_quote(self, symbol: str) -> Dict[str, Any] | None:
         """Fetch current price quote."""
         url = "https://finnhub.io/api/v1/quote"
-        return self._make_request(url, {'symbol': symbol, 'token': self.api_key})
+        return self._make_request(url, {"symbol": symbol, "token": self.api_key})
 
-    def get_basic_financials(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_basic_financials(self, symbol: str) -> Dict[str, Any] | None:
         """Fetch basic financial metrics (avg volume, ratios)."""
         url = "https://finnhub.io/api/v1/stock/metric"
-        return self._make_request(url, {'symbol': symbol, 'metric': 'all', 'token': self.api_key})
+        return self._make_request(url, {"symbol": symbol, "metric": "all", "token": self.api_key})
 
     def get_fundamentals(self, symbol: str) -> OptionalFundamentals:
         """
@@ -263,13 +295,13 @@ class FinnhubDataDownloader(BaseDataDownloader):
 
             # 2. Get current price
             quote_data = self.get_quote(symbol)
-            current_price = quote_data.get('c', 0.0) if quote_data else 0.0
+            current_price = quote_data.get("c", 0.0) if quote_data else 0.0
 
             # 3. Get financial metrics
             metrics_response = self.get_basic_financials(symbol)
-            metrics = metrics_response.get('metric', {}) if metrics_response else {}
+            metrics = metrics_response.get("metric", {}) if metrics_response else {}
 
-            _logger.debug("Retrieved fundamentals for %s: %s", symbol, profile_data.get('name', 'Unknown'))
+            _logger.debug("Retrieved fundamentals for %s: %s", symbol, profile_data.get("name", "Unknown"))
 
             # Extract volume data (in millions, convert to shares)
             avg_vol_millions = metrics.get("10DayAverageTradingVolume", 0)
@@ -280,42 +312,72 @@ class FinnhubDataDownloader(BaseDataDownloader):
                 ticker=symbol.upper(),
                 company_name=profile_data.get("name", "Unknown"),
                 current_price=current_price,
-                market_cap=float(profile_data.get("marketCapitalization", 0)) * 1_000_000 if profile_data.get("marketCapitalization") else 0.0,
+                market_cap=float(profile_data.get("marketCapitalization", 0)) * 1_000_000
+                if profile_data.get("marketCapitalization")
+                else 0.0,
                 pe_ratio=float(metrics.get("peNormalizedAnnual", 0)) if metrics.get("peNormalizedAnnual") else 0.0,
                 forward_pe=float(metrics.get("peForwardAnnual", 0)) if metrics.get("peForwardAnnual") else 0.0,
-                dividend_yield=float(metrics.get("dividendYieldIndicatedAnnual", 0)) if metrics.get("dividendYieldIndicatedAnnual") else 0.0,
+                dividend_yield=float(metrics.get("dividendYieldIndicatedAnnual", 0))
+                if metrics.get("dividendYieldIndicatedAnnual")
+                else 0.0,
                 earnings_per_share=float(metrics.get("epsTTM", 0)) if metrics.get("epsTTM") else 0.0,
                 # Additional fields
                 price_to_book=float(metrics.get("pbAnnual", 0)) if metrics.get("pbAnnual") else None,
                 return_on_equity=float(metrics.get("roeRfy", 0)) if metrics.get("roeRfy") else None,
                 return_on_assets=float(metrics.get("roaRfy", 0)) if metrics.get("roaRfy") else None,
-                debt_to_equity=float(metrics.get("debtToEquityAnnual", 0)) if metrics.get("debtToEquityAnnual") else None,
-                current_ratio=float(metrics.get("currentRatioAnnual", 0)) if metrics.get("currentRatioAnnual") else None,
+                debt_to_equity=float(metrics.get("debtToEquityAnnual", 0))
+                if metrics.get("debtToEquityAnnual")
+                else None,
+                current_ratio=float(metrics.get("currentRatioAnnual", 0))
+                if metrics.get("currentRatioAnnual")
+                else None,
                 quick_ratio=float(metrics.get("quickRatioAnnual", 0)) if metrics.get("quickRatioAnnual") else None,
-                revenue=float(metrics.get("revenuePerShareAnnual", 0)) if metrics.get("revenuePerShareAnnual") else None,
-                revenue_growth=float(metrics.get("revenueGrowthAnnual", 0)) if metrics.get("revenueGrowthAnnual") else None,
-                net_income=float(metrics.get("netIncomeGrowthAnnual", 0)) if metrics.get("netIncomeGrowthAnnual") else None,
-                net_income_growth=float(metrics.get("netIncomeGrowthAnnual", 0)) if metrics.get("netIncomeGrowthAnnual") else None,
-                free_cash_flow=float(metrics.get("freeCashFlowPerShareTTM", 0)) if metrics.get("freeCashFlowPerShareTTM") else None,
-                operating_margin=float(metrics.get("operatingMarginTTM", 0)) if metrics.get("operatingMarginTTM") else None,
-                profit_margin=float(metrics.get("netProfitMarginTTM", 0)) if metrics.get("netProfitMarginTTM") else None,
+                revenue=float(metrics.get("revenuePerShareAnnual", 0))
+                if metrics.get("revenuePerShareAnnual")
+                else None,
+                revenue_growth=float(metrics.get("revenueGrowthAnnual", 0))
+                if metrics.get("revenueGrowthAnnual")
+                else None,
+                net_income=float(metrics.get("netIncomeGrowthAnnual", 0))
+                if metrics.get("netIncomeGrowthAnnual")
+                else None,
+                net_income_growth=float(metrics.get("netIncomeGrowthAnnual", 0))
+                if metrics.get("netIncomeGrowthAnnual")
+                else None,
+                free_cash_flow=float(metrics.get("freeCashFlowPerShareTTM", 0))
+                if metrics.get("freeCashFlowPerShareTTM")
+                else None,
+                operating_margin=float(metrics.get("operatingMarginTTM", 0))
+                if metrics.get("operatingMarginTTM")
+                else None,
+                profit_margin=float(metrics.get("netProfitMarginTTM", 0))
+                if metrics.get("netProfitMarginTTM")
+                else None,
                 beta=float(metrics.get("beta", 0)) if metrics.get("beta") else None,
                 sector=profile_data.get("finnhubIndustry", None),
                 industry=profile_data.get("finnhubIndustry", None),
                 country=profile_data.get("country", None),
                 exchange=profile_data.get("exchange", None),
                 currency=profile_data.get("currency", None),
-                shares_outstanding=float(profile_data.get("shareOutstanding", 0)) * 1_000_000 if profile_data.get("shareOutstanding") else None,
+                shares_outstanding=float(profile_data.get("shareOutstanding", 0)) * 1_000_000
+                if profile_data.get("shareOutstanding")
+                else None,
                 float_shares=None,  # Finnhub doesn't provide float shares
                 avg_volume=avg_volume,  # 10-day average trading volume
-                short_ratio=float(metrics.get("shortInterestRatioAnnual", 0)) if metrics.get("shortInterestRatioAnnual") else None,
+                short_ratio=float(metrics.get("shortInterestRatioAnnual", 0))
+                if metrics.get("shortInterestRatioAnnual")
+                else None,
                 payout_ratio=float(metrics.get("payoutRatioAnnual", 0)) if metrics.get("payoutRatioAnnual") else None,
                 peg_ratio=float(metrics.get("pegAnnual", 0)) if metrics.get("pegAnnual") else None,
                 price_to_sales=float(metrics.get("psTTM", 0)) if metrics.get("psTTM") else None,
-                enterprise_value=float(metrics.get("enterpriseValueAnnual", 0)) if metrics.get("enterpriseValueAnnual") else None,
-                enterprise_value_to_ebitda=float(metrics.get("evToEbitdaAnnual", 0)) if metrics.get("evToEbitdaAnnual") else None,
+                enterprise_value=float(metrics.get("enterpriseValueAnnual", 0))
+                if metrics.get("enterpriseValueAnnual")
+                else None,
+                enterprise_value_to_ebitda=float(metrics.get("evToEbitdaAnnual", 0))
+                if metrics.get("evToEbitdaAnnual")
+                else None,
                 data_source="Finnhub",
-                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             )
 
         except Exception as e:
@@ -335,7 +397,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
             dividend_yield=0.0,
             earnings_per_share=0.0,
             data_source="Finnhub",
-            last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         )
 
     def download_multiple_symbols(  # type: ignore[override]
@@ -343,9 +405,8 @@ class FinnhubDataDownloader(BaseDataDownloader):
     ) -> Dict[str, pd.DataFrame]:
         def download_func(symbol, interval, start_date, end_date):
             return self.get_ohlcv(symbol, interval, start_date, end_date)
-        return super().download_multiple_symbols(
-            symbols, download_func, interval, start_date, end_date
-        )
+
+        return super().download_multiple_symbols(symbols, download_func, interval, start_date, end_date)
 
     def get_provider_name(self) -> str:
         """Return the canonical provider name for this downloader."""
@@ -353,11 +414,11 @@ class FinnhubDataDownloader(BaseDataDownloader):
 
     def get_supported_intervals(self) -> List[str]:
         """Return list of supported intervals for Finnhub."""
-        return ['1m', '5m', '15m', '30m', '1h', '1d']
+        return ["1m", "5m", "15m", "30m", "1h", "1d"]
 
     # Short Squeeze Detection Pipeline Extensions
 
-    def get_sentiment_data(self, symbol: str, hours_back: int = 24) -> Optional[Dict[str, Any]]:
+    def get_sentiment_data(self, symbol: str, hours_back: int = 24) -> Dict[str, Any] | None:
         """
         Get sentiment data for a symbol from news and social media.
 
@@ -376,15 +437,12 @@ class FinnhubDataDownloader(BaseDataDownloader):
             start_date = end_date - timedelta(hours=hours_back)
 
             # Convert to required format (YYYY-MM-DD)
-            start_str = start_date.strftime('%Y-%m-%d')
-            end_str = end_date.strftime('%Y-%m-%d')
+            start_str = start_date.strftime("%Y-%m-%d")
+            end_str = end_date.strftime("%Y-%m-%d")
 
             # Get news sentiment
             news_url = "https://finnhub.io/api/v1/news-sentiment"
-            news_params = {
-                'symbol': symbol,
-                'token': self.api_key
-            }
+            news_params = {"symbol": symbol, "token": self.api_key}
 
             _logger.debug("Fetching sentiment data for %s", symbol)
 
@@ -406,22 +464,25 @@ class FinnhubDataDownloader(BaseDataDownloader):
 
             # Extract sentiment metrics
             sentiment_data = {
-                'symbol': symbol,
-                'sentiment_score': data.get('sentiment', {}).get('bearishPercent', 0),
-                'bullish_percent': data.get('sentiment', {}).get('bullishPercent', 0),
-                'bearish_percent': data.get('sentiment', {}).get('bearishPercent', 0),
-                'buzz_articles_in_last_week': data.get('buzz', {}).get('articlesInLastWeek', 0),
-                'buzz_weekly_average': data.get('buzz', {}).get('weeklyAverage', 0),
-                'company_news_score': data.get('companyNewsScore', 0),
-                'sector_average_bullish': data.get('sectorAverageBullishPercent', 0),
-                'sector_average_news_score': data.get('sectorAverageNewsScore', 0),
-                'timestamp': datetime.now().isoformat(),
-                'hours_back': hours_back
+                "symbol": symbol,
+                "sentiment_score": data.get("sentiment", {}).get("bearishPercent", 0),
+                "bullish_percent": data.get("sentiment", {}).get("bullishPercent", 0),
+                "bearish_percent": data.get("sentiment", {}).get("bearishPercent", 0),
+                "buzz_articles_in_last_week": data.get("buzz", {}).get("articlesInLastWeek", 0),
+                "buzz_weekly_average": data.get("buzz", {}).get("weeklyAverage", 0),
+                "company_news_score": data.get("companyNewsScore", 0),
+                "sector_average_bullish": data.get("sectorAverageBullishPercent", 0),
+                "sector_average_news_score": data.get("sectorAverageNewsScore", 0),
+                "timestamp": datetime.now().isoformat(),
+                "hours_back": hours_back,
             }
 
-            _logger.debug("Retrieved sentiment data for %s: bullish=%s%%, bearish=%s%%",
-                        symbol, sentiment_data.get('bullish_percent', 'N/A'),
-                        sentiment_data.get('bearish_percent', 'N/A'))
+            _logger.debug(
+                "Retrieved sentiment data for %s: bullish=%s%%, bearish=%s%%",
+                symbol,
+                sentiment_data.get("bullish_percent", "N/A"),
+                sentiment_data.get("bearish_percent", "N/A"),
+            )
 
             return sentiment_data
 
@@ -429,7 +490,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
             _logger.error("Error getting sentiment data for %s: %s", symbol, e)
             return None
 
-    def get_options_data(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_options_data(self, symbol: str) -> Dict[str, Any] | None:
         """
         Get options data for a symbol to calculate call/put ratios.
 
@@ -442,10 +503,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
         try:
             # Get options chain data
             options_url = "https://finnhub.io/api/v1/stock/option-chain"
-            options_params = {
-                'symbol': symbol,
-                'token': self.api_key
-            }
+            options_params = {"symbol": symbol, "token": self.api_key}
 
             _logger.debug("Fetching options data for %s", symbol)
 
@@ -461,11 +519,11 @@ class FinnhubDataDownloader(BaseDataDownloader):
 
             data = response.json()
 
-            if not data or 'data' not in data:
+            if not data or "data" not in data:
                 _logger.warning("No options data found for %s", symbol)
                 return None
 
-            options_chain = data.get('data', [])
+            options_chain = data.get("data", [])
 
             # Calculate call/put metrics
             total_call_volume = 0
@@ -474,14 +532,14 @@ class FinnhubDataDownloader(BaseDataDownloader):
             total_put_oi = 0
 
             for option in options_chain:
-                option_type = option.get('type', '').lower()
-                volume = option.get('volume', 0) or 0
-                open_interest = option.get('openInterest', 0) or 0
+                option_type = option.get("type", "").lower()
+                volume = option.get("volume", 0) or 0
+                open_interest = option.get("openInterest", 0) or 0
 
-                if option_type == 'call':
+                if option_type == "call":
                     total_call_volume += volume
                     total_call_oi += open_interest
-                elif option_type == 'put':
+                elif option_type == "put":
                     total_put_volume += volume
                     total_put_oi += open_interest
 
@@ -490,19 +548,23 @@ class FinnhubDataDownloader(BaseDataDownloader):
             call_put_oi_ratio = (total_call_oi / total_put_oi) if total_put_oi > 0 else None
 
             options_data = {
-                'symbol': symbol,
-                'total_call_volume': total_call_volume,
-                'total_put_volume': total_put_volume,
-                'total_call_open_interest': total_call_oi,
-                'total_put_open_interest': total_put_oi,
-                'call_put_volume_ratio': call_put_volume_ratio,
-                'call_put_oi_ratio': call_put_oi_ratio,
-                'total_options_count': len(options_chain),
-                'timestamp': datetime.now().isoformat()
+                "symbol": symbol,
+                "total_call_volume": total_call_volume,
+                "total_put_volume": total_put_volume,
+                "total_call_open_interest": total_call_oi,
+                "total_put_open_interest": total_put_oi,
+                "call_put_volume_ratio": call_put_volume_ratio,
+                "call_put_oi_ratio": call_put_oi_ratio,
+                "total_options_count": len(options_chain),
+                "timestamp": datetime.now().isoformat(),
             }
 
-            _logger.debug("Retrieved options data for %s: C/P volume ratio=%s, C/P OI ratio=%s",
-                        symbol, call_put_volume_ratio, call_put_oi_ratio)
+            _logger.debug(
+                "Retrieved options data for %s: C/P volume ratio=%s, C/P OI ratio=%s",
+                symbol,
+                call_put_volume_ratio,
+                call_put_oi_ratio,
+            )
 
             return options_data
 
@@ -510,7 +572,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
             _logger.error("Error getting options data for %s: %s", symbol, e)
             return None
 
-    def get_borrow_rates_data(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_borrow_rates_data(self, symbol: str) -> Dict[str, Any] | None:
         """
         Get stock lending/borrow rates data for a symbol.
 
@@ -525,10 +587,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
             # This is a placeholder implementation that attempts to get the data
 
             lending_url = "https://finnhub.io/api/v1/stock/lending-rate"
-            lending_params = {
-                'symbol': symbol,
-                'token': self.api_key
-            }
+            lending_params = {"symbol": symbol, "token": self.api_key}
 
             _logger.debug("Fetching borrow rates data for %s", symbol)
 
@@ -539,7 +598,9 @@ class FinnhubDataDownloader(BaseDataDownloader):
                 return None
 
             if response.status_code != 200:
-                _logger.warning("Finnhub borrow rates API error: %s (may require premium subscription)", response.status_code)
+                _logger.warning(
+                    "Finnhub borrow rates API error: %s (may require premium subscription)", response.status_code
+                )
                 return None
 
             data = response.json()
@@ -549,15 +610,18 @@ class FinnhubDataDownloader(BaseDataDownloader):
                 return None
 
             borrow_data = {
-                'symbol': symbol,
-                'borrow_fee_rate': data.get('fee', None),
-                'available_shares': data.get('available', None),
-                'fee_rate_percentage': data.get('feeRate', None),
-                'timestamp': datetime.now().isoformat()
+                "symbol": symbol,
+                "borrow_fee_rate": data.get("fee", None),
+                "available_shares": data.get("available", None),
+                "fee_rate_percentage": data.get("feeRate", None),
+                "timestamp": datetime.now().isoformat(),
             }
 
-            _logger.debug("Retrieved borrow rates data for %s: fee rate=%s%%",
-                        symbol, borrow_data.get('fee_rate_percentage', 'N/A'))
+            _logger.debug(
+                "Retrieved borrow rates data for %s: fee rate=%s%%",
+                symbol,
+                borrow_data.get("fee_rate_percentage", "N/A"),
+            )
 
             return borrow_data
 
@@ -565,7 +629,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
             _logger.error("Error getting borrow rates data for %s: %s", symbol, e)
             return None
 
-    def calculate_call_put_ratio(self, options_data: Dict[str, Any]) -> Optional[float]:
+    def calculate_call_put_ratio(self, options_data: Dict[str, Any]) -> float | None:
         """
         Calculate call-to-put ratio from options data.
 
@@ -579,15 +643,14 @@ class FinnhubDataDownloader(BaseDataDownloader):
             if not options_data:
                 return None
 
-            call_volume = options_data.get('total_call_volume', 0)
-            put_volume = options_data.get('total_put_volume', 0)
+            call_volume = options_data.get("total_call_volume", 0)
+            put_volume = options_data.get("total_put_volume", 0)
 
             if put_volume == 0:
                 return None
 
             ratio = call_volume / put_volume
-            _logger.debug("Calculated call/put ratio for %s: %s",
-                        options_data.get('symbol', 'Unknown'), ratio)
+            _logger.debug("Calculated call/put ratio for %s: %s", options_data.get("symbol", "Unknown"), ratio)
 
             return ratio
 
@@ -595,7 +658,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
             _logger.exception("Error calculating call/put ratio:")
             return None
 
-    def aggregate_24h_sentiment(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def aggregate_24h_sentiment(self, symbol: str) -> Dict[str, Any] | None:
         """
         Aggregate sentiment data over the last 24 hours.
 
@@ -613,8 +676,8 @@ class FinnhubDataDownloader(BaseDataDownloader):
                 return None
 
             # Calculate aggregated sentiment score
-            bullish_pct = sentiment_data.get('bullish_percent', 0)
-            bearish_pct = sentiment_data.get('bearish_percent', 0)
+            bullish_pct = sentiment_data.get("bullish_percent", 0)
+            bearish_pct = sentiment_data.get("bearish_percent", 0)
 
             # Normalize sentiment score to -1 to 1 scale
             # Positive values indicate bullish sentiment, negative values indicate bearish
@@ -624,25 +687,27 @@ class FinnhubDataDownloader(BaseDataDownloader):
                 sentiment_score = 0.0
 
             # Calculate buzz intensity
-            articles_this_week = sentiment_data.get('buzz_articles_in_last_week', 0)
-            weekly_average = sentiment_data.get('buzz_weekly_average', 1)
+            articles_this_week = sentiment_data.get("buzz_articles_in_last_week", 0)
+            weekly_average = sentiment_data.get("buzz_weekly_average", 1)
             buzz_intensity = articles_this_week / weekly_average if weekly_average > 0 else 0
 
             aggregated_data = {
-                'symbol': symbol,
-                'sentiment_score_24h': sentiment_score,
-                'bullish_percent_24h': bullish_pct,
-                'bearish_percent_24h': bearish_pct,
-                'buzz_intensity': buzz_intensity,
-                'articles_count_24h': articles_this_week,
-                'company_news_score': sentiment_data.get('company_news_score', 0),
-                'vs_sector_bullish': bullish_pct - sentiment_data.get('sector_average_bullish', 0),
-                'vs_sector_news_score': sentiment_data.get('company_news_score', 0) - sentiment_data.get('sector_average_news_score', 0),
-                'timestamp': datetime.now().isoformat()
+                "symbol": symbol,
+                "sentiment_score_24h": sentiment_score,
+                "bullish_percent_24h": bullish_pct,
+                "bearish_percent_24h": bearish_pct,
+                "buzz_intensity": buzz_intensity,
+                "articles_count_24h": articles_this_week,
+                "company_news_score": sentiment_data.get("company_news_score", 0),
+                "vs_sector_bullish": bullish_pct - sentiment_data.get("sector_average_bullish", 0),
+                "vs_sector_news_score": sentiment_data.get("company_news_score", 0)
+                - sentiment_data.get("sector_average_news_score", 0),
+                "timestamp": datetime.now().isoformat(),
             }
 
-            _logger.debug("Aggregated 24h sentiment for %s: score=%s, buzz intensity=%s",
-                        symbol, sentiment_score, buzz_intensity)
+            _logger.debug(
+                "Aggregated 24h sentiment for %s: score=%s, buzz intensity=%s", symbol, sentiment_score, buzz_intensity
+            )
 
             return aggregated_data
 
@@ -682,12 +747,12 @@ class FinnhubDataDownloader(BaseDataDownloader):
 
                     # Combine all data
                     ticker_data = {
-                        'symbol': ticker,
-                        'sentiment_24h': sentiment,
-                        'options_data': options,
-                        'borrow_rates': borrow_rates,
-                        'call_put_ratio': call_put_ratio,
-                        'timestamp': datetime.now().isoformat()
+                        "symbol": ticker,
+                        "sentiment_24h": sentiment,
+                        "options_data": options,
+                        "borrow_rates": borrow_rates,
+                        "call_put_ratio": call_put_ratio,
+                        "timestamp": datetime.now().isoformat(),
                     }
 
                     batch_data[ticker] = ticker_data
@@ -713,7 +778,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
     # ASYNC SENTIMENT DATA METHODS (New Implementation)
     # ========================================================================
 
-    async def get_news_sentiment(self, symbol: str) -> Optional[SentimentData]:
+    async def get_news_sentiment(self, symbol: str) -> SentimentData | None:
         """
         Get news sentiment data for a symbol (async).
 
@@ -728,10 +793,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
         """
         try:
             url = "https://finnhub.io/api/v1/news-sentiment"
-            params = {
-                'symbol': symbol.upper(),
-                'token': self.api_key
-            }
+            params = {"symbol": symbol.upper(), "token": self.api_key}
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
@@ -750,11 +812,11 @@ class FinnhubDataDownloader(BaseDataDownloader):
                         return None
 
                     # Extract sentiment metrics
-                    sentiment = data.get('sentiment', {})
-                    buzz = data.get('buzz', {})
+                    sentiment = data.get("sentiment", {})
+                    buzz = data.get("buzz", {})
 
-                    bullish_pct = sentiment.get('bullishPercent', 0)
-                    bearish_pct = sentiment.get('bearishPercent', 0)
+                    bullish_pct = sentiment.get("bullishPercent", 0)
+                    bearish_pct = sentiment.get("bearishPercent", 0)
 
                     # Calculate normalized sentiment score (-1 to 1)
                     if bullish_pct + bearish_pct > 0:
@@ -765,36 +827,41 @@ class FinnhubDataDownloader(BaseDataDownloader):
                     # Create SentimentData object
                     sentiment_data = SentimentData(
                         symbol=symbol.upper(),
-                        provider='finnhub',
+                        provider="finnhub",
                         timestamp=datetime.now().isoformat(),
                         sentiment_score=sentiment_score,
                         bullish_score=bullish_pct / 100.0 if bullish_pct else None,
                         bearish_score=bearish_pct / 100.0 if bearish_pct else None,
-                        article_count=buzz.get('articlesInLastWeek', 0),
-                        buzz_ratio=buzz.get('buzz', None),
+                        article_count=buzz.get("articlesInLastWeek", 0),
+                        buzz_ratio=buzz.get("buzz", None),
                         sector_comparison={
-                            'sector_average_bullish': sentiment.get('sectorAverageBullishPercent', 0) / 100.0,
-                            'vs_sector_bullish': (bullish_pct - sentiment.get('sectorAverageBullishPercent', 0)) / 100.0,
-                            'company_news_score': data.get('companyNewsScore', 0),
-                            'sector_average_news_score': data.get('sectorAverageNewsScore', 0)
+                            "sector_average_bullish": sentiment.get("sectorAverageBullishPercent", 0) / 100.0,
+                            "vs_sector_bullish": (bullish_pct - sentiment.get("sectorAverageBullishPercent", 0))
+                            / 100.0,
+                            "company_news_score": data.get("companyNewsScore", 0),
+                            "sector_average_news_score": data.get("sectorAverageNewsScore", 0),
                         },
                         raw_data=data,
-                        data_source='finnhub_news_sentiment_api'
+                        data_source="finnhub_news_sentiment_api",
                     )
 
-                    _logger.debug("Retrieved news sentiment for %s: score=%.3f, articles=%d",
-                                symbol, sentiment_score, buzz.get('articlesInLastWeek', 0))
+                    _logger.debug(
+                        "Retrieved news sentiment for %s: score=%.3f, articles=%d",
+                        symbol,
+                        sentiment_score,
+                        buzz.get("articlesInLastWeek", 0),
+                    )
 
                     return sentiment_data
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             _logger.error("Timeout getting news sentiment for %s", symbol)
             return None
         except Exception as e:
             _logger.error("Error getting news sentiment for %s: %s", symbol, e)
             return None
 
-    async def get_social_sentiment(self, symbol: str, days_back: int = 7) -> Optional[SentimentData]:
+    async def get_social_sentiment(self, symbol: str, days_back: int = 7) -> SentimentData | None:
         """
         Get social media sentiment data for a symbol (async).
 
@@ -816,10 +883,10 @@ class FinnhubDataDownloader(BaseDataDownloader):
             start_date = end_date - timedelta(days=days_back)
 
             params = {
-                'symbol': symbol.upper(),
-                'from': start_date.strftime('%Y-%m-%d'),
-                'to': end_date.strftime('%Y-%m-%d'),
-                'token': self.api_key
+                "symbol": symbol.upper(),
+                "from": start_date.strftime("%Y-%m-%d"),
+                "to": end_date.strftime("%Y-%m-%d"),
+                "token": self.api_key,
             }
 
             async with aiohttp.ClientSession() as session:
@@ -843,21 +910,21 @@ class FinnhubDataDownloader(BaseDataDownloader):
                     reddit_mentions = 0
                     reddit_score = 0.0
 
-                    if 'reddit' in data and data['reddit']:
-                        reddit_entries = data['reddit']
+                    if "reddit" in data and data["reddit"]:
+                        reddit_entries = data["reddit"]
                         # Get most recent entry or aggregate
                         if reddit_entries:
                             latest_reddit = reddit_entries[-1]  # Most recent
-                            reddit_mentions = latest_reddit.get('mention', 0)
-                            reddit_score = latest_reddit.get('score', 0.0)
+                            reddit_mentions = latest_reddit.get("mention", 0)
+                            reddit_score = latest_reddit.get("score", 0.0)
                             reddit_data = {
-                                'mentions': reddit_mentions,
-                                'positive_mentions': latest_reddit.get('positiveMention', 0),
-                                'negative_mentions': latest_reddit.get('negativeMention', 0),
-                                'score': reddit_score,
-                                'positive_score': latest_reddit.get('positiveScore', 0),
-                                'negative_score': latest_reddit.get('negativeScore', 0),
-                                'time': latest_reddit.get('atTime', '')
+                                "mentions": reddit_mentions,
+                                "positive_mentions": latest_reddit.get("positiveMention", 0),
+                                "negative_mentions": latest_reddit.get("negativeMention", 0),
+                                "score": reddit_score,
+                                "positive_score": latest_reddit.get("positiveScore", 0),
+                                "negative_score": latest_reddit.get("negativeScore", 0),
+                                "time": latest_reddit.get("atTime", ""),
                             }
 
                     # Process Twitter data
@@ -865,59 +932,64 @@ class FinnhubDataDownloader(BaseDataDownloader):
                     twitter_mentions = 0
                     twitter_score = 0.0
 
-                    if 'twitter' in data and data['twitter']:
-                        twitter_entries = data['twitter']
+                    if "twitter" in data and data["twitter"]:
+                        twitter_entries = data["twitter"]
                         if twitter_entries:
                             latest_twitter = twitter_entries[-1]  # Most recent
-                            twitter_mentions = latest_twitter.get('mention', 0)
-                            twitter_score = latest_twitter.get('score', 0.0)
+                            twitter_mentions = latest_twitter.get("mention", 0)
+                            twitter_score = latest_twitter.get("score", 0.0)
                             twitter_data = {
-                                'mentions': twitter_mentions,
-                                'positive_mentions': latest_twitter.get('positiveMention', 0),
-                                'negative_mentions': latest_twitter.get('negativeMention', 0),
-                                'score': twitter_score,
-                                'positive_score': latest_twitter.get('positiveScore', 0),
-                                'negative_score': latest_twitter.get('negativeScore', 0),
-                                'time': latest_twitter.get('atTime', '')
+                                "mentions": twitter_mentions,
+                                "positive_mentions": latest_twitter.get("positiveMention", 0),
+                                "negative_mentions": latest_twitter.get("negativeMention", 0),
+                                "score": twitter_score,
+                                "positive_score": latest_twitter.get("positiveScore", 0),
+                                "negative_score": latest_twitter.get("negativeScore", 0),
+                                "time": latest_twitter.get("atTime", ""),
                             }
 
                     # Calculate overall sentiment score (weighted average)
                     total_mentions = reddit_mentions + twitter_mentions
                     if total_mentions > 0:
-                        overall_score = (reddit_score * reddit_mentions + twitter_score * twitter_mentions) / total_mentions
+                        overall_score = (
+                            reddit_score * reddit_mentions + twitter_score * twitter_mentions
+                        ) / total_mentions
                     else:
                         overall_score = 0.0
 
                     # Create SentimentData object
                     sentiment_data = SentimentData(
                         symbol=symbol.upper(),
-                        provider='finnhub',
+                        provider="finnhub",
                         timestamp=datetime.now().isoformat(),
                         sentiment_score=overall_score,
                         mention_count=total_mentions,
                         reddit_data=reddit_data,
                         twitter_data=twitter_data,
-                        sources={
-                            'reddit': reddit_data is not None,
-                            'twitter': twitter_data is not None
-                        },
+                        sources={"reddit": reddit_data is not None, "twitter": twitter_data is not None},
                         raw_data=data,
-                        data_source='finnhub_social_sentiment_api'
+                        data_source="finnhub_social_sentiment_api",
                     )
 
-                    _logger.debug("Retrieved social sentiment for %s: score=%.3f, mentions=%d (reddit=%d, twitter=%d)",
-                                symbol, overall_score, total_mentions, reddit_mentions, twitter_mentions)
+                    _logger.debug(
+                        "Retrieved social sentiment for %s: score=%.3f, mentions=%d (reddit=%d, twitter=%d)",
+                        symbol,
+                        overall_score,
+                        total_mentions,
+                        reddit_mentions,
+                        twitter_mentions,
+                    )
 
                     return sentiment_data
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             _logger.error("Timeout getting social sentiment for %s", symbol)
             return None
         except Exception as e:
             _logger.error("Error getting social sentiment for %s: %s", symbol, e)
             return None
 
-    async def get_combined_sentiment(self, symbol: str) -> Optional[SentimentData]:
+    async def get_combined_sentiment(self, symbol: str) -> SentimentData | None:
         """
         Get aggregated sentiment data from both news and social sources (async).
         """
@@ -939,11 +1011,13 @@ class FinnhubDataDownloader(BaseDataDownloader):
             # Combine the data
             if news_data and social_data:
                 # Both available - average the scores
-                combined_score = (float(news_data.sentiment_score or 0.0) + float(social_data.sentiment_score or 0.0)) / 2.0
+                combined_score = (
+                    float(news_data.sentiment_score or 0.0) + float(social_data.sentiment_score or 0.0)
+                ) / 2.0
 
                 combined_data = SentimentData(
                     symbol=symbol.upper(),
-                    provider='finnhub',
+                    provider="finnhub",
                     timestamp=datetime.now().isoformat(),
                     sentiment_score=combined_score,
                     bullish_score=news_data.bullish_score,
@@ -955,15 +1029,12 @@ class FinnhubDataDownloader(BaseDataDownloader):
                     twitter_data=social_data.twitter_data,
                     sector_comparison=news_data.sector_comparison,
                     sources={
-                        'news': True,
-                        'reddit': social_data.reddit_data is not None,
-                        'twitter': social_data.twitter_data is not None
+                        "news": True,
+                        "reddit": social_data.reddit_data is not None,
+                        "twitter": social_data.twitter_data is not None,
                     },
-                    raw_data={
-                        'news': news_data.raw_data,
-                        'social': social_data.raw_data
-                    },
-                    data_source='finnhub_combined_sentiment_api'
+                    raw_data={"news": news_data.raw_data, "social": social_data.raw_data},
+                    data_source="finnhub_combined_sentiment_api",
                 )
 
                 _logger.debug("Retrieved combined sentiment for %s: score=%.3f", symbol, combined_score)
@@ -997,12 +1068,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
         """
         try:
             url = "https://finnhub.io/api/v1/company-news"
-            params = {
-                'symbol': symbol.upper(),
-                'from': from_date,
-                'to': to_date,
-                'token': self.api_key
-            }
+            params = {"symbol": symbol.upper(), "from": from_date, "to": to_date, "token": self.api_key}
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:

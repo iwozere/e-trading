@@ -16,19 +16,17 @@ Architecture:
 """
 
 import asyncio
-from pathlib import Path
-from typing import Optional, Dict, Any
-from datetime import datetime
 import base64
-from io import BytesIO
+from pathlib import Path
+from typing import Any, Dict
 
 from aiogram import Bot
-from aiogram.types import BufferedInputFile, FSInputFile
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
+from aiogram.types import BufferedInputFile
 
-from src.notification.service.message_queue_client import get_message_queue_client
-from src.notification.logger import setup_logger
 from src.data.db.services.users_service import users_service
+from src.notification.logger import setup_logger
+from src.notification.service.message_queue_client import get_message_queue_client
 
 _logger = setup_logger(__name__)
 
@@ -52,15 +50,12 @@ class TelegramQueueProcessor:
         self.bot = bot
         self.poll_interval = poll_interval
         self._running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._message_queue_client = get_message_queue_client()
         self._consecutive_errors: int = 0  # tracks backoff state (P2-TG-3)
         self._logger = setup_logger(f"{__name__}.TelegramQueueProcessor")
 
-        self._logger.info(
-            "Telegram queue processor initialized (poll interval: %s seconds)",
-            poll_interval
-        )
+        self._logger.info("Telegram queue processor initialized (poll interval: %s seconds)", poll_interval)
 
     async def start(self):
         """Start the queue processor."""
@@ -101,7 +96,7 @@ class TelegramQueueProcessor:
                 # Get pending Telegram messages
                 messages = self._message_queue_client.get_pending_messages_for_channels(
                     channels=["telegram"],
-                    limit=10  # Process up to 10 messages per poll
+                    limit=10,  # Process up to 10 messages per poll
                 )
 
                 if messages:
@@ -111,10 +106,7 @@ class TelegramQueueProcessor:
                         try:
                             await self._process_message(message)
                         except Exception:
-                            self._logger.exception(
-                                "Failed to process message %s:",
-                                message.id
-                            )
+                            self._logger.exception("Failed to process message %s:", message.id)
 
                 # Successful poll — reset error counter and use normal interval
                 self._consecutive_errors = 0
@@ -127,12 +119,13 @@ class TelegramQueueProcessor:
                 # Exponential backoff capped at _MAX_BACKOFF_SECONDS so a DB outage
                 # does not hammer the connection indefinitely (P2-TG-3).
                 backoff = min(
-                    self.poll_interval * (2 ** self._consecutive_errors),
+                    self.poll_interval * (2**self._consecutive_errors),
                     self._MAX_BACKOFF_SECONDS,
                 )
                 self._logger.exception(
                     "Error in telegram queue processor poll loop (error #%d, sleeping %ds):",
-                    self._consecutive_errors, backoff,
+                    self._consecutive_errors,
+                    backoff,
                 )
                 await asyncio.sleep(backoff)
 
@@ -145,7 +138,7 @@ class TelegramQueueProcessor:
         Args:
             message: Message dictionary from database
         """
-        message_id = message['id']
+        message_id = message["id"]
         self._logger.info("Processing message %s", message_id)
 
         # Mark as processing
@@ -160,7 +153,7 @@ class TelegramQueueProcessor:
                 self._message_queue_client.mark_message_failed(
                     message_id,
                     error_msg,
-                    increment_retry=False  # Don't retry if chat_id is missing
+                    increment_retry=False,  # Don't retry if chat_id is missing
                 )
                 return
 
@@ -168,28 +161,23 @@ class TelegramQueueProcessor:
             message_text = self._build_message_text(message)
 
             # Extract optional parameters
-            message_metadata = message.get('message_metadata') or {}
+            message_metadata = message.get("message_metadata") or {}
             reply_to_message_id = message_metadata.get("reply_to_message_id")
 
             # Check for attachments
-            content = message.get('content') or {}
+            content = message.get("content") or {}
             attachments = content.get("attachments", {})
 
             if attachments:
                 # Send with attachments
-                await self._send_with_attachments(
-                    telegram_chat_id,
-                    message_text,
-                    attachments,
-                    reply_to_message_id
-                )
+                await self._send_with_attachments(telegram_chat_id, message_text, attachments, reply_to_message_id)
             else:
                 # Send text only
                 await self.bot.send_message(
                     chat_id=telegram_chat_id,
                     text=message_text,
                     reply_to_message_id=reply_to_message_id,
-                    parse_mode="HTML"
+                    parse_mode="HTML",
                 )
 
             # Mark as delivered
@@ -200,23 +188,15 @@ class TelegramQueueProcessor:
             # Telegram API error
             error_msg = f"Telegram API error: {str(e)}"
             self._logger.error("Message %s: %s", message_id, error_msg)
-            self._message_queue_client.mark_message_failed(
-                message_id,
-                error_msg,
-                increment_retry=True
-            )
+            self._message_queue_client.mark_message_failed(message_id, error_msg, increment_retry=True)
 
         except Exception as e:
             # Other errors
             error_msg = f"Unexpected error: {str(e)}"
             self._logger.exception("Message %s: %s", message_id, error_msg)
-            self._message_queue_client.mark_message_failed(
-                message_id,
-                error_msg,
-                increment_retry=True
-            )
+            self._message_queue_client.mark_message_failed(message_id, error_msg, increment_retry=True)
 
-    def _extract_telegram_chat_id(self, message: Dict[str, Any]) -> Optional[int]:
+    def _extract_telegram_chat_id(self, message: Dict[str, Any]) -> int | None:
         """
         Extract a Telegram chat ID from the message, trying three sources in order.
 
@@ -237,18 +217,16 @@ class TelegramQueueProcessor:
             Telegram chat ID, or None if resolution fails
         """
         # 1. Explicit telegram_chat_id in metadata (highest priority)
-        message_metadata = message.get('message_metadata') or {}
+        message_metadata = message.get("message_metadata") or {}
         explicit_chat_id = message_metadata.get("telegram_chat_id")
         if explicit_chat_id:
             try:
                 return int(explicit_chat_id)
             except (ValueError, TypeError):
-                self._logger.warning(
-                    "Invalid telegram_chat_id in message_metadata: %s", explicit_chat_id
-                )
+                self._logger.warning("Invalid telegram_chat_id in message_metadata: %s", explicit_chat_id)
 
         # 2 + 3. Resolve from recipient_id
-        recipient_id = message.get('recipient_id')
+        recipient_id = message.get("recipient_id")
         if not recipient_id:
             return None
 
@@ -261,17 +239,19 @@ class TelegramQueueProcessor:
         # 2. Try DB lookup first — works for internal user IDs of any magnitude
         try:
             channels = users_service.get_user_notification_channels(recipient_id_int)
-            if channels and channels.get('telegram_chat_id'):
-                resolved = int(channels['telegram_chat_id'])
+            if channels and channels.get("telegram_chat_id"):
+                resolved = int(channels["telegram_chat_id"])
                 self._logger.debug(
                     "Resolved recipient_id %s to Telegram chat ID %s via DB",
-                    recipient_id_int, resolved,
+                    recipient_id_int,
+                    resolved,
                 )
                 return resolved
         except Exception as exc:
             self._logger.debug(
                 "DB lookup failed for recipient_id %s: %s — falling back to direct ID",
-                recipient_id_int, exc,
+                recipient_id_int,
+                exc,
             )
 
         # 3. Treat recipient_id itself as a direct Telegram chat ID
@@ -291,7 +271,7 @@ class TelegramQueueProcessor:
         Returns:
             Formatted message text
         """
-        content = message.get('content') or {}
+        content = message.get("content") or {}
         title = content.get("title", "")
         body = content.get("message", "")
 
@@ -303,11 +283,7 @@ class TelegramQueueProcessor:
             return body or "Empty message"
 
     async def _send_with_attachments(
-        self,
-        chat_id: int,
-        text: str,
-        attachments: Dict[str, Any],
-        reply_to_message_id: Optional[int] = None
+        self, chat_id: int, text: str, attachments: Dict[str, Any], reply_to_message_id: int | None = None
     ):
         """
         Send message with attachments.
@@ -342,7 +318,7 @@ class TelegramQueueProcessor:
                         document=file_obj,
                         caption=text if text else None,
                         reply_to_message_id=reply_to_message_id,
-                        parse_mode="HTML"
+                        parse_mode="HTML",
                     )
                     self._logger.debug("Sent attachment %s to chat %s", filename, chat_id)
 
@@ -356,17 +332,10 @@ class TelegramQueueProcessor:
         # If there's still text and no attachments were sent, send as text message
         if text:
             await self.bot.send_message(
-                chat_id=chat_id,
-                text=text,
-                reply_to_message_id=reply_to_message_id,
-                parse_mode="HTML"
+                chat_id=chat_id, text=text, reply_to_message_id=reply_to_message_id, parse_mode="HTML"
             )
 
-    async def _process_attachment(
-        self,
-        filename: str,
-        attachment_data: Any
-    ) -> Optional[BufferedInputFile]:
+    async def _process_attachment(self, filename: str, attachment_data: Any) -> BufferedInputFile | None:
         """
         Process attachment data into aiogram input file.
 
@@ -384,27 +353,18 @@ class TelegramQueueProcessor:
                 # Attachment stored as base64 in database
                 if attachment_data.get("type") == "base64":
                     actual_data = base64.b64decode(attachment_data["data"])
-                    self._logger.debug(
-                        "Decoded base64 attachment: %s (size: %d bytes)",
-                        filename, len(actual_data)
-                    )
+                    self._logger.debug("Decoded base64 attachment: %s (size: %d bytes)", filename, len(actual_data))
                 elif attachment_data.get("type") == "file_path":
                     # File path stored in database
                     file_path = attachment_data.get("path")
                     if file_path:
-                        with open(file_path, 'rb') as f:
+                        with open(file_path, "rb") as f:
                             actual_data = f.read()
-                        self._logger.debug(
-                            "Read file attachment: %s from %s",
-                            filename, file_path
-                        )
+                        self._logger.debug("Read file attachment: %s from %s", filename, file_path)
             elif isinstance(attachment_data, bytes):
                 # Raw bytes (direct usage)
                 actual_data = attachment_data
-                self._logger.debug(
-                    "Using raw bytes attachment: %s (size: %d bytes)",
-                    filename, len(actual_data)
-                )
+                self._logger.debug("Using raw bytes attachment: %s (size: %d bytes)", filename, len(actual_data))
 
             if actual_data:
                 return BufferedInputFile(actual_data, filename=filename)
@@ -426,7 +386,7 @@ class TelegramQueueProcessor:
         return {
             "running": self._running,
             "poll_interval": self.poll_interval,
-            "pending_count": self._message_queue_client.get_pending_count_for_channels(
-                ["telegram"]
-            ) if self._running else 0
+            "pending_count": self._message_queue_client.get_pending_count_for_channels(["telegram"])
+            if self._running
+            else 0,
         }

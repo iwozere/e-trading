@@ -1,15 +1,14 @@
-import asyncio
-import unittest
-from unittest.mock import MagicMock, AsyncMock, patch
-from datetime import datetime, timezone
 import sys
+import unittest
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.common.sentiments.collect_sentiment_async import collect_sentiment_batch
+
 
 class TestUnifiedSentiment(unittest.IsolatedAsyncioTestCase):
     async def test_collect_all_providers(self):
@@ -20,7 +19,7 @@ class TestUnifiedSentiment(unittest.IsolatedAsyncioTestCase):
             "news": {"mentions": 5, "sentiment_score": 0.8, "provider": "news"},
             "trends": {"mentions": 1, "sentiment_score": 0.0, "provider": "trends"},
             "discord": {"mentions": 50, "sentiment_score": -0.1, "provider": "discord"},
-            "twitter": {"mentions": 100, "sentiment_score": 0.3, "provider": "twitter"}
+            "twitter": {"mentions": 100, "sentiment_score": 0.3, "provider": "twitter"},
         }
 
         # Configuration for all providers enabled
@@ -32,20 +31,13 @@ class TestUnifiedSentiment(unittest.IsolatedAsyncioTestCase):
                 "trends": True,
                 "discord": True,
                 "twitter": True,
-                "hf_enabled": False
+                "hf_enabled": False,
             },
-            "weights": {
-                "stocktwits": 1.0,
-                "reddit": 1.0,
-                "news": 1.0,
-                "trends": 1.0,
-                "discord": 1.0,
-                "twitter": 1.0
-            }
+            "weights": {"stocktwits": 1.0, "reddit": 1.0, "news": 1.0, "trends": 1.0, "discord": 1.0, "twitter": 1.0},
         }
 
         # Mock adapter manager
-        with patch('src.common.sentiments.adapters.adapter_manager.get_adapter_manager') as mock_get_manager:
+        with patch("src.common.sentiments.adapters.adapter_manager.get_adapter_manager") as mock_get_manager:
             manager = MagicMock()
             mock_get_manager.return_value = manager
 
@@ -86,19 +78,16 @@ class TestUnifiedSentiment(unittest.IsolatedAsyncioTestCase):
         # Mock messages for HF
         mock_messages = [
             {"body": "AAPL is great", "likes": 10, "replies": 2, "provider": "stocktwits"},
-            {"body": "Short AAPL", "likes": 0, "replies": 5, "provider": "stocktwits"}
+            {"body": "Short AAPL", "likes": 0, "replies": 5, "provider": "stocktwits"},
         ]
 
         config = {
-            "providers": {
-                "stocktwits": True,
-                "hf_enabled": True
-            },
+            "providers": {"stocktwits": True, "hf_enabled": True},
             "min_mentions_for_hf": 10,
-            "weights": {"heuristic_vs_hf": 1.0} # Use only HF score
+            "weights": {"heuristic_vs_hf": 1.0},  # Use only HF score
         }
 
-        with patch('src.common.sentiments.adapters.adapter_manager.get_adapter_manager') as mock_get_manager:
+        with patch("src.common.sentiments.adapters.adapter_manager.get_adapter_manager") as mock_get_manager:
             manager = MagicMock()
             mock_get_manager.return_value = manager
             manager.get_available_adapters.return_value = ["stocktwits", "huggingface"]
@@ -111,7 +100,7 @@ class TestUnifiedSentiment(unittest.IsolatedAsyncioTestCase):
             manager._adapters = {"huggingface": hf_adapter}
             hf_adapter.predict_batch.return_value = [
                 {"label": "POSITIVE", "score": 0.9},
-                {"label": "NEGATIVE", "score": 0.8}
+                {"label": "NEGATIVE", "score": 0.8},
             ]
 
             results = await collect_sentiment_batch(["AAPL"], config=config)
@@ -125,6 +114,7 @@ class TestUnifiedSentiment(unittest.IsolatedAsyncioTestCase):
             # Msg 2: NEG (-1.0). Engagement: 0 + 2*5 = 10. Weight: sqrt(11) = 3.31
             # Combined score should be slightly positive due to higher engagement on POS message.
             self.assertTrue(aapl.sentiment_score_24h > 0)
+
 
 if __name__ == "__main__":
     unittest.main()

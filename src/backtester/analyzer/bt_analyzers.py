@@ -22,6 +22,7 @@ class CalmarRatio(bt.Analyzer):
     Analyzer to calculate the Calmar Ratio, which is the CAGR divided by the maximum drawdown.
     Uses CAGR and DrawDown analyzers to compute the metric.
     """
+
     params = (("riskfreerate", 0.0), ("timeframe", bt.TimeFrame.Years))
 
     def __init__(self):
@@ -51,10 +52,11 @@ class CAGR(bt.Analyzer):
     """
     Analyzer to calculate the Compound Annual Growth Rate (CAGR) of the strategy's equity curve.
     """
+
     params = (("timeframe", bt.TimeFrame.Years),)
 
     def start(self):
-        super(CAGR, self).start()
+        super().start()
         self.start_value = self.strategy.broker.getvalue()
 
     def stop(self):
@@ -79,6 +81,7 @@ class SortinoRatio(bt.Analyzer):
     """
     Analyzer to calculate the Sortino Ratio, a risk-adjusted return metric that penalizes only downside volatility.
     """
+
     params = (("riskfreerate", 0.0), ("timeframe", bt.TimeFrame.Days))
 
     def start(self):
@@ -102,9 +105,7 @@ class SortinoRatio(bt.Analyzer):
         # Рассчитываем downside deviation
         downside_returns = returns[returns < self.p.riskfreerate]
         if len(downside_returns) > 0:
-            downside_dev = np.sqrt(
-                np.mean((downside_returns - self.p.riskfreerate) ** 2)
-            )
+            downside_dev = np.sqrt(np.mean((downside_returns - self.p.riskfreerate) ** 2))
         else:
             # If no downside returns, use the standard deviation of all returns
             # This is a more conservative approach for the Sortino ratio
@@ -128,6 +129,7 @@ class ProfitFactor(bt.Analyzer):
     """
     Analyzer to calculate the Profit Factor, defined as the ratio of gross profit to gross loss from closed trades.
     """
+
     def start(self):
         self.gross_profit = 0.0
         self.gross_loss = 0.0
@@ -155,6 +157,7 @@ class WinRate(bt.Analyzer):
     """
     Analyzer to calculate the win rate (percentage of winning trades), average win, and average loss.
     """
+
     def start(self):
         self.winning_trades = 0
         self.total_trades = 0
@@ -172,11 +175,7 @@ class WinRate(bt.Analyzer):
 
     def stop(self):
         self.rets = {}
-        self.rets["win_rate"] = (
-            (self.winning_trades / self.total_trades * 100)
-            if self.total_trades > 0
-            else 0.0
-        )
+        self.rets["win_rate"] = (self.winning_trades / self.total_trades * 100) if self.total_trades > 0 else 0.0
         self.rets["avg_win"] = np.mean(self.win_amounts) if self.win_amounts else 0.0
         self.rets["avg_loss"] = np.mean(self.loss_amounts) if self.loss_amounts else 0.0
 
@@ -188,6 +187,7 @@ class ConsecutiveWinsLosses(bt.Analyzer):
     """
     Analyzer to track the maximum number of consecutive winning and losing trades.
     """
+
     def start(self):
         self.current_wins = 0
         self.current_losses = 0
@@ -221,6 +221,7 @@ class PortfolioVolatility(bt.Analyzer):
     """
     Analyzer to calculate the volatility of the portfolio's returns, optionally annualized.
     """
+
     params = (("annualize", True),)
 
     def start(self):

@@ -18,14 +18,17 @@ Classes:
 """
 
 from datetime import datetime
-from typing import List, Dict
+from typing import Dict, List
+
 import pandas as pd
 import requests
+
 from src.data.downloader.base_data_downloader import BaseDataDownloader
-from src.notification.logger import setup_logger
 from src.model.schemas import OptionalFundamentals
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class CoinGeckoDataDownloader(BaseDataDownloader):
     """
@@ -126,18 +129,15 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
 
             # Resample to requested interval
             if interval.endswith("d"):
-                rule = f'{interval[:-1]}D' if interval != "1d" else "D"
+                rule = f"{interval[:-1]}D" if interval != "1d" else "D"
             elif interval.endswith("h"):
-                rule = f'{interval[:-1]}H' if interval != "1h" else "H"
+                rule = f"{interval[:-1]}H" if interval != "1h" else "H"
             elif interval.endswith("m"):
-                rule = f'{interval[:-1]}T' if interval != "1m" else "T"
+                rule = f"{interval[:-1]}T" if interval != "1m" else "T"
             else:
                 rule = "D"
 
-            ohlcv = df.resample(rule, on="timestamp").agg({
-                "close": ["first", "max", "min", "last"],
-                "volume": "sum"
-            })
+            ohlcv = df.resample(rule, on="timestamp").agg({"close": ["first", "max", "min", "last"], "volume": "sum"})
             ohlcv.columns = ["open", "high", "low", "close", "volume"]
             ohlcv = ohlcv.reset_index()
             ohlcv = ohlcv.rename(columns={"timestamp": "timestamp"})
@@ -205,16 +205,16 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
             return pd.DataFrame()
 
     def get_periods(self) -> list:
-        return ['1d', '7d', '1w', '1mo', '3mo', '6mo', '1y', '2y']
+        return ["1d", "7d", "1w", "1mo", "3mo", "6mo", "1y", "2y"]
 
     def get_intervals(self) -> list:
-        return ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w', '1mo']
+        return ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w", "1mo"]
 
     def is_valid_period_interval(self, period, interval) -> bool:
         return interval in self.get_intervals() and period in self.get_periods()
 
     def get_ohlcv(self, symbol, interval, start_date: datetime, end_date: datetime, **kwargs):
-        save_to_csv = kwargs.get('save_to_csv', False)
+        save_to_csv = kwargs.get("save_to_csv", False)
         return self.download_historical_data(symbol, interval, start_date, end_date, save_to_csv=save_to_csv)
 
     def get_fundamentals(self, symbol: str) -> OptionalFundamentals:
@@ -239,9 +239,8 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
     ) -> Dict[str, str]:
         def download_func(symbol, interval, start_date, end_date):
             return self.download_historical_data(symbol, interval, start_date, end_date, save_to_csv=False)
-        return super().download_multiple_symbols(
-            symbols, download_func, interval, start_date, end_date
-        )
+
+        return super().download_multiple_symbols(symbols, download_func, interval, start_date, end_date)
 
     def get_provider_name(self) -> str:
         """Return the canonical provider name for this downloader."""
@@ -249,4 +248,4 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
 
     def get_supported_intervals(self) -> List[str]:
         """Return list of supported intervals for CoinGecko."""
-        return ['1d']  # CoinGecko only supports daily data
+        return ["1d"]  # CoinGecko only supports daily data

@@ -16,9 +16,9 @@ recovers, guaranteeing entry is triggered and the 5% take-profit exits it.
 import sys
 from pathlib import Path
 
+import backtrader as bt
 import numpy as np
 import pandas as pd
-import backtrader as bt
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -29,10 +29,10 @@ from src.strategy.entry.rsi_or_bb_entry_mixin import RSIOrBBEntryMixin
 from src.strategy.exit.fixed_ratio_exit_mixin import FixedRatioExitMixin
 from src.strategy.indicator_factory import IndicatorFactory
 
-
 # ---------------------------------------------------------------------------
 # Synthetic data
 # ---------------------------------------------------------------------------
+
 
 def _make_ohlcv(n: int = 250) -> pd.DataFrame:
     """
@@ -52,10 +52,10 @@ def _make_ohlcv(n: int = 250) -> pd.DataFrame:
     spread = np.random.uniform(0.002, 0.008, n)
     df = pd.DataFrame(
         {
-            "open":   arr * (1 + np.random.uniform(-0.001, 0.001, n)),
-            "high":   arr * (1 + spread),
-            "low":    arr * (1 - spread),
-            "close":  arr,
+            "open": arr * (1 + np.random.uniform(-0.001, 0.001, n)),
+            "high": arr * (1 + spread),
+            "low": arr * (1 - spread),
+            "close": arr,
             "volume": np.full(n, 1_000_000.0),
         },
         index=pd.date_range("2024-01-01", periods=n, freq="1h"),
@@ -66,6 +66,7 @@ def _make_ohlcv(n: int = 250) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Thin test strategy
 # ---------------------------------------------------------------------------
+
 
 class MixinTestStrategy(bt.Strategy):
     """
@@ -80,18 +81,22 @@ class MixinTestStrategy(bt.Strategy):
         self.completed_trades: int = 0
 
         # Instantiate mixin pair
-        self.entry_mixin = RSIOrBBEntryMixin(params={
-            "rsi_period": 14,
-            "rsi_oversold": 30,
-            "bb_period": 20,
-            "bb_dev": 2.0,
-            "use_bb_touch": True,
-            "cooldown_bars": 0,
-        })
-        self.exit_mixin = FixedRatioExitMixin(params={
-            "take_profit": 0.05,
-            "stop_loss": 0.50,  # very wide — prevents stop-out during recovery
-        })
+        self.entry_mixin = RSIOrBBEntryMixin(
+            params={
+                "rsi_period": 14,
+                "rsi_oversold": 30,
+                "bb_period": 20,
+                "bb_dev": 2.0,
+                "use_bb_touch": True,
+                "cooldown_bars": 0,
+            }
+        )
+        self.exit_mixin = FixedRatioExitMixin(
+            params={
+                "take_profit": 0.05,
+                "stop_loss": 0.50,  # very wide — prevents stop-out during recovery
+            }
+        )
 
         # Create real TALib indicators from the entry mixin's blueprint
         ind_configs = RSIOrBBEntryMixin.get_indicator_config(self.entry_mixin.params)
@@ -118,8 +123,8 @@ class MixinTestStrategy(bt.Strategy):
 # Tests
 # ---------------------------------------------------------------------------
 
-class TestBuyHoldSellCycle:
 
+class TestBuyHoldSellCycle:
     def _run(self, cash: float = 10_000.0) -> MixinTestStrategy:
         cerebro = bt.Cerebro()
         cerebro.broker.set_cash(cash)
@@ -131,9 +136,7 @@ class TestBuyHoldSellCycle:
 
     def test_at_least_one_trade_completes(self):
         strat = self._run()
-        assert strat.completed_trades >= 1, (
-            f"Expected ≥1 completed trade, got {strat.completed_trades}"
-        )
+        assert strat.completed_trades >= 1, f"Expected ≥1 completed trade, got {strat.completed_trades}"
 
     def test_broker_has_cash_after_run(self):
         """Broker value should be non-zero — strategy didn't blow up."""

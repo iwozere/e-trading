@@ -1,7 +1,7 @@
 """Tests for P17 CatalystAgent (daily 8-K index cache + legacy EDGAR fallback)."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
@@ -13,10 +13,8 @@ from src.ml.pipeline.p17_penny_stocks.agents.catalyst_agent import CatalystAgent
 from src.ml.pipeline.p17_penny_stocks.config import P17CatalystConfig
 from src.ml.pipeline.p17_penny_stocks.models.candidate import Candidate
 
-
 TARGET_DATE = "2026-06-25"
-_INDEX_COLS = ["cik", "company", "accession_number", "items",
-               "description", "filed_date", "primary_document"]
+_INDEX_COLS = ["cik", "company", "accession_number", "items", "description", "filed_date", "primary_document"]
 
 
 def _bare_agent(tmp_path) -> CatalystAgent:
@@ -50,12 +48,11 @@ def _candidate() -> Candidate:
 
 def _write_index(index_dir: Path, date_str: str, rows: list) -> None:
     full = [{**{c: "" for c in _INDEX_COLS}, "filed_date": date_str, **r} for r in rows]
-    pd.DataFrame(full, columns=_INDEX_COLS).to_csv(
-        index_dir / f"{date_str}.csv.gz", index=False, compression="gzip"
-    )
+    pd.DataFrame(full, columns=_INDEX_COLS).to_csv(index_dir / f"{date_str}.csv.gz", index=False, compression="gzip")
 
 
 # ── Classification (no EDGAR) ───────────────────────────────────────────────
+
 
 def test_fda_keyword_is_tier1(tmp_path):
     cat, pts = _bare_agent(tmp_path)._classify("8.01", "FDA clearance granted")
@@ -88,6 +85,7 @@ def test_neutral_officer_change_not_catalyst(tmp_path):
 
 # ── Recency ─────────────────────────────────────────────────────────────────
 
+
 def test_recency_decays_with_age(tmp_path):
     agent = _bare_agent(tmp_path)
     assert agent._recency_multiplier(1) == 1.0
@@ -99,11 +97,16 @@ def test_recency_decays_with_age(tmp_path):
 
 # ── Cache path (primary) ────────────────────────────────────────────────────
 
+
 def test_cache_recent_fda_sets_high_score(tmp_path):
     agent, index_dir = _cache_agent(tmp_path)
-    _write_index(index_dir, "2026-06-24", [
-        {"cik": "111", "items": "8.01", "description": "FDA approval of NDA"},
-    ])
+    _write_index(
+        index_dir,
+        "2026-06-24",
+        [
+            {"cik": "111", "items": "8.01", "description": "FDA approval of NDA"},
+        ],
+    )
     c = _candidate()
     agent.run([c])
     assert c.catalyst_score == P17CatalystConfig().points_tier1  # 90 * 1.0
@@ -113,9 +116,13 @@ def test_cache_recent_fda_sets_high_score(tmp_path):
 
 def test_cache_old_filing_is_decayed(tmp_path):
     agent, index_dir = _cache_agent(tmp_path)
-    _write_index(index_dir, "2026-06-05", [
-        {"cik": "111", "items": "8.01", "description": "FDA approval"},
-    ])
+    _write_index(
+        index_dir,
+        "2026-06-05",
+        [
+            {"cik": "111", "items": "8.01", "description": "FDA approval"},
+        ],
+    )
     c = _candidate()
     agent.run([c])
     assert abs(c.catalyst_score - 90.0 * 0.35) < 1e-6  # 20 days old
@@ -124,10 +131,14 @@ def test_cache_old_filing_is_decayed(tmp_path):
 def test_cache_multi_catalyst_bonus(tmp_path):
     agent, index_dir = _cache_agent(tmp_path)
     cfg = P17CatalystConfig()
-    _write_index(index_dir, "2026-06-24", [
-        {"cik": "111", "items": "1.01", "description": "Definitive merger agreement"},
-        {"cik": "111", "items": "2.02", "description": "Quarterly results"},
-    ])
+    _write_index(
+        index_dir,
+        "2026-06-24",
+        [
+            {"cik": "111", "items": "1.01", "description": "Definitive merger agreement"},
+            {"cik": "111", "items": "2.02", "description": "Quarterly results"},
+        ],
+    )
     c = _candidate()
     agent.run([c])
     assert c.catalyst_score == min(100.0, cfg.points_tier1 + cfg.multi_catalyst_bonus)
@@ -136,9 +147,13 @@ def test_cache_multi_catalyst_bonus(tmp_path):
 def test_cache_leading_zero_cik_matches(tmp_path):
     """Index CIK stored without leading zeros still matches a resolved int CIK."""
     agent, index_dir = _cache_agent(tmp_path)
-    _write_index(index_dir, "2026-06-24", [
-        {"cik": "0000111", "items": "8.01", "description": "FDA approval"},
-    ])
+    _write_index(
+        index_dir,
+        "2026-06-24",
+        [
+            {"cik": "0000111", "items": "8.01", "description": "FDA approval"},
+        ],
+    )
     c = _candidate()
     agent.run([c])
     assert c.catalyst_score == P17CatalystConfig().points_tier1
@@ -146,9 +161,13 @@ def test_cache_leading_zero_cik_matches(tmp_path):
 
 def test_cache_no_catalyst_leaves_zero(tmp_path):
     agent, index_dir = _cache_agent(tmp_path)
-    _write_index(index_dir, "2026-06-24", [
-        {"cik": "111", "items": "5.02", "description": "Officer appointment"},
-    ])
+    _write_index(
+        index_dir,
+        "2026-06-24",
+        [
+            {"cik": "111", "items": "5.02", "description": "Officer appointment"},
+        ],
+    )
     c = _candidate()
     agent.run([c])
     assert c.catalyst_score == 0.0
@@ -159,10 +178,13 @@ def test_cache_filing_outside_lookback_ignored(tmp_path):
     agent, index_dir = _cache_agent(tmp_path)
     # ~85 days before target → no index file even written in window; but write one
     # inside the scanned window with an old date to ensure age filter applies.
-    _write_index(index_dir, "2026-06-24", [
-        {"cik": "111", "items": "8.01", "description": "FDA approval",
-         "filed_date": "2026-04-01"},
-    ])
+    _write_index(
+        index_dir,
+        "2026-06-24",
+        [
+            {"cik": "111", "items": "8.01", "description": "FDA approval", "filed_date": "2026-04-01"},
+        ],
+    )
     c = _candidate()
     agent.run([c])
     assert c.catalyst_score == 0.0
@@ -170,9 +192,13 @@ def test_cache_filing_outside_lookback_ignored(tmp_path):
 
 def test_cache_unrelated_cik_not_scored(tmp_path):
     agent, index_dir = _cache_agent(tmp_path)
-    _write_index(index_dir, "2026-06-24", [
-        {"cik": "999", "items": "8.01", "description": "FDA approval"},
-    ])
+    _write_index(
+        index_dir,
+        "2026-06-24",
+        [
+            {"cik": "999", "items": "8.01", "description": "FDA approval"},
+        ],
+    )
     c = _candidate()
     agent.run([c])
     assert c.catalyst_score == 0.0
@@ -180,11 +206,11 @@ def test_cache_unrelated_cik_not_scored(tmp_path):
 
 # ── Legacy fallback (no index dir) ──────────────────────────────────────────
 
+
 def test_legacy_fallback_used_when_no_index(tmp_path):
     agent = _legacy_agent(tmp_path)
     agent._edgar.get_recent_filings.return_value = [
-        {"form": "8-K", "items": "8.01", "primaryDocDescription": "FDA approval",
-         "filingDate": "2026-06-24"},
+        {"form": "8-K", "items": "8.01", "primaryDocDescription": "FDA approval", "filingDate": "2026-06-24"},
     ]
     c = _candidate()
     agent.run([c])

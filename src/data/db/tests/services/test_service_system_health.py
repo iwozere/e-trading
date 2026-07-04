@@ -9,8 +9,8 @@ Tests cover:
 - Utility methods
 """
 
-from src.data.db.services.system_health_service import SystemHealthService
 from src.data.db.models.model_system_health import SystemHealthStatus
+from src.data.db.services.system_health_service import SystemHealthService
 
 
 class TestSystemHealthServiceBasicOperations:
@@ -21,9 +21,7 @@ class TestSystemHealthServiceBasicOperations:
         service = SystemHealthService(db_service=mock_database_service)
 
         health = service.update_system_health(
-            system="telegram_bot",
-            status=SystemHealthStatus.HEALTHY,
-            response_time_ms=150
+            system="telegram_bot", status=SystemHealthStatus.HEALTHY, response_time_ms=150
         )
 
         assert health is not None
@@ -35,10 +33,7 @@ class TestSystemHealthServiceBasicOperations:
         service = SystemHealthService(db_service=mock_database_service)
 
         health = service.update_system_health(
-            system="notification",
-            component="email",
-            status=SystemHealthStatus.HEALTHY,
-            response_time_ms=200
+            system="notification", component="email", status=SystemHealthStatus.HEALTHY, response_time_ms=200
         )
 
         assert health is not None
@@ -53,7 +48,7 @@ class TestSystemHealthServiceBasicOperations:
             system="api_service",
             status=SystemHealthStatus.DEGRADED,
             response_time_ms=2000,
-            error_message="High latency detected"
+            error_message="High latency detected",
         )
 
         assert health is not None
@@ -66,9 +61,7 @@ class TestSystemHealthServiceBasicOperations:
 
         metadata = {"version": "1.0.0", "uptime_seconds": 3600}
         health = service.update_system_health(
-            system="trading_bot",
-            status=SystemHealthStatus.HEALTHY,
-            metadata=metadata
+            system="trading_bot", status=SystemHealthStatus.HEALTHY, metadata=metadata
         )
 
         assert health is not None
@@ -83,10 +76,7 @@ class TestSystemHealthServiceRetrieval:
         service = SystemHealthService(db_service=mock_database_service)
 
         # Create health record first
-        service.update_system_health(
-            system="database",
-            status=SystemHealthStatus.HEALTHY
-        )
+        service.update_system_health(system="database", status=SystemHealthStatus.HEALTHY)
 
         # Retrieve it
         health_data = service.get_system_health(system="database")
@@ -100,17 +90,10 @@ class TestSystemHealthServiceRetrieval:
         service = SystemHealthService(db_service=mock_database_service)
 
         # Create health record
-        service.update_system_health(
-            system="notification",
-            component="telegram",
-            status=SystemHealthStatus.HEALTHY
-        )
+        service.update_system_health(system="notification", component="telegram", status=SystemHealthStatus.HEALTHY)
 
         # Retrieve it
-        health_data = service.get_system_health(
-            system="notification",
-            component="telegram"
-        )
+        health_data = service.get_system_health(system="notification", component="telegram")
 
         assert health_data is not None
         assert health_data["system"] == "notification"
@@ -186,9 +169,7 @@ class TestSystemHealthServiceChannelCompatibility:
         service = SystemHealthService(db_service=mock_database_service)
 
         health = service.update_notification_channel_health(
-            channel="email",
-            status=SystemHealthStatus.HEALTHY,
-            response_time_ms=100
+            channel="email", status=SystemHealthStatus.HEALTHY, response_time_ms=100
         )
 
         assert health is not None
@@ -214,10 +195,7 @@ class TestSystemHealthServiceChannelCompatibility:
         service = SystemHealthService(db_service=mock_database_service)
 
         # Create channel health
-        service.update_notification_channel_health(
-            channel="slack",
-            status=SystemHealthStatus.HEALTHY
-        )
+        service.update_notification_channel_health(channel="slack", status=SystemHealthStatus.HEALTHY)
 
         # Get it
         channel_health = service.get_notification_channel_health(channel="slack")
@@ -233,10 +211,7 @@ class TestSystemHealthServiceSpecificSystems:
         """Test updating Telegram bot health."""
         service = SystemHealthService(db_service=mock_database_service)
 
-        health = service.update_telegram_bot_health(
-            status=SystemHealthStatus.HEALTHY,
-            response_time_ms=100
-        )
+        health = service.update_telegram_bot_health(status=SystemHealthStatus.HEALTHY, response_time_ms=100)
 
         assert health is not None
         assert health.system == "telegram_bot"
@@ -245,9 +220,7 @@ class TestSystemHealthServiceSpecificSystems:
         """Test updating API service health."""
         service = SystemHealthService(db_service=mock_database_service)
 
-        health = service.update_api_service_health(
-            status=SystemHealthStatus.HEALTHY
-        )
+        health = service.update_api_service_health(status=SystemHealthStatus.HEALTHY)
 
         assert health is not None
         assert health.system == "api_service"
@@ -256,9 +229,7 @@ class TestSystemHealthServiceSpecificSystems:
         """Test updating Web UI health."""
         service = SystemHealthService(db_service=mock_database_service)
 
-        health = service.update_web_ui_health(
-            status=SystemHealthStatus.HEALTHY
-        )
+        health = service.update_web_ui_health(status=SystemHealthStatus.HEALTHY)
 
         assert health is not None
         assert health.system == "web_ui"
@@ -268,8 +239,7 @@ class TestSystemHealthServiceSpecificSystems:
         service = SystemHealthService(db_service=mock_database_service)
 
         health = service.update_trading_bot_health(
-            status=SystemHealthStatus.DEGRADED,
-            error_message="Connection issues"
+            status=SystemHealthStatus.DEGRADED, error_message="Connection issues"
         )
 
         assert health is not None
@@ -280,10 +250,7 @@ class TestSystemHealthServiceSpecificSystems:
         """Test updating database health."""
         service = SystemHealthService(db_service=mock_database_service)
 
-        health = service.update_database_health(
-            status=SystemHealthStatus.HEALTHY,
-            response_time_ms=50
-        )
+        health = service.update_database_health(status=SystemHealthStatus.HEALTHY, response_time_ms=50)
 
         assert health is not None
         assert health.system == "database"
@@ -328,10 +295,7 @@ class TestSystemHealthServiceIntegration:
         # 1. Update multiple system healths
         service.update_telegram_bot_health(status=SystemHealthStatus.HEALTHY)
         service.update_api_service_health(status=SystemHealthStatus.HEALTHY)
-        service.update_trading_bot_health(
-            status=SystemHealthStatus.DEGRADED,
-            error_message="Minor issues"
-        )
+        service.update_trading_bot_health(status=SystemHealthStatus.DEGRADED, error_message="Minor issues")
 
         # 2. Get overview
         overview = service.get_systems_overview()
@@ -352,11 +316,7 @@ class TestSystemHealthServiceIntegration:
         # Update multiple channels
         service.update_notification_channel_health("email", SystemHealthStatus.HEALTHY)
         service.update_notification_channel_health("telegram", SystemHealthStatus.HEALTHY)
-        service.update_notification_channel_health(
-            "slack",
-            SystemHealthStatus.DOWN,
-            error_message="API unreachable"
-        )
+        service.update_notification_channel_health("slack", SystemHealthStatus.DOWN, error_message="API unreachable")
 
         # Get all channels
         channels = service.get_notification_channels_health()

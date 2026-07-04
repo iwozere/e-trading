@@ -5,19 +5,20 @@ Tests that updated code works with unified service, verifies migration scenarios
 and tests configuration changes and interface updates.
 """
 
-import pytest
-import pandas as pd
-from unittest.mock import patch, Mock
-from datetime import datetime
 import sys
+from datetime import datetime
 from pathlib import Path
+from unittest.mock import Mock, patch
+
+import pandas as pd
+import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.indicators.service import IndicatorService
-from src.indicators.models import IndicatorBatchConfig, IndicatorSpec, TickerIndicatorsRequest
 from src.indicators.indicator_factory import IndicatorFactory
+from src.indicators.models import IndicatorBatchConfig, IndicatorSpec, TickerIndicatorsRequest
+from src.indicators.service import IndicatorService
 
 
 class TestMigrationCompatibility:
@@ -26,13 +27,16 @@ class TestMigrationCompatibility:
     @pytest.fixture
     def sample_ohlcv(self):
         """Sample OHLCV data for testing."""
-        return pd.DataFrame({
-            'open': [100, 101, 102, 103, 104],
-            'high': [102, 103, 104, 105, 106],
-            'low': [99, 100, 101, 102, 103],
-            'close': [101, 102, 103, 104, 105],
-            'volume': [1000, 1100, 1200, 1300, 1400]
-        }, index=pd.date_range('2024-01-01', periods=5, freq='D', tz='UTC'))
+        return pd.DataFrame(
+            {
+                "open": [100, 101, 102, 103, 104],
+                "high": [102, 103, 104, 105, 106],
+                "low": [99, 100, 101, 102, 103],
+                "close": [101, 102, 103, 104, 105],
+                "volume": [1000, 1100, 1200, 1300, 1400],
+            },
+            index=pd.date_range("2024-01-01", periods=5, freq="D", tz="UTC"),
+        )
 
     def test_legacy_indicator_factory_compatibility(self, sample_ohlcv):
         """Test that legacy IndicatorFactory works with unified service."""
@@ -63,7 +67,7 @@ class TestMigrationCompatibility:
             indicators=[
                 # Old parameter names should be mapped to new ones
                 IndicatorSpec(name="rsi", output="rsi", params={"period": 14}),  # old: period, new: timeperiod
-                IndicatorSpec(name="ema", output="ema", params={"span": 20}),    # old: span, new: timeperiod
+                IndicatorSpec(name="ema", output="ema", params={"span": 20}),  # old: span, new: timeperiod
             ]
         )
 
@@ -82,7 +86,7 @@ class TestMigrationCompatibility:
             indicators=[
                 IndicatorSpec(name="rsi", output="rsi_14"),
                 IndicatorSpec(name="macd", output="macd_line"),
-                IndicatorSpec(name="bbands", output="bb")
+                IndicatorSpec(name="bbands", output="bb"),
             ]
         )
 
@@ -106,9 +110,7 @@ class TestMigrationCompatibility:
 
         # Test that unified indicators can be created for Backtrader
         try:
-            from src.indicators.adapters.backtrader_wrappers import (
-                UnifiedRSIIndicator, UnifiedBollingerBandsIndicator
-            )
+            from src.indicators.adapters.backtrader_wrappers import UnifiedBollingerBandsIndicator, UnifiedRSIIndicator
 
             # Should be able to create indicators
             rsi_indicator = UnifiedRSIIndicator(mock_data, period=14)
@@ -129,7 +131,7 @@ class TestMigrationCompatibility:
         old_config_data = {
             "indicators": {
                 "rsi": {"period": 14, "overbought": 70, "oversold": 30},
-                "macd": {"fast": 12, "slow": 26, "signal": 9}
+                "macd": {"fast": 12, "slow": 26, "signal": 9},
             }
         }
 
@@ -148,15 +150,12 @@ class TestMigrationCompatibility:
 
         # Test new-style API calls
         request = TickerIndicatorsRequest(
-            ticker="AAPL",
-            timeframe="1D",
-            period="1M",
-            indicators=["rsi", "ema", "macd"],
-            include_recommendations=True
+            ticker="AAPL", timeframe="1D", period="1M", indicators=["rsi", "ema", "macd"], include_recommendations=True
         )
 
-        with patch('src.common.get_ohlcv', return_value=sample_ohlcv):
+        with patch("src.common.get_ohlcv", return_value=sample_ohlcv):
             import asyncio
+
             result = asyncio.run(service.compute_for_ticker(request))
 
             assert result is not None
@@ -169,14 +168,12 @@ class TestMigrationCompatibility:
 
         tickers = ["AAPL", "GOOGL", "MSFT"]
 
-        with patch('src.common.get_ohlcv', return_value=sample_ohlcv):
+        with patch("src.common.get_ohlcv", return_value=sample_ohlcv):
             import asyncio
-            results = asyncio.run(service.compute_batch(
-                tickers=tickers,
-                indicators=["rsi", "ema"],
-                timeframe="1D",
-                period="1M"
-            ))
+
+            results = asyncio.run(
+                service.compute_batch(tickers=tickers, indicators=["rsi", "ema"], timeframe="1D", period="1M")
+            )
 
             assert len(results) == len(tickers)
             for ticker in tickers:
@@ -187,9 +184,7 @@ class TestMigrationCompatibility:
         service = IndicatorService()
 
         # Test with invalid indicator name
-        config = IndicatorBatchConfig(
-            indicators=[IndicatorSpec(name="old_indicator_name", output="old")]
-        )
+        config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="old_indicator_name", output="old")])
 
         try:
             service.compute(sample_ohlcv, config)
@@ -206,7 +201,7 @@ class TestMigrationCompatibility:
             indicators=[
                 IndicatorSpec(name="rsi", output="rsi"),
                 IndicatorSpec(name="ema", output="ema"),
-                IndicatorSpec(name="macd", output="macd")
+                IndicatorSpec(name="macd", output="macd"),
             ]
         )
 
@@ -228,27 +223,23 @@ class TestMigrationCompatibility:
         # Test with different index types
         data_formats = [
             # Standard datetime index
-            pd.DataFrame({
-                'open': [100, 101], 'high': [102, 103], 'low': [99, 100],
-                'close': [101, 102], 'volume': [1000, 1100]
-            }, index=pd.date_range('2024-01-01', periods=2, freq='D')),
-
+            pd.DataFrame(
+                {"open": [100, 101], "high": [102, 103], "low": [99, 100], "close": [101, 102], "volume": [1000, 1100]},
+                index=pd.date_range("2024-01-01", periods=2, freq="D"),
+            ),
             # String datetime index
-            pd.DataFrame({
-                'open': [100, 101], 'high': [102, 103], 'low': [99, 100],
-                'close': [101, 102], 'volume': [1000, 1100]
-            }, index=['2024-01-01', '2024-01-02']),
-
+            pd.DataFrame(
+                {"open": [100, 101], "high": [102, 103], "low": [99, 100], "close": [101, 102], "volume": [1000, 1100]},
+                index=["2024-01-01", "2024-01-02"],
+            ),
             # Integer index
-            pd.DataFrame({
-                'open': [100, 101], 'high': [102, 103], 'low': [99, 100],
-                'close': [101, 102], 'volume': [1000, 1100]
-            }, index=[0, 1])
+            pd.DataFrame(
+                {"open": [100, 101], "high": [102, 103], "low": [99, 100], "close": [101, 102], "volume": [1000, 1100]},
+                index=[0, 1],
+            ),
         ]
 
-        config = IndicatorBatchConfig(
-            indicators=[IndicatorSpec(name="rsi", output="rsi")]
-        )
+        config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="rsi", output="rsi")])
 
         for i, data in enumerate(data_formats):
             with pytest.subTest(format=i):
@@ -264,17 +255,18 @@ class TestMigrationCompatibility:
         service = IndicatorService()
 
         # Test with different column names
-        alt_column_data = pd.DataFrame({
-            'Open': [100, 101],    # Capitalized
-            'High': [102, 103],
-            'Low': [99, 100],
-            'Close': [101, 102],
-            'Volume': [1000, 1100]
-        }, index=pd.date_range('2024-01-01', periods=2, freq='D'))
-
-        config = IndicatorBatchConfig(
-            indicators=[IndicatorSpec(name="rsi", output="rsi")]
+        alt_column_data = pd.DataFrame(
+            {
+                "Open": [100, 101],  # Capitalized
+                "High": [102, 103],
+                "Low": [99, 100],
+                "Close": [101, 102],
+                "Volume": [1000, 1100],
+            },
+            index=pd.date_range("2024-01-01", periods=2, freq="D"),
         )
+
+        config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="rsi", output="rsi")])
 
         try:
             result = service.compute(alt_column_data, config)
@@ -287,31 +279,28 @@ class TestMigrationCompatibility:
         """Test that recommendation formats are compatible."""
         service = IndicatorService()
 
-        request = TickerIndicatorsRequest(
-            ticker="AAPL",
-            indicators=["rsi"],
-            include_recommendations=True
-        )
+        request = TickerIndicatorsRequest(ticker="AAPL", indicators=["rsi"], include_recommendations=True)
 
-        with patch('src.common.get_ohlcv', return_value=sample_ohlcv):
+        with patch("src.common.get_ohlcv", return_value=sample_ohlcv):
             import asyncio
+
             result = asyncio.run(service.compute_for_ticker(request))
 
             # Check recommendation format
             if result.technical and result.technical.get("rsi"):
                 rsi_result = result.technical["rsi"]
-                if hasattr(rsi_result, 'recommendation'):
+                if hasattr(rsi_result, "recommendation"):
                     rec = rsi_result.recommendation
-                    assert hasattr(rec, 'type')
-                    assert hasattr(rec, 'confidence')
+                    assert hasattr(rec, "type")
+                    assert hasattr(rec, "confidence")
 
     def test_legacy_import_compatibility(self):
         """Test that legacy import statements still work."""
         # Test that old import paths are still accessible
         try:
             # These imports should work if backward compatibility is maintained
-            from src.indicators.service import IndicatorService
             from src.indicators.models import IndicatorBatchConfig
+            from src.indicators.service import IndicatorService
 
             assert IndicatorService is not None
             assert IndicatorBatchConfig is not None
@@ -324,13 +313,7 @@ class TestMigrationCompatibility:
         service = IndicatorService()
 
         # Mock old configuration file format
-        old_config = {
-            "rsi_period": 14,
-            "macd_fast": 12,
-            "macd_slow": 26,
-            "bb_period": 20,
-            "bb_std": 2
-        }
+        old_config = {"rsi_period": 14, "macd_fast": 12, "macd_slow": 26, "bb_period": 20, "bb_std": 2}
 
         # Service should handle old configuration format
         config_manager = service._config_manager
@@ -345,5 +328,5 @@ class TestMigrationCompatibility:
             pass
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

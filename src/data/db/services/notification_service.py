@@ -6,24 +6,22 @@ Service layer for notification operations.
 Provides high-level business logic for notification management.
 """
 
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
 import sys
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List
 
-from sqlalchemy import cast, Text, or_, desc, func
+from sqlalchemy import Text, cast, desc, func, or_
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.db.models.model_notification import (
-    Message, MessageDeliveryStatus, MessageStatus
-)
-from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
+from src.data.db.models.model_notification import Message, MessageDeliveryStatus, MessageStatus
+from src.data.db.services.base_service import BaseDBService, handle_db_error, with_uow
 from src.notification.channels.base import ChannelHealth, DeliveryStatus
-
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
 
 
@@ -39,46 +37,46 @@ class NotificationService(BaseDBService):
     def create_message(self, message_data: Dict[str, Any]) -> Message:
         """Create a new notification message."""
         # Validate required fields
-        required_fields = ['message_type', 'channels', 'recipient_id', 'content']
+        required_fields = ["message_type", "channels", "recipient_id", "content"]
         for field in required_fields:
             if field not in message_data:
                 raise ValueError(f"Missing required field: {field}")
 
         # Set defaults
-        if 'priority' not in message_data:
-            message_data['priority'] = 'NORMAL'
+        if "priority" not in message_data:
+            message_data["priority"] = "NORMAL"
 
-        if 'status' not in message_data:
-            message_data['status'] = MessageStatus.PENDING.value
+        if "status" not in message_data:
+            message_data["status"] = MessageStatus.PENDING.value
 
-        if 'scheduled_for' not in message_data:
-            message_data['scheduled_for'] = datetime.now(timezone.utc)
+        if "scheduled_for" not in message_data:
+            message_data["scheduled_for"] = datetime.now(UTC)
 
-        if 'max_retries' not in message_data:
-            message_data['max_retries'] = 3
+        if "max_retries" not in message_data:
+            message_data["max_retries"] = 3
 
-        if 'retry_count' not in message_data:
-            message_data['retry_count'] = 0
+        if "retry_count" not in message_data:
+            message_data["retry_count"] = 0
 
         # Create message
         message = self.repos.notifications.create_message(message_data)
 
         # Create delivery status records for each channel
-        for channel in message_data['channels']:
+        for channel in message_data["channels"]:
             delivery_data = {
-                'message_id': message.id,
-                'channel': channel,
-                'status': DeliveryStatus.PENDING.value,
-                'created_at': datetime.now(timezone.utc)
+                "message_id": message.id,
+                "channel": channel,
+                "status": DeliveryStatus.PENDING.value,
+                "created_at": datetime.now(UTC),
             }
             self.repos.notifications.create_delivery_status(delivery_data)
 
-        self._logger.info("Created message %s with %d delivery channels", message.id, len(message_data['channels']))
+        self._logger.info("Created message %s with %d delivery channels", message.id, len(message_data["channels"]))
         return message
 
     @with_uow
     @handle_db_error
-    def get_message(self, message_id: int) -> Optional[Message]:
+    def get_message(self, message_id: int) -> Message | None:
         """Get a message by ID."""
         return self.repos.notifications.get_message(message_id)
 
@@ -86,12 +84,12 @@ class NotificationService(BaseDBService):
     @handle_db_error
     def list_messages(
         self,
-        status: Optional[str] = None,
-        priority: Optional[str] = None,
-        recipient_id: Optional[str] = None,
-        message_type: Optional[str] = None,
+        status: str | None = None,
+        priority: str | None = None,
+        recipient_id: str | None = None,
+        message_type: str | None = None,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
     ) -> List[Message]:
         """List messages with filtering."""
         # Convert string status to enum if provided
@@ -104,6 +102,7 @@ class NotificationService(BaseDBService):
 
         # Convert string priority to enum if provided
         from src.data.db.models.model_notification import MessagePriority
+
         priority_enum = None
         if priority:
             try:
@@ -117,19 +116,19 @@ class NotificationService(BaseDBService):
             recipient_id=recipient_id,
             message_type=message_type,
             limit=limit,
-            offset=offset
+            offset=offset,
         )
 
     @with_uow
     @handle_db_error
     def search_messages(
         self,
-        recipient_id: Optional[str] = None,
-        search: Optional[str] = None,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        status: Optional[str] = None,
-        channel: Optional[str] = None,
+        recipient_id: str | None = None,
+        search: str | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        status: str | None = None,
+        channel: str | None = None,
         days: int = 30,
         limit: int = 100,
         offset: int = 0,
@@ -156,7 +155,7 @@ class NotificationService(BaseDBService):
         """
         # Default to the last `days` days when no explicit start is given.
         if start_date is None:
-            start_date = datetime.now(timezone.utc) - timedelta(days=days)
+            start_date = datetime.now(UTC) - timedelta(days=days)
 
         limit = max(1, min(limit, 1000))
         offset = max(0, offset)
@@ -188,12 +187,7 @@ class NotificationService(BaseDBService):
 
         total = query.with_entities(func.count(Message.id)).scalar() or 0
 
-        messages = (
-            query.order_by(desc(Message.created_at))
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
+        messages = query.order_by(desc(Message.created_at)).offset(offset).limit(limit).all()
 
         items = [
             {
@@ -219,15 +213,14 @@ class NotificationService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def update_message_status(self, message_id: int, status: str, error_message: Optional[str] = None) -> Optional[Message]:
+    def update_message_status(
+        self, message_id: int, status: str, error_message: str | None = None
+    ) -> Message | None:
         """Update message status."""
-        update_data = {
-            'status': status,
-            'processed_at': datetime.now(timezone.utc)
-        }
+        update_data = {"status": status, "processed_at": datetime.now(UTC)}
 
         if error_message:
-            update_data['last_error'] = error_message
+            update_data["last_error"] = error_message
 
         message = self.repos.notifications.update_message(message_id, update_data)
         if message:
@@ -247,27 +240,27 @@ class NotificationService(BaseDBService):
         self,
         delivery_id: int,
         status: str,
-        delivered_at: Optional[datetime] = None,
-        response_time_ms: Optional[int] = None,
-        error_message: Optional[str] = None,
-        external_id: Optional[str] = None
-    ) -> Optional[MessageDeliveryStatus]:
+        delivered_at: datetime | None = None,
+        response_time_ms: int | None = None,
+        error_message: str | None = None,
+        external_id: str | None = None,
+    ) -> MessageDeliveryStatus | None:
         """Update delivery status."""
-        update_data = {'status': status}
+        update_data = {"status": status}
 
         if delivered_at:
-            update_data['delivered_at'] = delivered_at
+            update_data["delivered_at"] = delivered_at
         elif status == DeliveryStatus.DELIVERED.value:
-            update_data['delivered_at'] = datetime.now(timezone.utc)
+            update_data["delivered_at"] = datetime.now(UTC)
 
         if response_time_ms is not None:
-            update_data['response_time_ms'] = response_time_ms
+            update_data["response_time_ms"] = response_time_ms
 
         if error_message:
-            update_data['error_message'] = error_message
+            update_data["error_message"] = error_message
 
         if external_id:
-            update_data['external_id'] = external_id
+            update_data["external_id"] = external_id
 
         delivery_status = self.repos.notifications.update_delivery_status(delivery_id, update_data)
         if delivery_status:
@@ -283,13 +276,13 @@ class NotificationService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def update_channel_health(self, channel: str, status: str, error_message: Optional[str] = None) -> ChannelHealth:
+    def update_channel_health(self, channel: str, status: str, error_message: str | None = None) -> ChannelHealth:
         """Update channel health status."""
         health_data = {
-            'channel': channel,
-            'status': status,
-            'error_message': error_message,
-            'checked_at': datetime.now(timezone.utc)
+            "channel": channel,
+            "status": status,
+            "error_message": error_message,
+            "checked_at": datetime.now(UTC),
         }
 
         health = self.repos.notifications.create_or_update_channel_health(health_data)
@@ -297,7 +290,7 @@ class NotificationService(BaseDBService):
         return health
 
     @with_uow
-    def get_delivery_statistics(self, channel: Optional[str] = None, days: int = 30) -> Dict[str, Any]:
+    def get_delivery_statistics(self, channel: str | None = None, days: int = 30) -> Dict[str, Any]:
         """Get delivery statistics."""
         return self.repos.notifications.get_delivery_statistics(channel=channel, days=days)
 
@@ -313,14 +306,14 @@ class NotificationService(BaseDBService):
     @handle_db_error
     def get_pending_messages(self, limit: int = 100) -> List[Message]:
         """Get pending messages ready for processing."""
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
         return self.repos.notifications.get_pending_messages(current_time, limit=limit)
 
     @with_uow
     @handle_db_error
     def get_failed_messages_for_retry(self, limit: int = 50) -> List[Message]:
         """Get failed messages that can be retried."""
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
         return self.repos.notifications.get_failed_messages_for_retry(current_time, limit=limit)
 
     @with_uow
@@ -329,8 +322,8 @@ class NotificationService(BaseDBService):
         """Check if user is within rate limits for a channel."""
         # Default rate limit configuration
         default_config = {
-            'max_tokens': 60,  # 60 messages per hour
-            'refill_rate': 60  # Refill 1 token per minute
+            "max_tokens": 60,  # 60 messages per hour
+            "refill_rate": 60,  # Refill 1 token per minute
         }
 
         return self.repos.notifications.check_and_consume_token(user_id, channel, default_config)

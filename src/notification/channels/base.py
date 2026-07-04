@@ -6,10 +6,10 @@ Provides the interface that all channel implementations must follow.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
+from typing import Any, Dict, List
 
 from src.notification.logger import setup_logger
 
@@ -18,6 +18,7 @@ _logger = setup_logger(__name__)
 
 class DeliveryStatus(str, Enum):
     """Delivery status enumeration."""
+
     PENDING = "PENDING"
     SENT = "SENT"
     DELIVERED = "DELIVERED"
@@ -27,6 +28,7 @@ class DeliveryStatus(str, Enum):
 
 class ChannelHealthStatus(str, Enum):
     """Channel health status enumeration."""
+
     HEALTHY = "HEALTHY"
     DEGRADED = "DEGRADED"
     DOWN = "DOWN"
@@ -38,10 +40,10 @@ class DeliveryResult:
 
     success: bool
     status: DeliveryStatus
-    external_id: Optional[str] = None
-    response_time_ms: Optional[int] = None
-    error_message: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    external_id: str | None = None
+    response_time_ms: int | None = None
+    error_message: str | None = None
+    metadata: Dict[str, Any] | None = None
 
     def __post_init__(self):
         """Validate delivery result data."""
@@ -68,10 +70,10 @@ class ChannelHealth:
 
     status: ChannelHealthStatus
     last_check: datetime
-    response_time_ms: Optional[int] = None
-    error_message: Optional[str] = None
+    response_time_ms: int | None = None
+    error_message: str | None = None
     failure_count: int = 0
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, Any] | None = None
 
     @property
     def is_healthy(self) -> bool:
@@ -89,10 +91,10 @@ class MessageContent:
     """Structured message content for delivery."""
 
     text: str
-    subject: Optional[str] = None
-    html: Optional[str] = None
-    attachments: Optional[List[Dict[str, Any]]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    subject: str | None = None
+    html: str | None = None
+    attachments: List[Dict[str, Any]] | None = None
+    metadata: Dict[str, Any] | None = None
 
     def __post_init__(self):
         """Validate message content."""
@@ -148,11 +150,7 @@ class NotificationChannel(ABC):
 
     @abstractmethod
     async def send_message(
-        self,
-        recipient: str,
-        content: MessageContent,
-        message_id: Optional[str] = None,
-        priority: str = "NORMAL"
+        self, recipient: str, content: MessageContent, message_id: str | None = None, priority: str = "NORMAL"
     ) -> DeliveryResult:
         """
         Send a message through this channel.
@@ -216,7 +214,7 @@ class NotificationChannel(ABC):
         """
         return content
 
-    def get_max_message_length(self) -> Optional[int]:
+    def get_max_message_length(self) -> int | None:
         """
         Get maximum message length for this channel.
 
@@ -228,11 +226,11 @@ class NotificationChannel(ABC):
     def split_long_message(self, content: MessageContent) -> List[MessageContent]:
         """
         Split a long message into multiple parts if needed.
-        
+
         P3.1 Fix: Now handles HTML-only messages and ensures 'text' is never empty.
         """
         max_length = self.get_max_message_length()
-        
+
         # Check both text and html length
         content_to_check = content.text or content.html or ""
         if not max_length or len(content_to_check) <= max_length:
@@ -241,7 +239,7 @@ class NotificationChannel(ABC):
         parts = []
         source_text = content.text or ""
         source_html = content.html
-        
+
         # If we have HTML but no text, use a snippet of HTML as text placeholder
         # to satisfy MessageContent validation rules.
         if not source_text and source_html:
@@ -251,29 +249,27 @@ class NotificationChannel(ABC):
             # Find a good break point
             break_point = max_length
             for i in range(max_length - 1, max_length - 100, -1):
-                if i < len(source_text) and source_text[i] in [' ', '\n', '\t', '.', ',', ';']:
+                if i < len(source_text) and source_text[i] in [" ", "\n", "\t", ".", ",", ";"]:
                     break_point = i
                     break
 
             part_text = source_text[:break_point].strip()
             if part_text:
-                parts.append(MessageContent(
-                    text=part_text,
-                    subject=content.subject,
-                    metadata=content.metadata
-                ))
+                parts.append(MessageContent(text=part_text, subject=content.subject, metadata=content.metadata))
 
             source_text = source_text[break_point:].strip()
 
         # Add the final part with remaining text and the original HTML/attachments
         if source_text or source_html or content.attachments:
-            parts.append(MessageContent(
-                text=source_text or "[Final Part]",
-                subject=content.subject,
-                html=source_html,
-                attachments=content.attachments,
-                metadata=content.metadata
-            ))
+            parts.append(
+                MessageContent(
+                    text=source_text or "[Final Part]",
+                    subject=content.subject,
+                    html=source_html,
+                    attachments=content.attachments,
+                    metadata=content.metadata,
+                )
+            )
 
         return parts or [content]
 
@@ -281,9 +277,9 @@ class NotificationChannel(ABC):
         self,
         recipient: str,
         content: MessageContent,
-        message_id: Optional[str] = None,
+        message_id: str | None = None,
         priority: str = "NORMAL",
-        max_retries: int = 3
+        max_retries: int = 3,
     ) -> DeliveryResult:
         """
         Send message with automatic retry on failure.
@@ -308,14 +304,16 @@ class NotificationChannel(ABC):
                     if attempt > 0:
                         self._logger.info(
                             "Message delivered successfully on attempt %s for channel %s",
-                            attempt + 1, self.channel_name
+                            attempt + 1,
+                            self.channel_name,
                         )
                     return result
 
                 if not result.is_retryable:
                     self._logger.warning(
                         "Message delivery failed with non-retryable error for channel %s: %s",
-                        self.channel_name, result.error_message
+                        self.channel_name,
+                        result.error_message,
                     )
                     return result
 
@@ -324,32 +322,31 @@ class NotificationChannel(ABC):
                 if attempt < max_retries:
                     self._logger.warning(
                         "Message delivery failed for channel %s (attempt %s/%s): %s",
-                        self.channel_name, attempt + 1, max_retries + 1, result.error_message
+                        self.channel_name,
+                        attempt + 1,
+                        max_retries + 1,
+                        result.error_message,
                     )
 
             except Exception as e:
                 error_msg = f"Unexpected error during delivery: {str(e)}"
-                last_result = DeliveryResult(
-                    success=False,
-                    status=DeliveryStatus.FAILED,
-                    error_message=error_msg
-                )
+                last_result = DeliveryResult(success=False, status=DeliveryStatus.FAILED, error_message=error_msg)
 
                 if attempt < max_retries:
                     self._logger.error(
                         "Unexpected error in channel %s (attempt %s/%s): %s",
-                        self.channel_name, attempt + 1, max_retries + 1, e
+                        self.channel_name,
+                        attempt + 1,
+                        max_retries + 1,
+                        e,
                     )
 
         self._logger.error(
-            "Message delivery failed after %s attempts for channel %s",
-            max_retries + 1, self.channel_name
+            "Message delivery failed after %s attempts for channel %s", max_retries + 1, self.channel_name
         )
 
         return last_result or DeliveryResult(
-            success=False,
-            status=DeliveryStatus.FAILED,
-            error_message="All retry attempts failed"
+            success=False, status=DeliveryStatus.FAILED, error_message="All retry attempts failed"
         )
 
     def __str__(self) -> str:
@@ -473,9 +470,7 @@ class ChannelRegistry:
             except Exception as e:
                 self._logger.error("Health check failed for channel %s: %s", channel_name, e)
                 health_results[channel_name] = ChannelHealth(
-                    status=ChannelHealthStatus.DOWN,
-                    last_check=datetime.now(timezone.utc),
-                    error_message=str(e)
+                    status=ChannelHealthStatus.DOWN, last_check=datetime.now(UTC), error_message=str(e)
                 )
 
         return health_results

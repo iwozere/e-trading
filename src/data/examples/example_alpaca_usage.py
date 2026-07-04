@@ -6,13 +6,14 @@ This script demonstrates how to use the AlpacaDataDownloader to fetch
 historical market data and fundamental information.
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from datetime import datetime, timedelta
+
 from src.data.downloader.alpaca_data_downloader import AlpacaDataDownloader
 from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 from src.notification.logger import setup_logger
@@ -44,7 +45,7 @@ def example_direct_usage():
 
             # Show recent data
             print("\nLast 5 days:")
-            print(df.tail()[['open', 'high', 'low', 'close', 'volume']])
+            print(df.tail()[["open", "high", "low", "close", "volume"]])
         else:
             print("No data received")
 
@@ -74,7 +75,7 @@ def example_factory_usage():
                 print(f"Latest close: ${df['close'].iloc[-1]:.2f}")
 
                 # Calculate simple statistics
-                daily_return = (df['close'].iloc[-1] / df['close'].iloc[0] - 1) * 100
+                daily_return = (df["close"].iloc[-1] / df["close"].iloc[0] - 1) * 100
                 print(f"3-day return: {daily_return:.2f}%")
             else:
                 print("No data received")
@@ -105,16 +106,16 @@ def example_multiple_symbols():
                 df = downloader.get_ohlcv(symbol, "1d", start_date, end_date)
                 if not df.empty:
                     # Calculate weekly return
-                    weekly_return = (df['close'].iloc[-1] / df['close'].iloc[0] - 1) * 100
+                    weekly_return = (df["close"].iloc[-1] / df["close"].iloc[0] - 1) * 100
                     results[symbol] = {
-                        'rows': len(df),
-                        'latest_price': df['close'].iloc[-1],
-                        'weekly_return': weekly_return
+                        "rows": len(df),
+                        "latest_price": df["close"].iloc[-1],
+                        "weekly_return": weekly_return,
                     }
                 else:
-                    results[symbol] = {'error': 'No data'}
+                    results[symbol] = {"error": "No data"}
             except Exception as e:
-                results[symbol] = {'error': str(e)}
+                results[symbol] = {"error": str(e)}
 
         # Display results
         print("\nResults Summary:")
@@ -122,12 +123,12 @@ def example_multiple_symbols():
         print("-" * 40)
 
         for symbol, data in results.items():
-            if 'error' in data:
+            if "error" in data:
                 print(f"{symbol:<8} {'ERROR':<10} {data['error']:<10}")
             else:
                 price = f"${data['latest_price']:.2f}"
                 return_pct = f"{data['weekly_return']:+.2f}%"
-                rows = str(data['rows'])
+                rows = str(data["rows"])
                 print(f"{symbol:<8} {price:<10} {return_pct:<10} {rows:<6}")
 
     except Exception as e:
@@ -215,7 +216,7 @@ def example_bar_limits():
         end_date = datetime.now() - timedelta(days=1)
 
         # Test with a very long date range (should be limited to 10,000 bars)
-        start_date = end_date - timedelta(days=365*5)  # 5 years ago
+        start_date = end_date - timedelta(days=365 * 5)  # 5 years ago
 
         print(f"Requesting 5 years of daily data for {symbol}")
         print(f"Date range: {start_date.date()} to {end_date.date()}")

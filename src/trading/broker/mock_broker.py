@@ -3,6 +3,8 @@ Mock broker implementation for testing and development.
 Simulates order execution and portfolio management without real API calls.
 """
 
+from datetime import UTC
+
 from src.trading.broker.base_broker import BaseBroker
 
 
@@ -15,17 +17,17 @@ class MockBroker(BaseBroker):
         # Create a default config if none provided
         if config is None:
             config = {
-                'name': 'Mock Broker',
-                'type': 'mock',
-                'trading_mode': 'paper',
-                'cash': cash,
-                'notifications': {
-                    'position_opened': False,
-                    'position_closed': False,
-                    'email_enabled': False,
-                    'telegram_enabled': False,
-                    'error_notifications': False
-                }
+                "name": "Mock Broker",
+                "type": "mock",
+                "trading_mode": "paper",
+                "cash": cash,
+                "notifications": {
+                    "position_opened": False,
+                    "position_closed": False,
+                    "email_enabled": False,
+                    "telegram_enabled": False,
+                    "error_notifications": False,
+                },
             }
 
         super().__init__(config)
@@ -101,6 +103,7 @@ class MockBroker(BaseBroker):
         for order in self.orders:
             if order.order_id == order_id:
                 from src.trading.broker.base_broker import OrderStatus
+
                 order.status = OrderStatus.CANCELLED
                 return True
         return False
@@ -114,8 +117,9 @@ class MockBroker(BaseBroker):
 
     async def get_positions(self) -> dict:
         """Get current positions."""
+        from datetime import datetime
+
         from src.trading.broker.base_broker import Position
-        from datetime import datetime, timezone
 
         positions = {}
         for symbol, quantity in self.positions.items():
@@ -127,15 +131,16 @@ class MockBroker(BaseBroker):
                     market_value=quantity * 100.0,
                     unrealized_pnl=0.0,
                     realized_pnl=0.0,
-                    timestamp=datetime.now(timezone.utc),
-                    paper_trading=True
+                    timestamp=datetime.now(UTC),
+                    paper_trading=True,
                 )
         return positions
 
     async def get_portfolio(self):
         """Get portfolio information."""
+        from datetime import datetime
+
         from src.trading.broker.base_broker import Portfolio
-        from datetime import datetime, timezone
 
         positions = await self.get_positions()
         total_value = self._cash + sum(pos.market_value for pos in positions.values())
@@ -146,20 +151,20 @@ class MockBroker(BaseBroker):
             positions=positions,
             unrealized_pnl=sum(pos.unrealized_pnl for pos in positions.values()),
             realized_pnl=0.0,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             paper_trading=True,
-            initial_balance=self.config.get('cash', 1000.0)
+            initial_balance=self.config.get("cash", 1000.0),
         )
 
     async def get_account_info(self) -> dict:
         """Get account information."""
         return {
-            'broker_name': self.broker_name,
-            'account_type': 'mock',
-            'trading_mode': 'paper',
-            'cash': self._cash,
-            'total_positions': len(self.positions),
-            'is_connected': getattr(self, 'is_connected', False)
+            "broker_name": self.broker_name,
+            "account_type": "mock",
+            "trading_mode": "paper",
+            "cash": self._cash,
+            "total_positions": len(self.positions),
+            "is_connected": getattr(self, "is_connected", False),
         }
 
     def _notify_order(self, order):

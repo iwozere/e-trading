@@ -13,8 +13,10 @@ From these swing points, it calculates:
 - Nearest Support: The closest swing low below the current price
 """
 
-import backtrader as bt
 from collections import deque
+
+import backtrader as bt
+
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -35,27 +37,21 @@ class SupportResistanceIndicator(bt.Indicator):
         support: Nearest support level below current price (or NaN if none found)
     """
 
-    lines = ('resistance', 'support')
+    lines = ("resistance", "support")
     params = (
-        ('lookback_bars', 2),
-        ('max_swings', 50),
+        ("lookback_bars", 2),
+        ("max_swings", 50),
     )
 
     def __init__(self):
         """Initialize the Support/Resistance indicator"""
         # Validate parameters
         if self.p.lookback_bars < 1:
-            _logger.warning(
-                "Invalid lookback_bars %s for S/R, using default 2",
-                self.p.lookback_bars
-            )
+            _logger.warning("Invalid lookback_bars %s for S/R, using default 2", self.p.lookback_bars)
             self.p.lookback_bars = 2
 
         if self.p.max_swings < 10:
-            _logger.warning(
-                "max_swings too small %s for S/R, using minimum 10",
-                self.p.max_swings
-            )
+            _logger.warning("max_swings too small %s for S/R, using minimum 10", self.p.max_swings)
             self.p.max_swings = 10
 
         # Storage for historical prices
@@ -67,9 +63,7 @@ class SupportResistanceIndicator(bt.Indicator):
         self.swing_lows = deque(maxlen=self.p.max_swings)
 
         _logger.debug(
-            "S/R indicator initialized with lookback_bars=%s, max_swings=%s",
-            self.p.lookback_bars,
-            self.p.max_swings
+            "S/R indicator initialized with lookback_bars=%s, max_swings=%s", self.p.lookback_bars, self.p.max_swings
         )
 
     def next(self):
@@ -88,8 +82,8 @@ class SupportResistanceIndicator(bt.Indicator):
         support = self._nearest_support(current_price)
 
         # Set line values (use NaN if no level found)
-        self.lines.resistance[0] = resistance if resistance is not None else float('nan')
-        self.lines.support[0] = support if support is not None else float('nan')
+        self.lines.resistance[0] = resistance if resistance is not None else float("nan")
+        self.lines.support[0] = support if support is not None else float("nan")
 
     def _detect_swings(self):
         """
@@ -202,4 +196,5 @@ class SupportResistanceIndicator(bt.Indicator):
 
 class SupportResistance(SupportResistanceIndicator):
     """Alias for SupportResistanceIndicator for convenience"""
+
     pass

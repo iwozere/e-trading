@@ -5,18 +5,18 @@ Tests cron expression parsing, validation, and next run calculations
 for both 5-field and 6-field formats.
 """
 
+import sys
 import unittest
 from datetime import datetime
-import pytz
-
 from pathlib import Path
-import sys
+
+import pytz
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.common.alerts.cron_parser import CronParser, CronExpression
+from src.common.alerts.cron_parser import CronExpression, CronParser
 
 
 class TestCronParser(unittest.TestCase):
@@ -25,14 +25,14 @@ class TestCronParser(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.utc = pytz.UTC
-        self.est = pytz.timezone('America/New_York')
+        self.est = pytz.timezone("America/New_York")
 
     def test_parse_valid_5_field_cron(self):
         """Test parsing valid 5-field cron expressions."""
         test_cases = [
-            "0 12 * * *",      # Daily at noon
-            "*/5 * * * *",     # Every 5 minutes
-            "0 0 1 * *",       # First day of month
+            "0 12 * * *",  # Daily at noon
+            "*/5 * * * *",  # Every 5 minutes
+            "0 0 1 * *",  # First day of month
             "0 9-17 * * 1-5",  # Business hours weekdays
         ]
 
@@ -50,9 +50,9 @@ class TestCronParser(unittest.TestCase):
     def test_parse_valid_6_field_cron(self):
         """Test parsing valid 6-field cron expressions."""
         test_cases = [
-            "0 0 12 * * *",    # Daily at noon with seconds
-            "*/30 */5 * * * *", # Every 30 seconds, every 5 minutes
-            "0 0 0 1 * *",     # First day of month with seconds
+            "0 0 12 * * *",  # Daily at noon with seconds
+            "*/30 */5 * * * *",  # Every 30 seconds, every 5 minutes
+            "0 0 0 1 * *",  # First day of month with seconds
         ]
 
         for expression in test_cases:
@@ -69,14 +69,14 @@ class TestCronParser(unittest.TestCase):
     def test_parse_invalid_cron_expressions(self):
         """Test parsing invalid cron expressions raises ValueError."""
         invalid_expressions = [
-            "",                    # Empty string
-            "* * *",              # Too few fields
-            "* * * * * * *",      # Too many fields
-            "60 * * * *",         # Invalid minute
-            "* 25 * * *",         # Invalid hour
-            "* * 32 * *",         # Invalid day
-            "* * * 13 *",         # Invalid month
-            "* * * * 8",          # Invalid weekday
+            "",  # Empty string
+            "* * *",  # Too few fields
+            "* * * * * * *",  # Too many fields
+            "60 * * * *",  # Invalid minute
+            "* 25 * * *",  # Invalid hour
+            "* * 32 * *",  # Invalid day
+            "* * * 13 *",  # Invalid month
+            "* * * * 8",  # Invalid weekday
         ]
 
         for expression in invalid_expressions:
@@ -137,9 +137,7 @@ class TestCronParser(unittest.TestCase):
         expression = "0 12 * * *"  # Daily at noon
         base_time = datetime(2024, 1, 1, 10, 0, 0)  # Naive datetime
 
-        next_run = CronParser.calculate_next_run(
-            expression, base_time, timezone="America/New_York"
-        )
+        next_run = CronParser.calculate_next_run(expression, base_time, timezone="America/New_York")
 
         # Should be timezone-aware
         self.assertIsNotNone(next_run.tzinfo)
@@ -229,5 +227,5 @@ class TestCronParser(unittest.TestCase):
         self.assertIsInstance(result, CronExpression)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

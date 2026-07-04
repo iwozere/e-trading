@@ -13,7 +13,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import pytest
 
 _pipeline_dir = Path(__file__).resolve().parents[1]
 if str(_pipeline_dir) not in sys.path:
@@ -58,9 +57,19 @@ class TestSimulateBarbell:
     def test_required_output_columns(self):
         result = simulate_barbell(_make_master())
         required = [
-            "S", "K", "T", "moneyness", "sigma_used", "put_price",
-            "budget_spent", "num_contracts", "payoff", "pnl",
-            "cum_cost", "cum_payoff", "cum_pnl",
+            "S",
+            "K",
+            "T",
+            "moneyness",
+            "sigma_used",
+            "put_price",
+            "budget_spent",
+            "num_contracts",
+            "payoff",
+            "pnl",
+            "cum_cost",
+            "cum_payoff",
+            "cum_pnl",
         ]
         for col in required:
             assert col in result.columns, f"Missing column: {col}"
@@ -72,9 +81,7 @@ class TestSimulateBarbell:
         """
         budget_pct = 0.02
         capital = 100_000.0
-        result = simulate_barbell(
-            _make_master(), put_budget_pct=budget_pct, initial_capital=capital
-        )
+        result = simulate_barbell(_make_master(), put_budget_pct=budget_pct, initial_capital=capital)
         expected_per_period = budget_pct * capital
         # All budget_spent values should equal the per-period budget
         assert (result["budget_spent"] - expected_per_period).abs().max() < 1e-6
@@ -89,8 +96,7 @@ class TestSimulateBarbell:
         # Strong uptrend: close rises 0.1% per day
         close = 4000.0 * np.cumprod(np.full(n, 1.001))
         df = pd.DataFrame(
-            {"open": close, "high": close, "low": close, "close": close,
-             "volume": 1e8, "vix": 15.0, "rate_3m": 0.04},
+            {"open": close, "high": close, "low": close, "close": close, "volume": 1e8, "vix": 15.0, "rate_3m": 0.04},
             index=dates,
         )
         df.index.name = "date"
@@ -109,8 +115,7 @@ class TestSimulateBarbell:
         close = np.full(n, 4000.0)
         close[80:] = close[80:] * 0.65  # 35% crash
         df = pd.DataFrame(
-            {"open": close, "high": close, "low": close, "close": close,
-             "volume": 1e8, "vix": 20.0, "rate_3m": 0.04},
+            {"open": close, "high": close, "low": close, "close": close, "volume": 1e8, "vix": 20.0, "rate_3m": 0.04},
             index=dates,
         )
         df.index.name = "date"

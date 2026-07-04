@@ -1,26 +1,29 @@
 from __future__ import annotations
-from datetime import datetime, timedelta, timezone
+
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from src.data.db.models.model_notification import DeliveryStatus, MessagePriority, MessageStatus
 from src.data.db.repos.repo_notification import (
     ChannelConfigRepository,
-    RateLimitRepository,
-    MessageRepository,
     DeliveryStatusRepository,
+    MessageRepository,
+    RateLimitRepository,
 )
-from src.data.db.models.model_notification import MessagePriority, MessageStatus, DeliveryStatus
 
-UTC = timezone.utc
+UTC = UTC
 
 
 def test_channel_config_crud(db_session: Session):
     configs = ChannelConfigRepository(db_session)
-    c = configs.create_channel_config({
-        "channel": "email",
-        "enabled": True,
-        "config": {"provider": "ses"},
-    })
+    c = configs.create_channel_config(
+        {
+            "channel": "email",
+            "enabled": True,
+            "config": {"provider": "ses"},
+        }
+    )
     assert c.channel == "email"
 
     got = configs.get_channel_config("email")
@@ -51,14 +54,16 @@ def test_messages_and_delivery_status(db_session: Session):
     deliveries = DeliveryStatusRepository(db_session)
 
     now = datetime.now(UTC)
-    msg = messages.create_message({
-        "message_type": "info",
-        "recipient_id": "r1",
-        "payload": {"text": "hello"},
-        "priority": MessagePriority.NORMAL.value,
-        "status": MessageStatus.PENDING.value,
-        "scheduled_for": now - timedelta(minutes=1),
-    })
+    msg = messages.create_message(
+        {
+            "message_type": "info",
+            "recipient_id": "r1",
+            "payload": {"text": "hello"},
+            "priority": MessagePriority.NORMAL.value,
+            "status": MessageStatus.PENDING.value,
+            "scheduled_for": now - timedelta(minutes=1),
+        }
+    )
     assert msg.id is not None
 
     # Pending fetch
@@ -69,12 +74,14 @@ def test_messages_and_delivery_status(db_session: Session):
     messages.update_message(msg.id, {"status": MessageStatus.DELIVERED.value, "processed_at": now})
 
     # Delivery status record
-    ds = deliveries.create_delivery_status({
-        "message_id": msg.id,
-        "channel": "telegram",
-        "status": DeliveryStatus.DELIVERED.value,
-        "response_time_ms": 120,
-    })
+    ds = deliveries.create_delivery_status(
+        {
+            "message_id": msg.id,
+            "channel": "telegram",
+            "status": DeliveryStatus.DELIVERED.value,
+            "response_time_ms": 120,
+        }
+    )
     assert ds.id is not None
 
     stats = deliveries.get_delivery_statistics(days=1)

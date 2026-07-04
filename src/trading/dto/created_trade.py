@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 @dataclass(frozen=True)
@@ -14,12 +14,12 @@ class CreatedTrade:
     row: Dict[str, Any]
 
     @classmethod
-    def from_row(cls, row: Dict[str, Any]) -> "CreatedTrade":
+    def from_row(cls, row: Dict[str, Any]) -> CreatedTrade:
         if not row or row.get("id") is None:
             raise ValueError("Trade row must be a non-empty dict with an 'id' key")
         return cls(id=str(row["id"]), row=dict(row))
 
     @classmethod
-    def synthetic(cls, trade_id: str, row: Optional[Dict[str, Any]] = None) -> "CreatedTrade":
+    def synthetic(cls, trade_id: str, row: Dict[str, Any] | None = None) -> CreatedTrade:
         """Test / offline mocks without a real database row."""
         return cls(id=str(trade_id), row=dict(row or {}))

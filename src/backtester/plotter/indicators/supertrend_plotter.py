@@ -1,7 +1,8 @@
 from src.backtester.plotter.indicators.base_indicator_plotter import BaseIndicatorPlotter
-
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
+
 
 class SuperTrendPlotter(BaseIndicatorPlotter):
     def plot(self, ax):

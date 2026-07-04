@@ -1,8 +1,8 @@
 """Stage 0 — Universe loader: Russell 3000 equities + top-20 crypto."""
 
+import sys
 from pathlib import Path
 from typing import List
-import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))

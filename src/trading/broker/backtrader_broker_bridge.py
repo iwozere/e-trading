@@ -37,24 +37,72 @@ if BACKTRADER_AVAILABLE:
         def getposition(self, data) -> Any:
             return self._core._bt_getposition(data)
 
-        def buy(self, owner=None, data=None, size=None, price=None, plimit=None,
-                exectype=None, valid=None, tradeid=0, oco=None, trailamount=None,
-                trailpercent=None, parent=None, transmit=True, **kwargs):
+        def buy(
+            self,
+            owner=None,
+            data=None,
+            size=None,
+            price=None,
+            plimit=None,
+            exectype=None,
+            valid=None,
+            tradeid=0,
+            oco=None,
+            trailamount=None,
+            trailpercent=None,
+            parent=None,
+            transmit=True,
+            **kwargs,
+        ):
             return self._core.buy(
-                owner=owner, data=data, size=size, price=price, plimit=plimit,
-                exectype=exectype, valid=valid, tradeid=tradeid, oco=oco,
-                trailamount=trailamount, trailpercent=trailpercent, parent=parent,
-                transmit=transmit, **kwargs,
+                owner=owner,
+                data=data,
+                size=size,
+                price=price,
+                plimit=plimit,
+                exectype=exectype,
+                valid=valid,
+                tradeid=tradeid,
+                oco=oco,
+                trailamount=trailamount,
+                trailpercent=trailpercent,
+                parent=parent,
+                transmit=transmit,
+                **kwargs,
             )
 
-        def sell(self, owner=None, data=None, size=None, price=None, plimit=None,
-                 exectype=None, valid=None, tradeid=0, oco=None, trailamount=None,
-                 trailpercent=None, parent=None, transmit=True, **kwargs):
+        def sell(
+            self,
+            owner=None,
+            data=None,
+            size=None,
+            price=None,
+            plimit=None,
+            exectype=None,
+            valid=None,
+            tradeid=0,
+            oco=None,
+            trailamount=None,
+            trailpercent=None,
+            parent=None,
+            transmit=True,
+            **kwargs,
+        ):
             return self._core.sell(
-                owner=owner, data=data, size=size, price=price, plimit=plimit,
-                exectype=exectype, valid=valid, tradeid=tradeid, oco=oco,
-                trailamount=trailamount, trailpercent=trailpercent, parent=parent,
-                transmit=transmit, **kwargs,
+                owner=owner,
+                data=data,
+                size=size,
+                price=price,
+                plimit=plimit,
+                exectype=exectype,
+                valid=valid,
+                tradeid=tradeid,
+                oco=oco,
+                trailamount=trailamount,
+                trailpercent=trailpercent,
+                parent=parent,
+                transmit=transmit,
+                **kwargs,
             )
 
         def cancel(self, order) -> bool:
@@ -82,7 +130,6 @@ def wrap_broker_for_cerebro(core: SupportsBacktraderBridge) -> Any:
     """
     if not BACKTRADER_AVAILABLE or BacktraderBrokerBridge is None:
         raise ImportError(
-            "backtrader is required for wrap_broker_for_cerebro; "
-            "install backtrader or run without Cerebro integration."
+            "backtrader is required for wrap_broker_for_cerebro; install backtrader or run without Cerebro integration."
         )
     return BacktraderBrokerBridge(core)

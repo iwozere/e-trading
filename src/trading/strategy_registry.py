@@ -5,22 +5,25 @@ Centralized registry for all available trading strategies in the system.
 Bridges StrategyHandler and LiveTradingBot / StrategyInstance.
 """
 
-from typing import Dict, Type, List, Optional, Any
+from typing import Dict, List, Type
+
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class StrategyRegistry:
     """
     Registry for trading strategy classes.
     Follows Singleton pattern.
     """
+
     _instance = None
     _strategies: Dict[str, Type] = {}
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(StrategyRegistry, cls).__new__(cls)
+            cls._instance = super().__new__(cls)
         return cls._instance
 
     def register(self, strategy_type: str, strategy_class: Type):
@@ -28,7 +31,7 @@ class StrategyRegistry:
         self._strategies[strategy_type] = strategy_class
         _logger.debug("Registered strategy type: %s", strategy_type)
 
-    def get(self, strategy_type: str) -> Optional[Type]:
+    def get(self, strategy_type: str) -> Type | None:
         """Get strategy class by type name."""
         return self._strategies.get(strategy_type)
 
@@ -39,6 +42,7 @@ class StrategyRegistry:
     def validate_type(self, strategy_type: str) -> bool:
         """Check if a strategy type is registered."""
         return strategy_type in self._strategies
+
 
 # Global registry instance
 strategy_registry = StrategyRegistry()

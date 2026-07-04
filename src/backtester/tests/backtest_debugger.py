@@ -12,10 +12,10 @@ Features:
 - Suggest parameter adjustments
 """
 
+import json
 import sys
 from pathlib import Path
-from typing import Dict, Any, Optional
-import json
+from typing import Any, Dict
 
 import pandas as pd
 
@@ -46,13 +46,13 @@ class BacktestDebugger:
 
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from JSON."""
-        with open(self.config_path, 'r') as f:
+        with open(self.config_path) as f:
             return json.load(f)
 
     def load_data(self) -> pd.DataFrame:
         """Load and prepare data from configuration."""
-        data_config = self.config['data']
-        file_path = Path(data_config['file_path'])
+        data_config = self.config["data"]
+        file_path = Path(data_config["file_path"])
 
         if not file_path.exists():
             raise FileNotFoundError(f"Data file not found: {file_path}")
@@ -61,22 +61,22 @@ class BacktestDebugger:
         df = pd.read_csv(file_path)
 
         # Parse datetime
-        datetime_col = data_config.get('datetime_col', 'datetime')
-        df['datetime'] = pd.to_datetime(df[datetime_col])
+        datetime_col = data_config.get("datetime_col", "datetime")
+        df["datetime"] = pd.to_datetime(df[datetime_col])
 
         # Apply date filters if specified
-        if data_config.get('fromdate'):
-            df = df[df['datetime'] >= pd.to_datetime(data_config['fromdate'])]
-        if data_config.get('todate'):
-            df = df[df['datetime'] <= pd.to_datetime(data_config['todate'])]
+        if data_config.get("fromdate"):
+            df = df[df["datetime"] >= pd.to_datetime(data_config["fromdate"])]
+        if data_config.get("todate"):
+            df = df[df["datetime"] <= pd.to_datetime(data_config["todate"])]
 
         # Rename columns to standard names
         column_mapping = {
-            data_config.get('open_col', 'open'): 'open',
-            data_config.get('high_col', 'high'): 'high',
-            data_config.get('low_col', 'low'): 'low',
-            data_config.get('close_col', 'close'): 'close',
-            data_config.get('volume_col', 'volume'): 'volume',
+            data_config.get("open_col", "open"): "open",
+            data_config.get("high_col", "high"): "high",
+            data_config.get("low_col", "low"): "low",
+            data_config.get("close_col", "close"): "close",
+            data_config.get("volume_col", "volume"): "volume",
         }
         df = df.rename(columns=column_mapping)
 
@@ -95,50 +95,50 @@ class BacktestDebugger:
         if self.data is None:
             self.load_data()
 
-        strategy_params = self.config['strategy']['parameters']
-        entry_logic = strategy_params['entry_logic']
+        strategy_params = self.config["strategy"]["parameters"]
+        entry_logic = strategy_params["entry_logic"]
 
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("ENTRY CONDITION ANALYSIS")
-        print("="*80)
+        print("=" * 80)
 
         print(f"\nEntry Mixin: {entry_logic['name']}")
         print(f"Parameters: {json.dumps(entry_logic['params'], indent=2)}")
 
         # Get entry mixin class
-        mixin_class = ENTRY_MIXIN_REGISTRY.get(entry_logic['name'])
+        mixin_class = ENTRY_MIXIN_REGISTRY.get(entry_logic["name"])
         if not mixin_class:
             print(f"\n✗ Entry mixin '{entry_logic['name']}' not found!")
-            return {'error': 'Mixin not found'}
+            return {"error": "Mixin not found"}
 
         # Analyze based on mixin type
-        analysis = {'mixin': entry_logic['name'], 'issues': [], 'suggestions': []}
+        analysis = {"mixin": entry_logic["name"], "issues": [], "suggestions": []}
 
-        if 'RSI' in entry_logic['name']:
-            analysis.update(self._analyze_rsi_conditions(entry_logic['params']))
+        if "RSI" in entry_logic["name"]:
+            analysis.update(self._analyze_rsi_conditions(entry_logic["params"]))
 
-        if 'BB' in entry_logic['name'] or 'Bollinger' in entry_logic['name']:
-            analysis.update(self._analyze_bb_conditions(entry_logic['params']))
+        if "BB" in entry_logic["name"] or "Bollinger" in entry_logic["name"]:
+            analysis.update(self._analyze_bb_conditions(entry_logic["params"]))
 
-        if 'Volume' in entry_logic['name']:
-            analysis.update(self._analyze_volume_conditions(entry_logic['params']))
+        if "Volume" in entry_logic["name"]:
+            analysis.update(self._analyze_volume_conditions(entry_logic["params"]))
 
-        if 'SuperTrend' in entry_logic['name']:
-            analysis.update(self._analyze_supertrend_conditions(entry_logic['params']))
+        if "SuperTrend" in entry_logic["name"]:
+            analysis.update(self._analyze_supertrend_conditions(entry_logic["params"]))
 
         # Print summary
-        print("\n" + "-"*80)
+        print("\n" + "-" * 80)
         print("ANALYSIS SUMMARY")
-        print("-"*80)
+        print("-" * 80)
 
-        if analysis.get('issues'):
+        if analysis.get("issues"):
             print("\nPotential Issues:")
-            for issue in analysis['issues']:
+            for issue in analysis["issues"]:
                 print(f"  ✗ {issue}")
 
-        if analysis.get('suggestions'):
+        if analysis.get("suggestions"):
             print("\nSuggestions:")
-            for suggestion in analysis['suggestions']:
+            for suggestion in analysis["suggestions"]:
                 print(f"  → {suggestion}")
 
         return analysis
@@ -148,12 +148,12 @@ class BacktestDebugger:
         df = self.data.copy()
 
         # Calculate RSI
-        rsi_period = params.get('e_rsi_period') or params.get('rsi_period', 14)
-        rsi_oversold = params.get('e_rsi_oversold') or params.get('rsi_oversold', 30)
-        rsi_overbought = params.get('e_rsi_overbought') or params.get('rsi_overbought', 70)
+        rsi_period = params.get("e_rsi_period") or params.get("rsi_period", 14)
+        rsi_oversold = params.get("e_rsi_oversold") or params.get("rsi_oversold", 30)
+        rsi_overbought = params.get("e_rsi_overbought") or params.get("rsi_overbought", 70)
 
         # Simple RSI calculation
-        delta = df['close'].diff()
+        delta = df["close"].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=rsi_period).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_period).mean()
         rs = gain / loss
@@ -167,7 +167,7 @@ class BacktestDebugger:
         print(f"  Oversold threshold: {rsi_oversold}")
         print(f"  Current RSI range: {rsi.min():.2f} - {rsi.max():.2f}")
         print(f"  Times RSI was oversold (<= {rsi_oversold}): {oversold_count}")
-        print(f"  Percentage of bars: {oversold_count/len(df)*100:.2f}%")
+        print(f"  Percentage of bars: {oversold_count / len(df) * 100:.2f}%")
 
         issues = []
         suggestions = []
@@ -179,28 +179,28 @@ class BacktestDebugger:
             issues.append(f"RSI rarely oversold (only {oversold_count} times)")
             suggestions.append(f"Consider raising threshold to {int(rsi.quantile(0.2))}")
 
-        return {'issues': issues, 'suggestions': suggestions}
+        return {"issues": issues, "suggestions": suggestions}
 
     def _analyze_bb_conditions(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze Bollinger Bands conditions."""
         df = self.data.copy()
 
-        bb_period = params.get('e_bb_period') or params.get('bb_period', 20)
-        bb_dev = params.get('e_bb_dev') or params.get('bb_dev', 2.0)
+        bb_period = params.get("e_bb_period") or params.get("bb_period", 20)
+        bb_dev = params.get("e_bb_dev") or params.get("bb_dev", 2.0)
 
         # Calculate BB
-        sma = df['close'].rolling(window=bb_period).mean()
-        std = df['close'].rolling(window=bb_period).std()
+        sma = df["close"].rolling(window=bb_period).mean()
+        std = df["close"].rolling(window=bb_period).std()
         bb_upper = sma + (std * bb_dev)
         bb_lower = sma - (std * bb_dev)
 
         # Count touches
-        lower_touches = (df['close'] <= bb_lower).sum()
+        lower_touches = (df["close"] <= bb_lower).sum()
 
         print("\nBollinger Bands Analysis:")
         print(f"  Period: {bb_period}, Deviation: {bb_dev}")
         print(f"  Lower band touches: {lower_touches}")
-        print(f"  Percentage of bars: {lower_touches/len(df)*100:.2f}%")
+        print(f"  Percentage of bars: {lower_touches / len(df) * 100:.2f}%")
 
         issues = []
         suggestions = []
@@ -212,18 +212,18 @@ class BacktestDebugger:
             issues.append(f"Rare BB lower touches ({lower_touches})")
             suggestions.append("Consider reducing deviation or period")
 
-        return {'issues': issues, 'suggestions': suggestions}
+        return {"issues": issues, "suggestions": suggestions}
 
     def _analyze_volume_conditions(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze volume conditions."""
         df = self.data.copy()
 
-        vol_ma_period = params.get('e_vol_ma_period') or params.get('volume_ma_period', 20)
-        vol_threshold = params.get('e_min_volume_ratio') or params.get('volume_threshold', 1.5)
+        vol_ma_period = params.get("e_vol_ma_period") or params.get("volume_ma_period", 20)
+        vol_threshold = params.get("e_min_volume_ratio") or params.get("volume_threshold", 1.5)
 
         # Calculate volume MA
-        vol_ma = df['volume'].rolling(window=vol_ma_period).mean()
-        vol_ratio = df['volume'] / vol_ma
+        vol_ma = df["volume"].rolling(window=vol_ma_period).mean()
+        vol_ratio = df["volume"] / vol_ma
 
         # Count high volume bars
         high_vol_count = (vol_ratio >= vol_threshold).sum()
@@ -232,7 +232,7 @@ class BacktestDebugger:
         print(f"  MA Period: {vol_ma_period}")
         print(f"  Volume threshold: {vol_threshold}x")
         print(f"  High volume bars: {high_vol_count}")
-        print(f"  Percentage of bars: {high_vol_count/len(df)*100:.2f}%")
+        print(f"  Percentage of bars: {high_vol_count / len(df) * 100:.2f}%")
         print(f"  Typical volume ratio range: {vol_ratio.quantile(0.1):.2f} - {vol_ratio.quantile(0.9):.2f}")
 
         issues = []
@@ -242,7 +242,7 @@ class BacktestDebugger:
             issues.append(f"Volume rarely exceeds {vol_threshold}x average")
             suggestions.append(f"Reduce threshold to {vol_ratio.quantile(0.7):.2f}x")
 
-        return {'issues': issues, 'suggestions': suggestions}
+        return {"issues": issues, "suggestions": suggestions}
 
     def _analyze_supertrend_conditions(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze SuperTrend conditions."""
@@ -251,7 +251,7 @@ class BacktestDebugger:
         print(f"  Multiplier: {params.get('supertrend_multiplier', 3.0)}")
         print("  Note: SuperTrend calculation requires ATR - check if trending conditions exist")
 
-        return {'issues': [], 'suggestions': []}
+        return {"issues": [], "suggestions": []}
 
     def suggest_parameter_adjustments(self) -> Dict[str, Any]:
         """
@@ -263,19 +263,19 @@ class BacktestDebugger:
         if self.data is None:
             self.load_data()
 
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("PARAMETER SUGGESTIONS")
-        print("="*80)
+        print("=" * 80)
 
-        strategy_params = self.config['strategy']['parameters']
-        entry_logic = strategy_params['entry_logic']
+        strategy_params = self.config["strategy"]["parameters"]
+        entry_logic = strategy_params["entry_logic"]
 
-        suggested_params = entry_logic['params'].copy()
+        suggested_params = entry_logic["params"].copy()
 
         # Adjust RSI if present
-        if 'rsi' in entry_logic['name'].lower():
+        if "rsi" in entry_logic["name"].lower():
             df = self.data.copy()
-            delta = df['close'].diff()
+            delta = df["close"].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
             rs = gain / loss
@@ -284,20 +284,20 @@ class BacktestDebugger:
             # Suggest oversold level at 20th percentile
             suggested_oversold = int(rsi.quantile(0.20))
 
-            for key in ['e_rsi_oversold', 'rsi_oversold']:
+            for key in ["e_rsi_oversold", "rsi_oversold"]:
                 if key in suggested_params:
                     print(f"  RSI Oversold: {suggested_params[key]} → {suggested_oversold}")
                     suggested_params[key] = suggested_oversold
 
         # Adjust volume if present
-        if 'volume' in entry_logic['name'].lower():
+        if "volume" in entry_logic["name"].lower():
             df = self.data.copy()
-            vol_ma = df['volume'].rolling(window=20).mean()
-            vol_ratio = df['volume'] / vol_ma
+            vol_ma = df["volume"].rolling(window=20).mean()
+            vol_ratio = df["volume"] / vol_ma
 
             suggested_vol_threshold = round(vol_ratio.quantile(0.60), 2)
 
-            for key in ['e_min_volume_ratio', 'volume_threshold']:
+            for key in ["e_min_volume_ratio", "volume_threshold"]:
                 if key in suggested_params:
                     print(f"  Volume Threshold: {suggested_params[key]} → {suggested_vol_threshold}")
                     suggested_params[key] = suggested_vol_threshold
@@ -307,7 +307,7 @@ class BacktestDebugger:
 
         return suggested_params
 
-    def generate_debug_report(self, output_path: Optional[Path] = None) -> str:
+    def generate_debug_report(self, output_path: Path | None = None) -> str:
         """
         Generate comprehensive debug report.
 
@@ -318,9 +318,9 @@ class BacktestDebugger:
             Report as string
         """
         report_lines = []
-        report_lines.append("="*80)
+        report_lines.append("=" * 80)
         report_lines.append("BACKTEST DEBUG REPORT")
-        report_lines.append("="*80)
+        report_lines.append("=" * 80)
         report_lines.append("")
 
         # Configuration info
@@ -346,7 +346,7 @@ class BacktestDebugger:
         if output_path:
             output_path = Path(output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, 'w', encoding='utf-8') as f:
+            with open(output_path, "w", encoding="utf-8") as f:
                 f.write(report)
             print(f"\nDebug report saved to: {output_path}")
 
@@ -360,13 +360,11 @@ class BacktestDebugger:
 DEBUG_MODE = True  # Set to True to use DEBUG_CONFIG, False for CLI mode
 DEBUG_CONFIG = {
     # Path to your config file (relative to project root or absolute)
-    'config_path': 'config/backtester/custom_strategy_test.json',
-
+    "config_path": "config/backtester/custom_strategy_test.json",
     # Suggest parameter adjustments? (True/False)
-    'suggest_adjustments': True,
-
+    "suggest_adjustments": True,
     # Save debug report to file? (None or path string)
-    'report_path': 'results/debug_report.txt',  # Set to 'results/debug_report.txt' to save report
+    "report_path": "results/debug_report.txt",  # Set to 'results/debug_report.txt' to save report
 }
 # =============================================================================
 
@@ -388,7 +386,7 @@ def main():
         print("Tip: Set DEBUG_MODE = False at the top to use CLI mode")
         print("=" * 80)
 
-        config_path = DEBUG_CONFIG['config_path']
+        config_path = DEBUG_CONFIG["config_path"]
 
         # Handle relative paths from project root
         if not Path(config_path).is_absolute():
@@ -400,11 +398,11 @@ def main():
         debugger.analyze_entry_conditions()
 
         # Suggest adjustments if requested
-        if DEBUG_CONFIG['suggest_adjustments']:
+        if DEBUG_CONFIG["suggest_adjustments"]:
             debugger.suggest_parameter_adjustments()
 
         # Generate report if requested
-        report_path = DEBUG_CONFIG.get('report_path')
+        report_path = DEBUG_CONFIG.get("report_path")
         if report_path and isinstance(report_path, str):
             debugger.generate_debug_report(report_path)
 
@@ -416,7 +414,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Debug backtests with no trades',
+        description="Debug backtests with no trades",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -426,11 +424,11 @@ Examples:
 
 Debug Mode:
   Set DEBUG_MODE = True and DEBUG_CONFIG at the top of the file, then run from IDE
-        """
+        """,
     )
-    parser.add_argument('config', help='Path to JSON configuration file')
-    parser.add_argument('--suggest', action='store_true', help='Suggest parameter adjustments')
-    parser.add_argument('--report', help='Save debug report to file')
+    parser.add_argument("config", help="Path to JSON configuration file")
+    parser.add_argument("--suggest", action="store_true", help="Suggest parameter adjustments")
+    parser.add_argument("--report", help="Save debug report to file")
 
     args = parser.parse_args()
 

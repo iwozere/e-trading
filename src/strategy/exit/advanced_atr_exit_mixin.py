@@ -34,20 +34,20 @@ Configuration Example (New architecture):
     }
 """
 
-import backtrader as bt
-from typing import Dict, Any, Optional, List, Tuple
-from enum import Enum
-from collections import deque
 import math
+from collections import deque
+from enum import Enum
+from typing import Any, Dict, List
 
-from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
+from src.strategy.exit.base_exit_mixin import BaseExitMixin
 
 logger = setup_logger(__name__)
 
 
 class ExitState(Enum):
     """Exit strategy state machine states."""
+
     INIT = "INIT"
     ARMED = "ARMED"
     PHASE1 = "PHASE1"
@@ -62,45 +62,47 @@ class AdvancedATRExitMixin(BaseExitMixin):
     New Architecture only.
     """
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         super().__init__(params)
 
         # Core parameters (standardized names or legacy)
-        self.anchor = self._resolve_param('anchor', 'x_anchor', "high")
-        self.update_on = self._resolve_param('update_on', 'x_update_on', "bar_close")
-        self.k_init = self._resolve_param('k_init', 'x_k_init', 2.5)
-        self.k_run = self._resolve_param('k_run', 'x_k_run', 2.0)
-        self.k_phase2 = self._resolve_param('k_phase2', 'x_k_phase2', 1.5)
+        self.anchor = self._resolve_param("anchor", "x_anchor", "high")
+        self.update_on = self._resolve_param("update_on", "x_update_on", "bar_close")
+        self.k_init = self._resolve_param("k_init", "x_k_init", 2.5)
+        self.k_run = self._resolve_param("k_run", "x_k_run", 2.0)
+        self.k_phase2 = self._resolve_param("k_phase2", "x_k_phase2", 1.5)
 
         # ATR parameters
-        self.p_fast = self._resolve_param('p_fast', 'x_p_fast', 7)
-        self.p_slow = self._resolve_param('p_slow', 'x_p_slow', 21)
-        self.use_htf_atr = self._resolve_param('use_htf_atr', 'x_use_htf_atr', True)
-        self.htf = self._resolve_param('htf', 'x_htf', "4h")
-        self.alpha_fast = self._resolve_param('alpha_fast', 'x_alpha_fast', 1.0)
-        self.alpha_slow = self._resolve_param('alpha_slow', 'x_alpha_slow', 1.0)
-        self.alpha_htf = self._resolve_param('alpha_htf', 'x_alpha_htf', 1.0)
-        self.atr_floor = self._resolve_param('atr_floor', 'x_atr_floor', 0.0)
+        self.p_fast = self._resolve_param("p_fast", "x_p_fast", 7)
+        self.p_slow = self._resolve_param("p_slow", "x_p_slow", 21)
+        self.use_htf_atr = self._resolve_param("use_htf_atr", "x_use_htf_atr", True)
+        self.htf = self._resolve_param("htf", "x_htf", "4h")
+        self.alpha_fast = self._resolve_param("alpha_fast", "x_alpha_fast", 1.0)
+        self.alpha_slow = self._resolve_param("alpha_slow", "x_alpha_slow", 1.0)
+        self.alpha_htf = self._resolve_param("alpha_htf", "x_alpha_htf", 1.0)
+        self.atr_floor = self._resolve_param("atr_floor", "x_atr_floor", 0.0)
 
         # Break-even and phases
-        self.arm_at_R = self._resolve_param('arm_at_R', 'x_arm_at_R', 1.0)
-        self.breakeven_offset_atr = self._resolve_param('breakeven_offset_atr', 'x_breakeven_offset_atr', 0.0)
-        self.phase2_at_R = self._resolve_param('phase2_at_R', 'x_phase2_at_R', 2.0)
+        self.arm_at_R = self._resolve_param("arm_at_R", "x_arm_at_R", 1.0)
+        self.breakeven_offset_atr = self._resolve_param("breakeven_offset_atr", "x_breakeven_offset_atr", 0.0)
+        self.phase2_at_R = self._resolve_param("phase2_at_R", "x_phase2_at_R", 2.0)
 
         # Structural ratchet
-        self.use_swing_ratchet = self._resolve_param('use_swing_ratchet', 'x_use_swing_ratchet', True)
-        self.swing_lookback = self._resolve_param('swing_lookback', 'x_swing_lookback', 10)
-        self.struct_buffer_atr = self._resolve_param('struct_buffer_atr', 'x_struct_buffer_atr', 0.25)
+        self.use_swing_ratchet = self._resolve_param("use_swing_ratchet", "x_use_swing_ratchet", True)
+        self.swing_lookback = self._resolve_param("swing_lookback", "x_swing_lookback", 10)
+        self.struct_buffer_atr = self._resolve_param("struct_buffer_atr", "x_struct_buffer_atr", 0.25)
 
         # Time-based tightening
-        self.tighten_if_stagnant_bars = self._resolve_param('tighten_if_stagnant_bars', 'x_tighten_if_stagnant_bars', 20)
-        self.tighten_k_factor = self._resolve_param('tighten_k_factor', 'x_tighten_k_factor', 0.8)
-        self.min_bars_between_tighten = self._resolve_param('min_bars_between_tighten', 'x_min_bars_between_tighten', 5)
+        self.tighten_if_stagnant_bars = self._resolve_param(
+            "tighten_if_stagnant_bars", "x_tighten_if_stagnant_bars", 20
+        )
+        self.tighten_k_factor = self._resolve_param("tighten_k_factor", "x_tighten_k_factor", 0.8)
+        self.min_bars_between_tighten = self._resolve_param("min_bars_between_tighten", "x_min_bars_between_tighten", 5)
 
         # Noise and step filters
-        self.min_stop_step = self._resolve_param('min_stop_step', 'x_min_stop_step', 0.0)
-        self.noise_filter_atr = self._resolve_param('noise_filter_atr', 'x_noise_filter_atr', 0.0)
-        self.max_trail_freq = self._resolve_param('max_trail_freq', 'x_max_trail_freq', 1)
+        self.min_stop_step = self._resolve_param("min_stop_step", "x_min_stop_step", 0.0)
+        self.noise_filter_atr = self._resolve_param("noise_filter_atr", "x_noise_filter_atr", 0.0)
+        self.max_trail_freq = self._resolve_param("max_trail_freq", "x_max_trail_freq", 1)
 
         # State variables
         self.state = ExitState.INIT
@@ -124,9 +126,15 @@ class AdvancedATRExitMixin(BaseExitMixin):
     @classmethod
     def get_default_params(cls) -> Dict[str, Any]:
         return {
-            "k_init": 2.5, "k_run": 2.0, "k_phase2": 1.5,
-            "p_fast": 7, "p_slow": 21, "use_htf_atr": True,
-            "swing_lookback": 10, "arm_at_R": 1.0, "phase2_at_R": 2.0
+            "k_init": 2.5,
+            "k_run": 2.0,
+            "k_phase2": 1.5,
+            "p_fast": 7,
+            "p_slow": 21,
+            "use_htf_atr": True,
+            "swing_lookback": 10,
+            "arm_at_R": 1.0,
+            "phase2_at_R": 2.0,
         }
 
     @classmethod
@@ -137,24 +145,18 @@ class AdvancedATRExitMixin(BaseExitMixin):
         use_htf_atr = params.get("use_htf_atr") or params.get("x_use_htf_atr", True)
 
         configs = [
-            {
-                "type": "ATR",
-                "params": {"timeperiod": p_fast},
-                "fields_mapping": {"atr": "exit_atr_fast"}
-            },
-            {
-                "type": "ATR",
-                "params": {"timeperiod": p_slow},
-                "fields_mapping": {"atr": "exit_atr_slow"}
-            }
+            {"type": "ATR", "params": {"timeperiod": p_fast}, "fields_mapping": {"atr": "exit_atr_fast"}},
+            {"type": "ATR", "params": {"timeperiod": p_slow}, "fields_mapping": {"atr": "exit_atr_slow"}},
         ]
 
         if use_htf_atr:
-            configs.append({
-                "type": "ATR",
-                "params": {"timeperiod": max(p_fast, p_slow)}, # Fallback HTF logic
-                "fields_mapping": {"atr": "exit_atr_htf"}
-            })
+            configs.append(
+                {
+                    "type": "ATR",
+                    "params": {"timeperiod": max(p_fast, p_slow)},  # Fallback HTF logic
+                    "fields_mapping": {"atr": "exit_atr_htf"},
+                }
+            )
 
         return configs
 
@@ -168,11 +170,11 @@ class AdvancedATRExitMixin(BaseExitMixin):
 
     def are_indicators_ready(self) -> bool:
         """Check indicator readiness."""
-        required = ['exit_atr_fast', 'exit_atr_slow']
+        required = ["exit_atr_fast", "exit_atr_slow"]
         if self.use_htf_atr:
-            required.append('exit_atr_htf')
+            required.append("exit_atr_htf")
 
-        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
+        return all(alias in getattr(self.strategy, "indicators", {}) for alias in required)
 
     def on_entry(self, entry_price: float, entry_time, position_size: float, direction: str):
         """Called when a position is entered."""
@@ -201,15 +203,15 @@ class AdvancedATRExitMixin(BaseExitMixin):
     def _get_effective_atr(self) -> float:
         """Calculate effective ATR using multi-timeframe aggregation."""
         try:
-            atr_fast_val = self.get_indicator('exit_atr_fast')
-            atr_slow_val = self.get_indicator('exit_atr_slow')
-            atr_htf_val = self.get_indicator('exit_atr_htf') if self.use_htf_atr else 0.0
+            atr_fast_val = self.get_indicator("exit_atr_fast")
+            atr_slow_val = self.get_indicator("exit_atr_slow")
+            atr_htf_val = self.get_indicator("exit_atr_htf") if self.use_htf_atr else 0.0
 
             atr_eff = max(
                 self.alpha_fast * (atr_fast_val or 0),
                 self.alpha_slow * (atr_slow_val or 0),
                 self.alpha_htf * (atr_htf_val or 0),
-                self.atr_floor
+                self.atr_floor,
             )
             return atr_eff if not math.isnan(atr_eff) else self.atr_floor
         except Exception:
@@ -254,7 +256,11 @@ class AdvancedATRExitMixin(BaseExitMixin):
     def _update_stop_logic(self, current_bar: int):
         """Internal trailing stop update logic."""
         atr_eff = self._get_effective_atr()
-        current_profit = (self.strategy.data.close[0] - self.entry_price) if self.direction == "long" else (self.entry_price - self.strategy.data.close[0])
+        current_profit = (
+            (self.strategy.data.close[0] - self.entry_price)
+            if self.direction == "long"
+            else (self.entry_price - self.strategy.data.close[0])
+        )
         profit_in_R = current_profit / self.initial_risk if self.initial_risk > 0 else 0
 
         # State transitions
@@ -282,4 +288,4 @@ class AdvancedATRExitMixin(BaseExitMixin):
         self.last_trail_bar = current_bar
 
     def get_exit_reason(self) -> str:
-        return getattr(self.strategy, 'current_exit_reason', 'stop_hit')
+        return getattr(self.strategy, "current_exit_reason", "stop_hit")

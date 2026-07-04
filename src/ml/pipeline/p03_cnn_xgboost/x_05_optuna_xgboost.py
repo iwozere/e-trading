@@ -13,14 +13,14 @@ project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
 import json
-from typing import Dict, List, Any, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
-import pandas as pd
 import optuna
+import pandas as pd
 import xgboost as xgb
+from sklearn.metrics import accuracy_score, f1_score, log_loss, precision_score, recall_score
 from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import log_loss, accuracy_score, precision_score, recall_score, f1_score
 
 from src.notification.logger import setup_logger
 from src.util.config import load_config
@@ -87,15 +87,14 @@ class XGBoostOptimizer:
                 if target in y_train_dict:
                     _logger.info("Optimizing hyperparameters for target: %s", target)
 
-                    target_results = self._optimize_target_hyperparameters(
-                        X_train, y_train_dict[target], target
-                    )
+                    target_results = self._optimize_target_hyperparameters(X_train, y_train_dict[target], target)
 
                     optimization_results[target] = target_results
                     best_params_dict[target] = target_results["best_params"]
 
-                    _logger.info("Completed optimization for %s: best score = %.4f",
-                                target, target_results["best_score"])
+                    _logger.info(
+                        "Completed optimization for %s: best score = %.4f", target, target_results["best_score"]
+                    )
 
             # Save optimization results
             self._save_optimization_results(optimization_results, best_params_dict)
@@ -106,7 +105,7 @@ class XGBoostOptimizer:
                 "status": "completed",
                 "targets_optimized": list(optimization_results.keys()),
                 "best_params": best_params_dict,
-                "optimization_results": optimization_results
+                "optimization_results": optimization_results,
             }
 
         except Exception as e:
@@ -172,20 +171,22 @@ class XGBoostOptimizer:
                 for target in self.targets:
                     if target in df.columns:
                         # Convert target to numeric type to handle string/int mismatches
-                        target_values = pd.to_numeric(df[target], errors='coerce')
+                        target_values = pd.to_numeric(df[target], errors="coerce")
 
                         # Check for any NaN values after conversion
                         nan_count = target_values.isna().sum()
                         if nan_count > 0:
-                            _logger.warning("Found %d NaN values in target %s for file %s",
-                                          nan_count, target, file_path.name)
+                            _logger.warning(
+                                "Found %d NaN values in target %s for file %s", nan_count, target, file_path.name
+                            )
                             # Fill NaN values with mode or most common value
-                            target_values = target_values.fillna(target_values.mode().iloc[0] if len(target_values.mode()) > 0 else 0)
+                            target_values = target_values.fillna(
+                                target_values.mode().iloc[0] if len(target_values.mode()) > 0 else 0
+                            )
 
                         all_targets[target].append(target_values.values)
 
-                _logger.debug("Processed %s: %d samples, %d features",
-                             file_path.name, len(features), len(feature_cols))
+                _logger.debug("Processed %s: %d samples, %d features", file_path.name, len(features), len(feature_cols))
 
                 processed_count += 1
 
@@ -198,8 +199,9 @@ class XGBoostOptimizer:
         if not all_features:
             raise ValueError("No valid feature data found")
 
-        _logger.info("Data preparation summary: %d files processed successfully, %d files failed",
-                    processed_count, error_count)
+        _logger.info(
+            "Data preparation summary: %d files processed successfully, %d files failed", processed_count, error_count
+        )
 
         # Combine all data
         X_train = np.vstack(all_features)
@@ -210,15 +212,11 @@ class XGBoostOptimizer:
             if all_targets[target]:
                 y_train_dict[target] = np.concatenate(all_targets[target])
 
-        _logger.info("Prepared training data: X shape %s, targets: %s",
-                    X_train.shape, list(y_train_dict.keys()))
+        _logger.info("Prepared training data: X shape %s, targets: %s", X_train.shape, list(y_train_dict.keys()))
 
         return X_train, y_train_dict
 
-    def _optimize_target_hyperparameters(self,
-                                        X_train: np.ndarray,
-                                        y_train: np.ndarray,
-                                        target: str) -> Dict[str, Any]:
+    def _optimize_target_hyperparameters(self, X_train: np.ndarray, y_train: np.ndarray, target: str) -> Dict[str, Any]:
         """
         Optimize hyperparameters for a specific target variable.
 
@@ -230,6 +228,7 @@ class XGBoostOptimizer:
         Returns:
             Dictionary containing optimization results
         """
+
         def objective(trial):
             # Define hyperparameter search space
             params = {
@@ -240,19 +239,16 @@ class XGBoostOptimizer:
                 "subsample": trial.suggest_float("subsample", 0.6, 1.0),
                 "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
                 "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.6, 1.0),
-
                 # Regularization parameters
                 "reg_alpha": trial.suggest_float("reg_alpha", 0.001, 10.0, log=True),
                 "reg_lambda": trial.suggest_float("reg_lambda", 0.001, 10.0, log=True),
-
                 # Tree parameters
                 "min_child_weight": trial.suggest_int("min_child_weight", 1, 10),
                 "min_split_loss": trial.suggest_float("min_split_loss", 0.0, 1.0),
-
                 # Other parameters
                 "random_state": 42,
                 "n_jobs": -1,
-                "eval_metric": "logloss"
+                "eval_metric": "logloss",
             }
 
             # Time series cross-validation
@@ -265,11 +261,7 @@ class XGBoostOptimizer:
 
                 # Train XGBoost model
                 model = xgb.XGBClassifier(**params)
-                model.fit(
-                    X_fold_train, y_fold_train,
-                    eval_set=[(X_fold_val, y_fold_val)],
-                    verbose=False
-                )
+                model.fit(X_fold_train, y_fold_train, eval_set=[(X_fold_val, y_fold_val)], verbose=False)
 
                 # Predict and evaluate
                 y_pred_proba = model.predict_proba(X_fold_val)
@@ -278,9 +270,9 @@ class XGBoostOptimizer:
                 # Calculate metrics
                 logloss = log_loss(y_fold_val, y_pred_proba)
                 accuracy = accuracy_score(y_fold_val, y_pred)
-                precision = precision_score(y_fold_val, y_pred, average='weighted', zero_division=0)
-                recall = recall_score(y_fold_val, y_pred, average='weighted', zero_division=0)
-                f1 = f1_score(y_fold_val, y_pred, average='weighted', zero_division=0)
+                precision = precision_score(y_fold_val, y_pred, average="weighted", zero_division=0)
+                recall = recall_score(y_fold_val, y_pred, average="weighted", zero_division=0)
+                f1 = f1_score(y_fold_val, y_pred, average="weighted", zero_division=0)
 
                 # Use log loss as primary metric (minimize)
                 cv_scores.append(logloss)
@@ -306,9 +298,9 @@ class XGBoostOptimizer:
         final_metrics = {
             "log_loss": log_loss(y_train, y_pred_proba),
             "accuracy": accuracy_score(y_train, y_pred),
-            "precision": precision_score(y_train, y_pred, average='weighted', zero_division=0),
-            "recall": recall_score(y_train, y_pred, average='weighted', zero_division=0),
-            "f1_score": f1_score(y_train, y_pred, average='weighted', zero_division=0)
+            "precision": precision_score(y_train, y_pred, average="weighted", zero_division=0),
+            "recall": recall_score(y_train, y_pred, average="weighted", zero_division=0),
+            "f1_score": f1_score(y_train, y_pred, average="weighted", zero_division=0),
         }
 
         return {
@@ -318,12 +310,12 @@ class XGBoostOptimizer:
             "n_trials": self.n_trials,
             "cv_splits": self.cv_splits,
             "final_metrics": final_metrics,
-            "study": study
+            "study": study,
         }
 
-    def _save_optimization_results(self,
-                                  optimization_results: Dict[str, Any],
-                                  best_params_dict: Dict[str, Any]) -> None:
+    def _save_optimization_results(
+        self, optimization_results: Dict[str, Any], best_params_dict: Dict[str, Any]
+    ) -> None:
         """
         Save optimization results and best parameters.
 
@@ -353,10 +345,10 @@ class XGBoostOptimizer:
                 target: {
                     "best_score": results["best_score"],
                     "final_metrics": results["final_metrics"],
-                    "n_trials": results["n_trials"]
+                    "n_trials": results["n_trials"],
                 }
                 for target, results in optimization_results.items()
-            }
+            },
         }
 
         with open(summary_path, "w") as f:
@@ -370,14 +362,18 @@ class XGBoostOptimizer:
             # Save detailed results
             detailed_path = target_dir / "optimization_results.json"
             with open(detailed_path, "w") as f:
-                json.dump({
-                    "target": target,
-                    "best_params": results["best_params"],
-                    "best_score": results["best_score"],
-                    "final_metrics": results["final_metrics"],
-                    "n_trials": results["n_trials"],
-                    "cv_splits": results["cv_splits"]
-                }, f, indent=2)
+                json.dump(
+                    {
+                        "target": target,
+                        "best_params": results["best_params"],
+                        "best_score": results["best_score"],
+                        "final_metrics": results["final_metrics"],
+                        "n_trials": results["n_trials"],
+                        "cv_splits": results["cv_splits"],
+                    },
+                    f,
+                    indent=2,
+                )
 
         _logger.info("Saved optimization results to %s", self.models_dir)
 

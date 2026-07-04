@@ -16,12 +16,12 @@ Steps:
 Or just run this script and it will try FTP download automatically.
 """
 
-import sys
-from pathlib import Path
-from datetime import datetime
-import json
 import io
+import json
+import sys
+from datetime import datetime
 from ftplib import FTP
+from pathlib import Path
 
 import pandas as pd
 
@@ -43,27 +43,27 @@ def download_nasdaq_files():
         print()
 
         # Connect to FTP server
-        ftp = FTP('ftp.nasdaqtrader.com', timeout=60)
+        ftp = FTP("ftp.nasdaqtrader.com", timeout=60)
         ftp.login()  # Anonymous login
 
         print("Connected successfully!")
         print(f"Server response: {ftp.getwelcome()}\n")
 
         # Change to SymbolDirectory
-        ftp.cwd('SymbolDirectory')
+        ftp.cwd("SymbolDirectory")
 
         # Download NASDAQ listed
         print("Downloading nasdaqlisted.txt...")
         nasdaq_data = []
-        ftp.retrlines('RETR nasdaqlisted.txt', nasdaq_data.append)
-        nasdaq_text = '\n'.join(nasdaq_data)
+        ftp.retrlines("RETR nasdaqlisted.txt", nasdaq_data.append)
+        nasdaq_text = "\n".join(nasdaq_data)
         print(f"  Downloaded {len(nasdaq_data)} lines")
 
         # Download other listed
         print("Downloading otherlisted.txt...")
         other_data = []
-        ftp.retrlines('RETR otherlisted.txt', other_data.append)
-        other_text = '\n'.join(other_data)
+        ftp.retrlines("RETR otherlisted.txt", other_data.append)
+        other_text = "\n".join(other_data)
         print(f"  Downloaded {len(other_data)} lines")
 
         ftp.quit()
@@ -82,15 +82,15 @@ def process_manual_files(results_dir: Path):
 
     if not nasdaq_file.exists() or not other_file.exists():
         print(f"Manual files not found in {results_dir}")
-        print(f"  Looking for: nasdaqlisted.txt and otherlisted.txt")
+        print("  Looking for: nasdaqlisted.txt and otherlisted.txt")
         return None, None
 
     print(f"Found manual files in {results_dir}")
 
-    with open(nasdaq_file, 'r') as f:
+    with open(nasdaq_file) as f:
         nasdaq_text = f.read()
 
-    with open(other_file, 'r') as f:
+    with open(other_file) as f:
         other_text = f.read()
 
     return nasdaq_text, other_text
@@ -109,7 +109,7 @@ def process_nasdaq_data(nasdaq_text: str, other_text: str, results_dir: Path):
         print(f"Columns: {df.columns.tolist()}\n")
 
         # Drop empty rows
-        df = df.dropna(how='all')
+        df = df.dropna(how="all")
 
         # Filter test issues
         if "Test Issue" in df.columns:
@@ -139,15 +139,12 @@ def process_nasdaq_data(nasdaq_text: str, other_text: str, results_dir: Path):
         # Save to cache
         cache_file = results_dir / "nasdaq_universe_cache.json"
         cache_data = {
-            'tickers': filtered_tickers,
-            'created_at': datetime.now().isoformat(),
-            'config': {
-                'exclude_test_issues': True,
-                'alphabetic_only': True
-            }
+            "tickers": filtered_tickers,
+            "created_at": datetime.now().isoformat(),
+            "config": {"exclude_test_issues": True, "alphabetic_only": True},
         }
 
-        with open(cache_file, 'w') as f:
+        with open(cache_file, "w") as f:
             json.dump(cache_data, f, indent=2)
 
         print(f"✓ Saved cache to: {cache_file}")
@@ -168,19 +165,20 @@ def process_nasdaq_data(nasdaq_text: str, other_text: str, results_dir: Path):
     except Exception as e:
         print(f"Error processing data: {e}")
         import traceback
+
         traceback.print_exc()
 
 
 def main():
     """Main execution."""
-    print("="*70)
+    print("=" * 70)
     print(" NASDAQ Universe Manual Download Helper")
-    print("="*70)
+    print("=" * 70)
     print()
 
     # Create results directory
-    today = datetime.now().strftime('%Y-%m-%d')
-    results_dir = PROJECT_ROOT / 'results' / 'emps2' / today
+    today = datetime.now().strftime("%Y-%m-%d")
+    results_dir = PROJECT_ROOT / "results" / "emps2" / today
     results_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Results directory: {results_dir}\n")
@@ -194,9 +192,9 @@ def main():
         nasdaq_text, other_text = process_manual_files(results_dir)
 
     if not nasdaq_text or not other_text:
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print(" Manual Download Required")
-        print("="*70)
+        print("=" * 70)
         print("\nPlease download these files manually in your browser:")
         print("  1. ftp://ftp.nasdaqtrader.com/SymbolDirectory/nasdaqlisted.txt")
         print("  2. ftp://ftp.nasdaqtrader.com/SymbolDirectory/otherlisted.txt")
@@ -209,9 +207,9 @@ def main():
     print("Processing NASDAQ data...")
     process_nasdaq_data(nasdaq_text, other_text, results_dir)
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print(" Done! You can now run the pipeline with --no-force-refresh")
-    print("="*70)
+    print("=" * 70)
     print("\nCommand:")
     print("  python src/ml/pipeline/p06_emps2/run_emps2_scan.py --no-force-refresh")
     print()

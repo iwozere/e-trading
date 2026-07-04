@@ -3,8 +3,9 @@ Test data factories for User models.
 
 Provides factory functions to create test data for User, AuthIdentity, and VerificationCode models.
 """
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, Optional
+
+from datetime import UTC, datetime, timedelta
+from typing import Any, Dict
 
 
 class UserFactory:
@@ -12,45 +13,30 @@ class UserFactory:
 
     @staticmethod
     def create_data(
-        email: Optional[str] = None,
-        role: str = "trader",
-        is_active: bool = True,
-        **kwargs
+        email: str | None = None, role: str = "trader", is_active: bool = True, **kwargs
     ) -> Dict[str, Any]:
         """Create user data dictionary matching actual User model."""
         return {
             "email": email,
             "role": role,  # Must be one of: admin, trader, viewer
             "is_active": is_active,
-            **kwargs
+            **kwargs,
         }
 
     @staticmethod
     def admin_user(email: str = "admin@example.com") -> Dict[str, Any]:
         """Create an admin user."""
-        return UserFactory.create_data(
-            email=email,
-            role="admin",
-            is_active=True
-        )
+        return UserFactory.create_data(email=email, role="admin", is_active=True)
 
     @staticmethod
     def regular_user(email: str = "user@example.com") -> Dict[str, Any]:
         """Create a regular user."""
-        return UserFactory.create_data(
-            email=email,
-            role="trader",
-            is_active=True
-        )
+        return UserFactory.create_data(email=email, role="trader", is_active=True)
 
     @staticmethod
     def inactive_user(email: str = "inactive@example.com") -> Dict[str, Any]:
         """Create an inactive user."""
-        return UserFactory.create_data(
-            email=email,
-            role="trader",
-            is_active=False
-        )
+        return UserFactory.create_data(email=email, role="trader", is_active=False)
 
 
 class AuthIdentityFactory:
@@ -61,9 +47,9 @@ class AuthIdentityFactory:
         user_id: int,
         provider: str = "telegram",
         provider_user_id: str = "123456789",
-        provider_username: Optional[str] = None,
-        provider_data: Optional[Dict[str, Any]] = None,
-        **kwargs
+        provider_username: str | None = None,
+        provider_data: Dict[str, Any] | None = None,
+        **kwargs,
     ) -> Dict[str, Any]:
         """Create auth identity data dictionary."""
         return {
@@ -72,7 +58,7 @@ class AuthIdentityFactory:
             "provider_user_id": provider_user_id,
             "provider_username": provider_username or f"user_{provider_user_id}",
             "provider_data": provider_data or {},
-            **kwargs
+            **kwargs,
         }
 
     @staticmethod
@@ -81,7 +67,7 @@ class AuthIdentityFactory:
         telegram_id: int = 123456789,
         username: str = "testuser",
         first_name: str = "Test",
-        last_name: str = "User"
+        last_name: str = "User",
     ) -> Dict[str, Any]:
         """Create a Telegram auth identity."""
         return AuthIdentityFactory.create_data(
@@ -94,15 +80,13 @@ class AuthIdentityFactory:
                 "username": username,
                 "first_name": first_name,
                 "last_name": last_name,
-                "is_bot": False
-            }
+                "is_bot": False,
+            },
         )
 
     @staticmethod
     def google_identity(
-        user_id: int,
-        google_id: str = "google_123456",
-        email: str = "test@example.com"
+        user_id: int, google_id: str = "google_123456", email: str = "test@example.com"
     ) -> Dict[str, Any]:
         """Create a Google auth identity."""
         return AuthIdentityFactory.create_data(
@@ -110,10 +94,7 @@ class AuthIdentityFactory:
             provider="google",
             provider_user_id=google_id,
             provider_username=email,
-            provider_data={
-                "email": email,
-                "email_verified": True
-            }
+            provider_data={"email": email, "email_verified": True},
         )
 
 
@@ -125,18 +106,18 @@ class VerificationCodeFactory:
         user_id: int,
         code: str = "123456",
         purpose: str = "login",
-        expires_at: Optional[datetime] = None,
-        used_at: Optional[datetime] = None,
-        **kwargs
+        expires_at: datetime | None = None,
+        used_at: datetime | None = None,
+        **kwargs,
     ) -> Dict[str, Any]:
         """Create verification code data dictionary."""
         return {
             "user_id": user_id,
             "code": code,
             "purpose": purpose,
-            "expires_at": expires_at or (datetime.now(timezone.utc) + timedelta(minutes=15)),
+            "expires_at": expires_at or (datetime.now(UTC) + timedelta(minutes=15)),
             "used_at": used_at,
-            **kwargs
+            **kwargs,
         }
 
     @staticmethod
@@ -146,8 +127,8 @@ class VerificationCodeFactory:
             user_id=user_id,
             code=code,
             purpose=purpose,
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
-            used_at=None
+            expires_at=datetime.now(UTC) + timedelta(minutes=15),
+            used_at=None,
         )
 
     @staticmethod
@@ -157,8 +138,8 @@ class VerificationCodeFactory:
             user_id=user_id,
             code=code,
             purpose=purpose,
-            expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
-            used_at=None
+            expires_at=datetime.now(UTC) - timedelta(minutes=1),
+            used_at=None,
         )
 
     @staticmethod
@@ -168,8 +149,8 @@ class VerificationCodeFactory:
             user_id=user_id,
             code=code,
             purpose=purpose,
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
-            used_at=datetime.now(timezone.utc) - timedelta(minutes=5)
+            expires_at=datetime.now(UTC) + timedelta(minutes=15),
+            used_at=datetime.now(UTC) - timedelta(minutes=5),
         )
 
 

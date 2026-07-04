@@ -1,5 +1,4 @@
 import asyncio
-import aiohttp
 import sys
 from pathlib import Path
 
@@ -12,6 +11,7 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
+
 async def test_reddit(ticker="AAPL"):
     print(f"Testing Reddit adapter for: {ticker}")
     adapter = AsyncRedditAdapter()
@@ -22,7 +22,9 @@ async def test_reddit(ticker="AAPL"):
     try:
         print("--- Ensuring Token ---")
         await adapter._ensure_token()
-        print(f"Token: {adapter._token[:10]}... (expires in {adapter._token_expiry - asyncio.get_event_loop().time()} seconds)")
+        print(
+            f"Token: {adapter._token[:10]}... (expires in {adapter._token_expiry - asyncio.get_event_loop().time()} seconds)"
+        )
 
         print("--- Fetching Messages ---")
         messages = await adapter.fetch_messages(ticker, limit=5)
@@ -37,9 +39,11 @@ async def test_reddit(ticker="AAPL"):
     except Exception as e:
         print(f"ERROR: {e}")
         import traceback
+
         traceback.print_exc()
     finally:
         await adapter.close()
+
 
 if __name__ == "__main__":
     asyncio.run(test_reddit())

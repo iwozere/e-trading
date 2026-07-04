@@ -56,7 +56,9 @@ def resolve_xml_path(path_or_glob: str) -> Path:
     latest = matches[-1]
     _logger.info(
         "Resolved XML glob '%s' → %s (%d candidate(s))",
-        path_or_glob, latest.name, len(matches),
+        path_or_glob,
+        latest.name,
+        len(matches),
     )
     return latest
 
@@ -111,9 +113,7 @@ def load_ibkr_xml(path: str) -> List[RawIbkrPosition]:
             continue
 
         if quantity <= 0:
-            _logger.debug(
-                "Skipping non-positive position for %s (qty=%s)", symbol_raw, quantity
-            )
+            _logger.debug("Skipping non-positive position for %s (qty=%s)", symbol_raw, quantity)
             continue
 
         raw_count += 1
@@ -133,9 +133,7 @@ def load_ibkr_xml(path: str) -> List[RawIbkrPosition]:
 
         avg_price = total_cost / total_qty
         if avg_price <= 0:
-            _logger.warning(
-                "Skipping %s: computed avg_price is non-positive (%.6f)", symbol, avg_price
-            )
+            _logger.warning("Skipping %s: computed avg_price is non-positive (%.6f)", symbol, avg_price)
             continue
 
         positions.append(
@@ -147,7 +145,5 @@ def load_ibkr_xml(path: str) -> List[RawIbkrPosition]:
             )
         )
 
-    _logger.info(
-        "Loaded %d merged positions from %s", len(positions), xml_path.name
-    )
+    _logger.info("Loaded %d merged positions from %s", len(positions), xml_path.name)
     return positions

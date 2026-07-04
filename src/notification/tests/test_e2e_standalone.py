@@ -8,20 +8,20 @@ Tests complete message delivery flows and service behavior.
 
 import asyncio
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Any, Dict
 from unittest.mock import patch
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.service.config import config
 from src.data.db.services.database_service import get_database_service
-from src.notification.service.message_queue import message_queue, MessagePriority
-from src.notification.service.processor import message_processor
 from src.notification.logger import setup_logger
+from src.notification.service.config import config
+from src.notification.service.message_queue import MessagePriority, message_queue
+from src.notification.service.processor import message_processor
 
 _logger = setup_logger(__name__)
 
@@ -46,29 +46,31 @@ class MockNotificationChannel:
             return {
                 "success": False,
                 "error_message": f"Mock failure for {self.name}",
-                "response_time_ms": int(self.delay * 1000)
+                "response_time_ms": int(self.delay * 1000),
             }
 
-        self.sent_messages.append({
-            "id": message.id,
-            "content": message.content,
-            "recipient_id": message.recipient_id,
-            "timestamp": datetime.now(timezone.utc)
-        })
+        self.sent_messages.append(
+            {
+                "id": message.id,
+                "content": message.content,
+                "recipient_id": message.recipient_id,
+                "timestamp": datetime.now(UTC),
+            }
+        )
 
         return {
             "success": True,
             "external_id": f"mock_{self.name}_{len(self.sent_messages)}",
-            "response_time_ms": int(self.delay * 1000)
+            "response_time_ms": int(self.delay * 1000),
         }
 
     async def get_health(self) -> Dict[str, Any]:
         """Mock health check."""
         return {
             "status": self.health_status,
-            "last_success": datetime.now(timezone.utc) if self.health_status == "healthy" else None,
-            "last_failure": datetime.now(timezone.utc) if self.health_status != "healthy" else None,
-            "avg_response_time_ms": int(self.delay * 1000)
+            "last_success": datetime.now(UTC) if self.health_status == "healthy" else None,
+            "last_failure": datetime.now(UTC) if self.health_status != "healthy" else None,
+            "avg_response_time_ms": int(self.delay * 1000),
         }
 
     def reset(self):
@@ -86,7 +88,7 @@ class EndToEndTestSuite:
         self.mock_channels = {
             "telegram": MockNotificationChannel("telegram", delay=0.1),
             "email": MockNotificationChannel("email", delay=0.2),
-            "sms": MockNotificationChannel("sms", delay=0.3)
+            "sms": MockNotificationChannel("sms", delay=0.3),
         }
         self.test_results = []
 
@@ -95,12 +97,7 @@ class EndToEndTestSuite:
         print("Setting up test environment...")
 
         # Initialize database
-        init_database(
-            database_url=config.database.url,
-            echo=False,
-            pool_size=5,
-            max_overflow=10
-        )
+        init_database(database_url=config.database.url, echo=False, pool_size=5, max_overflow=10)
 
         # Create tables using database service
         db_service = get_database_service()
@@ -113,9 +110,7 @@ class EndToEndTestSuite:
                 "DELETE FROM msg_delivery_status WHERE message_id IN "
                 "(SELECT id FROM msg_messages WHERE message_type LIKE 'e2e_test_%')"
             )
-            repo.session.execute(
-                "DELETE FROM msg_messages WHERE message_type LIKE 'e2e_test_%'"
-            )
+            repo.session.execute("DELETE FROM msg_messages WHERE message_type LIKE 'e2e_test_%'")
             repo.commit()
 
         print("✓ Test environment setup complete")
@@ -135,21 +130,16 @@ class EndToEndTestSuite:
                 "DELETE FROM msg_delivery_status WHERE message_id IN "
                 "(SELECT id FROM msg_messages WHERE message_type LIKE 'e2e_test_%')"
             )
-            repo.session.execute(
-                "DELETE FROM msg_messages WHERE message_type LIKE 'e2e_test_%'"
-            )
+            repo.session.execute("DELETE FROM msg_messages WHERE message_type LIKE 'e2e_test_%'")
             repo.commit()
 
         print("✓ Test environment cleanup complete")
 
     def record_test_result(self, test_name: str, success: bool, message: str = ""):
         """Record test result."""
-        self.test_results.append({
-            "test": test_name,
-            "success": success,
-            "message": message,
-            "timestamp": datetime.now(timezone.utc)
-        })
+        self.test_results.append(
+            {"test": test_name, "success": success, "message": message, "timestamp": datetime.now(UTC)}
+        )
 
         status = "PASS" if success else "FAIL"
         print(f"  {test_name}: {status}" + (f" - {message}" if message else ""))
@@ -161,17 +151,17 @@ class EndToEndTestSuite:
 
         try:
             # Mock the channel registry
-            with patch('src.notification.channels.base.channel_registry') as mock_registry:
+            with patch("src.notification.channels.base.channel_registry") as mock_registry:
                 mock_registry.get_channel.side_effect = lambda name: self.mock_channels.get(name)
                 mock_registry.list_channels.return_value = list(self.mock_channels.keys())
 
                 # Enqueue message
                 message_data = {
-                    'message_type': 'e2e_test_single',
-                    'channels': ['telegram'],
-                    'content': {'text': 'Single channel test message'},
-                    'recipient_id': 'test_user_1',
-                    'priority': MessagePriority.NORMAL.value
+                    "message_type": "e2e_test_single",
+                    "channels": ["telegram"],
+                    "content": {"text": "Single channel test message"},
+                    "recipient_id": "test_user_1",
+                    "priority": MessagePriority.NORMAL.value,
                 }
 
                 message_id = message_queue.enqueue(message_data, MessagePriority.NORMAL)
@@ -205,20 +195,17 @@ class EndToEndTestSuite:
         print(f"\nTesting {test_name}...")
 
         try:
-            with patch('src.notification.channels.base.channel_registry') as mock_registry:
+            with patch("src.notification.channels.base.channel_registry") as mock_registry:
                 mock_registry.get_channel.side_effect = lambda name: self.mock_channels.get(name)
                 mock_registry.list_channels.return_value = list(self.mock_channels.keys())
 
                 # Enqueue multi-channel message
                 message_data = {
-                    'message_type': 'e2e_test_multi',
-                    'channels': ['telegram', 'email', 'sms'],
-                    'content': {
-                        'text': 'Multi-channel test message',
-                        'subject': 'Test Alert'
-                    },
-                    'recipient_id': 'test_user_2',
-                    'priority': MessagePriority.HIGH.value
+                    "message_type": "e2e_test_multi",
+                    "channels": ["telegram", "email", "sms"],
+                    "content": {"text": "Multi-channel test message", "subject": "Test Alert"},
+                    "recipient_id": "test_user_2",
+                    "priority": MessagePriority.HIGH.value,
                 }
 
                 message_id = message_queue.enqueue(message_data, MessagePriority.HIGH)
@@ -235,7 +222,7 @@ class EndToEndTestSuite:
                     if any(msg["id"] == message_id for msg in channel.sent_messages):
                         channels_with_messages.append(channel_name)
 
-                expected_channels = {'telegram', 'email', 'sms'}
+                expected_channels = {"telegram", "email", "sms"}
                 actual_channels = set(channels_with_messages)
 
                 if actual_channels == expected_channels:
@@ -255,7 +242,7 @@ class EndToEndTestSuite:
         print(f"\nTesting {test_name}...")
 
         try:
-            with patch('src.notification.channels.base.channel_registry') as mock_registry:
+            with patch("src.notification.channels.base.channel_registry") as mock_registry:
                 mock_registry.get_channel.side_effect = lambda name: self.mock_channels.get(name)
                 mock_registry.list_channels.return_value = list(self.mock_channels.keys())
 
@@ -264,21 +251,21 @@ class EndToEndTestSuite:
 
                 # Enqueue normal priority message first
                 normal_data = {
-                    'message_type': 'e2e_test_normal',
-                    'channels': ['telegram'],
-                    'content': {'text': 'Normal priority message'},
-                    'recipient_id': 'test_user_3',
-                    'priority': MessagePriority.NORMAL.value
+                    "message_type": "e2e_test_normal",
+                    "channels": ["telegram"],
+                    "content": {"text": "Normal priority message"},
+                    "recipient_id": "test_user_3",
+                    "priority": MessagePriority.NORMAL.value,
                 }
                 normal_id = message_queue.enqueue(normal_data, MessagePriority.NORMAL)
 
                 # Enqueue critical priority message second
                 critical_data = {
-                    'message_type': 'e2e_test_critical',
-                    'channels': ['telegram'],
-                    'content': {'text': 'CRITICAL priority message'},
-                    'recipient_id': 'test_user_3',
-                    'priority': MessagePriority.CRITICAL.value
+                    "message_type": "e2e_test_critical",
+                    "channels": ["telegram"],
+                    "content": {"text": "CRITICAL priority message"},
+                    "recipient_id": "test_user_3",
+                    "priority": MessagePriority.CRITICAL.value,
                 }
                 critical_id = message_queue.enqueue(critical_data, MessagePriority.CRITICAL)
 
@@ -301,7 +288,9 @@ class EndToEndTestSuite:
                     else:
                         self.record_test_result(test_name, False, "Priority order not respected")
                 else:
-                    self.record_test_result(test_name, False, f"Expected 2 messages, got {len(telegram_channel.sent_messages)}")
+                    self.record_test_result(
+                        test_name, False, f"Expected 2 messages, got {len(telegram_channel.sent_messages)}"
+                    )
 
                 await message_processor.shutdown()
 
@@ -314,7 +303,7 @@ class EndToEndTestSuite:
         print(f"\nTesting {test_name}...")
 
         try:
-            with patch('src.notification.channels.base.channel_registry') as mock_registry:
+            with patch("src.notification.channels.base.channel_registry") as mock_registry:
                 mock_registry.get_channel.side_effect = lambda name: self.mock_channels.get(name)
                 mock_registry.list_channels.return_value = list(self.mock_channels.keys())
 
@@ -324,11 +313,11 @@ class EndToEndTestSuite:
 
                 # Enqueue message to failing channel
                 message_data = {
-                    'message_type': 'e2e_test_failure',
-                    'channels': ['telegram'],
-                    'content': {'text': 'This should fail'},
-                    'recipient_id': 'test_user_4',
-                    'priority': MessagePriority.NORMAL.value
+                    "message_type": "e2e_test_failure",
+                    "channels": ["telegram"],
+                    "content": {"text": "This should fail"},
+                    "recipient_id": "test_user_4",
+                    "priority": MessagePriority.NORMAL.value,
                 }
 
                 message_id = message_queue.enqueue(message_data, MessagePriority.NORMAL)
@@ -345,7 +334,9 @@ class EndToEndTestSuite:
                 if telegram_channel.call_count > 0:
                     # Channel was called but should have no successful deliveries
                     if len(telegram_channel.sent_messages) == 0:
-                        self.record_test_result(test_name, True, f"Failure handled correctly ({telegram_channel.call_count} attempts)")
+                        self.record_test_result(
+                            test_name, True, f"Failure handled correctly ({telegram_channel.call_count} attempts)"
+                        )
                     else:
                         self.record_test_result(test_name, False, "Message delivered despite failure")
                 else:
@@ -362,7 +353,7 @@ class EndToEndTestSuite:
         print(f"\nTesting {test_name}...")
 
         try:
-            with patch('src.notification.channels.base.channel_registry') as mock_registry:
+            with patch("src.notification.channels.base.channel_registry") as mock_registry:
                 mock_registry.get_channel.side_effect = lambda name: self.mock_channels.get(name)
                 mock_registry.list_channels.return_value = list(self.mock_channels.keys())
 
@@ -375,11 +366,11 @@ class EndToEndTestSuite:
 
                 # Enqueue multi-channel message
                 message_data = {
-                    'message_type': 'e2e_test_partial',
-                    'channels': ['telegram', 'email', 'sms'],
-                    'content': {'text': 'Partial failure test'},
-                    'recipient_id': 'test_user_5',
-                    'priority': MessagePriority.NORMAL.value
+                    "message_type": "e2e_test_partial",
+                    "channels": ["telegram", "email", "sms"],
+                    "content": {"text": "Partial failure test"},
+                    "recipient_id": "test_user_5",
+                    "priority": MessagePriority.NORMAL.value,
                 }
 
                 message_id = message_queue.enqueue(message_data, MessagePriority.NORMAL)
@@ -395,17 +386,21 @@ class EndToEndTestSuite:
                 failed_channels = []
 
                 for channel_name, channel in self.mock_channels.items():
-                    if channel_name in ['telegram', 'email', 'sms']:
+                    if channel_name in ["telegram", "email", "sms"]:
                         if any(msg["id"] == message_id for msg in channel.sent_messages):
                             successful_channels.append(channel_name)
                         elif channel.call_count > 0:
                             failed_channels.append(channel_name)
 
                 # Should have telegram and sms successful, email failed
-                if 'telegram' in successful_channels and 'sms' in successful_channels and 'email' in failed_channels:
-                    self.record_test_result(test_name, True, f"Partial success: {successful_channels} delivered, {failed_channels} failed")
+                if "telegram" in successful_channels and "sms" in successful_channels and "email" in failed_channels:
+                    self.record_test_result(
+                        test_name, True, f"Partial success: {successful_channels} delivered, {failed_channels} failed"
+                    )
                 else:
-                    self.record_test_result(test_name, False, f"Unexpected results: success={successful_channels}, failed={failed_channels}")
+                    self.record_test_result(
+                        test_name, False, f"Unexpected results: success={successful_channels}, failed={failed_channels}"
+                    )
 
                 await message_processor.shutdown()
 
@@ -418,7 +413,7 @@ class EndToEndTestSuite:
         print(f"\nTesting {test_name}...")
 
         try:
-            with patch('src.notification.channels.base.channel_registry') as mock_registry:
+            with patch("src.notification.channels.base.channel_registry") as mock_registry:
                 mock_registry.get_channel.side_effect = lambda name: self.mock_channels.get(name)
                 mock_registry.list_channels.return_value = list(self.mock_channels.keys())
 
@@ -430,11 +425,11 @@ class EndToEndTestSuite:
 
                 # Enqueue message during failure
                 message_data = {
-                    'message_type': 'e2e_test_recovery',
-                    'channels': ['telegram'],
-                    'content': {'text': 'Recovery test message'},
-                    'recipient_id': 'test_user_6',
-                    'priority': MessagePriority.NORMAL.value
+                    "message_type": "e2e_test_recovery",
+                    "channels": ["telegram"],
+                    "content": {"text": "Recovery test message"},
+                    "recipient_id": "test_user_6",
+                    "priority": MessagePriority.NORMAL.value,
                 }
 
                 message_id = message_queue.enqueue(message_data, MessagePriority.NORMAL)
@@ -459,7 +454,9 @@ class EndToEndTestSuite:
                 else:
                     # Check if at least retry attempts were made
                     if telegram_channel.call_count > 1:
-                        self.record_test_result(test_name, True, f"Recovery attempted ({telegram_channel.call_count} calls)")
+                        self.record_test_result(
+                            test_name, True, f"Recovery attempted ({telegram_channel.call_count} calls)"
+                        )
                     else:
                         self.record_test_result(test_name, False, "No recovery attempts detected")
 
@@ -476,11 +473,11 @@ class EndToEndTestSuite:
         try:
             # Enqueue message
             message_data = {
-                'message_type': 'e2e_test_persistence',
-                'channels': ['telegram'],
-                'content': {'text': 'Persistence test message'},
-                'recipient_id': 'test_user_7',
-                'priority': MessagePriority.NORMAL.value
+                "message_type": "e2e_test_persistence",
+                "channels": ["telegram"],
+                "content": {"text": "Persistence test message"},
+                "recipient_id": "test_user_7",
+                "priority": MessagePriority.NORMAL.value,
             }
 
             message_id = message_queue.enqueue(message_data, MessagePriority.NORMAL)
@@ -491,9 +488,11 @@ class EndToEndTestSuite:
                 message = r.notifications.messages.get_message(message_id)
 
                 if message:
-                    if (message.message_type == 'e2e_test_persistence' and
-                        message.recipient_id == 'test_user_7' and
-                        'telegram' in message.channels):
+                    if (
+                        message.message_type == "e2e_test_persistence"
+                        and message.recipient_id == "test_user_7"
+                        and "telegram" in message.channels
+                    ):
                         self.record_test_result(test_name, True, f"Message {message_id} persisted correctly")
                     else:
                         self.record_test_result(test_name, False, "Message data incorrect")
@@ -517,14 +516,14 @@ class EndToEndTestSuite:
             self.test_priority_message_handling,
             self.test_channel_failure_handling,
             self.test_partial_failure_scenario,
-            self.test_service_recovery
+            self.test_service_recovery,
         ]
 
         for test in tests:
             try:
                 await test()
             except Exception as e:
-                test_name = test.__name__.replace('test_', '').replace('_', ' ').title()
+                test_name = test.__name__.replace("test_", "").replace("_", " ").title()
                 self.record_test_result(test_name, False, f"Test crashed: {str(e)}")
 
         await self.teardown()

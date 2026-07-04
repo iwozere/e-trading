@@ -1,19 +1,17 @@
-
 import asyncio
-import os
 import sys
 from pathlib import Path
-from datetime import datetime
 
 # Add project root
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
-from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
-from src.data.downloader.santiment_data_downloader import SantimentDataDownloader
-from src.common.sentiments.adapters.async_news import AsyncNewsAdapter
 from src.common.sentiments.adapters.async_apewisdom import AsyncApeWisdomAdapter
+from src.common.sentiments.adapters.async_news import AsyncNewsAdapter
+from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
+from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
+from src.data.downloader.santiment_data_downloader import SantimentDataDownloader
+
 
 async def verify_downloaders():
     print("\n=== Verifying Sentiment Downloaders ===\n")
@@ -49,15 +47,16 @@ async def verify_downloaders():
         print("Skipping Alpha Vantage (No API Key)")
 
     # 3. Santiment
-    print(f"\n--- Santiment (BTC) ---")
+    print("\n--- Santiment (BTC) ---")
     san = SantimentDataDownloader()
     try:
         social = await san.get_social_volume("BTC")
         print(f"Social Volume: {social.mention_count if social else 'None'}")
         if social and social.raw_data and "error" in social.raw_data:
-             print(f"Warning: {social.raw_data['error']}")
+            print(f"Warning: {social.raw_data['error']}")
     except Exception as e:
         print(f"Santiment Error: {e}")
+
 
 async def verify_adapter():
     print("\n=== Verifying AsyncNewsAdapter ===\n")
@@ -65,7 +64,7 @@ async def verify_adapter():
     adapter = AsyncNewsAdapter()
     try:
         summary = await adapter.fetch_summary("AAPL")
-        print(f"Sentiment Summary for AAPL:")
+        print("Sentiment Summary for AAPL:")
         print(f"  Mentions: {summary.get('mentions')}")
         print(f"  Score: {summary.get('sentiment_score')}")
         print(f"  Bullish/Bearish: {summary.get('bullish')}/{summary.get('bearish')}")
@@ -81,7 +80,7 @@ async def verify_adapter():
     try:
         # TSLA is almost always in top 500 trending on ApeWisdom
         summary = await ape_adapter.fetch_summary("TSLA")
-        print(f"Sentiment Summary for TSLA (ApeWisdom):")
+        print("Sentiment Summary for TSLA (ApeWisdom):")
         print(f"  Mentions: {summary.get('mentions')}")
         print(f"  Score: {summary.get('sentiment_score')}")
         print(f"  Bullish/Bearish: {summary.get('bullish')}/{summary.get('bearish')}")
@@ -90,11 +89,13 @@ async def verify_adapter():
     finally:
         await ape_adapter.close()
 
+
 async def main():
     await verify_downloaders()
     await verify_adapter()
 
+
 if __name__ == "__main__":
-    if sys.platform == 'win32':
+    if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(main())

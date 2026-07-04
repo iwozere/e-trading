@@ -77,18 +77,14 @@ def test_start_and_stop_bot():
 @pytest.mark.integration
 def test_backtest_stub():
     payload = {"strategy": "rsi_bb_volume", "ticker": "BTCUSDT", "tf": "1h"}
-    r = requests.post(
-        f"{API_URL}/backtest", json=payload, auth=HTTPBasicAuth(API_LOGIN, API_PASSWORD)
-    )
+    r = requests.post(f"{API_URL}/backtest", json=payload, auth=HTTPBasicAuth(API_LOGIN, API_PASSWORD))
     assert r.status_code == 200
     assert "message" in r.json()
 
 
 @pytest.mark.integration
 def test_missing_bot_id():
-    r = requests.post(
-        f"{API_URL}/stop_bot", json={}, auth=HTTPBasicAuth(API_LOGIN, API_PASSWORD)
-    )
+    r = requests.post(f"{API_URL}/stop_bot", json={}, auth=HTTPBasicAuth(API_LOGIN, API_PASSWORD))
     assert r.status_code == 400
     assert "error" in r.json()
 

@@ -1,11 +1,14 @@
-import vectorbt as vbt
-import pandas as pd
+from typing import Any, Dict, List
+
 import numpy as np
-from typing import List, Dict, Any
-from src.vectorbt.pipeline.engine import StrategyEngine
+import pandas as pd
+
+import vectorbt as vbt
 from src.notification.logger import setup_logger
+from src.vectorbt.pipeline.engine import StrategyEngine
 
 _logger = setup_logger(__name__, use_multiprocessing=True)
+
 
 class Objective:
     """
@@ -63,7 +66,7 @@ class Objective:
             data = data.copy(deep=True)
             # 2. Generate signals via Dynamic Engine
             # Pass full OHLC for indicators like ADX/ATR
-            close = data.xs('Close', level='column', axis=1)
+            close = data.xs("Close", level="column", axis=1)
             res_full = self.engine.run(data, params)
             res = res_full["signals"]
             results = res_full["results"]
@@ -76,7 +79,7 @@ class Objective:
                 sl_cfg = self.strategy_config["exits"]["sl_trailing"]
                 # Resolve multiplier
                 if "multiplier" in sl_cfg.get("space", {}):
-                    multiplier = params.get(f"sl_trailing_multiplier", 2.0)
+                    multiplier = params.get("sl_trailing_multiplier", 2.0)
                 else:
                     multiplier = sl_cfg.get("params", {}).get("multiplier", 2.0)
 
@@ -105,27 +108,27 @@ class Objective:
 
             pf = vbt.Portfolio.from_signals(
                 close,
-                entries=res['entries'],
-                exits=res['exits'],
-                short_entries=res['short_entries'],
-                short_exits=res['short_exits'],
+                entries=res["entries"],
+                exits=res["exits"],
+                short_entries=res["short_entries"],
+                short_exits=res["short_exits"],
                 fees=0.0004,
                 slippage=0.0001,
                 size=target_value,
-                size_type='Value',
+                size_type="Value",
                 cash_sharing=True,
                 init_cash=init_cash,
                 sl_stop=sl_stop,
                 sl_trail=sl_trail,
-                freq='15m'
+                freq="15m",
             )
 
             # 4. Custom Liquidation Proxy (Senior Architect Requirement)
             # Discard if Max Drawdown > 60% (conservative threshold)
-            max_dd = pf.max_drawdown().max() # Max across all assets/columns
+            max_dd = pf.max_drawdown().max()  # Max across all assets/columns
             all_max_dd.append(max_dd)
             if max_dd > 0.6:
-                split_scores.append(-1.0) # Penalty for this split
+                split_scores.append(-1.0)  # Penalty for this split
                 continue
 
             # 5. Production-grade Scoring per split

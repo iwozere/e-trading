@@ -7,7 +7,7 @@ These models are used for data validation and business logic, separate from data
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Any, Dict
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -22,6 +22,7 @@ _logger = setup_logger(__name__)
 @dataclass
 class StructuralMetrics:
     """Structural metrics for short squeeze analysis."""
+
     short_interest_pct: float
     days_to_cover: float
     float_shares: int
@@ -45,14 +46,15 @@ class StructuralMetrics:
 @dataclass
 class TransientMetrics:
     """Transient metrics for short squeeze analysis."""
+
     volume_spike: float
-    call_put_ratio: Optional[float]
+    call_put_ratio: float | None
     sentiment_24h: float
-    borrow_fee_pct: Optional[float]
+    borrow_fee_pct: float | None
 
     # Enhanced sentiment metrics (multi-source)
     mentions_24h: int = 0
-    mentions_growth_7d: Optional[float] = None
+    mentions_growth_7d: float | None = None
     virality_index: float = 0.0
     bot_pct: float = 0.0
     sentiment_data_quality: Dict[str, Any] = field(default_factory=dict)
@@ -82,6 +84,7 @@ class TransientMetrics:
 @dataclass
 class Candidate:
     """Short squeeze candidate."""
+
     ticker: str
     screener_score: float
     structural_metrics: StructuralMetrics
@@ -100,10 +103,11 @@ class Candidate:
 @dataclass
 class ScoredCandidate:
     """Candidate with transient metrics and final squeeze score."""
+
     candidate: Candidate
     transient_metrics: TransientMetrics
     squeeze_score: float
-    alert_level: Optional[AlertLevel] = None
+    alert_level: AlertLevel | None = None
 
     def __post_init__(self):
         """Validate scored candidate after initialization."""
@@ -114,14 +118,15 @@ class ScoredCandidate:
 @dataclass
 class Alert:
     """Short squeeze alert."""
+
     ticker: str
     alert_level: AlertLevel
     reason: str
     squeeze_score: float
     timestamp: datetime = field(default_factory=datetime.now)
-    cooldown_expires: Optional[datetime] = None
+    cooldown_expires: datetime | None = None
     sent: bool = False
-    notification_id: Optional[str] = None
+    notification_id: str | None = None
 
     def __post_init__(self):
         """Validate alert after initialization."""
@@ -135,10 +140,11 @@ class Alert:
 @dataclass
 class AdHocCandidate:
     """Ad-hoc candidate for manual monitoring."""
+
     ticker: str
     reason: str
     first_seen: datetime = field(default_factory=datetime.now)
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
     active: bool = True
     promoted_by_screener: bool = False
 
@@ -152,6 +158,7 @@ class AdHocCandidate:
 # Pydantic models for API validation and serialization
 class StructuralMetricsCreate(BaseModel):
     """Pydantic model for creating structural metrics."""
+
     short_interest_pct: float = Field(..., ge=0, le=1)
     days_to_cover: float = Field(..., ge=0)
     float_shares: int = Field(..., gt=0)
@@ -161,14 +168,15 @@ class StructuralMetricsCreate(BaseModel):
 
 class TransientMetricsCreate(BaseModel):
     """Pydantic model for creating transient metrics."""
+
     volume_spike: float = Field(..., ge=0)
-    call_put_ratio: Optional[float] = Field(None, ge=0)
+    call_put_ratio: float | None = Field(None, ge=0)
     sentiment_24h: float = Field(..., ge=-1, le=1)
-    borrow_fee_pct: Optional[float] = Field(None, ge=0)
+    borrow_fee_pct: float | None = Field(None, ge=0)
 
     # Enhanced sentiment metrics
     mentions_24h: int = Field(default=0, ge=0)
-    mentions_growth_7d: Optional[float] = Field(default=None, ge=-1)
+    mentions_growth_7d: float | None = Field(default=None, ge=-1)
     virality_index: float = Field(default=0.0, ge=0, le=1)
     bot_pct: float = Field(default=0.0, ge=0, le=1)
     sentiment_data_quality: Dict[str, Any] = Field(default_factory=dict)
@@ -176,54 +184,58 @@ class TransientMetricsCreate(BaseModel):
 
 class CandidateCreate(BaseModel):
     """Pydantic model for creating a candidate."""
+
     ticker: str = Field(..., min_length=1, max_length=10)
     screener_score: float = Field(..., ge=0, le=1)
     structural_metrics: StructuralMetricsCreate
     source: CandidateSource = Field(default=CandidateSource.SCREENER)
 
-    @field_validator('ticker')
+    @field_validator("ticker")
     def validate_ticker(cls, v):
         """Validate and normalize ticker."""
         if not v or not v.strip():
-            raise ValueError('Ticker cannot be empty')
+            raise ValueError("Ticker cannot be empty")
         return v.upper().strip()
 
 
 class ScoredCandidateCreate(BaseModel):
     """Pydantic model for creating a scored candidate."""
+
     candidate: CandidateCreate
     transient_metrics: TransientMetricsCreate
     squeeze_score: float = Field(..., ge=0, le=1)
-    alert_level: Optional[AlertLevel] = None
+    alert_level: AlertLevel | None = None
 
 
 class AlertCreate(BaseModel):
     """Pydantic model for creating an alert."""
+
     ticker: str = Field(..., min_length=1, max_length=10)
     alert_level: AlertLevel
     reason: str = Field(..., min_length=1)
     squeeze_score: float = Field(..., ge=0, le=1)
-    cooldown_expires: Optional[datetime] = None
+    cooldown_expires: datetime | None = None
 
-    @field_validator('ticker')
+    @field_validator("ticker")
     def validate_ticker(cls, v):
         """Validate and normalize ticker."""
         if not v or not v.strip():
-            raise ValueError('Ticker cannot be empty')
+            raise ValueError("Ticker cannot be empty")
         return v.upper().strip()
 
 
 class AdHocCandidateCreate(BaseModel):
     """Pydantic model for creating an ad-hoc candidate."""
+
     ticker: str = Field(..., min_length=1, max_length=10)
     reason: str = Field(..., min_length=1)
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
 
-    @field_validator('ticker')
+    @field_validator("ticker")
     def validate_ticker(cls, v):
         """Validate and normalize ticker."""
         if not v or not v.strip():
-            raise ValueError('Ticker cannot be empty')
+            raise ValueError("Ticker cannot be empty")
         return v.upper().strip()
 
 

@@ -29,7 +29,7 @@ def example_basic_usage():
     stats = downloader.download_fundamentals(
         tickers=tickers,
         provider="yf",  # Yahoo Finance (no API key needed)
-        show_progress=True
+        show_progress=True,
     )
 
     print(f"Download completed: {stats['successful_downloads']} successful, {stats['failed_downloads']} failed")
@@ -52,11 +52,7 @@ def example_batch_processing():
     downloader = FundamentalsDownloader(max_workers=3)
 
     # Download fundamentals
-    stats = downloader.download_fundamentals(
-        tickers=tickers,
-        provider="yf",
-        show_progress=True
-    )
+    stats = downloader.download_fundamentals(tickers=tickers, provider="yf", show_progress=True)
 
     print(f"Batch download completed: {stats['successful_downloads']} successful, {stats['failed_downloads']} failed")
 
@@ -91,12 +87,7 @@ def example_force_refresh():
     downloader = FundamentalsDownloader()
 
     # Force refresh even if cache is valid
-    stats = downloader.download_fundamentals(
-        tickers=["AAPL"],
-        provider="yf",
-        force_refresh=True,
-        show_progress=True
-    )
+    stats = downloader.download_fundamentals(tickers=["AAPL"], provider="yf", force_refresh=True, show_progress=True)
 
     print(f"Force refresh completed: {stats['successful_downloads']} successful")
 
@@ -115,11 +106,7 @@ def example_multiple_providers():
     for provider in providers:
         print(f"\nDownloading {ticker} from {provider}...")
         try:
-            stats = downloader.download_fundamentals(
-                tickers=[ticker],
-                provider=provider,
-                show_progress=True
-            )
+            stats = downloader.download_fundamentals(tickers=[ticker], provider=provider, show_progress=True)
             print(f"Provider {provider}: {stats['successful_downloads']} successful")
         except Exception as e:
             print(f"Provider {provider} failed: {e}")

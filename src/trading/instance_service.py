@@ -11,11 +11,11 @@ over when a second StrategyManager is created (tests, hot-reload).
 """
 
 import asyncio
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List
 
-from src.trading.strategy_instance import StrategyInstance
 from src.notification.logger import setup_logger
 from src.notification.service.client import NotificationServiceClient
+from src.trading.strategy_instance import StrategyInstance
 
 _logger = setup_logger(__name__)
 
@@ -32,7 +32,7 @@ class InstanceService:
 
     def __init__(
         self,
-        notification_client: Optional[NotificationServiceClient] = None,
+        notification_client: NotificationServiceClient | None = None,
         trade_repository: Any = None,
     ):
         """
@@ -65,7 +65,7 @@ class InstanceService:
             instance_id=instance_id,
             config=config,
             notification_client=self.notification_client,
-            trade_repository=self.trade_repository
+            trade_repository=self.trade_repository,
         )
         self.instances[instance_id] = instance
         _logger.info("Created strategy instance: %s (%s)", instance.name, instance_id)
@@ -95,7 +95,7 @@ class InstanceService:
             await asyncio.gather(*stop_tasks)
         _logger.info("All instances stopped.")
 
-    def get_instance_status(self, instance_id: str) -> Optional[Dict[str, Any]]:
+    def get_instance_status(self, instance_id: str) -> Dict[str, Any] | None:
         """Get status of a specific instance."""
         if instance_id in self.instances:
             return self.instances[instance_id].get_status()
@@ -108,7 +108,7 @@ class InstanceService:
     def remove_instance(self, instance_id: str) -> bool:
         """Remove an instance from the service (must be stopped first)."""
         if instance_id in self.instances:
-            if self.instances[instance_id].status == 'running':
+            if self.instances[instance_id].status == "running":
                 _logger.error("Cannot remove running instance %s", instance_id)
                 return False
             del self.instances[instance_id]

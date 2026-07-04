@@ -1,10 +1,11 @@
-import asyncio
 from typing import List
+
+from src.notification.logger import setup_logger
 from src.screeners.discovery.base import IDiscoveryProvider
 from src.trading.broker.ibkr_broker import IBKRBroker
-from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class PortfolioDiscovery(IDiscoveryProvider):
     """

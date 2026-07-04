@@ -13,27 +13,32 @@ Checks (in the filing's recent submissions JSON):
 Total penalty is the SUM of all applicable penalties.
 """
 
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-import sys
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.data.downloader.edgar_downloader import EdgarDownloader
 from src.ml.pipeline.p17_penny_stocks.config import P17ScoringConfig
 from src.ml.pipeline.p17_penny_stocks.models.candidate import Candidate
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
 _SHELF_FORMS = {"S-3", "S-3ASR", "S-1", "S-1/A"}
 _ATM_FORMS = {"424B1", "424B2", "424B3", "424B4", "424B5", "424B8", "FWP"}
 _REVERSE_SPLIT_KEYWORDS = {"reverse split", "reverse stock split", "rs effective"}
-_CONVERTIBLE_KEYWORDS = {"convertible note", "convertible debenture", "at-the-market",
-                         "atm agreement", "equity distribution"}
+_CONVERTIBLE_KEYWORDS = {
+    "convertible note",
+    "convertible debenture",
+    "at-the-market",
+    "atm agreement",
+    "equity distribution",
+}
 _WARRANT_KEYWORDS = {"warrant", "warrants issued", "warrant exercise"}
 
 
@@ -179,7 +184,7 @@ class DilutionAgent:
             return {}
 
     @staticmethod
-    def _parse_date(date_str: str) -> Optional[datetime]:
+    def _parse_date(date_str: str) -> datetime | None:
         for fmt in ("%Y-%m-%d", "%Y%m%d"):
             try:
                 return datetime.strptime(date_str, fmt)

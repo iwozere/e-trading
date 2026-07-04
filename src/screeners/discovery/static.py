@@ -2,8 +2,8 @@ import json
 from pathlib import Path
 from typing import List, Union
 
-from src.screeners.discovery.base import IDiscoveryProvider
 from src.notification.logger import setup_logger
+from src.screeners.discovery.base import IDiscoveryProvider
 
 _logger = setup_logger(__name__)
 
@@ -24,7 +24,7 @@ class StaticDiscovery(IDiscoveryProvider):
 
         try:
             data = json.loads(self.file_path.read_text(encoding="utf-8"))
-            symbols = data.get('symbols', [])
+            symbols = data.get("symbols", [])
             _logger.info("Loaded %d symbols from static watchlist.", len(symbols))
             return symbols
         except Exception as e:

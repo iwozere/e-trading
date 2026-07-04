@@ -102,10 +102,12 @@ def test_individual_vs_batch_vs_optimized():
             batch_fund = batch_fundamentals[ticker]
             opt_fund = optimized_fundamentals[ticker]
 
-            if (ind_fund.company_name == batch_fund.company_name == opt_fund.company_name):
+            if ind_fund.company_name == batch_fund.company_name == opt_fund.company_name:
                 print(f"  ✅ {ticker}: {ind_fund.company_name} (all consistent)")
             else:
-                print(f"  ⚠️  {ticker}: Individual='{ind_fund.company_name}', Batch='{batch_fund.company_name}', Optimized='{opt_fund.company_name}'")
+                print(
+                    f"  ⚠️  {ticker}: Individual='{ind_fund.company_name}', Batch='{batch_fund.company_name}', Optimized='{opt_fund.company_name}'"
+                )
         else:
             print(f"  ❌ {ticker}: Missing data in one or more methods")
 
@@ -117,9 +119,36 @@ def test_large_scale_optimized():
 
     # Larger test set
     large_tickers = [
-        "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "NFLX", "JPM", "JNJ",
-        "V", "PG", "UNH", "HD", "MA", "DIS", "PYPL", "BAC", "ADBE", "CRM",
-        "NKE", "CMCSA", "XOM", "VZ", "ABT", "KO", "PEP", "TMO", "COST", "AVGO"
+        "AAPL",
+        "MSFT",
+        "GOOGL",
+        "AMZN",
+        "TSLA",
+        "META",
+        "NVDA",
+        "NFLX",
+        "JPM",
+        "JNJ",
+        "V",
+        "PG",
+        "UNH",
+        "HD",
+        "MA",
+        "DIS",
+        "PYPL",
+        "BAC",
+        "ADBE",
+        "CRM",
+        "NKE",
+        "CMCSA",
+        "XOM",
+        "VZ",
+        "ABT",
+        "KO",
+        "PEP",
+        "TMO",
+        "COST",
+        "AVGO",
     ]
 
     downloader = YahooDataDownloader()
@@ -136,7 +165,9 @@ def test_large_scale_optimized():
         fundamentals_time = time.time() - start_time
         successful_fundamentals = len([f for f in fundamentals_results.values() if f.company_name != "Unknown"])
         print(f"  Completed in {fundamentals_time:.2f} seconds")
-        print(f"  Success rate: {successful_fundamentals}/{len(large_tickers)} ({successful_fundamentals/len(large_tickers)*100:.1f}%)")
+        print(
+            f"  Success rate: {successful_fundamentals}/{len(large_tickers)} ({successful_fundamentals / len(large_tickers) * 100:.1f}%)"
+        )
 
         # Show some sample results
         print("\n  Sample Results:")
@@ -159,29 +190,21 @@ def test_enhanced_screener_optimized():
     test_config = {
         "screener_type": "hybrid",
         "list_type": "us_medium_cap",
-        "fundamental_criteria": [
-            {
-                "indicator": "PE",
-                "operator": "max",
-                "value": 25,
-                "weight": 1.0,
-                "required": True
-            }
-        ],
+        "fundamental_criteria": [{"indicator": "PE", "operator": "max", "value": 25, "weight": 1.0, "required": True}],
         "technical_criteria": [
             {
                 "indicator": "RSI",
                 "parameters": {"period": 14},
                 "condition": {"operator": "range", "min": 20, "max": 80},
                 "weight": 0.6,
-                "required": False
+                "required": False,
             }
         ],
         "period": "3mo",
         "interval": "1d",
         "max_results": 5,
         "min_score": 5.0,
-        "email": False
+        "email": False,
     }
 
     try:

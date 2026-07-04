@@ -2,18 +2,19 @@ import asyncio
 import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import List, Dict, Any, Type, Optional
+from typing import Any, Dict, List, Type
 
 from src.data.downloader.ibkr_downloader import IBKRDownloader
-from src.screeners.logic.strategy_bridge import ScreenerStrategyBridge
+from src.notification.logger import setup_logger
 from src.screeners.discovery.base import IDiscoveryProvider
 from src.screeners.logic.notifier import SignalNotifier
+from src.screeners.logic.strategy_bridge import ScreenerStrategyBridge
 from src.strategy.base_strategy import BaseStrategy
-from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class IBKRScreenerService:
     """
@@ -21,14 +22,16 @@ class IBKRScreenerService:
     Manages discovery, data gaps, strategy execution, and results.
     """
 
-    def __init__(self,
-                 strategy_class: Type[BaseStrategy],
-                 strategy_config: Dict[str, Any],
-                 discovery_providers: List[IDiscoveryProvider],
-                 notifier: Optional[SignalNotifier] = None,
-                 interval: str = '1h',
-                 concurrency: int = 50,
-                 downloader: Optional[IBKRDownloader] = None):
+    def __init__(
+        self,
+        strategy_class: Type[BaseStrategy],
+        strategy_config: Dict[str, Any],
+        discovery_providers: List[IDiscoveryProvider],
+        notifier: SignalNotifier | None = None,
+        interval: str = "1h",
+        concurrency: int = 50,
+        downloader: IBKRDownloader | None = None,
+    ):
         """
         Initialize the service.
 
@@ -94,7 +97,7 @@ class IBKRScreenerService:
         #    notification channels on every scan interval.
         new_signals = []
         for result in valid_results:
-            symbol = result.get('symbol', '')
+            symbol = result.get("symbol", "")
             fp = self._signal_fingerprint(result)
             if self._seen_signals.get(symbol) != fp:
                 self._seen_signals[symbol] = fp
@@ -106,8 +109,7 @@ class IBKRScreenerService:
             await self.notifier.notify_signals(new_signals)
 
         _logger.info(
-            "Scan loop complete. %d signals generated, %d new (de-duplicated).",
-            len(valid_results), len(new_signals)
+            "Scan loop complete. %d signals generated, %d new (de-duplicated).", len(valid_results), len(new_signals)
         )
         return valid_results
 
@@ -124,12 +126,12 @@ class IBKRScreenerService:
         Returns:
             Hex MD5 digest of the sorted, serialised result content.
         """
-        _VOLATILE_KEYS = frozenset(('timestamp', 'scan_time', 'date'))
+        _VOLATILE_KEYS = frozenset(("timestamp", "scan_time", "date"))
         filtered = {k: v for k, v in result.items() if k not in _VOLATILE_KEYS}
         payload = json.dumps(filtered, sort_keys=True, default=str).encode()
         return hashlib.md5(payload).hexdigest()
 
-    async def _process_symbol(self, symbol: str) -> Optional[Dict[str, Any]]:
+    async def _process_symbol(self, symbol: str) -> Dict[str, Any] | None:
         """Handles the flow for a single symbol with concurrency limiting."""
         async with self.concurrency_limit:
             try:
@@ -137,8 +139,8 @@ class IBKRScreenerService:
 
                 # A. Download Data
                 # We need enough data for the strategy warmup
-                warmup = self.strategy_config.get('warmup_period', 100)
-                start_date = datetime.now(timezone.utc) - timedelta(days=warmup * 2)
+                warmup = self.strategy_config.get("warmup_period", 100)
+                start_date = datetime.now(UTC) - timedelta(days=warmup * 2)
 
                 # Downloader handles caching internally.
                 # get_ohlcv is synchronous/I-O-bound — run it in the thread pool so we
@@ -150,8 +152,8 @@ class IBKRScreenerService:
                         symbol=symbol,
                         interval=self.interval,
                         start_date=start_date,
-                        end_date=datetime.now(timezone.utc)
-                    )
+                        end_date=datetime.now(UTC),
+                    ),
                 )
 
                 if df.empty or len(df) < 10:
@@ -172,17 +174,15 @@ class IBKRScreenerService:
         if not results:
             return
 
-        now_utc = datetime.now(timezone.utc)
+        now_utc = datetime.now(UTC)
         timestamp = now_utc.strftime("%Y%m%d_%H%M%S")
         file_path = self.results_dir / f"signals_{timestamp}.json"
 
         try:
-            with open(file_path, 'w') as f:
-                json.dump({
-                    "scan_time": now_utc.isoformat(),
-                    "total_symbols": len(results),
-                    "signals": results
-                }, f, indent=2)
+            with open(file_path, "w") as f:
+                json.dump(
+                    {"scan_time": now_utc.isoformat(), "total_symbols": len(results), "signals": results}, f, indent=2
+                )
             _logger.info("Saved scan results to %s", file_path)
         except Exception as e:
             _logger.error("Failed to save results: %s", e)
@@ -206,11 +206,11 @@ class IBKRScreenerService:
         while True:
             try:
                 await self.run_once()
-                backoff = 1 # Reset on success
+                backoff = 1  # Reset on success
             except Exception as e:
                 _logger.error("Error in screener loop: %s. Retrying in %ds", e, backoff * 60)
                 await asyncio.sleep(backoff * 60)
-                backoff = min(backoff * 2, 30) # Max 30 min backoff
+                backoff = min(backoff * 2, 30)  # Max 30 min backoff
                 continue
 
             _logger.info("Waiting %d minutes for next scan...", run_every_minutes)

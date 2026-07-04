@@ -10,27 +10,28 @@ Main configuration manager that handles:
 - Configuration templates
 """
 
-import os
 import json
-from typing import Dict, List, Optional, Any
-from pathlib import Path
+import os
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List
+
 import yaml
-from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from src.notification.logger import setup_logger
+from watchdog.observers import Observer
 
-
-from src.model.schemas import (
-    ConfigSchema,
-    TradingConfig,
-    OptimizerConfig,
-    DataConfig,
-)
 from src.config.registry import ConfigRegistry
 from src.config.templates import ConfigTemplates
+from src.model.schemas import (
+    ConfigSchema,
+    DataConfig,
+    OptimizerConfig,
+    TradingConfig,
+)
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class ConfigFileHandler(FileSystemEventHandler):
     """File system event handler for configuration hot-reloading"""
@@ -39,7 +40,7 @@ class ConfigFileHandler(FileSystemEventHandler):
         self.config_manager = config_manager
 
     def on_modified(self, event):
-        if not event.is_directory and event.src_path.endswith(('.json', '.yaml', '.yml')):
+        if not event.is_directory and event.src_path.endswith((".json", ".yaml", ".yml")):
             _logger.info("Configuration file modified: %s", event.src_path)
             self.config_manager.reload_config(event.src_path)
 
@@ -97,19 +98,19 @@ class ConfigManager:
             for config_file in env_dir.rglob("*.yml"):
                 self._load_config_file(config_file)
 
-    def _load_config_file(self, config_path: Path) -> Optional[Dict[str, Any]]:
+    def _load_config_file(self, config_path: Path) -> Dict[str, Any] | None:
         """Load a single configuration file"""
         try:
-            if config_path.suffix.lower() in ['.yaml', '.yml']:
-                with open(config_path, 'r') as f:
+            if config_path.suffix.lower() in [".yaml", ".yml"]:
+                with open(config_path) as f:
                     config = yaml.safe_load(f)
             else:
-                with open(config_path, 'r') as f:
+                with open(config_path) as f:
                     config = json.load(f)
 
             # Add metadata
-            config['_file_path'] = str(config_path)
-            config['_loaded_at'] = datetime.now().isoformat()
+            config["_file_path"] = str(config_path)
+            config["_loaded_at"] = datetime.now().isoformat()
 
             # Validate and cache
             self._validate_and_cache_config(config, config_path)
@@ -152,11 +153,11 @@ class ConfigManager:
 
     def _detect_config_type(self, config: Dict[str, Any]) -> str:
         """Detect configuration type based on content"""
-        if 'bot_id' in config and 'broker' in config:
+        if "bot_id" in config and "broker" in config:
             return "trading"
-        elif 'optimizer_type' in config or 'n_trials' in config:
+        elif "optimizer_type" in config or "n_trials" in config:
             return "optimizer"
-        elif 'data_source' in config and 'symbol' in config:
+        elif "data_source" in config and "symbol" in config:
             return "data"
         else:
             return "generic"
@@ -165,9 +166,9 @@ class ConfigManager:
         """Generate a unique configuration ID"""
         # Use relative path from config directory
         relative_path = config_path.relative_to(self.config_dir)
-        return str(relative_path).replace('/', '_').replace('\\', '_').replace('.', '_')
+        return str(relative_path).replace("/", "_").replace("\\", "_").replace(".", "_")
 
-    def get_config(self, config_id: str) -> Optional[Any]:
+    def get_config(self, config_id: str) -> Any | None:
         """Get a configuration by ID"""
         return self._config_cache.get(config_id)
 
@@ -210,10 +211,10 @@ class ConfigManager:
     def save_config(self, config: Any, filename: str = None) -> str:
         """Save a configuration to file"""
         if not filename:
-            if hasattr(config, 'bot_id'):
+            if hasattr(config, "bot_id"):
                 filename = "%s.json" % config.bot_id
             else:
-                filename = "config_%s.json" % datetime.now().strftime('%Y%m%d_%H%M%S')
+                filename = "config_%s.json" % datetime.now().strftime("%Y%m%d_%H%M%S")
 
         config_path = self.config_dir / self.environment / filename
 
@@ -222,9 +223,9 @@ class ConfigManager:
 
         # Convert to dict and save
         config_dict = config.dict()
-        config_dict['updated_at'] = datetime.now().isoformat()
+        config_dict["updated_at"] = datetime.now().isoformat()
 
-        with open(config_path, 'w') as f:
+        with open(config_path, "w") as f:
             json.dump(config_dict, f, indent=2, default=str)
 
         # Reload the config
@@ -283,7 +284,7 @@ class ConfigManager:
         env_config_file = self.config_dir / "%s.json" % self.environment
 
         if env_config_file.exists():
-            with open(env_config_file, 'r') as f:
+            with open(env_config_file) as f:
                 env_config = json.load(f)
                 return env_config.get(key, default)
 
@@ -316,7 +317,7 @@ class ConfigManager:
             "config_dir": str(self.config_dir),
             "total_configs": len(self._config_cache),
             "configs_by_type": self.list_configs(),
-            "hot_reload_enabled": self._hot_reload_enabled
+            "hot_reload_enabled": self._hot_reload_enabled,
         }
         return summary
 

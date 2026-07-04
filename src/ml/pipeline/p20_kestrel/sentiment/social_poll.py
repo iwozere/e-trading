@@ -12,7 +12,7 @@ import sys
 import time
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
@@ -38,7 +38,7 @@ _REDDIT_SEARCH_URL = "https://oauth.reddit.com/r/{sub}/search.json"
 _STOCKTWITS_DELAY = 2.1  # seconds between calls
 
 
-def _fetch_stocktwits(ticker: str) -> Optional[Dict[str, Any]]:
+def _fetch_stocktwits(ticker: str) -> Dict[str, Any] | None:
     """
     Fetch StockTwits public stream for a ticker.
 
@@ -85,11 +85,7 @@ def _fetch_apewisdom() -> Dict[str, int]:
         resp.raise_for_status()
         data = resp.json()
         results = data.get("results", [])
-        return {
-            str(r.get("ticker", "")).upper(): int(r.get("mentions", 0))
-            for r in results
-            if r.get("ticker")
-        }
+        return {str(r.get("ticker", "")).upper(): int(r.get("mentions", 0)) for r in results if r.get("ticker")}
     except Exception:
         _logger.debug("ApeWisdom fetch failed")
         return {}
@@ -132,7 +128,7 @@ def _fetch_reddit(ticker: str, reddit_headers: Dict[str, str]) -> int:
     return total
 
 
-def _get_reddit_headers() -> Optional[Dict[str, str]]:
+def _get_reddit_headers() -> Dict[str, str] | None:
     """
     Get Reddit OAuth bearer headers via app-only (client_credentials) flow.
 
@@ -144,6 +140,7 @@ def _get_reddit_headers() -> Optional[Dict[str, str]]:
         Bearer headers dict, or None if credentials missing or auth fails.
     """
     import os
+
     client_id = os.environ.get("REDDIT_API_KEY", "")
     client_secret = os.environ.get("REDDIT_API_SECRET", "")
     user_agent = os.environ.get("REDDIT_USER_AGENT", "") or "KestrelBot/1.0"
@@ -168,7 +165,7 @@ def _get_reddit_headers() -> Optional[Dict[str, str]]:
         return None
 
 
-def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
+def run(as_of_date: date | None = None) -> Dict[str, Any]:
     """
     Poll social sources for all watchlist tickers and upsert sentiment.
 
@@ -212,23 +209,27 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
             if reddit_headers:
                 reddit_mentions = _fetch_reddit(ticker, reddit_headers)
                 if reddit_mentions > 0:
-                    all_rows.append({
-                        "ticker": ticker,
-                        "date": target_date,
-                        "source": "reddit",
-                        "mentions": reddit_mentions,
-                    })
+                    all_rows.append(
+                        {
+                            "ticker": ticker,
+                            "date": target_date,
+                            "source": "reddit",
+                            "mentions": reddit_mentions,
+                        }
+                    )
                     reddit_ok += 1
 
             # ApeWisdom cross-check
             ape_mentions = apewisdom.get(ticker, 0)
             if ape_mentions > 0:
-                all_rows.append({
-                    "ticker": ticker,
-                    "date": target_date,
-                    "source": "apewisdom",
-                    "mentions": ape_mentions,
-                })
+                all_rows.append(
+                    {
+                        "ticker": ticker,
+                        "date": target_date,
+                        "source": "apewisdom",
+                        "mentions": ape_mentions,
+                    }
+                )
 
         rows_upserted = upsert_sentiment(all_rows)
         summary = {

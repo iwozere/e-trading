@@ -6,14 +6,15 @@ Advanced Strategy Framework for composite strategies, multi-timeframe support,
 and dynamic switching.
 """
 
+from typing import Any, Dict
+
 import backtrader as bt
 import pandas as pd
-from typing import Dict, Optional, Any
-from src.notification.logger import setup_logger
 
-from src.strategy.future.composite_strategy_manager import AdvancedStrategyFramework, CompositeSignal
+from src.notification.logger import setup_logger
 from src.strategy.entry.entry_mixin_factory import EntryMixinFactory
 from src.strategy.exit.exit_mixin_factory import ExitMixinFactory
+from src.strategy.future.composite_strategy_manager import AdvancedStrategyFramework, CompositeSignal
 
 logger = setup_logger(__name__)
 
@@ -30,13 +31,13 @@ class AdvancedBacktraderStrategy(bt.Strategy):
     """
 
     params = (
-        ('strategy_name', 'momentum_trend_composite'),
-        ('use_dynamic_switching', True),
-        ('max_position_size', 0.1),
-        ('stop_loss_pct', 0.02),
-        ('take_profit_pct', 0.04),
-        ('use_trailing_stop', True),
-        ('trailing_stop_pct', 0.01),
+        ("strategy_name", "momentum_trend_composite"),
+        ("use_dynamic_switching", True),
+        ("max_position_size", 0.1),
+        ("stop_loss_pct", 0.02),
+        ("take_profit_pct", 0.04),
+        ("use_trailing_stop", True),
+        ("trailing_stop_pct", 0.01),
     )
 
     def __init__(self):
@@ -58,13 +59,13 @@ class AdvancedBacktraderStrategy(bt.Strategy):
         # Performance tracking
         self.trade_history = []
         self.performance_metrics = {
-            'total_trades': 0,
-            'winning_trades': 0,
-            'losing_trades': 0,
-            'total_pnl': 0.0,
-            'max_drawdown': 0.0,
-            'current_drawdown': 0.0,
-            'peak_value': 0.0
+            "total_trades": 0,
+            "winning_trades": 0,
+            "losing_trades": 0,
+            "total_pnl": 0.0,
+            "max_drawdown": 0.0,
+            "current_drawdown": 0.0,
+            "peak_value": 0.0,
         }
 
         # Initialize data feeds for multi-timeframe analysis
@@ -82,29 +83,29 @@ class AdvancedBacktraderStrategy(bt.Strategy):
         """Initialize data feeds for different timeframes."""
         # Primary data feed (from Backtrader)
         primary_data = {
-            'datetime': [d.datetime.datetime() for d in self.datas[0]],
-            'open': [d.open[0] for d in self.datas[0]],
-            'high': [d.high[0] for d in self.datas[0]],
-            'low': [d.low[0] for d in self.datas[0]],
-            'close': [d.close[0] for d in self.datas[0]],
-            'volume': [d.volume[0] for d in self.datas[0]]
+            "datetime": [d.datetime.datetime() for d in self.datas[0]],
+            "open": [d.open[0] for d in self.datas[0]],
+            "high": [d.high[0] for d in self.datas[0]],
+            "low": [d.low[0] for d in self.datas[0]],
+            "close": [d.close[0] for d in self.datas[0]],
+            "volume": [d.volume[0] for d in self.datas[0]],
         }
 
         # Create DataFrame for primary timeframe
-        self.data_feeds['1h'] = pd.DataFrame(primary_data)
-        self.data_feeds['1h']['datetime'] = pd.to_datetime(self.data_feeds['1h']['datetime'])
-        self.data_feeds['1h'].set_index('datetime', inplace=True)
+        self.data_feeds["1h"] = pd.DataFrame(primary_data)
+        self.data_feeds["1h"]["datetime"] = pd.to_datetime(self.data_feeds["1h"]["datetime"])
+        self.data_feeds["1h"].set_index("datetime", inplace=True)
 
         # Create resampled timeframes (simplified - in production, you'd use actual multi-timeframe data)
-        if len(self.data_feeds['1h']) > 0:
+        if len(self.data_feeds["1h"]) > 0:
             # 15-minute timeframe (aggregate 4 1-hour bars)
-            self.data_feeds['15m'] = self._resample_data(self.data_feeds['1h'], '15T')
+            self.data_feeds["15m"] = self._resample_data(self.data_feeds["1h"], "15T")
 
             # 4-hour timeframe (aggregate 4 1-hour bars)
-            self.data_feeds['4h'] = self._resample_data(self.data_feeds['1h'], '4H')
+            self.data_feeds["4h"] = self._resample_data(self.data_feeds["1h"], "4H")
 
             # Daily timeframe (aggregate 24 1-hour bars)
-            self.data_feeds['1d'] = self._resample_data(self.data_feeds['1h'], '1D')
+            self.data_feeds["1d"] = self._resample_data(self.data_feeds["1h"], "1D")
 
     def _resample_data(self, data: pd.DataFrame, timeframe: str) -> pd.DataFrame:
         """Resample data to different timeframe (simplified implementation)."""
@@ -114,13 +115,13 @@ class AdvancedBacktraderStrategy(bt.Strategy):
         # Simple resampling - in production, use proper OHLCV aggregation
         resampled = data.copy()
 
-        if timeframe == '15T':
+        if timeframe == "15T":
             # Take every 4th bar for 15-minute
             resampled = data.iloc[::4].copy()
-        elif timeframe == '4H':
+        elif timeframe == "4H":
             # Take every 4th bar for 4-hour
             resampled = data.iloc[::4].copy()
-        elif timeframe == '1D':
+        elif timeframe == "1D":
             # Take every 24th bar for daily
             resampled = data.iloc[::24].copy()
 
@@ -137,25 +138,25 @@ class AdvancedBacktraderStrategy(bt.Strategy):
 
         if strategy_config:
             # Initialize entry mixins
-            for strategy in strategy_config.get('strategies', []):
-                strategy_name = strategy.get('name', '')
+            for strategy in strategy_config.get("strategies", []):
+                strategy_name = strategy.get("name", "")
                 if strategy_name:
                     try:
-                        entry_mixin = entry_factory.create_entry_mixin(strategy_name, strategy.get('params', {}))
+                        entry_mixin = entry_factory.create_entry_mixin(strategy_name, strategy.get("params", {}))
                         self.entry_mixins[strategy_name] = entry_mixin
                     except Exception as e:
                         logger.warning("Could not initialize entry mixin for %s: %s", strategy_name, e)
 
             # Initialize exit mixins
-            exit_config = strategy_config.get('risk_management', {})
+            exit_config = strategy_config.get("risk_management", {})
             if exit_config:
                 try:
-                    exit_mixin = exit_factory.create_exit_mixin('atr_exit', exit_config)
-                    self.exit_mixins['atr_exit'] = exit_mixin
+                    exit_mixin = exit_factory.create_exit_mixin("atr_exit", exit_config)
+                    self.exit_mixins["atr_exit"] = exit_mixin
                 except Exception as e:
                     logger.warning("Could not initialize exit mixin: %s", e)
 
-    def _get_strategy_config(self) -> Optional[Dict]:
+    def _get_strategy_config(self) -> Dict | None:
         """Get configuration for the current strategy."""
         composite_configs = self.advanced_framework.configs.get("composite_strategies", {})
         return composite_configs.get("composite_strategies", {}).get(self.current_strategy)
@@ -177,10 +178,7 @@ class AdvancedBacktraderStrategy(bt.Strategy):
 
         # Generate trading signal using advanced framework
         try:
-            composite_signal = self.advanced_framework.execute_strategy(
-                self.current_strategy,
-                self.data_feeds
-            )
+            composite_signal = self.advanced_framework.execute_strategy(self.current_strategy, self.data_feeds)
             self.last_signal = composite_signal
 
             # Execute trading logic based on signal
@@ -203,20 +201,20 @@ class AdvancedBacktraderStrategy(bt.Strategy):
 
         # Update primary data feed
         current_data = {
-            'datetime': self.datas[0].datetime.datetime(),
-            'open': self.datas[0].open[0],
-            'high': self.datas[0].high[0],
-            'low': self.datas[0].low[0],
-            'close': self.datas[0].close[0],
-            'volume': self.datas[0].volume[0]
+            "datetime": self.datas[0].datetime.datetime(),
+            "open": self.datas[0].open[0],
+            "high": self.datas[0].high[0],
+            "low": self.datas[0].low[0],
+            "close": self.datas[0].close[0],
+            "volume": self.datas[0].volume[0],
         }
 
         # Add to primary timeframe
         new_row = pd.DataFrame([current_data])
-        new_row['datetime'] = pd.to_datetime(new_row['datetime'])
-        new_row.set_index('datetime', inplace=True)
+        new_row["datetime"] = pd.to_datetime(new_row["datetime"])
+        new_row.set_index("datetime", inplace=True)
 
-        self.data_feeds['1h'] = pd.concat([self.data_feeds['1h'], new_row])
+        self.data_feeds["1h"] = pd.concat([self.data_feeds["1h"], new_row])
 
         # Keep only recent data (last 1000 bars)
         for timeframe in self.data_feeds:
@@ -224,10 +222,10 @@ class AdvancedBacktraderStrategy(bt.Strategy):
                 self.data_feeds[timeframe] = self.data_feeds[timeframe].tail(1000)
 
         # Update resampled timeframes
-        if len(self.data_feeds['1h']) > 0:
-            self.data_feeds['15m'] = self._resample_data(self.data_feeds['1h'], '15T')
-            self.data_feeds['4h'] = self._resample_data(self.data_feeds['1h'], '4H')
-            self.data_feeds['1d'] = self._resample_data(self.data_feeds['1h'], '1D')
+        if len(self.data_feeds["1h"]) > 0:
+            self.data_feeds["15m"] = self._resample_data(self.data_feeds["1h"], "15T")
+            self.data_feeds["4h"] = self._resample_data(self.data_feeds["1h"], "4H")
+            self.data_feeds["1d"] = self._resample_data(self.data_feeds["1h"], "1D")
 
     def _execute_trading_logic(self, signal: CompositeSignal):
         """
@@ -268,7 +266,13 @@ class AdvancedBacktraderStrategy(bt.Strategy):
         self.position_entry_price = current_price
         self.trailing_stop_price = stop_loss
 
-        logger.info("BUY signal executed: Price=%.4f, Size=%s, Stop=%.4f, TP=%.4f", current_price, position_size, stop_loss, take_profit)
+        logger.info(
+            "BUY signal executed: Price=%.4f, Size=%s, Stop=%.4f, TP=%.4f",
+            current_price,
+            position_size,
+            stop_loss,
+            take_profit,
+        )
 
     def _execute_sell_signal(self, signal: CompositeSignal, current_price: float):
         """Execute sell signal."""
@@ -286,13 +290,24 @@ class AdvancedBacktraderStrategy(bt.Strategy):
         self.position_entry_price = current_price
         self.trailing_stop_price = stop_loss
 
-        logger.info("SELL signal executed: Price=%.4f, Size=%s, Stop=%.4f, TP=%.4f", current_price, position_size, stop_loss, take_profit)
+        logger.info(
+            "SELL signal executed: Price=%.4f, Size=%s, Stop=%.4f, TP=%.4f",
+            current_price,
+            position_size,
+            stop_loss,
+            take_profit,
+        )
 
     def _execute_exit_signal(self, signal: CompositeSignal, current_price: float):
         """Execute exit signal."""
         if self.position:
             self.close()
-            logger.info("EXIT signal executed: Price=%.4f, Size=%s, PnL=%.2f", current_price, self.position.size, self.position.pnl)
+            logger.info(
+                "EXIT signal executed: Price=%.4f, Size=%s, PnL=%.2f",
+                current_price,
+                self.position.size,
+                self.position.pnl,
+            )
 
     def _calculate_position_size(self, confidence: float) -> float:
         """Calculate position size based on confidence and risk management."""
@@ -336,51 +351,56 @@ class AdvancedBacktraderStrategy(bt.Strategy):
         # Update peak value and drawdown
         current_value = self.broker.getvalue()
 
-        if current_value > self.performance_metrics['peak_value']:
-            self.performance_metrics['peak_value'] = current_value
+        if current_value > self.performance_metrics["peak_value"]:
+            self.performance_metrics["peak_value"] = current_value
 
-        if self.performance_metrics['peak_value'] > 0:
-            current_drawdown = (current_value - self.performance_metrics['peak_value']) / self.performance_metrics['peak_value']
-            self.performance_metrics['current_drawdown'] = current_drawdown
+        if self.performance_metrics["peak_value"] > 0:
+            current_drawdown = (current_value - self.performance_metrics["peak_value"]) / self.performance_metrics[
+                "peak_value"
+            ]
+            self.performance_metrics["current_drawdown"] = current_drawdown
 
-            if current_drawdown < self.performance_metrics['max_drawdown']:
-                self.performance_metrics['max_drawdown'] = current_drawdown
+            if current_drawdown < self.performance_metrics["max_drawdown"]:
+                self.performance_metrics["max_drawdown"] = current_drawdown
 
     def notify_trade(self, trade):
         """Called when a trade is completed."""
         if trade.isclosed:
             # Update trade statistics
-            self.performance_metrics['total_trades'] += 1
+            self.performance_metrics["total_trades"] += 1
 
             if trade.pnl > 0:
-                self.performance_metrics['winning_trades'] += 1
+                self.performance_metrics["winning_trades"] += 1
             else:
-                self.performance_metrics['losing_trades'] += 1
+                self.performance_metrics["losing_trades"] += 1
 
-            self.performance_metrics['total_pnl'] += trade.pnl
+            self.performance_metrics["total_pnl"] += trade.pnl
 
             # Calculate win rate
-            win_rate = (self.performance_metrics['winning_trades'] /
-                       self.performance_metrics['total_trades']) if self.performance_metrics['total_trades'] > 0 else 0
+            win_rate = (
+                (self.performance_metrics["winning_trades"] / self.performance_metrics["total_trades"])
+                if self.performance_metrics["total_trades"] > 0
+                else 0
+            )
 
             # Calculate Sharpe ratio (simplified)
-            if self.performance_metrics['total_trades'] > 0:
-                avg_pnl = self.performance_metrics['total_pnl'] / self.performance_metrics['total_trades']
+            if self.performance_metrics["total_trades"] > 0:
+                avg_pnl = self.performance_metrics["total_pnl"] / self.performance_metrics["total_trades"]
                 # This is a simplified Sharpe calculation - in production, use proper risk-free rate and volatility
-                sharpe_ratio = avg_pnl / max(abs(self.performance_metrics['max_drawdown']), 0.001)
+                sharpe_ratio = avg_pnl / max(abs(self.performance_metrics["max_drawdown"]), 0.001)
             else:
                 sharpe_ratio = 0.0
 
             # Store trade in history
             trade_record = {
-                'datetime': self.datas[0].datetime.datetime(),
-                'strategy': self.current_strategy,
-                'pnl': trade.pnl,
-                'size': trade.size,
-                'price': trade.price,
-                'win_rate': win_rate,
-                'sharpe_ratio': sharpe_ratio,
-                'max_drawdown': self.performance_metrics['max_drawdown']
+                "datetime": self.datas[0].datetime.datetime(),
+                "strategy": self.current_strategy,
+                "pnl": trade.pnl,
+                "size": trade.size,
+                "price": trade.price,
+                "win_rate": win_rate,
+                "sharpe_ratio": sharpe_ratio,
+                "max_drawdown": self.performance_metrics["max_drawdown"],
             }
             self.trade_history.append(trade_record)
 
@@ -388,27 +408,39 @@ class AdvancedBacktraderStrategy(bt.Strategy):
             self.advanced_framework.update_performance(
                 self.current_strategy,
                 {
-                    'sharpe_ratio': sharpe_ratio,
-                    'win_rate': win_rate,
-                    'max_drawdown': self.performance_metrics['max_drawdown']
-                }
+                    "sharpe_ratio": sharpe_ratio,
+                    "win_rate": win_rate,
+                    "max_drawdown": self.performance_metrics["max_drawdown"],
+                },
             )
 
-            logger.info("Trade closed: PnL=%.2f, Win Rate=%.2f%%, Total Trades=%d, Win Trades=%d, Loss Trades=%d", trade.pnl, win_rate*100, self.performance_metrics['total_trades'], self.performance_metrics['winning_trades'], self.performance_metrics['losing_trades'])
+            logger.info(
+                "Trade closed: PnL=%.2f, Win Rate=%.2f%%, Total Trades=%d, Win Trades=%d, Loss Trades=%d",
+                trade.pnl,
+                win_rate * 100,
+                self.performance_metrics["total_trades"],
+                self.performance_metrics["winning_trades"],
+                self.performance_metrics["losing_trades"],
+            )
 
     def stop(self):
         """Called when the strategy stops."""
         logger.info("Advanced strategy stopped")
-        logger.info("Final performance: Total PnL=%.2f, Sharpe=%.2f, Max Drawdown=%.2f", self.performance_metrics['total_pnl'], self.performance_metrics['sharpe_ratio'], self.performance_metrics['max_drawdown'])
+        logger.info(
+            "Final performance: Total PnL=%.2f, Sharpe=%.2f, Max Drawdown=%.2f",
+            self.performance_metrics["total_pnl"],
+            self.performance_metrics["sharpe_ratio"],
+            self.performance_metrics["max_drawdown"],
+        )
 
     def get_strategy_summary(self) -> Dict[str, Any]:
         """Get summary of strategy performance and configuration."""
         return {
-            'strategy_name': self.current_strategy,
-            'performance_metrics': self.performance_metrics.copy(),
-            'trade_history': self.trade_history[-10:],  # Last 10 trades
-            'data_feeds': list(self.data_feeds.keys()),
-            'entry_mixins': list(self.entry_mixins.keys()),
-            'exit_mixins': list(self.exit_mixins.keys()),
-            'last_signal': self.last_signal.__dict__ if self.last_signal else None
+            "strategy_name": self.current_strategy,
+            "performance_metrics": self.performance_metrics.copy(),
+            "trade_history": self.trade_history[-10:],  # Last 10 trades
+            "data_feeds": list(self.data_feeds.keys()),
+            "entry_mixins": list(self.entry_mixins.keys()),
+            "exit_mixins": list(self.exit_mixins.keys()),
+            "last_signal": self.last_signal.__dict__ if self.last_signal else None,
         }

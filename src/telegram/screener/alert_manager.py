@@ -1,9 +1,10 @@
-import json
-from typing import Any, Dict, List, Optional
-from src.telegram.command_parser import ParsedCommand
+from typing import Any, Dict
+
 from src.notification.logger import setup_logger
+from src.telegram.command_parser import ParsedCommand
 
 _logger = setup_logger(__name__)
+
 
 class AlertManager:
     """
@@ -36,7 +37,9 @@ class AlertManager:
                 email = parsed.args.get("email", False)
                 timeframe = parsed.args.get("timeframe", "15m")
                 alert_action = parsed.args.get("action_type", "notify")
-                return self.handle_alerts_add_indicator(telegram_user_id, ticker, config_json, timeframe, alert_action, email)
+                return self.handle_alerts_add_indicator(
+                    telegram_user_id, ticker, config_json, timeframe, alert_action, email
+                )
             elif action == "edit" and len(params) >= 1:
                 alert_id = params[0]
                 new_price = params[1] if len(params) > 1 else None
@@ -53,11 +56,7 @@ class AlertManager:
                 alert_id = params[0]
                 return self.handle_alerts_resume(telegram_user_id, alert_id)
             else:
-                return {
-                    "status": "error",
-                    "title": "Alerts Help",
-                    "message": self._get_alerts_help_text()
-                }
+                return {"status": "error", "title": "Alerts Help", "message": self._get_alerts_help_text()}
         except Exception as e:
             _logger.exception("Error in alerts command")
             return {"status": "error", "message": f"Error processing alerts command: {str(e)}"}
@@ -78,13 +77,17 @@ class AlertManager:
                 email_flag = "📧" if alert.get("email") else "💬"
                 alert_type = alert.get("alert_type", "price")
                 if alert_type == "price":
-                    alert_list.append(f"#{alert['id']}: {alert['ticker']} {alert['condition']} ${alert['price']:.2f} {email_flag} - {status}")
+                    alert_list.append(
+                        f"#{alert['id']}: {alert['ticker']} {alert['condition']} ${alert['price']:.2f} {email_flag} - {status}"
+                    )
                 else:
                     alert_type_icon = "📊" if alert_type == "indicator" else "❓"
                     timeframe = alert.get("timeframe", "15m")
                     action = alert.get("alert_action", "notify")
-                    condition_text = alert.get('condition', 'Unknown condition')
-                    alert_list.append(f"#{alert['id']}: {alert['ticker']} {alert_type_icon} {condition_text} ({timeframe}, {action}) {email_flag} - {status}")
+                    condition_text = alert.get("condition", "Unknown condition")
+                    alert_list.append(
+                        f"#{alert['id']}: {alert['ticker']} {alert_type_icon} {condition_text} ({timeframe}, {action}) {email_flag} - {status}"
+                    )
 
             message = f"Your alerts ({len(alerts)}):\n\n" + "\n".join(alert_list)
             return {"status": "ok", "title": "Your Alerts", "message": message}
@@ -92,14 +95,17 @@ class AlertManager:
             _logger.exception("Error listing alerts")
             return {"status": "error", "message": f"Error listing alerts: {str(e)}"}
 
-    def handle_alerts_add(self, telegram_user_id: str, ticker: str, price_str: str, condition: str, email: bool = False) -> Dict[str, Any]:
+    def handle_alerts_add(
+        self, telegram_user_id: str, ticker: str, price_str: str, condition: str, email: bool = False
+    ) -> Dict[str, Any]:
         """Add a new price alert."""
         try:
             if condition.lower() not in ["above", "below"]:
                 return {"status": "error", "message": "Condition must be 'above' or 'below'"}
             try:
                 price = float(price_str)
-                if price <= 0: raise ValueError()
+                if price <= 0:
+                    raise ValueError()
             except ValueError:
                 return {"status": "error", "message": "Price must be a positive number"}
 
@@ -112,7 +118,9 @@ class AlertManager:
             if len(current_alerts) >= max_alerts:
                 return {"status": "error", "message": f"Alert limit reached ({max_alerts}). Delete some alerts first."}
 
-            alert_id = self.telegram_service.add_alert(telegram_user_id, ticker.upper(), price, condition.lower(), email)
+            alert_id = self.telegram_service.add_alert(
+                telegram_user_id, ticker.upper(), price, condition.lower(), email
+            )
             if not alert_id:
                 return {"status": "error", "message": "Failed to create alert."}
 
@@ -120,13 +128,21 @@ class AlertManager:
             return {
                 "status": "ok",
                 "title": "Alert Added",
-                "message": f"Alert #{alert_id} created: {ticker.upper()} {condition.lower()} ${price:.2f}{email_text}\n🔄 Re-arm enabled."
+                "message": f"Alert #{alert_id} created: {ticker.upper()} {condition.lower()} ${price:.2f}{email_text}\n🔄 Re-arm enabled.",
             }
         except Exception as e:
             _logger.exception("Error adding alert")
             return {"status": "error", "message": f"Error adding alert: {str(e)}"}
 
-    def handle_alerts_add_indicator(self, telegram_user_id: str, ticker: str, config_json: str, timeframe: str = "15m", alert_action: str = "notify", email: bool = False) -> Dict[str, Any]:
+    def handle_alerts_add_indicator(
+        self,
+        telegram_user_id: str,
+        ticker: str,
+        config_json: str,
+        timeframe: str = "15m",
+        alert_action: str = "notify",
+        email: bool = False,
+    ) -> Dict[str, Any]:
         """Add a new indicator-based alert."""
         try:
             if not ticker or len(ticker.strip()) == 0:
@@ -134,7 +150,10 @@ class AlertManager:
 
             valid_timeframes = ["5m", "15m", "1h", "4h", "1d"]
             if timeframe not in valid_timeframes:
-                return {"status": "error", "message": f"Invalid timeframe. Must be one of: {', '.join(valid_timeframes)}"}
+                return {
+                    "status": "error",
+                    "message": f"Invalid timeframe. Must be one of: {', '.join(valid_timeframes)}",
+                }
 
             valid_actions = ["BUY", "SELL", "HOLD", "notify"]
             if alert_action not in valid_actions:
@@ -157,19 +176,26 @@ class AlertManager:
                 value=0.0,
                 timeframe=timeframe,
                 alert_action=alert_action,
-                email=email
+                email=email,
             )
             email_text = " and email" if email else ""
             return {
                 "status": "ok",
                 "title": "Indicator Alert Added",
-                "message": f"Alert #{alert_id} created: {ticker.upper()} Indicator Alert ({timeframe}){email_text}"
+                "message": f"Alert #{alert_id} created: {ticker.upper()} Indicator Alert ({timeframe}){email_text}",
             }
         except Exception as e:
             _logger.exception("Error adding indicator alert")
             return {"status": "error", "message": f"Error adding indicator alert: {str(e)}"}
 
-    def handle_alerts_edit(self, telegram_user_id: str, alert_id_str: str, new_price_str: str = None, new_condition: str = None, email: bool = None) -> Dict[str, Any]:
+    def handle_alerts_edit(
+        self,
+        telegram_user_id: str,
+        alert_id_str: str,
+        new_price_str: str = None,
+        new_condition: str = None,
+        email: bool = None,
+    ) -> Dict[str, Any]:
         """Edit an existing alert."""
         try:
             alert_id = int(alert_id_str)
@@ -196,7 +222,7 @@ class AlertManager:
             return {
                 "status": "ok",
                 "title": "Alert Updated",
-                "message": f"Alert #{alert_id} updated: {updated_alert['ticker']} {updated_alert['condition']} ${updated_alert['price']:.2f}"
+                "message": f"Alert #{alert_id} updated: {updated_alert['ticker']} {updated_alert['condition']} ${updated_alert['price']:.2f}",
             }
         except Exception as e:
             _logger.exception("Error editing alert")
@@ -213,7 +239,11 @@ class AlertManager:
                 return {"status": "error", "message": f"Alert #{alert_id} not found."}
 
             self.telegram_service.delete_alert(alert_id)
-            return {"status": "ok", "title": "Alert Deleted", "message": f"Alert #{alert_id} for {alert['ticker']} deleted."}
+            return {
+                "status": "ok",
+                "title": "Alert Deleted",
+                "message": f"Alert #{alert_id} for {alert['ticker']} deleted.",
+            }
         except Exception as e:
             _logger.exception("Error deleting alert")
             return {"status": "error", "message": f"Error deleting alert: {str(e)}"}
@@ -251,18 +281,20 @@ class AlertManager:
             return {"status": "error", "message": f"Error resuming alert: {str(e)}"}
 
     def _get_alerts_help_text(self) -> str:
-        return ("Available alert commands:\n"
-                "/alerts - List all alerts\n"
-                "/alerts add TICKER PRICE CONDITION [flags] - Add price alert\n"
-                "  CONDITION: above or below\n"
-                "  Example: /alerts add BTCUSDT 65000 above -email\n"
-                "/alerts add_indicator TICKER CONFIG_JSON [flags] - Add indicator alert\n"
-                "  Example: /alerts add_indicator AAPL '{\"type\":\"indicator\",\"indicator\":\"RSI\",\"condition\":{\"operator\":\"<\",\"value\":30}}' -email\n"
-                "Flags:\n"
-                "  -email: Send alert notification to email\n"
-                "  -timeframe=15m: Set timeframe (5m, 15m, 1h, 4h, 1d)\n"
-                "  -action_type=notify: Set action (BUY, SELL, HOLD, notify)\n"
-                "/alerts edit ALERT_ID [PRICE] [CONDITION] [flags] - Edit alert\n"
-                "/alerts delete ALERT_ID - Delete alert\n"
-                "/alerts pause ALERT_ID - Pause alert\n"
-                "/alerts resume ALERT_ID - Resume alert")
+        return (
+            "Available alert commands:\n"
+            "/alerts - List all alerts\n"
+            "/alerts add TICKER PRICE CONDITION [flags] - Add price alert\n"
+            "  CONDITION: above or below\n"
+            "  Example: /alerts add BTCUSDT 65000 above -email\n"
+            "/alerts add_indicator TICKER CONFIG_JSON [flags] - Add indicator alert\n"
+            '  Example: /alerts add_indicator AAPL \'{"type":"indicator","indicator":"RSI","condition":{"operator":"<","value":30}}\' -email\n'
+            "Flags:\n"
+            "  -email: Send alert notification to email\n"
+            "  -timeframe=15m: Set timeframe (5m, 15m, 1h, 4h, 1d)\n"
+            "  -action_type=notify: Set action (BUY, SELL, HOLD, notify)\n"
+            "/alerts edit ALERT_ID [PRICE] [CONDITION] [flags] - Edit alert\n"
+            "/alerts delete ALERT_ID - Delete alert\n"
+            "/alerts pause ALERT_ID - Pause alert\n"
+            "/alerts resume ALERT_ID - Resume alert"
+        )

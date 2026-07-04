@@ -14,23 +14,26 @@ Features:
 - Supports multiple objectives and Pareto optimization
 """
 
-import pandas as pd
-import numpy as np
-import yaml
-from pathlib import Path
 import json
-from datetime import datetime
-import optuna
-import talib
 import sys
+from datetime import datetime
+from pathlib import Path
 from typing import Dict
+
+import numpy as np
+import optuna
+import pandas as pd
+import talib
+import yaml
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
+
 
 class IndicatorOptimizer:
     def __init__(self, config_path: str = "config/pipeline/p01.yaml"):
@@ -42,20 +45,20 @@ class IndicatorOptimizer:
         """
         self.config_path = Path(config_path)
         self.config = self._load_config()
-        self.labeled_data_dir = Path(self.config['paths']['data_labeled'])
-        self.results_dir = Path(self.config['paths']['models_lstm'])
+        self.labeled_data_dir = Path(self.config["paths"]["data_labeled"])
+        self.results_dir = Path(self.config["paths"]["models_lstm"])
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
         # Optuna configuration
-        self.n_trials = self.config['optuna']['n_trials']
-        self.timeout = self.config['optuna'].get('timeout', 3600)
+        self.n_trials = self.config["optuna"]["n_trials"]
+        self.timeout = self.config["optuna"].get("timeout", 3600)
 
     def _load_config(self) -> dict:
         """Load configuration from YAML file."""
         if not self.config_path.exists():
             raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
 
-        with open(self.config_path, 'r') as f:
+        with open(self.config_path) as f:
             config = yaml.safe_load(f)
 
         _logger.info("Loaded configuration from %s", self.config_path)
@@ -75,40 +78,37 @@ class IndicatorOptimizer:
         df = df.copy()
 
         # Extract OHLCV arrays
-        high = df['high'].values
-        low = df['low'].values
-        close = df['close'].values
-        volume = df['volume'].values
+        high = df["high"].values
+        low = df["low"].values
+        close = df["close"].values
+        volume = df["volume"].values
 
         try:
             # RSI
-            if 'rsi_period' in params:
-                df['rsi'] = talib.RSI(close, timeperiod=params['rsi_period'])
+            if "rsi_period" in params:
+                df["rsi"] = talib.RSI(close, timeperiod=params["rsi_period"])
 
             # Bollinger Bands
-            if 'bb_period' in params and 'bb_std' in params:
+            if "bb_period" in params and "bb_std" in params:
                 bb_upper, bb_middle, bb_lower = talib.BBANDS(
-                    close,
-                    timeperiod=params['bb_period'],
-                    nbdevup=params['bb_std'],
-                    nbdevdn=params['bb_std']
+                    close, timeperiod=params["bb_period"], nbdevup=params["bb_std"], nbdevdn=params["bb_std"]
                 )
-                df['bb_upper'] = bb_upper
-                df['bb_middle'] = bb_middle
-                df['bb_lower'] = bb_lower
+                df["bb_upper"] = bb_upper
+                df["bb_middle"] = bb_middle
+                df["bb_lower"] = bb_lower
                 # Avoid division by zero in bb_position calculation
                 bb_range = bb_upper - bb_lower
                 # Use masked arrays to avoid division by zero warnings
                 mask = bb_range != 0
                 bb_position = np.full_like(close, 0.5)  # Default value
                 bb_position[mask] = (close[mask] - bb_lower[mask]) / bb_range[mask]
-                df['bb_position'] = bb_position
+                df["bb_position"] = bb_position
 
                 # Avoid division by zero in bb_width calculation
                 mask_width = bb_middle != 0
                 bb_width = np.full_like(close, 0)  # Default value
                 bb_width[mask_width] = bb_range[mask_width] / bb_middle[mask_width]
-                df['bb_width'] = bb_width
+                df["bb_width"] = bb_width
 
         except Exception as e:
             _logger.warning("Error calculating indicators with params %s: %s", params, str(e))
@@ -138,16 +138,16 @@ class IndicatorOptimizer:
             sell_signals = 0
 
             # RSI signals
-            if 'rsi' in df.columns and not pd.isna(df['rsi'].iloc[i]):
-                rsi = df['rsi'].iloc[i]
+            if "rsi" in df.columns and not pd.isna(df["rsi"].iloc[i]):
+                rsi = df["rsi"].iloc[i]
                 if rsi < 30:
                     buy_signals += 1
                 elif rsi > 70:
                     sell_signals += 1
 
             # Bollinger Bands signals
-            if 'bb_position' in df.columns and not pd.isna(df['bb_position'].iloc[i]):
-                bb_pos = df['bb_position'].iloc[i]
+            if "bb_position" in df.columns and not pd.isna(df["bb_position"].iloc[i]):
+                bb_pos = df["bb_position"].iloc[i]
                 if bb_pos < 0.2:  # Near lower band
                     buy_signals += 1
                 elif bb_pos > 0.8:  # Near upper band
@@ -161,7 +161,7 @@ class IndicatorOptimizer:
 
             signals.append(signal)
 
-        df['signal'] = signals
+        df["signal"] = signals
         return df
 
     def calculate_performance_metrics(self, df: pd.DataFrame) -> Dict:
@@ -174,21 +174,21 @@ class IndicatorOptimizer:
         Returns:
             Dict with performance metrics
         """
-        if 'signal' not in df.columns:
-            return {'sharpe_ratio': -999, 'profit_factor': 0, 'max_drawdown': 999}
+        if "signal" not in df.columns:
+            return {"sharpe_ratio": -999, "profit_factor": 0, "max_drawdown": 999}
 
         # Calculate returns
         df = df.copy()
-        df['price_return'] = df['close'].pct_change()
+        df["price_return"] = df["close"].pct_change()
 
         # Calculate strategy returns (shift signal by 1 to avoid look-ahead bias)
-        df['strategy_return'] = df['signal'].shift(1) * df['price_return']
+        df["strategy_return"] = df["signal"].shift(1) * df["price_return"]
         df = df.dropna()
 
         if len(df) < 10:  # Not enough data
-            return {'sharpe_ratio': -999, 'profit_factor': 0, 'max_drawdown': 999}
+            return {"sharpe_ratio": -999, "profit_factor": 0, "max_drawdown": 999}
 
-        strategy_returns = df['strategy_return']
+        strategy_returns = df["strategy_return"]
 
         # Handle NaN values in strategy returns
         strategy_returns = strategy_returns.fillna(0)
@@ -227,17 +227,17 @@ class IndicatorOptimizer:
         win_rate = (strategy_returns > 0).mean()
 
         # Number of trades
-        n_trades = (df['signal'].diff() != 0).sum()
+        n_trades = (df["signal"].diff() != 0).sum()
 
         return {
-            'sharpe_ratio': sharpe_ratio,
-            'profit_factor': profit_factor,
-            'max_drawdown': max_drawdown,
-            'total_return': total_return,
-            'win_rate': win_rate,
-            'n_trades': n_trades,
-            'avg_return': strategy_returns.mean(),
-            'volatility': strategy_returns.std()
+            "sharpe_ratio": sharpe_ratio,
+            "profit_factor": profit_factor,
+            "max_drawdown": max_drawdown,
+            "total_return": total_return,
+            "win_rate": win_rate,
+            "n_trades": n_trades,
+            "avg_return": strategy_returns.mean(),
+            "volatility": strategy_returns.std(),
         }
 
     def objective(self, trial: optuna.trial.Trial, df: pd.DataFrame) -> float:
@@ -256,11 +256,11 @@ class IndicatorOptimizer:
             params = {}
 
             # RSI
-            params['rsi_period'] = trial.suggest_int('rsi_period', 5, 50)
+            params["rsi_period"] = trial.suggest_int("rsi_period", 5, 50)
 
             # Bollinger Bands
-            params['bb_period'] = trial.suggest_int('bb_period', 10, 50)
-            params['bb_std'] = trial.suggest_float('bb_std', 1.0, 3.0)
+            params["bb_period"] = trial.suggest_int("bb_period", 10, 50)
+            params["bb_std"] = trial.suggest_float("bb_std", 1.0, 3.0)
 
             # Calculate indicators with suggested parameters
             df_with_indicators = self.calculate_indicators_with_params(df, params)
@@ -271,10 +271,10 @@ class IndicatorOptimizer:
             # Calculate performance metrics
             metrics = self.calculate_performance_metrics(df_with_signals)
 
-                        # Focus on profit and drawdown instead of Sharpe ratio
-            total_return = metrics['total_return']
-            profit_factor = metrics['profit_factor']
-            max_drawdown = metrics['max_drawdown']
+            # Focus on profit and drawdown instead of Sharpe ratio
+            total_return = metrics["total_return"]
+            profit_factor = metrics["profit_factor"]
+            max_drawdown = metrics["max_drawdown"]
 
             # Handle NaN and infinite values
             if np.isnan(total_return) or np.isinf(total_return):
@@ -286,8 +286,12 @@ class IndicatorOptimizer:
 
             # Debug logging for first few trials
             # Note: study is not available in objective scope, so we'll log without trial number
-            _logger.debug("Trial - Total Return: %.3f, Profit Factor: %.3f, Max DD: %.3f",
-                       total_return, profit_factor, max_drawdown)
+            _logger.debug(
+                "Trial - Total Return: %.3f, Profit Factor: %.3f, Max DD: %.3f",
+                total_return,
+                profit_factor,
+                max_drawdown,
+            )
 
             # More realistic thresholds for initial optimization
             if total_return < -0.5 or profit_factor < 0.3 or max_drawdown > 0.8:
@@ -347,14 +351,15 @@ class IndicatorOptimizer:
             train_end = int(len(df) * 0.60)
             df_optimization = df.iloc[:train_end].copy().reset_index(drop=True)
 
-            _logger.info("Using %d samples for indicator optimization (first 60%% of %d total)",
-                         len(df_optimization), len(df))
+            _logger.info(
+                "Using %d samples for indicator optimization (first 60%% of %d total)", len(df_optimization), len(df)
+            )
 
             # Create Optuna study
             study = optuna.create_study(
-                direction='minimize',
+                direction="minimize",
                 sampler=optuna.samplers.TPESampler(seed=42),
-                pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=10)
+                pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=10),
             )
 
             # Optimize
@@ -362,7 +367,7 @@ class IndicatorOptimizer:
                 lambda trial: self.objective(trial, df_optimization),
                 n_trials=self.n_trials,
                 timeout=self.timeout,
-                show_progress_bar=True
+                show_progress_bar=True,
             )
 
             # Get best parameters
@@ -399,45 +404,40 @@ class IndicatorOptimizer:
                     return obj
 
             results = {
-                'symbol': symbol,
-                'timeframe': timeframe,
-                'optimization_timestamp': timestamp,
-                'best_params': convert_numpy_types(best_params),
-                'best_objective_value': convert_numpy_types(best_value),
-                'validation_metrics': convert_numpy_types(validation_metrics),
-                'n_trials': len(study.trials),
-                'optimization_samples': len(df_optimization),
-                'total_samples': len(df),
-                'validation_samples': len(df_optimization)
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "optimization_timestamp": timestamp,
+                "best_params": convert_numpy_types(best_params),
+                "best_objective_value": convert_numpy_types(best_value),
+                "validation_metrics": convert_numpy_types(validation_metrics),
+                "n_trials": len(study.trials),
+                "optimization_samples": len(df_optimization),
+                "total_samples": len(df),
+                "validation_samples": len(df_optimization),
             }
 
             # Save to JSON file
             output_filename = f"indicators_{symbol}_{timeframe}_{timestamp}.json"
             output_path = self.results_dir / output_filename
 
-            with open(output_path, 'w') as f:
+            with open(output_path, "w") as f:
                 json.dump(results, f, indent=2)
 
             _logger.info("[OK] Saved optimization results to %s", output_path)
 
             return {
-                'symbol': symbol,
-                'timeframe': timeframe,
-                'success': True,
-                'results_file': str(output_path),
-                'best_params': best_params,
-                'validation_metrics': validation_metrics
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "success": True,
+                "results_file": str(output_path),
+                "best_params": best_params,
+                "validation_metrics": validation_metrics,
             }
 
         except Exception as e:
             error_msg = f"Failed to optimize indicators for {symbol} {timeframe}: {str(e)}"
             _logger.error(error_msg)
-            return {
-                'symbol': symbol,
-                'timeframe': timeframe,
-                'success': False,
-                'error': error_msg
-            }
+            return {"symbol": symbol, "timeframe": timeframe, "success": False, "error": error_msg}
 
     def optimize_all(self) -> Dict:
         """
@@ -446,16 +446,16 @@ class IndicatorOptimizer:
         Returns:
             Dict with summary of optimization results
         """
-                # Check if using new multi-provider format
-        if 'data_sources' in self.config:
+        # Check if using new multi-provider format
+        if "data_sources" in self.config:
             _logger.info("Using multi-provider configuration format")
             symbols = []
             timeframes = []
             providers = []
 
-            for provider, provider_config in self.config['data_sources'].items():
-                provider_symbols = provider_config['symbols']
-                provider_timeframes = provider_config['timeframes']
+            for provider, provider_config in self.config["data_sources"].items():
+                provider_symbols = provider_config["symbols"]
+                provider_timeframes = provider_config["timeframes"]
 
                 for symbol in provider_symbols:
                     for timeframe in provider_timeframes:
@@ -468,42 +468,39 @@ class IndicatorOptimizer:
             _logger.info("Multi-provider providers: %s", providers)
         else:
             # Legacy format
-            symbols = self.config['symbols']
-            timeframes = self.config['timeframes']
+            symbols = self.config["symbols"]
+            timeframes = self.config["timeframes"]
             providers = [None] * len(symbols)  # No provider info for legacy format
             _logger.info("Using legacy configuration format")
 
         _logger.info("Optimizing indicators for %d symbol-timeframe combinations", len(symbols))
 
-        results = {
-            'total': len(symbols),
-            'successful': [],
-            'failed': []
-        }
+        results = {"total": len(symbols), "successful": [], "failed": []}
 
         for i, (symbol, timeframe, provider) in enumerate(zip(symbols, timeframes, providers)):
-            _logger.info("Processing %d/%d: %s %s (provider: %s)", i+1, len(symbols), symbol, timeframe, provider)
+            _logger.info("Processing %d/%d: %s %s (provider: %s)", i + 1, len(symbols), symbol, timeframe, provider)
             result = self.optimize_indicators(symbol, timeframe, provider)
 
-            if result['success']:
-                results['successful'].append(result)
+            if result["success"]:
+                results["successful"].append(result)
             else:
-                results['failed'].append(result)
+                results["failed"].append(result)
 
         # Log summary
-        _logger.info("%s", "="*50)
+        _logger.info("%s", "=" * 50)
         _logger.info("Indicator Optimization Summary:")
-        _logger.info("  Total: %d", results['total'])
-        _logger.info("  Successful: %d", len(results['successful']))
-        _logger.info("  Failed: %d", len(results['failed']))
-        _logger.info("%s", "="*50)
+        _logger.info("  Total: %d", results["total"])
+        _logger.info("  Successful: %d", len(results["successful"]))
+        _logger.info("  Failed: %d", len(results["failed"]))
+        _logger.info("%s", "=" * 50)
 
-        if results['failed']:
+        if results["failed"]:
             _logger.warning("Failed optimizations:")
-            for failure in results['failed']:
-                _logger.warning("  %s %s: %s", failure['symbol'], failure['timeframe'], failure['error'])
+            for failure in results["failed"]:
+                _logger.warning("  %s %s: %s", failure["symbol"], failure["timeframe"], failure["error"])
 
         return results
+
 
 def main():
     """Main function to run indicator optimization."""
@@ -516,6 +513,7 @@ def main():
     except Exception:
         _logger.exception("Indicator optimization failed: ")
         raise
+
 
 if __name__ == "__main__":
     main()

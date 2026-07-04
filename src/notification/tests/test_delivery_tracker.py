@@ -7,21 +7,23 @@ Tests comprehensive delivery tracking, multi-channel support, and statistics.
 
 import asyncio
 import sys
-from pathlib import Path
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.service.delivery_tracker import (
-    delivery_tracker, DeliveryStatus, DeliveryResult,
-    MessageDeliveryStatus
-)
-from src.notification.service.message_queue import QueuedMessage
 from src.data.db.models.model_notification import MessagePriority
 from src.notification.logger import setup_logger
+from src.notification.service.delivery_tracker import (
+    DeliveryResult,
+    DeliveryStatus,
+    MessageDeliveryStatus,
+    delivery_tracker,
+)
+from src.notification.service.message_queue import QueuedMessage
 
 _logger = setup_logger(__name__)
 
@@ -30,7 +32,7 @@ def create_test_message(
     message_id: int,
     channels: list = None,
     priority: MessagePriority = MessagePriority.NORMAL,
-    recipient_id: str = "test_user"
+    recipient_id: str = "test_user",
 ) -> QueuedMessage:
     """Create a test message."""
     if channels is None:
@@ -45,10 +47,10 @@ def create_test_message(
         template_name=None,
         content={"text": f"Test message {message_id}"},
         metadata=None,
-        scheduled_for=datetime.now(timezone.utc),
+        scheduled_for=datetime.now(UTC),
         retry_count=0,
         max_retries=3,
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC),
     )
 
 
@@ -82,10 +84,7 @@ async def test_basic_delivery_tracking():
 
         # Complete telegram delivery successfully
         success = await delivery_tracker.complete_channel_attempt(
-            telegram_attempt.attempt_id,
-            DeliveryStatus.DELIVERED,
-            response_time_ms=150,
-            external_id="tg_msg_123"
+            telegram_attempt.attempt_id, DeliveryStatus.DELIVERED, response_time_ms=150, external_id="tg_msg_123"
         )
         assert success
         print("✓ Completed telegram delivery successfully")
@@ -95,7 +94,7 @@ async def test_basic_delivery_tracking():
             email_attempt.attempt_id,
             DeliveryStatus.FAILED,
             response_time_ms=300,
-            error_message="SMTP connection failed"
+            error_message="SMTP connection failed",
         )
         assert success
         print("✓ Completed email delivery with failure")
@@ -136,7 +135,7 @@ async def test_multi_channel_success():
                 attempt.attempt_id,
                 DeliveryStatus.DELIVERED,
                 response_time_ms=response_times[i],
-                external_id=f"{channel}_msg_{message.id}"
+                external_id=f"{channel}_msg_{message.id}",
             )
 
         # Check final status
@@ -176,9 +175,7 @@ async def test_retry_mechanism():
         assert attempt1.retry_count == 0
 
         await delivery_tracker.complete_channel_attempt(
-            attempt1.attempt_id,
-            DeliveryStatus.FAILED,
-            error_message="Network timeout"
+            attempt1.attempt_id, DeliveryStatus.FAILED, error_message="Network timeout"
         )
 
         # Second attempt - failure
@@ -186,9 +183,7 @@ async def test_retry_mechanism():
         assert attempt2.retry_count == 1
 
         await delivery_tracker.complete_channel_attempt(
-            attempt2.attempt_id,
-            DeliveryStatus.FAILED,
-            error_message="Rate limited"
+            attempt2.attempt_id, DeliveryStatus.FAILED, error_message="Rate limited"
         )
 
         # Third attempt - success
@@ -196,10 +191,7 @@ async def test_retry_mechanism():
         assert attempt3.retry_count == 2
 
         await delivery_tracker.complete_channel_attempt(
-            attempt3.attempt_id,
-            DeliveryStatus.DELIVERED,
-            response_time_ms=200,
-            external_id="tg_msg_success"
+            attempt3.attempt_id, DeliveryStatus.DELIVERED, response_time_ms=200, external_id="tg_msg_success"
         )
 
         # Check final status
@@ -232,11 +224,13 @@ async def test_status_callbacks():
 
         # Define callback function
         async def status_callback(delivery_status: MessageDeliveryStatus):
-            callback_calls.append({
-                "message_id": delivery_status.message_id,
-                "status": delivery_status.overall_status.value,
-                "timestamp": datetime.now(timezone.utc)
-            })
+            callback_calls.append(
+                {
+                    "message_id": delivery_status.message_id,
+                    "status": delivery_status.overall_status.value,
+                    "timestamp": datetime.now(UTC),
+                }
+            )
 
         # Add global callback
         delivery_tracker.add_global_callback(status_callback)
@@ -247,16 +241,12 @@ async def test_status_callbacks():
 
         # Add message-specific callback
         message_callbacks = []
-        delivery_status.add_status_callback(
-            lambda ds: message_callbacks.append(ds.overall_status.value)
-        )
+        delivery_status.add_status_callback(lambda ds: message_callbacks.append(ds.overall_status.value))
 
         # Start and complete delivery
         attempt = await delivery_tracker.start_channel_attempt(message.id, "telegram_channel")
         await delivery_tracker.complete_channel_attempt(
-            attempt.attempt_id,
-            DeliveryStatus.DELIVERED,
-            response_time_ms=100
+            attempt.attempt_id, DeliveryStatus.DELIVERED, response_time_ms=100
         )
 
         # Wait a bit for callbacks
@@ -328,14 +318,14 @@ async def test_delivery_statistics():
         print(f"  Average response time: {stats['avg_response_time_ms']:.1f}ms")
 
         # Verify some basic statistics
-        assert stats['total_messages'] >= 4
-        assert stats['successful_deliveries'] >= 1
-        assert stats['failed_deliveries'] >= 1
-        assert stats['partial_deliveries'] >= 1
+        assert stats["total_messages"] >= 4
+        assert stats["successful_deliveries"] >= 1
+        assert stats["failed_deliveries"] >= 1
+        assert stats["partial_deliveries"] >= 1
 
         # Check channel statistics
-        if 'telegram_channel' in stats['channel_statistics']:
-            tg_stats = stats['channel_statistics']['telegram_channel']
+        if "telegram_channel" in stats["channel_statistics"]:
+            tg_stats = stats["channel_statistics"]["telegram_channel"]
             print(f"  Telegram attempts: {tg_stats['total_attempts']}")
             print(f"  Telegram success rate: {tg_stats['successful_attempts']}/{tg_stats['total_attempts']}")
 
@@ -424,12 +414,11 @@ async def test_performance():
 
         for delivery_status in delivery_statuses:
             for channel in delivery_status.channels:
+
                 async def complete_delivery(msg_id, ch):
                     attempt = await delivery_tracker.start_channel_attempt(msg_id, ch)
                     await delivery_tracker.complete_channel_attempt(
-                        attempt.attempt_id,
-                        DeliveryStatus.DELIVERED,
-                        response_time_ms=100
+                        attempt.attempt_id, DeliveryStatus.DELIVERED, response_time_ms=100
                     )
 
                 task = complete_delivery(delivery_status.message_id, channel)

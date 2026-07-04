@@ -32,23 +32,26 @@ If you add a new metric (e.g. Omega ratio), add it here first and call it from t
 other two locations.  Never define the same metric formula in more than one place.
 """
 
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Any
 import json
 import os
 import warnings
-warnings.filterwarnings('ignore')
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Tuple
+
+import numpy as np
+import pandas as pd
+
+warnings.filterwarnings("ignore")
 
 from src.model.analytics import PerformanceMetrics, Trade
 
 # For PDF generation
 try:
-    from reportlab.lib.pagesizes import A4
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
     REPORTLAB_AVAILABLE = True
 except ImportError:
     REPORTLAB_AVAILABLE = False
@@ -57,11 +60,10 @@ except ImportError:
 try:
     import openpyxl
     from openpyxl.styles import Font, PatternFill
+
     OPENPYXL_AVAILABLE = True
 except ImportError:
     OPENPYXL_AVAILABLE = False
-
-
 
 
 class AdvancedAnalytics:
@@ -78,7 +80,7 @@ class AdvancedAnalytics:
         """
         self.risk_free_rate = risk_free_rate
         self.trades: List[Trade] = []
-        self.metrics: Optional[PerformanceMetrics] = None
+        self.metrics: PerformanceMetrics | None = None
 
     def add_trades(self, trades_data: List[Dict[str, Any]]):
         """
@@ -89,17 +91,17 @@ class AdvancedAnalytics:
         """
         for trade_data in trades_data:
             trade = Trade(
-                entry_time=datetime.fromisoformat(trade_data['entry_time'].replace('Z', '+00:00')),
-                exit_time=datetime.fromisoformat(trade_data['exit_time'].replace('Z', '+00:00')),
-                symbol=trade_data.get('symbol', 'Unknown'),
-                side=trade_data.get('side', 'Unknown'),
-                entry_price=float(trade_data['entry_price']),
-                exit_price=float(trade_data['exit_price']),
-                quantity=float(trade_data['quantity']),
-                pnl=float(trade_data.get('pnl', 0)),
-                commission=float(trade_data.get('commission', 0)),
-                net_pnl=float(trade_data['net_pnl']),
-                exit_reason=trade_data.get('exit_reason', 'unknown')
+                entry_time=datetime.fromisoformat(trade_data["entry_time"].replace("Z", "+00:00")),
+                exit_time=datetime.fromisoformat(trade_data["exit_time"].replace("Z", "+00:00")),
+                symbol=trade_data.get("symbol", "Unknown"),
+                side=trade_data.get("side", "Unknown"),
+                entry_price=float(trade_data["entry_price"]),
+                exit_price=float(trade_data["exit_price"]),
+                quantity=float(trade_data["quantity"]),
+                pnl=float(trade_data.get("pnl", 0)),
+                commission=float(trade_data.get("commission", 0)),
+                net_pnl=float(trade_data["net_pnl"]),
+                exit_reason=trade_data.get("exit_reason", "unknown"),
             )
             self.trades.append(trade)
 
@@ -128,7 +130,7 @@ class AdvancedAnalytics:
         gross_profit = sum(t.net_pnl for t in winning_trades)
         gross_loss = abs(sum(t.net_pnl for t in losing_trades))
 
-        profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
+        profit_factor = gross_profit / gross_loss if gross_loss > 0 else float("inf")
 
         # Calculate portfolio value series
         portfolio_values = self._calculate_portfolio_values()
@@ -194,7 +196,7 @@ class AdvancedAnalytics:
             avg_trades_per_day=avg_trades_per_day,
             recovery_factor=recovery_factor,
             payoff_ratio=payoff_ratio,
-            profit_factor_ratio=profit_factor
+            profit_factor_ratio=profit_factor,
         )
 
         return self.metrics
@@ -252,8 +254,8 @@ class AdvancedAnalytics:
 
         returns = []
         for i in range(1, len(portfolio_values)):
-            if portfolio_values[i-1] != 0:
-                ret = (portfolio_values[i] - portfolio_values[i-1]) / portfolio_values[i-1]
+            if portfolio_values[i - 1] != 0:
+                ret = (portfolio_values[i] - portfolio_values[i - 1]) / portfolio_values[i - 1]
                 returns.append(ret)
 
         if not returns:
@@ -279,8 +281,8 @@ class AdvancedAnalytics:
 
         returns = []
         for i in range(1, len(portfolio_values)):
-            if portfolio_values[i-1] != 0:
-                ret = (portfolio_values[i] - portfolio_values[i-1]) / portfolio_values[i-1]
+            if portfolio_values[i - 1] != 0:
+                ret = (portfolio_values[i] - portfolio_values[i - 1]) / portfolio_values[i - 1]
                 returns.append(ret)
 
         if not returns:
@@ -290,14 +292,14 @@ class AdvancedAnalytics:
         avg_return = np.mean(returns)
 
         # Calculate downside deviation
-        downside_returns = returns[returns < self.risk_free_rate/252]
+        downside_returns = returns[returns < self.risk_free_rate / 252]
         if len(downside_returns) == 0:
-            return float('inf')
+            return float("inf")
 
-        downside_dev = np.sqrt(np.mean((downside_returns - self.risk_free_rate/252) ** 2))
+        downside_dev = np.sqrt(np.mean((downside_returns - self.risk_free_rate / 252) ** 2))
 
         if downside_dev == 0:
-            return float('inf')
+            return float("inf")
 
         # Annualize
         annualized_return = avg_return * 252
@@ -436,8 +438,8 @@ class AdvancedAnalytics:
                 "25": np.percentile(simulation_results, 25),
                 "50": np.percentile(simulation_results, 50),
                 "75": np.percentile(simulation_results, 75),
-                "90": np.percentile(simulation_results, 90)
-            }
+                "90": np.percentile(simulation_results, 90),
+            },
         }
 
     def generate_performance_report(self, output_dir: str = "reports") -> str:
@@ -489,41 +491,45 @@ class AdvancedAnalytics:
 
         # Title
         title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
+            "CustomTitle",
+            parent=styles["Heading1"],
             fontSize=16,
             spaceAfter=30,
-            alignment=1  # Center
+            alignment=1,  # Center
         )
         story.append(Paragraph("Trading Strategy Performance Report", title_style))
         story.append(Spacer(1, 12))
 
         # Summary metrics
-        story.append(Paragraph("Performance Summary", styles['Heading2']))
+        story.append(Paragraph("Performance Summary", styles["Heading2"]))
         story.append(Spacer(1, 12))
 
         summary_data = [
-            ['Metric', 'Value'],
-            ['Total Trades', f"{self.metrics.total_trades}"],
-            ['Win Rate', f"{self.metrics.win_rate:.2f}%"],
-            ['Profit Factor', f"{self.metrics.profit_factor:.2f}"],
-            ['Total Return', f"${self.metrics.total_return:.2f}"],
-            ['Sharpe Ratio', f"{self.metrics.sharpe_ratio:.2f}"],
-            ['Max Drawdown', f"{self.metrics.max_drawdown_pct:.2f}%"],
-            ['Calmar Ratio', f"{self.metrics.calmar_ratio:.2f}"],
+            ["Metric", "Value"],
+            ["Total Trades", f"{self.metrics.total_trades}"],
+            ["Win Rate", f"{self.metrics.win_rate:.2f}%"],
+            ["Profit Factor", f"{self.metrics.profit_factor:.2f}"],
+            ["Total Return", f"${self.metrics.total_return:.2f}"],
+            ["Sharpe Ratio", f"{self.metrics.sharpe_ratio:.2f}"],
+            ["Max Drawdown", f"{self.metrics.max_drawdown_pct:.2f}%"],
+            ["Calmar Ratio", f"{self.metrics.calmar_ratio:.2f}"],
         ]
 
         summary_table = Table(summary_data)
-        summary_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
-        ]))
+        summary_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, 0), 12),
+                    ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                    ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
+                    ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                ]
+            )
+        )
         story.append(summary_table)
 
         doc.build(story)
@@ -538,7 +544,7 @@ class AdvancedAnalytics:
         ws.title = "Performance Summary"
 
         # Headers
-        headers = ['Metric', 'Value', 'Target', 'Status']
+        headers = ["Metric", "Value", "Target", "Status"]
         for col, header in enumerate(headers, 1):
             ws.cell(row=1, column=col, value=header)
             ws.cell(row=1, column=col).font = Font(bold=True)
@@ -546,14 +552,44 @@ class AdvancedAnalytics:
 
         # Data
         data = [
-            ['Total Trades', self.metrics.total_trades, '>30', '✓' if self.metrics.total_trades > 30 else '✗'],
-            ['Win Rate (%)', round(self.metrics.win_rate, 2), '>50', '✓' if self.metrics.win_rate > 50 else '✗'],
-            ['Profit Factor', round(self.metrics.profit_factor, 2), '>1.5', '✓' if self.metrics.profit_factor > 1.5 else '✗'],
-            ['Sharpe Ratio', round(self.metrics.sharpe_ratio, 2), '>1.0', '✓' if self.metrics.sharpe_ratio > 1.0 else '✗'],
-            ['Max Drawdown (%)', round(self.metrics.max_drawdown_pct, 2), '<20', '✓' if self.metrics.max_drawdown_pct < 20 else '✗'],
-            ['Calmar Ratio', round(self.metrics.calmar_ratio, 2), '>1.0', '✓' if self.metrics.calmar_ratio > 1.0 else '✗'],
-            ['Sortino Ratio', round(self.metrics.sortino_ratio, 2), '>1.0', '✓' if self.metrics.sortino_ratio > 1.0 else '✗'],
-            ['Recovery Factor', round(self.metrics.recovery_factor, 2), '>1.0', '✓' if self.metrics.recovery_factor > 1.0 else '✗'],
+            ["Total Trades", self.metrics.total_trades, ">30", "✓" if self.metrics.total_trades > 30 else "✗"],
+            ["Win Rate (%)", round(self.metrics.win_rate, 2), ">50", "✓" if self.metrics.win_rate > 50 else "✗"],
+            [
+                "Profit Factor",
+                round(self.metrics.profit_factor, 2),
+                ">1.5",
+                "✓" if self.metrics.profit_factor > 1.5 else "✗",
+            ],
+            [
+                "Sharpe Ratio",
+                round(self.metrics.sharpe_ratio, 2),
+                ">1.0",
+                "✓" if self.metrics.sharpe_ratio > 1.0 else "✗",
+            ],
+            [
+                "Max Drawdown (%)",
+                round(self.metrics.max_drawdown_pct, 2),
+                "<20",
+                "✓" if self.metrics.max_drawdown_pct < 20 else "✗",
+            ],
+            [
+                "Calmar Ratio",
+                round(self.metrics.calmar_ratio, 2),
+                ">1.0",
+                "✓" if self.metrics.calmar_ratio > 1.0 else "✗",
+            ],
+            [
+                "Sortino Ratio",
+                round(self.metrics.sortino_ratio, 2),
+                ">1.0",
+                "✓" if self.metrics.sortino_ratio > 1.0 else "✗",
+            ],
+            [
+                "Recovery Factor",
+                round(self.metrics.recovery_factor, 2),
+                ">1.0",
+                "✓" if self.metrics.recovery_factor > 1.0 else "✗",
+            ],
         ]
 
         for row, (metric, value, target, status) in enumerate(data, 2):
@@ -563,10 +599,14 @@ class AdvancedAnalytics:
             ws.cell(row=row, column=4, value=status)
 
             # Color code status
-            if status == '✓':
-                ws.cell(row=row, column=4).fill = PatternFill(start_color="90EE90", end_color="90EE90", fill_type="solid")
+            if status == "✓":
+                ws.cell(row=row, column=4).fill = PatternFill(
+                    start_color="90EE90", end_color="90EE90", fill_type="solid"
+                )
             else:
-                ws.cell(row=row, column=4).fill = PatternFill(start_color="FFB6C1", end_color="FFB6C1", fill_type="solid")
+                ws.cell(row=row, column=4).fill = PatternFill(
+                    start_color="FFB6C1", end_color="FFB6C1", fill_type="solid"
+                )
 
         # Auto-adjust column widths
         for column in ws.columns:
@@ -591,15 +631,15 @@ class AdvancedAnalytics:
                 "total_trades": self.metrics.total_trades,
                 "analysis_period": {
                     "start": min(t.entry_time for t in self.trades).isoformat() if self.trades else None,
-                    "end": max(t.exit_time for t in self.trades).isoformat() if self.trades else None
-                }
+                    "end": max(t.exit_time for t in self.trades).isoformat() if self.trades else None,
+                },
             },
             "performance_metrics": {
                 "basic_metrics": {
                     "win_rate": round(self.metrics.win_rate, 2),
                     "profit_factor": round(self.metrics.profit_factor, 2),
                     "total_return": round(self.metrics.total_return, 2),
-                    "total_return_pct": round(self.metrics.total_return_pct, 2)
+                    "total_return_pct": round(self.metrics.total_return_pct, 2),
                 },
                 "risk_metrics": {
                     "max_drawdown": round(self.metrics.max_drawdown, 2),
@@ -608,7 +648,7 @@ class AdvancedAnalytics:
                     "sortino_ratio": round(self.metrics.sortino_ratio, 2),
                     "calmar_ratio": round(self.metrics.calmar_ratio, 2),
                     "var_95": round(self.metrics.var_95, 2),
-                    "cvar_95": round(self.metrics.cvar_95, 2)
+                    "cvar_95": round(self.metrics.cvar_95, 2),
                 },
                 "trade_analysis": {
                     "avg_win": round(self.metrics.avg_win, 2),
@@ -616,13 +656,13 @@ class AdvancedAnalytics:
                     "largest_win": round(self.metrics.largest_win, 2),
                     "largest_loss": round(self.metrics.largest_loss, 2),
                     "max_consecutive_wins": self.metrics.max_consecutive_wins,
-                    "max_consecutive_losses": self.metrics.max_consecutive_losses
-                }
+                    "max_consecutive_losses": self.metrics.max_consecutive_losses,
+                },
             },
-            "recommendations": self._generate_recommendations()
+            "recommendations": self._generate_recommendations(),
         }
 
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             json.dump(report_data, f, indent=2, default=str)
 
     def _generate_recommendations(self) -> List[str]:
@@ -678,21 +718,23 @@ class StrategyComparator:
                 analytics.calculate_metrics()
 
             metrics = analytics.metrics
-            comparison_data.append({
-                'Strategy': name,
-                'Total Trades': metrics.total_trades,
-                'Win Rate (%)': round(metrics.win_rate, 2),
-                'Profit Factor': round(metrics.profit_factor, 2),
-                'Total Return ($)': round(metrics.total_return, 2),
-                'Sharpe Ratio': round(metrics.sharpe_ratio, 2),
-                'Max Drawdown (%)': round(metrics.max_drawdown_pct, 2),
-                'Calmar Ratio': round(metrics.calmar_ratio, 2),
-                'Sortino Ratio': round(metrics.sortino_ratio, 2),
-                'Recovery Factor': round(metrics.recovery_factor, 2)
-            })
+            comparison_data.append(
+                {
+                    "Strategy": name,
+                    "Total Trades": metrics.total_trades,
+                    "Win Rate (%)": round(metrics.win_rate, 2),
+                    "Profit Factor": round(metrics.profit_factor, 2),
+                    "Total Return ($)": round(metrics.total_return, 2),
+                    "Sharpe Ratio": round(metrics.sharpe_ratio, 2),
+                    "Max Drawdown (%)": round(metrics.max_drawdown_pct, 2),
+                    "Calmar Ratio": round(metrics.calmar_ratio, 2),
+                    "Sortino Ratio": round(metrics.sortino_ratio, 2),
+                    "Recovery Factor": round(metrics.recovery_factor, 2),
+                }
+            )
 
         df = pd.DataFrame(comparison_data)
-        return df.sort_values('Sharpe Ratio', ascending=False)
+        return df.sort_values("Sharpe Ratio", ascending=False)
 
     def rank_strategies(self) -> Dict[str, int]:
         """Rank strategies by overall performance score"""
@@ -709,11 +751,11 @@ class StrategyComparator:
 
             # Calculate composite score (weighted average)
             score = (
-                metrics.win_rate * 0.2 +
-                min(metrics.profit_factor, 5.0) * 20 * 0.2 +
-                metrics.sharpe_ratio * 10 * 0.2 +
-                (100 - metrics.max_drawdown_pct) * 0.2 +
-                metrics.calmar_ratio * 10 * 0.2
+                metrics.win_rate * 0.2
+                + min(metrics.profit_factor, 5.0) * 20 * 0.2
+                + metrics.sharpe_ratio * 10 * 0.2
+                + (100 - metrics.max_drawdown_pct) * 0.2
+                + metrics.calmar_ratio * 10 * 0.2
             )
 
             scores[name] = score

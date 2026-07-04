@@ -8,14 +8,16 @@ Tests cover:
 - Rate limiting and permissions handling
 - Sentiment analysis and community metrics
 """
+
+import asyncio
+import os
+import sys
+from pathlib import Path
+from unittest.mock import AsyncMock, Mock, patch
+
+import aiohttp
 import pytest
 import pytest_asyncio
-import asyncio
-import aiohttp
-import os
-from unittest.mock import Mock, AsyncMock, patch
-from pathlib import Path
-import sys
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -41,7 +43,7 @@ class TestAsyncDiscordAdapter:
             concurrency=2,
             rate_limit_delay=0.01,
             max_retries=1,
-            session=mock_session
+            session=mock_session,
         )
         yield adapter
         await adapter.close()
@@ -54,26 +56,26 @@ class TestAsyncDiscordAdapter:
                 "id": "channel1",
                 "name": "trading-discussion",
                 "type": 0,  # GUILD_TEXT
-                "topic": "Discuss stock trading strategies"
+                "topic": "Discuss stock trading strategies",
             },
             {
                 "id": "channel2",
                 "name": "crypto-analysis",
                 "type": 0,  # GUILD_TEXT
-                "topic": "Cryptocurrency market analysis"
+                "topic": "Cryptocurrency market analysis",
             },
             {
                 "id": "channel3",
                 "name": "general",
                 "type": 0,  # GUILD_TEXT
-                "topic": "General discussion"
+                "topic": "General discussion",
             },
             {
                 "id": "voice1",
                 "name": "voice-channel",
                 "type": 2,  # GUILD_VOICE - should be filtered out
-                "topic": ""
-            }
+                "topic": "",
+            },
         ]
 
     @pytest.fixture
@@ -89,12 +91,9 @@ class TestAsyncDiscordAdapter:
                     "username": "trader123",
                     "discriminator": "1234",
                     "avatar": "avatar_hash",
-                    "bot": False
+                    "bot": False,
                 },
-                "reactions": [
-                    {"emoji": {"name": "🚀"}, "count": 5},
-                    {"emoji": {"name": "👍"}, "count": 3}
-                ]
+                "reactions": [{"emoji": {"name": "🚀"}, "count": 5}, {"emoji": {"name": "👍"}, "count": 3}],
             },
             {
                 "id": "msg2",
@@ -105,9 +104,9 @@ class TestAsyncDiscordAdapter:
                     "username": "bear_trader",
                     "discriminator": "5678",
                     "avatar": "avatar_hash2",
-                    "bot": False
+                    "bot": False,
                 },
-                "reactions": []
+                "reactions": [],
             },
             {
                 "id": "msg3",
@@ -118,19 +117,17 @@ class TestAsyncDiscordAdapter:
                     "username": "trading_bot",
                     "discriminator": "0000",
                     "avatar": None,
-                    "bot": True  # Should be filtered out
+                    "bot": True,  # Should be filtered out
                 },
-                "reactions": []
-            }
+                "reactions": [],
+            },
         ]
 
     @pytest.mark.asyncio
     async def test_initialization_with_token(self):
         """Test adapter initialization with bot token."""
         adapter = AsyncDiscordAdapter(
-            bot_token="test_token",
-            guild_ids=["guild1", "guild2"],
-            channel_keywords=["trading", "stocks"]
+            bot_token="test_token", guild_ids=["guild1", "guild2"], channel_keywords=["trading", "stocks"]
         )
 
         try:
@@ -158,9 +155,9 @@ class TestAsyncDiscordAdapter:
         """Test authentication header generation."""
         headers = adapter._get_headers()
 
-        assert headers['Authorization'] == 'Bot test_bot_token'
-        assert headers['Content-Type'] == 'application/json'
-        assert headers['User-Agent'] == 'SentimentBot/1.0'
+        assert headers["Authorization"] == "Bot test_bot_token"
+        assert headers["Content-Type"] == "application/json"
+        assert headers["User-Agent"] == "SentimentBot/1.0"
 
     def test_get_headers_no_token(self):
         """Test header generation without token raises error."""
@@ -179,6 +176,7 @@ class TestAsyncDiscordAdapter:
 
         # Simulate many requests
         import time
+
         current_time = time.time()
         adapter._request_times = [current_time - 0.1 for _ in range(50)]
 
@@ -222,7 +220,7 @@ class TestAsyncDiscordAdapter:
     @pytest.mark.asyncio
     async def test_get_financial_channels_success(self, adapter, sample_channels):
         """Test successful financial channel discovery."""
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = sample_channels
 
             channels = await adapter._get_financial_channels()
@@ -230,11 +228,11 @@ class TestAsyncDiscordAdapter:
             # Should return only text channels with financial keywords (2 channels × 2 guilds = 4)
             assert len(channels) == 4  # trading-discussion and crypto-analysis from both guilds
 
-            channel_names = [ch['name'] for ch in channels]
-            assert 'trading-discussion' in channel_names
-            assert 'crypto-analysis' in channel_names
-            assert 'general' not in channel_names  # No financial keywords
-            assert 'voice-channel' not in channel_names  # Not a text channel
+            channel_names = [ch["name"] for ch in channels]
+            assert "trading-discussion" in channel_names
+            assert "crypto-analysis" in channel_names
+            assert "general" not in channel_names  # No financial keywords
+            assert "voice-channel" not in channel_names  # Not a text channel
 
     @pytest.mark.asyncio
     async def test_get_financial_channels_no_guilds(self):
@@ -250,7 +248,7 @@ class TestAsyncDiscordAdapter:
     @pytest.mark.asyncio
     async def test_get_financial_channels_api_error(self, adapter):
         """Test channel discovery with API errors."""
-        with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None  # Simulate API error
 
             channels = await adapter._get_financial_channels()
@@ -260,8 +258,8 @@ class TestAsyncDiscordAdapter:
     @pytest.mark.asyncio
     async def test_fetch_messages_success(self, adapter, sample_channels, sample_messages):
         """Test successful message fetching."""
-        with patch.object(adapter, '_get_financial_channels', new_callable=AsyncMock) as mock_channels:
-            with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_financial_channels", new_callable=AsyncMock) as mock_channels:
+            with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
                 mock_channels.return_value = sample_channels[:2]  # Only financial channels
                 mock_get.return_value = sample_messages
 
@@ -299,7 +297,7 @@ class TestAsyncDiscordAdapter:
     @pytest.mark.asyncio
     async def test_fetch_messages_no_channels(self, adapter):
         """Test fetch messages when no financial channels found."""
-        with patch.object(adapter, '_get_financial_channels', new_callable=AsyncMock) as mock_channels:
+        with patch.object(adapter, "_get_financial_channels", new_callable=AsyncMock) as mock_channels:
             mock_channels.return_value = []
 
             messages = await adapter.fetch_messages("AAPL")
@@ -318,8 +316,8 @@ class TestAsyncDiscordAdapter:
     @pytest.mark.asyncio
     async def test_fetch_messages_with_since_ts(self, adapter, sample_channels, sample_messages):
         """Test fetch messages with since_ts parameter."""
-        with patch.object(adapter, '_get_financial_channels', new_callable=AsyncMock) as mock_channels:
-            with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_financial_channels", new_callable=AsyncMock) as mock_channels:
+            with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
                 mock_channels.return_value = sample_channels[:1]
                 mock_get.return_value = sample_messages
 
@@ -328,13 +326,13 @@ class TestAsyncDiscordAdapter:
 
                 # Verify 'after' parameter was added (Discord snowflake)
                 call_args = mock_get.call_args[1]
-                assert 'after' in call_args['params']
+                assert "after" in call_args["params"]
 
     @pytest.mark.asyncio
     async def test_fetch_messages_filters_bots(self, adapter, sample_channels, sample_messages):
         """Test that bot messages are filtered out."""
-        with patch.object(adapter, '_get_financial_channels', new_callable=AsyncMock) as mock_channels:
-            with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_financial_channels", new_callable=AsyncMock) as mock_channels:
+            with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
                 mock_channels.return_value = sample_channels[:1]
                 mock_get.return_value = sample_messages  # Includes bot message
 
@@ -353,12 +351,12 @@ class TestAsyncDiscordAdapter:
                 "content": "General discussion about markets",
                 "timestamp": "2023-01-01T12:00:00.000000+00:00",
                 "author": {"id": "user1", "username": "trader", "bot": False},
-                "reactions": []
+                "reactions": [],
             }
         ]
 
-        with patch.object(adapter, '_get_financial_channels', new_callable=AsyncMock) as mock_channels:
-            with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_financial_channels", new_callable=AsyncMock) as mock_channels:
+            with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
                 mock_channels.return_value = sample_channels[:1]
                 mock_get.return_value = messages_without_ticker
 
@@ -372,25 +370,36 @@ class TestAsyncDiscordAdapter:
         """Test successful summary generation."""
         # Create messages with clear sentiment patterns
         messages = [
-            {"body": "AAPL to the moon! 🚀 bullish rocket", "user": {"id": "user1"}, "reactions": 5,
-             "channel": {"name": "trading"}},
-            {"body": "AAPL bearish outlook, might crash", "user": {"id": "user2"}, "reactions": 2,
-             "channel": {"name": "analysis"}},
-            {"body": "AAPL neutral analysis", "user": {"id": "user3"}, "reactions": 1,
-             "channel": {"name": "trading"}},
-            {"body": "Another AAPL bullish hodl comment", "user": {"id": "user1"}, "reactions": 3,
-             "channel": {"name": "trading"}},  # Same user, should count unique users correctly
+            {
+                "body": "AAPL to the moon! 🚀 bullish rocket",
+                "user": {"id": "user1"},
+                "reactions": 5,
+                "channel": {"name": "trading"},
+            },
+            {
+                "body": "AAPL bearish outlook, might crash",
+                "user": {"id": "user2"},
+                "reactions": 2,
+                "channel": {"name": "analysis"},
+            },
+            {"body": "AAPL neutral analysis", "user": {"id": "user3"}, "reactions": 1, "channel": {"name": "trading"}},
+            {
+                "body": "Another AAPL bullish hodl comment",
+                "user": {"id": "user1"},
+                "reactions": 3,
+                "channel": {"name": "trading"},
+            },  # Same user, should count unique users correctly
         ]
 
-        with patch.object(adapter, 'fetch_messages', new_callable=AsyncMock) as mock_fetch:
+        with patch.object(adapter, "fetch_messages", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = messages
 
             summary = await adapter.fetch_summary("AAPL")
 
             assert summary["mentions"] == 4
             assert summary["bullish"] == 2  # Two bullish messages
-            assert summary["bearish"] == 1   # One bearish message
-            assert summary["neutral"] == 1   # One neutral message
+            assert summary["bearish"] == 1  # One bearish message
+            assert summary["neutral"] == 1  # One neutral message
             assert summary["sentiment_score"] == 0.25  # (2-1)/4 = 0.25
             assert summary["provider"] == "discord"
             assert summary["unique_users"] == 3  # user1, user2, user3
@@ -406,7 +415,7 @@ class TestAsyncDiscordAdapter:
     @pytest.mark.asyncio
     async def test_fetch_summary_no_messages(self, adapter):
         """Test summary generation with no messages."""
-        with patch.object(adapter, 'fetch_messages', new_callable=AsyncMock) as mock_fetch:
+        with patch.object(adapter, "fetch_messages", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = []
 
             summary = await adapter.fetch_summary("AAPL")
@@ -424,10 +433,16 @@ class TestAsyncDiscordAdapter:
     async def test_fetch_summary_sentiment_keywords(self, adapter):
         """Test sentiment analysis with Discord-specific keywords."""
         # Test one case to verify sentiment analysis works
-        messages = [{"body": "AAPL moon rocket 🚀 bullish", "user": {"id": "user1"}, "reactions": 0,
-                   "channel": {"name": "test"}}]
+        messages = [
+            {
+                "body": "AAPL moon rocket 🚀 bullish",
+                "user": {"id": "user1"},
+                "reactions": 0,
+                "channel": {"name": "test"},
+            }
+        ]
 
-        with patch.object(adapter, 'fetch_messages', new_callable=AsyncMock) as mock_fetch:
+        with patch.object(adapter, "fetch_messages", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = messages
 
             summary = await adapter.fetch_summary("TEST")
@@ -452,6 +467,7 @@ class TestAsyncDiscordAdapter:
 
         # Create a proper session mock
         import aiohttp
+
         mock_session = Mock(spec=aiohttp.ClientSession)
         mock_session.get = Mock(return_value=mock_context_manager)
         adapter._session = mock_session
@@ -467,7 +483,7 @@ class TestAsyncDiscordAdapter:
         # First call returns 429, second call succeeds
         mock_response_429 = Mock()
         mock_response_429.status = 429
-        mock_response_429.headers = {'retry-after': '0.1'}  # Shorter delay for testing
+        mock_response_429.headers = {"retry-after": "0.1"}  # Shorter delay for testing
         mock_response_429.request_info = Mock()
         mock_response_429.history = []
 
@@ -487,6 +503,7 @@ class TestAsyncDiscordAdapter:
         mock_context_manager_200.__aexit__.return_value = None
 
         import aiohttp
+
         mock_session = Mock(spec=aiohttp.ClientSession)
         mock_session.get = Mock(side_effect=[mock_context_manager_429, mock_context_manager_200])
         adapter._session = mock_session
@@ -550,14 +567,14 @@ class TestAsyncDiscordAdapter:
     @pytest.mark.asyncio
     async def test_ticker_normalization(self, adapter, sample_channels, sample_messages):
         """Test that tickers are properly normalized."""
-        with patch.object(adapter, '_get_financial_channels', new_callable=AsyncMock) as mock_channels:
-            with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_financial_channels", new_callable=AsyncMock) as mock_channels:
+            with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
                 mock_channels.return_value = sample_channels[:1]
                 mock_get.return_value = []
 
                 # Test various ticker formats
                 await adapter.fetch_messages("  aapl  ")  # Should be normalized to AAPL
-                await adapter.fetch_messages("tsla")      # Should be normalized to TSLA
+                await adapter.fetch_messages("tsla")  # Should be normalized to TSLA
 
                 # The normalization happens in _message_mentions_ticker
                 # Verify the method was called (indirectly through the filtering)
@@ -567,30 +584,26 @@ class TestAsyncDiscordAdapter:
     async def test_channel_keyword_filtering(self):
         """Test that channels are filtered by financial keywords."""
         channels = [
-            {"id": "1", "name": "trading-room", "type": 0},      # Should match
-            {"id": "2", "name": "crypto-signals", "type": 0},    # Should match
-            {"id": "3", "name": "general-chat", "type": 0},      # Should not match
-            {"id": "4", "name": "memes", "type": 0},             # Should not match
+            {"id": "1", "name": "trading-room", "type": 0},  # Should match
+            {"id": "2", "name": "crypto-signals", "type": 0},  # Should match
+            {"id": "3", "name": "general-chat", "type": 0},  # Should not match
+            {"id": "4", "name": "memes", "type": 0},  # Should not match
         ]
 
-        adapter = AsyncDiscordAdapter(
-            bot_token="test",
-            guild_ids=["guild1"],
-            channel_keywords=["trading", "crypto"]
-        )
+        adapter = AsyncDiscordAdapter(bot_token="test", guild_ids=["guild1"], channel_keywords=["trading", "crypto"])
 
         try:
-            with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+            with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
                 mock_get.return_value = channels
 
                 financial_channels = await adapter._get_financial_channels()
 
                 assert len(financial_channels) == 2
-                channel_names = [ch['name'] for ch in financial_channels]
-                assert 'trading-room' in channel_names
-                assert 'crypto-signals' in channel_names
-                assert 'general-chat' not in channel_names
-                assert 'memes' not in channel_names
+                channel_names = [ch["name"] for ch in financial_channels]
+                assert "trading-room" in channel_names
+                assert "crypto-signals" in channel_names
+                assert "general-chat" not in channel_names
+                assert "memes" not in channel_names
 
         finally:
             await adapter.close()
@@ -598,8 +611,8 @@ class TestAsyncDiscordAdapter:
     @pytest.mark.asyncio
     async def test_message_limit_distribution(self, adapter, sample_channels):
         """Test that message limit is distributed across channels."""
-        with patch.object(adapter, '_get_financial_channels', new_callable=AsyncMock) as mock_channels:
-            with patch.object(adapter, '_get_with_retry', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_financial_channels", new_callable=AsyncMock) as mock_channels:
+            with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:
                 mock_channels.return_value = sample_channels[:2]  # 2 channels
                 mock_get.return_value = []
 
@@ -611,6 +624,6 @@ class TestAsyncDiscordAdapter:
 
                 # Check that limit parameter was set appropriately
                 for call_args in call_args_list:
-                    params = call_args[1]['params']
-                    assert params['limit'] <= 100  # Should not exceed total limit
-                    assert params['limit'] >= 1    # Should have at least 1
+                    params = call_args[1]["params"]
+                    assert params["limit"] <= 100  # Should not exceed total limit
+                    assert params["limit"] >= 1  # Should have at least 1

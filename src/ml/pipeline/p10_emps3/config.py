@@ -5,13 +5,8 @@ Configuration dataclasses for the EMPS3 (Accumulation Phase Detection) pipeline.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
-from src.ml.pipeline.shared.config import (
-    FundamentalFilterConfig,
-    SentimentFilterConfig,
-    UniverseConfig
-)
+from src.ml.pipeline.shared.config import FundamentalFilterConfig, SentimentFilterConfig, UniverseConfig
 
 
 @dataclass
@@ -19,22 +14,23 @@ class EMPS3FilterConfig(FundamentalFilterConfig):
     """
     Configuration for Stage 2 & 3 filters for Precursor / Accumulation Phase.
     """
+
     # Fundamental filters (Stage 2)
     min_price: float = 1.0
     min_avg_volume: int = 400_000
-    min_market_cap: int = 50_000_000      # $50M
-    max_market_cap: int = 5_000_000_000   # $5B
-    max_float: int = 60_000_000           # 60M shares
+    min_market_cap: int = 50_000_000  # $50M
+    max_market_cap: int = 5_000_000_000  # $5B
+    max_float: int = 60_000_000  # 60M shares
 
     # Accumulation Analyzer Config (Stage C)
     min_vol_zscore: float = 1.5
-    max_price_impact: float = 0.05             # daily range gate; was 0.03
-    min_vol_rv_ratio: float = 1.5              # was 2.0
-    max_atr_ratio: float = 0.04               # ATR(14)/price gate; was hardcoded 0.02 in analyzer
+    max_price_impact: float = 0.05  # daily range gate; was 0.03
+    min_vol_rv_ratio: float = 1.5  # was 2.0
+    max_atr_ratio: float = 0.04  # ATR(14)/price gate; was hardcoded 0.02 in analyzer
     lookback_days: int = 10
     require_dark_pool_surge: bool = True
-    max_distance_from_resistance: float = 0.15 # applies to 20-day high; was 0.05 (52w high)
-    max_distance_from_sma20: float = 0.10      # 10% from SMA20
+    max_distance_from_resistance: float = 0.15  # applies to 20-day high; was 0.05 (52w high)
+    max_distance_from_sma20: float = 0.10  # 10% from SMA20
 
     # Data parameters
     interval: str = "1h"
@@ -50,13 +46,14 @@ class EMPS3RollingMemoryConfig:
     """
     Configuration for Rolling Memory and Phase 1.5 detection.
     """
+
     enabled: bool = True
     lookback_days: int = 5
 
     # Phase 1.5 detection (Early Warning)
     phase1_5_min_appearances: int = 3
-    min_vol_slope: float = 0.05      # Minimum volume acceleration slope
-    max_atr_slope: float = -0.0001   # Maximum ATR contraction slope (must be negative)
+    min_vol_slope: float = 0.05  # Minimum volume acceleration slope
+    max_atr_slope: float = -0.0001  # Maximum ATR contraction slope (must be negative)
 
     # Alert settings
     send_alerts: bool = True
@@ -72,6 +69,7 @@ class EMPS3PipelineConfig:
     """
     Complete EMPS3 pipeline configuration.
     """
+
     filter_config: EMPS3FilterConfig
     universe_config: UniverseConfig
     rolling_memory_config: EMPS3RollingMemoryConfig
@@ -84,7 +82,7 @@ class EMPS3PipelineConfig:
     save_intermediate_results: bool = True
     generate_summary: bool = True
     verbose_logging: bool = True
-    user_id: Optional[str] = None
+    user_id: str | None = None
 
     # Cache parameters
     fundamental_cache_enabled: bool = True

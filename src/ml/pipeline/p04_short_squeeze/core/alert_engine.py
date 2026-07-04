@@ -5,22 +5,20 @@ This module implements the alert engine that evaluates scored candidates against
 thresholds and manages alert generation with cooldown logic.
 """
 
-from pathlib import Path
 import sys
-from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.ml.pipeline.p04_short_squeeze.core.models import (
-    ScoredCandidate, Alert, AlertLevel
-)
-from src.ml.pipeline.p04_short_squeeze.config.data_classes import AlertConfig
 from src.data.db.services.short_squeeze_service import ShortSqueezeService
-from src.notification.service.client import NotificationServiceClient, MessageType, MessagePriority
+from src.ml.pipeline.p04_short_squeeze.config.data_classes import AlertConfig
+from src.ml.pipeline.p04_short_squeeze.core.models import Alert, AlertLevel, ScoredCandidate
 from src.notification.logger import setup_logger
+from src.notification.service.client import MessagePriority, MessageType, NotificationServiceClient
 
 _logger = setup_logger(__name__)
 
@@ -33,7 +31,7 @@ class AlertEngine:
     alert generation with cooldown logic and notification integration.
     """
 
-    def __init__(self, config: AlertConfig, notification_client: Optional[NotificationServiceClient] = None):
+    def __init__(self, config: AlertConfig, notification_client: NotificationServiceClient | None = None):
         """
         Initialize the alert engine.
 
@@ -48,23 +46,29 @@ class AlertEngine:
         # Validate configuration
         self._validate_config()
 
-        _logger.info("AlertEngine initialized with thresholds: high=%.2f, medium=%.2f, low=%.2f",
-                    self.config.thresholds.high.squeeze_score,
-                    self.config.thresholds.medium.squeeze_score,
-                    self.config.thresholds.low.squeeze_score)
+        _logger.info(
+            "AlertEngine initialized with thresholds: high=%.2f, medium=%.2f, low=%.2f",
+            self.config.thresholds.high.squeeze_score,
+            self.config.thresholds.medium.squeeze_score,
+            self.config.thresholds.low.squeeze_score,
+        )
 
     def _validate_config(self) -> None:
         """Validate alert configuration."""
         # Check threshold ordering
-        if not (self.config.thresholds.high.squeeze_score >
-                self.config.thresholds.medium.squeeze_score >
-                self.config.thresholds.low.squeeze_score):
+        if not (
+            self.config.thresholds.high.squeeze_score
+            > self.config.thresholds.medium.squeeze_score
+            > self.config.thresholds.low.squeeze_score
+        ):
             raise ValueError("Alert thresholds must be ordered: high > medium > low")
 
         # Check cooldown periods
-        if not (self.config.cooldown.high_alert_days >=
-                self.config.cooldown.medium_alert_days >=
-                self.config.cooldown.low_alert_days):
+        if not (
+            self.config.cooldown.high_alert_days
+            >= self.config.cooldown.medium_alert_days
+            >= self.config.cooldown.low_alert_days
+        ):
             raise ValueError("Cooldown periods should be ordered: high >= medium >= low")
 
     def evaluate_alerts(self, scored_candidates: List[ScoredCandidate]) -> List[Alert]:
@@ -85,15 +89,13 @@ class AlertEngine:
                 if alert:
                     alerts.append(alert)
             except Exception as e:
-                self._logger.error("Error evaluating alert for %s: %s",
-                                 candidate.candidate.ticker, e)
+                self._logger.error("Error evaluating alert for %s: %s", candidate.candidate.ticker, e)
 
-        self._logger.info("Generated %d alerts from %d candidates",
-                         len(alerts), len(scored_candidates))
+        self._logger.info("Generated %d alerts from %d candidates", len(alerts), len(scored_candidates))
 
         return alerts
 
-    def _evaluate_candidate_alert(self, scored_candidate: ScoredCandidate) -> Optional[Alert]:
+    def _evaluate_candidate_alert(self, scored_candidate: ScoredCandidate) -> Alert | None:
         """
         Evaluate a single candidate for alert generation.
 
@@ -132,18 +134,16 @@ class AlertEngine:
             reason=reason,
             squeeze_score=squeeze_score,
             timestamp=datetime.now(),
-            cooldown_expires=cooldown_expires
+            cooldown_expires=cooldown_expires,
         )
 
-        self._logger.info("Generated %s alert for %s: score=%.3f, reason=%s",
-                         alert_level.value, ticker, squeeze_score, reason)
+        self._logger.info(
+            "Generated %s alert for %s: score=%.3f, reason=%s", alert_level.value, ticker, squeeze_score, reason
+        )
 
         return alert
 
-    def _determine_alert_level(self,
-                             squeeze_score: float,
-                             structural: Any,
-                             transient: Any) -> Optional[AlertLevel]:
+    def _determine_alert_level(self, squeeze_score: float, structural: Any, transient: Any) -> AlertLevel | None:
         """
         Determine alert level based on score and additional criteria.
 
@@ -157,26 +157,32 @@ class AlertEngine:
         """
         # Check high threshold
         high_threshold = self.config.thresholds.high
-        if (squeeze_score >= high_threshold.squeeze_score and
-            structural.short_interest_pct >= high_threshold.min_si_percent and
-            transient.volume_spike >= high_threshold.min_volume_spike and
-            transient.sentiment_24h >= high_threshold.min_sentiment):
+        if (
+            squeeze_score >= high_threshold.squeeze_score
+            and structural.short_interest_pct >= high_threshold.min_si_percent
+            and transient.volume_spike >= high_threshold.min_volume_spike
+            and transient.sentiment_24h >= high_threshold.min_sentiment
+        ):
             return AlertLevel.HIGH
 
         # Check medium threshold
         medium_threshold = self.config.thresholds.medium
-        if (squeeze_score >= medium_threshold.squeeze_score and
-            structural.short_interest_pct >= medium_threshold.min_si_percent and
-            transient.volume_spike >= medium_threshold.min_volume_spike and
-            transient.sentiment_24h >= medium_threshold.min_sentiment):
+        if (
+            squeeze_score >= medium_threshold.squeeze_score
+            and structural.short_interest_pct >= medium_threshold.min_si_percent
+            and transient.volume_spike >= medium_threshold.min_volume_spike
+            and transient.sentiment_24h >= medium_threshold.min_sentiment
+        ):
             return AlertLevel.MEDIUM
 
         # Check low threshold
         low_threshold = self.config.thresholds.low
-        if (squeeze_score >= low_threshold.squeeze_score and
-            structural.short_interest_pct >= low_threshold.min_si_percent and
-            transient.volume_spike >= low_threshold.min_volume_spike and
-            transient.sentiment_24h >= low_threshold.min_sentiment):
+        if (
+            squeeze_score >= low_threshold.squeeze_score
+            and structural.short_interest_pct >= low_threshold.min_si_percent
+            and transient.volume_spike >= low_threshold.min_volume_spike
+            and transient.sentiment_24h >= low_threshold.min_sentiment
+        ):
             return AlertLevel.LOW
 
         return None
@@ -286,7 +292,7 @@ class AlertEngine:
             additional_info = [
                 f"⏰ Alert time: {alert.timestamp.strftime('%Y-%m-%d %H:%M:%S')}",
                 f"📊 Squeeze score: {alert.squeeze_score:.1%}",
-                f"🔄 Next alert after: {alert.cooldown_expires.strftime('%Y-%m-%d %H:%M:%S') if alert.cooldown_expires else 'N/A'}"
+                f"🔄 Next alert after: {alert.cooldown_expires.strftime('%Y-%m-%d %H:%M:%S') if alert.cooldown_expires else 'N/A'}",
             ]
 
             message += "\n\n" + "\n".join(additional_info)
@@ -309,19 +315,17 @@ class AlertEngine:
                     "ticker": alert.ticker,
                     "alert_level": alert.alert_level.value,
                     "squeeze_score": alert.squeeze_score,
-                    "alert_type": "short_squeeze"
-                }
+                    "alert_type": "short_squeeze",
+                },
             )
 
             if success:
-                self._logger.info("Successfully sent %s alert for %s",
-                                alert.alert_level.value, alert.ticker)
+                self._logger.info("Successfully sent %s alert for %s", alert.alert_level.value, alert.ticker)
 
                 # Mark alert as sent in database
                 await self._mark_alert_sent(alert, "notification_sent")
             else:
-                self._logger.error("Failed to send %s alert for %s",
-                                 alert.alert_level.value, alert.ticker)
+                self._logger.error("Failed to send %s alert for %s", alert.alert_level.value, alert.ticker)
 
             return success
 
@@ -347,7 +351,7 @@ class AlertEngine:
                 alert_level=alert.alert_level,
                 reason=alert.reason,
                 squeeze_score=alert.squeeze_score,
-                cooldown_days=self._get_cooldown_days(alert.alert_level)
+                cooldown_days=self._get_cooldown_days(alert.alert_level),
             )
 
             if alert_id:
@@ -388,7 +392,7 @@ class AlertEngine:
                     "candidates_processed": len(scored_candidates),
                     "alerts_generated": 0,
                     "alerts_sent": 0,
-                    "alerts_failed": 0
+                    "alerts_failed": 0,
                 }
 
             # Send alerts
@@ -416,10 +420,10 @@ class AlertEngine:
                         "ticker": alert.ticker,
                         "level": alert.alert_level.value,
                         "score": alert.squeeze_score,
-                        "sent": alert.sent
+                        "sent": alert.sent,
                     }
                     for alert in alerts
-                ]
+                ],
             }
 
             self._logger.info("Alert processing complete: %s", results)
@@ -432,7 +436,7 @@ class AlertEngine:
                 "alerts_generated": 0,
                 "alerts_sent": 0,
                 "alerts_failed": 0,
-                "error": str(e)
+                "error": str(e),
             }
 
     def get_alert_statistics(self, days: int = 7) -> Dict[str, Any]:
@@ -467,7 +471,7 @@ class AlertEngine:
                 "alerts_sent": sent_count,
                 "alerts_pending": len(recent_alerts) - sent_count,
                 "by_level": level_counts,
-                "success_rate": sent_count / len(recent_alerts) if recent_alerts else 0.0
+                "success_rate": sent_count / len(recent_alerts) if recent_alerts else 0.0,
             }
 
         except Exception as e:

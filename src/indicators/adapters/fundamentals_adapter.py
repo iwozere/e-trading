@@ -3,9 +3,10 @@ import pandas as pd
 
 from src.common.fundamentals import get_fundamentals_unified
 from src.indicators.adapters.base import BaseAdapter
-
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
+
 
 class FundamentalsAdapter(BaseAdapter):
     FIELD_MAP = {
@@ -57,7 +58,7 @@ class FundamentalsAdapter(BaseAdapter):
                 return {"value": pd.Series([value], name=name)}
 
         except Exception as e:
-            _logger.warning("Error fetching fundamental %s for %s: %s", name, params.get('ticker'), e)
+            _logger.warning("Error fetching fundamental %s for %s: %s", name, params.get("ticker"), e)
             # Return NaN series
             if df is not None and len(df) > 0:
                 return {"value": pd.Series(index=df.index, dtype=float, name=name)}

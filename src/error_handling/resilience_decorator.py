@@ -13,25 +13,28 @@ Features:
 - Easy-to-use decorators
 """
 
-import time
 import functools
-from typing import Callable, Optional
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+import time
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
+from typing import Callable
 
-from src.error_handling.retry_manager import RetryManager, RetryConfig
 from src.error_handling.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
-from src.error_handling.error_monitor import error_monitor, ErrorSeverity
+from src.error_handling.error_monitor import ErrorSeverity, error_monitor
+from src.error_handling.retry_manager import RetryConfig, RetryManager
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
 
-def resilient(retry_config: Optional[RetryConfig] = None,
-              circuit_breaker_config: Optional[CircuitBreakerConfig] = None,
-              fallback_func: Optional[Callable] = None,
-              timeout: Optional[float] = None,
-              monitor_errors: bool = True,
-              component: Optional[str] = None):
+def resilient(
+    retry_config: RetryConfig | None = None,
+    circuit_breaker_config: CircuitBreakerConfig | None = None,
+    fallback_func: Callable | None = None,
+    timeout: float | None = None,
+    monitor_errors: bool = True,
+    component: str | None = None,
+):
     """
     Comprehensive resilience decorator combining multiple features.
 
@@ -54,6 +57,7 @@ def resilient(retry_config: Optional[RetryConfig] = None,
             # Function with full resilience
             pass
     """
+
     def decorator(func: Callable) -> Callable:
         # Create retry manager if configured
         retry_manager = None
@@ -63,15 +67,12 @@ def resilient(retry_config: Optional[RetryConfig] = None,
         # Create circuit breaker if configured
         circuit_breaker = None
         if circuit_breaker_config:
-            circuit_breaker = CircuitBreaker(
-                name=f"{func.__module__}.{func.__name__}",
-                config=circuit_breaker_config
-            )
+            circuit_breaker = CircuitBreaker(name=f"{func.__module__}.{func.__name__}", config=circuit_breaker_config)
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Auto-detect component if not provided
-            comp = component or func.__module__.split('.')[-1]
+            comp = component or func.__module__.split(".")[-1]
 
             # Define the function to execute with timeout
             def execute_with_timeout():
@@ -115,11 +116,7 @@ def resilient(retry_config: Optional[RetryConfig] = None,
                         error=e,
                         severity=ErrorSeverity.ERROR,
                         component=comp,
-                        context={
-                            'function': func.__name__,
-                            'args': str(args),
-                            'kwargs': str(kwargs)
-                        }
+                        context={"function": func.__name__, "args": str(args), "kwargs": str(kwargs)},
                     )
 
                 # Try fallback if available
@@ -135,12 +132,12 @@ def resilient(retry_config: Optional[RetryConfig] = None,
 
         # Add resilience info to wrapper
         wrapper.resilience_info = {
-            'retry_manager': retry_manager,
-            'circuit_breaker': circuit_breaker,
-            'fallback_func': fallback_func,
-            'timeout': timeout,
-            'monitor_errors': monitor_errors,
-            'component': component
+            "retry_manager": retry_manager,
+            "circuit_breaker": circuit_breaker,
+            "fallback_func": fallback_func,
+            "timeout": timeout,
+            "monitor_errors": monitor_errors,
+            "component": component,
         }
 
         return wrapper
@@ -148,10 +145,12 @@ def resilient(retry_config: Optional[RetryConfig] = None,
     return decorator
 
 
-def retry_on_failure(max_attempts: int = 3,
-                    base_delay: float = 1.0,
-                    strategy: str = "exponential",
-                    retry_on_exceptions: tuple = (Exception,)):
+def retry_on_failure(
+    max_attempts: int = 3,
+    base_delay: float = 1.0,
+    strategy: str = "exponential",
+    retry_on_exceptions: tuple = (Exception,),
+):
     """
     Decorator for adding retry functionality.
 
@@ -172,23 +171,25 @@ def retry_on_failure(max_attempts: int = 3,
     strategy_map = {
         "fixed": RetryStrategy.FIXED,
         "exponential": RetryStrategy.EXPONENTIAL,
-        "linear": RetryStrategy.LINEAR
+        "linear": RetryStrategy.LINEAR,
     }
 
     retry_config = RetryConfig(
         max_attempts=max_attempts,
         base_delay=base_delay,
         strategy=strategy_map.get(strategy, RetryStrategy.EXPONENTIAL),
-        retry_on_exceptions=retry_on_exceptions
+        retry_on_exceptions=retry_on_exceptions,
     )
 
     return resilient(retry_config=retry_config)
 
 
-def circuit_breaker(name: Optional[str] = None,
-                   failure_threshold: int = 5,
-                   recovery_timeout: int = 60,
-                   failure_exceptions: tuple = (Exception,)):
+def circuit_breaker(
+    name: str | None = None,
+    failure_threshold: int = 5,
+    recovery_timeout: int = 60,
+    failure_exceptions: tuple = (Exception,),
+):
     """
     Decorator for adding circuit breaker functionality.
 
@@ -204,13 +205,14 @@ def circuit_breaker(name: Optional[str] = None,
             # Function with circuit breaker protection
             pass
     """
+
     def decorator(func: Callable) -> Callable:
         cb_name = name or f"{func.__module__}.{func.__name__}"
 
         circuit_breaker_config = CircuitBreakerConfig(
             failure_threshold=failure_threshold,
             recovery_timeout=recovery_timeout,
-            failure_exceptions=failure_exceptions
+            failure_exceptions=failure_exceptions,
         )
 
         return resilient(circuit_breaker_config=circuit_breaker_config)(func)
@@ -251,10 +253,12 @@ def timeout(timeout_seconds: float):
 
 
 # Pre-configured decorators for common use cases
-def resilient_api_call(max_attempts: int = 3,
-                      failure_threshold: int = 5,
-                      timeout_seconds: float = 30.0,
-                      fallback_func: Optional[Callable] = None):
+def resilient_api_call(
+    max_attempts: int = 3,
+    failure_threshold: int = 5,
+    timeout_seconds: float = 30.0,
+    fallback_func: Callable | None = None,
+):
     """
     Pre-configured resilience decorator for API calls.
 
@@ -270,16 +274,10 @@ def resilient_api_call(max_attempts: int = 3,
             # API call with comprehensive resilience
             pass
     """
-    retry_config = RetryConfig(
-        max_attempts=max_attempts,
-        base_delay=2.0,
-        strategy="exponential"
-    )
+    retry_config = RetryConfig(max_attempts=max_attempts, base_delay=2.0, strategy="exponential")
 
     circuit_breaker_config = CircuitBreakerConfig(
-        failure_threshold=failure_threshold,
-        recovery_timeout=60,
-        failure_exceptions=(Exception,)
+        failure_threshold=failure_threshold, recovery_timeout=60, failure_exceptions=(Exception,)
     )
 
     return resilient(
@@ -287,13 +285,11 @@ def resilient_api_call(max_attempts: int = 3,
         circuit_breaker_config=circuit_breaker_config,
         fallback_func=fallback_func,
         timeout=timeout_seconds,
-        component="api"
+        component="api",
     )
 
 
-def resilient_database_call(max_attempts: int = 2,
-                           failure_threshold: int = 3,
-                           timeout_seconds: float = 10.0):
+def resilient_database_call(max_attempts: int = 2, failure_threshold: int = 3, timeout_seconds: float = 10.0):
     """
     Pre-configured resilience decorator for database calls.
 
@@ -308,28 +304,21 @@ def resilient_database_call(max_attempts: int = 2,
             # Database query with resilience
             pass
     """
-    retry_config = RetryConfig(
-        max_attempts=max_attempts,
-        base_delay=1.0,
-        strategy="fixed"
-    )
+    retry_config = RetryConfig(max_attempts=max_attempts, base_delay=1.0, strategy="fixed")
 
     circuit_breaker_config = CircuitBreakerConfig(
-        failure_threshold=failure_threshold,
-        recovery_timeout=30,
-        failure_exceptions=(Exception,)
+        failure_threshold=failure_threshold, recovery_timeout=30, failure_exceptions=(Exception,)
     )
 
     return resilient(
         retry_config=retry_config,
         circuit_breaker_config=circuit_breaker_config,
         timeout=timeout_seconds,
-        component="database"
+        component="database",
     )
 
 
-def resilient_strategy_call(max_attempts: int = 2,
-                           timeout_seconds: float = 5.0):
+def resilient_strategy_call(max_attempts: int = 2, timeout_seconds: float = 5.0):
     """
     Pre-configured resilience decorator for strategy calls.
 
@@ -343,17 +332,9 @@ def resilient_strategy_call(max_attempts: int = 2,
             # Strategy signal generation with resilience
             pass
     """
-    retry_config = RetryConfig(
-        max_attempts=max_attempts,
-        base_delay=0.5,
-        strategy="fixed"
-    )
+    retry_config = RetryConfig(max_attempts=max_attempts, base_delay=0.5, strategy="fixed")
 
-    return resilient(
-        retry_config=retry_config,
-        timeout=timeout_seconds,
-        component="strategy"
-    )
+    return resilient(retry_config=retry_config, timeout=timeout_seconds, component="strategy")
 
 
 # Utility decorators for specific scenarios
@@ -371,6 +352,7 @@ def with_caching(cache_func: Callable, ttl: int = 300):
             # Expensive call with caching
             pass
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -414,6 +396,7 @@ def with_rate_limiting(max_calls: int, time_window: int):
             # API call with rate limiting
             pass
     """
+
     def decorator(func: Callable) -> Callable:
         call_times = []
 
@@ -451,6 +434,7 @@ def with_metrics(metric_func: Callable):
             # API call with metrics
             pass
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):

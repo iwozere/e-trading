@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime as dt
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -22,10 +22,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # need to import from one place.
 from src.data.db.models.model_jobs import JobType, RunStatus
 
-
 # ---------------------------------------------------------------------------
 # Schedule schemas
 # ---------------------------------------------------------------------------
+
 
 class ScheduleCreate(BaseModel):
     """Pydantic model for creating a schedule."""
@@ -50,11 +50,11 @@ class ScheduleCreate(BaseModel):
 class ScheduleUpdate(BaseModel):
     """Pydantic model for updating a schedule."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    target: Optional[str] = Field(None, min_length=1, max_length=255)
-    task_params: Optional[Dict[str, Any]] = None
-    cron: Optional[str] = Field(None, min_length=1, max_length=100)
-    enabled: Optional[bool] = None
+    name: str | None = Field(None, min_length=1, max_length=255)
+    target: str | None = Field(None, min_length=1, max_length=255)
+    task_params: Dict[str, Any] | None = None
+    cron: str | None = Field(None, min_length=1, max_length=100)
+    enabled: bool | None = None
 
 
 class ScheduleResponse(BaseModel):
@@ -68,7 +68,7 @@ class ScheduleResponse(BaseModel):
     task_params: Dict[str, Any]
     cron: str
     enabled: bool
-    next_run_at: Optional[dt]
+    next_run_at: dt | None
     created_at: dt
     updated_at: dt
     state_json: Dict[str, Any] = {}
@@ -89,11 +89,12 @@ class ScheduleResponse(BaseModel):
 # Schedule run schemas
 # ---------------------------------------------------------------------------
 
+
 class ScheduleRunCreate(BaseModel):
     """Pydantic model for creating a run."""
 
     job_type: JobType
-    job_id: Optional[str] = None
+    job_id: str | None = None
     scheduled_for: dt
     job_snapshot: Dict[str, Any] = Field(default_factory=dict)
 
@@ -101,11 +102,11 @@ class ScheduleRunCreate(BaseModel):
 class ScheduleRunUpdate(BaseModel):
     """Pydantic model for updating a run."""
 
-    status: Optional[RunStatus] = None
-    started_at: Optional[dt] = None
-    finished_at: Optional[dt] = None
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    status: RunStatus | None = None
+    started_at: dt | None = None
+    finished_at: dt | None = None
+    result: Dict[str, Any] | None = None
+    error: str | None = None
 
 
 class ScheduleRunResponse(BaseModel):
@@ -113,21 +114,21 @@ class ScheduleRunResponse(BaseModel):
 
     id: int
     job_type: JobType
-    job_id: Optional[str]
-    user_id: Optional[int]
-    status: Optional[RunStatus]
-    scheduled_for: Optional[dt]
-    enqueued_at: Optional[dt]
-    started_at: Optional[dt]
-    finished_at: Optional[dt]
-    job_snapshot: Optional[Dict[str, Any]]
-    result: Optional[Dict[str, Any]]
-    error: Optional[str]
+    job_id: str | None
+    user_id: int | None
+    status: RunStatus | None
+    scheduled_for: dt | None
+    enqueued_at: dt | None
+    started_at: dt | None
+    finished_at: dt | None
+    job_snapshot: Dict[str, Any] | None
+    result: Dict[str, Any] | None
+    error: str | None
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("job_id", mode="before")
     @classmethod
-    def coerce_job_id_to_str(cls, v: Any) -> Optional[str]:
+    def coerce_job_id_to_str(cls, v: Any) -> str | None:
         """DB column is BigInteger; coerce to str until a migration converts it to VARCHAR."""
         if v is None:
             return None
@@ -148,26 +149,27 @@ class ScheduleRunResponse(BaseModel):
 # Request helpers
 # ---------------------------------------------------------------------------
 
+
 class ReportRequest(BaseModel):
     """Pydantic model for report execution requests."""
 
     report_type: str = Field(..., min_length=1, max_length=100)
     parameters: Dict[str, Any] = Field(default_factory=dict)
-    scheduled_for: Optional[dt] = None
+    scheduled_for: dt | None = None
 
 
 class ScreenerRequest(BaseModel):
     """Pydantic model for screener execution requests."""
 
-    screener_set: Optional[str] = Field(None, min_length=1, max_length=100)
-    tickers: Optional[List[str]] = Field(None, min_length=1)
+    screener_set: str | None = Field(None, min_length=1, max_length=100)
+    tickers: List[str] | None = Field(None, min_length=1)
     filter_criteria: Dict[str, Any] = Field(default_factory=dict)
-    top_n: Optional[int] = Field(None, ge=1, le=1000)
-    scheduled_for: Optional[dt] = None
+    top_n: int | None = Field(None, ge=1, le=1000)
+    scheduled_for: dt | None = None
 
     @field_validator("tickers")
     @classmethod
-    def validate_tickers_or_set(cls, v: Optional[List[str]], info: Any) -> Optional[List[str]]:
+    def validate_tickers_or_set(cls, v: List[str] | None, info: Any) -> List[str] | None:
         """Ensure either screener_set or tickers is provided."""
         if not v and not (info.data or {}).get("screener_set"):
             raise ValueError("Either screener_set or tickers must be provided")

@@ -5,14 +5,15 @@ Provides pytest fixtures and helper functions for setting up
 service mocks and business logic instances for testing.
 """
 
-import pytest
-from typing import Tuple, Dict, Any, List
+from typing import Any, Dict, List, Tuple
 
-from tests.mocks.telegram_service_mock import TelegramServiceMock
-from tests.mocks.indicator_service_mock import IndicatorServiceMock
-from src.telegram.screener.business_logic import TelegramBusinessLogic
+import pytest
+
+from src.indicators.models import IndicatorResultSet, IndicatorValue, TickerIndicatorsRequest
 from src.telegram.command_parser import ParsedCommand
-from src.indicators.models import TickerIndicatorsRequest, IndicatorResultSet, IndicatorValue
+from src.telegram.screener.business_logic import TelegramBusinessLogic
+from tests.mocks.indicator_service_mock import IndicatorServiceMock
+from tests.mocks.telegram_service_mock import TelegramServiceMock
 
 
 @pytest.fixture
@@ -28,11 +29,12 @@ def indicator_service_mock() -> IndicatorServiceMock:
 
 
 @pytest.fixture
-def business_logic_with_mocks(telegram_service_mock, indicator_service_mock) -> Tuple[TelegramBusinessLogic, TelegramServiceMock, IndicatorServiceMock]:
+def business_logic_with_mocks(
+    telegram_service_mock, indicator_service_mock
+) -> Tuple[TelegramBusinessLogic, TelegramServiceMock, IndicatorServiceMock]:
     """Provide TelegramBusinessLogic with mocked services."""
     business_logic = TelegramBusinessLogic(
-        telegram_service=telegram_service_mock,
-        indicator_service=indicator_service_mock
+        telegram_service=telegram_service_mock, indicator_service=indicator_service_mock
     )
     return business_logic, telegram_service_mock, indicator_service_mock
 
@@ -49,7 +51,7 @@ def sample_user_data() -> Dict[str, Any]:
         "max_alerts": 10,
         "max_schedules": 5,
         "verification_code": None,
-        "code_sent_time": None
+        "code_sent_time": None,
     }
 
 
@@ -65,7 +67,7 @@ def admin_user_data() -> Dict[str, Any]:
         "max_alerts": 50,
         "max_schedules": 20,
         "verification_code": None,
-        "code_sent_time": None
+        "code_sent_time": None,
     }
 
 
@@ -81,7 +83,7 @@ def unverified_user_data() -> Dict[str, Any]:
         "max_alerts": 5,
         "max_schedules": 2,
         "verification_code": "123456",
-        "code_sent_time": 1640995200  # Mock timestamp
+        "code_sent_time": 1640995200,  # Mock timestamp
     }
 
 
@@ -95,8 +97,8 @@ def sample_parsed_command() -> ParsedCommand:
             "ticker": "AAPL",
             "indicators": ["RSI", "MACD"],
             "interval": "1d",
-            "period": "1y"
-        }
+            "period": "1y",
+        },
     )
 
 
@@ -104,11 +106,7 @@ def sample_parsed_command() -> ParsedCommand:
 def sample_indicator_request() -> TickerIndicatorsRequest:
     """Provide a sample TickerIndicatorsRequest for testing."""
     return TickerIndicatorsRequest(
-        ticker="AAPL",
-        indicators=["RSI", "MACD", "SMA"],
-        timeframe="1d",
-        period="1y",
-        provider="yahoo"
+        ticker="AAPL", indicators=["RSI", "MACD", "SMA"], timeframe="1d", period="1y", provider="yahoo"
     )
 
 
@@ -120,20 +118,21 @@ def sample_indicator_result() -> IndicatorResultSet:
         technical={
             "RSI": IndicatorValue(name="RSI", value=65.5),
             "MACD": IndicatorValue(name="MACD", value=1.23),
-            "SMA": IndicatorValue(name="SMA", value=150.25)
+            "SMA": IndicatorValue(name="SMA", value=150.25),
         },
         fundamental={
             "PE": IndicatorValue(name="PE", value=25.4),
-            "MarketCap": IndicatorValue(name="MarketCap", value=2500000000000)
-        }
+            "MarketCap": IndicatorValue(name="MarketCap", value=2500000000000),
+        },
     )
 
 
 # Helper functions for test setup
 
-def setup_user_in_mock(telegram_service_mock: TelegramServiceMock,
-                      telegram_user_id: str,
-                      user_data: Dict[str, Any] = None) -> Dict[str, Any]:
+
+def setup_user_in_mock(
+    telegram_service_mock: TelegramServiceMock, telegram_user_id: str, user_data: Dict[str, Any] = None
+) -> Dict[str, Any]:
     """
     Set up a user in the telegram service mock.
 
@@ -155,17 +154,19 @@ def setup_user_in_mock(telegram_service_mock: TelegramServiceMock,
             "max_alerts": 10,
             "max_schedules": 5,
             "verification_code": None,
-            "code_sent_time": None
+            "code_sent_time": None,
         }
 
     telegram_service_mock.add_test_user(telegram_user_id, **user_data)
     return user_data
 
 
-def setup_indicator_data_in_mock(indicator_service_mock: IndicatorServiceMock,
-                                ticker: str,
-                                technical_indicators: Dict[str, float] = None,
-                                fundamental_indicators: Dict[str, float] = None):
+def setup_indicator_data_in_mock(
+    indicator_service_mock: IndicatorServiceMock,
+    ticker: str,
+    technical_indicators: Dict[str, float] = None,
+    fundamental_indicators: Dict[str, float] = None,
+):
     """
     Set up indicator data in the indicator service mock.
 
@@ -188,9 +189,7 @@ def setup_indicator_data_in_mock(indicator_service_mock: IndicatorServiceMock,
     indicator_service_mock.add_ticker_data(ticker, technical, fundamental)
 
 
-def create_parsed_command(command: str,
-                         telegram_user_id: str = "test_user_123",
-                         **args) -> ParsedCommand:
+def create_parsed_command(command: str, telegram_user_id: str = "test_user_123", **args) -> ParsedCommand:
     """
     Create a ParsedCommand for testing.
 
@@ -217,8 +216,9 @@ def assert_service_called(service_mock, method_name: str, *args, **kwargs):
         method_name: Name of the method that should have been called
         *args, **kwargs: Expected arguments
     """
-    assert service_mock.was_called_with(method_name, *args, **kwargs), \
+    assert service_mock.was_called_with(method_name, *args, **kwargs), (
         f"Expected {method_name} to be called with args={args}, kwargs={kwargs}"
+    )
 
 
 def assert_service_call_count(service_mock, method_name: str, expected_count: int):
@@ -231,8 +231,9 @@ def assert_service_call_count(service_mock, method_name: str, expected_count: in
         expected_count: Expected number of calls
     """
     actual_count = service_mock.get_call_count(method_name)
-    assert actual_count == expected_count, \
+    assert actual_count == expected_count, (
         f"Expected {method_name} to be called {expected_count} times, but was called {actual_count} times"
+    )
 
 
 def get_last_service_call(service_mock, method_name: str) -> Dict[str, Any]:
@@ -251,59 +252,49 @@ def get_last_service_call(service_mock, method_name: str) -> Dict[str, Any]:
 
 # Error simulation helpers
 
-def simulate_database_error(telegram_service_mock: TelegramServiceMock,
-                           method_name: str = "get_user_status"):
+
+def simulate_database_error(telegram_service_mock: TelegramServiceMock, method_name: str = "get_user_status"):
     """Simulate a database connection error."""
-    telegram_service_mock.configure_error(
-        method_name,
-        ConnectionError("Database connection failed")
-    )
+    telegram_service_mock.configure_error(method_name, ConnectionError("Database connection failed"))
 
 
-def simulate_rate_limit_error(telegram_service_mock: TelegramServiceMock,
-                             method_name: str = "set_verification_code"):
+def simulate_rate_limit_error(telegram_service_mock: TelegramServiceMock, method_name: str = "set_verification_code"):
     """Simulate a rate limit error."""
-    telegram_service_mock.configure_error(
-        method_name,
-        Exception("Rate limit exceeded - too many requests")
-    )
+    telegram_service_mock.configure_error(method_name, Exception("Rate limit exceeded - too many requests"))
 
 
-def simulate_indicator_api_error(indicator_service_mock: IndicatorServiceMock,
-                                method_name: str = "compute_for_ticker"):
+def simulate_indicator_api_error(indicator_service_mock: IndicatorServiceMock, method_name: str = "compute_for_ticker"):
     """Simulate an indicator API error."""
-    indicator_service_mock.configure_error(
-        method_name,
-        ConnectionError("Unable to fetch market data - API error")
-    )
+    indicator_service_mock.configure_error(method_name, ConnectionError("Unable to fetch market data - API error"))
 
 
-def simulate_invalid_ticker_error(indicator_service_mock: IndicatorServiceMock,
-                                 method_name: str = "compute_for_ticker"):
+def simulate_invalid_ticker_error(
+    indicator_service_mock: IndicatorServiceMock, method_name: str = "compute_for_ticker"
+):
     """Simulate an invalid ticker error."""
-    indicator_service_mock.configure_error(
-        method_name,
-        ValueError("Ticker symbol not found")
-    )
+    indicator_service_mock.configure_error(method_name, ValueError("Ticker symbol not found"))
 
 
 # Test data generators
+
 
 def generate_test_alerts(count: int = 3) -> List[Dict[str, Any]]:
     """Generate test alert data."""
     alerts = []
     for i in range(count):
-        alerts.append({
-            "id": i + 1,
-            "user_id": "test_user_123",
-            "ticker": f"TEST{i}",
-            "price": 100.0 + i * 10,
-            "condition": "above",
-            "email": i % 2 == 0,
-            "status": "ARMED",
-            "created_at": 1640995200 + i * 3600,
-            "enabled": True
-        })
+        alerts.append(
+            {
+                "id": i + 1,
+                "user_id": "test_user_123",
+                "ticker": f"TEST{i}",
+                "price": 100.0 + i * 10,
+                "condition": "above",
+                "email": i % 2 == 0,
+                "status": "ARMED",
+                "created_at": 1640995200 + i * 3600,
+                "enabled": True,
+            }
+        )
     return alerts
 
 
@@ -311,18 +302,21 @@ def generate_test_schedules(count: int = 2) -> List[Dict[str, Any]]:
     """Generate test schedule data."""
     schedules = []
     for i in range(count):
-        schedules.append({
-            "id": i + 1,
-            "user_id": "test_user_123",
-            "ticker": f"SCHED{i}",
-            "scheduled_time": f"0{9 + i} 00 * * *",
-            "created_at": 1640995200 + i * 3600,
-            "enabled": True
-        })
+        schedules.append(
+            {
+                "id": i + 1,
+                "user_id": "test_user_123",
+                "ticker": f"SCHED{i}",
+                "scheduled_time": f"0{9 + i} 00 * * *",
+                "created_at": 1640995200 + i * 3600,
+                "enabled": True,
+            }
+        )
     return schedules
 
 
 # Integration test helpers
+
 
 class ServiceTestContext:
     """
@@ -339,8 +333,7 @@ class ServiceTestContext:
         self.telegram_service_mock = TelegramServiceMock()
         self.indicator_service_mock = IndicatorServiceMock()
         self.business_logic = TelegramBusinessLogic(
-            telegram_service=self.telegram_service_mock,
-            indicator_service=self.indicator_service_mock
+            telegram_service=self.telegram_service_mock, indicator_service=self.indicator_service_mock
         )
         return self
 

@@ -1,11 +1,13 @@
-import time
 import re
 import secrets
-from typing import Any, Dict, Optional
-from src.telegram.command_parser import ParsedCommand
+import time
+from typing import Any, Dict
+
 from src.notification.logger import setup_logger
+from src.telegram.command_parser import ParsedCommand
 
 _logger = setup_logger(__name__)
+
 
 class UserService:
     """
@@ -38,7 +40,10 @@ class UserService:
     def check_approved_access(self, telegram_user_id: str) -> Dict[str, Any]:
         """Check if user has approved access for restricted features. Returns error dict if not."""
         if not self.is_approved_user(telegram_user_id):
-            return {"status": "error", "message": "Access denied, please contact chat's admin or send request for approval using command /request_approval"}
+            return {
+                "status": "error",
+                "message": "Access denied, please contact chat's admin or send request for approval using command /request_approval",
+            }
         return {"status": "ok"}
 
     def handle_register(self, parsed: ParsedCommand) -> Dict[str, Any]:
@@ -52,10 +57,13 @@ class UserService:
                 return {"status": "error", "message": "No telegram_user_id provided"}
 
             if not email:
-                return {"status": "error", "message": "Please provide an email address. Usage: /register email@example.com [language]"}
+                return {
+                    "status": "error",
+                    "message": "Please provide an email address. Usage: /register email@example.com [language]",
+                }
 
             # Validate email format
-            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
             if not re.match(email_pattern, email):
                 return {"status": "error", "message": "Please provide a valid email address."}
 
@@ -64,7 +72,10 @@ class UserService:
 
             codes_sent = self.telegram_service.count_codes_last_hour(telegram_user_id)
             if codes_sent >= 5:
-                return {"status": "error", "message": "Too many verification codes sent. Please wait an hour before requesting another."}
+                return {
+                    "status": "error",
+                    "message": "Too many verification codes sent. Please wait an hour before requesting another.",
+                }
 
             # Generate verification code using CSPRNG (secrets module — not random)
             code = f"{secrets.randbelow(900000) + 100000:06d}"
@@ -77,11 +88,7 @@ class UserService:
                 "status": "ok",
                 "title": "Email Registration",
                 "message": f"A 6-digit verification code has been sent to {email}. Use /verify CODE to verify your email.",
-                "email_verification": {
-                    "email": email,
-                    "code": code,
-                    "user_id": telegram_user_id
-                }
+                "email_verification": {"email": email, "code": code, "user_id": telegram_user_id},
             }
         except Exception as e:
             _logger.exception("Error in register command")
@@ -109,12 +116,12 @@ class UserService:
                 return {
                     "status": "ok",
                     "title": "Email Verified",
-                    "message": "Your email has been successfully verified! You can now use all bot features including email reports."
+                    "message": "Your email has been successfully verified! You can now use all bot features including email reports.",
                 }
             else:
                 return {
                     "status": "error",
-                    "message": "Invalid or expired verification code. Please check the code or request a new one with /register."
+                    "message": "Invalid or expired verification code. Please check the code or request a new one with /register.",
                 }
         except Exception as e:
             _logger.exception("Error in verify command")
@@ -139,13 +146,13 @@ class UserService:
             return {
                 "status": "ok",
                 "title": "Your Info",
-                "message": f"Email: {email}\nVerified: {verified}\nApproved: {approved}\nAdmin: {admin}\nLanguage: {language}"
+                "message": f"Email: {email}\nVerified: {verified}\nApproved: {approved}\nAdmin: {admin}\nLanguage: {language}",
             }
         else:
             return {
                 "status": "ok",
                 "title": "Your Info",
-                "message": "Email: (not set)\nVerified: No\nApproved: No\nAdmin: No\nLanguage: (not set)"
+                "message": "Email: (not set)\nVerified: No\nApproved: No\nAdmin: No\nLanguage: (not set)",
             }
 
     def handle_language(self, parsed: ParsedCommand) -> Dict[str, Any]:
@@ -158,11 +165,17 @@ class UserService:
                 return {"status": "error", "message": "No telegram_user_id provided"}
 
             if not language:
-                return {"status": "error", "message": "Please provide a language code. Usage: /language en (supported: en, ru)"}
+                return {
+                    "status": "error",
+                    "message": "Please provide a language code. Usage: /language en (supported: en, ru)",
+                }
 
             supported_languages = ["en", "ru"]
             if language.lower() not in supported_languages:
-                return {"status": "error", "message": f"Language '{language}' not supported. Supported languages: {', '.join(supported_languages)}"}
+                return {
+                    "status": "error",
+                    "message": f"Language '{language}' not supported. Supported languages: {', '.join(supported_languages)}",
+                }
 
             access_check = self.check_approved_access(telegram_user_id)
             if access_check["status"] != "ok":
@@ -182,7 +195,7 @@ class UserService:
             return {
                 "status": "ok",
                 "title": "Language Updated",
-                "message": f"Your language preference has been updated to {language.upper()}."
+                "message": f"Your language preference has been updated to {language.upper()}.",
             }
         except Exception as e:
             _logger.exception("Error in language command")
@@ -213,7 +226,7 @@ class UserService:
                 "message": "Your approval request has been submitted. Admins will review your request and notify you of the decision.",
                 "user_id": telegram_user_id,
                 "email": status.get("email"),
-                "notify_admins": True
+                "notify_admins": True,
             }
         except Exception as e:
             _logger.exception("Error processing approval request")
@@ -235,17 +248,22 @@ class UserService:
 
             user_list = []
             for user in users:
-                email = user.get('email', 'N/A')
+                email = user.get("email", "N/A")
                 verified = user.get("verified", False)
                 approved = user.get("approved", False)
-                status_text = "✅ Verified & Approved" if verified and approved else \
-                             "✅ Verified" if verified else "❌ Not Verified"
+                status_text = (
+                    "✅ Verified & Approved"
+                    if verified and approved
+                    else "✅ Verified"
+                    if verified
+                    else "❌ Not Verified"
+                )
                 user_list.append(f"• {email} - {status_text}")
 
             return {
                 "status": "ok",
                 "message": f"**User List ({len(users)} users)**\n\n" + "\n".join(user_list),
-                "is_admin": True
+                "is_admin": True,
             }
         except Exception:
             _logger.exception("Error listing users")
@@ -272,7 +290,7 @@ class UserService:
             return {
                 "status": "ok",
                 "message": "**Users Pending Approval**\n\n" + "\n".join(user_list),
-                "is_admin": True
+                "is_admin": True,
             }
         except Exception:
             _logger.exception("Error listing pending approvals")
@@ -334,7 +352,7 @@ class UserService:
                 return {
                     "status": "ok",
                     "message": f"{limit_type.capitalize()} limit set to {limit} for user {target_user_id}",
-                    "is_admin": True
+                    "is_admin": True,
                 }
             return {"status": "error", "message": "Global limit setting not yet implemented"}
         except Exception as e:

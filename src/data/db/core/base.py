@@ -1,6 +1,6 @@
 # src/data/db/core/base.py
-from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy import MetaData
+from sqlalchemy.orm import DeclarativeBase
 
 # optional: naming convention helps Alembic + SQLite constraints
 convention = {
@@ -11,6 +11,7 @@ convention = {
     "pk": "pk_%(table_name)s",
 }
 _shared_metadata = MetaData(naming_convention=convention)
+
 
 class Base(DeclarativeBase):
     metadata = _shared_metadata

@@ -10,13 +10,13 @@ This module provides comprehensive virality analysis with:
 """
 
 import math
-from typing import Dict, List, Optional, Tuple, Any
+import sys
+from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from collections import defaultdict, Counter
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
-import sys
+from typing import Any, Dict, List, Tuple
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -26,8 +26,10 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
+
 class Platform(Enum):
     """Social media platform types."""
+
     TWITTER = "twitter"
     REDDIT = "reddit"
     STOCKTWITS = "stocktwits"
@@ -35,9 +37,11 @@ class Platform(Enum):
     NEWS = "news"
     GENERAL = "general"
 
+
 @dataclass
 class EngagementMetrics:
     """Engagement metrics for a post or message."""
+
     likes: int = 0
     replies: int = 0
     retweets: int = 0
@@ -50,24 +54,27 @@ class EngagementMetrics:
 
     def total_engagement(self) -> int:
         """Calculate total engagement across all metrics."""
-        return (self.likes + self.replies + self.retweets + self.shares +
-                self.comments + self.upvotes + self.reactions)
+        return self.likes + self.replies + self.retweets + self.shares + self.comments + self.upvotes + self.reactions
+
 
 @dataclass
 class AuthorInfluence:
     """Author influence metrics."""
+
     username: str
     followers_count: int = 0
     following_count: int = 0
     verified: bool = False
-    account_age_days: Optional[int] = None
+    account_age_days: int | None = None
     total_posts: int = 0
     avg_engagement: float = 0.0
     influence_score: float = 0.0
 
+
 @dataclass
 class ViralityResult:
     """Result of virality analysis."""
+
     virality_index: float  # 0.0 to 1.0+
     engagement_score: float
     velocity_score: float
@@ -78,9 +85,11 @@ class ViralityResult:
     breakdown: Dict[str, float]
     top_contributors: List[Tuple[str, float]]  # (username, contribution_score)
 
+
 @dataclass
 class PostData:
     """Post data for virality analysis."""
+
     id: str
     content: str
     author: AuthorInfluence
@@ -96,6 +105,7 @@ class PostData:
         if self.mentions is None:
             self.mentions = []
 
+
 class ViralityCalculator:
     """
     Advanced virality and engagement metrics calculator.
@@ -108,7 +118,7 @@ class ViralityCalculator:
     - Platform-specific normalization
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Dict | None = None):
         """
         Initialize the virality calculator.
 
@@ -139,43 +149,18 @@ class ViralityCalculator:
     def _load_platform_weights(self) -> Dict[Platform, Dict[str, float]]:
         """Load platform-specific engagement weights."""
         default_weights = {
-            Platform.TWITTER: {
-                "likes": 1.0,
-                "retweets": 3.0,
-                "replies": 2.0,
-                "views": 0.01,
-                "base_multiplier": 1.0
-            },
+            Platform.TWITTER: {"likes": 1.0, "retweets": 3.0, "replies": 2.0, "views": 0.01, "base_multiplier": 1.0},
             Platform.REDDIT: {
                 "upvotes": 2.0,
                 "downvotes": -1.0,
                 "comments": 3.0,
                 "shares": 2.5,
-                "base_multiplier": 1.2
+                "base_multiplier": 1.2,
             },
-            Platform.STOCKTWITS: {
-                "likes": 1.5,
-                "replies": 2.5,
-                "retweets": 3.5,
-                "base_multiplier": 1.3
-            },
-            Platform.DISCORD: {
-                "reactions": 1.0,
-                "replies": 2.0,
-                "base_multiplier": 0.8
-            },
-            Platform.NEWS: {
-                "shares": 4.0,
-                "comments": 2.0,
-                "likes": 1.0,
-                "base_multiplier": 2.0
-            },
-            Platform.GENERAL: {
-                "likes": 1.0,
-                "replies": 2.0,
-                "shares": 2.5,
-                "base_multiplier": 1.0
-            }
+            Platform.STOCKTWITS: {"likes": 1.5, "replies": 2.5, "retweets": 3.5, "base_multiplier": 1.3},
+            Platform.DISCORD: {"reactions": 1.0, "replies": 2.0, "base_multiplier": 0.8},
+            Platform.NEWS: {"shares": 4.0, "comments": 2.0, "likes": 1.0, "base_multiplier": 2.0},
+            Platform.GENERAL: {"likes": 1.0, "replies": 2.0, "shares": 2.5, "base_multiplier": 1.0},
         }
 
         # Override with config values
@@ -192,7 +177,7 @@ class ViralityCalculator:
 
         return default_weights
 
-    def calculate_virality(self, posts: List[PostData], ticker: Optional[str] = None) -> ViralityResult:
+    def calculate_virality(self, posts: List[PostData], ticker: str | None = None) -> ViralityResult:
         """
         Calculate comprehensive virality metrics for a collection of posts.
 
@@ -234,7 +219,7 @@ class ViralityCalculator:
             "reach": reach_score,
             "influence": influence_score,
             "trending": trending_score,
-            "platform_normalized": platform_normalized_score
+            "platform_normalized": platform_normalized_score,
         }
 
         return ViralityResult(
@@ -246,7 +231,7 @@ class ViralityCalculator:
             trending_score=trending_score,
             platform_normalized_score=platform_normalized_score,
             breakdown=breakdown,
-            top_contributors=top_contributors
+            top_contributors=top_contributors,
         )
 
     def _calculate_engagement_score(self, posts: List[PostData]) -> float:
@@ -324,8 +309,8 @@ class ViralityCalculator:
         # Calculate velocity (acceleration of engagement)
         velocities = []
         for i in range(1, len(window_engagements)):
-            if window_engagements[i-1] > 0:
-                velocity = (window_engagements[i] - window_engagements[i-1]) / window_engagements[i-1]
+            if window_engagements[i - 1] > 0:
+                velocity = (window_engagements[i] - window_engagements[i - 1]) / window_engagements[i - 1]
             else:
                 velocity = 1.0 if window_engagements[i] > 0 else 0.0
             velocities.append(velocity)
@@ -516,33 +501,28 @@ class ViralityCalculator:
             Platform.STOCKTWITS: 0.8,
             Platform.DISCORD: 0.6,
             Platform.NEWS: 2.0,
-            Platform.GENERAL: 1.0
+            Platform.GENERAL: 1.0,
         }
 
         return baselines.get(platform, 1.0)
 
-    def _calculate_virality_index(self, engagement: float, velocity: float, reach: float,
-                                 influence: float, trending: float) -> float:
+    def _calculate_virality_index(
+        self, engagement: float, velocity: float, reach: float, influence: float, trending: float
+    ) -> float:
         """Calculate overall virality index from component scores."""
         # Weighted combination of components
-        weights = {
-            "engagement": 0.3,
-            "velocity": 0.2,
-            "reach": 0.2,
-            "influence": 0.15,
-            "trending": 0.15
-        }
+        weights = {"engagement": 0.3, "velocity": 0.2, "reach": 0.2, "influence": 0.15, "trending": 0.15}
 
         # Override with config weights if provided
         config_weights = self.config.get("virality_weights", {})
         weights.update(config_weights)
 
         virality_index = (
-            engagement * weights["engagement"] +
-            velocity * weights["velocity"] +
-            reach * weights["reach"] +
-            influence * weights["influence"] +
-            trending * weights["trending"]
+            engagement * weights["engagement"]
+            + velocity * weights["velocity"]
+            + reach * weights["reach"]
+            + influence * weights["influence"]
+            + trending * weights["trending"]
         )
 
         return min(1.0, virality_index)
@@ -560,17 +540,13 @@ class ViralityCalculator:
             author_contributions[post.author.username] += contribution
 
         # Sort by contribution and return top 10
-        sorted_contributors = sorted(
-            author_contributions.items(),
-            key=lambda x: x[1],
-            reverse=True
-        )
+        sorted_contributors = sorted(author_contributions.items(), key=lambda x: x[1], reverse=True)
 
         return sorted_contributors[:10]
 
     def _calculate_time_decay(self, timestamp: datetime) -> float:
         """Calculate time decay factor for engagement."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         hours_ago = (now - timestamp).total_seconds() / 3600
 
         # Exponential decay: newer posts have higher weight
@@ -589,7 +565,7 @@ class ViralityCalculator:
             trending_score=0.0,
             platform_normalized_score=0.0,
             breakdown={},
-            top_contributors=[]
+            top_contributors=[],
         )
 
     def analyze_trending_topics(self, posts: List[PostData], min_mentions: int = 5) -> Dict[str, float]:
@@ -627,14 +603,14 @@ class ViralityCalculator:
                 recent_mentions = 0
                 total_engagement = 0
 
-                cutoff_time = datetime.now(timezone.utc) - timedelta(hours=6)  # Last 6 hours
+                cutoff_time = datetime.now(UTC) - timedelta(hours=6)  # Last 6 hours
 
                 for post in posts:
                     topic_clean = topic[1:]  # Remove # or @ prefix
 
-                    if (topic.startswith('#') and topic_clean in post.hashtags) or \
-                       (topic.startswith('@') and topic_clean in post.mentions):
-
+                    if (topic.startswith("#") and topic_clean in post.hashtags) or (
+                        topic.startswith("@") and topic_clean in post.mentions
+                    ):
                         if post.timestamp >= cutoff_time:
                             recent_mentions += 1
 
@@ -645,11 +621,7 @@ class ViralityCalculator:
                 recency_score = recent_mentions / max(1, count)
                 engagement_score = total_engagement / max(1, count)
 
-                trending_score = (
-                    frequency_score * 0.4 +
-                    recency_score * 0.3 +
-                    min(1.0, engagement_score / 100) * 0.3
-                )
+                trending_score = frequency_score * 0.4 + recency_score * 0.3 + min(1.0, engagement_score / 100) * 0.3
 
                 trending_topics[topic] = trending_score
 
@@ -661,7 +633,7 @@ class ViralityCalculator:
         return {
             "influence_cache_size": len(self._influence_cache),
             "platform_baselines": dict(self._platform_baselines),
-            "config": self.config
+            "config": self.config,
         }
 
     def clear_cache(self) -> None:

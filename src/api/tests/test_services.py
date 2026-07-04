@@ -10,20 +10,21 @@ Tests for the application service layer including:
 - System Monitoring Service (system metrics and alerts)
 """
 
-import pytest
-from unittest.mock import patch, Mock, MagicMock
-from datetime import datetime, timezone
-from pathlib import Path
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.api.services.webui_app_service import WebUIAppService
-from src.api.services.telegram_app_service import TelegramAppService
 from src.api.services.monitoring_service import SystemMonitoringService
-from src.api.services.strategy_service import StrategyManagementService, StrategyValidationError, StrategyOperationError
+from src.api.services.strategy_service import StrategyManagementService, StrategyOperationError, StrategyValidationError
+from src.api.services.telegram_app_service import TelegramAppService
+from src.api.services.webui_app_service import WebUIAppService
 
 
 class TestWebUIAppService:
@@ -33,7 +34,7 @@ class TestWebUIAppService:
         """Set up test dependencies."""
         self.service = WebUIAppService()
 
-    @patch('src.api.services.webui_app_service.get_database_service')
+    @patch("src.api.services.webui_app_service.get_database_service")
     def test_get_db_session(self, mock_get_db_service):
         """Test database session generator."""
         mock_db_service = Mock()
@@ -54,8 +55,8 @@ class TestWebUIAppService:
 
         assert session == mock_session
 
-    @patch('src.api.services.webui_app_service.get_database_service')
-    @patch('src.api.services.webui_app_service.PROJECT_ROOT')
+    @patch("src.api.services.webui_app_service.get_database_service")
+    @patch("src.api.services.webui_app_service.PROJECT_ROOT")
     def test_init_database_success(self, mock_project_root, mock_get_db_service):
         """Test successful database initialization."""
         # Mock project root and database directory
@@ -66,15 +67,15 @@ class TestWebUIAppService:
         mock_get_db_service.return_value = mock_db_service
 
         # Mock users service to return existing users
-        with patch('src.api.services.webui_app_service.users_service') as mock_users_service:
+        with patch("src.api.services.webui_app_service.users_service") as mock_users_service:
             mock_users_service.list_telegram_users_dto.return_value = [{"id": 1}]  # Existing users
 
             self.service.init_database()
 
             mock_db_service.init_databases.assert_called_once()
 
-    @patch('src.api.services.webui_app_service.get_database_service')
-    @patch('src.api.services.webui_app_service.users_service')
+    @patch("src.api.services.webui_app_service.get_database_service")
+    @patch("src.api.services.webui_app_service.users_service")
     def test_create_default_users(self, mock_users_service, mock_get_db_service):
         """Test creation of default users."""
         # Mock no existing users
@@ -99,7 +100,7 @@ class TestWebUIAppService:
         assert mock_session.add.call_count == 3  # admin, trader, viewer
         mock_session.commit.assert_called_once()
 
-    @patch('src.api.services.webui_app_service.get_database_service')
+    @patch("src.api.services.webui_app_service.get_database_service")
     def test_authenticate_user_success(self, mock_get_db_service):
         """Test successful user authentication."""
         # Mock database service and user
@@ -129,7 +130,7 @@ class TestWebUIAppService:
         mock_user.verify_password.assert_called_once_with("password")
         mock_session.commit.assert_called_once()
 
-    @patch('src.api.services.webui_app_service.get_database_service')
+    @patch("src.api.services.webui_app_service.get_database_service")
     def test_authenticate_user_not_found(self, mock_get_db_service):
         """Test user authentication when user not found."""
         mock_db_service = Mock()
@@ -149,7 +150,7 @@ class TestWebUIAppService:
 
         assert result is None
 
-    @patch('src.api.services.webui_app_service.webui_service')
+    @patch("src.api.services.webui_app_service.webui_service")
     def test_log_user_action_success(self, mock_webui_service):
         """Test successful user action logging."""
         mock_webui_service.audit_log.return_value = 123
@@ -159,7 +160,7 @@ class TestWebUIAppService:
             action="login",
             resource_type="authentication",
             resource_id="session_123",
-            details={"method": "jwt"}
+            details={"method": "jwt"},
         )
 
         assert result == 123
@@ -170,10 +171,10 @@ class TestWebUIAppService:
             resource_id="session_123",
             details={"method": "jwt"},
             ip_address=None,
-            user_agent=None
+            user_agent=None,
         )
 
-    @patch('src.api.services.webui_app_service.webui_service')
+    @patch("src.api.services.webui_app_service.webui_service")
     def test_get_system_config(self, mock_webui_service):
         """Test system configuration retrieval."""
         mock_config = {"key": "value", "setting": "enabled"}
@@ -184,7 +185,7 @@ class TestWebUIAppService:
         assert result == mock_config
         mock_webui_service.get_config.assert_called_once_with("test_key")
 
-    @patch('src.api.services.webui_app_service.webui_service')
+    @patch("src.api.services.webui_app_service.webui_service")
     def test_set_system_config(self, mock_webui_service):
         """Test system configuration setting."""
         mock_result = {"id": 1, "key": "test_key", "value": {"setting": "value"}}
@@ -204,40 +205,40 @@ class TestTelegramAppService:
         """Set up test dependencies."""
         self.service = TelegramAppService()
 
-    @patch('src.api.services.telegram_app_service.users_service')
+    @patch("src.api.services.telegram_app_service.users_service")
     def test_get_user_stats(self, mock_users_service):
         """Test getting Telegram user statistics."""
         mock_users = [
-            {'verified': True, 'approved': True, 'is_admin': False},
-            {'verified': True, 'approved': False, 'is_admin': False},
-            {'verified': False, 'approved': False, 'is_admin': False},
-            {'verified': True, 'approved': True, 'is_admin': True}
+            {"verified": True, "approved": True, "is_admin": False},
+            {"verified": True, "approved": False, "is_admin": False},
+            {"verified": False, "approved": False, "is_admin": False},
+            {"verified": True, "approved": True, "is_admin": True},
         ]
         mock_users_service.list_telegram_users_dto.return_value = mock_users
 
         result = self.service.get_user_stats()
 
-        assert result['total_users'] == 4
-        assert result['verified_users'] == 3
-        assert result['approved_users'] == 2
-        assert result['pending_approvals'] == 1  # verified but not approved
-        assert result['admin_users'] == 1
+        assert result["total_users"] == 4
+        assert result["verified_users"] == 3
+        assert result["approved_users"] == 2
+        assert result["pending_approvals"] == 1  # verified but not approved
+        assert result["admin_users"] == 1
 
-    @patch('src.api.services.telegram_app_service.users_service')
+    @patch("src.api.services.telegram_app_service.users_service")
     def test_get_users_list_all(self, mock_users_service):
         """Test getting all Telegram users."""
         mock_users = [
             {
-                'telegram_user_id': '123456789',
-                'email': 'test@example.com',
-                'verified': True,
-                'approved': True,
-                'language': 'en',
-                'is_admin': False,
-                'max_alerts': 5,
-                'max_schedules': 5,
-                'created_at': datetime.now(timezone.utc),
-                'updated_at': datetime.now(timezone.utc)
+                "telegram_user_id": "123456789",
+                "email": "test@example.com",
+                "verified": True,
+                "approved": True,
+                "language": "en",
+                "is_admin": False,
+                "max_alerts": 5,
+                "max_schedules": 5,
+                "created_at": datetime.now(UTC),
+                "updated_at": datetime.now(UTC),
             }
         ]
         mock_users_service.list_telegram_users_dto.return_value = mock_users
@@ -245,17 +246,17 @@ class TestTelegramAppService:
         result = self.service.get_users_list()
 
         assert len(result) == 1
-        assert result[0]['telegram_user_id'] == '123456789'
-        assert result[0]['verified'] is True
-        assert result[0]['approved'] is True
+        assert result[0]["telegram_user_id"] == "123456789"
+        assert result[0]["verified"] is True
+        assert result[0]["approved"] is True
 
-    @patch('src.api.services.telegram_app_service.users_service')
+    @patch("src.api.services.telegram_app_service.users_service")
     def test_get_users_list_filtered(self, mock_users_service):
         """Test getting filtered Telegram users."""
         mock_users = [
-            {'verified': True, 'approved': True},
-            {'verified': True, 'approved': False},
-            {'verified': False, 'approved': False}
+            {"verified": True, "approved": True},
+            {"verified": True, "approved": False},
+            {"verified": False, "approved": False},
         ]
         mock_users_service.list_telegram_users_dto.return_value = mock_users
 
@@ -271,7 +272,7 @@ class TestTelegramAppService:
         result = self.service.get_users_list(filter_type="pending")
         assert len(result) == 1  # Verified but not approved
 
-    @patch('src.api.services.telegram_app_service.users_service')
+    @patch("src.api.services.telegram_app_service.users_service")
     def test_verify_user_success(self, mock_users_service):
         """Test successful user verification."""
         mock_users_service.update_telegram_profile.return_value = None
@@ -281,11 +282,11 @@ class TestTelegramAppService:
         assert "verified successfully" in result["message"]
         mock_users_service.update_telegram_profile.assert_called_once_with("123456789", verified=True)
 
-    @patch('src.api.services.telegram_app_service.users_service')
+    @patch("src.api.services.telegram_app_service.users_service")
     def test_approve_user_success(self, mock_users_service):
         """Test successful user approval."""
         # Mock user profile with verified status
-        mock_users_service.get_telegram_profile.return_value = {'verified': True}
+        mock_users_service.get_telegram_profile.return_value = {"verified": True}
         mock_users_service.update_telegram_profile.return_value = None
 
         result = self.service.approve_user("123456789")
@@ -293,16 +294,16 @@ class TestTelegramAppService:
         assert "approved successfully" in result["message"]
         mock_users_service.update_telegram_profile.assert_called_once_with("123456789", approved=True)
 
-    @patch('src.api.services.telegram_app_service.users_service')
+    @patch("src.api.services.telegram_app_service.users_service")
     def test_approve_user_not_verified(self, mock_users_service):
         """Test user approval when user is not verified."""
         # Mock user profile without verified status
-        mock_users_service.get_telegram_profile.return_value = {'verified': False}
+        mock_users_service.get_telegram_profile.return_value = {"verified": False}
 
         with pytest.raises(ValueError, match="User must be verified before approval"):
             self.service.approve_user("123456789")
 
-    @patch('src.api.services.telegram_app_service.users_service')
+    @patch("src.api.services.telegram_app_service.users_service")
     def test_approve_user_not_found(self, mock_users_service):
         """Test user approval when user not found."""
         mock_users_service.get_telegram_profile.return_value = None
@@ -310,38 +311,34 @@ class TestTelegramAppService:
         with pytest.raises(ValueError, match="User not found"):
             self.service.approve_user("123456789")
 
-    @patch('src.api.services.telegram_app_service.telegram_service')
+    @patch("src.api.services.telegram_app_service.telegram_service")
     def test_get_alert_stats(self, mock_telegram_service):
         """Test getting alert statistics."""
-        mock_alerts = [
-            {'id': 1, 'active': True},
-            {'id': 2, 'active': True},
-            {'id': 3, 'active': False}
-        ]
+        mock_alerts = [{"id": 1, "active": True}, {"id": 2, "active": True}, {"id": 3, "active": False}]
         mock_telegram_service.get_active_alerts.return_value = mock_alerts
 
         result = self.service.get_alert_stats()
 
-        assert result['total_alerts'] == 3
-        assert result['active_alerts'] == 3  # Only active alerts returned by service
+        assert result["total_alerts"] == 3
+        assert result["active_alerts"] == 3  # Only active alerts returned by service
 
-    @patch('src.api.services.telegram_app_service.telegram_service')
+    @patch("src.api.services.telegram_app_service.telegram_service")
     def test_send_broadcast_success(self, mock_telegram_service):
         """Test successful broadcast sending."""
         mock_users = [
-            {'approved': True},
-            {'approved': True},
-            {'approved': False}  # This user won't receive broadcast
+            {"approved": True},
+            {"approved": True},
+            {"approved": False},  # This user won't receive broadcast
         ]
         mock_telegram_service.list_users.return_value = mock_users
         mock_telegram_service.log_broadcast.return_value = 123
 
         result = self.service.send_broadcast("Test message")
 
-        assert result['total_recipients'] == 2  # Only approved users
-        assert result['successful_deliveries'] == 2
-        assert result['failed_deliveries'] == 0
-        assert result['broadcast_id'] == '123'
+        assert result["total_recipients"] == 2  # Only approved users
+        assert result["successful_deliveries"] == 2
+        assert result["failed_deliveries"] == 0
+        assert result["broadcast_id"] == "123"
         mock_telegram_service.log_broadcast.assert_called_once()
 
 
@@ -362,10 +359,7 @@ class TestStrategyManagementService:
 
     def test_get_all_strategies_status_with_manager(self):
         """Test getting all strategies status with manager available."""
-        mock_strategies = [
-            {"id": "strategy-1", "status": "running"},
-            {"id": "strategy-2", "status": "stopped"}
-        ]
+        mock_strategies = [{"id": "strategy-1", "status": "running"}, {"id": "strategy-2", "status": "stopped"}]
         self.mock_strategy_manager.get_all_status.return_value = mock_strategies
 
         result = self.service.get_all_strategies_status()
@@ -382,7 +376,7 @@ class TestStrategyManagementService:
         assert result == []
 
     @pytest.mark.asyncio
-    @patch('src.api.services.strategy_service.StrategyInstance')
+    @patch("src.api.services.strategy_service.StrategyInstance")
     async def test_create_strategy_success(self, mock_strategy_instance):
         """Test successful strategy creation."""
         config = {
@@ -390,13 +384,13 @@ class TestStrategyManagementService:
             "name": "Test Strategy",
             "symbol": "BTCUSDT",
             "broker": {"type": "paper", "trading_mode": "paper"},
-            "strategy": {"type": "sma"}
+            "strategy": {"type": "sma"},
         }
         expected_result = {
             "strategy_id": "test-strategy",
             "name": "Test Strategy",
             "status": "created",
-            "message": "Strategy created successfully"
+            "message": "Strategy created successfully",
         }
 
         # Mock strategy_instances as an empty dict to simulate no existing strategies
@@ -444,11 +438,7 @@ class TestStrategyManagementService:
 
     def test_get_service_status_with_manager(self):
         """Test getting service status with manager available."""
-        mock_strategies = [
-            {"status": "running"},
-            {"status": "running"},
-            {"status": "stopped"}
-        ]
+        mock_strategies = [{"status": "running"}, {"status": "running"}, {"status": "stopped"}]
         self.mock_strategy_manager.get_all_strategies_status.return_value = mock_strategies
 
         result = self.service.get_service_status()
@@ -471,7 +461,7 @@ class TestStrategyManagementService:
         """Test getting strategy templates."""
         expected_templates = [
             {"name": "SMA Crossover", "type": "sma_crossover"},
-            {"name": "RSI Strategy", "type": "rsi"}
+            {"name": "RSI Strategy", "type": "rsi"},
         ]
 
         result = self.service.get_strategy_templates()
@@ -488,7 +478,7 @@ class TestSystemMonitoringService:
         """Set up test dependencies."""
         self.service = SystemMonitoringService()
 
-    @patch('src.api.services.monitoring_service.psutil')
+    @patch("src.api.services.monitoring_service.psutil")
     def test_get_comprehensive_metrics_success(self, mock_psutil):
         """Test successful comprehensive metrics retrieval."""
         # Mock psutil responses
@@ -497,16 +487,14 @@ class TestSystemMonitoringService:
         mock_psutil.disk_usage.return_value.percent = 75.0
 
         # Mock temperature (may not be available on all systems)
-        mock_psutil.sensors_temperatures.return_value = {
-            'cpu_thermal': [Mock(current=45.0)]
-        }
+        mock_psutil.sensors_temperatures.return_value = {"cpu_thermal": [Mock(current=45.0)]}
 
         result = self.service.get_comprehensive_metrics()
 
-        assert result['cpu']['usage_percent'] == 25.5
-        assert result['memory']['usage_percent'] == 60.2
-        assert 'disk' in result
-        assert 'temperature' in result
+        assert result["cpu"]["usage_percent"] == 25.5
+        assert result["memory"]["usage_percent"] == 60.2
+        assert "disk" in result
+        assert "temperature" in result
 
     def test_get_alerts_empty(self):
         """Test getting alerts when none exist."""

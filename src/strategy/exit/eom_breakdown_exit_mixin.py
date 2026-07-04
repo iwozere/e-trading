@@ -50,11 +50,11 @@ Configuration Example (New architecture):
     }
 """
 
-from typing import Any, Dict, Optional, List
 import math
+from typing import Any, Dict, List
 
-from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
+from src.strategy.exit.base_exit_mixin import BaseExitMixin
 
 _logger = setup_logger(__name__)
 
@@ -65,7 +65,7 @@ class EOMBreakdownExitMixin(BaseExitMixin):
     New Architecture only.
     """
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
         self._exit_reason = ""
@@ -97,24 +97,16 @@ class EOMBreakdownExitMixin(BaseExitMixin):
             {
                 "type": "SupportResistance",
                 "params": {"lookback_bars": res_lookback},
-                "fields_mapping": {"resistance": "exit_resistance", "support": "exit_support"}
+                "fields_mapping": {"resistance": "exit_resistance", "support": "exit_support"},
             },
-            {
-                "type": "EOM",
-                "params": {"timeperiod": eom_period},
-                "fields_mapping": {"eom": "exit_eom"}
-            },
+            {"type": "EOM", "params": {"timeperiod": eom_period}, "fields_mapping": {"eom": "exit_eom"}},
             {
                 "type": "SMA",
                 "params": {"timeperiod": vol_ma_period},
                 "data_field": "volume",
-                "fields_mapping": {"sma": "exit_volume_sma"}
+                "fields_mapping": {"sma": "exit_volume_sma"},
             },
-            {
-                "type": "ATR",
-                "params": {"timeperiod": atr_period},
-                "fields_mapping": {"atr": "exit_atr"}
-            }
+            {"type": "ATR", "params": {"timeperiod": atr_period}, "fields_mapping": {"atr": "exit_atr"}},
         ]
 
     def _init_indicators(self):
@@ -127,16 +119,14 @@ class EOMBreakdownExitMixin(BaseExitMixin):
             self.get_param("eom_period", 14),
             self.get_param("vol_ma_period", 20),
             self.get_param("atr_period", 14),
-            self.get_param("resistance_lookback", 2) * 5
+            self.get_param("resistance_lookback", 2) * 5,
         ]
         return max(periods)
 
     def are_indicators_ready(self) -> bool:
         """Check if required indicators exist in the strategy registry."""
-        required = [
-            'exit_support', 'exit_eom', 'exit_volume_sma', 'exit_atr'
-        ]
-        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
+        required = ["exit_support", "exit_eom", "exit_volume_sma", "exit_atr"]
+        return all(alias in getattr(self.strategy, "indicators", {}) for alias in required)
 
     def should_exit(self) -> bool:
         """Determines if the mixin should exit a position."""
@@ -152,15 +142,15 @@ class EOMBreakdownExitMixin(BaseExitMixin):
             volume = self.strategy.data.volume[0]
 
             # Unified Indicator Access
-            support = self.get_indicator('exit_support')
-            eom = self.get_indicator('exit_eom')
-            eom_prev = self.get_indicator_prev('exit_eom', 1)
-            volume_sma = self.get_indicator('exit_volume_sma')
-            atr = self.get_indicator('exit_atr')
-            atr_prev = self.get_indicator_prev('exit_atr', 1)
+            support = self.get_indicator("exit_support")
+            eom = self.get_indicator("exit_eom")
+            eom_prev = self.get_indicator_prev("exit_eom", 1)
+            volume_sma = self.get_indicator("exit_volume_sma")
+            atr = self.get_indicator("exit_atr")
+            atr_prev = self.get_indicator_prev("exit_atr", 1)
 
             # Get parameters
-            breakdown_threshold = self._resolve_param('breakdown_threshold', 'x_breakdown_threshold', 0.002)
+            breakdown_threshold = self._resolve_param("breakdown_threshold", "x_breakdown_threshold", 0.002)
 
             # Check if support is valid (not NaN)
             if math.isnan(support):

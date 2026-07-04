@@ -3,15 +3,17 @@ Channel Health Monitoring System
 Comprehensive health monitoring for notification channels with automatic failure detection,
 recovery mechanisms, and health metrics tracking.
 """
+
 import asyncio
-import time
 import statistics
-from typing import Dict, Any, List, Optional, Set, Callable
-from datetime import datetime, timedelta, timezone
-from dataclasses import dataclass, field
-from enum import Enum
 import threading
+import time
 from collections import defaultdict, deque
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any, Callable, Dict, List, Set
+
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -19,6 +21,7 @@ _logger = setup_logger(__name__)
 
 class HealthStatus(Enum):
     """Health status levels for channels."""
+
     HEALTHY = "HEALTHY"
     DEGRADED = "DEGRADED"
     UNHEALTHY = "UNHEALTHY"
@@ -29,6 +32,7 @@ class HealthStatus(Enum):
 
 class HealthCheckType(Enum):
     """Types of health checks."""
+
     CONNECTIVITY = "CONNECTIVITY"
     RESPONSE_TIME = "RESPONSE_TIME"
     SUCCESS_RATE = "SUCCESS_RATE"
@@ -41,6 +45,7 @@ class HealthCheckType(Enum):
 @dataclass
 class HealthMetric:
     """Individual health metric measurement."""
+
     metric_type: HealthCheckType
     value: float
     timestamp: datetime
@@ -54,22 +59,23 @@ class HealthMetric:
             "value": self.value,
             "timestamp": self.timestamp.isoformat(),
             "channel": self.channel,
-            "details": self.details
+            "details": self.details,
         }
 
 
 @dataclass
 class HealthThreshold:
     """Health threshold configuration for a metric."""
+
     metric_type: HealthCheckType
-    healthy_min: Optional[float] = None
-    healthy_max: Optional[float] = None
-    degraded_min: Optional[float] = None
-    degraded_max: Optional[float] = None
-    unhealthy_min: Optional[float] = None
-    unhealthy_max: Optional[float] = None
-    critical_min: Optional[float] = None
-    critical_max: Optional[float] = None
+    healthy_min: float | None = None
+    healthy_max: float | None = None
+    degraded_min: float | None = None
+    degraded_max: float | None = None
+    unhealthy_min: float | None = None
+    unhealthy_max: float | None = None
+    critical_min: float | None = None
+    critical_max: float | None = None
 
     def evaluate_status(self, value: float) -> HealthStatus:
         """Evaluate health status based on metric value."""
@@ -103,14 +109,15 @@ class HealthThreshold:
 @dataclass
 class ChannelHealthStatus:
     """Current health status for a channel."""
+
     channel: str
     overall_status: HealthStatus
     last_updated: datetime
     metrics: Dict[HealthCheckType, HealthMetric] = field(default_factory=dict)
     failure_count: int = 0
     consecutive_failures: int = 0
-    last_failure: Optional[datetime] = None
-    last_success: Optional[datetime] = None
+    last_failure: datetime | None = None
+    last_success: datetime | None = None
     uptime_percentage: float = 100.0
     average_response_time_ms: float = 0.0
     is_enabled: bool = True
@@ -130,24 +137,27 @@ class ChannelHealthStatus:
             "uptime_percentage": self.uptime_percentage,
             "average_response_time_ms": self.average_response_time_ms,
             "is_enabled": self.is_enabled,
-            "auto_disabled": self.auto_disabled
+            "auto_disabled": self.auto_disabled,
         }
 
 
 @dataclass
 class HealthCheckConfig:
     """Configuration for health checks."""
+
     channel: str
     check_interval_seconds: int = 60
-    enabled_checks: Set[HealthCheckType] = field(default_factory=lambda: {
-        HealthCheckType.CONNECTIVITY,
-        HealthCheckType.RESPONSE_TIME,
-        HealthCheckType.SUCCESS_RATE
-    })
+    enabled_checks: Set[HealthCheckType] = field(
+        default_factory=lambda: {
+            HealthCheckType.CONNECTIVITY,
+            HealthCheckType.RESPONSE_TIME,
+            HealthCheckType.SUCCESS_RATE,
+        }
+    )
     thresholds: Dict[HealthCheckType, HealthThreshold] = field(default_factory=dict)
     auto_disable_threshold: int = 5  # Consecutive failures before auto-disable
-    auto_enable_threshold: int = 3   # Consecutive successes before auto-enable
-    metric_history_size: int = 100   # Number of metrics to keep in memory
+    auto_enable_threshold: int = 3  # Consecutive successes before auto-enable
+    metric_history_size: int = 100  # Number of metrics to keep in memory
 
     def __post_init__(self):
         """Initialize default thresholds if not provided."""
@@ -159,25 +169,25 @@ class HealthCheckConfig:
         return {
             HealthCheckType.SUCCESS_RATE: HealthThreshold(
                 metric_type=HealthCheckType.SUCCESS_RATE,
-                healthy_min=95.0,      # 95%+ success rate is healthy
-                degraded_min=85.0,     # 85-95% is degraded
-                unhealthy_min=70.0,    # 70-85% is unhealthy
-                critical_min=50.0      # <50% is critical
+                healthy_min=95.0,  # 95%+ success rate is healthy
+                degraded_min=85.0,  # 85-95% is degraded
+                unhealthy_min=70.0,  # 70-85% is unhealthy
+                critical_min=50.0,  # <50% is critical
             ),
             HealthCheckType.RESPONSE_TIME: HealthThreshold(
                 metric_type=HealthCheckType.RESPONSE_TIME,
-                healthy_max=1000.0,    # <1s is healthy
-                degraded_max=3000.0,   # 1-3s is degraded
-                unhealthy_max=10000.0, # 3-10s is unhealthy
-                critical_max=30000.0   # >30s is critical
+                healthy_max=1000.0,  # <1s is healthy
+                degraded_max=3000.0,  # 1-3s is degraded
+                unhealthy_max=10000.0,  # 3-10s is unhealthy
+                critical_max=30000.0,  # >30s is critical
             ),
             HealthCheckType.ERROR_RATE: HealthThreshold(
                 metric_type=HealthCheckType.ERROR_RATE,
-                healthy_max=5.0,       # <5% error rate is healthy
-                degraded_max=15.0,     # 5-15% is degraded
-                unhealthy_max=30.0,    # 15-30% is unhealthy
-                critical_max=50.0      # >50% is critical
-            )
+                healthy_max=5.0,  # <5% error rate is healthy
+                degraded_max=15.0,  # 5-15% is degraded
+                unhealthy_max=30.0,  # 15-30% is unhealthy
+                critical_max=50.0,  # >50% is critical
+            ),
         }
 
 
@@ -218,7 +228,7 @@ class HealthMonitor:
             "failed_checks": 0,
             "channels_monitored": 0,
             "auto_disabled_channels": 0,
-            "auto_enabled_channels": 0
+            "auto_enabled_channels": 0,
         }
 
     async def start(self):
@@ -265,9 +275,7 @@ class HealthMonitor:
             # Initialize status if not exists
             if config.channel not in self._status:
                 self._status[config.channel] = ChannelHealthStatus(
-                    channel=config.channel,
-                    overall_status=HealthStatus.UNKNOWN,
-                    last_updated=datetime.now(timezone.utc)
+                    channel=config.channel, overall_status=HealthStatus.UNKNOWN, last_updated=datetime.now(UTC)
                 )
 
             # Update stats
@@ -278,8 +286,7 @@ class HealthMonitor:
             asyncio.create_task(self._start_channel_monitoring(config.channel))
 
         self._logger.info(
-            "Configured health monitoring for channel %s (interval: %ds)",
-            config.channel, config.check_interval_seconds
+            "Configured health monitoring for channel %s (interval: %ds)", config.channel, config.check_interval_seconds
         )
 
     def remove_channel(self, channel: str) -> bool:
@@ -320,9 +327,7 @@ class HealthMonitor:
                     pass
 
         # Start new monitoring task
-        self._check_tasks[channel] = asyncio.create_task(
-            self._monitor_channel_health(channel)
-        )
+        self._check_tasks[channel] = asyncio.create_task(self._monitor_channel_health(channel))
 
     async def _monitor_channel_health(self, channel: str):
         """Monitor health for a specific channel."""
@@ -361,10 +366,7 @@ class HealthMonitor:
                         self._metric_history[channel][check_type].append(metric)
 
                 except Exception as e:
-                    self._logger.warning(
-                        "Health check %s failed for channel %s: %s",
-                        check_type.value, channel, e
-                    )
+                    self._logger.warning("Health check %s failed for channel %s: %s", check_type.value, channel, e)
 
             # Update channel status
             await self._update_channel_status(channel, config, current_metrics)
@@ -376,7 +378,7 @@ class HealthMonitor:
             self._logger.error("Health check error for channel %s: %s", channel, e)
             self._stats["failed_checks"] += 1
 
-    async def _perform_single_check(self, channel: str, check_type: HealthCheckType) -> Optional[HealthMetric]:
+    async def _perform_single_check(self, channel: str, check_type: HealthCheckType) -> HealthMetric | None:
         """Perform a single health check."""
         start_time = time.time()
 
@@ -400,9 +402,9 @@ class HealthMonitor:
             return HealthMetric(
                 metric_type=check_type,
                 value=0.0,  # Failure value
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 channel=channel,
-                details={"error": str(e), "check_duration_ms": (time.time() - start_time) * 1000}
+                details={"error": str(e), "check_duration_ms": (time.time() - start_time) * 1000},
             )
 
     async def _check_connectivity(self, channel: str) -> HealthMetric:
@@ -424,18 +426,18 @@ class HealthMonitor:
             return HealthMetric(
                 metric_type=HealthCheckType.CONNECTIVITY,
                 value=connectivity_score,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 channel=channel,
-                details={"method": "simulated", "success_count": success_count, "total_count": total_count}
+                details={"method": "simulated", "success_count": success_count, "total_count": total_count},
             )
 
         except Exception as e:
             return HealthMetric(
                 metric_type=HealthCheckType.CONNECTIVITY,
                 value=0.0,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 channel=channel,
-                details={"error": str(e)}
+                details={"error": str(e)},
             )
 
     async def _check_response_time(self, channel: str) -> HealthMetric:
@@ -451,9 +453,9 @@ class HealthMonitor:
             return HealthMetric(
                 metric_type=HealthCheckType.RESPONSE_TIME,
                 value=response_time_ms,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 channel=channel,
-                details={"method": "ping_test"}
+                details={"method": "ping_test"},
             )
 
         except Exception as e:
@@ -461,9 +463,9 @@ class HealthMonitor:
             return HealthMetric(
                 metric_type=HealthCheckType.RESPONSE_TIME,
                 value=response_time_ms,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 channel=channel,
-                details={"error": str(e)}
+                details={"error": str(e)},
             )
 
     async def _check_success_rate(self, channel: str) -> HealthMetric:
@@ -485,9 +487,9 @@ class HealthMonitor:
         return HealthMetric(
             metric_type=HealthCheckType.SUCCESS_RATE,
             value=success_rate,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             channel=channel,
-            details={"calculation_method": "recent_connectivity", "sample_size": len(recent_metrics)}
+            details={"calculation_method": "recent_connectivity", "sample_size": len(recent_metrics)},
         )
 
     async def _check_error_rate(self, channel: str) -> HealthMetric:
@@ -499,9 +501,9 @@ class HealthMonitor:
         return HealthMetric(
             metric_type=HealthCheckType.ERROR_RATE,
             value=error_rate,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             channel=channel,
-            details={"derived_from": "success_rate"}
+            details={"derived_from": "success_rate"},
         )
 
     async def _check_throughput(self, channel: str) -> HealthMetric:
@@ -514,16 +516,13 @@ class HealthMonitor:
         return HealthMetric(
             metric_type=HealthCheckType.THROUGHPUT,
             value=throughput_msgs_per_minute,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             channel=channel,
-            details={"unit": "messages_per_minute", "method": "simulated"}
+            details={"unit": "messages_per_minute", "method": "simulated"},
         )
 
     async def _update_channel_status(
-        self,
-        channel: str,
-        config: HealthCheckConfig,
-        current_metrics: Dict[HealthCheckType, HealthMetric]
+        self, channel: str, config: HealthCheckConfig, current_metrics: Dict[HealthCheckType, HealthMetric]
     ):
         """Update channel health status based on current metrics."""
         with self._lock:
@@ -531,7 +530,7 @@ class HealthMonitor:
 
             # Update metrics
             status.metrics.update(current_metrics)
-            status.last_updated = datetime.now(timezone.utc)
+            status.last_updated = datetime.now(UTC)
 
             # Calculate overall health status
             metric_statuses = []
@@ -562,12 +561,12 @@ class HealthMonitor:
             if overall_status in [HealthStatus.UNHEALTHY, HealthStatus.CRITICAL]:
                 status.failure_count += 1
                 status.consecutive_failures += 1
-                status.last_failure = datetime.now(timezone.utc)
+                status.last_failure = datetime.now(UTC)
             else:
                 if status.consecutive_failures > 0:
                     # Reset consecutive failures on success
                     status.consecutive_failures = 0
-                status.last_success = datetime.now(timezone.utc)
+                status.last_success = datetime.now(UTC)
 
             # Calculate uptime percentage
             await self._update_uptime_percentage(status)
@@ -599,7 +598,7 @@ class HealthMonitor:
         all_metrics.sort(key=lambda m: m.timestamp)
 
         # Calculate uptime from last 24 hours or available data
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff_time = now - timedelta(hours=24)
         recent_metrics = [m for m in all_metrics if m.timestamp >= cutoff_time]
 
@@ -619,10 +618,12 @@ class HealthMonitor:
             metric_type_counts[metric_type] += 1
 
             # Consider successful if value indicates good health
-            if ((metric_type == HealthCheckType.CONNECTIVITY and metric.value > 50.0) or
-                (metric_type == HealthCheckType.SUCCESS_RATE and metric.value > 50.0) or
-                (metric_type == HealthCheckType.RESPONSE_TIME and metric.value < 10000.0) or
-                (metric_type == HealthCheckType.ERROR_RATE and metric.value < 50.0)):
+            if (
+                (metric_type == HealthCheckType.CONNECTIVITY and metric.value > 50.0)
+                or (metric_type == HealthCheckType.SUCCESS_RATE and metric.value > 50.0)
+                or (metric_type == HealthCheckType.RESPONSE_TIME and metric.value < 10000.0)
+                or (metric_type == HealthCheckType.ERROR_RATE and metric.value < 50.0)
+            ):
                 successful_by_type[metric_type] += 1
 
         # Calculate overall success rate across all metric types
@@ -645,34 +646,37 @@ class HealthMonitor:
     async def _check_auto_disable_enable(self, status: ChannelHealthStatus, config: HealthCheckConfig):
         """Check if channel should be auto-disabled or auto-enabled."""
         # Auto-disable logic
-        if (status.is_enabled and not status.auto_disabled and
-            status.consecutive_failures >= config.auto_disable_threshold):
-
+        if (
+            status.is_enabled
+            and not status.auto_disabled
+            and status.consecutive_failures >= config.auto_disable_threshold
+        ):
             status.is_enabled = False
             status.auto_disabled = True
             self._stats["auto_disabled_channels"] += 1
 
             self._logger.warning(
-                "Auto-disabled channel %s after %d consecutive failures",
-                status.channel, status.consecutive_failures
+                "Auto-disabled channel %s after %d consecutive failures", status.channel, status.consecutive_failures
             )
 
             # Trigger alert callback
             await self._trigger_health_alert_callbacks(
                 status.channel,
                 "auto_disabled",
-                f"Channel auto-disabled after {status.consecutive_failures} consecutive failures"
+                f"Channel auto-disabled after {status.consecutive_failures} consecutive failures",
             )
 
         # Auto-enable logic
-        elif (not status.is_enabled and status.auto_disabled and
-              status.consecutive_failures == 0 and
-              status.overall_status == HealthStatus.HEALTHY):
-
+        elif (
+            not status.is_enabled
+            and status.auto_disabled
+            and status.consecutive_failures == 0
+            and status.overall_status == HealthStatus.HEALTHY
+        ):
             # Check if we have enough consecutive successes
             recent_metrics = []
             for metric_deque in self._metric_history[status.channel].values():
-                recent_metrics.extend(list(metric_deque)[-config.auto_enable_threshold:])
+                recent_metrics.extend(list(metric_deque)[-config.auto_enable_threshold :])
 
             # Count recent successful checks
             successful_recent = sum(1 for m in recent_metrics if m.value > 50.0)
@@ -683,23 +687,17 @@ class HealthMonitor:
                 self._stats["auto_enabled_channels"] += 1
 
                 self._logger.info(
-                    "Auto-enabled channel %s after %d consecutive successes",
-                    status.channel, successful_recent
+                    "Auto-enabled channel %s after %d consecutive successes", status.channel, successful_recent
                 )
 
                 # Trigger alert callback
                 await self._trigger_health_alert_callbacks(
                     status.channel,
                     "auto_enabled",
-                    f"Channel auto-enabled after {successful_recent} consecutive successes"
+                    f"Channel auto-enabled after {successful_recent} consecutive successes",
                 )
 
-    async def _trigger_status_change_callbacks(
-        self,
-        channel: str,
-        old_status: HealthStatus,
-        new_status: HealthStatus
-    ):
+    async def _trigger_status_change_callbacks(self, channel: str, old_status: HealthStatus, new_status: HealthStatus):
         """Trigger status change callbacks."""
         for callback in self._status_change_callbacks:
             try:
@@ -729,7 +727,7 @@ class HealthMonitor:
         """Add callback for health alerts."""
         self._health_alert_callbacks.append(callback)
 
-    def get_channel_status(self, channel: str) -> Optional[ChannelHealthStatus]:
+    def get_channel_status(self, channel: str) -> ChannelHealthStatus | None:
         """Get current health status for a channel."""
         with self._lock:
             return self._status.get(channel)
@@ -739,7 +737,7 @@ class HealthMonitor:
         with self._lock:
             return self._status.copy()
 
-    def get_channel_metrics(self, channel: str, metric_type: Optional[HealthCheckType] = None) -> List[HealthMetric]:
+    def get_channel_metrics(self, channel: str, metric_type: HealthCheckType | None = None) -> List[HealthMetric]:
         """Get metric history for a channel."""
         with self._lock:
             if channel not in self._metric_history:
@@ -768,7 +766,7 @@ class HealthMonitor:
                 "status_distribution": dict(status_counts),
                 "healthy_percentage": (status_counts["HEALTHY"] / total_channels * 100) if total_channels > 0 else 0,
                 "statistics": self._stats.copy(),
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
     def manually_disable_channel(self, channel: str, reason: str = "Manual disable") -> bool:
@@ -826,10 +824,7 @@ health_monitor = HealthMonitor()
 # Convenience functions for common configurations
 def create_default_health_config(channel: str, **kwargs) -> HealthCheckConfig:
     """Create a default health configuration for a channel."""
-    return HealthCheckConfig(
-        channel=channel,
-        **kwargs
-    )
+    return HealthCheckConfig(channel=channel, **kwargs)
 
 
 def create_strict_health_config(channel: str, **kwargs) -> HealthCheckConfig:
@@ -837,33 +832,33 @@ def create_strict_health_config(channel: str, **kwargs) -> HealthCheckConfig:
     strict_thresholds = {
         HealthCheckType.SUCCESS_RATE: HealthThreshold(
             metric_type=HealthCheckType.SUCCESS_RATE,
-            healthy_min=98.0,      # 98%+ success rate is healthy
-            degraded_min=95.0,     # 95-98% is degraded
-            unhealthy_min=90.0,    # 90-95% is unhealthy
-            critical_min=80.0      # <80% is critical
+            healthy_min=98.0,  # 98%+ success rate is healthy
+            degraded_min=95.0,  # 95-98% is degraded
+            unhealthy_min=90.0,  # 90-95% is unhealthy
+            critical_min=80.0,  # <80% is critical
         ),
         HealthCheckType.RESPONSE_TIME: HealthThreshold(
             metric_type=HealthCheckType.RESPONSE_TIME,
-            healthy_max=500.0,     # <500ms is healthy
-            degraded_max=1000.0,   # 500ms-1s is degraded
+            healthy_max=500.0,  # <500ms is healthy
+            degraded_max=1000.0,  # 500ms-1s is degraded
             unhealthy_max=3000.0,  # 1-3s is unhealthy
-            critical_max=10000.0   # >10s is critical
+            critical_max=10000.0,  # >10s is critical
         ),
         HealthCheckType.ERROR_RATE: HealthThreshold(
             metric_type=HealthCheckType.ERROR_RATE,
-            healthy_max=2.0,       # <2% error rate is healthy
-            degraded_max=5.0,      # 2-5% is degraded
-            unhealthy_max=10.0,    # 5-10% is unhealthy
-            critical_max=20.0      # >20% is critical
-        )
+            healthy_max=2.0,  # <2% error rate is healthy
+            degraded_max=5.0,  # 2-5% is degraded
+            unhealthy_max=10.0,  # 5-10% is unhealthy
+            critical_max=20.0,  # >20% is critical
+        ),
     }
 
     return HealthCheckConfig(
         channel=channel,
         thresholds=strict_thresholds,
         auto_disable_threshold=3,  # Disable after 3 failures
-        auto_enable_threshold=5,   # Enable after 5 successes
-        **kwargs
+        auto_enable_threshold=5,  # Enable after 5 successes
+        **kwargs,
     )
 
 
@@ -872,31 +867,31 @@ def create_lenient_health_config(channel: str, **kwargs) -> HealthCheckConfig:
     lenient_thresholds = {
         HealthCheckType.SUCCESS_RATE: HealthThreshold(
             metric_type=HealthCheckType.SUCCESS_RATE,
-            healthy_min=85.0,      # 85%+ success rate is healthy
-            degraded_min=70.0,     # 70-85% is degraded
-            unhealthy_min=50.0,    # 50-70% is unhealthy
-            critical_min=25.0      # <25% is critical
+            healthy_min=85.0,  # 85%+ success rate is healthy
+            degraded_min=70.0,  # 70-85% is degraded
+            unhealthy_min=50.0,  # 50-70% is unhealthy
+            critical_min=25.0,  # <25% is critical
         ),
         HealthCheckType.RESPONSE_TIME: HealthThreshold(
             metric_type=HealthCheckType.RESPONSE_TIME,
-            healthy_max=3000.0,    # <3s is healthy
+            healthy_max=3000.0,  # <3s is healthy
             degraded_max=10000.0,  # 3-10s is degraded
-            unhealthy_max=30000.0, # 10-30s is unhealthy
-            critical_max=60000.0   # >60s is critical
+            unhealthy_max=30000.0,  # 10-30s is unhealthy
+            critical_max=60000.0,  # >60s is critical
         ),
         HealthCheckType.ERROR_RATE: HealthThreshold(
             metric_type=HealthCheckType.ERROR_RATE,
-            healthy_max=15.0,      # <15% error rate is healthy
-            degraded_max=30.0,     # 15-30% is degraded
-            unhealthy_max=50.0,    # 30-50% is unhealthy
-            critical_max=75.0      # >75% is critical
-        )
+            healthy_max=15.0,  # <15% error rate is healthy
+            degraded_max=30.0,  # 15-30% is degraded
+            unhealthy_max=50.0,  # 30-50% is unhealthy
+            critical_max=75.0,  # >75% is critical
+        ),
     }
 
     return HealthCheckConfig(
         channel=channel,
         thresholds=lenient_thresholds,
         auto_disable_threshold=10,  # Disable after 10 failures
-        auto_enable_threshold=2,    # Enable after 2 successes
-        **kwargs
+        auto_enable_threshold=2,  # Enable after 2 successes
+        **kwargs,
     )

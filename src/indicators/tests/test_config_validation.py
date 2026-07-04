@@ -4,11 +4,12 @@ Comprehensive configuration validation tests.
 Tests parameter validation, preset management, and configuration loading.
 """
 
-import pytest
 import json
-from pathlib import Path
-from unittest.mock import patch, mock_open
 import sys
+from pathlib import Path
+from unittest.mock import mock_open, patch
+
+import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
@@ -59,8 +60,8 @@ class TestConfigurationValidation:
                     "description": "Conservative settings",
                     "parameters": {
                         "rsi": {"timeperiod": 21},
-                        "macd": {"fastperiod": 12, "slowperiod": 26, "signalperiod": 9}
-                    }
+                        "macd": {"fastperiod": 12, "slowperiod": 26, "signalperiod": 9},
+                    },
                 }
             }
         }
@@ -97,5 +98,5 @@ class TestConfigurationValidation:
         assert cleared_params.get("timeperiod") == base_period
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

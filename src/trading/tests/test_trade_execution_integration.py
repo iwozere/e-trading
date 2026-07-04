@@ -14,17 +14,18 @@ These tests use in-memory mock objects — no DB, no real broker, no Telegram.
 
 from __future__ import annotations
 
-import pytest
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from src.trading.base_trading_bot import BaseTradingBot
 from src.trading.dto.created_trade import CreatedTrade
 
-
 # ---------------------------------------------------------------------------
 # Helpers / stubs
 # ---------------------------------------------------------------------------
+
 
 class _MockTradeRepository:
     """In-memory trade repository stub implementing the full interface used by BaseTradingBot."""
@@ -48,15 +49,13 @@ class _MockTradeRepository:
 
     # --- Methods called during BaseTradingBot.__init__ ---
 
-    def get_bot_instance(self, bot_id: str) -> Optional[Dict[str, Any]]:
+    def get_bot_instance(self, bot_id: str) -> Dict[str, Any] | None:
         return None  # no pre-existing bot record
 
     def create_bot_instance(self, data: Dict[str, Any]) -> Dict[str, Any]:
         return {"id": 1}
 
-    def get_open_trades(
-        self, bot_id: str, status: str = "open"
-    ) -> List[Dict[str, Any]]:
+    def get_open_trades(self, bot_id: str, status: str = "open") -> List[Dict[str, Any]]:
         return []  # no pre-existing open trades
 
     def get_open_positions_for_bot(self, bot_id: str) -> List[Dict[str, Any]]:
@@ -66,7 +65,7 @@ class _MockTradeRepository:
 def _make_bot(
     *,
     pair: str = "BTCUSDT",
-    hook_calls: Optional[List] = None,
+    hook_calls: List | None = None,
     commission_rate: float = 0.001,
 ) -> Tuple[BaseTradingBot, _MockTradeRepository]:
     """
@@ -87,7 +86,7 @@ def _make_bot(
 
     calls: List = [] if hook_calls is None else hook_calls
 
-    def _hook(side: str, price: float, size: float, pnl: Optional[float]) -> None:
+    def _hook(side: str, price: float, size: float, pnl: float | None) -> None:
         calls.append((side, price, size, pnl))
 
     repo = _MockTradeRepository()
@@ -121,6 +120,7 @@ def _repo_of(bot: BaseTradingBot) -> _MockTradeRepository:
 # ---------------------------------------------------------------------------
 # Test cases
 # ---------------------------------------------------------------------------
+
 
 class TestBuySignalRecordsPosition:
     """BUY signal: position is stored and DB create_trade is called."""
@@ -197,8 +197,7 @@ class TestCommissionOnNotional:
 
         update = repo.updated_trades[0]
         assert update["commission"] > 0.0, (
-            "Commission must be positive even on a losing trade "
-            "(it is charged on notional, not on P&L)"
+            "Commission must be positive even on a losing trade (it is charged on notional, not on P&L)"
         )
 
     def test_commission_equals_notional_times_rate(self) -> None:

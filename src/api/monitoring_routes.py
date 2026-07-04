@@ -6,7 +6,7 @@ Endpoints for service health and pipeline execution status.
 """
 
 import socket
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Dict, List, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -76,12 +76,14 @@ async def get_services_status(current_user: User = Depends(get_current_user)) ->
         # (oneshot, always-inactive) systemd unit so the live state is accurate.
         for display_name, port in _IB_GATEWAYS:
             up = _port_open(_IB_GATEWAY_HOST, port)
-            services.append({
-                "name": f"ib-gateway-{port}",
-                "display_name": display_name,
-                "status": "active" if up else "inactive",
-                "has_errors": False,
-            })
+            services.append(
+                {
+                    "name": f"ib-gateway-{port}",
+                    "display_name": display_name,
+                    "status": "active" if up else "inactive",
+                    "has_errors": False,
+                }
+            )
 
         for svc in SERVICES_TO_MONITOR:
             # The Docker gateway unit is reported above via port probing.
@@ -95,12 +97,14 @@ async def get_services_status(current_user: User = Depends(get_current_user)) ->
             else:
                 status = "inactive"
             errors = monitor.check_service_logs(svc) if status == "active" else []
-            services.append({
-                "name": svc,
-                "display_name": _DISPLAY_NAMES.get(svc, svc),
-                "status": status,
-                "has_errors": bool(errors),
-            })
+            services.append(
+                {
+                    "name": svc,
+                    "display_name": _DISPLAY_NAMES.get(svc, svc),
+                    "status": status,
+                    "has_errors": bool(errors),
+                }
+            )
 
         try:
             tg = _telegram_health.get_health_status()
@@ -123,7 +127,7 @@ async def get_services_status(current_user: User = Depends(get_current_user)) ->
             channels["email"] = {"status": notif_status}
 
         return {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "services": services,
             "channels": channels,
         }
@@ -146,10 +150,7 @@ async def get_pipelines_status(_current_user: User = Depends(get_current_user)) 
         with db_service.uow() as uow:
             schedules: List[Schedule] = uow.s.query(Schedule).order_by(Schedule.name).all()
             recent_runs: List[ScheduleRun] = (
-                uow.s.query(ScheduleRun)
-                .order_by(ScheduleRun.enqueued_at.desc())
-                .limit(500)
-                .all()
+                uow.s.query(ScheduleRun).order_by(ScheduleRun.enqueued_at.desc()).limit(500).all()
             )
 
         schedule_runs: Dict[int, List[ScheduleRun]] = {s.id: [] for s in schedules}
@@ -195,11 +196,9 @@ async def get_pipelines_status(_current_user: User = Depends(get_current_user)) 
 
             if last_run:
                 last_status = last_run.status or "unknown"
-                last_run_at = (last_run.started_at or last_run.enqueued_at)
+                last_run_at = last_run.started_at or last_run.enqueued_at
                 if last_run.started_at and last_run.finished_at:
-                    last_duration_s = round(
-                        (last_run.finished_at - last_run.started_at).total_seconds(), 1
-                    )
+                    last_duration_s = round((last_run.finished_at - last_run.started_at).total_seconds(), 1)
 
             completed = sum(1 for r in runs if r.status == "completed")
             success_rate = round(completed / len(runs), 2) if runs else None
@@ -209,32 +208,36 @@ async def get_pipelines_status(_current_user: User = Depends(get_current_user)) 
                 dur = None
                 if r.started_at and r.finished_at:
                     dur = round((r.finished_at - r.started_at).total_seconds(), 1)
-                recent.append({
-                    "id": r.id,
-                    "status": r.status,
-                    "started_at": r.started_at.isoformat() if r.started_at else None,
-                    "finished_at": r.finished_at.isoformat() if r.finished_at else None,
-                    "duration_s": dur,
-                    "error": r.error,
-                })
+                recent.append(
+                    {
+                        "id": r.id,
+                        "status": r.status,
+                        "started_at": r.started_at.isoformat() if r.started_at else None,
+                        "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+                        "duration_s": dur,
+                        "error": r.error,
+                    }
+                )
 
-            pipelines.append({
-                "id": schedule.id,
-                "name": schedule.name,
-                "job_type": schedule.job_type,
-                "target": schedule.target,
-                "enabled": schedule.enabled,
-                "cron": schedule.cron,
-                "next_run_at": schedule.next_run_at.isoformat() if schedule.next_run_at else None,
-                "last_status": last_status,
-                "last_run_at": last_run_at.isoformat() if last_run_at else None,
-                "last_duration_s": last_duration_s,
-                "success_rate_10": success_rate,
-                "recent_runs": recent,
-            })
+            pipelines.append(
+                {
+                    "id": schedule.id,
+                    "name": schedule.name,
+                    "job_type": schedule.job_type,
+                    "target": schedule.target,
+                    "enabled": schedule.enabled,
+                    "cron": schedule.cron,
+                    "next_run_at": schedule.next_run_at.isoformat() if schedule.next_run_at else None,
+                    "last_status": last_status,
+                    "last_run_at": last_run_at.isoformat() if last_run_at else None,
+                    "last_duration_s": last_duration_s,
+                    "success_rate_10": success_rate,
+                    "recent_runs": recent,
+                }
+            )
 
         return {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "pipelines": pipelines,
         }
 

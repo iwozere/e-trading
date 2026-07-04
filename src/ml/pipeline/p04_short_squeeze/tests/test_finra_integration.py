@@ -12,10 +12,11 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
-from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.data.downloader.finra_data_downloader import create_finra_downloader
+from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.ml.pipeline.p04_short_squeeze.core.volume_squeeze_detector import create_volume_squeeze_detector
+from src.notification.logger import setup_logger
+
 # FINRA service functionality is now part of ShortSqueezeService
 
 _logger = setup_logger(__name__)
@@ -38,7 +39,7 @@ def test_finra_connection():
                 print(f"   Most recent: {dates[-1].strftime('%Y-%m-%d')}")
 
                 # Test getting data for specific symbols
-                test_symbols = ['AAPL', 'TSLA', 'GME']
+                test_symbols = ["AAPL", "TSLA", "GME"]
                 bulk_data = finra.get_bulk_short_interest(test_symbols)
 
                 print(f"✅ Bulk data test: {len(bulk_data)}/{len(test_symbols)} symbols found")
@@ -80,7 +81,7 @@ def test_volume_detection():
         detector = create_volume_squeeze_detector(fmp)
 
         # Test with known volatile stocks
-        test_tickers = ['GME', 'AMC', 'TSLA', 'AAPL', 'NVDA']
+        test_tickers = ["GME", "AMC", "TSLA", "AAPL", "NVDA"]
 
         print(f"Testing volume detection on {len(test_tickers)} tickers...")
 
@@ -90,8 +91,9 @@ def test_volume_detection():
             if analysis:
                 candidate, indicators = analysis
                 results.append((ticker, indicators))
-                print(f"✅ {ticker}: Score={indicators.combined_score:.3f}, "
-                      f"Probability={indicators.squeeze_probability}")
+                print(
+                    f"✅ {ticker}: Score={indicators.combined_score:.3f}, Probability={indicators.squeeze_probability}"
+                )
             else:
                 print(f"❌ {ticker}: Analysis failed")
 
@@ -99,9 +101,11 @@ def test_volume_detection():
             print("\n📊 Volume Detection Summary:")
             results.sort(key=lambda x: x[1].combined_score, reverse=True)
             for ticker, indicators in results[:3]:
-                print(f"   Top: {ticker} - Score: {indicators.combined_score:.3f}, "
-                      f"Volume: {indicators.volume_score:.3f}, "
-                      f"Momentum: {indicators.momentum_score:.3f}")
+                print(
+                    f"   Top: {ticker} - Score: {indicators.combined_score:.3f}, "
+                    f"Volume: {indicators.volume_score:.3f}, "
+                    f"Momentum: {indicators.momentum_score:.3f}"
+                )
 
         return len(results) > 0
 
@@ -141,9 +145,7 @@ def test_database_integration():
         print(f"   Data age: {report.get('data_age_days', 'N/A')} days")
 
         # Test getting high short interest candidates
-        candidates = service.get_high_short_interest_candidates(
-            min_short_ratio=0.1, limit=10
-        )
+        candidates = service.get_high_short_interest_candidates(min_short_ratio=0.1, limit=10)
 
         print(f"✅ Found {len(candidates)} high short interest candidates")
 
@@ -160,8 +162,8 @@ def test_hybrid_screening():
 
     try:
         from src.ml.pipeline.p04_short_squeeze.config.config_manager import ConfigManager
-        from src.ml.pipeline.p04_short_squeeze.core.weekly_screener import create_weekly_screener
         from src.ml.pipeline.p04_short_squeeze.core.universe_loader import create_universe_loader
+        from src.ml.pipeline.p04_short_squeeze.core.weekly_screener import create_weekly_screener
 
         # Initialize components
         fmp = FMPDataDownloader()
@@ -198,10 +200,12 @@ def test_hybrid_screening():
         if results.top_candidates:
             print("\n🎯 Top Candidates:")
             for i, candidate in enumerate(results.top_candidates[:5], 1):
-                print(f"   {i}. {candidate.ticker}: "
-                      f"Score={candidate.screener_score:.3f}, "
-                      f"SI={candidate.structural_metrics.short_interest_pct*100:.1f}%, "
-                      f"Source={candidate.source.value}")
+                print(
+                    f"   {i}. {candidate.ticker}: "
+                    f"Score={candidate.screener_score:.3f}, "
+                    f"SI={candidate.structural_metrics.short_interest_pct * 100:.1f}%, "
+                    f"Source={candidate.source.value}"
+                )
 
         return results.candidates_found > 0
 
@@ -227,7 +231,7 @@ def main():
 
     for test_name, test_func in tests:
         try:
-            print(f"\n{'='*20} {test_name} {'='*20}")
+            print(f"\n{'=' * 20} {test_name} {'=' * 20}")
             if test_func():
                 print(f"✅ {test_name} - PASSED")
                 passed += 1

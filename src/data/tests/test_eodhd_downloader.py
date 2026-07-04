@@ -1,44 +1,41 @@
-import pytest
+from datetime import datetime
+from unittest.mock import patch
+
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
-from pathlib import Path
-import json
-import os
+import pytest
 
 # Import the module to test
-from src.data.downloader.eodhd_downloader import (
-    EODHDDataDownloader,
-    EODHDApiError
-)
+from src.data.downloader.eodhd_downloader import EODHDApiError, EODHDDataDownloader
 
 # Test data
 SAMPLE_OPTION_CHAIN = {
-    "data": [{
-        "expiration": "2025-12-19",
-        "options": {
-            "call": [
-                {
-                    "strike": 150.0,
-                    "last_trade_price": 5.25,
-                    "volume": 1000,
-                    "open_interest": 2500,
-                    "implied_volatility": 0.35
-                }
-            ],
-            "put": [
-                {
-                    "strike": 150.0,
-                    "last_trade_price": 4.75,
-                    "volume": 800,
-                    "open_interest": 2000,
-                    "implied_volatility": 0.32
-                }
-            ]
+    "data": [
+        {
+            "expiration": "2025-12-19",
+            "options": {
+                "call": [
+                    {
+                        "strike": 150.0,
+                        "last_trade_price": 5.25,
+                        "volume": 1000,
+                        "open_interest": 2500,
+                        "implied_volatility": 0.35,
+                    }
+                ],
+                "put": [
+                    {
+                        "strike": 150.0,
+                        "last_trade_price": 4.75,
+                        "volume": 800,
+                        "open_interest": 2000,
+                        "implied_volatility": 0.32,
+                    }
+                ],
+            },
         }
-    }]
+    ]
 }
+
 
 # Fixtures
 @pytest.fixture
@@ -53,34 +50,34 @@ def sample_option_data():
         "last": 5.25,
         "volume": 1000,
         "open_interest": 2500,
-        "iv": 0.35
+        "iv": 0.35,
     }
+
 
 @pytest.fixture
 def sample_historical_data():
     """Sample historical data for testing statistics."""
-    dates = pd.date_range(end=datetime.today(), periods=30).strftime('%Y-%m-%d')
+    dates = pd.date_range(end=datetime.today(), periods=30).strftime("%Y-%m-%d")
     data = []
     for i, date in enumerate(dates):
-        data.append({
-            "ticker": "AAPL",
-            "date": date,
-            "type": "call",
-            "volume": 1000 + (i * 10),
-            "open_interest": 2500 + (i * 20)
-        })
-        data.append({
-            "ticker": "AAPL",
-            "date": date,
-            "type": "put",
-            "volume": 800 + (i * 5),
-            "open_interest": 2000 + (i * 10)
-        })
+        data.append(
+            {
+                "ticker": "AAPL",
+                "date": date,
+                "type": "call",
+                "volume": 1000 + (i * 10),
+                "open_interest": 2500 + (i * 20),
+            }
+        )
+        data.append(
+            {"ticker": "AAPL", "date": date, "type": "put", "volume": 800 + (i * 5), "open_interest": 2000 + (i * 10)}
+        )
     return pd.DataFrame(data)
+
 
 # Test cases
 class TestFetchChain:
-    @patch('src.data.downloader.eodhd_downloader.EODHDDataDownloader._make_api_request')
+    @patch("src.data.downloader.eodhd_downloader.EODHDDataDownloader._make_api_request")
     def test_fetch_chain_success(self, mock_api_request):
         """Test successful option chain fetch."""
         # Setup
@@ -96,7 +93,7 @@ class TestFetchChain:
         assert "AAPL" in result["ticker"].values
         assert 150.0 in result["strike"].values
 
-    @patch('src.data.downloader.eodhd_downloader.EODHDDataDownloader._make_api_request')
+    @patch("src.data.downloader.eodhd_downloader.EODHDDataDownloader._make_api_request")
     def test_fetch_chain_no_data(self, mock_api_request):
         """Test handling of no data from API."""
         # Setup
@@ -109,7 +106,7 @@ class TestFetchChain:
         # Verify
         assert result.empty
 
-    @patch('src.data.downloader.eodhd_downloader.EODHDDataDownloader._make_api_request')
+    @patch("src.data.downloader.eodhd_downloader.EODHDDataDownloader._make_api_request")
     def test_fetch_chain_api_error(self, mock_api_request):
         """Test handling of API errors."""
         # Setup
@@ -120,8 +117,9 @@ class TestFetchChain:
         with pytest.raises(EODHDApiError):
             downloader.fetch_chain("AAPL", "2025-12-05")
 
+
 class TestDownloadForDate:
-    @patch('src.data.downloader.eodhd_downloader.EODHDDataDownloader.fetch_chain')
+    @patch("src.data.downloader.eodhd_downloader.EODHDDataDownloader.fetch_chain")
     def test_download_for_date_single_ticker(self, mock_fetch):
         """Test downloading data for a single ticker."""
         # Setup
@@ -137,13 +135,13 @@ class TestDownloadForDate:
         assert len(result) == 1
         mock_fetch.assert_called_once()
 
-    @patch('src.data.downloader.eodhd_downloader.EODHDDataDownloader.fetch_chain')
+    @patch("src.data.downloader.eodhd_downloader.EODHDDataDownloader.fetch_chain")
     def test_download_for_date_multiple_tickers(self, mock_fetch):
         """Test downloading data for multiple tickers."""
         # Setup
         mock_fetch.side_effect = [
             pd.DataFrame([{"ticker": "AAPL", "volume": 1000}]),
-            pd.DataFrame([{"ticker": "MSFT", "volume": 800}])
+            pd.DataFrame([{"ticker": "MSFT", "volume": 800}]),
         ]
         downloader = EODHDDataDownloader()
 
@@ -153,6 +151,7 @@ class TestDownloadForDate:
         # Verify
         assert len(result) == 2
         assert set(result["ticker"]) == {"AAPL", "MSFT"}
+
 
 class TestCompute30dStats:
     def test_compute_30d_stats_basic(self, sample_historical_data):
@@ -176,6 +175,7 @@ class TestCompute30dStats:
         # Verify
         assert result.empty
 
+
 class TestComputeUOAScore:
     def test_compute_uoa_score_basic(self, sample_historical_data):
         """Test computing UOA score."""
@@ -196,14 +196,18 @@ class TestComputeUOAScore:
         """Test UOA score with edge cases."""
         downloader = EODHDDataDownloader()
         # Setup
-        df = pd.DataFrame([{
-            "ticker": "AAPL",
-            "date": "2025-12-05",
-            "call_volume": 0,
-            "put_volume": 0,
-            "call_volume_30d_avg": 0,
-            "put_volume_30d_avg": 0
-        }])
+        df = pd.DataFrame(
+            [
+                {
+                    "ticker": "AAPL",
+                    "date": "2025-12-05",
+                    "call_volume": 0,
+                    "put_volume": 0,
+                    "call_volume_30d_avg": 0,
+                    "put_volume_30d_avg": 0,
+                }
+            ]
+        )
 
         # Execute
         result = downloader.compute_uoa_score(df)
@@ -211,6 +215,7 @@ class TestComputeUOAScore:
         # Verify
         assert not result.empty
         assert result["uoa_score"].iloc[0] == 0
+
 
 class TestSaveToFile:
     def test_save_to_csv(self, tmp_path):
@@ -238,9 +243,10 @@ class TestSaveToFile:
         with pytest.raises(ValueError):
             downloader.save_to_file(df, ".", "test.unsupported")
 
+
 # Integration test
 class TestIntegration:
-    @patch('src.data.downloader.eodhd_downloader.EODHDDataDownloader._make_api_request')
+    @patch("src.data.downloader.eodhd_downloader.EODHDDataDownloader._make_api_request")
     def test_end_to_end_flow(self, mock_api_request, tmp_path):
         """Test the complete flow from API call to file save."""
         downloader = EODHDDataDownloader()

@@ -2,6 +2,7 @@
 """
 Unit tests for strategy_core module
 """
+
 import sys
 from pathlib import Path
 
@@ -9,18 +10,19 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 import unittest
-import pandas as pd
-import numpy as np
 from datetime import datetime
 from unittest.mock import Mock
 
+import numpy as np
+import pandas as pd
+
 from src.strategy.future.strategy_core import (
-    BaseStrategy,
-    StrategySignal,
-    SignalAggregator,
     AggregationMethod,
+    BaseStrategy,
+    MarketRegime,
     MarketRegimeDetector,
-    MarketRegime
+    SignalAggregator,
+    StrategySignal,
 )
 
 
@@ -38,7 +40,7 @@ class TestBaseStrategy(unittest.TestCase):
                     confidence=0.8,
                     weight=1.0,
                     timestamp=datetime.now(),
-                    metadata={}
+                    metadata={},
                 )
 
         strategy = TestStrategy("test_strategy")
@@ -62,14 +64,11 @@ class TestBaseStrategy(unittest.TestCase):
                     confidence=0.0,
                     weight=1.0,
                     timestamp=datetime.now(),
-                    metadata={}
+                    metadata={},
                 )
 
         strategy = TestStrategy("test_strategy")
-        test_data = pd.DataFrame({
-            'close': [100, 101, 102],
-            'volume': [1000, 1100, 1200]
-        })
+        test_data = pd.DataFrame({"close": [100, 101, 102], "volume": [1000, 1100, 1200]})
 
         strategy.set_data(test_data)
         self.assertIsNotNone(strategy.data)
@@ -86,7 +85,7 @@ class TestBaseStrategy(unittest.TestCase):
                     confidence=0.0,
                     weight=1.0,
                     timestamp=datetime.now(),
-                    metadata={}
+                    metadata={},
                 )
 
         strategy = TestStrategy("test_strategy")
@@ -112,7 +111,7 @@ class TestSignalAggregator(unittest.TestCase):
             confidence=0.8,
             weight=1.0,
             timestamp=datetime.now(),
-            metadata={}
+            metadata={},
         )
 
         self.sell_signal = StrategySignal(
@@ -121,7 +120,7 @@ class TestSignalAggregator(unittest.TestCase):
             confidence=0.6,
             weight=1.0,
             timestamp=datetime.now(),
-            metadata={}
+            metadata={},
         )
 
         self.hold_signal = StrategySignal(
@@ -130,7 +129,7 @@ class TestSignalAggregator(unittest.TestCase):
             confidence=0.0,
             weight=1.0,
             timestamp=datetime.now(),
-            metadata={}
+            metadata={},
         )
 
     def test_empty_signals(self):
@@ -161,7 +160,7 @@ class TestSignalAggregator(unittest.TestCase):
             confidence=0.7,
             weight=1.0,
             timestamp=datetime.now(),
-            metadata={}
+            metadata={},
         )
 
         signals = [self.buy_signal, buy_signal2]
@@ -181,14 +180,14 @@ class TestSignalAggregator(unittest.TestCase):
             confidence=0.5,
             weight=1.0,
             timestamp=datetime.now(),
-            metadata={}
+            metadata={},
         )
 
         signals = [self.buy_signal, buy_signal2, self.sell_signal]
         result = majority_aggregator.aggregate_signals(signals)
 
         self.assertEqual(result.signal_type, "buy")
-        self.assertAlmostEqual(result.confidence, 2/3, places=2)
+        self.assertAlmostEqual(result.confidence, 2 / 3, places=2)
 
     def test_weighted_average(self):
         """Test weighted average aggregation."""
@@ -203,7 +202,8 @@ class TestSignalAggregator(unittest.TestCase):
 
     def test_invalid_signal_aggregator_method(self):
         """Test that an invalid aggregation method raises ValueError."""
-        from src.strategy.future.strategy_core import SignalAggregator, AggregationMethod
+        from src.strategy.future.strategy_core import AggregationMethod, SignalAggregator
+
         aggregator = SignalAggregator(AggregationMethod.WEIGHTED_VOTING)
         aggregator.method = "invalid_method"
         with self.assertRaises(ValueError):
@@ -211,6 +211,7 @@ class TestSignalAggregator(unittest.TestCase):
 
     def test_strategy_signal_metadata(self):
         """Test that metadata is correctly passed in signals."""
+
         class TestStrategy(BaseStrategy):
             def generate_signal(self):
                 return StrategySignal(
@@ -219,8 +220,9 @@ class TestSignalAggregator(unittest.TestCase):
                     confidence=0.8,
                     weight=1.0,
                     timestamp=datetime.now(),
-                    metadata={"foo": "bar"}
+                    metadata={"foo": "bar"},
                 )
+
         strategy = TestStrategy("test_strategy")
         signal = strategy.generate_signal()
         self.assertIn("foo", signal.metadata)
@@ -236,9 +238,11 @@ class TestMarketRegimeDetector(unittest.TestCase):
 
     def test_insufficient_data(self):
         """Test regime detection with insufficient data."""
-        data = pd.DataFrame({
-            'close': [100, 101, 102]  # Less than lookback_period
-        })
+        data = pd.DataFrame(
+            {
+                "close": [100, 101, 102]  # Less than lookback_period
+            }
+        )
 
         regime = self.detector.detect_regime(data)
         self.assertEqual(regime, MarketRegime.RANGING_STABLE)
@@ -251,9 +255,7 @@ class TestMarketRegimeDetector(unittest.TestCase):
         noise = np.random.normal(0, 2, 30)  # High volatility
         prices = trend + noise
 
-        data = pd.DataFrame({
-            'close': prices
-        })
+        data = pd.DataFrame({"close": prices})
 
         regime = self.detector.detect_regime(data)
         self.assertEqual(regime, MarketRegime.TRENDING_VOLATILE)
@@ -266,9 +268,7 @@ class TestMarketRegimeDetector(unittest.TestCase):
         noise = np.random.normal(0, 0.5, 30)  # Low volatility
         prices = trend + noise
 
-        data = pd.DataFrame({
-            'close': prices
-        })
+        data = pd.DataFrame({"close": prices})
 
         regime = self.detector.detect_regime(data)
         self.assertEqual(regime, MarketRegime.TRENDING_STABLE)
@@ -281,9 +281,7 @@ class TestMarketRegimeDetector(unittest.TestCase):
         noise = np.random.normal(0, 2, 30)  # High volatility
         prices = base + noise
 
-        data = pd.DataFrame({
-            'close': prices
-        })
+        data = pd.DataFrame({"close": prices})
 
         regime = self.detector.detect_regime(data)
         self.assertEqual(regime, MarketRegime.RANGING_VOLATILE)

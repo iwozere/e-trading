@@ -29,11 +29,10 @@ Configuration Example (New TALib Architecture):
     }
 """
 
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List
 
-import backtrader as bt
-from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
+from src.strategy.exit.base_exit_mixin import BaseExitMixin
 
 logger = setup_logger(__name__)
 
@@ -43,7 +42,7 @@ class MACrossoverExitMixin(BaseExitMixin):
     New Architecture only.
     """
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
 
@@ -71,13 +70,13 @@ class MACrossoverExitMixin(BaseExitMixin):
             {
                 "type": ma_type,
                 "params": {"timeperiod": fast_period},
-                "fields_mapping": {ma_type.lower(): "exit_fast_ma"}
+                "fields_mapping": {ma_type.lower(): "exit_fast_ma"},
             },
             {
                 "type": ma_type,
                 "params": {"timeperiod": slow_period},
-                "fields_mapping": {ma_type.lower(): "exit_slow_ma"}
-            }
+                "fields_mapping": {ma_type.lower(): "exit_slow_ma"},
+            },
         ]
 
     def _init_indicators(self):
@@ -86,15 +85,12 @@ class MACrossoverExitMixin(BaseExitMixin):
 
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
-        return max(
-            self.get_param("fast_period", 10),
-            self.get_param("slow_period", 20)
-        )
+        return max(self.get_param("fast_period", 10), self.get_param("slow_period", 20))
 
     def are_indicators_ready(self) -> bool:
         """Check if required indicators exist in the strategy registry."""
-        required = ['exit_fast_ma', 'exit_slow_ma']
-        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
+        required = ["exit_fast_ma", "exit_slow_ma"]
+        return all(alias in getattr(self.strategy, "indicators", {}) for alias in required)
 
     def should_exit(self) -> bool:
         """Check if we should exit a position."""
@@ -106,23 +102,23 @@ class MACrossoverExitMixin(BaseExitMixin):
 
         try:
             # Unified Indicator Access
-            fast_ma_current = self.get_indicator('exit_fast_ma')
-            slow_ma_current = self.get_indicator('exit_slow_ma')
-            fast_ma_prev = self.get_indicator_prev('exit_fast_ma', 1)
-            slow_ma_prev = self.get_indicator_prev('exit_slow_ma', 1)
+            fast_ma_current = self.get_indicator("exit_fast_ma")
+            slow_ma_current = self.get_indicator("exit_slow_ma")
+            fast_ma_prev = self.get_indicator_prev("exit_fast_ma", 1)
+            slow_ma_prev = self.get_indicator_prev("exit_slow_ma", 1)
 
             # Check for crossover based on position
             if self.strategy.position.size > 0:  # Long position
-                return_value = (fast_ma_prev > slow_ma_prev and fast_ma_current < slow_ma_current)
+                return_value = fast_ma_prev > slow_ma_prev and fast_ma_current < slow_ma_current
             else:  # Short position
-                return_value = (fast_ma_prev < slow_ma_prev and fast_ma_current > slow_ma_current)
+                return_value = fast_ma_prev < slow_ma_prev and fast_ma_current > slow_ma_current
 
             if return_value:
                 logger.debug(
                     f"EXIT Crossover - Fast: {fast_ma_current:.2f}, Slow: {slow_ma_current:.2f}, "
                     f"Prev Fast: {fast_ma_prev:.2f}, Prev Slow: {slow_ma_prev:.2f}"
                 )
-                ma_type = self._resolve_param('ma_type', 'x_ma_type', "SMA")
+                ma_type = self._resolve_param("ma_type", "x_ma_type", "SMA")
                 self.strategy.current_exit_reason = f"{ma_type.lower()}_crossover"
             return return_value
 
@@ -132,8 +128,8 @@ class MACrossoverExitMixin(BaseExitMixin):
 
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""
-        return getattr(self.strategy, 'current_exit_reason', 'ma_crossover')
+        return getattr(self.strategy, "current_exit_reason", "ma_crossover")
 
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""
-        return getattr(self.strategy, 'current_exit_reason', 'ma_crossover')
+        return getattr(self.strategy, "current_exit_reason", "ma_crossover")

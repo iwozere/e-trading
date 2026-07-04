@@ -1,7 +1,8 @@
 from src.backtester.plotter.indicators.base_indicator_plotter import BaseIndicatorPlotter
-
 from src.notification.logger import setup_logger
+
 _logger = setup_logger(__name__)
+
 
 class BollingerBandsPlotter(BaseIndicatorPlotter):
     def plot(self, ax):
@@ -11,9 +12,7 @@ class BollingerBandsPlotter(BaseIndicatorPlotter):
             if "bb" in self.indicators:
                 bb = self.indicators["bb"]
                 if not hasattr(bb, "lines"):
-                    _logger.warning(
-                        "Bollinger Bands indicator has invalid data structure"
-                    )
+                    _logger.warning("Bollinger Bands indicator has invalid data structure")
                     return
 
                 dates = [self.data.datetime.datetime(i) for i in range(len(self.data))]

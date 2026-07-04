@@ -52,7 +52,8 @@ import argparse
 import json
 import time
 from datetime import datetime, timedelta
-from typing import List, Set, Optional, Dict, Any
+from typing import Any, Dict, List, Set
+
 import pandas as pd
 
 from src.notification.logger import setup_logger
@@ -83,11 +84,11 @@ class TimeframeCalculator:
 
     # Timeframe definitions (in minutes)
     TIMEFRAMES = {
-        '5m': 5,
-        '15m': 15,
-        '1h': 60,
-        '4h': 240,
-        '1d': 960  # 16 hours * 60 minutes
+        "5m": 5,
+        "15m": 15,
+        "1h": 60,
+        "4h": 240,
+        "1d": 960,  # 16 hours * 60 minutes
     }
 
     def __init__(self, cache_dir: str = None):
@@ -102,14 +103,14 @@ class TimeframeCalculator:
 
         # Pipeline statistics
         self.stats = {
-            'total_tickers': 0,
-            'successful_tickers': [],
-            'failed_tickers': [],
-            'skipped_tickers': [],
-            'timeframes_processed': {},
-            'total_bars_calculated': 0,
-            'processing_time': 0,
-            'errors': {}
+            "total_tickers": 0,
+            "successful_tickers": [],
+            "failed_tickers": [],
+            "skipped_tickers": [],
+            "timeframes_processed": {},
+            "total_bars_calculated": 0,
+            "processing_time": 0,
+            "errors": {},
         }
 
     def discover_tickers_with_1m_data(self) -> Set[str]:
@@ -126,7 +127,7 @@ class TimeframeCalculator:
             return tickers
 
         for ticker_dir in self.ohlcv_dir.iterdir():
-            if ticker_dir.is_dir() and not ticker_dir.name.startswith('_'):
+            if ticker_dir.is_dir() and not ticker_dir.name.startswith("_"):
                 ticker = ticker_dir.name.upper()
 
                 # Check if 1m data exists
@@ -139,7 +140,7 @@ class TimeframeCalculator:
         _logger.info("Discovered %d tickers with 1m data: %s", len(tickers), sorted(tickers))
         return tickers
 
-    def load_1m_data(self, ticker: str) -> Optional[pd.DataFrame]:
+    def load_1m_data(self, ticker: str) -> pd.DataFrame | None:
         """
         Load 1-minute data for a ticker.
 
@@ -155,7 +156,7 @@ class TimeframeCalculator:
 
         try:
             if csv_gz_file.exists():
-                df = pd.read_csv(csv_gz_file, compression='gzip')
+                df = pd.read_csv(csv_gz_file, compression="gzip")
                 _logger.debug("Loaded 1m data for %s from gzipped file (%d rows)", ticker, len(df))
             elif csv_file.exists():
                 df = pd.read_csv(csv_file)
@@ -165,8 +166,8 @@ class TimeframeCalculator:
                 return None
 
             # Ensure proper datetime index
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            df.set_index('timestamp', inplace=True)
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
+            df.set_index("timestamp", inplace=True)
             df.sort_index(inplace=True)
 
             # Filter to trading hours (4 AM to 8 PM ET)
@@ -208,7 +209,7 @@ class TimeframeCalculator:
 
         minutes = self.TIMEFRAMES[timeframe]
 
-        if timeframe == '1d':
+        if timeframe == "1d":
             # Daily bars: group by date, 4 AM to 8 PM
             return self._calculate_daily_bars(df_1m)
         else:
@@ -244,13 +245,13 @@ class TimeframeCalculator:
 
             # Calculate OHLCV for the day
             bar = {
-                'timestamp': pd.Timestamp(date) + timedelta(hours=4),  # 4 AM of the trading day
-                'open': group['open'].iloc[0],
-                'high': group['high'].max(),
-                'low': group['low'].min(),
-                'close': group['close'].iloc[-1],
-                'volume': group['volume'].sum(),
-                'bar_count': len(group)  # Number of 1m bars used
+                "timestamp": pd.Timestamp(date) + timedelta(hours=4),  # 4 AM of the trading day
+                "open": group["open"].iloc[0],
+                "high": group["high"].max(),
+                "low": group["low"].min(),
+                "close": group["close"].iloc[-1],
+                "volume": group["volume"].sum(),
+                "bar_count": len(group),  # Number of 1m bars used
             }
 
             daily_bars.append(bar)
@@ -259,7 +260,7 @@ class TimeframeCalculator:
             return pd.DataFrame()
 
         df_daily = pd.DataFrame(daily_bars)
-        df_daily.set_index('timestamp', inplace=True)
+        df_daily.set_index("timestamp", inplace=True)
         df_daily.sort_index(inplace=True)
 
         _logger.debug("Calculated %d daily bars from %d 1m bars", len(df_daily), len(df_1m))
@@ -284,37 +285,38 @@ class TimeframeCalculator:
         freq = f"{minutes}min"  # min = minutes in pandas (T is deprecated)
 
         # Use custom aggregation with intelligence
-        agg_dict = {
-            'open': 'first',
-            'high': 'max',
-            'low': 'min',
-            'close': 'last',
-            'volume': 'sum'
-        }
+        agg_dict = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
 
         # Resample and aggregate
-        resampled = df_1m.resample(freq, label='left', closed='left').agg(agg_dict)
+        resampled = df_1m.resample(freq, label="left", closed="left").agg(agg_dict)
 
         # Add bar count for intelligence
-        bar_counts = df_1m.resample(freq, label='left', closed='left').size()
-        resampled['bar_count'] = bar_counts
+        bar_counts = df_1m.resample(freq, label="left", closed="left").size()
+        resampled["bar_count"] = bar_counts
 
         # Remove bars with no data (NaN values)
-        resampled = resampled.dropna(subset=['open', 'high', 'low', 'close'])
+        resampled = resampled.dropna(subset=["open", "high", "low", "close"])
 
         # Apply intelligence: only keep bars with at least 1 underlying bar
         # (This preserves gaps as they exist in 1m data)
-        resampled = resampled[resampled['bar_count'] > 0]
+        resampled = resampled[resampled["bar_count"] > 0]
 
         # Remove the bar_count column from final output (keep for logging)
         expected_bars = minutes
-        actual_bars = resampled['bar_count'].mean() if len(resampled) > 0 else 0
+        actual_bars = resampled["bar_count"].mean() if len(resampled) > 0 else 0
 
-        _logger.debug("Calculated %d %s bars from %d 1m bars (avg %.1f bars per %s, expected %d)",
-                     len(resampled), timeframe, len(df_1m), actual_bars, timeframe, expected_bars)
+        _logger.debug(
+            "Calculated %d %s bars from %d 1m bars (avg %.1f bars per %s, expected %d)",
+            len(resampled),
+            timeframe,
+            len(df_1m),
+            actual_bars,
+            timeframe,
+            expected_bars,
+        )
 
         # Drop bar_count for final output
-        resampled = resampled.drop(columns=['bar_count'])
+        resampled = resampled.drop(columns=["bar_count"])
 
         return resampled
 
@@ -339,16 +341,14 @@ class TimeframeCalculator:
         for year_file in ticker_dir.glob("*.csv.gz"):
             try:
                 year = int(year_file.stem)  # Extract year from filename
-                df = pd.read_csv(year_file, compression='gzip')
-                df['timestamp'] = pd.to_datetime(df['timestamp'])
-                df.set_index('timestamp', inplace=True)
+                df = pd.read_csv(year_file, compression="gzip")
+                df["timestamp"] = pd.to_datetime(df["timestamp"])
+                df.set_index("timestamp", inplace=True)
                 df.sort_index(inplace=True)
                 existing_data[year] = df
-                _logger.debug("Loaded existing %s data for %s year %d (%d bars)",
-                             timeframe, ticker, year, len(df))
+                _logger.debug("Loaded existing %s data for %s year %d (%d bars)", timeframe, ticker, year, len(df))
             except Exception as e:
-                _logger.warning("Error loading %s data for %s year %s: %s",
-                               timeframe, ticker, year_file.stem, e)
+                _logger.warning("Error loading %s data for %s year %s: %s", timeframe, ticker, year_file.stem, e)
 
         return existing_data
 
@@ -383,34 +383,31 @@ class TimeframeCalculator:
 
                 # Reset index to save timestamp as column
                 year_df_save = year_df.reset_index()
-                year_df_save.to_csv(year_file, index=False, compression='gzip')
+                year_df_save.to_csv(year_file, index=False, compression="gzip")
 
-                _logger.debug("Saved %s %s data for year %d (%d bars) to %s",
-                             ticker, timeframe, year, len(year_df), year_file)
+                _logger.debug(
+                    "Saved %s %s data for year %d (%d bars) to %s", ticker, timeframe, year, len(year_df), year_file
+                )
 
             # Save metadata
             metadata = {
-                'ticker': ticker,
-                'timeframe': timeframe,
-                'last_updated': datetime.now().isoformat(),
-                'years_available': sorted(yearly_data.keys()),
-                'total_bars': len(df),
-                'date_range': {
-                    'start': df.index.min().isoformat() if len(df) > 0 else None,
-                    'end': df.index.max().isoformat() if len(df) > 0 else None
+                "ticker": ticker,
+                "timeframe": timeframe,
+                "last_updated": datetime.now().isoformat(),
+                "years_available": sorted(yearly_data.keys()),
+                "total_bars": len(df),
+                "date_range": {
+                    "start": df.index.min().isoformat() if len(df) > 0 else None,
+                    "end": df.index.max().isoformat() if len(df) > 0 else None,
                 },
-                'trading_hours': {
-                    'start_hour': self.TRADING_START_HOUR,
-                    'end_hour': self.TRADING_END_HOUR
-                }
+                "trading_hours": {"start_hour": self.TRADING_START_HOUR, "end_hour": self.TRADING_END_HOUR},
             }
 
             metadata_file = ticker_dir / "metadata.json"
-            with open(metadata_file, 'w') as f:
+            with open(metadata_file, "w") as f:
                 json.dump(metadata, f, indent=2)
 
-            _logger.info("Saved %s %s data: %d bars across %d years",
-                        ticker, timeframe, len(df), len(yearly_data))
+            _logger.info("Saved %s %s data: %d bars across %d years", ticker, timeframe, len(df), len(yearly_data))
             return True
 
         except Exception:
@@ -439,31 +436,28 @@ class TimeframeCalculator:
             return True
 
         try:
-            with open(metadata_file, 'r') as f:
+            with open(metadata_file) as f:
                 metadata = json.load(f)
 
             # Check if 1m data is newer than last calculation
-            last_updated = pd.to_datetime(metadata['last_updated'])
+            last_updated = pd.to_datetime(metadata["last_updated"])
             latest_1m_data = df_1m.index.max()
 
             if latest_1m_data > last_updated:
-                _logger.debug("1m data newer than %s %s calculation, recalculation needed",
-                             ticker, timeframe)
+                _logger.debug("1m data newer than %s %s calculation, recalculation needed", ticker, timeframe)
                 return True
 
             # Check if date range has changed significantly
             current_start = df_1m.index.min()
             current_end = df_1m.index.max()
 
-            if metadata['date_range']['start']:
-                existing_start = pd.to_datetime(metadata['date_range']['start'])
-                existing_end = pd.to_datetime(metadata['date_range']['end'])
+            if metadata["date_range"]["start"]:
+                existing_start = pd.to_datetime(metadata["date_range"]["start"])
+                existing_end = pd.to_datetime(metadata["date_range"]["end"])
 
                 # If new data extends significantly beyond existing range
-                if (current_start < existing_start - timedelta(days=1) or
-                    current_end > existing_end + timedelta(days=1)):
-                    _logger.debug("Date range changed for %s %s, recalculation needed",
-                                 ticker, timeframe)
+                if current_start < existing_start - timedelta(days=1) or current_end > existing_end + timedelta(days=1):
+                    _logger.debug("Date range changed for %s %s, recalculation needed", ticker, timeframe)
                     return True
 
             _logger.debug("No recalculation needed for %s %s", ticker, timeframe)
@@ -486,13 +480,13 @@ class TimeframeCalculator:
             Dictionary with processing results
         """
         result = {
-            'ticker': ticker,
-            'success': False,
-            'timeframes_processed': [],
-            'timeframes_skipped': [],
-            'total_bars_calculated': 0,
-            'error': None,
-            'processing_time': 0
+            "ticker": ticker,
+            "success": False,
+            "timeframes_processed": [],
+            "timeframes_skipped": [],
+            "total_bars_calculated": 0,
+            "error": None,
+            "processing_time": 0,
         }
 
         start_time = time.time()
@@ -501,18 +495,23 @@ class TimeframeCalculator:
             # Load 1m data
             df_1m = self.load_1m_data(ticker)
             if df_1m is None or df_1m.empty:
-                result['error'] = "No 1m data available"
+                result["error"] = "No 1m data available"
                 return result
 
-            _logger.info("Processing %s with %d 1m bars from %s to %s",
-                        ticker, len(df_1m), df_1m.index.min().date(), df_1m.index.max().date())
+            _logger.info(
+                "Processing %s with %d 1m bars from %s to %s",
+                ticker,
+                len(df_1m),
+                df_1m.index.min().date(),
+                df_1m.index.max().date(),
+            )
 
             # Process each timeframe
             for timeframe in timeframes:
                 try:
                     # Check if recalculation is needed
                     if not force_refresh and not self.needs_recalculation(ticker, timeframe, df_1m):
-                        result['timeframes_skipped'].append(timeframe)
+                        result["timeframes_skipped"].append(timeframe)
                         _logger.debug("Skipping %s %s (up to date)", ticker, timeframe)
                         continue
 
@@ -525,14 +524,14 @@ class TimeframeCalculator:
 
                     # Save timeframe data
                     if self.save_timeframe_data(ticker, timeframe, df_timeframe):
-                        result['timeframes_processed'].append(timeframe)
-                        result['total_bars_calculated'] += len(df_timeframe)
-                        self.stats['total_bars_calculated'] += len(df_timeframe)
+                        result["timeframes_processed"].append(timeframe)
+                        result["total_bars_calculated"] += len(df_timeframe)
+                        self.stats["total_bars_calculated"] += len(df_timeframe)
 
                         # Update timeframe statistics
-                        if timeframe not in self.stats['timeframes_processed']:
-                            self.stats['timeframes_processed'][timeframe] = 0
-                        self.stats['timeframes_processed'][timeframe] += len(df_timeframe)
+                        if timeframe not in self.stats["timeframes_processed"]:
+                            self.stats["timeframes_processed"][timeframe] = 0
+                        self.stats["timeframes_processed"][timeframe] += len(df_timeframe)
 
                         _logger.info("✅ %s %s: %d bars calculated", ticker, timeframe, len(df_timeframe))
                     else:
@@ -542,24 +541,18 @@ class TimeframeCalculator:
                     _logger.exception("Error processing %s %s:", ticker, timeframe)
 
             # Success if we processed timeframes OR if everything was up to date
-            success = (len(result['timeframes_processed']) > 0 or
-                      len(result['timeframes_skipped']) > 0)
+            success = len(result["timeframes_processed"]) > 0 or len(result["timeframes_skipped"]) > 0
 
-            result.update({
-                'success': success,
-                'processing_time': time.time() - start_time
-            })
+            result.update({"success": success, "processing_time": time.time() - start_time})
 
         except Exception as e:
-            result.update({
-                'error': str(e),
-                'processing_time': time.time() - start_time
-            })
+            result.update({"error": str(e), "processing_time": time.time() - start_time})
 
         return result
 
-    def calculate_all_timeframes(self, tickers: List[str], timeframes: List[str],
-                               force_refresh: bool = False) -> Dict[str, Any]:
+    def calculate_all_timeframes(
+        self, tickers: List[str], timeframes: List[str], force_refresh: bool = False
+    ) -> Dict[str, Any]:
         """
         Calculate timeframes for all tickers with comprehensive pipeline statistics.
 
@@ -572,13 +565,13 @@ class TimeframeCalculator:
             Dictionary with comprehensive pipeline results
         """
         pipeline_start_time = time.time()
-        self.stats['total_tickers'] = len(tickers)
+        self.stats["total_tickers"] = len(tickers)
 
         _logger.info("=" * 60)
         _logger.info("PIPELINE STEP 2: CALCULATE TIMEFRAMES")
         _logger.info("=" * 60)
         _logger.info("Tickers: %d symbols", len(tickers))
-        _logger.info("Timeframes: %s", ', '.join(timeframes))
+        _logger.info("Timeframes: %s", ", ".join(timeframes))
         _logger.info("Force refresh: %s", force_refresh)
         _logger.info("Trading hours: %02d:00 - %02d:00 ET", self.TRADING_START_HOUR, self.TRADING_END_HOUR)
         _logger.info("=" * 60)
@@ -592,30 +585,27 @@ class TimeframeCalculator:
             results[ticker] = result
 
             # Update statistics
-            if result['success']:
-                self.stats['successful_tickers'].append(ticker)
-                if result['timeframes_processed']:
-                    _logger.info("✅ %s: %s processed", ticker, ', '.join(result['timeframes_processed']))
-                if result['timeframes_skipped']:
-                    _logger.info("⏭️ %s: %s skipped (up to date)", ticker, ', '.join(result['timeframes_skipped']))
-                if not result['timeframes_processed'] and not result['timeframes_skipped']:
+            if result["success"]:
+                self.stats["successful_tickers"].append(ticker)
+                if result["timeframes_processed"]:
+                    _logger.info("✅ %s: %s processed", ticker, ", ".join(result["timeframes_processed"]))
+                if result["timeframes_skipped"]:
+                    _logger.info("⏭️ %s: %s skipped (up to date)", ticker, ", ".join(result["timeframes_skipped"]))
+                if not result["timeframes_processed"] and not result["timeframes_skipped"]:
                     _logger.info("✅ %s: No processing needed", ticker)
             else:
-                self.stats['failed_tickers'].append(ticker)
-                error = result.get('error', 'Unknown error')
-                self.stats['errors'][ticker] = error
+                self.stats["failed_tickers"].append(ticker)
+                error = result.get("error", "Unknown error")
+                self.stats["errors"][ticker] = error
                 _logger.error("❌ %s: %s", ticker, error)
 
         # Calculate final statistics
-        self.stats['processing_time'] = time.time() - pipeline_start_time
+        self.stats["processing_time"] = time.time() - pipeline_start_time
 
         # Print comprehensive pipeline summary
         self.print_pipeline_summary(timeframes)
 
-        return {
-            'results': results,
-            'statistics': self.stats
-        }
+        return {"results": results, "statistics": self.stats}
 
     def print_pipeline_summary(self, timeframes: List[str]):
         """Print comprehensive pipeline summary with statistics."""
@@ -624,9 +614,9 @@ class TimeframeCalculator:
         _logger.info("=" * 80)
 
         # Overall statistics
-        total = self.stats['total_tickers']
-        successful = len(self.stats['successful_tickers'])
-        failed = len(self.stats['failed_tickers'])
+        total = self.stats["total_tickers"]
+        successful = len(self.stats["successful_tickers"])
+        failed = len(self.stats["failed_tickers"])
 
         _logger.info("📊 PROCESSING STATISTICS:")
         _logger.info("   Total tickers processed: %d", total)
@@ -635,27 +625,27 @@ class TimeframeCalculator:
         _logger.info("   📈 Success rate: %.1f%%", successful / total * 100 if total > 0 else 0)
 
         _logger.info("\n📈 CALCULATION STATISTICS:")
-        _logger.info("   Total bars calculated: %d", self.stats['total_bars_calculated'])
-        _logger.info("   Processing time: %.1f seconds", self.stats['processing_time'])
+        _logger.info("   Total bars calculated: %d", self.stats["total_bars_calculated"])
+        _logger.info("   Processing time: %.1f seconds", self.stats["processing_time"])
 
         # Timeframe statistics
-        if self.stats['timeframes_processed']:
+        if self.stats["timeframes_processed"]:
             _logger.info("\n📊 TIMEFRAME STATISTICS:")
             for timeframe in timeframes:
-                count = self.stats['timeframes_processed'].get(timeframe, 0)
+                count = self.stats["timeframes_processed"].get(timeframe, 0)
                 _logger.info("   %s: %d bars calculated", timeframe, count)
 
         # Successful tickers
-        if self.stats['successful_tickers']:
-            _logger.info("\n✅ SUCCESSFULLY PROCESSED TICKERS (%d):", len(self.stats['successful_tickers']))
-            for ticker in sorted(self.stats['successful_tickers']):
+        if self.stats["successful_tickers"]:
+            _logger.info("\n✅ SUCCESSFULLY PROCESSED TICKERS (%d):", len(self.stats["successful_tickers"]))
+            for ticker in sorted(self.stats["successful_tickers"]):
                 _logger.info("   %s", ticker)
 
         # Failed tickers with reasons
-        if self.stats['failed_tickers']:
-            _logger.info("\n❌ FAILED TICKERS (%d):", len(self.stats['failed_tickers']))
-            for ticker in sorted(self.stats['failed_tickers']):
-                error = self.stats['errors'].get(ticker, 'Unknown error')
+        if self.stats["failed_tickers"]:
+            _logger.info("\n❌ FAILED TICKERS (%d):", len(self.stats["failed_tickers"]))
+            for ticker in sorted(self.stats["failed_tickers"]):
+                error = self.stats["errors"].get(ticker, "Unknown error")
                 _logger.info("   %s: %s", ticker, error)
 
         _logger.info("=" * 80)
@@ -691,34 +681,25 @@ Timeframes Available:
 
 Output Structure:
   DATA_CACHE_DIR/ohlcv/TICKER/TIMEFRAME/YYYY.csv.gz
-        """
+        """,
     )
 
     parser.add_argument(
-        "--tickers",
-        type=str,
-        help="Comma-separated list of tickers to process (default: discover from 1m data)"
+        "--tickers", type=str, help="Comma-separated list of tickers to process (default: discover from 1m data)"
     )
 
     parser.add_argument(
         "--timeframes",
         type=str,
         default="5m,15m,1h,4h,1d",
-        help="Comma-separated list of timeframes to calculate (default: 5m,15m,1h,4h,1d)"
+        help="Comma-separated list of timeframes to calculate (default: 5m,15m,1h,4h,1d)",
     )
 
     parser.add_argument(
-        "--cache-dir",
-        type=str,
-        default=DATA_CACHE_DIR,
-        help=f"Cache directory path (default: {DATA_CACHE_DIR})"
+        "--cache-dir", type=str, default=DATA_CACHE_DIR, help=f"Cache directory path (default: {DATA_CACHE_DIR})"
     )
 
-    parser.add_argument(
-        "--force-refresh",
-        action="store_true",
-        help="Force refresh: recalculate all timeframe data"
-    )
+    parser.add_argument("--force-refresh", action="store_true", help="Force refresh: recalculate all timeframe data")
 
     args = parser.parse_args()
 
@@ -730,8 +711,7 @@ Output Structure:
         timeframes = [tf.strip() for tf in args.timeframes.split(",")]
         invalid_timeframes = [tf for tf in timeframes if tf not in calculator.TIMEFRAMES]
         if invalid_timeframes:
-            _logger.error("Invalid timeframes: %s. Valid: %s",
-                         invalid_timeframes, list(calculator.TIMEFRAMES.keys()))
+            _logger.error("Invalid timeframes: %s. Valid: %s", invalid_timeframes, list(calculator.TIMEFRAMES.keys()))
             sys.exit(1)
 
         # Get tickers
@@ -746,16 +726,14 @@ Output Structure:
             tickers = sorted(discovered_tickers)
 
         # Run pipeline step 2
-        pipeline_results = calculator.calculate_all_timeframes(
-            tickers, timeframes, args.force_refresh
-        )
+        pipeline_results = calculator.calculate_all_timeframes(tickers, timeframes, args.force_refresh)
 
         # Exit with appropriate code based on results
-        stats = pipeline_results['statistics']
-        if len(stats['failed_tickers']) == 0:
+        stats = pipeline_results["statistics"]
+        if len(stats["failed_tickers"]) == 0:
             _logger.info("Pipeline Step 2 completed successfully - all tickers processed")
             sys.exit(0)
-        elif len(stats['successful_tickers']) > 0:
+        elif len(stats["successful_tickers"]) > 0:
             _logger.warning("Pipeline Step 2 completed with some failures")
             sys.exit(0)  # Continue pipeline even with some failures
         else:

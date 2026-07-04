@@ -24,21 +24,21 @@ Usage:
 """
 
 import argparse
-import sys
 import os
-from pathlib import Path
-from typing import List, Dict, Any
-import time
 import random
+import sys
+import time
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.data.data_manager import DataManager
 from src.data.cache.fundamentals_cache import get_fundamentals_cache
 from src.data.cache.fundamentals_combiner import get_fundamentals_combiner
+from src.data.data_manager import DataManager
 from src.notification.logger import setup_logger
 
 # Import cache directory setting
@@ -48,6 +48,7 @@ except ImportError:
     DATA_CACHE_DIR = "data-cache"
 
 _logger = setup_logger(__name__)
+
 
 def get_cached_symbols(cache_dir: str) -> List[str]:
     """Get list of symbols that have cached fundamentals data by scanning the fundamentals directory."""
@@ -63,7 +64,7 @@ def get_cached_symbols(cache_dir: str) -> List[str]:
 
         # Scan all subdirectories in the fundamentals directory
         for item in fundamentals_dir.iterdir():
-            if item.is_dir() and not item.name.startswith('.'):
+            if item.is_dir() and not item.name.startswith("."):
                 total_dirs += 1
                 # Each subdirectory represents a ticker symbol
                 symbol = item.name.upper()
@@ -77,22 +78,22 @@ def get_cached_symbols(cache_dir: str) -> List[str]:
                     _logger.debug("Skipping %s (no JSON files found)", symbol)
 
         symbols.sort()  # Sort alphabetically for consistent output
-        _logger.info("Scanned %d directories, found %d symbols with cached fundamentals data",
-                    total_dirs, len(symbols))
+        _logger.info("Scanned %d directories, found %d symbols with cached fundamentals data", total_dirs, len(symbols))
         return symbols
 
     except Exception:
         _logger.exception("Error scanning fundamentals directory:")
         return []
 
+
 def load_symbols_from_file(file_path: str) -> List[str]:
     """Load symbols from a text file (one symbol per line)."""
     try:
         symbols = []
-        with open(file_path, 'r') as f:
+        with open(file_path) as f:
             for line in f:
                 symbol = line.strip()
-                if symbol and not symbol.startswith('#'):  # Skip empty lines and comments
+                if symbol and not symbol.startswith("#"):  # Skip empty lines and comments
                     symbols.append(symbol.upper())
 
         _logger.info("Loaded %d symbols from %s", len(symbols), file_path)
@@ -122,7 +123,7 @@ def _filter_symbols_by_staleness(
     data_type: str = "general",
     stale_min_days: float | None = None,
     stale_fraction: float | None = None,
-    ttl_days: int = 14
+    ttl_days: int = 14,
 ) -> List[str]:
     """
     Keep only symbols whose latest cache age exceeds the stale threshold.
@@ -160,66 +161,52 @@ def _filter_symbols_by_staleness(
 
     _logger.info(
         "Staleness filter: threshold=%.2f days, eligible=%d/%d (missing=%d)",
-        threshold_days, len(eligible), len(symbols), missing_count
+        threshold_days,
+        len(eligible),
+        len(symbols),
+        missing_count,
     )
     return eligible
 
-def refresh_symbol_fundamentals(dm: DataManager, symbol: str, data_types: List[str],
-                               force_refresh: bool = False) -> Dict[str, Any]:
+
+def refresh_symbol_fundamentals(
+    dm: DataManager, symbol: str, data_types: List[str], force_refresh: bool = False
+) -> Dict[str, Any]:
     """Refresh fundamentals for a specific symbol."""
-    results = {
-        'symbol': symbol,
-        'data_types': {},
-        'success': True,
-        'errors': []
-    }
+    results = {"symbol": symbol, "data_types": {}, "success": True, "errors": []}
 
     for data_type in data_types:
         try:
-            _logger.info("Refreshing %s fundamentals for %s (force_refresh=%s)",
-                        data_type, symbol, force_refresh)
+            _logger.info("Refreshing %s fundamentals for %s (force_refresh=%s)", data_type, symbol, force_refresh)
 
             fundamentals = dm.get_fundamentals(
-                symbol=symbol,
-                data_type=data_type,
-                force_refresh=force_refresh,
-                combination_strategy='priority_based'
+                symbol=symbol, data_type=data_type, force_refresh=force_refresh, combination_strategy="priority_based"
             )
 
             if fundamentals:
-                results['data_types'][data_type] = {
-                    'success': True,
-                    'fields_count': len(fundamentals),
-                    'has_metadata': '_metadata' in fundamentals
+                results["data_types"][data_type] = {
+                    "success": True,
+                    "fields_count": len(fundamentals),
+                    "has_metadata": "_metadata" in fundamentals,
                 }
-                _logger.info("Successfully refreshed %s for %s: %d fields",
-                           data_type, symbol, len(fundamentals))
+                _logger.info("Successfully refreshed %s for %s: %d fields", data_type, symbol, len(fundamentals))
             else:
-                results['data_types'][data_type] = {
-                    'success': False,
-                    'error': 'No data returned'
-                }
-                results['errors'].append(f"No data for {data_type}")
+                results["data_types"][data_type] = {"success": False, "error": "No data returned"}
+                results["errors"].append(f"No data for {data_type}")
 
         except Exception as e:
             error_msg = f"Error refreshing {data_type} for {symbol}: {e}"
             _logger.error(error_msg)
-            results['data_types'][data_type] = {
-                'success': False,
-                'error': str(e)
-            }
-            results['errors'].append(error_msg)
-            results['success'] = False
+            results["data_types"][data_type] = {"success": False, "error": str(e)}
+            results["errors"].append(error_msg)
+            results["success"] = False
 
     return results
 
+
 def cleanup_expired_cache(cache_dir: str, data_types: List[str]) -> Dict[str, Any]:
     """Clean up expired cache data."""
-    cleanup_results = {
-        'data_types': {},
-        'total_removed_files': 0,
-        'total_removed_symbols': 0
-    }
+    cleanup_results = {"data_types": {}, "total_removed_files": 0, "total_removed_symbols": 0}
 
     try:
         combiner = get_fundamentals_combiner()
@@ -229,23 +216,28 @@ def cleanup_expired_cache(cache_dir: str, data_types: List[str]) -> Dict[str, An
             _logger.info("Cleaning up expired %s cache data", data_type)
 
             stats = cache.cleanup_expired_data(data_type=data_type)
-            cleanup_results['data_types'][data_type] = stats
-            cleanup_results['total_removed_files'] += stats.get('removed_files', 0)
-            cleanup_results['total_removed_symbols'] += stats.get('removed_symbols', 0)
+            cleanup_results["data_types"][data_type] = stats
+            cleanup_results["total_removed_files"] += stats.get("removed_files", 0)
+            cleanup_results["total_removed_symbols"] += stats.get("removed_symbols", 0)
 
-            _logger.info("Cleaned up %s: %d files, %d symbols removed",
-                        data_type, stats.get('removed_files', 0), stats.get('removed_symbols', 0))
+            _logger.info(
+                "Cleaned up %s: %d files, %d symbols removed",
+                data_type,
+                stats.get("removed_files", 0),
+                stats.get("removed_symbols", 0),
+            )
 
     except Exception as e:
         _logger.exception("Error during cache cleanup:")
-        cleanup_results['error'] = str(e)
+        cleanup_results["error"] = str(e)
 
     return cleanup_results
+
 
 def main():
     """Main function to run the fundamentals cache refresh script."""
     parser = argparse.ArgumentParser(
-        description='Refresh fundamentals cache data. By default, scans DATA_CACHE_DIR/fundamentals and refreshes all cached tickers.',
+        description="Refresh fundamentals cache data. By default, scans DATA_CACHE_DIR/fundamentals and refreshes all cached tickers.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -266,50 +258,52 @@ Examples:
 
   # Cleanup only
   python src/data/utils/refresh_fundamentals_cache.py --cleanup-only
-        """
+        """,
     )
 
     # Symbol selection
     symbol_group = parser.add_mutually_exclusive_group(required=False)
-    symbol_group.add_argument('--symbols', type=str,
-                             help='Comma-separated list of symbols to refresh (e.g., AAPL,GOOGL,MSFT)')
-    symbol_group.add_argument('--all-symbols', action='store_true',
-                             help='Refresh all cached symbols (same as default behavior)')
-    symbol_group.add_argument('--cleanup-only', action='store_true',
-                             help='Only cleanup expired cache data, no refresh')
-    symbol_group.add_argument('--symbols-file', type=str,
-                             help='Path to text file containing symbols (one per line)')
+    symbol_group.add_argument(
+        "--symbols", type=str, help="Comma-separated list of symbols to refresh (e.g., AAPL,GOOGL,MSFT)"
+    )
+    symbol_group.add_argument(
+        "--all-symbols", action="store_true", help="Refresh all cached symbols (same as default behavior)"
+    )
+    symbol_group.add_argument("--cleanup-only", action="store_true", help="Only cleanup expired cache data, no refresh")
+    symbol_group.add_argument("--symbols-file", type=str, help="Path to text file containing symbols (one per line)")
 
     # Data types
-    parser.add_argument('--data-types', type=str, default='ratios,profile,statements',
-                       help='Comma-separated list of data types to refresh (default: ratios,profile,statements)')
+    parser.add_argument(
+        "--data-types",
+        type=str,
+        default="ratios,profile,statements",
+        help="Comma-separated list of data types to refresh (default: ratios,profile,statements)",
+    )
 
     # Options
-    parser.add_argument('--force-refresh', action='store_true',
-                       help='Force refresh even if cache is valid')
-    parser.add_argument('--cache-dir', type=str, default=DATA_CACHE_DIR,
-                       help=f'Cache directory path (default: {DATA_CACHE_DIR})')
-    parser.add_argument('--delay', type=float, default=1.0,
-                       help='Delay between symbol refreshes in seconds (default: 1.0)')
-    parser.add_argument('--max-symbols', type=int, default=0,
-                       help='Maximum number of symbols to process (0 = all)')
-    parser.add_argument('--shuffle', action='store_true',
-                       help='Shuffle symbol order before processing')
-    parser.add_argument('--seed', type=int,
-                       help='Optional random seed for deterministic shuffling')
-    parser.add_argument('--stale-min-days', type=float, default=None,
-                       help='Refresh only symbols older than this many days')
-    parser.add_argument('--stale-fraction', type=float, default=None,
-                       help='Refresh only symbols older than TTL * fraction (e.g. 0.7)')
-    parser.add_argument('--stale-ttl-days', type=int, default=14,
-                       help='TTL used with --stale-fraction (default: 14)')
-    parser.add_argument('--dry-run', action='store_true',
-                       help='Show what would be done without actually doing it')
+    parser.add_argument("--force-refresh", action="store_true", help="Force refresh even if cache is valid")
+    parser.add_argument(
+        "--cache-dir", type=str, default=DATA_CACHE_DIR, help=f"Cache directory path (default: {DATA_CACHE_DIR})"
+    )
+    parser.add_argument(
+        "--delay", type=float, default=1.0, help="Delay between symbol refreshes in seconds (default: 1.0)"
+    )
+    parser.add_argument("--max-symbols", type=int, default=0, help="Maximum number of symbols to process (0 = all)")
+    parser.add_argument("--shuffle", action="store_true", help="Shuffle symbol order before processing")
+    parser.add_argument("--seed", type=int, help="Optional random seed for deterministic shuffling")
+    parser.add_argument(
+        "--stale-min-days", type=float, default=None, help="Refresh only symbols older than this many days"
+    )
+    parser.add_argument(
+        "--stale-fraction", type=float, default=None, help="Refresh only symbols older than TTL * fraction (e.g. 0.7)"
+    )
+    parser.add_argument("--stale-ttl-days", type=int, default=14, help="TTL used with --stale-fraction (default: 14)")
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be done without actually doing it")
 
     args = parser.parse_args()
 
     # Parse data types
-    data_types = [dt.strip() for dt in args.data_types.split(',')]
+    data_types = [dt.strip() for dt in args.data_types.split(",")]
 
     _logger.info("Starting fundamentals cache refresh")
     _logger.info("Cache directory: %s", args.cache_dir)
@@ -332,8 +326,8 @@ Examples:
             cleanup_results = cleanup_expired_cache(args.cache_dir, data_types)
 
             _logger.info("Cleanup completed:")
-            _logger.info("  Total files removed: %d", cleanup_results['total_removed_files'])
-            _logger.info("  Total symbols removed: %d", cleanup_results['total_removed_symbols'])
+            _logger.info("  Total files removed: %d", cleanup_results["total_removed_files"])
+            _logger.info("  Total symbols removed: %d", cleanup_results["total_removed_symbols"])
 
             return
 
@@ -342,7 +336,7 @@ Examples:
             symbols = get_cached_symbols(args.cache_dir)
             _logger.info("Found %d cached symbols to refresh", len(symbols))
         elif args.symbols:
-            symbols = [s.strip().upper() for s in args.symbols.split(',')]
+            symbols = [s.strip().upper() for s in args.symbols.split(",")]
             _logger.info("Refreshing %d specified symbols", len(symbols))
         elif args.symbols_file:
             symbols = load_symbols_from_file(args.symbols_file)
@@ -355,7 +349,7 @@ Examples:
                 _logger.info("Found %d symbols with cached fundamentals data to refresh", len(symbols))
             else:
                 # Fallback to example_tickers.txt if no cached symbols found
-                default_file = os.path.join(os.path.dirname(__file__), 'example_tickers.txt')
+                default_file = os.path.join(os.path.dirname(__file__), "example_tickers.txt")
                 if os.path.exists(default_file):
                     symbols = load_symbols_from_file(default_file)
                     _logger.info("No cached symbols found, using default file: %s", default_file)
@@ -373,10 +367,10 @@ Examples:
             symbols = _filter_symbols_by_staleness(
                 symbols=symbols,
                 cache_dir=args.cache_dir,
-                data_type='general',
+                data_type="general",
                 stale_min_days=args.stale_min_days,
                 stale_fraction=args.stale_fraction,
-                ttl_days=args.stale_ttl_days
+                ttl_days=args.stale_ttl_days,
             )
             if not symbols:
                 _logger.info("No symbols meet stale threshold; nothing to refresh")
@@ -391,13 +385,13 @@ Examples:
         # Optional hard cap for daily/periodic chunks
         if args.max_symbols > 0:
             original_count = len(symbols)
-            symbols = symbols[:args.max_symbols]
+            symbols = symbols[: args.max_symbols]
             _logger.info("Limiting processing to %d/%d symbols", len(symbols), original_count)
 
         # Refresh fundamentals for each symbol
         results = []
         for i, symbol in enumerate(symbols):
-            _logger.info("Processing symbol %d/%d: %s", i+1, len(symbols), symbol)
+            _logger.info("Processing symbol %d/%d: %s", i + 1, len(symbols), symbol)
 
             if not args.dry_run:
                 result = refresh_symbol_fundamentals(dm, symbol, data_types, args.force_refresh)
@@ -411,8 +405,8 @@ Examples:
 
         # Summary
         if not args.dry_run:
-            successful_symbols = [r for r in results if r['success']]
-            failed_symbols = [r for r in results if not r['success']]
+            successful_symbols = [r for r in results if r["success"]]
+            failed_symbols = [r for r in results if not r["success"]]
 
             _logger.info("Refresh completed:")
             _logger.info("  Successful symbols: %d", len(successful_symbols))
@@ -421,24 +415,24 @@ Examples:
             if failed_symbols:
                 _logger.warning("Failed symbols:")
                 for result in failed_symbols:
-                    _logger.warning("  %s: %s", result['symbol'], ', '.join(result['errors']))
+                    _logger.warning("  %s: %s", result["symbol"], ", ".join(result["errors"]))
 
         # Optional cleanup after refresh
         if not args.dry_run and not args.cleanup_only:
             _logger.info("Running post-refresh cleanup")
             cleanup_results = cleanup_expired_cache(args.cache_dir, data_types)
-            _logger.info("Post-refresh cleanup: %d files removed",
-                        cleanup_results['total_removed_files'])
+            _logger.info("Post-refresh cleanup: %d files removed", cleanup_results["total_removed_files"])
 
         # Output result for scheduler
         if not args.dry_run:
             import json
+
             result = {
                 "success": True,
                 "total_symbols": len(symbols),
                 "successful_symbols": len(successful_symbols),
                 "failed_symbols": len(failed_symbols),
-                "cleanup_files_removed": cleanup_results['total_removed_files'] if not args.cleanup_only else 0
+                "cleanup_files_removed": cleanup_results["total_removed_files"] if not args.cleanup_only else 0,
             }
             print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")
 
@@ -447,13 +441,12 @@ Examples:
 
         # Output error result for scheduler
         import json
-        result = {
-            "success": False,
-            "error": str(e)
-        }
+
+        result = {"success": False, "error": str(e)}
         print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")
 
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

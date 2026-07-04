@@ -5,9 +5,9 @@ Validation utilities and schemas for channel plugin configurations.
 Provides type-safe configuration handling and validation.
 """
 
-from typing import Dict, Any, List, Optional, Union, Type
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
+from typing import Any, Dict, List, Type, Union
 
 from src.notification.logger import setup_logger
 
@@ -17,7 +17,7 @@ _logger = setup_logger(__name__)
 class ConfigValidationError(Exception):
     """Exception raised when configuration validation fails."""
 
-    def __init__(self, message: str, field: Optional[str] = None, value: Any = None):
+    def __init__(self, message: str, field: str | None = None, value: Any = None):
         """
         Initialize configuration validation error.
 
@@ -37,14 +37,14 @@ class ValidationRule:
 
     field_name: str
     required: bool = True
-    field_type: Optional[Type] = None
-    min_length: Optional[int] = None
-    max_length: Optional[int] = None
-    min_value: Optional[Union[int, float]] = None
-    max_value: Optional[Union[int, float]] = None
-    pattern: Optional[str] = None
-    allowed_values: Optional[List[Any]] = None
-    custom_validator: Optional[callable] = None
+    field_type: Type | None = None
+    min_length: int | None = None
+    max_length: int | None = None
+    min_value: Union[int, float] | None = None
+    max_value: Union[int, float] | None = None
+    pattern: str | None = None
+    allowed_values: List[Any] | None = None
+    custom_validator: callable | None = None
     description: str = ""
 
     def validate(self, value: Any) -> None:
@@ -61,9 +61,7 @@ class ValidationRule:
         if value is None:
             if self.required:
                 raise ConfigValidationError(
-                    f"Required field '{self.field_name}' is missing",
-                    field=self.field_name,
-                    value=value
+                    f"Required field '{self.field_name}' is missing", field=self.field_name, value=value
                 )
             return  # Optional field with None value is valid
 
@@ -72,7 +70,7 @@ class ValidationRule:
             raise ConfigValidationError(
                 f"Field '{self.field_name}' must be of type {self.field_type.__name__}, got {type(value).__name__}",
                 field=self.field_name,
-                value=value
+                value=value,
             )
 
         # Check string length
@@ -81,14 +79,14 @@ class ValidationRule:
                 raise ConfigValidationError(
                     f"Field '{self.field_name}' must be at least {self.min_length} characters long",
                     field=self.field_name,
-                    value=value
+                    value=value,
                 )
 
             if self.max_length is not None and len(value) > self.max_length:
                 raise ConfigValidationError(
                     f"Field '{self.field_name}' must be at most {self.max_length} characters long",
                     field=self.field_name,
-                    value=value
+                    value=value,
                 )
 
             # Check pattern
@@ -96,23 +94,19 @@ class ValidationRule:
                 raise ConfigValidationError(
                     f"Field '{self.field_name}' does not match required pattern: {self.pattern}",
                     field=self.field_name,
-                    value=value
+                    value=value,
                 )
 
         # Check numeric ranges
         if isinstance(value, (int, float)):
             if self.min_value is not None and value < self.min_value:
                 raise ConfigValidationError(
-                    f"Field '{self.field_name}' must be at least {self.min_value}",
-                    field=self.field_name,
-                    value=value
+                    f"Field '{self.field_name}' must be at least {self.min_value}", field=self.field_name, value=value
                 )
 
             if self.max_value is not None and value > self.max_value:
                 raise ConfigValidationError(
-                    f"Field '{self.field_name}' must be at most {self.max_value}",
-                    field=self.field_name,
-                    value=value
+                    f"Field '{self.field_name}' must be at most {self.max_value}", field=self.field_name, value=value
                 )
 
         # Check allowed values
@@ -120,7 +114,7 @@ class ValidationRule:
             raise ConfigValidationError(
                 f"Field '{self.field_name}' must be one of {self.allowed_values}, got {value}",
                 field=self.field_name,
-                value=value
+                value=value,
             )
 
         # Custom validation
@@ -131,7 +125,7 @@ class ValidationRule:
                 raise ConfigValidationError(
                     f"Custom validation failed for field '{self.field_name}': {str(e)}",
                     field=self.field_name,
-                    value=value
+                    value=value,
                 )
 
 
@@ -158,13 +152,7 @@ class ConfigValidator:
         """
         self.rules.append(rule)
 
-    def require_field(
-        self,
-        field_name: str,
-        field_type: Type,
-        description: str = "",
-        **kwargs
-    ) -> None:
+    def require_field(self, field_name: str, field_type: Type, description: str = "", **kwargs) -> None:
         """
         Add a required field validation rule.
 
@@ -175,21 +163,12 @@ class ConfigValidator:
             **kwargs: Additional validation parameters
         """
         rule = ValidationRule(
-            field_name=field_name,
-            required=True,
-            field_type=field_type,
-            description=description,
-            **kwargs
+            field_name=field_name, required=True, field_type=field_type, description=description, **kwargs
         )
         self.add_rule(rule)
 
     def optional_field(
-        self,
-        field_name: str,
-        field_type: Type,
-        default_value: Any = None,
-        description: str = "",
-        **kwargs
+        self, field_name: str, field_type: Type, default_value: Any = None, description: str = "", **kwargs
     ) -> None:
         """
         Add an optional field validation rule.
@@ -202,11 +181,7 @@ class ConfigValidator:
             **kwargs: Additional validation parameters
         """
         rule = ValidationRule(
-            field_name=field_name,
-            required=False,
-            field_type=field_type,
-            description=description,
-            **kwargs
+            field_name=field_name, required=False, field_type=field_type, description=description, **kwargs
         )
         self.add_rule(rule)
 
@@ -235,7 +210,7 @@ class ConfigValidator:
                 # Set default values for optional fields
                 if value is None and not rule.required:
                     # Look for default in rule or use None
-                    default_value = getattr(rule, 'default_value', None)
+                    default_value = getattr(rule, "default_value", None)
                     if default_value is not None:
                         validated_config[rule.field_name] = default_value
 
@@ -248,13 +223,14 @@ class ConfigValidator:
 
         if unknown_fields:
             self._logger.warning(
-                "Unknown configuration fields for channel %s: %s",
-                self.channel_name, list(unknown_fields)
+                "Unknown configuration fields for channel %s: %s", self.channel_name, list(unknown_fields)
             )
 
         # Raise combined error if any validation failed
         if errors:
-            error_message = f"Configuration validation failed for channel '{self.channel_name}':\n" + "\n".join(f"  - {error}" for error in errors)
+            error_message = f"Configuration validation failed for channel '{self.channel_name}':\n" + "\n".join(
+                f"  - {error}" for error in errors
+            )
             raise ConfigValidationError(error_message)
 
         self._logger.info("Configuration validated successfully for channel: %s", self.channel_name)
@@ -267,16 +243,13 @@ class ConfigValidator:
         Returns:
             Schema dictionary describing all fields
         """
-        schema = {
-            "channel": self.channel_name,
-            "fields": {}
-        }
+        schema = {"channel": self.channel_name, "fields": {}}
 
         for rule in self.rules:
             field_info = {
                 "type": rule.field_type.__name__ if rule.field_type else "any",
                 "required": rule.required,
-                "description": rule.description
+                "description": rule.description,
             }
 
             # Add constraints
@@ -301,14 +274,14 @@ class ConfigValidator:
 # Common validation functions
 def validate_url(url: str) -> None:
     """Validate URL format."""
-    url_pattern = r'^https?://[^\s/$.?#].[^\s]*$'
+    url_pattern = r"^https?://[^\s/$.?#].[^\s]*$"
     if not re.match(url_pattern, url):
         raise ValueError("Invalid URL format")
 
 
 def validate_email(email: str) -> None:
     """Validate email format."""
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
     if not re.match(email_pattern, email):
         raise ValueError(f"Invalid email format: {email}")
 
@@ -316,8 +289,8 @@ def validate_email(email: str) -> None:
 def validate_phone(phone: str) -> None:
     """Validate phone number format."""
     # Simple international phone number validation
-    phone_pattern = r'^\+?[1-9]\d{1,14}$'
-    if not re.match(phone_pattern, phone.replace(' ', '').replace('-', '')):
+    phone_pattern = r"^\+?[1-9]\d{1,14}$"
+    if not re.match(phone_pattern, phone.replace(" ", "").replace("-", "")):
         raise ValueError("Invalid phone number format")
 
 
@@ -341,22 +314,14 @@ class CommonValidationRules:
     def api_token(field_name: str = "api_token", description: str = "API authentication token") -> ValidationRule:
         """API token validation rule."""
         return ValidationRule(
-            field_name=field_name,
-            required=True,
-            field_type=str,
-            min_length=10,
-            description=description
+            field_name=field_name, required=True, field_type=str, min_length=10, description=description
         )
 
     @staticmethod
     def api_url(field_name: str = "api_url", description: str = "API base URL") -> ValidationRule:
         """API URL validation rule."""
         return ValidationRule(
-            field_name=field_name,
-            required=True,
-            field_type=str,
-            custom_validator=validate_url,
-            description=description
+            field_name=field_name, required=True, field_type=str, custom_validator=validate_url, description=description
         )
 
     @staticmethod
@@ -368,7 +333,7 @@ class CommonValidationRules:
             field_type=int,
             min_value=1,
             max_value=300,
-            description=f"Request timeout in seconds (default: {default})"
+            description=f"Request timeout in seconds (default: {default})",
         )
 
     @staticmethod
@@ -380,7 +345,7 @@ class CommonValidationRules:
             field_type=int,
             min_value=1,
             max_value=10000,
-            description=f"Rate limit in messages per minute (default: {default})"
+            description=f"Rate limit in messages per minute (default: {default})",
         )
 
     @staticmethod
@@ -392,7 +357,7 @@ class CommonValidationRules:
             field_type=int,
             min_value=0,
             max_value=10,
-            description=f"Maximum retry attempts (default: {default})"
+            description=f"Maximum retry attempts (default: {default})",
         )
 
     @staticmethod
@@ -403,7 +368,7 @@ class CommonValidationRules:
             required=True,
             field_type=str,
             custom_validator=validate_email,
-            description=description
+            description=description,
         )
 
     @staticmethod
@@ -414,5 +379,5 @@ class CommonValidationRules:
             required=True,
             field_type=str,
             custom_validator=validate_phone,
-            description=description
+            description=description,
         )

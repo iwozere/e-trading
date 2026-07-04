@@ -16,9 +16,10 @@ Architecture notes
 • The X-API-Key middleware on the HTTP API is wired inside api/routes.py
   via create_api_app().
 """
-import sys
-import os
+
 import asyncio
+import os
+import sys
 import time
 from pathlib import Path
 
@@ -30,7 +31,7 @@ from aiogram import Bot, Dispatcher
 from aiohttp import web
 
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN
-from src.notification.logger import setup_logger, set_logging_context
+from src.notification.logger import set_logging_context, setup_logger
 
 _logger = setup_logger("telegram_screener_bot")
 
@@ -38,16 +39,17 @@ _logger = setup_logger("telegram_screener_bot")
 dp = Dispatcher()
 
 # ─── Register all command handler groups ─────────────────────────────────────
-from src.telegram.handlers import account, alerts, admin, content, misc  # noqa: E402
+from src.telegram.handlers import account, admin, alerts, content, misc  # noqa: E402
 
 account.register(dp)
 alerts.register(dp)
 admin.register(dp)
 content.register(dp)
-misc.register(dp)   # misc must be last — contains the catch-all @dp.message()
+misc.register(dp)  # misc must be last — contains the catch-all @dp.message()
 
 
 # ─── Entry point ─────────────────────────────────────────────────────────────
+
 
 async def main() -> None:
     global notification_client
@@ -65,6 +67,7 @@ async def main() -> None:
 
     # Service layer
     from src.telegram.lifecycle import initialize_services
+
     try:
         ok = await initialize_services()
         if ok:
@@ -81,7 +84,14 @@ async def main() -> None:
         def _health_check():
             bot_ok = bot is not None and bool(TELEGRAM_BOT_TOKEN)
             if bot_ok:
-                return {"status": "HEALTHY", "metadata": {"bot_token_present": True, "notification_system": "lazy_initialization", "last_check": time.time()}}
+                return {
+                    "status": "HEALTHY",
+                    "metadata": {
+                        "bot_token_present": True,
+                        "notification_system": "lazy_initialization",
+                        "last_check": time.time(),
+                    },
+                }
             return {"status": "DOWN", "error_message": "Bot not properly initialised"}
 
         hb = HeartbeatManager(system="telegram_bot", interval_seconds=30)
@@ -94,6 +104,7 @@ async def main() -> None:
     # Queue processor (polls DB every 5 s for queued messages from scheduler etc.)
     try:
         from src.telegram.services.telegram_queue_processor import TelegramQueueProcessor
+
         queue_processor = TelegramQueueProcessor(bot=bot, poll_interval=5)
         await queue_processor.start()
         _logger.info("TelegramQueueProcessor started")
@@ -103,6 +114,7 @@ async def main() -> None:
     # HTTP API
     try:
         from src.telegram.api.routes import create_api_app
+
         api_app = create_api_app()
         runner = web.AppRunner(api_app)
         await runner.setup()

@@ -21,10 +21,10 @@ Jobs executed (in order, failures are isolated):
 import json
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from io import StringIO
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, cast
+from typing import Any, Callable, Dict, List, cast
 
 import pandas as pd
 import requests
@@ -40,10 +40,7 @@ from src.data.downloader.russell3000_downloader import Russell3000Downloader
 from src.notification.logger import setup_logger
 
 _NASDAQ_SCREENER_CSV = Path(_cache_root) / "universe" / "nasdaq_screener.csv"
-_NASDAQ_API_URL = (
-    "https://api.nasdaq.com/api/screener/stocks"
-    "?tableonly=true&limit=25000&download=true"
-)
+_NASDAQ_API_URL = "https://api.nasdaq.com/api/screener/stocks?tableonly=true&limit=25000&download=true"
 # nasdaqtrader.com is the official programmatic mirror — no geo-blocking.
 # Two pipe-delimited files cover all US exchanges.
 _NASDAQTRADER_LISTED = "https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt"
@@ -56,7 +53,8 @@ _logger = setup_logger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _run_job(name: str, fn: Callable[[], Optional[Dict[str, Any]]]) -> Dict[str, Any]:
+
+def _run_job(name: str, fn: Callable[[], Dict[str, Any] | None]) -> Dict[str, Any]:
     """
     Run a single job function, catching all exceptions.
 
@@ -84,7 +82,8 @@ def _run_job(name: str, fn: Callable[[], Optional[Dict[str, Any]]]) -> Dict[str,
 # Job functions
 # ---------------------------------------------------------------------------
 
-def _job_russell3000_refresh() -> Optional[Dict[str, Any]]:
+
+def _job_russell3000_refresh() -> Dict[str, Any] | None:
     dl = Russell3000Downloader()
     if not dl.is_stale():
         _logger.info("russell3000: cache fresh — skipping")
@@ -93,30 +92,30 @@ def _job_russell3000_refresh() -> Optional[Dict[str, Any]]:
     return {"rows": len(df), "source": dl.last_source_used}
 
 
-def _job_aaii() -> Optional[Dict[str, Any]]:
+def _job_aaii() -> Dict[str, Any] | None:
     path = AaiiDownloader().download(force=True)
     if path and path.exists():
         return {"path": str(path)}
     return None
 
 
-def _job_fear_greed_full() -> Optional[Dict[str, Any]]:
+def _job_fear_greed_full() -> Dict[str, Any] | None:
     path = FearGreedDownloader().download(full_rebuild=True)
     if path and path.exists():
         return {"path": str(path)}
     return None
 
 
-def _job_fred_freq(dl: FredDownloader, freqs: list) -> Optional[Dict[str, Any]]:
+def _job_fred_freq(dl: FredDownloader, freqs: list) -> Dict[str, Any] | None:
     return dl.update_by_freq(freqs)  # type: ignore[return-value]
 
 
-def _job_fred_combined(dl: FredDownloader) -> Optional[Dict[str, Any]]:
+def _job_fred_combined(dl: FredDownloader) -> Dict[str, Any] | None:
     df = dl.build_combined()
     return {"rows": len(df)}
 
 
-def _job_nasdaq_screener() -> Optional[Dict[str, Any]]:
+def _job_nasdaq_screener() -> Dict[str, Any] | None:
     """
     Download the Nasdaq all-stocks screener CSV and save to the shared data cache.
 
@@ -130,7 +129,7 @@ def _job_nasdaq_screener() -> Optional[Dict[str, Any]]:
     Returns:
         Dict with rows count, file path, and source used.
     """
-    df: Optional[pd.DataFrame] = None
+    df: pd.DataFrame | None = None
     source = "api.nasdaq.com"
 
     # --- Primary: Nasdaq JSON API (rich data, geo-blocked on some servers) ---
@@ -220,6 +219,7 @@ def _job_nasdaq_screener() -> Optional[Dict[str, Any]]:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     """Run all weekly P15 jobs and emit a structured scheduler result."""
     _logger.info("=== P15 Weekly Bundle ===")
@@ -227,26 +227,26 @@ def main() -> None:
     fred_dl = FredDownloader()
     results: Dict[str, Dict[str, Any]] = {}
 
-    results["aaii"]                = _run_job("aaii",                _job_aaii)
-    results["fear_greed_full"]     = _run_job("fear_greed_full",     _job_fear_greed_full)
-    results["fred_weekly"]         = _run_job("fred_weekly",         lambda: _job_fred_freq(fred_dl, ["weekly"]))
-    results["fred_monthly"]        = _run_job("fred_monthly",        lambda: _job_fred_freq(fred_dl, ["monthly"]))
-    results["fred_quarterly"]      = _run_job("fred_quarterly",      lambda: _job_fred_freq(fred_dl, ["quarterly"]))
+    results["aaii"] = _run_job("aaii", _job_aaii)
+    results["fear_greed_full"] = _run_job("fear_greed_full", _job_fear_greed_full)
+    results["fred_weekly"] = _run_job("fred_weekly", lambda: _job_fred_freq(fred_dl, ["weekly"]))
+    results["fred_monthly"] = _run_job("fred_monthly", lambda: _job_fred_freq(fred_dl, ["monthly"]))
+    results["fred_quarterly"] = _run_job("fred_quarterly", lambda: _job_fred_freq(fred_dl, ["quarterly"]))
     results["russell3000_refresh"] = _run_job("russell3000_refresh", _job_russell3000_refresh)
-    results["fred_combined"]       = _run_job("fred_combined",       lambda: _job_fred_combined(fred_dl))
-    results["nasdaq_screener"]     = _run_job("nasdaq_screener",     _job_nasdaq_screener)
+    results["fred_combined"] = _run_job("fred_combined", lambda: _job_fred_combined(fred_dl))
+    results["nasdaq_screener"] = _run_job("nasdaq_screener", _job_nasdaq_screener)
 
-    n_ok   = sum(1 for r in results.values() if r["success"])
+    n_ok = sum(1 for r in results.values() if r["success"])
     n_fail = len(results) - n_ok
     _logger.info("=== P15 Weekly Bundle done: %d ok / %d failed ===", n_ok, n_fail)
 
     summary = {
-        "success":      n_fail == 0,
-        "bundle":       "p15_weekly",
-        "jobs_ok":      n_ok,
-        "jobs_failed":  n_fail,
-        "jobs":         results,
-        "run_at":       datetime.now(timezone.utc).isoformat(),
+        "success": n_fail == 0,
+        "bundle": "p15_weekly",
+        "jobs_ok": n_ok,
+        "jobs_failed": n_fail,
+        "jobs": results,
+        "run_at": datetime.now(UTC).isoformat(),
     }
     print(f"__SCHEDULER_RESULT__:{json.dumps(summary)}")
 

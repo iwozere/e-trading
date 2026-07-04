@@ -1,8 +1,9 @@
-from src.notification.logger import setup_logger
-from src.model.telegram_bot import Technicals
+import numpy as np
 import pandas as pd
 import talib
-import numpy as np
+
+from src.model.telegram_bot import Technicals
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -21,16 +22,16 @@ def calculate_technicals_talib(df: pd.DataFrame) -> Technicals:
         raise ValueError("DataFrame is empty or None")
 
     # Validate required columns
-    required_cols = ['open', 'high', 'low', 'close', 'volume']
+    required_cols = ["open", "high", "low", "close", "volume"]
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
         raise ValueError(f"Missing required columns: {missing_cols}")
 
     # Extract price data
-    close = df['close'].values.astype(float)
-    high = df['high'].values.astype(float)
-    low = df['low'].values.astype(float)
-    volume = df['volume'].values.astype(float)
+    close = df["close"].values.astype(float)
+    high = df["high"].values.astype(float)
+    low = df["low"].values.astype(float)
+    volume = df["volume"].values.astype(float)
 
     # Check for sufficient data
     if len(close) < 50:
@@ -90,33 +91,33 @@ def calculate_technicals_talib(df: pd.DataFrame) -> Technicals:
 
     # Build technical data dictionary with current indicator values
     technical_data = {
-        'rsi': get_last_value(rsi),
-        'sma_fast': get_last_value(sma_fast),
-        'sma_slow': get_last_value(sma_slow),
-        'ema_fast': get_last_value(ema_fast),
-        'ema_slow': get_last_value(ema_slow),
-        'macd': get_last_value(macd),
-        'macd_signal': get_last_value(macd_signal),
-        'macd_histogram': get_last_value(macd_hist),
-        'stoch_k': get_last_value(stoch_k),
-        'stoch_d': get_last_value(stoch_d),
-        'adx': get_last_value(adx),
-        'plus_di': get_last_value(plus_di),
-        'minus_di': get_last_value(minus_di),
-        'obv': get_last_value(obv),
-        'adr': get_last_value(adr),
-        'avg_adr': None,  # Not calculated
-        'trend': 'NEUTRAL',
-        'bb_upper': get_last_value(bb_upper),
-        'bb_middle': get_last_value(bb_middle),
-        'bb_lower': get_last_value(bb_lower),
-        'bb_width': None,  # Will calculate below
-        'cci': get_last_value(cci),
-        'roc': get_last_value(roc),
-        'mfi': get_last_value(mfi),
-        'williams_r': get_last_value(williams_r),
-        'atr': get_last_value(atr),
-        'recommendations': {}
+        "rsi": get_last_value(rsi),
+        "sma_fast": get_last_value(sma_fast),
+        "sma_slow": get_last_value(sma_slow),
+        "ema_fast": get_last_value(ema_fast),
+        "ema_slow": get_last_value(ema_slow),
+        "macd": get_last_value(macd),
+        "macd_signal": get_last_value(macd_signal),
+        "macd_histogram": get_last_value(macd_hist),
+        "stoch_k": get_last_value(stoch_k),
+        "stoch_d": get_last_value(stoch_d),
+        "adx": get_last_value(adx),
+        "plus_di": get_last_value(plus_di),
+        "minus_di": get_last_value(minus_di),
+        "obv": get_last_value(obv),
+        "adr": get_last_value(adr),
+        "avg_adr": None,  # Not calculated
+        "trend": "NEUTRAL",
+        "bb_upper": get_last_value(bb_upper),
+        "bb_middle": get_last_value(bb_middle),
+        "bb_lower": get_last_value(bb_lower),
+        "bb_width": None,  # Will calculate below
+        "cci": get_last_value(cci),
+        "roc": get_last_value(roc),
+        "mfi": get_last_value(mfi),
+        "williams_r": get_last_value(williams_r),
+        "atr": get_last_value(atr),
+        "recommendations": {},
     }
 
     # Generate recommendations based on indicator values
@@ -124,75 +125,119 @@ def calculate_technicals_talib(df: pd.DataFrame) -> Technicals:
     current_price = close[-1]
 
     # RSI recommendations
-    if technical_data['rsi'] is not None:
-        rsi_val = technical_data['rsi']
+    if technical_data["rsi"] is not None:
+        rsi_val = technical_data["rsi"]
         if rsi_val > 70:
-            recommendations['rsi'] = {"signal": "SELL", "reason": "Overbought - Sell opportunity", "confidence": 0.7}
+            recommendations["rsi"] = {"signal": "SELL", "reason": "Overbought - Sell opportunity", "confidence": 0.7}
         elif rsi_val < 30:
-            recommendations['rsi'] = {"signal": "BUY", "reason": "Oversold - Buy opportunity", "confidence": 0.7}
+            recommendations["rsi"] = {"signal": "BUY", "reason": "Oversold - Buy opportunity", "confidence": 0.7}
         else:
-            recommendations['rsi'] = {"signal": "HOLD", "reason": "Neutral zone - No clear signal", "confidence": 0.5}
+            recommendations["rsi"] = {"signal": "HOLD", "reason": "Neutral zone - No clear signal", "confidence": 0.5}
 
     # MACD recommendations
-    if technical_data['macd'] is not None and technical_data['macd_signal'] is not None:
-        if technical_data['macd'] > technical_data['macd_signal']:
-            recommendations['macd'] = {"signal": "BUY", "reason": "MACD above signal - Bullish", "confidence": 0.6}
+    if technical_data["macd"] is not None and technical_data["macd_signal"] is not None:
+        if technical_data["macd"] > technical_data["macd_signal"]:
+            recommendations["macd"] = {"signal": "BUY", "reason": "MACD above signal - Bullish", "confidence": 0.6}
         else:
-            recommendations['macd'] = {"signal": "SELL", "reason": "MACD below signal - Bearish", "confidence": 0.6}
+            recommendations["macd"] = {"signal": "SELL", "reason": "MACD below signal - Bearish", "confidence": 0.6}
 
     # Bollinger Bands recommendations
-    if technical_data['bb_upper'] is not None and technical_data['bb_lower'] is not None:
-        if current_price >= technical_data['bb_upper']:
-            recommendations['bb_middle'] = {"signal": "SELL", "reason": "Price at upper band - Overbought", "confidence": 0.6}
-        elif current_price <= technical_data['bb_lower']:
-            recommendations['bb_middle'] = {"signal": "BUY", "reason": "Price at lower band - Oversold", "confidence": 0.6}
+    if technical_data["bb_upper"] is not None and technical_data["bb_lower"] is not None:
+        if current_price >= technical_data["bb_upper"]:
+            recommendations["bb_middle"] = {
+                "signal": "SELL",
+                "reason": "Price at upper band - Overbought",
+                "confidence": 0.6,
+            }
+        elif current_price <= technical_data["bb_lower"]:
+            recommendations["bb_middle"] = {
+                "signal": "BUY",
+                "reason": "Price at lower band - Oversold",
+                "confidence": 0.6,
+            }
         else:
-            recommendations['bb_middle'] = {"signal": "HOLD", "reason": "Price within bands - Normal range", "confidence": 0.5}
+            recommendations["bb_middle"] = {
+                "signal": "HOLD",
+                "reason": "Price within bands - Normal range",
+                "confidence": 0.5,
+            }
 
     # Stochastic recommendations
-    if technical_data['stoch_k'] is not None and technical_data['stoch_d'] is not None:
-        stoch_k_val = technical_data['stoch_k']
-        stoch_d_val = technical_data['stoch_d']
+    if technical_data["stoch_k"] is not None and technical_data["stoch_d"] is not None:
+        stoch_k_val = technical_data["stoch_k"]
+        stoch_d_val = technical_data["stoch_d"]
         if stoch_k_val > 80:
-            recommendations['stoch_k'] = {"signal": "SELL", "reason": "Stochastic overbought (K > 80)", "confidence": 0.7}
+            recommendations["stoch_k"] = {
+                "signal": "SELL",
+                "reason": "Stochastic overbought (K > 80)",
+                "confidence": 0.7,
+            }
         elif stoch_k_val < 20:
-            recommendations['stoch_k'] = {"signal": "BUY", "reason": "Stochastic oversold (K < 20)", "confidence": 0.7}
+            recommendations["stoch_k"] = {"signal": "BUY", "reason": "Stochastic oversold (K < 20)", "confidence": 0.7}
         elif stoch_k_val > stoch_d_val:
-            recommendations['stoch_k'] = {"signal": "BUY", "reason": "Stochastic K above D - Bullish crossover", "confidence": 0.6}
+            recommendations["stoch_k"] = {
+                "signal": "BUY",
+                "reason": "Stochastic K above D - Bullish crossover",
+                "confidence": 0.6,
+            }
         else:
-            recommendations['stoch_k'] = {"signal": "HOLD", "reason": "Stochastic in neutral zone", "confidence": 0.5}
+            recommendations["stoch_k"] = {"signal": "HOLD", "reason": "Stochastic in neutral zone", "confidence": 0.5}
 
     # ADX recommendations
-    if technical_data['adx'] is not None:
-        adx_val = technical_data['adx']
+    if technical_data["adx"] is not None:
+        adx_val = technical_data["adx"]
         if adx_val > 25:  # Strong trend
-            if technical_data['plus_di'] is not None and technical_data['minus_di'] is not None:
-                if technical_data['plus_di'] > technical_data['minus_di']:
-                    recommendations['adx'] = {"signal": "BUY", "reason": f"Strong uptrend (ADX: {adx_val:.1f})", "confidence": 0.8}
+            if technical_data["plus_di"] is not None and technical_data["minus_di"] is not None:
+                if technical_data["plus_di"] > technical_data["minus_di"]:
+                    recommendations["adx"] = {
+                        "signal": "BUY",
+                        "reason": f"Strong uptrend (ADX: {adx_val:.1f})",
+                        "confidence": 0.8,
+                    }
                 else:
-                    recommendations['adx'] = {"signal": "SELL", "reason": f"Strong downtrend (ADX: {adx_val:.1f})", "confidence": 0.8}
+                    recommendations["adx"] = {
+                        "signal": "SELL",
+                        "reason": f"Strong downtrend (ADX: {adx_val:.1f})",
+                        "confidence": 0.8,
+                    }
             else:
-                recommendations['adx'] = {"signal": "HOLD", "reason": f"Strong trend (ADX: {adx_val:.1f})", "confidence": 0.6}
+                recommendations["adx"] = {
+                    "signal": "HOLD",
+                    "reason": f"Strong trend (ADX: {adx_val:.1f})",
+                    "confidence": 0.6,
+                }
         else:
-            recommendations['adx'] = {"signal": "HOLD", "reason": f"Weak trend (ADX: {adx_val:.1f})", "confidence": 0.4}
+            recommendations["adx"] = {"signal": "HOLD", "reason": f"Weak trend (ADX: {adx_val:.1f})", "confidence": 0.4}
 
     # OBV recommendations
-    if technical_data['obv'] is not None:
-        obv_val = technical_data['obv']
+    if technical_data["obv"] is not None:
+        obv_val = technical_data["obv"]
         if obv_val > 0:
-            recommendations['obv'] = {"signal": "BUY", "reason": "Positive OBV - Accumulation", "confidence": 0.5}
+            recommendations["obv"] = {"signal": "BUY", "reason": "Positive OBV - Accumulation", "confidence": 0.5}
         else:
-            recommendations['obv'] = {"signal": "SELL", "reason": "Negative OBV - Distribution", "confidence": 0.5}
+            recommendations["obv"] = {"signal": "SELL", "reason": "Negative OBV - Distribution", "confidence": 0.5}
 
     # ADR recommendations
-    if technical_data['adr'] is not None:
-        adr_val = technical_data['adr']
+    if technical_data["adr"] is not None:
+        adr_val = technical_data["adr"]
         if adr_val > 3.0:
-            recommendations['adr'] = {"signal": "HOLD", "reason": f"High volatility ({adr_val:.1f}%) - Caution", "confidence": 0.5}
+            recommendations["adr"] = {
+                "signal": "HOLD",
+                "reason": f"High volatility ({adr_val:.1f}%) - Caution",
+                "confidence": 0.5,
+            }
         elif adr_val < 1.0:
-            recommendations['adr'] = {"signal": "HOLD", "reason": f"Low volatility ({adr_val:.1f}%) - Stable price action", "confidence": 0.5}
+            recommendations["adr"] = {
+                "signal": "HOLD",
+                "reason": f"Low volatility ({adr_val:.1f}%) - Stable price action",
+                "confidence": 0.5,
+            }
         else:
-            recommendations['adr'] = {"signal": "HOLD", "reason": f"Normal volatility ({adr_val:.1f}%)", "confidence": 0.5}
+            recommendations["adr"] = {
+                "signal": "HOLD",
+                "reason": f"Normal volatility ({adr_val:.1f}%)",
+                "confidence": 0.5,
+            }
 
     # Generate overall recommendation based on individual signals
     buy_signals = sum(1 for rec in recommendations.values() if rec["signal"] in ["STRONG_BUY", "BUY"])
@@ -217,34 +262,30 @@ def calculate_technicals_talib(df: pd.DataFrame) -> Technicals:
         reason = "No clear signals available"
         confidence = 0.5
 
-    recommendations["overall"] = {
-        "signal": overall_signal,
-        "reason": reason,
-        "confidence": confidence
-    }
+    recommendations["overall"] = {"signal": overall_signal, "reason": reason, "confidence": confidence}
 
     # Calculate trend based on SMA comparison
-    if technical_data['sma_fast'] is not None and technical_data['sma_slow'] is not None:
-        if technical_data['sma_fast'] > technical_data['sma_slow']:
-            technical_data['trend'] = 'BULLISH'
+    if technical_data["sma_fast"] is not None and technical_data["sma_slow"] is not None:
+        if technical_data["sma_fast"] > technical_data["sma_slow"]:
+            technical_data["trend"] = "BULLISH"
         else:
-            technical_data['trend'] = 'BEARISH'
+            technical_data["trend"] = "BEARISH"
 
     # Calculate BB width if BB values are available
-    if (technical_data['bb_upper'] is not None and
-        technical_data['bb_middle'] is not None and
-        technical_data['bb_lower'] is not None and
-        technical_data['bb_middle'] != 0):
-        technical_data['bb_width'] = (technical_data['bb_upper'] - technical_data['bb_lower']) / technical_data['bb_middle']
+    if (
+        technical_data["bb_upper"] is not None
+        and technical_data["bb_middle"] is not None
+        and technical_data["bb_lower"] is not None
+        and technical_data["bb_middle"] != 0
+    ):
+        technical_data["bb_width"] = (technical_data["bb_upper"] - technical_data["bb_lower"]) / technical_data[
+            "bb_middle"
+        ]
 
     # Set recommendations
-    technical_data['recommendations'] = recommendations
+    technical_data["recommendations"] = recommendations
 
     return Technicals(**technical_data)
-
-
-
-
 
 
 def format_technical_analysis(ticker: str, technicals: Technicals, current_price: float = None) -> str:
@@ -276,7 +317,9 @@ def format_technical_analysis(ticker: str, technicals: Technicals, current_price
     # RSI
     rsi_rec = technicals.recommendations.get("rsi", {}) if technicals.recommendations else {}
     if rsi is not None:
-        message += f"• RSI ({rsi:.1f}): {rsi_rec.get('signal', 'HOLD')} - {rsi_rec.get('reason', 'No reason provided')}\n"
+        message += (
+            f"• RSI ({rsi:.1f}): {rsi_rec.get('signal', 'HOLD')} - {rsi_rec.get('reason', 'No reason provided')}\n"
+        )
     else:
         message += f"• RSI (N/A): {rsi_rec.get('signal', 'HOLD')} - {rsi_rec.get('reason', 'No reason provided')}\n"
 
@@ -304,13 +347,17 @@ def format_technical_analysis(ticker: str, technicals: Technicals, current_price
     if stoch_k is not None and stoch_d is not None:
         message += f"• Stoch K/D ({stoch_k:.1f}/{stoch_d:.1f}): {stoch_rec.get('signal', 'HOLD')} - {stoch_rec.get('reason', 'No reason provided')}\n"
     else:
-        message += f"• Stoch K/D (N/A): {stoch_rec.get('signal', 'HOLD')} - {stoch_rec.get('reason', 'No reason provided')}\n"
+        message += (
+            f"• Stoch K/D (N/A): {stoch_rec.get('signal', 'HOLD')} - {stoch_rec.get('reason', 'No reason provided')}\n"
+        )
 
     # ADX
     adx_rec = technicals.recommendations.get("adx", {}) if technicals.recommendations else {}
     adx_val = technicals.adx
     if adx_val is not None:
-        message += f"• ADX ({adx_val:.1f}): {adx_rec.get('signal', 'HOLD')} - {adx_rec.get('reason', 'No reason provided')}\n"
+        message += (
+            f"• ADX ({adx_val:.1f}): {adx_rec.get('signal', 'HOLD')} - {adx_rec.get('reason', 'No reason provided')}\n"
+        )
     else:
         message += f"• ADX (N/A): {adx_rec.get('signal', 'HOLD')} - {adx_rec.get('reason', 'No reason provided')}\n"
 
@@ -318,7 +365,9 @@ def format_technical_analysis(ticker: str, technicals: Technicals, current_price
     obv_rec = technicals.recommendations.get("obv", {}) if technicals.recommendations else {}
     obv_val = technicals.obv
     if obv_val is not None:
-        message += f"• OBV ({obv_val:.0f}): {obv_rec.get('signal', 'HOLD')} - {obv_rec.get('reason', 'No reason provided')}\n"
+        message += (
+            f"• OBV ({obv_val:.0f}): {obv_rec.get('signal', 'HOLD')} - {obv_rec.get('reason', 'No reason provided')}\n"
+        )
     else:
         message += f"• OBV (N/A): {obv_rec.get('signal', 'HOLD')} - {obv_rec.get('reason', 'No reason provided')}\n"
 
@@ -326,11 +375,9 @@ def format_technical_analysis(ticker: str, technicals: Technicals, current_price
     adr_rec = technicals.recommendations.get("adr", {}) if technicals.recommendations else {}
     adr_val = technicals.adr
     if adr_val is not None:
-        message += f"• ADR ({adr_val:.2f}): {adr_rec.get('signal', 'HOLD')} - {adr_rec.get('reason', 'No reason provided')}\n"
+        message += (
+            f"• ADR ({adr_val:.2f}): {adr_rec.get('signal', 'HOLD')} - {adr_rec.get('reason', 'No reason provided')}\n"
+        )
     else:
         message += f"• ADR (N/A): {adr_rec.get('signal', 'HOLD')} - {adr_rec.get('reason', 'No reason provided')}\n"
     return message
-
-
-
-

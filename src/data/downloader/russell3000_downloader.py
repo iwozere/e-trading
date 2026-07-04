@@ -18,10 +18,10 @@ Cache layout:
 """
 
 import json
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import List, Optional
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
@@ -57,7 +57,7 @@ class Russell3000Downloader(BaseDataDownloader):
     TTL:   90 days; force=True bypasses the TTL check.
     """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         """
         Args:
             api_key: FMP API key. Defaults to FMP_API_KEY from donotshare config.
@@ -68,7 +68,7 @@ class Russell3000Downloader(BaseDataDownloader):
         self._cache_file = self._cache_dir / "russell3000.csv.gz"
         self._meta_file = self._cache_dir / "russell3000_meta.json"
         self._static_csv_path = self._cache_dir / "russell3000_static.csv"
-        self.last_source_used: Optional[str] = None
+        self.last_source_used: str | None = None
 
     # ------------------------------------------------------------------
     # BaseDataDownloader abstract method stubs (not applicable)
@@ -128,8 +128,8 @@ class Russell3000Downloader(BaseDataDownloader):
         try:
             last_updated = datetime.fromisoformat(last_updated_str)
             if last_updated.tzinfo is None:
-                last_updated = last_updated.replace(tzinfo=timezone.utc)
-            age_days = (datetime.now(timezone.utc) - last_updated).days
+                last_updated = last_updated.replace(tzinfo=UTC)
+            age_days = (datetime.now(UTC) - last_updated).days
             return age_days > _CACHE_TTL_DAYS
         except (ValueError, TypeError):
             return True
@@ -138,7 +138,7 @@ class Russell3000Downloader(BaseDataDownloader):
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _fetch_from_fmp(self) -> Optional[pd.DataFrame]:
+    def _fetch_from_fmp(self) -> pd.DataFrame | None:
         """Call FMP stable API for Russell 3000 constituents; return None on any error."""
         if not self._api_key:
             _logger.warning("russell3000: no FMP API key — skipping FMP fetch")
@@ -193,7 +193,7 @@ class Russell3000Downloader(BaseDataDownloader):
         _logger.info("russell3000: loaded %d constituents from static CSV", len(df))
         return df
 
-    def _normalise_columns(self, df: pd.DataFrame) -> Optional[pd.DataFrame]:
+    def _normalise_columns(self, df: pd.DataFrame) -> pd.DataFrame | None:
         """Map provider column names to the canonical schema."""
         col_map = {
             "symbol": "ticker",
@@ -224,14 +224,12 @@ class Russell3000Downloader(BaseDataDownloader):
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         df.to_csv(self._cache_file, index=False, compression="gzip")
         meta = {
-            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "last_updated": datetime.now(UTC).isoformat(),
             "source_used": self.last_source_used,
             "row_count": len(df),
         }
         self._meta_file.write_text(json.dumps(meta, indent=2))
-        _logger.info(
-            "russell3000: cache written — %d rows, source=%s", len(df), self.last_source_used
-        )
+        _logger.info("russell3000: cache written — %d rows, source=%s", len(df), self.last_source_used)
 
     def _read_meta(self) -> dict:
         """Read metadata JSON; return empty dict on any error."""

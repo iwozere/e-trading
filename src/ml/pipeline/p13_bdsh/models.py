@@ -1,5 +1,6 @@
-from dataclasses import dataclass, field
-from typing import Dict, Any
+from dataclasses import dataclass
+from typing import Any, Dict
+
 
 @dataclass
 class P13Config:
@@ -13,7 +14,7 @@ class P13Config:
     atr_multiplier: float = 2.0
     vix_symbol: str = "^VIX"
     resolution: str = "1d"
-    
+
     @classmethod
     def from_module(cls, config_module: Any):
         """Creates a P13Config instance from the config module's constants."""
@@ -27,5 +28,5 @@ class P13Config:
             atr_period=config_module.ATR_PERIOD,
             atr_multiplier=config_module.ATR_MULTIPLIER,
             vix_symbol=config_module.VIX_SYMBOL,
-            resolution=config_module.RESOLUTION
+            resolution=config_module.RESOLUTION,
         )

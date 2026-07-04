@@ -8,6 +8,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.common.sentiments.adapters.async_reddit import AsyncRedditAdapter
 
+
 async def test_reddit():
     adapter = AsyncRedditAdapter()
     ticker = "NVDA"
@@ -26,6 +27,7 @@ async def test_reddit():
         print(f"Error: {e}")
     finally:
         await adapter.close()
+
 
 if __name__ == "__main__":
     asyncio.run(test_reddit())

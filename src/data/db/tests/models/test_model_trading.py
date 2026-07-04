@@ -1,6 +1,6 @@
 from sqlalchemy.exc import IntegrityError
 
-from src.data.db.models.model_trading import BotInstance, Trade, Position
+from src.data.db.models.model_trading import BotInstance, Position, Trade
 from src.data.db.models.model_users import User
 
 

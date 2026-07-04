@@ -15,8 +15,9 @@ Examples:
     python test_live_data_feeds.py ibkr SPY 1m
 """
 
-import sys
 import os
+import sys
+
 import pytest
 
 # Add the src directory to the path
@@ -24,7 +25,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 import time
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any, Dict
 
 import backtrader as bt
 
@@ -36,9 +37,11 @@ _logger = setup_logger(__name__)
 
 def on_new_bar(symbol: str, timestamp, data: Dict[str, Any]):
     """Callback function called when new data arrives."""
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] New {symbol} bar: "
-          f"O={data['open']:.4f} H={data['high']:.4f} L={data['low']:.4f} "
-          f"C={data['close']:.4f} V={data['volume']:.2f}")
+    print(
+        f"[{datetime.now().strftime('%H:%M:%S')}] New {symbol} bar: "
+        f"O={data['open']:.4f} H={data['high']:.4f} L={data['low']:.4f} "
+        f"C={data['close']:.4f} V={data['volume']:.2f}"
+    )
 
 
 def create_test_config(data_source: str, symbol: str, interval: str) -> Dict[str, Any]:
@@ -50,25 +53,21 @@ def create_test_config(data_source: str, symbol: str, interval: str) -> Dict[str
         "interval": interval,
         "lookback_bars": 100,
         "retry_interval": 60,
-        "on_new_bar": on_new_bar
+        "on_new_bar": on_new_bar,
     }
 
     if data_source == "binance":
-        base_config.update({
-            "api_key": None,  # Use public data
-            "api_secret": None,
-            "testnet": False
-        })
+        base_config.update(
+            {
+                "api_key": None,  # Use public data
+                "api_secret": None,
+                "testnet": False,
+            }
+        )
     elif data_source == "yahoo":
-        base_config.update({
-            "polling_interval": 60
-        })
+        base_config.update({"polling_interval": 60})
     elif data_source == "ibkr":
-        base_config.update({
-            "host": "127.0.0.1",
-            "port": 7497,
-            "client_id": 1
-        })
+        base_config.update({"host": "127.0.0.1", "port": 7497, "client_id": 1})
 
     return base_config
 
@@ -84,12 +83,12 @@ def test_data_feed(data_source: str, symbol: str, interval: str, duration: int =
         interval: Data interval
         duration: Test duration in seconds
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Testing {data_source.upper()} Live Data Feed")
     print(f"Symbol: {symbol}")
     print(f"Interval: {interval}")
     print(f"Duration: {duration} seconds")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     try:
         # Create configuration
@@ -165,7 +164,7 @@ def test_data_feed(data_source: str, symbol: str, interval: str, duration: int =
 
     except KeyboardInterrupt:
         print("\nTest interrupted by user")
-        if 'data_feed' in locals():
+        if "data_feed" in locals():
             data_feed.stop()
     except Exception as e:
         print(f"\nError during test: {str(e)}")

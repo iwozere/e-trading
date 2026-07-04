@@ -7,7 +7,6 @@ P&L accounting.
 """
 
 import logging
-from typing import Optional
 
 import pandas as pd
 
@@ -15,7 +14,7 @@ from .pricing import bs_put_price, skew_adjusted_sigma
 
 _logger = logging.getLogger(__name__)
 
-_MAX_PUT_PCT_OF_S = 0.15   # discard if put_price > 15% of spot (likely data error)
+_MAX_PUT_PCT_OF_S = 0.15  # discard if put_price > 15% of spot (likely data error)
 
 
 def simulate_barbell(
@@ -29,7 +28,7 @@ def simulate_barbell(
     sigma_col: str = "vix",
     skew_slope: float = 0.015,
     use_market_prices: bool = False,
-    options_df: Optional[pd.DataFrame] = None,
+    options_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """
     Simulate systematic monthly put purchases over the master DataFrame.
@@ -84,7 +83,9 @@ def simulate_barbell(
     for idx in purchase_indices:
         purchase_date = trading_days[idx]
         S = float(df["close"].iat[idx])
-        vix_val = float(df[sigma_col].iat[idx]) if sigma_col in df.columns and not pd.isna(df[sigma_col].iat[idx]) else 20.0
+        vix_val = (
+            float(df[sigma_col].iat[idx]) if sigma_col in df.columns and not pd.isna(df[sigma_col].iat[idx]) else 20.0
+        )
         r = float(df[r_col].iat[idx]) if r_col in df.columns and not pd.isna(df[r_col].iat[idx]) else 0.04
 
         K = moneyness * S
@@ -96,14 +97,18 @@ def simulate_barbell(
         if put_price <= 0 or put_price > S * _MAX_PUT_PCT_OF_S:
             _logger.debug(
                 "Skipping period %s: put_price=%.4f (S=%.2f, K=%.2f, sigma=%.3f)",
-                purchase_date.date(), put_price, S, K, sigma,  # type: ignore[union-attr]
+                purchase_date.date(),
+                put_price,
+                S,
+                K,
+                sigma,  # type: ignore[union-attr]
             )
             skipped += 1
             continue
 
         put_price_pct = put_price / S * 100.0
         num_contracts = budget_per_period / put_price
-        budget_spent = num_contracts * put_price   # = budget_per_period (no rounding)
+        budget_spent = num_contracts * put_price  # = budget_per_period (no rounding)
 
         # Find expiry trading day: first trading day >= purchase_date + T_days
         expiry_calendar = purchase_date + pd.Timedelta(days=T_days)
@@ -121,29 +126,31 @@ def simulate_barbell(
         pnl = payoff - budget_spent
         pnl_pct = pnl / initial_capital * 100.0
 
-        rows.append({
-            "date":                    purchase_date,
-            "expiry_date":             expiry_date,
-            "S":                       S,
-            "K":                       K,
-            "T":                       T_years,
-            "moneyness":               moneyness,
-            "otm_pct":                 otm_pct * 100.0,
-            "sigma_used":              sigma,
-            "vix":                     vix_val,
-            "rate_3m":                 r,
-            "put_price":               put_price,
-            "put_price_pct_of_S":      put_price_pct,
-            "budget_spent":            budget_spent,
-            "num_contracts":           num_contracts,
-            "price_source":            "bs",
-            "S_at_expiry":             S_expiry,
-            "drawdown_at_expiry":      drawdown_at_expiry,
-            "intrinsic_value_at_expiry": intrinsic_value,
-            "payoff":                  payoff,
-            "pnl":                     pnl,
-            "pnl_pct":                 pnl_pct,
-        })
+        rows.append(
+            {
+                "date": purchase_date,
+                "expiry_date": expiry_date,
+                "S": S,
+                "K": K,
+                "T": T_years,
+                "moneyness": moneyness,
+                "otm_pct": otm_pct * 100.0,
+                "sigma_used": sigma,
+                "vix": vix_val,
+                "rate_3m": r,
+                "put_price": put_price,
+                "put_price_pct_of_S": put_price_pct,
+                "budget_spent": budget_spent,
+                "num_contracts": num_contracts,
+                "price_source": "bs",
+                "S_at_expiry": S_expiry,
+                "drawdown_at_expiry": drawdown_at_expiry,
+                "intrinsic_value_at_expiry": intrinsic_value,
+                "payoff": payoff,
+                "pnl": pnl,
+                "pnl_pct": pnl_pct,
+            }
+        )
 
     if not rows:
         _logger.warning("No simulation rows produced (all %d periods skipped)", skipped)
@@ -157,7 +164,12 @@ def simulate_barbell(
     _logger.info(
         "simulate_barbell: moneyness=%.2f T=%dd → %d periods, %d skipped, "
         "total_cost=$%.0f, total_payoff=$%.0f, net_pnl=$%.0f",
-        moneyness, T_days, len(result), skipped,
-        result["cum_cost"].iloc[-1], result["cum_payoff"].iloc[-1], result["cum_pnl"].iloc[-1],
+        moneyness,
+        T_days,
+        len(result),
+        skipped,
+        result["cum_cost"].iloc[-1],
+        result["cum_payoff"].iloc[-1],
+        result["cum_pnl"].iloc[-1],
     )
     return result

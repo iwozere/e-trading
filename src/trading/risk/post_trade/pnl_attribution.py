@@ -3,7 +3,9 @@ PnL Attribution Module
 
 Implements P&L attribution for post-trade analysis.
 """
-from typing import List, Dict
+
+from typing import Dict, List
+
 
 def pnl_attribution(trades: List[Dict], group_by: str = "symbol") -> Dict[str, float]:
     """
@@ -18,4 +20,4 @@ def pnl_attribution(trades: List[Dict], group_by: str = "symbol") -> Dict[str, f
     for trade in trades:
         key = trade.get(group_by, "unknown")
         result[key] = result.get(key, 0.0) + trade.get("pnl", 0.0)
-    return result 
+    return result

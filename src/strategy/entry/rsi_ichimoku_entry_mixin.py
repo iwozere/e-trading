@@ -39,11 +39,10 @@ Configuration Example (New Unified Architecture):
 Note: This mixin no longer supports legacy internal indicator initialization.
 """
 
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List
 
-import backtrader as bt
-from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 from src.notification.logger import setup_logger
+from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 
 logger = setup_logger(__name__)
 
@@ -51,7 +50,7 @@ logger = setup_logger(__name__)
 class RSIIchimokuEntryMixin(BaseEntryMixin):
     """Entry mixin based on RSI and Ichimoku Cloud"""
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         super().__init__(params)
 
     def get_required_params(self) -> list:
@@ -61,13 +60,7 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
     @classmethod
     def get_default_params(cls) -> Dict[str, Any]:
         """Default parameters"""
-        return {
-            "rsi_oversold": 30,
-            "rsi_period": 14,
-            "tenkan_period": 9,
-            "kijun_period": 26,
-            "senkou_period": 52
-        }
+        return {"rsi_oversold": 30, "rsi_period": 14, "tenkan_period": 9, "kijun_period": 26, "senkou_period": 52}
 
     @classmethod
     def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -78,20 +71,16 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
         senkou = params.get("senkou_period") or params.get("e_senkou", 52)
 
         return [
-            {
-                "type": "RSI",
-                "params": {"timeperiod": rsi_period},
-                "fields_mapping": {"rsi": "entry_rsi"}
-            },
+            {"type": "RSI", "params": {"timeperiod": rsi_period}, "fields_mapping": {"rsi": "entry_rsi"}},
             {
                 "type": "ICHIMOKU",
                 "params": {"tenkan": tenkan, "kijun": kijun, "senkou": senkou},
                 "fields_mapping": {
                     "tenkan_sen": "entry_ichimoku_tenkan",
                     "senkou_span_a": "entry_ichimoku_senkou_a",
-                    "senkou_span_b": "entry_ichimoku_senkou_b"
-                }
-            }
+                    "senkou_span_b": "entry_ichimoku_senkou_b",
+                },
+            },
         ]
 
     def _init_indicators(self):
@@ -105,19 +94,14 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
         """
         Returns the minimum number of bars required (Kijun period for Ichimoku cloud).
         """
-        return self._resolve_param('kijun_period', 'e_kijun', 26)
+        return self._resolve_param("kijun_period", "e_kijun", 26)
 
     def are_indicators_ready(self) -> bool:
         """
         Check if required indicators exist in the strategy registry.
         """
-        required = [
-            'entry_rsi',
-            'entry_ichimoku_tenkan',
-            'entry_ichimoku_senkou_a',
-            'entry_ichimoku_senkou_b'
-        ]
-        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
+        required = ["entry_rsi", "entry_ichimoku_tenkan", "entry_ichimoku_senkou_a", "entry_ichimoku_senkou_b"]
+        return all(alias in getattr(self.strategy, "indicators", {}) for alias in required)
 
     def should_enter(self) -> bool:
         """Check if we should enter a position."""
@@ -132,25 +116,21 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
             kijun_period = 26  # Standard lookback for Ichimoku Span A/B
 
             # Access indicators via the unified registry
-            current_rsi = self.get_indicator('entry_rsi')
+            current_rsi = self.get_indicator("entry_rsi")
 
-            span_a = self.get_indicator_prev('entry_ichimoku_senkou_a', kijun_period)
-            span_b = self.get_indicator_prev('entry_ichimoku_senkou_b', kijun_period)
+            span_a = self.get_indicator_prev("entry_ichimoku_senkou_a", kijun_period)
+            span_b = self.get_indicator_prev("entry_ichimoku_senkou_b", kijun_period)
 
-            tenkan = self.get_indicator('entry_ichimoku_tenkan')
-            prev_tenkan = self.get_indicator_prev('entry_ichimoku_tenkan', 1)
+            tenkan = self.get_indicator("entry_ichimoku_tenkan")
+            prev_tenkan = self.get_indicator_prev("entry_ichimoku_tenkan", 1)
             prev_price = self.strategy.data.close[-1]
 
             # Cross-over logic
-            cross_over_tenkan = (prev_price <= prev_tenkan and current_price > tenkan)
+            cross_over_tenkan = prev_price <= prev_tenkan and current_price > tenkan
             kumo_top = max(span_a, span_b)
 
             # Strategy conditions
-            entry_signal = (
-                current_price > kumo_top and
-                current_rsi <= rsi_oversold and
-                cross_over_tenkan
-            )
+            entry_signal = current_price > kumo_top and current_rsi <= rsi_oversold and cross_over_tenkan
 
             if entry_signal:
                 logger.debug(

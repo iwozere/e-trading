@@ -8,20 +8,22 @@ Tests the AlertEvaluator service functionality including:
 - Market data and indicator integration
 """
 
-import pytest
 import json
-from datetime import datetime, timezone, timedelta
-from unittest.mock import Mock, AsyncMock
-import pandas as pd
-import numpy as np
 
 # Add src to path
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import AsyncMock, Mock
+
+import numpy as np
+import pandas as pd
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
-UTC = timezone.utc
+UTC = UTC
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -31,13 +33,11 @@ def setup_imports():
     global AlertSchemaValidator, ValidationResult, DataManager, IndicatorService, JobsService
     global _logger
 
-    from src.common.alerts.alert_evaluator import (
-        AlertEvaluator, AlertConfig, AlertEvaluationResult, RearmResult
-    )
+    from src.common.alerts.alert_evaluator import AlertConfig, AlertEvaluationResult, AlertEvaluator, RearmResult
     from src.common.alerts.schema_validator import AlertSchemaValidator, ValidationResult
     from src.data.data_manager import DataManager
-    from src.indicators.service import IndicatorService
     from src.data.db.services.jobs_service import JobsService
+    from src.indicators.service import IndicatorService
     from src.notification.logger import setup_logger
 
     _logger = setup_logger(__name__)
@@ -68,26 +68,23 @@ class TestAlertEvaluator:
     def mock_schema_validator(self):
         """Create mock AlertSchemaValidator."""
         mock = Mock(spec=AlertSchemaValidator)
-        mock.validate_alert_config = Mock(return_value=ValidationResult(
-            is_valid=True, errors=[], warnings=[]
-        ))
+        mock.validate_alert_config = Mock(return_value=ValidationResult(is_valid=True, errors=[], warnings=[]))
         return mock
 
     @pytest.fixture
-    def alert_evaluator(self, mock_data_manager, mock_indicator_service,
-                       mock_jobs_service, mock_schema_validator):
+    def alert_evaluator(self, mock_data_manager, mock_indicator_service, mock_jobs_service, mock_schema_validator):
         """Create AlertEvaluator instance with mocked dependencies."""
         return AlertEvaluator(
             data_manager=mock_data_manager,
             indicator_service=mock_indicator_service,
             jobs_service=mock_jobs_service,
-            schema_validator=mock_schema_validator
+            schema_validator=mock_schema_validator,
         )
 
     @pytest.fixture
     def sample_market_data(self):
         """Create sample market data DataFrame."""
-        dates = pd.date_range(start='2023-01-01', periods=100, freq='1H')
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="1H")
         np.random.seed(42)  # For reproducible tests
 
         # Generate realistic OHLCV data
@@ -97,28 +94,31 @@ class TestAlertEvaluator:
             price = base_price + np.random.normal(0, 2) + 0.1 * i  # Slight upward trend
             prices.append(price)
 
-        df = pd.DataFrame({
-            'open': prices,
-            'high': [p + abs(np.random.normal(0, 1)) for p in prices],
-            'low': [p - abs(np.random.normal(0, 1)) for p in prices],
-            'close': [p + np.random.normal(0, 0.5) for p in prices],
-            'volume': [1000 + abs(np.random.normal(0, 200)) for _ in prices]
-        }, index=dates)
+        df = pd.DataFrame(
+            {
+                "open": prices,
+                "high": [p + abs(np.random.normal(0, 1)) for p in prices],
+                "low": [p - abs(np.random.normal(0, 1)) for p in prices],
+                "close": [p + np.random.normal(0, 0.5) for p in prices],
+                "volume": [1000 + abs(np.random.normal(0, 200)) for _ in prices],
+            },
+            index=dates,
+        )
 
         # Ensure high >= low and realistic OHLC relationships
-        df['high'] = df[['open', 'close', 'high']].max(axis=1)
-        df['low'] = df[['open', 'close', 'low']].min(axis=1)
+        df["high"] = df[["open", "close", "high"]].max(axis=1)
+        df["low"] = df[["open", "close", "low"]].min(axis=1)
 
         return df
 
     @pytest.fixture
     def sample_indicators(self):
         """Create sample indicators dictionary."""
-        dates = pd.date_range(start='2023-01-01', periods=100, freq='1H')
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="1H")
         return {
-            'SMA_20': pd.Series([100 + i * 0.1 for i in range(100)], index=dates),
-            'RSI': pd.Series([50 + np.random.normal(0, 10) for _ in range(100)], index=dates),
-            'EMA_10': pd.Series([99 + i * 0.12 for i in range(100)], index=dates)
+            "SMA_20": pd.Series([100 + i * 0.1 for i in range(100)], index=dates),
+            "RSI": pd.Series([50 + np.random.normal(0, 10) for _ in range(100)], index=dates),
+            "EMA_10": pd.Series([99 + i * 0.12 for i in range(100)], index=dates),
         }
 
     @pytest.fixture
@@ -129,12 +129,7 @@ class TestAlertEvaluator:
         mock_schedule.task_params = {
             "ticker": "BTCUSDT",
             "timeframe": "1h",
-            "rule": {
-                "gt": {
-                    "lhs": {"field": "close"},
-                    "rhs": {"value": 100}
-                }
-            }
+            "rule": {"gt": {"lhs": {"field": "close"}, "rhs": {"value": 100}}},
         }
         mock_schedule.state_json = None
 
@@ -148,55 +143,36 @@ class TestAlertEvaluator:
 
     def test_evaluate_simple_gt_rule(self, alert_evaluator, sample_market_data, sample_indicators):
         """Test simple greater than rule evaluation."""
-        rule = {
-            "gt": {
-                "lhs": {"field": "close"},
-                "rhs": {"value": 100}
-            }
-        }
+        rule = {"gt": {"lhs": {"field": "close"}, "rhs": {"value": 100}}}
 
-        result, sides, snapshot = alert_evaluator._evaluate_rule_tree(
-            rule, sample_market_data, sample_indicators, {}
-        )
+        result, sides, snapshot = alert_evaluator._evaluate_rule_tree(rule, sample_market_data, sample_indicators, {})
 
-        last_close = sample_market_data['close'].iloc[-1]
+        last_close = sample_market_data["close"].iloc[-1]
         expected_result = last_close > 100
 
         assert result == expected_result
-        assert 'close' in snapshot
-        assert 'value' in snapshot
-        assert snapshot['close'] == last_close
-        assert snapshot['value'] == 100
+        assert "close" in snapshot
+        assert "value" in snapshot
+        assert snapshot["close"] == last_close
+        assert snapshot["value"] == 100
 
     def test_evaluate_and_rule(self, alert_evaluator, sample_market_data, sample_indicators):
         """Test AND logical operator."""
         rule = {
             "and": [
-                {
-                    "gt": {
-                        "lhs": {"field": "close"},
-                        "rhs": {"value": 100}
-                    }
-                },
-                {
-                    "lt": {
-                        "lhs": {"field": "close"},
-                        "rhs": {"value": 200}
-                    }
-                }
+                {"gt": {"lhs": {"field": "close"}, "rhs": {"value": 100}}},
+                {"lt": {"lhs": {"field": "close"}, "rhs": {"value": 200}}},
             ]
         }
 
-        result, sides, snapshot = alert_evaluator._evaluate_rule_tree(
-            rule, sample_market_data, sample_indicators, {}
-        )
+        result, sides, snapshot = alert_evaluator._evaluate_rule_tree(rule, sample_market_data, sample_indicators, {})
 
-        last_close = sample_market_data['close'].iloc[-1]
+        last_close = sample_market_data["close"].iloc[-1]
         expected_result = 100 < last_close < 200
 
         assert result == expected_result
-        assert 'close' in snapshot
-        assert 'value' in snapshot
+        assert "close" in snapshot
+        assert "value" in snapshot
 
     def test_evaluate_or_rule(self, alert_evaluator, sample_market_data, sample_indicators):
         """Test OR logical operator."""
@@ -205,23 +181,21 @@ class TestAlertEvaluator:
                 {
                     "lt": {
                         "lhs": {"field": "close"},
-                        "rhs": {"value": 50}  # Very low threshold
+                        "rhs": {"value": 50},  # Very low threshold
                     }
                 },
                 {
                     "gt": {
                         "lhs": {"field": "close"},
-                        "rhs": {"value": 90}  # More likely threshold
+                        "rhs": {"value": 90},  # More likely threshold
                     }
-                }
+                },
             ]
         }
 
-        result, sides, snapshot = alert_evaluator._evaluate_rule_tree(
-            rule, sample_market_data, sample_indicators, {}
-        )
+        result, sides, snapshot = alert_evaluator._evaluate_rule_tree(rule, sample_market_data, sample_indicators, {})
 
-        last_close = sample_market_data['close'].iloc[-1]
+        last_close = sample_market_data["close"].iloc[-1]
         expected_result = last_close < 50 or last_close > 90
 
         assert result == expected_result
@@ -232,48 +206,33 @@ class TestAlertEvaluator:
             "not": {
                 "gt": {
                     "lhs": {"field": "close"},
-                    "rhs": {"value": 1000}  # Very high threshold
+                    "rhs": {"value": 1000},  # Very high threshold
                 }
             }
         }
 
-        result, sides, snapshot = alert_evaluator._evaluate_rule_tree(
-            rule, sample_market_data, sample_indicators, {}
-        )
+        result, sides, snapshot = alert_evaluator._evaluate_rule_tree(rule, sample_market_data, sample_indicators, {})
 
-        last_close = sample_market_data['close'].iloc[-1]
+        last_close = sample_market_data["close"].iloc[-1]
         expected_result = not (last_close > 1000)
 
         assert result == expected_result
 
     def test_evaluate_between_rule(self, alert_evaluator, sample_market_data, sample_indicators):
         """Test BETWEEN range operator."""
-        rule = {
-            "between": {
-                "value": {"field": "close"},
-                "lower": {"value": 90},
-                "upper": {"value": 120}
-            }
-        }
+        rule = {"between": {"value": {"field": "close"}, "lower": {"value": 90}, "upper": {"value": 120}}}
 
-        result, sides, snapshot = alert_evaluator._evaluate_rule_tree(
-            rule, sample_market_data, sample_indicators, {}
-        )
+        result, sides, snapshot = alert_evaluator._evaluate_rule_tree(rule, sample_market_data, sample_indicators, {})
 
-        last_close = sample_market_data['close'].iloc[-1]
+        last_close = sample_market_data["close"].iloc[-1]
         expected_result = 90 <= last_close <= 120
 
         assert result == expected_result
-        assert snapshot['close'] == last_close
+        assert snapshot["close"] == last_close
 
     def test_evaluate_crosses_above_rule(self, alert_evaluator, sample_market_data, sample_indicators):
         """Test CROSSES_ABOVE operator with side tracking."""
-        rule = {
-            "crosses_above": {
-                "lhs": {"field": "close"},
-                "rhs": {"value": 105}
-            }
-        }
+        rule = {"crosses_above": {"lhs": {"field": "close"}, "rhs": {"value": 105}}}
 
         # First evaluation - establish initial side
         result1, sides1, snapshot1 = alert_evaluator._evaluate_rule_tree(
@@ -292,7 +251,7 @@ class TestAlertEvaluator:
 
         # Create modified data where close is above threshold
         modified_data = sample_market_data.copy()
-        modified_data.loc[modified_data.index[-1], 'close'] = 110  # Above threshold
+        modified_data.loc[modified_data.index[-1], "close"] = 110  # Above threshold
 
         result2, sides2, snapshot2 = alert_evaluator._evaluate_rule_tree(
             rule, modified_data, sample_indicators, previous_sides
@@ -304,23 +263,16 @@ class TestAlertEvaluator:
 
     def test_evaluate_indicator_rule(self, alert_evaluator, sample_market_data, sample_indicators):
         """Test rule evaluation with indicators."""
-        rule = {
-            "gt": {
-                "lhs": {"indicator": {"type": "RSI", "output": "RSI"}},
-                "rhs": {"value": 70}
-            }
-        }
+        rule = {"gt": {"lhs": {"indicator": {"type": "RSI", "output": "RSI"}}, "rhs": {"value": 70}}}
 
-        result, sides, snapshot = alert_evaluator._evaluate_rule_tree(
-            rule, sample_market_data, sample_indicators, {}
-        )
+        result, sides, snapshot = alert_evaluator._evaluate_rule_tree(rule, sample_market_data, sample_indicators, {})
 
-        last_rsi = sample_indicators['RSI'].iloc[-1]
+        last_rsi = sample_indicators["RSI"].iloc[-1]
         expected_result = last_rsi > 70
 
         assert result == expected_result
-        assert 'RSI' in snapshot
-        assert snapshot['RSI'] == last_rsi
+        assert "RSI" in snapshot
+        assert snapshot["RSI"] == last_rsi
 
     # Test Rearm Logic
 
@@ -332,7 +284,7 @@ class TestAlertEvaluator:
             rule={"gt": {"lhs": {"field": "close"}, "rhs": {"value": 100}}},
             rearm=None,
             options={},
-            notify={}
+            notify={},
         )
 
         current_state = {"status": "ARMED"}
@@ -353,15 +305,12 @@ class TestAlertEvaluator:
             rule={"gt": {"lhs": {"field": "close"}, "rhs": {"value": 100}}},
             rearm={"enabled": True, "cooldown_minutes": 60},
             options={},
-            notify={}
+            notify={},
         )
 
         # Test within cooldown period
         recent_trigger = (datetime.now(UTC) - timedelta(minutes=30)).isoformat()
-        current_state = {
-            "status": "TRIGGERED",
-            "last_triggered": recent_trigger
-        }
+        current_state = {"status": "TRIGGERED", "last_triggered": recent_trigger}
 
         result = alert_evaluator._apply_rearm_logic(alert_config, current_state, False, True)
 
@@ -376,15 +325,12 @@ class TestAlertEvaluator:
             rule={"gt": {"lhs": {"field": "close"}, "rhs": {"value": 100}}},
             rearm={"enabled": True, "cooldown_minutes": 60},
             options={},
-            notify={}
+            notify={},
         )
 
         # Test after cooldown period
         old_trigger = (datetime.now(UTC) - timedelta(minutes=120)).isoformat()
-        current_state = {
-            "status": "TRIGGERED",
-            "last_triggered": old_trigger
-        }
+        current_state = {"status": "TRIGGERED", "last_triggered": old_trigger}
 
         result = alert_evaluator._apply_rearm_logic(alert_config, current_state, False, True)
 
@@ -400,14 +346,11 @@ class TestAlertEvaluator:
             rule={"gt": {"lhs": {"field": "close"}, "rhs": {"value": 100}}},
             rearm={"enabled": True, "persistence_bars": 3},
             options={},
-            notify={}
+            notify={},
         )
 
         # Test insufficient persistence bars - should not trigger yet
-        current_state = {
-            "status": "ARMED",
-            "consecutive_trigger_bars": 2
-        }
+        current_state = {"status": "ARMED", "consecutive_trigger_bars": 2}
 
         # The logic checks if consecutive_trigger_bars >= persistence_bars after increment
         # So with 2 bars + 1 (current trigger) = 3, which meets the requirement
@@ -448,12 +391,14 @@ class TestAlertEvaluator:
 
     def test_load_alert_state_valid_json(self, alert_evaluator):
         """Test loading valid alert state from JSON."""
-        state_json = json.dumps({
-            "status": "TRIGGERED",
-            "sides": {"cross_123": "above"},
-            "last_triggered": "2023-01-01T12:00:00+00:00",
-            "trigger_count": 5
-        })
+        state_json = json.dumps(
+            {
+                "status": "TRIGGERED",
+                "sides": {"cross_123": "above"},
+                "last_triggered": "2023-01-01T12:00:00+00:00",
+                "trigger_count": 5,
+            }
+        )
 
         state = alert_evaluator._load_alert_state(state_json)
 
@@ -488,7 +433,7 @@ class TestAlertEvaluator:
             "sides": {"cross_123": "above"},
             "last_triggered": "2023-01-01T12:00:00+00:00",
             "trigger_count": 5,
-            "consecutive_trigger_bars": 2
+            "consecutive_trigger_bars": 2,
         }
 
         sanitized = alert_evaluator._sanitize_state(raw_state)
@@ -513,7 +458,7 @@ class TestAlertEvaluator:
             "sides": {
                 "valid_key": "above",
                 "invalid_key": "invalid_side",
-                123: "above"  # Invalid key type
+                123: "above",  # Invalid key type
             }
         }
 
@@ -531,34 +476,20 @@ class TestAlertEvaluator:
         """Test successful market data fetching."""
         mock_data_manager.get_ohlcv.return_value = sample_market_data
 
-        alert_config = AlertConfig(
-            ticker="BTCUSDT",
-            timeframe="1h",
-            rule={},
-            rearm=None,
-            options={},
-            notify={}
-        )
+        alert_config = AlertConfig(ticker="BTCUSDT", timeframe="1h", rule={}, rearm=None, options={}, notify={})
 
         result = await alert_evaluator._fetch_market_data(alert_config)
 
         assert result is not None
         assert len(result) > 0
-        assert all(col in result.columns for col in ['open', 'high', 'low', 'close', 'volume'])
+        assert all(col in result.columns for col in ["open", "high", "low", "close", "volume"])
 
     @pytest.mark.asyncio
     async def test_fetch_market_data_failure(self, alert_evaluator, mock_data_manager):
         """Test market data fetching failure."""
         mock_data_manager.get_ohlcv.side_effect = Exception("Data provider error")
 
-        alert_config = AlertConfig(
-            ticker="BTCUSDT",
-            timeframe="1h",
-            rule={},
-            rearm=None,
-            options={},
-            notify={}
-        )
+        alert_config = AlertConfig(ticker="BTCUSDT", timeframe="1h", rule={}, rearm=None, options={}, notify={})
 
         result = await alert_evaluator._fetch_market_data(alert_config)
 
@@ -577,7 +508,7 @@ class TestAlertEvaluator:
 
     def test_validate_market_data_missing_columns(self, alert_evaluator):
         """Test market data validation with missing columns."""
-        invalid_df = pd.DataFrame({'price': [100, 101, 102]})
+        invalid_df = pd.DataFrame({"price": [100, 101, 102]})
         result = alert_evaluator._validate_market_data(invalid_df, Mock(), 50)
         assert result is False
 
@@ -597,7 +528,7 @@ class TestAlertEvaluator:
         assert len(indicators["SMA_20"]) == len(sample_market_data)
 
         # Verify SMA calculation (last 20 values average)
-        expected_sma = sample_market_data['close'].rolling(window=20).mean().iloc[-1]
+        expected_sma = sample_market_data["close"].rolling(window=20).mean().iloc[-1]
         assert abs(indicators["SMA_20"].iloc[-1] - expected_sma) < 0.001
 
     def test_calculate_basic_indicators_rsi(self, alert_evaluator, sample_market_data):
@@ -618,20 +549,10 @@ class TestAlertEvaluator:
         alert_config = AlertConfig(
             ticker="BTCUSDT",
             timeframe="1h",
-            rule={
-                "gt": {
-                    "lhs": {"indicator": {"type": "SMA", "params": {"period": 50}}},
-                    "rhs": {"value": 100}
-                }
-            },
-            rearm={
-                "gt": {
-                    "lhs": {"indicator": {"type": "EMA", "params": {"period": 20}}},
-                    "rhs": {"value": 95}
-                }
-            },
+            rule={"gt": {"lhs": {"indicator": {"type": "SMA", "params": {"period": 50}}}, "rhs": {"value": 100}}},
+            rearm={"gt": {"lhs": {"indicator": {"type": "EMA", "params": {"period": 20}}}, "rhs": {"value": 95}}},
             options={"lookback": 100},
-            notify={}
+            notify={},
         )
 
         lookback = alert_evaluator._calculate_required_lookback(alert_config)
@@ -642,14 +563,13 @@ class TestAlertEvaluator:
     # Test Full Alert Evaluation
 
     @pytest.mark.asyncio
-    async def test_evaluate_alert_success(self, alert_evaluator, mock_job_run,
-                                        sample_market_data, mock_data_manager):
+    async def test_evaluate_alert_success(self, alert_evaluator, mock_job_run, sample_market_data, mock_data_manager):
         """Test successful alert evaluation."""
         mock_data_manager.get_ohlcv.return_value = sample_market_data
 
         # Set up market data so rule will trigger (close > 100)
         modified_data = sample_market_data.copy()
-        modified_data.loc[modified_data.index[-1], 'close'] = 150
+        modified_data.loc[modified_data.index[-1], "close"] = 150
         mock_data_manager.get_ohlcv.return_value = modified_data
 
         result = await alert_evaluator.evaluate_alert(mock_job_run)
@@ -670,8 +590,7 @@ class TestAlertEvaluator:
         assert result.error == "No market data available"
 
     @pytest.mark.asyncio
-    async def test_evaluate_alert_invalid_config(self, alert_evaluator, mock_job_run,
-                                               mock_schema_validator):
+    async def test_evaluate_alert_invalid_config(self, alert_evaluator, mock_job_run, mock_schema_validator):
         """Test alert evaluation with invalid configuration."""
         mock_schema_validator.validate_alert_config.return_value = ValidationResult(
             is_valid=False, errors=["Invalid ticker"], warnings=[]
@@ -691,7 +610,7 @@ class TestAlertEvaluator:
             "rule": {"gt": {"lhs": {"field": "close"}, "rhs": {"value": 100}}},
             "rearm": {"enabled": True},
             "options": {"lookback": 200},
-            "notify": {"channels": ["telegram"]}
+            "notify": {"channels": ["telegram"]},
         }
 
         config = alert_evaluator._parse_alert_config(task_params)
@@ -717,12 +636,7 @@ class TestAlertEvaluator:
     def test_prepare_notification_data(self, alert_evaluator, sample_market_data, sample_indicators):
         """Test preparation of notification data."""
         alert_config = AlertConfig(
-            ticker="BTCUSDT",
-            timeframe="1h",
-            rule={},
-            rearm=None,
-            options={},
-            notify={"channels": ["telegram"]}
+            ticker="BTCUSDT", timeframe="1h", rule={}, rearm=None, options={}, notify={"channels": ["telegram"]}
         )
 
         rule_snapshot = {"close": 105.5, "value": 100}
@@ -777,11 +691,7 @@ class TestAlertEvaluator:
 
     def test_calculate_atr_insufficient_data(self, alert_evaluator):
         """Test ATR calculation with insufficient data."""
-        small_df = pd.DataFrame({
-            'high': [100, 101],
-            'low': [99, 100],
-            'close': [100.5, 100.8]
-        })
+        small_df = pd.DataFrame({"high": [100, 101], "low": [99, 100], "close": [100.5, 100.8]})
 
         atr = alert_evaluator._calculate_atr(small_df, period=14)
 

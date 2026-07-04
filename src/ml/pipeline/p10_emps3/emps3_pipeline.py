@@ -9,12 +9,11 @@ Remove once no scheduler or caller references this entrypoint directly.
 """
 
 import warnings
-from typing import Optional
 
 import pandas as pd
 
-from src.ml.pipeline.p06_emps2.emps2_pipeline import EMPS2Pipeline
 from src.ml.pipeline.p06_emps2.config import EMPS2PipelineConfig
+from src.ml.pipeline.p06_emps2.emps2_pipeline import EMPS2Pipeline
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -32,11 +31,12 @@ class EMPS3Pipeline:
     Deprecated shim — delegates to EMPS2Pipeline(analyzer_type='accumulation').
     """
 
-    def __init__(self, config=None, target_date: Optional[str] = None):
+    def __init__(self, config=None, target_date: str | None = None):
         warnings.warn(_DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
         _logger.warning("EMPS3Pipeline is deprecated. %s", _DEPRECATION_MSG)
 
         from pathlib import Path
+
         emps2_config = EMPS2PipelineConfig.create_default()
         emps2_config.analyzer_type = "accumulation"
 
@@ -54,7 +54,7 @@ class EMPS3Pipeline:
     def results_dir(self):
         return self._delegate._results_dir
 
-    def run(self, force_refresh: bool = False, tickers: Optional[list] = None) -> pd.DataFrame:
+    def run(self, force_refresh: bool = False, tickers: list | None = None) -> pd.DataFrame:
         if tickers is not None:
             _logger.warning(
                 "EMPS3Pipeline shim: 'tickers' filter is not supported by the EMPS2 delegate "

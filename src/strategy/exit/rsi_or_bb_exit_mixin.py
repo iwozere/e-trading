@@ -30,11 +30,10 @@ Configuration Example (New TALib Architecture):
     }
 """
 
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List
 
-import backtrader as bt
-from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
+from src.strategy.exit.base_exit_mixin import BaseExitMixin
 
 logger = setup_logger(__name__)
 
@@ -44,7 +43,7 @@ class RSIOrBBExitMixin(BaseExitMixin):
     New Architecture only.
     """
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
 
@@ -70,18 +69,12 @@ class RSIOrBBExitMixin(BaseExitMixin):
         bb_dev = params.get("bb_dev", 2.0)
 
         return [
-            {
-                "type": "RSI",
-                "params": {"timeperiod": rsi_period},
-                "fields_mapping": {"rsi": "exit_rsi"}
-            },
+            {"type": "RSI", "params": {"timeperiod": rsi_period}, "fields_mapping": {"rsi": "exit_rsi"}},
             {
                 "type": "BBANDS",
                 "params": {"timeperiod": bb_period, "nbdevup": bb_dev, "nbdevdn": bb_dev},
-                "fields_mapping": {
-                    "upperband": "exit_bb_upper"
-                }
-            }
+                "fields_mapping": {"upperband": "exit_bb_upper"},
+            },
         ]
 
     def _init_indicators(self):
@@ -90,15 +83,12 @@ class RSIOrBBExitMixin(BaseExitMixin):
 
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
-        return max(
-            self.get_param("rsi_period", 14),
-            self.get_param("bb_period", 20)
-        )
+        return max(self.get_param("rsi_period", 14), self.get_param("bb_period", 20))
 
     def are_indicators_ready(self) -> bool:
         """Check if required indicators exist in the strategy registry."""
-        required = ['exit_rsi', 'exit_bb_upper']
-        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
+        required = ["exit_rsi", "exit_bb_upper"]
+        return all(alias in getattr(self.strategy, "indicators", {}) for alias in required)
 
     def should_exit(self) -> bool:
         """Check if we should exit a position."""
@@ -110,23 +100,23 @@ class RSIOrBBExitMixin(BaseExitMixin):
 
         try:
             # Standardized parameter retrieval
-            rsi_overbought = self._resolve_param('rsi_overbought', 'x_rsi_overbought', 70)
+            rsi_overbought = self._resolve_param("rsi_overbought", "x_rsi_overbought", 70)
 
             # Unified Indicator Access
-            current_rsi = self.get_indicator('exit_rsi')
-            previous_rsi = self.get_indicator_prev('exit_rsi', 1)
-            current_bb_top = self.get_indicator('exit_bb_upper')
-            previous_bb_top = self.get_indicator_prev('exit_bb_upper', 1)
+            current_rsi = self.get_indicator("exit_rsi")
+            previous_rsi = self.get_indicator_prev("exit_rsi", 1)
+            current_bb_top = self.get_indicator("exit_bb_upper")
+            previous_bb_top = self.get_indicator_prev("exit_bb_upper", 1)
 
             # Get current and previous prices
             current_price = self.strategy.data.close[0]
             previous_price = self.strategy.data.close[-1]
 
             # RSI cross condition
-            rsi_cross_condition = (previous_rsi >= rsi_overbought and current_rsi < rsi_overbought)
+            rsi_cross_condition = previous_rsi >= rsi_overbought and current_rsi < rsi_overbought
 
             # BB cross condition
-            bb_cross_condition = (previous_price >= previous_bb_top and current_price < current_bb_top)
+            bb_cross_condition = previous_price >= previous_bb_top and current_price < current_bb_top
 
             should_exit_pos = rsi_cross_condition or bb_cross_condition
 
@@ -152,8 +142,8 @@ class RSIOrBBExitMixin(BaseExitMixin):
 
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""
-        return getattr(self.strategy, 'current_exit_reason', 'rsi_or_bb_exit')
+        return getattr(self.strategy, "current_exit_reason", "rsi_or_bb_exit")
 
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""
-        return getattr(self.strategy, 'current_exit_reason', 'rsi_or_bb_exit')
+        return getattr(self.strategy, "current_exit_reason", "rsi_or_bb_exit")

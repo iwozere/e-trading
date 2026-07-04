@@ -12,22 +12,24 @@ Features:
 - Hashtag and mention tracking capabilities
 - Rate limit handling and authentication
 """
+
 import asyncio
-import aiohttp
 import os
-from typing import List, Dict, Optional, Any
-from pathlib import Path
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Dict, List
+
+import aiohttp
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
 from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -40,9 +42,15 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
     with proper rate limiting and authentication handling.
     """
 
-    def __init__(self, name: str = "twitter", session: Optional[aiohttp.ClientSession] = None,
-                 concurrency: int = 3, rate_limit_delay: float = 1.0, max_retries: int = 3,
-                 bearer_token: Optional[str] = None):
+    def __init__(
+        self,
+        name: str = "twitter",
+        session: aiohttp.ClientSession | None = None,
+        concurrency: int = 3,
+        rate_limit_delay: float = 1.0,
+        max_retries: int = 3,
+        bearer_token: str | None = None,
+    ):
         super().__init__(name, concurrency, rate_limit_delay)
         self._provided_session = session is not None
         self._session = session
@@ -51,7 +59,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
         self._analyzer = HeuristicSentimentAnalyzer()
 
         # Twitter API configuration
-        self.bearer_token = bearer_token or os.getenv('TWITTER_BEARER_TOKEN')
+        self.bearer_token = bearer_token or os.getenv("TWITTER_BEARER_TOKEN")
         self.base_url = "https://api.twitter.com/2"
 
         # Rate limiting - Twitter API v2 limits
@@ -61,13 +69,13 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
         self.use_cashtags = True  # Fallback flag for restricted API plans
 
         # Tweet fields to request
-        self.tweet_fields = ['id', 'text', 'created_at', 'author_id']
+        self.tweet_fields = ["id", "text", "created_at", "author_id"]
 
         # Potentially restricted fields
-        self.extra_tweet_fields = ['public_metrics', 'entities']
-        self.use_extra_fields = False # Default to False for Free tier stability
+        self.extra_tweet_fields = ["public_metrics", "entities"]
+        self.use_extra_fields = False  # Default to False for Free tier stability
 
-        self.user_fields = ['id', 'username', 'name', 'verified']
+        self.user_fields = ["id", "username", "name", "verified"]
 
         # HARD DISABLE: Twitter API limits on Free tier make it impractical for default use
         self.enabled = False
@@ -80,10 +88,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
         if not self.bearer_token:
             raise ValueError("Twitter bearer token not configured")
 
-        return {
-            'Authorization': f'Bearer {self.bearer_token}',
-            'Content-Type': 'application/json'
-        }
+        return {"Authorization": f"Bearer {self.bearer_token}", "Content-Type": "application/json"}
 
     def _check_rate_limit(self) -> bool:
         """Check if we're within rate limits for search requests."""
@@ -91,8 +96,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
 
         # Remove old requests outside the window
         self._search_requests = [
-            req_time for req_time in self._search_requests
-            if current_time - req_time < self.search_window
+            req_time for req_time in self._search_requests if current_time - req_time < self.search_window
         ]
 
         return len(self._search_requests) < self.search_rate_limit
@@ -101,7 +105,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
         """Record a new API request for rate limiting."""
         self._search_requests.append(time.time())
 
-    async def _get_with_retry(self, url: str, params: Optional[dict] = None, timeout: int = 30) -> Optional[dict]:
+    async def _get_with_retry(self, url: str, params: dict | None = None, timeout: int = 30) -> dict | None:
         """Make HTTP request with exponential backoff retry logic."""
         if not self.enabled:
             return None
@@ -127,7 +131,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                     start_time = time.time()
                     headers = self._get_headers()
 
-                    if getattr(self, '_in_backoff', False):
+                    if getattr(self, "_in_backoff", False):
                         wait_time = max(0, self._backoff_until - time.time())
                         if wait_time > 0:
                             _logger.debug("Twitter already in backoff, waiting %.2fs", wait_time)
@@ -146,7 +150,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
 
                         if resp.status == 429:
                             # Rate limited
-                            backoff_delay = self.rate_limit_delay * (2 ** attempt) + 1.0
+                            backoff_delay = self.rate_limit_delay * (2**attempt) + 1.0
                             retry_after = resp.headers.get("x-rate-limit-reset")
                             if retry_after:
                                 delay = float(retry_after) - time.time() + 1.0
@@ -158,10 +162,16 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                             self._backoff_until = time.time() + backoff_delay
 
                             if _limit == "1":
-                                _logger.warning("Twitter API capacity is extremely low (1/15min). You appear to be on the Free tier.")
+                                _logger.warning(
+                                    "Twitter API capacity is extremely low (1/15min). You appear to be on the Free tier."
+                                )
 
-                            _logger.warning("Twitter 429 rate limit (attempt %d/%d) - sleeping %.2fs",
-                                          attempt + 1, self.max_retries + 1, backoff_delay)
+                            _logger.warning(
+                                "Twitter 429 rate limit (attempt %d/%d) - sleeping %.2fs",
+                                attempt + 1,
+                                self.max_retries + 1,
+                                backoff_delay,
+                            )
                             await asyncio.sleep(backoff_delay)
                             self._in_backoff = False
 
@@ -177,20 +187,22 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
 
                             # Check for specific operator errors
                             if "invalid operator 'cashtag'" in error_text.lower():
-                                _logger.warning("Cashtag operator rejected by Twitter. Disabling cashtags for future requests.")
+                                _logger.warning(
+                                    "Cashtag operator rejected by Twitter. Disabling cashtags for future requests."
+                                )
                                 self.use_cashtags = False
 
                             # Try to parse JSON to see specific field errors
                             try:
                                 err_json = json.loads(error_text)
-                                for detail in err_json.get('errors', []):
-                                    if 'field' in detail:
-                                        _logger.warning("Twitter rejected field: %s", detail['field'])
+                                for detail in err_json.get("errors", []):
+                                    if "field" in detail:
+                                        _logger.warning("Twitter rejected field: %s", detail["field"])
                             except:
                                 pass
 
                             # If we tried extra fields and failed, try disabling them for next time
-                            if getattr(self, 'use_extra_fields', True):
+                            if getattr(self, "use_extra_fields", True):
                                 _logger.warning("Disabling extra fields due to 400 error")
                                 self.use_extra_fields = False
                             break
@@ -201,15 +213,20 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                                 request_info=resp.request_info,
                                 history=resp.history,
                                 status=resp.status,
-                                message="Authentication failed"
+                                message="Authentication failed",
                             )
 
                         if resp.status >= 500:
                             # Server error - retry with backoff
                             if attempt < self.max_retries:
-                                backoff_delay = self.rate_limit_delay * (2 ** attempt)
-                                _logger.warning("Twitter server error %d (attempt %d/%d) - retrying in %.2fs",
-                                              resp.status, attempt + 1, self.max_retries + 1, backoff_delay)
+                                backoff_delay = self.rate_limit_delay * (2**attempt)
+                                _logger.warning(
+                                    "Twitter server error %d (attempt %d/%d) - retrying in %.2fs",
+                                    resp.status,
+                                    attempt + 1,
+                                    self.max_retries + 1,
+                                    backoff_delay,
+                                )
                                 await asyncio.sleep(backoff_delay)
                                 continue
 
@@ -222,23 +239,34 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
 
                         return data
 
-                except asyncio.TimeoutError as e:
+                except TimeoutError as e:
                     last_exception = e
                     if attempt < self.max_retries:
-                        backoff_delay = self.rate_limit_delay * (2 ** attempt)
-                        _logger.warning("Twitter timeout (attempt %d/%d) - retrying in %.2fs",
-                                      attempt + 1, self.max_retries + 1, backoff_delay)
+                        backoff_delay = self.rate_limit_delay * (2**attempt)
+                        _logger.warning(
+                            "Twitter timeout (attempt %d/%d) - retrying in %.2fs",
+                            attempt + 1,
+                            self.max_retries + 1,
+                            backoff_delay,
+                        )
                         await asyncio.sleep(backoff_delay)
                         continue
 
                 except (aiohttp.ClientError, aiohttp.ClientResponseError) as e:
                     last_exception = e
-                    if attempt < self.max_retries and not isinstance(e, aiohttp.ClientResponseError) or (
-                        isinstance(e, aiohttp.ClientResponseError) and e.status >= 500
+                    if (
+                        attempt < self.max_retries
+                        and not isinstance(e, aiohttp.ClientResponseError)
+                        or (isinstance(e, aiohttp.ClientResponseError) and e.status >= 500)
                     ):
-                        backoff_delay = self.rate_limit_delay * (2 ** attempt)
-                        _logger.warning("Twitter client error (attempt %d/%d) - retrying in %.2fs: %s",
-                                      attempt + 1, self.max_retries + 1, backoff_delay, e)
+                        backoff_delay = self.rate_limit_delay * (2**attempt)
+                        _logger.warning(
+                            "Twitter client error (attempt %d/%d) - retrying in %.2fs: %s",
+                            attempt + 1,
+                            self.max_retries + 1,
+                            backoff_delay,
+                            e,
+                        )
                         await asyncio.sleep(backoff_delay)
                         continue
                     else:
@@ -247,10 +275,9 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
 
                 except Exception as e:
                     last_exception = e
-                    _logger.debug("Twitter unexpected error (attempt %d/%d): %s",
-                                attempt + 1, self.max_retries + 1, e)
+                    _logger.debug("Twitter unexpected error (attempt %d/%d): %s", attempt + 1, self.max_retries + 1, e)
                     if attempt < self.max_retries:
-                        backoff_delay = self.rate_limit_delay * (2 ** attempt)
+                        backoff_delay = self.rate_limit_delay * (2**attempt)
                         await asyncio.sleep(backoff_delay)
                         continue
                     break
@@ -269,20 +296,24 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
 
         # Build query with various ticker formats and exclude retweets
         query_parts = []
-        if getattr(self, 'use_cashtags', True):
-            query_parts.append(f'${symbol}')
+        if getattr(self, "use_cashtags", True):
+            query_parts.append(f"${symbol}")
 
-        query_parts.extend([
-            f'#{symbol}',  # Hashtag
-            f'"{symbol}"',  # Exact match in quotes
-        ])
+        query_parts.extend(
+            [
+                f"#{symbol}",  # Hashtag
+                f'"{symbol}"',  # Exact match in quotes
+            ]
+        )
 
         # Combine with OR and exclude retweets
         query = f"({' OR '.join(query_parts)}) -is:retweet lang:en"
 
         return query
 
-    async def fetch_messages(self, ticker: str, since_ts: Optional[int] = None, limit: int = 200) -> List[Dict[str, Any]]:
+    async def fetch_messages(
+        self, ticker: str, since_ts: int | None = None, limit: int = 200
+    ) -> List[Dict[str, Any]]:
         """
         Fetch individual tweets for a ticker from Twitter API v2.
         """
@@ -302,21 +333,21 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
 
             # Build API parameters - start with base fields
             all_tweet_fields = list(self.tweet_fields)
-            if getattr(self, 'use_extra_fields', True):
+            if getattr(self, "use_extra_fields", True):
                 all_tweet_fields.extend(self.extra_tweet_fields)
 
             params = {
-                'query': query,
-                'max_results': min(100, limit),
-                'tweet.fields': ','.join(all_tweet_fields),
-                'user.fields': ','.join(self.user_fields),
-                'expansions': 'author_id'
+                "query": query,
+                "max_results": min(100, limit),
+                "tweet.fields": ",".join(all_tweet_fields),
+                "user.fields": ",".join(self.user_fields),
+                "expansions": "author_id",
             }
 
             # Add time filter if provided
             if since_ts:
-                start_time = datetime.fromtimestamp(since_ts).isoformat() + 'Z'
-                params['start_time'] = start_time
+                start_time = datetime.fromtimestamp(since_ts).isoformat() + "Z"
+                params["start_time"] = start_time
 
             url = f"{self.base_url}/tweets/search/recent"
             payload = await self._get_with_retry(url, params=params)
@@ -329,7 +360,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
             users_data = payload.get("includes", {}).get("users", [])
 
             # Create user lookup for efficiency
-            users_lookup = {user['id']: user for user in users_data}
+            users_lookup = {user["id"]: user for user in users_data}
 
             if not tweet_data:
                 _logger.debug("No tweets found for ticker %s", symbol)
@@ -366,7 +397,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                             "id": str(author_id or ""),
                             "followers": int(user_info.get("public_metrics", {}).get("followers_count", 0)),
                             "verified": bool(user_info.get("verified", False)),
-                            "name": user_info.get("name", "")
+                            "name": user_info.get("name", ""),
                         },
                         "likes": int(metrics.get("like_count", 0)),
                         "replies": int(metrics.get("reply_count", 0)),
@@ -374,7 +405,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                         "quotes": int(metrics.get("quote_count", 0)),
                         "hashtags": hashtags,
                         "mentions": mentions,
-                        "provider": "twitter"
+                        "provider": "twitter",
                     }
                     tweets.append(normalized_tweet)
 
@@ -396,7 +427,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
             self._update_health_failure(e)
             raise
 
-    async def fetch_summary(self, ticker: str, since_ts: Optional[int] = None) -> Dict[str, Any]:
+    async def fetch_summary(self, ticker: str, since_ts: int | None = None) -> Dict[str, Any]:
         """
         Fetch aggregated sentiment summary for a ticker from Twitter.
         """
@@ -487,11 +518,16 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                 "verified_ratio": float(verified_ratio),
                 "top_hashtags": dict(top_hashtags),
                 "provider": "twitter",
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
-            _logger.debug("Generated Twitter summary for ticker %s: %d mentions, score %.3f, engagement %.1f",
-                         ticker, mentions, score, avg_engagement)
+            _logger.debug(
+                "Generated Twitter summary for ticker %s: %d mentions, score %.3f, engagement %.1f",
+                ticker,
+                mentions,
+                score,
+                avg_engagement,
+            )
             return summary
 
         except Exception as e:

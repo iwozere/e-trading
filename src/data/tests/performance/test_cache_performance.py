@@ -12,14 +12,15 @@ Test Coverage:
 - Concurrent access performance
 """
 
+import shutil
 import sys
 import tempfile
-import shutil
-import time
 import threading
-from pathlib import Path
+import time
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import Mock, patch
+
 import pandas as pd
 import pytest
 
@@ -56,13 +57,16 @@ class TestCachePerformance:
         def slow_get_ohlcv(*args, **kwargs):
             # Simulate API delay
             time.sleep(0.1)  # 100ms delay
-            return pd.DataFrame({
-                'open': [100.0 + i * 0.1 for i in range(100)],
-                'high': [101.0 + i * 0.1 for i in range(100)],
-                'low': [99.0 + i * 0.1 for i in range(100)],
-                'close': [100.5 + i * 0.1 for i in range(100)],
-                'volume': [1000 + i * 10 for i in range(100)]
-            }, index=pd.date_range('2024-01-01', periods=100, freq='1h'))
+            return pd.DataFrame(
+                {
+                    "open": [100.0 + i * 0.1 for i in range(100)],
+                    "high": [101.0 + i * 0.1 for i in range(100)],
+                    "low": [99.0 + i * 0.1 for i in range(100)],
+                    "close": [100.5 + i * 0.1 for i in range(100)],
+                    "volume": [1000 + i * 10 for i in range(100)],
+                },
+                index=pd.date_range("2024-01-01", periods=100, freq="1h"),
+            )
 
         downloader.get_ohlcv.side_effect = slow_get_ohlcv
         return downloader
@@ -74,12 +78,10 @@ class TestCachePerformance:
         start_date = datetime(2024, 1, 1)
         end_date = datetime(2024, 1, 5, 3)  # Match the full range of mock data (100 hours)
 
-        with patch.object(data_manager.provider_selector, 'get_provider_with_failover') as mock_failover:
-            mock_failover.return_value = ['test_provider']
+        with patch.object(data_manager.provider_selector, "get_provider_with_failover") as mock_failover:
+            mock_failover.return_value = ["test_provider"]
 
-            with patch.dict(data_manager.provider_selector.downloaders, {
-                'test_provider': mock_downloader
-            }):
+            with patch.dict(data_manager.provider_selector.downloaders, {"test_provider": mock_downloader}):
                 # First request - cache miss (should be slow)
                 start_time = time.time()
                 result1 = data_manager.get_ohlcv(symbol, timeframe, start_date, end_date)
@@ -109,12 +111,10 @@ class TestCachePerformance:
         start_date = datetime(2024, 1, 1)
         end_date = datetime(2024, 1, 2)
 
-        with patch.object(data_manager.provider_selector, 'get_provider_with_failover') as mock_failover:
-            mock_failover.return_value = ['test_provider']
+        with patch.object(data_manager.provider_selector, "get_provider_with_failover") as mock_failover:
+            mock_failover.return_value = ["test_provider"]
 
-            with patch.dict(data_manager.provider_selector.downloaders, {
-                'test_provider': mock_downloader
-            }):
+            with patch.dict(data_manager.provider_selector.downloaders, {"test_provider": mock_downloader}):
                 # First request to populate cache
                 data_manager.get_ohlcv(symbol, timeframe, start_date, end_date)
 
@@ -159,22 +159,23 @@ class TestCachePerformance:
 
         # Create a mock downloader that returns large dataset
         large_downloader = Mock()
-        large_data = pd.DataFrame({
-            'open': [100.0 + i * 0.1 for i in range(8760)],  # 8760 hours in a year
-            'high': [101.0 + i * 0.1 for i in range(8760)],
-            'low': [99.0 + i * 0.1 for i in range(8760)],
-            'close': [100.5 + i * 0.1 for i in range(8760)],
-            'volume': [1000 + i * 10 for i in range(8760)]
-        }, index=pd.date_range('2024-01-01', periods=8760, freq='1h'))
+        large_data = pd.DataFrame(
+            {
+                "open": [100.0 + i * 0.1 for i in range(8760)],  # 8760 hours in a year
+                "high": [101.0 + i * 0.1 for i in range(8760)],
+                "low": [99.0 + i * 0.1 for i in range(8760)],
+                "close": [100.5 + i * 0.1 for i in range(8760)],
+                "volume": [1000 + i * 10 for i in range(8760)],
+            },
+            index=pd.date_range("2024-01-01", periods=8760, freq="1h"),
+        )
 
         large_downloader.get_ohlcv.return_value = large_data
 
-        with patch.object(data_manager.provider_selector, 'get_provider_with_failover') as mock_failover:
-            mock_failover.return_value = ['test_provider']
+        with patch.object(data_manager.provider_selector, "get_provider_with_failover") as mock_failover:
+            mock_failover.return_value = ["test_provider"]
 
-            with patch.dict(data_manager.provider_selector.downloaders, {
-                'test_provider': large_downloader
-            }):
+            with patch.dict(data_manager.provider_selector.downloaders, {"test_provider": large_downloader}):
                 # First request - cache miss
                 start_time = time.time()
                 result1 = data_manager.get_ohlcv(symbol, timeframe, start_date, end_date)
@@ -199,20 +200,19 @@ class TestCachePerformance:
 
     def test_memory_usage(self, data_manager, mock_downloader):
         """Test memory usage of cache operations."""
-        import psutil
         import gc
+
+        import psutil
 
         symbol = "BTCUSDT"
         timeframe = "1h"
         start_date = datetime(2024, 1, 1)
         end_date = datetime(2024, 1, 2)
 
-        with patch.object(data_manager.provider_selector, 'get_provider_with_failover') as mock_failover:
-            mock_failover.return_value = ['test_provider']
+        with patch.object(data_manager.provider_selector, "get_provider_with_failover") as mock_failover:
+            mock_failover.return_value = ["test_provider"]
 
-            with patch.dict(data_manager.provider_selector.downloaders, {
-                'test_provider': mock_downloader
-            }):
+            with patch.dict(data_manager.provider_selector.downloaders, {"test_provider": mock_downloader}):
                 # Get initial memory usage
                 process = psutil.Process()
                 initial_memory = process.memory_info().rss / 1024 / 1024  # MB
@@ -234,7 +234,9 @@ class TestCachePerformance:
                 print(f"Memory increase: {memory_increase:.1f} MB")
 
                 # Memory increase should be reasonable
-                assert memory_increase < 100, f"Memory usage should be reasonable, got {memory_increase:.1f} MB increase"
+                assert memory_increase < 100, (
+                    f"Memory usage should be reasonable, got {memory_increase:.1f} MB increase"
+                )
 
     def test_cache_file_size(self, data_manager, mock_downloader, temp_cache_dir):
         """Test that cache files are efficiently compressed."""
@@ -243,12 +245,10 @@ class TestCachePerformance:
         start_date = datetime(2024, 1, 1)
         end_date = datetime(2024, 1, 2)
 
-        with patch.object(data_manager.provider_selector, 'get_provider_with_failover') as mock_failover:
-            mock_failover.return_value = ['test_provider']
+        with patch.object(data_manager.provider_selector, "get_provider_with_failover") as mock_failover:
+            mock_failover.return_value = ["test_provider"]
 
-            with patch.dict(data_manager.provider_selector.downloaders, {
-                'test_provider': mock_downloader
-            }):
+            with patch.dict(data_manager.provider_selector.downloaders, {"test_provider": mock_downloader}):
                 # Make request to create cache
                 result = data_manager.get_ohlcv(symbol, timeframe, start_date, end_date)
 
@@ -277,12 +277,7 @@ def run_performance_tests():
     print("=" * 50)
 
     # Run pytest
-    pytest.main([
-        __file__,
-        "-v",
-        "--tb=short",
-        "--color=yes"
-    ])
+    pytest.main([__file__, "-v", "--tb=short", "--color=yes"])
 
 
 if __name__ == "__main__":

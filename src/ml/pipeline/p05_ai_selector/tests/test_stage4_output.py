@@ -1,14 +1,13 @@
 """Tests for Stage4Output."""
 
+import sys
 from datetime import date
 from pathlib import Path
-import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
-import pytest
 
 from src.ml.pipeline.p05_ai_selector.stages.stage4_output import Stage4Output
 
@@ -36,14 +35,18 @@ def _make_pick(rank: int = 1, confidence: int = 7) -> dict:
 
 
 def _make_stage2_df() -> pd.DataFrame:
-    return pd.DataFrame([{
-        "ticker": "TICK1",
-        "total_score": 80.0,
-        "fundamental_score": 20.0,
-        "momentum_score": 40.0,
-        "p18_score": 20.0,
-        "signal_breakdown": "{}",
-    }])
+    return pd.DataFrame(
+        [
+            {
+                "ticker": "TICK1",
+                "total_score": 80.0,
+                "fundamental_score": 20.0,
+                "momentum_score": 40.0,
+                "p18_score": 20.0,
+                "signal_breakdown": "{}",
+            }
+        ]
+    )
 
 
 class TestWriteResults:

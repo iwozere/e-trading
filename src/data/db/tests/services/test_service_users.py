@@ -13,9 +13,9 @@ Note: UsersService works primarily through Telegram integration,
 so tests focus on the actual API methods available.
 """
 
+from src.data.db.models.model_users import AuthIdentity, User
 from src.data.db.services.users_service import UsersService
-from src.data.db.models.model_users import User, AuthIdentity
-from src.data.db.tests.fixtures.factory_users import UserFactory, AuthIdentityFactory
+from src.data.db.tests.fixtures.factory_users import AuthIdentityFactory, UserFactory
 
 
 class TestUsersServiceTelegramOperations:
@@ -26,14 +26,9 @@ class TestUsersServiceTelegramOperations:
         service = UsersService(db_service=mock_database_service)
 
         telegram_id = 123456789
-        defaults = {
-            "email": "test@example.com"
-        }
+        defaults = {"email": "test@example.com"}
 
-        user_id = service.ensure_user_for_telegram(
-            telegram_user_id=telegram_id,
-            defaults_user=defaults
-        )
+        user_id = service.ensure_user_for_telegram(telegram_user_id=telegram_id, defaults_user=defaults)
 
         assert user_id is not None
         assert isinstance(user_id, int)
@@ -48,21 +43,13 @@ class TestUsersServiceTelegramOperations:
         service = UsersService(db_service=mock_database_service)
 
         telegram_id = 987654321
-        defaults = {
-            "email": "existing@example.com"
-        }
+        defaults = {"email": "existing@example.com"}
 
         # Create user first time
-        user_id_1 = service.ensure_user_for_telegram(
-            telegram_user_id=telegram_id,
-            defaults_user=defaults
-        )
+        user_id_1 = service.ensure_user_for_telegram(telegram_user_id=telegram_id, defaults_user=defaults)
 
         # Try to create again
-        user_id_2 = service.ensure_user_for_telegram(
-            telegram_user_id=telegram_id,
-            defaults_user=defaults
-        )
+        user_id_2 = service.ensure_user_for_telegram(telegram_user_id=telegram_id, defaults_user=defaults)
 
         # Should return same user ID
         assert user_id_1 == user_id_2
@@ -74,10 +61,7 @@ class TestUsersServiceTelegramOperations:
         telegram_id = 111222333
         defaults = {"email": "get@example.com"}
 
-        user_id = service.ensure_user_for_telegram(
-            telegram_user_id=telegram_id,
-            defaults_user=defaults
-        )
+        user_id = service.ensure_user_for_telegram(telegram_user_id=telegram_id, defaults_user=defaults)
 
         # Get user
         user = service.get_user_by_telegram_id(telegram_user_id=telegram_id)
@@ -98,14 +82,9 @@ class TestUsersServiceTelegramOperations:
         service = UsersService(db_service=mock_database_service)
 
         telegram_id = 444555666
-        defaults = {
-            "email": "profile@example.com"
-        }
+        defaults = {"email": "profile@example.com"}
 
-        service.ensure_user_for_telegram(
-            telegram_user_id=telegram_id,
-            defaults_user=defaults
-        )
+        service.ensure_user_for_telegram(telegram_user_id=telegram_id, defaults_user=defaults)
 
         # Get profile
         profile = service.get_telegram_profile(telegram_user_id=telegram_id)
@@ -118,21 +97,12 @@ class TestUsersServiceTelegramOperations:
         service = UsersService(db_service=mock_database_service)
 
         telegram_id = 777888999
-        defaults = {
-            "email": "update@example.com"
-        }
+        defaults = {"email": "update@example.com"}
 
-        service.ensure_user_for_telegram(
-            telegram_user_id=telegram_id,
-            defaults_user=defaults
-        )
+        service.ensure_user_for_telegram(telegram_user_id=telegram_id, defaults_user=defaults)
 
         # Update profile (these go into identity metadata)
-        service.update_telegram_profile(
-            telegram_user_id=telegram_id,
-            verified=True,
-            approved=True
-        )
+        service.update_telegram_profile(telegram_user_id=telegram_id, verified=True, approved=True)
 
         # Verify update - profile should still exist
         profile = service.get_telegram_profile(telegram_user_id=telegram_id)
@@ -148,12 +118,7 @@ class TestUsersServiceListing:
 
         # Create multiple users
         for i in range(3):
-            service.ensure_user_for_telegram(
-                telegram_user_id=1000 + i,
-                defaults_user={
-                    "email": f"user{i}@example.com"
-                }
-            )
+            service.ensure_user_for_telegram(telegram_user_id=1000 + i, defaults_user={"email": f"user{i}@example.com"})
 
         # List users
         users = service.list_telegram_users_dto()
@@ -168,10 +133,7 @@ class TestUsersServiceListing:
         # Create users
         for i in range(2):
             service.ensure_user_for_telegram(
-                telegram_user_id=2000 + i,
-                defaults_user={
-                    "email": f"broadcast{i}@example.com"
-                }
+                telegram_user_id=2000 + i, defaults_user={"email": f"broadcast{i}@example.com"}
             )
 
         # List for broadcast
@@ -193,10 +155,7 @@ class TestUsersServiceListing:
         # Create users (some may need approval based on implementation)
         for i in range(2):
             service.ensure_user_for_telegram(
-                telegram_user_id=3000 + i,
-                defaults_user={
-                    "email": f"pending{i}@example.com"
-                }
+                telegram_user_id=3000 + i, defaults_user={"email": f"pending{i}@example.com"}
             )
 
         # List pending approvals
@@ -215,6 +174,7 @@ class TestUsersServiceAdmin:
 
         # Create an admin user manually
         from src.data.db.repos.repo_users import UsersRepo
+
         repos = UsersRepo(db_session)
 
         # Create admin user with proper structure
@@ -224,17 +184,10 @@ class TestUsersServiceAdmin:
         db_session.flush()
 
         # Create auth identity for admin
-        auth_data = AuthIdentityFactory.telegram_identity(
-            user_id=user.id,
-            telegram_id=9999999,
-            username="admin_user"
-        )
+        auth_data = AuthIdentityFactory.telegram_identity(user_id=user.id, telegram_id=9999999, username="admin_user")
         # AuthIdentity uses external_id, not provider_user_id
         auth = AuthIdentity(
-            user_id=user.id,
-            provider="telegram",
-            external_id=str(9999999),
-            identity_metadata=auth_data["provider_data"]
+            user_id=user.id, provider="telegram", external_id=str(9999999), identity_metadata=auth_data["provider_data"]
         )
         db_session.add(auth)
         db_session.commit()
@@ -256,7 +209,7 @@ class TestUsersServiceEdgeCases:
         # Use numeric ID
         user_id = service.ensure_user_for_telegram(
             telegram_user_id=123456,  # int, not string
-            defaults_user={"email": "numeric@example.com"}
+            defaults_user={"email": "numeric@example.com"},
         )
 
         assert user_id is not None
@@ -268,7 +221,7 @@ class TestUsersServiceEdgeCases:
         # Use string ID
         user_id = service.ensure_user_for_telegram(
             telegram_user_id="123456",  # string
-            defaults_user={"email": "string@example.com"}
+            defaults_user={"email": "string@example.com"},
         )
 
         assert user_id is not None
@@ -279,7 +232,7 @@ class TestUsersServiceEdgeCases:
 
         user_id = service.ensure_user_for_telegram(
             telegram_user_id=555666,
-            defaults_user={}  # Minimal data
+            defaults_user={},  # Minimal data
         )
 
         assert user_id is not None
@@ -288,10 +241,7 @@ class TestUsersServiceEdgeCases:
         """Test ensuring user with no default data."""
         service = UsersService(db_service=mock_database_service)
 
-        user_id = service.ensure_user_for_telegram(
-            telegram_user_id=666777,
-            defaults_user=None
-        )
+        user_id = service.ensure_user_for_telegram(telegram_user_id=666777, defaults_user=None)
 
         assert user_id is not None
 
@@ -307,10 +257,7 @@ class TestUsersServiceIntegration:
 
         # 1. Create user
         user_id = service.ensure_user_for_telegram(
-            telegram_user_id=telegram_id,
-            defaults_user={
-                "email": "lifecycle@example.com"
-            }
+            telegram_user_id=telegram_id, defaults_user={"email": "lifecycle@example.com"}
         )
 
         assert user_id is not None
@@ -321,11 +268,7 @@ class TestUsersServiceIntegration:
         assert user.id == user_id
 
         # 3. Update profile
-        service.update_telegram_profile(
-            telegram_user_id=telegram_id,
-            verified=True,
-            approved=True
-        )
+        service.update_telegram_profile(telegram_user_id=telegram_id, verified=True, approved=True)
 
         # 4. Get profile
         profile = service.get_telegram_profile(telegram_user_id=telegram_id)
@@ -343,10 +286,7 @@ class TestUsersServiceIntegration:
         user_ids = []
         for i in range(5):
             user_id = service.ensure_user_for_telegram(
-                telegram_user_id=4000 + i,
-                defaults_user={
-                    "email": f"multi_user_{i}@example.com"
-                }
+                telegram_user_id=4000 + i, defaults_user={"email": f"multi_user_{i}@example.com"}
             )
             user_ids.append(user_id)
 

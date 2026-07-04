@@ -5,20 +5,20 @@ This module provides functionality to load and filter the universe of stocks
 for short squeeze analysis using FMP data provider.
 """
 
-from pathlib import Path
-import sys
-from typing import List, Dict, Any, Optional
-from datetime import datetime
 import json
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
-from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.data.db.services.short_squeeze_service import ShortSqueezeService
+from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.ml.pipeline.p04_short_squeeze.config.data_classes import UniverseConfig
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -46,8 +46,12 @@ class UniverseLoader:
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._cache_ttl_hours = 24  # Cache universe for 24 hours
 
-        _logger.info("Universe Loader initialized with config: min_cap=%s, max_cap=%s, min_volume=%s",
-                    self.config.min_market_cap, self.config.max_market_cap, self.config.min_avg_volume)
+        _logger.info(
+            "Universe Loader initialized with config: min_cap=%s, max_cap=%s, min_volume=%s",
+            self.config.min_market_cap,
+            self.config.max_market_cap,
+            self.config.min_avg_volume,
+        )
 
     def load_universe(self) -> List[str]:
         """
@@ -97,17 +101,17 @@ class UniverseLoader:
             mid_cap_max = min(self.config.max_market_cap, 5_000_000_000)  # Max $5B for mid-cap
 
             # Calculate strategy limits from config
-            max_universe = getattr(self.config, 'max_universe_size', 1000)
+            max_universe = getattr(self.config, "max_universe_size", 1000)
             strategy_1_limit = min(500, max_universe // 2)  # Up to half for mid-cap
             strategy_2_limit = min(300, max_universe // 3)  # Up to third for small-cap
 
             # Strategy 1: High volume, mid-cap stocks (most likely to have short interest data)
             criteria_1 = {
-                'marketCapMoreThan': mid_cap_min,
-                'marketCapLowerThan': mid_cap_max,
-                'volumeMoreThan': max(self.config.min_avg_volume * 2, 1_000_000),  # 2x min volume or 1M
-                'exchange': ','.join(self.config.exchanges),
-                'limit': strategy_1_limit
+                "marketCapMoreThan": mid_cap_min,
+                "marketCapLowerThan": mid_cap_max,
+                "volumeMoreThan": max(self.config.min_avg_volume * 2, 1_000_000),  # 2x min volume or 1M
+                "exchange": ",".join(self.config.exchanges),
+                "limit": strategy_1_limit,
             }
 
             _logger.info("Loading high-volume mid-cap universe: %s", criteria_1)
@@ -118,11 +122,11 @@ class UniverseLoader:
             # Strategy 2: Small-cap high volume (potential squeeze candidates)
             small_cap_max = min(mid_cap_min, 1_000_000_000)  # Max $1B for small-cap
             criteria_2 = {
-                'marketCapMoreThan': self.config.min_market_cap,
-                'marketCapLowerThan': small_cap_max,
-                'volumeMoreThan': max(self.config.min_avg_volume, 500_000),  # Config volume or 500K
-                'exchange': ','.join(self.config.exchanges),
-                'limit': strategy_2_limit
+                "marketCapMoreThan": self.config.min_market_cap,
+                "marketCapLowerThan": small_cap_max,
+                "volumeMoreThan": max(self.config.min_avg_volume, 500_000),  # Config volume or 500K
+                "exchange": ",".join(self.config.exchanges),
+                "limit": strategy_2_limit,
             }
 
             _logger.info("Loading small-cap high-volume universe: %s", criteria_2)
@@ -154,11 +158,11 @@ class UniverseLoader:
         """Fallback to original screener method."""
         try:
             criteria = {
-                'marketCapMoreThan': self.config.min_market_cap,
-                'marketCapLowerThan': self.config.max_market_cap,
-                'volumeMoreThan': self.config.min_avg_volume,
-                'exchange': ','.join(self.config.exchanges),
-                'limit': 1000
+                "marketCapMoreThan": self.config.min_market_cap,
+                "marketCapLowerThan": self.config.max_market_cap,
+                "volumeMoreThan": self.config.min_avg_volume,
+                "exchange": ",".join(self.config.exchanges),
+                "limit": 1000,
             }
 
             tickers = self.fmp_downloader.load_universe_from_screener(criteria)
@@ -179,22 +183,48 @@ class UniverseLoader:
         # These are stocks that typically have active short interest and are good for testing
         known_candidates = [
             # Meme stocks / frequently shorted
-            'GME', 'AMC', 'BBBY', 'CLOV', 'WISH', 'PLTR', 'SPCE',
-
+            "GME",
+            "AMC",
+            "BBBY",
+            "CLOV",
+            "WISH",
+            "PLTR",
+            "SPCE",
             # High-profile tech stocks often shorted
-            'TSLA', 'NKLA', 'RIVN', 'LCID', 'HOOD', 'COIN',
-
+            "TSLA",
+            "NKLA",
+            "RIVN",
+            "LCID",
+            "HOOD",
+            "COIN",
             # Biotech (often heavily shorted)
-            'MRNA', 'BNTX', 'NVAX', 'SAVA', 'BIIB', 'GILD',
-
+            "MRNA",
+            "BNTX",
+            "NVAX",
+            "SAVA",
+            "BIIB",
+            "GILD",
             # Energy/EV (volatile sector)
-            'PLUG', 'FCEL', 'BLNK', 'CHPT', 'QS', 'HYLN',
-
+            "PLUG",
+            "FCEL",
+            "BLNK",
+            "CHPT",
+            "QS",
+            "HYLN",
             # SPACs and growth stocks
-            'DKNG', 'OPEN', 'SKLZ', 'SOFI', 'UPST', 'AFRM',
-
+            "DKNG",
+            "OPEN",
+            "SKLZ",
+            "SOFI",
+            "UPST",
+            "AFRM",
             # Traditional high short interest sectors
-            'NFLX', 'SHOP', 'ZM', 'PTON', 'ROKU', 'SQ'
+            "NFLX",
+            "SHOP",
+            "ZM",
+            "PTON",
+            "ROKU",
+            "SQ",
         ]
 
         _logger.info("Added %d known short interest candidates", len(known_candidates))
@@ -225,7 +255,7 @@ class UniverseLoader:
             _logger.info("After basic validation: %d tickers", len(valid_tickers))
 
             # Step 2: Check if FINRA filtering is enabled in config
-            use_finra_filtering = getattr(self.config, 'use_finra_filtering', False)
+            use_finra_filtering = getattr(self.config, "use_finra_filtering", False)
 
             if use_finra_filtering and len(valid_tickers) > 100:
                 _logger.info("FINRA filtering enabled - pre-filtering using database data (no API calls)")
@@ -273,8 +303,8 @@ class UniverseLoader:
                 if ticker_upper in finra_data:
                     # Check if the ticker has meaningful short interest data
                     ticker_data = finra_data[ticker_upper]
-                    short_interest_pct = ticker_data.get('short_interest_pct', 0)
-                    days_to_cover = ticker_data.get('days_to_cover', 0)
+                    short_interest_pct = ticker_data.get("short_interest_pct", 0)
+                    days_to_cover = ticker_data.get("days_to_cover", 0)
 
                     # Only include if there's actual short interest activity
                     if short_interest_pct > 0 and days_to_cover > 0:
@@ -284,12 +314,17 @@ class UniverseLoader:
                 else:
                     tickers_without_finra.append(ticker)
 
-            _logger.info("FINRA data availability: %d with data, %d without data",
-                        len(tickers_with_finra), len(tickers_without_finra))
+            _logger.info(
+                "FINRA data availability: %d with data, %d without data",
+                len(tickers_with_finra),
+                len(tickers_without_finra),
+            )
 
             # Prioritize tickers with FINRA data, add known candidates from remaining
             known_candidates = self._get_known_short_interest_candidates()
-            known_without_finra = [t for t in tickers_without_finra if t.upper() in [k.upper() for k in known_candidates]]
+            known_without_finra = [
+                t for t in tickers_without_finra if t.upper() in [k.upper() for k in known_candidates]
+            ]
 
             # Combine: FINRA tickers first, then known candidates, then limit others
             final_list = tickers_with_finra + known_without_finra
@@ -300,9 +335,13 @@ class UniverseLoader:
                 remaining_slots = 200 - len(final_list)
                 final_list.extend(other_tickers[:remaining_slots])
 
-            _logger.info("Final universe: %d with FINRA data + %d known candidates + %d others = %d total",
-                        len(tickers_with_finra), len(known_without_finra),
-                        len(final_list) - len(tickers_with_finra) - len(known_without_finra), len(final_list))
+            _logger.info(
+                "Final universe: %d with FINRA data + %d known candidates + %d others = %d total",
+                len(tickers_with_finra),
+                len(known_without_finra),
+                len(final_list) - len(tickers_with_finra) - len(known_without_finra),
+                len(final_list),
+            )
 
             return final_list
 
@@ -351,11 +390,15 @@ class UniverseLoader:
         other_tickers = [t for t in tickers if t.upper() not in [k.upper() for k in known_candidates]]
 
         # Limit to avoid too many potential API failures later
-        limited_others = other_tickers[:min(150, len(other_tickers))]
+        limited_others = other_tickers[: min(150, len(other_tickers))]
 
         final_list = known_in_universe + limited_others
-        _logger.info("Fallback universe: %d known + %d others = %d total",
-                    len(known_in_universe), len(limited_others), len(final_list))
+        _logger.info(
+            "Fallback universe: %d known + %d others = %d total",
+            len(known_in_universe),
+            len(limited_others),
+            len(final_list),
+        )
 
         return final_list
 
@@ -383,9 +426,14 @@ class UniverseLoader:
             # Exclude certain ticker patterns that are typically not suitable
             # for short squeeze analysis (ETFs, preferred shares, etc.)
             exclude_patterns = [
-                '.', '-', '/', ' ',  # Special characters
-                'WARR', 'WS', 'WT',  # Warrants
-                'PR',  # Preferred shares (though this might be too broad)
+                ".",
+                "-",
+                "/",
+                " ",  # Special characters
+                "WARR",
+                "WS",
+                "WT",  # Warrants
+                "PR",  # Preferred shares (though this might be too broad)
             ]
 
             for pattern in exclude_patterns:
@@ -427,7 +475,7 @@ class UniverseLoader:
             low_activity = 0
 
             for ticker_data in finra_data.values():
-                short_interest_pct = ticker_data.get('short_interest_pct', 0)
+                short_interest_pct = ticker_data.get("short_interest_pct", 0)
 
                 if short_interest_pct > 20.0:  # > 20% short interest
                     high_activity += 1
@@ -437,19 +485,25 @@ class UniverseLoader:
                     low_activity += 1
 
             stats = {
-                'total_tickers': total_tickers,
-                'finra_covered': covered_tickers,
-                'coverage_rate': coverage_rate,
-                'high_short_activity': high_activity,
-                'medium_short_activity': medium_activity,
-                'low_short_activity': low_activity,
-                'report_date': datetime.now().date(),
-                'data_source': 'database'
+                "total_tickers": total_tickers,
+                "finra_covered": covered_tickers,
+                "coverage_rate": coverage_rate,
+                "high_short_activity": high_activity,
+                "medium_short_activity": medium_activity,
+                "low_short_activity": low_activity,
+                "report_date": datetime.now().date(),
+                "data_source": "database",
             }
 
-            _logger.info("FINRA coverage: %.1f%% (%d/%d), High activity: %d, Medium: %d, Low: %d",
-                        coverage_rate * 100, covered_tickers, total_tickers,
-                        high_activity, medium_activity, low_activity)
+            _logger.info(
+                "FINRA coverage: %.1f%% (%d/%d), High activity: %d, Medium: %d, Low: %d",
+                coverage_rate * 100,
+                covered_tickers,
+                total_tickers,
+                high_activity,
+                medium_activity,
+                low_activity,
+            )
 
             return stats
 
@@ -457,7 +511,7 @@ class UniverseLoader:
             _logger.exception("Error getting FINRA coverage stats:")
             return {}
 
-    def _load_from_cache(self) -> Optional[List[str]]:
+    def _load_from_cache(self) -> List[str] | None:
         """
         Load universe from cache if available and not expired.
 
@@ -477,21 +531,22 @@ class UniverseLoader:
                 return None
 
             # Load cache
-            with open(cache_file, 'r') as f:
+            with open(cache_file) as f:
                 cache_data = json.load(f)
 
             # Validate cache structure
-            if not isinstance(cache_data, dict) or 'tickers' not in cache_data:
+            if not isinstance(cache_data, dict) or "tickers" not in cache_data:
                 _logger.warning("Invalid cache structure, ignoring cache")
                 return None
 
-            tickers = cache_data['tickers']
+            tickers = cache_data["tickers"]
             if not isinstance(tickers, list):
                 _logger.warning("Invalid ticker list in cache, ignoring cache")
                 return None
 
-            _logger.info("Loaded %d tickers from cache (created: %s)",
-                        len(tickers), cache_data.get('created_at', 'unknown'))
+            _logger.info(
+                "Loaded %d tickers from cache (created: %s)", len(tickers), cache_data.get("created_at", "unknown")
+            )
             return tickers
 
         except Exception as e:
@@ -509,17 +564,17 @@ class UniverseLoader:
             cache_file = self._cache_dir / "universe_cache.json"
 
             cache_data = {
-                'tickers': tickers,
-                'created_at': datetime.now().isoformat(),
-                'config': {
-                    'min_market_cap': self.config.min_market_cap,
-                    'max_market_cap': self.config.max_market_cap,
-                    'min_avg_volume': self.config.min_avg_volume,
-                    'exchanges': self.config.exchanges
-                }
+                "tickers": tickers,
+                "created_at": datetime.now().isoformat(),
+                "config": {
+                    "min_market_cap": self.config.min_market_cap,
+                    "max_market_cap": self.config.max_market_cap,
+                    "min_avg_volume": self.config.min_avg_volume,
+                    "exchanges": self.config.exchanges,
+                },
             }
 
-            with open(cache_file, 'w') as f:
+            with open(cache_file, "w") as f:
                 json.dump(cache_data, f, indent=2)
 
             _logger.info("Saved %d tickers to cache", len(tickers))
@@ -548,30 +603,29 @@ class UniverseLoader:
             cache_file = self._cache_dir / "universe_cache.json"
 
             if not cache_file.exists():
-                return {'exists': False}
+                return {"exists": False}
 
             stat = cache_file.stat()
             cache_age = datetime.now() - datetime.fromtimestamp(stat.st_mtime)
 
-            with open(cache_file, 'r') as f:
+            with open(cache_file) as f:
                 cache_data = json.load(f)
 
             return {
-                'exists': True,
-                'size': len(cache_data.get('tickers', [])),
-                'created_at': cache_data.get('created_at'),
-                'age_hours': cache_age.total_seconds() / 3600,
-                'expired': cache_age.total_seconds() > (self._cache_ttl_hours * 3600),
-                'config': cache_data.get('config', {})
+                "exists": True,
+                "size": len(cache_data.get("tickers", [])),
+                "created_at": cache_data.get("created_at"),
+                "age_hours": cache_age.total_seconds() / 3600,
+                "expired": cache_age.total_seconds() > (self._cache_ttl_hours * 3600),
+                "config": cache_data.get("config", {}),
             }
 
         except Exception as e:
             _logger.warning("Error getting cache info: %s", e)
-            return {'exists': False, 'error': str(e)}
+            return {"exists": False, "error": str(e)}
 
 
-def create_universe_loader(fmp_downloader: FMPDataDownloader,
-                          config: UniverseConfig) -> UniverseLoader:
+def create_universe_loader(fmp_downloader: FMPDataDownloader, config: UniverseConfig) -> UniverseLoader:
     """
     Factory function to create Universe Loader.
 
@@ -597,7 +651,7 @@ if __name__ == "__main__":
         min_market_cap=100_000_000,  # $100M
         max_market_cap=10_000_000_000,  # $10B
         min_avg_volume=200_000,
-        exchanges=['NYSE', 'NASDAQ']
+        exchanges=["NYSE", "NASDAQ"],
     )
 
     # Create universe loader

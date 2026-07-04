@@ -1,11 +1,12 @@
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Any, Union
+from typing import Any, Dict, Union
 
 from src.trading.services.schema_validator import validate_bot_configuration
 
 logger = logging.getLogger(__name__)
+
 
 class ConfigurationFactory:
     """
@@ -44,7 +45,7 @@ class ConfigurationFactory:
         """
         # 1. Load raw manifest
         if isinstance(manifest_source, (str, Path)):
-            with open(manifest_source, 'r') as f:
+            with open(manifest_source) as f:
                 manifest = json.load(f)
         else:
             manifest = manifest_source.copy()
@@ -121,7 +122,7 @@ class ConfigurationFactory:
         if not full_path.exists():
             raise FileNotFoundError(f"Module reference not found: {full_path}")
 
-        with open(full_path, 'r') as f:
+        with open(full_path) as f:
             data = json.load(f)
 
         # Recursively resolve any nested references inside the instance
@@ -133,6 +134,7 @@ class ConfigurationFactory:
         if not is_valid:
             raise ValueError("; ".join(errors))
         return True
+
 
 # Singleton instance for easy import
 config_factory = ConfigurationFactory()

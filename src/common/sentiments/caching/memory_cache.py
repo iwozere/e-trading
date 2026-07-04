@@ -5,20 +5,21 @@ Provides fast in-memory caching with configurable TTL and LRU eviction policy.
 Used as the default cache tier and fallback when Redis is unavailable.
 """
 
-import time
+import pickle
+import sys
 import threading
-from typing import Any, Optional, Dict
+import time
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
-import sys
-import pickle
+from typing import Any, Dict
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
+
 from .cache_metrics import get_cache_metrics
 
 _logger = setup_logger(__name__)
@@ -27,6 +28,7 @@ _logger = setup_logger(__name__)
 @dataclass
 class CacheEntry:
     """Cache entry with value and expiration time."""
+
     value: Any
     expires_at: float
     created_at: float
@@ -71,7 +73,7 @@ class MemoryCache:
         self._last_cleanup = time.time()
         self._cleanup_interval = 300  # 5 minutes
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """
         Get value from cache.
 
@@ -108,7 +110,7 @@ class MemoryCache:
             self._update_size_metrics()
             return entry.value
 
-    def set(self, key: str, value: Any, ttl_seconds: Optional[int] = None) -> bool:
+    def set(self, key: str, value: Any, ttl_seconds: int | None = None) -> bool:
         """
         Set value in cache.
 
@@ -129,11 +131,7 @@ class MemoryCache:
                 expires_at = time.time() + ttl
                 created_at = time.time()
 
-                entry = CacheEntry(
-                    value=value,
-                    expires_at=expires_at,
-                    created_at=created_at
-                )
+                entry = CacheEntry(value=value, expires_at=expires_at, created_at=created_at)
 
                 # Remove existing entry if present
                 if key in self._cache:
@@ -206,7 +204,7 @@ class MemoryCache:
 
             return True
 
-    def get_ttl(self, key: str) -> Optional[int]:
+    def get_ttl(self, key: str) -> int | None:
         """
         Get remaining TTL for a key.
 
@@ -254,7 +252,7 @@ class MemoryCache:
                 for key in sample_keys:
                     entry = self._cache[key]
                     try:
-                        key_size = len(key.encode('utf-8'))
+                        key_size = len(key.encode("utf-8"))
                         value_size = len(pickle.dumps(entry.value))
                         total_size += key_size + value_size + 64  # overhead estimate
                     except Exception:
@@ -296,21 +294,23 @@ class MemoryCache:
         """Get cache statistics."""
         with self._lock:
             stats = {
-                'size': len(self._cache),
-                'max_size': self.max_size,
-                'memory_usage_bytes': self.get_memory_usage(),
-                'default_ttl_seconds': self.default_ttl
+                "size": len(self._cache),
+                "max_size": self.max_size,
+                "memory_usage_bytes": self.get_memory_usage(),
+                "default_ttl_seconds": self.default_ttl,
             }
 
             if self._cache:
                 entries = list(self._cache.values())
                 current_time = time.time()
 
-                stats.update({
-                    'avg_age_seconds': sum(current_time - e.created_at for e in entries) / len(entries),
-                    'avg_access_count': sum(e.access_count for e in entries) / len(entries),
-                    'expired_count': sum(1 for e in entries if e.is_expired())
-                })
+                stats.update(
+                    {
+                        "avg_age_seconds": sum(current_time - e.created_at for e in entries) / len(entries),
+                        "avg_access_count": sum(e.access_count for e in entries) / len(entries),
+                        "expired_count": sum(1 for e in entries if e.is_expired()),
+                    }
+                )
 
             return stats
 
@@ -325,8 +325,4 @@ class MemoryCache:
 
     def _update_size_metrics(self) -> None:
         """Update cache size metrics."""
-        self._metrics.update_cache_size(
-            "memory",
-            len(self._cache),
-            self.get_memory_usage()
-        )
+        self._metrics.update_cache_size("memory", len(self._cache), self.get_memory_usage())

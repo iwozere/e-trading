@@ -8,17 +8,18 @@ domain services underneath.
 """
 
 from __future__ import annotations
-from typing import Any, Dict, List, Optional, Generator
-from pathlib import Path
+
 import sys
+from pathlib import Path
+from typing import Any, Dict, Generator, List
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.data.db.services.database_service import get_database_service
 from src.data.db.services.users_service import UsersService
 from src.data.db.services.webui_service import WebUIService
-from src.data.db.services.database_service import get_database_service
 
 users_service = UsersService()
 webui_service = WebUIService()
@@ -85,29 +86,15 @@ class WebUIAppService:
 
             # Create default users using the users service
             default_users = [
-                {
-                    "email": "admin@trading-system.local",
-                    "role": "admin",
-                    "is_active": True
-                },
-                {
-                    "email": "trader@trading-system.local",
-                    "role": "trader",
-                    "is_active": True
-                },
-                {
-                    "email": "viewer@trading-system.local",
-                    "role": "viewer",
-                    "is_active": True
-                }
+                {"email": "admin@trading-system.local", "role": "admin", "is_active": True},
+                {"email": "trader@trading-system.local", "role": "trader", "is_active": True},
+                {"email": "viewer@trading-system.local", "role": "viewer", "is_active": True},
             ]
 
             # Use users service to create users
             for user_data in default_users:
                 users_service.create_user(
-                    email=user_data["email"],
-                    role=user_data["role"],
-                    is_active=user_data["is_active"]
+                    email=user_data["email"], role=user_data["role"], is_active=user_data["is_active"]
                 )
 
             _logger.info("Created default users: admin, trader, viewer")
@@ -118,7 +105,7 @@ class WebUIAppService:
 
     # ---------- User Management ----------
 
-    def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+    def get_user_by_email(self, email: str) -> Dict[str, Any] | None:
         """Get user by email."""
         try:
             # Use users service to get user profile
@@ -129,7 +116,7 @@ class WebUIAppService:
             _logger.exception("Error getting user by email %s:", email)
             return None
 
-    def authenticate_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
+    def authenticate_user(self, username: str, password: str) -> Dict[str, Any] | None:
         """Authenticate user with username/email and password."""
         try:
             # Try to authenticate with email first
@@ -160,11 +147,11 @@ class WebUIAppService:
         self,
         user_id: int,
         action: str,
-        resource_type: Optional[str] = None,
-        resource_id: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None,
+        resource_type: str | None = None,
+        resource_id: str | None = None,
+        details: Dict[str, Any] | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
     ) -> int:
         """Log user action for audit purposes."""
         try:
@@ -183,7 +170,7 @@ class WebUIAppService:
 
     # ---------- Configuration Management ----------
 
-    def get_system_config(self, key: str) -> Optional[Dict[str, Any]]:
+    def get_system_config(self, key: str) -> Dict[str, Any] | None:
         """Get system configuration."""
         try:
             return webui_service.get_config(key)
@@ -191,7 +178,7 @@ class WebUIAppService:
             _logger.exception("Error getting system config %s:", key)
             return None
 
-    def set_system_config(self, key: str, value: Dict[str, Any], description: Optional[str] = None) -> Dict[str, Any]:
+    def set_system_config(self, key: str, value: Dict[str, Any], description: str | None = None) -> Dict[str, Any]:
         """Set system configuration."""
         try:
             return webui_service.set_config(key, value, description)

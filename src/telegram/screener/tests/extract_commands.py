@@ -6,13 +6,14 @@ Extract screener commands from screener_commands.json and format them for easy c
 import json
 from pathlib import Path
 
+
 def extract_commands():
     """Extract and format screener commands for copy-paste use."""
 
     # Load the commands file
     commands_file = Path(__file__).parent / "screener_commands.json"
 
-    with open(commands_file, 'r') as f:
+    with open(commands_file) as f:
         commands = json.load(f)
 
     print("🎯 SCREENER COMMANDS FOR COPY-PASTE")
@@ -26,7 +27,7 @@ def extract_commands():
         print("-" * 60)
 
         # Convert the config to a compact JSON string
-        config_json = json.dumps(screener_data['config'], separators=(',', ':'))
+        config_json = json.dumps(screener_data["config"], separators=(",", ":"))
 
         # Create the command
         command = f"/screener {config_json}"
@@ -40,7 +41,7 @@ def extract_commands():
         print()
 
         print("JSON Config (for manual formatting):")
-        print(json.dumps(screener_data['config'], indent=2))
+        print(json.dumps(screener_data["config"], indent=2))
         print("-" * 60)
 
     print("\n📋 USAGE INSTRUCTIONS:")
@@ -55,8 +56,9 @@ def extract_commands():
     print("=" * 40)
 
     for screener_name, screener_data in commands.items():
-        config_json = json.dumps(screener_data['config'], separators=(',', ':'))
+        config_json = json.dumps(screener_data["config"], separators=(",", ":"))
         print(f"{screener_name}: /screener {config_json} -email")
+
 
 if __name__ == "__main__":
     extract_commands()

@@ -9,34 +9,44 @@ Usage:
     model = AsyncHFSentiment(model_name="cardiffnlp/twitter-roberta-base-sentiment", device=-1)
     results = await model.predict_batch(texts)  # returns list of dicts
 """
+
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from typing import List, Dict, Optional, Any
 import os
-from pathlib import Path
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from typing import Any, Dict, List
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
 try:
     from transformers import pipeline
+
     HF_AVAILABLE = True
 except Exception:
     HF_AVAILABLE = False
 
 DEFAULT_MODEL = os.getenv("SENTIMENT_MODEL", "cardiffnlp/twitter-roberta-base-sentiment")
 
+
 class AsyncHFSentiment(BaseSentimentAdapter):
-    def __init__(self, name: str = "huggingface", model_name: Optional[str] = None,
-                 device: int = -1, max_workers: int = 1, concurrency: int = 1, rate_limit_delay: float = 0.1):
+    def __init__(
+        self,
+        name: str = "huggingface",
+        model_name: str | None = None,
+        device: int = -1,
+        max_workers: int = 1,
+        concurrency: int = 1,
+        rate_limit_delay: float = 0.1,
+    ):
         super().__init__(name, concurrency, rate_limit_delay)
 
         if not HF_AVAILABLE:
@@ -61,7 +71,9 @@ class AsyncHFSentiment(BaseSentimentAdapter):
             loop = asyncio.get_event_loop()
             self._pipe = await loop.run_in_executor(
                 self._executor,
-                lambda: pipeline("sentiment-analysis", model=self.model_name, tokenizer=self.model_name, device=self.device)
+                lambda: pipeline(
+                    "sentiment-analysis", model=self.model_name, tokenizer=self.model_name, device=self.device
+                ),
             )
 
             _logger.info("HF pipeline loaded successfully")
@@ -171,14 +183,16 @@ class AsyncHFSentiment(BaseSentimentAdapter):
             _logger.error("HF predict_single failed: %s", e)
             return {"label": "NEUTRAL", "score": 0.5}
 
-    async def fetch_messages(self, ticker: str, since_ts: Optional[int] = None, limit: int = 200) -> List[Dict[str, Any]]:
+    async def fetch_messages(
+        self, ticker: str, since_ts: int | None = None, limit: int = 200
+    ) -> List[Dict[str, Any]]:
         """
         HuggingFace adapter doesn't fetch messages directly.
         This method is not applicable for this adapter type.
         """
         raise NotImplementedError("HuggingFace adapter doesn't fetch messages - it processes existing text")
 
-    async def fetch_summary(self, ticker: str, since_ts: Optional[int] = None) -> Dict[str, Any]:
+    async def fetch_summary(self, ticker: str, since_ts: int | None = None) -> Dict[str, Any]:
         """
         HuggingFace adapter doesn't fetch summaries directly.
         This method is not applicable for this adapter type.

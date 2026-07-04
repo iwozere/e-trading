@@ -5,19 +5,19 @@ Provides comprehensive performance profiling, bottleneck detection,
 and optimization recommendations for sentiment analysis operations.
 """
 
-import time
 import asyncio
+import cProfile
 import functools
-from typing import Dict, List, Any, Optional, Callable, NamedTuple
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from collections import deque
-from pathlib import Path
+import io
+import pstats
 import sys
 import threading
-import cProfile
-import pstats
-import io
+import time
+from collections import deque
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any, Callable, Dict, List, NamedTuple
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -31,6 +31,7 @@ _logger = setup_logger(__name__)
 @dataclass
 class ProfilerConfig:
     """Configuration for performance profiler."""
+
     enable_profiling: bool = True
     enable_detailed_profiling: bool = False
     max_profile_entries: int = 1000
@@ -42,6 +43,7 @@ class ProfilerConfig:
 
 class TimingResult(NamedTuple):
     """Result of a timing measurement."""
+
     duration_seconds: float
     start_time: datetime
     end_time: datetime
@@ -52,13 +54,14 @@ class TimingResult(NamedTuple):
 @dataclass
 class PerformanceMetrics:
     """Performance metrics for a function or operation."""
+
     function_name: str
     call_count: int = 0
     total_time_seconds: float = 0.0
-    min_time_seconds: float = float('inf')
+    min_time_seconds: float = float("inf")
     max_time_seconds: float = 0.0
     avg_time_seconds: float = 0.0
-    last_call_time: Optional[datetime] = None
+    last_call_time: datetime | None = None
     error_count: int = 0
     recent_timings: deque = field(default_factory=lambda: deque(maxlen=100))
 
@@ -73,7 +76,7 @@ class PerformanceMetrics:
         self.min_time_seconds = min(self.min_time_seconds, duration)
         self.max_time_seconds = max(self.max_time_seconds, duration)
         self.avg_time_seconds = self.total_time_seconds / (self.call_count - self.error_count)
-        self.last_call_time = datetime.now(timezone.utc)
+        self.last_call_time = datetime.now(UTC)
         self.recent_timings.append(duration)
 
     @property
@@ -99,7 +102,7 @@ class PerformanceProfiler:
     recommendations with minimal overhead.
     """
 
-    def __init__(self, config: Optional[ProfilerConfig] = None):
+    def __init__(self, config: ProfilerConfig | None = None):
         """
         Initialize performance profiler.
 
@@ -110,31 +113,36 @@ class PerformanceProfiler:
         self._metrics: Dict[str, PerformanceMetrics] = {}
         self._active_timers: Dict[str, float] = {}
         self._lock = threading.RLock()
-        self._last_report_time = datetime.now(timezone.utc)
-        self._profiler: Optional[cProfile.Profile] = None
+        self._last_report_time = datetime.now(UTC)
+        self._profiler: cProfile.Profile | None = None
 
         if self.config.enable_detailed_profiling:
             self._profiler = cProfile.Profile()
 
-    def time_function(self, func_name: Optional[str] = None):
+    def time_function(self, func_name: str | None = None):
         """
         Decorator to time function execution.
 
         Args:
             func_name: Custom name for the function (uses actual name if None)
         """
+
         def decorator(func: Callable) -> Callable:
             name = func_name or f"{func.__module__}.{func.__name__}"
 
             if asyncio.iscoroutinefunction(func):
+
                 @functools.wraps(func)
                 async def async_wrapper(*args, **kwargs):
                     return await self._time_async_call(name, func, *args, **kwargs)
+
                 return async_wrapper
             else:
+
                 @functools.wraps(func)
                 def sync_wrapper(*args, **kwargs):
                     return self._time_sync_call(name, func, *args, **kwargs)
+
                 return sync_wrapper
 
         return decorator
@@ -242,19 +250,13 @@ class PerformanceProfiler:
 
             # Log slow operations
             if duration > self.config.profile_threshold_seconds:
-                _logger.debug(
-                    "Slow operation detected: %s took %.3f seconds",
-                    name, duration
-                )
+                _logger.debug("Slow operation detected: %s took %.3f seconds", name, duration)
 
             # Check for bottlenecks
             if duration > self.config.bottleneck_threshold_seconds:
-                _logger.warning(
-                    "Performance bottleneck: %s took %.3f seconds",
-                    name, duration
-                )
+                _logger.warning("Performance bottleneck: %s took %.3f seconds", name, duration)
 
-    def get_metrics(self, function_name: Optional[str] = None) -> Dict[str, Any]:
+    def get_metrics(self, function_name: str | None = None) -> Dict[str, Any]:
         """
         Get performance metrics.
 
@@ -269,16 +271,16 @@ class PerformanceProfiler:
                 if function_name in self._metrics:
                     metrics = self._metrics[function_name]
                     return {
-                        'function_name': metrics.function_name,
-                        'call_count': metrics.call_count,
-                        'total_time_seconds': metrics.total_time_seconds,
-                        'avg_time_seconds': metrics.avg_time_seconds,
-                        'min_time_seconds': metrics.min_time_seconds,
-                        'max_time_seconds': metrics.max_time_seconds,
-                        'recent_avg_time_seconds': metrics.recent_avg_time,
-                        'success_rate': metrics.success_rate,
-                        'error_count': metrics.error_count,
-                        'last_call_time': metrics.last_call_time
+                        "function_name": metrics.function_name,
+                        "call_count": metrics.call_count,
+                        "total_time_seconds": metrics.total_time_seconds,
+                        "avg_time_seconds": metrics.avg_time_seconds,
+                        "min_time_seconds": metrics.min_time_seconds,
+                        "max_time_seconds": metrics.max_time_seconds,
+                        "recent_avg_time_seconds": metrics.recent_avg_time,
+                        "success_rate": metrics.success_rate,
+                        "error_count": metrics.error_count,
+                        "last_call_time": metrics.last_call_time,
                     }
                 return {}
 
@@ -286,11 +288,11 @@ class PerformanceProfiler:
             result = {}
             for name, metrics in self._metrics.items():
                 result[name] = {
-                    'call_count': metrics.call_count,
-                    'avg_time_seconds': metrics.avg_time_seconds,
-                    'recent_avg_time_seconds': metrics.recent_avg_time,
-                    'success_rate': metrics.success_rate,
-                    'total_time_seconds': metrics.total_time_seconds
+                    "call_count": metrics.call_count,
+                    "avg_time_seconds": metrics.avg_time_seconds,
+                    "recent_avg_time_seconds": metrics.recent_avg_time,
+                    "success_rate": metrics.success_rate,
+                    "total_time_seconds": metrics.total_time_seconds,
                 }
 
             return result
@@ -309,19 +311,19 @@ class PerformanceProfiler:
 
         with self._lock:
             for name, metrics in self._metrics.items():
-                if (metrics.call_count >= min_calls and
-                    metrics.avg_time_seconds > self.config.profile_threshold_seconds):
-
-                    bottlenecks.append({
-                        'function_name': name,
-                        'avg_time_seconds': metrics.avg_time_seconds,
-                        'call_count': metrics.call_count,
-                        'total_time_seconds': metrics.total_time_seconds,
-                        'success_rate': metrics.success_rate
-                    })
+                if metrics.call_count >= min_calls and metrics.avg_time_seconds > self.config.profile_threshold_seconds:
+                    bottlenecks.append(
+                        {
+                            "function_name": name,
+                            "avg_time_seconds": metrics.avg_time_seconds,
+                            "call_count": metrics.call_count,
+                            "total_time_seconds": metrics.total_time_seconds,
+                            "success_rate": metrics.success_rate,
+                        }
+                    )
 
         # Sort by average time (worst first)
-        bottlenecks.sort(key=lambda x: x['avg_time_seconds'], reverse=True)
+        bottlenecks.sort(key=lambda x: x["avg_time_seconds"], reverse=True)
         return bottlenecks
 
     def get_optimization_recommendations(self) -> List[str]:
@@ -338,30 +340,27 @@ class PerformanceProfiler:
             return ["No significant performance bottlenecks detected."]
 
         for bottleneck in bottlenecks[:5]:  # Top 5 bottlenecks
-            name = bottleneck['function_name']
-            avg_time = bottleneck['avg_time_seconds']
-            call_count = bottleneck['call_count']
+            name = bottleneck["function_name"]
+            avg_time = bottleneck["avg_time_seconds"]
+            call_count = bottleneck["call_count"]
 
-            if 'fetch' in name.lower() and avg_time > 2.0:
+            if "fetch" in name.lower() and avg_time > 2.0:
                 recommendations.append(
-                    f"Consider caching or batch processing for {name} "
-                    f"(avg: {avg_time:.2f}s, calls: {call_count})"
+                    f"Consider caching or batch processing for {name} (avg: {avg_time:.2f}s, calls: {call_count})"
                 )
-            elif 'hf' in name.lower() or 'huggingface' in name.lower():
+            elif "hf" in name.lower() or "huggingface" in name.lower():
                 recommendations.append(
                     f"Consider batch processing or model optimization for {name} "
                     f"(avg: {avg_time:.2f}s, calls: {call_count})"
                 )
             elif avg_time > 5.0:
                 recommendations.append(
-                    f"Investigate performance issues in {name} "
-                    f"(avg: {avg_time:.2f}s, calls: {call_count})"
+                    f"Investigate performance issues in {name} (avg: {avg_time:.2f}s, calls: {call_count})"
                 )
 
         if len(bottlenecks) > 3:
             recommendations.append(
-                "Multiple bottlenecks detected. Consider implementing "
-                "parallel processing or caching strategies."
+                "Multiple bottlenecks detected. Consider implementing parallel processing or caching strategies."
             )
 
         return recommendations
@@ -375,8 +374,8 @@ class PerformanceProfiler:
         """
         report_lines = [
             "=== Performance Profile Report ===",
-            f"Generated at: {datetime.now(timezone.utc).isoformat()}",
-            ""
+            f"Generated at: {datetime.now(UTC).isoformat()}",
+            "",
         ]
 
         # Summary statistics
@@ -385,19 +384,17 @@ class PerformanceProfiler:
             total_calls = sum(m.call_count for m in self._metrics.values())
             total_time = sum(m.total_time_seconds for m in self._metrics.values())
 
-        report_lines.extend([
-            f"Total functions profiled: {total_functions}",
-            f"Total function calls: {total_calls}",
-            f"Total execution time: {total_time:.3f} seconds",
-            ""
-        ])
+        report_lines.extend(
+            [
+                f"Total functions profiled: {total_functions}",
+                f"Total function calls: {total_calls}",
+                f"Total execution time: {total_time:.3f} seconds",
+                "",
+            ]
+        )
 
         # Top functions by time
-        metrics_by_time = sorted(
-            self._metrics.items(),
-            key=lambda x: x[1].total_time_seconds,
-            reverse=True
-        )
+        metrics_by_time = sorted(self._metrics.items(), key=lambda x: x[1].total_time_seconds, reverse=True)
 
         report_lines.append("Top functions by total time:")
         for name, metrics in metrics_by_time[:10]:
@@ -432,30 +429,27 @@ class PerformanceProfiler:
 
         # Detailed profiling data
         if self._profiler and self.config.enable_detailed_profiling:
-            report_lines.extend([
-                "",
-                "=== Detailed Profile Data ===",
-                ""
-            ])
+            report_lines.extend(["", "=== Detailed Profile Data ===", ""])
 
             s = io.StringIO()
             ps = pstats.Stats(self._profiler, stream=s)
-            ps.sort_stats('cumulative').print_stats(20)
+            ps.sort_stats("cumulative").print_stats(20)
             report_lines.append(s.getvalue())
 
         return "\n".join(report_lines)
 
     def should_report(self) -> bool:
         """Check if it's time to generate a report."""
-        return (datetime.now(timezone.utc) - self._last_report_time >
-                timedelta(seconds=self.config.report_interval_seconds))
+        return datetime.now(UTC) - self._last_report_time > timedelta(
+            seconds=self.config.report_interval_seconds
+        )
 
     def auto_report(self) -> None:
         """Generate and log performance report if interval has passed."""
         if self.should_report():
             report = self.generate_profile_report()
             _logger.info("Performance Report:\n%s", report)
-            self._last_report_time = datetime.now(timezone.utc)
+            self._last_report_time = datetime.now(UTC)
 
     def reset_metrics(self) -> None:
         """Reset all performance metrics."""
@@ -478,18 +472,18 @@ class PerformanceProfiler:
             avg_success_rate = sum(m.success_rate for m in self._metrics.values()) / len(self._metrics)
 
             return {
-                'total_functions': len(self._metrics),
-                'total_calls': total_calls,
-                'total_time_seconds': total_time,
-                'avg_success_rate': avg_success_rate,
-                'bottleneck_count': len(self.get_bottlenecks()),
-                'profiling_enabled': self.config.enable_profiling,
-                'detailed_profiling_enabled': self.config.enable_detailed_profiling
+                "total_functions": len(self._metrics),
+                "total_calls": total_calls,
+                "total_time_seconds": total_time,
+                "avg_success_rate": avg_success_rate,
+                "bottleneck_count": len(self.get_bottlenecks()),
+                "profiling_enabled": self.config.enable_profiling,
+                "detailed_profiling_enabled": self.config.enable_detailed_profiling,
             }
 
 
 # Global profiler instance
-_global_profiler: Optional[PerformanceProfiler] = None
+_global_profiler: PerformanceProfiler | None = None
 
 
 def get_performance_profiler() -> PerformanceProfiler:
@@ -501,11 +495,11 @@ def get_performance_profiler() -> PerformanceProfiler:
 
 
 # Convenience decorators
-def profile_function(func_name: Optional[str] = None):
+def profile_function(func_name: str | None = None):
     """Convenience decorator for profiling functions."""
     return get_performance_profiler().time_function(func_name)
 
 
-def profile_async(func_name: Optional[str] = None):
+def profile_async(func_name: str | None = None):
     """Convenience decorator for profiling async functions."""
     return get_performance_profiler().time_function(func_name)

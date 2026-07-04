@@ -34,10 +34,11 @@ model.save('regime_model.pt')
 model.load('regime_model.pt')
 """
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import numpy as np
+
 
 class LSTMRegimeClassifier(nn.Module):
     def __init__(self, input_size, hidden_size=32, num_layers=1, n_regimes=3):
@@ -51,6 +52,7 @@ class LSTMRegimeClassifier(nn.Module):
         out = out[:, -1, :]  # Take last output
         out = self.fc(out)
         return out
+
 
 class NNRegimeDetector:
     def __init__(self, input_size, n_regimes=3, hidden_size=32, num_layers=1, device=None):
@@ -69,7 +71,7 @@ class NNRegimeDetector:
         X_seq = []
         y_seq = []
         for i in range(seq_len, n_samples):
-            X_seq.append(X[i-seq_len:i, :])
+            X_seq.append(X[i - seq_len : i, :])
             if y is not None:
                 y_seq.append(y[i])
         X_seq = np.stack(X_seq)
@@ -83,8 +85,7 @@ class NNRegimeDetector:
         y = np.asarray(y, dtype=np.int64)
         X_seq, y_seq = self._prepare_sequences(X, y, seq_len)
         dataset = torch.utils.data.TensorDataset(
-            torch.tensor(X_seq, dtype=torch.float32),
-            torch.tensor(y_seq, dtype=torch.long)
+            torch.tensor(X_seq, dtype=torch.float32), torch.tensor(y_seq, dtype=torch.long)
         )
         loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
         self.model.train()
@@ -100,7 +101,7 @@ class NNRegimeDetector:
                 total_loss += loss.item() * xb.size(0)
             avg_loss = total_loss / len(dataset)
             if verbose:
-                print(f"Epoch {epoch+1}/{epochs} - Loss: {avg_loss:.4f}")
+                print(f"Epoch {epoch + 1}/{epochs} - Loss: {avg_loss:.4f}")
 
     def predict(self, X, seq_len=20, batch_size=128):
         X = np.asarray(X, dtype=np.float32)
@@ -109,7 +110,7 @@ class NNRegimeDetector:
         preds = []
         with torch.no_grad():
             for i in range(0, len(X_seq), batch_size):
-                xb = torch.tensor(X_seq[i:i+batch_size], dtype=torch.float32).to(self.device)
+                xb = torch.tensor(X_seq[i : i + batch_size], dtype=torch.float32).to(self.device)
                 out = self.model(xb)
                 pred = torch.argmax(out, dim=1).cpu().numpy()
                 preds.append(pred)

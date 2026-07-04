@@ -5,16 +5,16 @@ This module provides tools to analyze and monitor database query performance,
 identify slow queries, and suggest optimizations.
 """
 
+import statistics
 import time
-from typing import Dict, List, Any, Optional
-from datetime import datetime, timezone
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-import statistics
+from datetime import UTC, datetime
+from typing import Any, Dict, List
 
-from sqlalchemy.orm import Session
 from sqlalchemy import event, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session
 
 from src.notification.logger import setup_logger
 
@@ -24,14 +24,15 @@ _logger = setup_logger(__name__)
 @dataclass
 class QueryMetrics:
     """Metrics for a database query."""
+
     query_hash: str
     query_text: str
     execution_count: int = 0
     total_time: float = 0.0
-    min_time: float = float('inf')
+    min_time: float = float("inf")
     max_time: float = 0.0
     avg_time: float = 0.0
-    last_executed: Optional[datetime] = None
+    last_executed: datetime | None = None
     execution_times: List[float] = field(default_factory=list)
 
     def add_execution(self, execution_time: float):
@@ -41,7 +42,7 @@ class QueryMetrics:
         self.min_time = min(self.min_time, execution_time)
         self.max_time = max(self.max_time, execution_time)
         self.avg_time = self.total_time / self.execution_count
-        self.last_executed = datetime.now(timezone.utc)
+        self.last_executed = datetime.now(UTC)
 
         # Keep only last 100 execution times for percentile calculations
         self.execution_times.append(execution_time)
@@ -74,7 +75,7 @@ class QueryMetrics:
             "avg_time": round(self.avg_time, 4),
             "median_time": round(self.median_time, 4),
             "p95_time": round(self.p95_time, 4),
-            "last_executed": self.last_executed.isoformat() if self.last_executed else None
+            "last_executed": self.last_executed.isoformat() if self.last_executed else None,
         }
 
 
@@ -110,7 +111,7 @@ class QueryPerformanceMonitor:
         @event.listens_for(engine, "after_cursor_execute")
         def receive_after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
             """Record query execution time and update metrics."""
-            if hasattr(context, '_query_start_time'):
+            if hasattr(context, "_query_start_time"):
                 execution_time = time.time() - context._query_start_time
                 self._record_query_execution(statement, execution_time)
 
@@ -147,10 +148,7 @@ class QueryPerformanceMonitor:
         query_hash = str(hash(normalized_query))
 
         if query_hash not in self.query_metrics:
-            self.query_metrics[query_hash] = QueryMetrics(
-                query_hash=query_hash,
-                query_text=normalized_query
-            )
+            self.query_metrics[query_hash] = QueryMetrics(query_hash=query_hash, query_text=normalized_query)
 
         self.query_metrics[query_hash].add_execution(execution_time)
 
@@ -159,7 +157,7 @@ class QueryPerformanceMonitor:
             _logger.warning(
                 "Slow query detected (%.4fs): %s",
                 execution_time,
-                normalized_query[:100] + "..." if len(normalized_query) > 100 else normalized_query
+                normalized_query[:100] + "..." if len(normalized_query) > 100 else normalized_query,
             )
 
     def _normalize_query(self, statement: str) -> str:
@@ -173,14 +171,15 @@ class QueryPerformanceMonitor:
             Normalized SQL statement
         """
         # Remove extra whitespace and normalize case
-        normalized = ' '.join(statement.split()).upper()
+        normalized = " ".join(statement.split()).upper()
 
         # Replace parameter placeholders with generic markers
         import re
-        normalized = re.sub(r'\$\d+', '$N', normalized)  # PostgreSQL parameters
-        normalized = re.sub(r'\?', '?', normalized)      # Generic parameters
+
+        normalized = re.sub(r"\$\d+", "$N", normalized)  # PostgreSQL parameters
+        normalized = re.sub(r"\?", "?", normalized)  # Generic parameters
         normalized = re.sub(r"'[^']*'", "'VALUE'", normalized)  # String literals
-        normalized = re.sub(r'\b\d+\b', 'N', normalized)  # Numeric literals
+        normalized = re.sub(r"\b\d+\b", "N", normalized)  # Numeric literals
 
         return normalized
 
@@ -195,8 +194,7 @@ class QueryPerformanceMonitor:
             List of slow query metrics
         """
         slow_queries = [
-            metrics for metrics in self.query_metrics.values()
-            if metrics.avg_time > self.slow_query_threshold
+            metrics for metrics in self.query_metrics.values() if metrics.avg_time > self.slow_query_threshold
         ]
 
         # Sort by average execution time
@@ -214,11 +212,7 @@ class QueryPerformanceMonitor:
         Returns:
             List of frequent query metrics
         """
-        frequent_queries = sorted(
-            self.query_metrics.values(),
-            key=lambda x: x.execution_count,
-            reverse=True
-        )
+        frequent_queries = sorted(self.query_metrics.values(), key=lambda x: x.execution_count, reverse=True)
 
         return [query.to_dict() for query in frequent_queries[:limit]]
 
@@ -232,11 +226,7 @@ class QueryPerformanceMonitor:
         Returns:
             List of high total time query metrics
         """
-        total_time_queries = sorted(
-            self.query_metrics.values(),
-            key=lambda x: x.total_time,
-            reverse=True
-        )
+        total_time_queries = sorted(self.query_metrics.values(), key=lambda x: x.total_time, reverse=True)
 
         return [query.to_dict() for query in total_time_queries[:limit]]
 
@@ -253,15 +243,12 @@ class QueryPerformanceMonitor:
                 "unique_queries": 0,
                 "slow_queries": 0,
                 "avg_execution_time": 0.0,
-                "total_execution_time": 0.0
+                "total_execution_time": 0.0,
             }
 
         total_executions = sum(m.execution_count for m in self.query_metrics.values())
         total_time = sum(m.total_time for m in self.query_metrics.values())
-        slow_query_count = sum(
-            1 for m in self.query_metrics.values()
-            if m.avg_time > self.slow_query_threshold
-        )
+        slow_query_count = sum(1 for m in self.query_metrics.values() if m.avg_time > self.slow_query_threshold)
 
         return {
             "total_queries": total_executions,
@@ -270,7 +257,7 @@ class QueryPerformanceMonitor:
             "avg_execution_time": round(total_time / total_executions, 4) if total_executions > 0 else 0.0,
             "total_execution_time": round(total_time, 4),
             "monitoring_enabled": self.monitoring_enabled,
-            "slow_query_threshold": self.slow_query_threshold
+            "slow_query_threshold": self.slow_query_threshold,
         }
 
     def reset_metrics(self):
@@ -290,7 +277,7 @@ class QueryPerformanceMonitor:
             "slow_queries": self.get_slow_queries(50),
             "frequent_queries": self.get_most_frequent_queries(50),
             "total_time_queries": self.get_total_time_queries(50),
-            "export_timestamp": datetime.now(timezone.utc).isoformat()
+            "export_timestamp": datetime.now(UTC).isoformat(),
         }
 
 
@@ -315,17 +302,9 @@ def query_timer(operation_name: str):
         result["execution_time"] = execution_time
 
         if execution_time > 1.0:  # Log operations taking more than 1 second
-            _logger.warning(
-                "Slow operation '%s' took %.4fs",
-                operation_name,
-                execution_time
-            )
+            _logger.warning("Slow operation '%s' took %.4fs", operation_name, execution_time)
         else:
-            _logger.debug(
-                "Operation '%s' completed in %.4fs",
-                operation_name,
-                execution_time
-            )
+            _logger.debug("Operation '%s' completed in %.4fs", operation_name, execution_time)
 
 
 class DatabaseHealthChecker:
@@ -364,19 +343,18 @@ class DatabaseHealthChecker:
             result = self.session.execute(bloat_query)
             tables = []
             for row in result:
-                tables.append({
-                    "schema": row.schemaname,
-                    "table": row.tablename,
-                    "total_size": row.total_size,
-                    "table_size": row.table_size,
-                    "index_size": row.index_size,
-                    "index_ratio": float(row.index_ratio) if row.index_ratio else 0.0
-                })
+                tables.append(
+                    {
+                        "schema": row.schemaname,
+                        "table": row.tablename,
+                        "total_size": row.total_size,
+                        "table_size": row.table_size,
+                        "index_size": row.index_size,
+                        "index_ratio": float(row.index_ratio) if row.index_ratio else 0.0,
+                    }
+                )
 
-            return {
-                "tables": tables,
-                "recommendations": self._generate_bloat_recommendations(tables)
-            }
+            return {"tables": tables, "recommendations": self._generate_bloat_recommendations(tables)}
         except Exception as e:
             _logger.exception("Failed to check table bloat:")
             return {"error": str(e)}
@@ -406,20 +384,19 @@ class DatabaseHealthChecker:
             result = self.session.execute(index_usage_query)
             indexes = []
             for row in result:
-                indexes.append({
-                    "schema": row.schemaname,
-                    "table": row.tablename,
-                    "index": row.indexname,
-                    "scans": row.idx_scan,
-                    "tuples_read": row.idx_tup_read,
-                    "tuples_fetched": row.idx_tup_fetch,
-                    "size": row.index_size
-                })
+                indexes.append(
+                    {
+                        "schema": row.schemaname,
+                        "table": row.tablename,
+                        "index": row.indexname,
+                        "scans": row.idx_scan,
+                        "tuples_read": row.idx_tup_read,
+                        "tuples_fetched": row.idx_tup_fetch,
+                        "size": row.index_size,
+                    }
+                )
 
-            return {
-                "indexes": indexes,
-                "recommendations": self._generate_index_recommendations(indexes)
-            }
+            return {"indexes": indexes, "recommendations": self._generate_index_recommendations(indexes)}
         except Exception as e:
             _logger.exception("Failed to check index usage:")
             return {"error": str(e)}
@@ -447,13 +424,13 @@ class DatabaseHealthChecker:
             total_connections = 0
 
             for row in result:
-                connections[row.state or 'unknown'] = row.connection_count
+                connections[row.state or "unknown"] = row.connection_count
                 total_connections += row.connection_count
 
             return {
                 "total_connections": total_connections,
                 "by_state": connections,
-                "recommendations": self._generate_connection_recommendations(connections, total_connections)
+                "recommendations": self._generate_connection_recommendations(connections, total_connections),
             }
         except Exception as e:
             _logger.exception("Failed to check connection stats:")
@@ -503,11 +480,10 @@ class DatabaseHealthChecker:
 
         if total > 100:
             recommendations.append(
-                f"High number of database connections ({total}). "
-                "Consider implementing connection pooling."
+                f"High number of database connections ({total}). Consider implementing connection pooling."
             )
 
-        idle_connections = connections.get('idle', 0)
+        idle_connections = connections.get("idle", 0)
         if idle_connections > total * 0.5:
             recommendations.append(
                 f"Many idle connections ({idle_connections}). "

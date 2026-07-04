@@ -5,11 +5,12 @@ This module provides retry mechanisms with exponential backoff for
 handling transient failures in data requests.
 """
 
-import time
 import random
-import requests
-from typing import Callable, Optional, TypeVar
+import time
 from functools import wraps
+from typing import Callable, TypeVar
+
+import requests
 
 from src.notification.logger import setup_logger
 
@@ -25,14 +26,11 @@ TRANSIENT_EXCEPTIONS = (
     OSError,
 )
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def exponential_backoff(
-    base_delay: float = 1.0,
-    max_delay: float = 60.0,
-    factor: float = 2.0,
-    jitter: bool = True
+    base_delay: float = 1.0, max_delay: float = 60.0, factor: float = 2.0, jitter: bool = True
 ) -> Callable[[int], float]:
     """
     Create an exponential backoff function.
@@ -46,8 +44,9 @@ def exponential_backoff(
     Returns:
         Function that takes retry attempt number and returns delay
     """
+
     def backoff(attempt: int) -> float:
-        delay = min(base_delay * (factor ** attempt), max_delay)
+        delay = min(base_delay * (factor**attempt), max_delay)
         if jitter:
             delay = delay * (0.5 + random.random() * 0.5)
         return delay
@@ -63,7 +62,7 @@ def request_with_backoff(
     backoff_factor: float = 2.0,
     jitter: bool = True,
     exceptions: tuple = TRANSIENT_EXCEPTIONS,
-    on_retry: Optional[Callable[[int, Exception, float], None]] = None
+    on_retry: Callable[[int, Exception, float], None] | None = None,
 ) -> T:
     """
     Execute a function with exponential backoff retry logic.
@@ -98,10 +97,7 @@ def request_with_backoff(
                 raise
 
             delay = backoff(attempt)
-            _logger.warning(
-                "Attempt %d failed: %s. Retrying in %.2f seconds...",
-                attempt + 1, e, delay
-            )
+            _logger.warning("Attempt %d failed: %s. Retrying in %.2f seconds...", attempt + 1, e, delay)
 
             if on_retry:
                 on_retry(attempt + 1, e, delay)
@@ -118,7 +114,7 @@ def retry_on_exception(
     backoff_factor: float = 2.0,
     jitter: bool = True,
     exceptions: tuple = TRANSIENT_EXCEPTIONS,
-    on_retry: Optional[Callable[[int, Exception, float], None]] = None
+    on_retry: Callable[[int, Exception, float], None] | None = None,
 ):
     """
     Decorator for retrying functions on exceptions.
@@ -135,6 +131,7 @@ def retry_on_exception(
     Returns:
         Decorated function with retry logic
     """
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
         def wrapper(*args, **kwargs) -> T:
@@ -149,10 +146,11 @@ def retry_on_exception(
                 backoff_factor=backoff_factor,
                 jitter=jitter,
                 exceptions=exceptions,
-                on_retry=on_retry
+                on_retry=on_retry,
             )
 
         return wrapper
+
     return decorator
 
 
@@ -161,7 +159,7 @@ def retry_on_rate_limit(
     base_delay: float = 1.0,
     max_delay: float = 300.0,  # 5 minutes for rate limits
     backoff_factor: float = 2.0,
-    jitter: bool = True
+    jitter: bool = True,
 ):
     """
     Decorator specifically for retrying on rate limit errors.
@@ -176,11 +174,9 @@ def retry_on_rate_limit(
     Returns:
         Decorated function with rate limit retry logic
     """
+
     def on_rate_limit_retry(attempt: int, exception: Exception, delay: float):
-        _logger.info(
-            "Rate limit hit (attempt %d). Waiting %.2f seconds before retry...",
-            attempt, delay
-        )
+        _logger.info("Rate limit hit (attempt %d). Waiting %.2f seconds before retry...", attempt, delay)
 
     return retry_on_exception(
         max_attempts=max_attempts,
@@ -189,5 +185,5 @@ def retry_on_rate_limit(
         backoff_factor=backoff_factor,
         jitter=jitter,
         exceptions=TRANSIENT_EXCEPTIONS,
-        on_retry=on_rate_limit_retry
+        on_retry=on_rate_limit_retry,
     )

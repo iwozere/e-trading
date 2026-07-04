@@ -8,17 +8,17 @@ CustomStrategy or the scheduler.  Validates:
   - position_size is in (0, 1]
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field, field_validator
 
 from src.strategy.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
 from src.strategy.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _check_param_types(mixin_name: str, params: Dict[str, Any], registry: dict) -> None:
     """
@@ -38,36 +38,30 @@ def _check_param_types(mixin_name: str, params: Dict[str, Any], registry: dict) 
 
         if expected is bool:
             if not isinstance(value, bool):
-                raise ValueError(
-                    f"Param '{key}' for {mixin_name} must be bool, "
-                    f"got {type(value).__name__}"
-                )
+                raise ValueError(f"Param '{key}' for {mixin_name} must be bool, got {type(value).__name__}")
         elif expected in (int, float):
             # Accept both int and float for numeric params, but not bool
             if isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise ValueError(
-                    f"Param '{key}' for {mixin_name} must be numeric (int or float), "
-                    f"got {type(value).__name__}"
+                    f"Param '{key}' for {mixin_name} must be numeric (int or float), got {type(value).__name__}"
                 )
         elif expected is str:
             if not isinstance(value, str):
-                raise ValueError(
-                    f"Param '{key}' for {mixin_name} must be str, "
-                    f"got {type(value).__name__}"
-                )
+                raise ValueError(f"Param '{key}' for {mixin_name} must be str, got {type(value).__name__}")
 
 
 # ---------------------------------------------------------------------------
 # Sub-models
 # ---------------------------------------------------------------------------
 
+
 class MixinLogicConfig(BaseModel):
     """Config block for a single entry or exit mixin."""
 
     name: str
-    logic_params: Optional[Dict[str, Any]] = None
-    params: Optional[Dict[str, Any]] = None       # legacy alias for logic_params
-    indicators: Optional[List[Dict[str, Any]]] = None  # explicit indicator override
+    logic_params: Dict[str, Any] | None = None
+    params: Dict[str, Any] | None = None  # legacy alias for logic_params
+    indicators: List[Dict[str, Any]] | None = None  # explicit indicator override
 
     def effective_params(self) -> Dict[str, Any]:
         """Return logic_params, falling back to params, then empty dict."""
@@ -77,6 +71,7 @@ class MixinLogicConfig(BaseModel):
 # ---------------------------------------------------------------------------
 # Top-level schema
 # ---------------------------------------------------------------------------
+
 
 class StrategyConfig(BaseModel):
     """
@@ -104,10 +99,7 @@ class StrategyConfig(BaseModel):
     @classmethod
     def entry_mixin_must_exist(cls, v: MixinLogicConfig) -> MixinLogicConfig:
         if v.name not in ENTRY_MIXIN_REGISTRY:
-            raise ValueError(
-                f"Unknown entry mixin '{v.name}'. "
-                f"Available: {sorted(ENTRY_MIXIN_REGISTRY.keys())}"
-            )
+            raise ValueError(f"Unknown entry mixin '{v.name}'. Available: {sorted(ENTRY_MIXIN_REGISTRY.keys())}")
         _check_param_types(v.name, v.effective_params(), ENTRY_MIXIN_REGISTRY)
         return v
 
@@ -115,10 +107,7 @@ class StrategyConfig(BaseModel):
     @classmethod
     def exit_mixin_must_exist(cls, v: MixinLogicConfig) -> MixinLogicConfig:
         if v.name not in EXIT_MIXIN_REGISTRY:
-            raise ValueError(
-                f"Unknown exit mixin '{v.name}'. "
-                f"Available: {sorted(EXIT_MIXIN_REGISTRY.keys())}"
-            )
+            raise ValueError(f"Unknown exit mixin '{v.name}'. Available: {sorted(EXIT_MIXIN_REGISTRY.keys())}")
         _check_param_types(v.name, v.effective_params(), EXIT_MIXIN_REGISTRY)
         return v
 
@@ -130,6 +119,7 @@ class StrategyConfig(BaseModel):
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def validate_strategy_config(config: Dict[str, Any]) -> StrategyConfig:
     """

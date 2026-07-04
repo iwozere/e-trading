@@ -1,17 +1,16 @@
 # entry_mixin_factory.py
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
-from src.strategy.entry.rsi_bb_entry_mixin import RSIBBEntryMixin
-from src.strategy.entry.rsi_or_bb_entry_mixin import RSIOrBBEntryMixin
-from src.strategy.entry.rsi_bb_volume_entry_mixin import RSIBBVolumeEntryMixin
-from src.strategy.entry.rsi_ichimoku_entry_mixin import RSIIchimokuEntryMixin
 from src.strategy.entry.bb_volume_supertrend_entry_mixin import BBVolumeSupertrendEntryMixin
-from src.strategy.entry.rsi_volume_supertrend_entry_mixin import RSIVolumeSupertrendEntryMixin
 from src.strategy.entry.eom_breakout_entry_mixin import EOMBreakoutEntryMixin
 from src.strategy.entry.eom_macd_breakout_entry_mixin import EOMMAcdBreakoutEntryMixin
 from src.strategy.entry.eom_pullback_entry_mixin import EOMPullbackEntryMixin
-from src.strategy.entry.hmm_lstm_entry_mixin import HMMLSTMEntryMixin
+from src.strategy.entry.rsi_bb_entry_mixin import RSIBBEntryMixin
+from src.strategy.entry.rsi_bb_volume_entry_mixin import RSIBBVolumeEntryMixin
+from src.strategy.entry.rsi_ichimoku_entry_mixin import RSIIchimokuEntryMixin
+from src.strategy.entry.rsi_or_bb_entry_mixin import RSIOrBBEntryMixin
+from src.strategy.entry.rsi_volume_supertrend_entry_mixin import RSIVolumeSupertrendEntryMixin
 
 # Registry of all available entry mixins
 ENTRY_MIXIN_REGISTRY = {
@@ -28,13 +27,11 @@ ENTRY_MIXIN_REGISTRY = {
 }
 
 
-def get_entry_mixin(mixin_name: str, params: Optional[Dict[str, Any]] = None):
+def get_entry_mixin(mixin_name: str, params: Dict[str, Any] | None = None):
     """Factory for creating instances of entry mixins."""
     if mixin_name not in ENTRY_MIXIN_REGISTRY:
         available_mixins = list(ENTRY_MIXIN_REGISTRY.keys())
-        raise ValueError(
-            f"Unknown entry mixin: {mixin_name}. Available: {available_mixins}"
-        )
+        raise ValueError(f"Unknown entry mixin: {mixin_name}. Available: {available_mixins}")
 
     mixin_class = ENTRY_MIXIN_REGISTRY[mixin_name]
     return mixin_class(params=params)

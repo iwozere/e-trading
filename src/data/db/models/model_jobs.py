@@ -6,28 +6,22 @@ Includes Schedule and Run models with proper relationships and validation.
 """
 
 from __future__ import annotations
-import datetime
+
 from datetime import datetime as dt
 from enum import Enum
-from typing import Optional
 
-from sqlalchemy import (
-    Integer, String, Boolean, DateTime, Text,
-    CheckConstraint, UniqueConstraint, Index, func
-)
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
-from src.data.db.core.json_types import JsonType
 
 from src.data.db.core.base import Base
-
+from src.data.db.core.json_types import JsonType
 
 ## For PostgreSQL we prefer the native JSONB type
 
 
-
-
 class JobType(str, Enum):
     """Job type enumeration."""
+
     SCHEDULE = "schedule"
     SCREENER = "screener"
     ALERT = "alert"
@@ -40,6 +34,7 @@ class JobType(str, Enum):
 
 class RunStatus(str, Enum):
     """Run status enumeration."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -67,7 +62,10 @@ class Schedule(Base):
 
     # Constraints
     __table_args__ = (
-        CheckConstraint("job_type IN ('report', 'screener', 'alert', 'notification', 'data_processing', 'backup', 'script', 'schedule')", name="check_job_type"),
+        CheckConstraint(
+            "job_type IN ('report', 'screener', 'alert', 'notification', 'data_processing', 'backup', 'script', 'schedule')",
+            name="check_job_type",
+        ),
         # Use an explicit unique constraint for user_id + name
         UniqueConstraint("user_id", "name", name="unique_user_schedule_name"),
         Index("idx_schedules_enabled", "enabled"),
@@ -106,19 +104,18 @@ class ScheduleRun(Base):
         return f"<ScheduleRun(id={self.id}, job_type='{self.job_type}', status='{self.status}')>"
 
 
-
 # ---------------------------------------------------------------------------
 # Pydantic schemas — defined in src.data.db.schemas.schema_jobs
 # Re-exported here for backward compatibility with existing imports.
 # ---------------------------------------------------------------------------
 from src.data.db.schemas.schema_jobs import (  # noqa: E402
+    ReportRequest,
     ScheduleCreate,
-    ScheduleUpdate,
     ScheduleResponse,
     ScheduleRunCreate,
-    ScheduleRunUpdate,
     ScheduleRunResponse,
-    ReportRequest,
+    ScheduleRunUpdate,
+    ScheduleUpdate,
     ScreenerRequest,
     ScreenerSetInfo,
 )

@@ -3,6 +3,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from src.trading.base_trading_bot import BaseTradingBot
 
 
@@ -45,9 +46,7 @@ def clean_state_file():
 
 @patch("src.trading.base_trading_bot.create_telegram_notifier")
 @patch("src.trading.base_trading_bot.EmailNotifier")
-def test_buy_and_sell_signal_triggers_order_and_trade(
-    mock_email, mock_telegram, mock_broker, clean_state_file
-):
+def test_buy_and_sell_signal_triggers_order_and_trade(mock_email, mock_telegram, mock_broker, clean_state_file):
     strategy = DummyStrategy()
     bot = BaseTradingBot(
         {"trading_pair": "BTCUSDT", "initial_balance": 1000},
@@ -72,9 +71,7 @@ def test_buy_and_sell_signal_triggers_order_and_trade(
 
 @patch("src.trading.base_trading_bot.create_telegram_notifier")
 @patch("src.trading.base_trading_bot.EmailNotifier")
-def test_broker_error_handling_and_notification(
-    mock_email, mock_telegram, clean_state_file
-):
+def test_broker_error_handling_and_notification(mock_email, mock_telegram, clean_state_file):
     strategy = DummyStrategy()
     broker = MagicMock()
     broker.place_order.side_effect = Exception("Order failed")
@@ -94,9 +91,7 @@ def test_broker_error_handling_and_notification(
 
 @patch("src.trading.base_trading_bot.create_telegram_notifier")
 @patch("src.trading.base_trading_bot.EmailNotifier")
-def test_state_persistence_and_recovery(
-    mock_email, mock_telegram, mock_broker, clean_state_file
-):
+def test_state_persistence_and_recovery(mock_email, mock_telegram, mock_broker, clean_state_file):
     strategy = DummyStrategy()
     bot = BaseTradingBot(
         {"trading_pair": "BTCUSDT", "initial_balance": 1000},

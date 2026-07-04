@@ -4,7 +4,7 @@ P17 Candidate Model
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 
 @dataclass
@@ -32,7 +32,7 @@ class Candidate:
     shares_outstanding: float = 0.0
     high_52w: float = 0.0
     low_52w: float = 0.0
-    institutional_pct: Optional[float] = None
+    institutional_pct: float | None = None
 
     # ── Technical features ─────────────────────────────────────────────────
     relative_volume: float = 0.0
@@ -45,23 +45,23 @@ class Candidate:
     breakout_20d: bool = False
     breakout_50d: bool = False
     bb_squeeze: bool = False
-    atr_pct: float = 0.0          # ATR as % of price; proxy for recent volatility
-    obv_slope: float = 0.0        # OBV linear regression slope (positive = accumulation)
-    accumulation_days: int = 0    # high-volume green days in last 20 sessions
+    atr_pct: float = 0.0  # ATR as % of price; proxy for recent volatility
+    obv_slope: float = 0.0  # OBV linear regression slope (positive = accumulation)
+    accumulation_days: int = 0  # high-volume green days in last 20 sessions
 
     # ── Short squeeze ──────────────────────────────────────────────────────
-    short_interest_pct_float: Optional[float] = None
-    days_to_cover: Optional[float] = None
-    finra_short_vol_ratio: Optional[float] = None   # daily short sale vol / total vol
+    short_interest_pct_float: float | None = None
+    days_to_cover: float | None = None
+    finra_short_vol_ratio: float | None = None  # daily short sale vol / total vol
 
     # ── Fundamentals ───────────────────────────────────────────────────────
-    revenue_growth_yoy: Optional[float] = None
-    gross_margin: Optional[float] = None
-    total_cash: Optional[float] = None
-    total_debt: Optional[float] = None
-    cash_runway_months: Optional[float] = None
-    operating_cashflow: Optional[float] = None
-    fundamentals_stale: bool = False   # True when data is older than one quarter
+    revenue_growth_yoy: float | None = None
+    gross_margin: float | None = None
+    total_cash: float | None = None
+    total_debt: float | None = None
+    cash_runway_months: float | None = None
+    operating_cashflow: float | None = None
+    fundamentals_stale: bool = False  # True when data is older than one quarter
 
     # ── Dilution ───────────────────────────────────────────────────────────
     dilution_penalty: float = 0.0
@@ -75,19 +75,19 @@ class Candidate:
     volume_score: float = 0.0
     technical_score: float = 0.0
     fundamentals_score: float = 0.0
-    catalyst_score: float = 0.0       # Phase 1: defaults to 0 (no catalyst agent yet)
+    catalyst_score: float = 0.0  # Phase 1: defaults to 0 (no catalyst agent yet)
     short_squeeze_score: float = 0.0
     accumulation_score: float = 0.0
 
     # ── Final output ───────────────────────────────────────────────────────
-    weighted_score: float = 0.0       # weighted sum before dilution deduction
-    final_score: float = 0.0          # weighted_score minus dilution_penalty (floored at 0)
-    tier: str = "W"                   # A | B | C | W
+    weighted_score: float = 0.0  # weighted sum before dilution deduction
+    final_score: float = 0.0  # weighted_score minus dilution_penalty (floored at 0)
+    tier: str = "W"  # A | B | C | W
     explosive_candidate: bool = False
     signals: List[str] = field(default_factory=list)
 
     # ── Metadata ───────────────────────────────────────────────────────────
-    data_as_of: Optional[datetime] = None
+    data_as_of: datetime | None = None
     run_date: str = ""
 
     # ── Serialisation ──────────────────────────────────────────────────────

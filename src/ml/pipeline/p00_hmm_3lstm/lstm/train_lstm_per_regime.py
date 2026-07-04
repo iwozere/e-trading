@@ -12,18 +12,20 @@ The script assumes the input CSVs contain feature columns and a 'regime' column.
 
 import sys
 from pathlib import Path
-PROJECT_ROOT = Path(__file__).resolve().parents[3] # Go up 3 levels from 'src/ml/hmm'
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]  # Go up 3 levels from 'src/ml/hmm'
 sys.path.append(str(PROJECT_ROOT))
 
-import os
 import json
+import os
+from glob import glob
+
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
 import torch
 import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader
-from glob import glob
+from sklearn.preprocessing import StandardScaler
+from torch.utils.data import DataLoader, TensorDataset
 
 from src.notification.logger import setup_logger
 
@@ -32,19 +34,20 @@ _logger = setup_logger(__name__)
 # ---- Config ----
 RESULTS_DIR = "results"
 MODEL_DIR = "src/ml/lstm/model"
-FEATURE_COLS = ['log_return', 'volatility', 'rsi', 'macd', 'boll_width']
-TARGET_COL = 'log_return'
-WINDOW = 20         # Size of the look-back window for sequences
-EPOCHS = 30         # Number of training epochs
-BATCH_SIZE = 32     # Batch size for training
-LR = 1e-3           # Learning rate for the Adam optimizer
-HIDDEN_DIM = 64     # Number of hidden units in the LSTM layers
-NUM_LAYERS = 2      # Number of LSTM layers
+FEATURE_COLS = ["log_return", "volatility", "rsi", "macd", "boll_width"]
+TARGET_COL = "log_return"
+WINDOW = 20  # Size of the look-back window for sequences
+EPOCHS = 30  # Number of training epochs
+BATCH_SIZE = 32  # Batch size for training
+LR = 1e-3  # Learning rate for the Adam optimizer
+HIDDEN_DIM = 64  # Number of hidden units in the LSTM layers
+NUM_LAYERS = 2  # Number of LSTM layers
 REGIME_NAMES = {0: "bearish", 1: "sideways", 2: "bullish"}
 
 # Create necessary directories if they don't exist
 os.makedirs(MODEL_DIR, exist_ok=True)
 os.makedirs(RESULTS_DIR, exist_ok=True)
+
 
 # ---- Model ----
 class LSTMModel(nn.Module):
@@ -59,6 +62,7 @@ class LSTMModel(nn.Module):
         hidden_dim (int): The number of features in the hidden state h.
         num_layers (int): The number of recurrent layers.
     """
+
     def __init__(self, input_dim, hidden_dim=64, num_layers=2):
         super().__init__()
         self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
@@ -81,6 +85,7 @@ class LSTMModel(nn.Module):
         # We take the hidden state of the last layer
         return self.fc(h_n[-1]).squeeze()
 
+
 # ---- Data prep ----
 def create_sequences(data, target_idx, window):
     """
@@ -97,9 +102,10 @@ def create_sequences(data, target_idx, window):
     """
     X, y = [], []
     for i in range(len(data) - window):
-        X.append(data[i:i + window])
+        X.append(data[i : i + window])
         y.append(data[i + window][target_idx])
     return np.array(X), np.array(y)
+
 
 def prepare_data(csv_path, regime_id, feature_cols, window):
     """
@@ -115,8 +121,8 @@ def prepare_data(csv_path, regime_id, feature_cols, window):
         tuple: A tuple containing the prepared sequences (X) and targets (y).
                Returns (None, None) if there is not enough data for the regime.
     """
-    df = pd.read_csv(csv_path, parse_dates=['timestamp'])
-    df = df[df['regime'] == regime_id].dropna()
+    df = pd.read_csv(csv_path, parse_dates=["timestamp"])
+    df = df[df["regime"] == regime_id].dropna()
 
     if df.empty or len(df) <= window:
         return None, None
@@ -127,6 +133,7 @@ def prepare_data(csv_path, regime_id, feature_cols, window):
     target_idx = feature_cols.index(TARGET_COL)
     X, y = create_sequences(features, target_idx, window)
     return X, y
+
 
 # ---- Training ----
 def train_lstm(X, y, input_dim, save_path, hidden_dim, num_layers):
@@ -171,6 +178,7 @@ def train_lstm(X, y, input_dim, save_path, hidden_dim, num_layers):
     torch.save(model.state_dict(), save_path)
     _logger.info("✅ Saved model: %s")
 
+
 # ---- Runner ----
 if __name__ == "__main__":
     # Find all CSV files in the results directory
@@ -198,14 +206,8 @@ if __name__ == "__main__":
                 continue
 
             # Train the model
-            model_path = f"{MODEL_DIR}/{filename.replace("HMM", "LSTM")}_{regime_name}.pt"
-            train_lstm(
-                X, y,
-                input_dim=X.shape[2],
-                save_path=model_path,
-                hidden_dim=HIDDEN_DIM,
-                num_layers=NUM_LAYERS
-            )
+            model_path = f"{MODEL_DIR}/{filename.replace('HMM', 'LSTM')}_{regime_name}.pt"
+            train_lstm(X, y, input_dim=X.shape[2], save_path=model_path, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS)
 
             # ---- Save parameters to a JSON file ----
             params = {
@@ -222,8 +224,8 @@ if __name__ == "__main__":
                     "batch_size": BATCH_SIZE,
                     "learning_rate": LR,
                     "hidden_dim": HIDDEN_DIM,
-                    "num_layers": NUM_LAYERS
-                }
+                    "num_layers": NUM_LAYERS,
+                },
             }
 
             # Construct the JSON filename as requested: LSTM_{symbol_info}_{regime}.json
@@ -231,7 +233,7 @@ if __name__ == "__main__":
             json_filename = f"LSTM_{filename}_{regime_name}.json"
             json_path = os.path.join(RESULTS_DIR, json_filename)
 
-            with open(json_path, 'w') as f:
+            with open(json_path, "w") as f:
                 json.dump(params, f, indent=4)
 
             _logger.info("📄 Saved params to: %s")

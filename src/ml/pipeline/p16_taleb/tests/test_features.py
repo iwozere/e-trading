@@ -9,7 +9,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import pytest
 
 _pipeline_dir = Path(__file__).resolve().parents[1]
 if str(_pipeline_dir) not in sys.path:
@@ -31,9 +30,15 @@ def _make_df(
     vix = np.clip(vix_level + rng.normal(0, 3, n), 5, 80)
     rate_3m = np.full(n, 0.04)
     df = pd.DataFrame(
-        {"open": close * 0.999, "high": close * 1.005, "low": close * 0.995,
-         "close": close, "volume": 1e8,
-         "vix": vix, "rate_3m": rate_3m},
+        {
+            "open": close * 0.999,
+            "high": close * 1.005,
+            "low": close * 0.995,
+            "close": close,
+            "volume": 1e8,
+            "vix": vix,
+            "rate_3m": rate_3m,
+        },
         index=dates,
     )
     df.index.name = "date"
@@ -44,8 +49,17 @@ class TestBuildFeatures:
     def test_returns_all_required_columns(self):
         df = _make_df()
         out = build_features(df)
-        required = ["ret_1d", "ret_5d", "ret_21d", "ret_63d",
-                    "drawdown", "vix_ma20", "vol_ratio", "vix_regime", "stress_flag"]
+        required = [
+            "ret_1d",
+            "ret_5d",
+            "ret_21d",
+            "ret_63d",
+            "drawdown",
+            "vix_ma20",
+            "vol_ratio",
+            "vix_regime",
+            "stress_flag",
+        ]
         for col in required:
             assert col in out.columns, f"Missing column: {col}"
 

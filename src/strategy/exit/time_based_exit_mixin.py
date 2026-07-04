@@ -5,10 +5,10 @@ This module implements an exit strategy based on time duration. The strategy exi
 after a specified number of bars or calendar days have elapsed since entry.
 """
 
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List
 
-from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
+from src.strategy.exit.base_exit_mixin import BaseExitMixin
 
 logger = setup_logger(__name__)
 
@@ -18,7 +18,7 @@ class TimeBasedExitMixin(BaseExitMixin):
     New Architecture only.
     """
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
         self.entry_bar = None
@@ -57,9 +57,9 @@ class TimeBasedExitMixin(BaseExitMixin):
 
         try:
             # Standardized parameter retrieval
-            use_time = self._resolve_param('use_time', 'x_use_time', False)
-            max_minutes = self._resolve_param('max_minutes', 'x_max_minutes', 60)
-            max_bars = self._resolve_param('max_bars', 'x_max_bars', 20)
+            use_time = self._resolve_param("use_time", "x_use_time", False)
+            max_minutes = self._resolve_param("max_minutes", "x_max_minutes", 60)
+            max_bars = self._resolve_param("max_bars", "x_max_bars", 20)
 
             if use_time:
                 # Use calendar time
@@ -103,4 +103,4 @@ class TimeBasedExitMixin(BaseExitMixin):
 
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""
-        return getattr(self.strategy, 'current_exit_reason', 'time_limit')
+        return getattr(self.strategy, "current_exit_reason", "time_limit")

@@ -20,7 +20,7 @@ Classes:
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List
 
 import pandas as pd
 
@@ -46,7 +46,9 @@ class BaseDataDownloader(ABC):
         pass
 
     @staticmethod
-    def _get_config_value(config_key: str, env_var: Optional[str] = None, default: Optional[str] = None) -> Optional[str]:
+    def _get_config_value(
+        config_key: str, env_var: str | None = None, default: str | None = None
+    ) -> str | None:
         """
         Get config value for a provider API key.
 
@@ -73,7 +75,6 @@ class BaseDataDownloader(ABC):
 
         return value if value is not None else default
 
-
     @abstractmethod
     def get_provider_name(self) -> str:
         """Return the canonical provider name for this downloader."""
@@ -85,7 +86,9 @@ class BaseDataDownloader(ABC):
         pass
 
     @abstractmethod
-    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> Optional[pd.DataFrame]:
+    def get_ohlcv(
+        self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs
+    ) -> pd.DataFrame | None:
         """
         Download historical OHLCV data for a given symbol.
 
@@ -116,7 +119,7 @@ class BaseDataDownloader(ABC):
 
     def get_periods(self) -> List[str]:
         """Return the list of supported periods for this data downloader."""
-        return ['1d', '7d', '1mo', '3mo', '6mo', '1y', '2y']
+        return ["1d", "7d", "1mo", "3mo", "6mo", "1y", "2y"]
 
     def get_intervals(self) -> List[str]:
         """Return the list of supported intervals for this data downloader."""
@@ -153,7 +156,7 @@ class BaseDataDownloader(ABC):
             Mapping of symbol → DataFrame.  Symbols that raised an exception
             are omitted from the result rather than propagating the error.
         """
-        results: Dict[str, "pd.DataFrame"] = {}
+        results: Dict[str, pd.DataFrame] = {}
         for symbol in symbols:
             try:
                 results[symbol] = download_func(symbol, interval, start_date, end_date)

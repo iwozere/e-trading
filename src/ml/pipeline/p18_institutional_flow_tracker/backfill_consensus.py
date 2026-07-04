@@ -28,12 +28,12 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.ml.pipeline.p18_institutional_flow_tracker.config import P18Config
 from src.ml.pipeline.p18_institutional_flow_tracker.pipeline import (
     InstitutionalFlowPipeline,
     _resolve_current_quarter,
 )
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -81,7 +81,9 @@ def main() -> int:
     if args.if_missing and cache_path.exists() and cache_path.stat().st_size >= _MIN_CONSENSUS_BYTES:
         _logger.info(
             "P18 backfill: consensus cache already present for %d Q%d (%s) — nothing to do.",
-            year, quarter, cache_path,
+            year,
+            quarter,
+            cache_path,
         )
         return 0
 
@@ -94,7 +96,8 @@ def main() -> int:
             "Backfill produced an empty consensus for %d Q%d — check EDGAR connectivity and "
             "prior-quarter data. If this quarter's 45-day filing window has not closed yet, "
             "few filings may be available; retry after the filing deadline.",
-            year, quarter,
+            year,
+            quarter,
         )
         return 1
 

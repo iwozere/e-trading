@@ -14,9 +14,9 @@ Can optionally merge with yfinance volume data for validation.
 """
 
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List
 
 import pandas as pd
 import requests
@@ -26,8 +26,8 @@ import yfinance as yf
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from config.donotshare.donotshare import DATA_CACHE_DIR, FINRA_API_CLIENT, FINRA_API_SECRET
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -50,10 +50,10 @@ class FinraTRFDownloader:
 
     def __init__(
         self,
-        date: Optional[str] = None,
-        output_dir: Optional[Path] = None,
+        date: str | None = None,
+        output_dir: Path | None = None,
         output_filename: str = "finra_trf.csv",
-        fetch_yfinance_data: bool = True
+        fetch_yfinance_data: bool = True,
     ):
         """
         Initialize FINRA TRF downloader.
@@ -77,8 +77,8 @@ class FinraTRFDownloader:
         self._cache_dir = Path(DATA_CACHE_DIR) / "trf"
 
         # OAuth token management
-        self._access_token: Optional[str] = None
-        self._token_expires_at: Optional[datetime] = None
+        self._access_token: str | None = None
+        self._token_expires_at: datetime | None = None
 
     @staticmethod
     def _is_weekend_or_holiday(date: datetime) -> bool:
@@ -94,7 +94,7 @@ class FinraTRFDownloader:
         return False
 
     @staticmethod
-    def _parse_date(date_str: Optional[str] = None) -> datetime:
+    def _parse_date(date_str: str | None = None) -> datetime:
         """Parse date string or return yesterday's date if None."""
         if date_str:
             return datetime.strptime(date_str, "%Y-%m-%d")
@@ -116,7 +116,7 @@ class FinraTRFDownloader:
         """
         # Check if we have a valid cached token
         if self._access_token and self._token_expires_at:
-            if datetime.now(timezone.utc) < self._token_expires_at:
+            if datetime.now(UTC) < self._token_expires_at:
                 _logger.debug("Using cached access token")
                 return self._access_token
 
@@ -124,11 +124,7 @@ class FinraTRFDownloader:
 
         try:
             # Use Basic Auth with Client ID and Secret
-            response = requests.post(
-                self.FINRA_AUTH_URL,
-                auth=(FINRA_API_CLIENT, FINRA_API_SECRET),
-                timeout=30
-            )
+            response = requests.post(self.FINRA_AUTH_URL, auth=(FINRA_API_CLIENT, FINRA_API_SECRET), timeout=30)
             response.raise_for_status()
 
             token_data = response.json()
@@ -136,7 +132,7 @@ class FinraTRFDownloader:
 
             # Cache token for 30 minutes (or use expires_in from response)
             expires_in = int(token_data.get("expires_in", 1800))  # Default 30 minutes
-            self._token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in - 60)
+            self._token_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in - 60)
 
             _logger.info("Successfully obtained access token (expires in %s seconds)", expires_in)
             return self._access_token
@@ -169,30 +165,19 @@ class FinraTRFDownloader:
 
             # Prepare the request headers with Bearer token
             headers = {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': f'Bearer {access_token}'
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Authorization": f"Bearer {access_token}",
             }
 
             # Filter for the specific trade date
             filters = {
-                "compareFilters": [
-                    {
-                        "compareType": "EQUAL",
-                        "fieldName": "tradeReportDate",
-                        "fieldValue": date_str
-                    }
-                ],
-                "limit": 10000  # Adjust based on expected data volume
+                "compareFilters": [{"compareType": "EQUAL", "fieldName": "tradeReportDate", "fieldValue": date_str}],
+                "limit": 10000,  # Adjust based on expected data volume
             }
 
             # Make POST request to FINRA API
-            response = requests.post(
-                self.finra_url,
-                headers=headers,
-                json=filters,
-                timeout=30
-            )
+            response = requests.post(self.finra_url, headers=headers, json=filters, timeout=30)
 
             # Log response details for debugging
             _logger.debug("Response status: %s", response.status_code)
@@ -227,15 +212,17 @@ class FinraTRFDownloader:
                 return df
 
             # Standardize column names based on actual API response
-            df = df.rename(columns={
-                "securitiesInformationProcessorSymbolIdentifier": "ticker",
-                "tradeReportDate": "date",
-                "shortParQuantity": "short_volume",
-                "shortExemptParQuantity": "short_exempt_volume",
-                "totalParQuantity": "total_volume",
-                "marketCode": "market_code",
-                "reportingFacilityCode": "facility_code"
-            })
+            df = df.rename(
+                columns={
+                    "securitiesInformationProcessorSymbolIdentifier": "ticker",
+                    "tradeReportDate": "date",
+                    "shortParQuantity": "short_volume",
+                    "shortExemptParQuantity": "short_exempt_volume",
+                    "totalParQuantity": "total_volume",
+                    "marketCode": "market_code",
+                    "reportingFacilityCode": "facility_code",
+                }
+            )
 
             # Convert date column
             df["date"] = pd.to_datetime(df["date"]).dt.date
@@ -244,8 +231,16 @@ class FinraTRFDownloader:
             df["short_ratio"] = df["short_volume"] / df["total_volume"]
 
             # Keep only relevant columns
-            keep_columns = ["date", "ticker", "short_volume", "short_exempt_volume",
-                          "total_volume", "short_ratio", "market_code", "facility_code"]
+            keep_columns = [
+                "date",
+                "ticker",
+                "short_volume",
+                "short_exempt_volume",
+                "total_volume",
+                "short_ratio",
+                "market_code",
+                "facility_code",
+            ]
             df = df[[col for col in keep_columns if col in df.columns]]
 
             return df
@@ -275,7 +270,7 @@ class FinraTRFDownloader:
 
         # Process tickers in batches to balance speed and error handling
         for i in range(0, len(tickers), batch_size):
-            batch = tickers[i:i + batch_size]
+            batch = tickers[i : i + batch_size]
             batch_num = i // batch_size + 1
             total_batches = (len(tickers) + batch_size - 1) // batch_size
 
@@ -288,9 +283,9 @@ class FinraTRFDownloader:
                     batch,
                     start=self.date - timedelta(days=1),
                     end=self.date + timedelta(days=1),
-                    group_by='ticker',
+                    group_by="ticker",
                     progress=False,
-                    threads=False  # Disable threading to avoid error propagation
+                    threads=False,  # Disable threading to avoid error propagation
                 )
 
                 if data.empty:
@@ -326,16 +321,18 @@ class FinraTRFDownloader:
                             # Check if Volume is valid (not NaN and > 0)
                             volume = row.get("Volume") if isinstance(row, pd.Series) else None
                             if pd.notna(volume) and volume > 0:
-                                volume_data.append({
-                                    "ticker": ticker,
-                                    "date": self.date.date(),
-                                    "volume": volume,
-                                    "open": row.get("Open"),
-                                    "high": row.get("High"),
-                                    "low": row.get("Low"),
-                                    "close": row.get("Close"),
-                                    "adj_close": row.get("Adj Close", row.get("Close"))
-                                })
+                                volume_data.append(
+                                    {
+                                        "ticker": ticker,
+                                        "date": self.date.date(),
+                                        "volume": volume,
+                                        "open": row.get("Open"),
+                                        "high": row.get("High"),
+                                        "low": row.get("Low"),
+                                        "close": row.get("Close"),
+                                        "adj_close": row.get("Adj Close", row.get("Close")),
+                                    }
+                                )
                             else:
                                 _logger.debug("No volume data for ticker %s on %s", ticker, target_date)
                                 failed_tickers.append(ticker)
@@ -348,14 +345,12 @@ class FinraTRFDownloader:
                         failed_tickers.append(ticker)
 
             except Exception as e:
-                _logger.warning("Batch %d failed: %s (marking %d tickers as failed)",
-                              batch_num, str(e), len(batch))
+                _logger.warning("Batch %d failed: %s (marking %d tickers as failed)", batch_num, str(e), len(batch))
                 failed_tickers.extend(batch)
 
         # Log summary
         if volume_data:
-            _logger.info("Successfully fetched volume data for %d/%d tickers",
-                        len(volume_data), len(tickers))
+            _logger.info("Successfully fetched volume data for %d/%d tickers", len(volume_data), len(tickers))
         else:
             _logger.warning("No volume data fetched for any tickers")
 
@@ -398,11 +393,7 @@ class FinraTRFDownloader:
                 if not volume_df.empty:
                     # Merge on ticker and date
                     result_df = pd.merge(
-                        trf_df,
-                        volume_df,
-                        on=["ticker", "date"],
-                        how="left",
-                        suffixes=("_finra", "_yf")
+                        trf_df, volume_df, on=["ticker", "date"], how="left", suffixes=("_finra", "_yf")
                     )
 
                     # Calculate ratio of FINRA total volume to yfinance volume (should be ~1.0)
@@ -436,29 +427,12 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Download FINRA TRF and volume data")
+    parser.add_argument("--date", default="2025-11-27", type=str, help="Date in YYYY-MM-DD format (default: yesterday)")
+    parser.add_argument("--output-dir", default="results/emps2/2025-11-27", type=str, help="Output directory path")
     parser.add_argument(
-        "--date",
-        default="2025-11-27",
-        type=str,
-        help="Date in YYYY-MM-DD format (default: yesterday)"
+        "--output-filename", type=str, default="trf.csv", help="Output filename (default: finra_trf.csv)"
     )
-    parser.add_argument(
-        "--output-dir",
-        default="results/emps2/2025-11-27",
-        type=str,
-        help="Output directory path"
-    )
-    parser.add_argument(
-        "--output-filename",
-        type=str,
-        default="trf.csv",
-        help="Output filename (default: finra_trf.csv)"
-    )
-    parser.add_argument(
-        "--no-yfinance",
-        action="store_true",
-        help="Skip fetching yfinance volume data"
-    )
+    parser.add_argument("--no-yfinance", action="store_true", help="Skip fetching yfinance volume data")
 
     args = parser.parse_args()
 
@@ -467,7 +441,7 @@ def main():
             date=args.date,
             output_dir=Path(args.output_dir) if args.output_dir else None,
             output_filename=args.output_filename,
-            fetch_yfinance_data=not args.no_yfinance
+            fetch_yfinance_data=not args.no_yfinance,
         )
         downloader.run()
     except Exception as e:

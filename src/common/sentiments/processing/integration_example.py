@@ -11,23 +11,33 @@ This example shows how to use the new processing modules together:
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
 import sys
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
+
 from . import (
-    HeuristicSentimentAnalyzer, EnhancedHFAnalyzer, ContentType,
-    BotDetector, UserProfile, PostMetrics,
-    ViralityCalculator, PostData, EngagementMetrics, AuthorInfluence, Platform,
-    SentimentAggregator
+    AuthorInfluence,
+    BotDetector,
+    ContentType,
+    EngagementMetrics,
+    EnhancedHFAnalyzer,
+    HeuristicSentimentAnalyzer,
+    Platform,
+    PostData,
+    PostMetrics,
+    SentimentAggregator,
+    UserProfile,
+    ViralityCalculator,
 )
 
 _logger = setup_logger(__name__)
+
 
 async def demonstrate_enhanced_processing():
     """Demonstrate the enhanced sentiment processing pipeline."""
@@ -38,7 +48,7 @@ async def demonstrate_enhanced_processing():
         "Bearish on AAPL, expecting a major correction soon. Selling my position.",
         "AAPL earnings beat expectations! Strong buy signal here 📈",
         "Not sure about AAPL direction, mixed signals in the market",
-        "AAPL pump and dump scheme, be careful! This looks like manipulation."
+        "AAPL pump and dump scheme, be careful! This looks like manipulation.",
     ]
 
     sample_users = [
@@ -46,7 +56,7 @@ async def demonstrate_enhanced_processing():
         UserProfile("bear_market_guru", 120, 800, 15000, 200, False, False, 80),
         UserProfile("earnings_watcher", 200, 2000, 8000, 1000, True, False, 120),
         UserProfile("market_newbie", 15, 50, 100, 2000, False, True, 20),
-        UserProfile("pump_bot_123", 5, 500, 50, 5000, False, True, 10)
+        UserProfile("pump_bot_123", 5, 500, 50, 5000, False, True, 10),
     ]
 
     print("=== Enhanced Sentiment Processing Demo ===\n")
@@ -59,7 +69,7 @@ async def demonstrate_enhanced_processing():
     for i, text in enumerate(sample_texts):
         result = heuristic_analyzer.analyze_sentiment(text)
         heuristic_results.append(result)
-        print(f"   Text {i+1}: Score={result.score:.3f}, Confidence={result.confidence:.3f}")
+        print(f"   Text {i + 1}: Score={result.score:.3f}, Confidence={result.confidence:.3f}")
         print(f"           Positive: {result.positive_signals}")
         print(f"           Negative: {result.negative_signals}")
         print(f"           Negation: {result.negation_detected}")
@@ -69,20 +79,18 @@ async def demonstrate_enhanced_processing():
     # 2. Enhanced HuggingFace Analysis (if available)
     print("2. Enhanced HuggingFace Analysis:")
     try:
-        hf_analyzer = EnhancedHFAnalyzer({
-            "models": {
-                "financial": {
-                    "model_path": "ProsusAI/finbert",
-                    "content_types": ["financial"],
-                    "batch_size": 4
+        hf_analyzer = EnhancedHFAnalyzer(
+            {
+                "models": {
+                    "financial": {"model_path": "ProsusAI/finbert", "content_types": ["financial"], "batch_size": 4}
                 }
             }
-        })
+        )
 
         hf_results = await hf_analyzer.predict_batch(sample_texts, ContentType.FINANCIAL)
 
         for i, result in enumerate(hf_results):
-            print(f"   Text {i+1}: Label={result.label}, Score={result.score:.3f}")
+            print(f"   Text {i + 1}: Label={result.label}, Score={result.score:.3f}")
             print(f"           Confidence={result.confidence:.3f}, Model={result.model_used}")
 
         await hf_analyzer.close()
@@ -101,12 +109,12 @@ async def demonstrate_enhanced_processing():
     sample_posts = []
     for i, (text, user) in enumerate(zip(sample_texts, sample_users)):
         post = PostMetrics(
-            timestamp=datetime.now(timezone.utc) - timedelta(hours=i),
+            timestamp=datetime.now(UTC) - timedelta(hours=i),
             content=text,
             likes=max(0, 100 - i * 20),
             replies=max(0, 10 - i * 2),
             retweets=max(0, 50 - i * 10),
-            content_hash=f"hash_{i}"
+            content_hash=f"hash_{i}",
         )
         sample_posts.append(post)
 
@@ -114,7 +122,7 @@ async def demonstrate_enhanced_processing():
     for i, (user, posts) in enumerate(zip(sample_users, [[post] for post in sample_posts])):
         result = bot_detector.analyze_user(user, posts)
         bot_results.append(result)
-        print(f"   User {i+1} ({user.username}): Bot={result.is_bot}, Score={result.bot_score:.3f}")
+        print(f"   User {i + 1} ({user.username}): Bot={result.is_bot}, Score={result.bot_score:.3f}")
         print(f"           Confidence={result.confidence:.3f}")
         print(f"           Reasons: {result.detection_reasons}")
         print()
@@ -132,14 +140,10 @@ async def demonstrate_enhanced_processing():
             following_count=user.following_count or 0,
             verified=user.verified,
             account_age_days=user.account_age_days,
-            total_posts=user.total_posts or 0
+            total_posts=user.total_posts or 0,
         )
 
-        engagement = EngagementMetrics(
-            likes=post.likes,
-            replies=post.replies,
-            retweets=post.retweets
-        )
+        engagement = EngagementMetrics(likes=post.likes, replies=post.replies, retweets=post.retweets)
 
         post_data = PostData(
             id=f"post_{i}",
@@ -148,7 +152,7 @@ async def demonstrate_enhanced_processing():
             timestamp=post.timestamp,
             engagement=engagement,
             platform=Platform.TWITTER,
-            hashtags=["AAPL", "ToTheMoon"] if "moon" in text.lower() else ["AAPL"]
+            hashtags=["AAPL", "ToTheMoon"] if "moon" in text.lower() else ["AAPL"],
         )
         post_data_list.append(post_data)
 
@@ -175,18 +179,20 @@ async def demonstrate_enhanced_processing():
         avg_heuristic = sum(r.score for r in heuristic_results) / len(heuristic_results)
         avg_confidence = sum(r.confidence for r in heuristic_results) / len(heuristic_results)
 
-        sources.append(aggregator.create_source_sentiment(
-            "heuristic", avg_heuristic, avg_confidence, "good", len(heuristic_results)
-        ))
+        sources.append(
+            aggregator.create_source_sentiment(
+                "heuristic", avg_heuristic, avg_confidence, "good", len(heuristic_results)
+            )
+        )
 
     # Add HF results if available
     if hf_results:
         avg_hf = sum(r.score for r in hf_results) / len(hf_results)
         avg_hf_confidence = sum(r.confidence for r in hf_results) / len(hf_results)
 
-        sources.append(aggregator.create_source_sentiment(
-            "huggingface", avg_hf, avg_hf_confidence, "excellent", len(hf_results)
-        ))
+        sources.append(
+            aggregator.create_source_sentiment("huggingface", avg_hf, avg_hf_confidence, "excellent", len(hf_results))
+        )
 
     # Add virality-weighted sentiment
     virality_weighted_sentiment = 0.0
@@ -198,9 +204,11 @@ async def demonstrate_enhanced_processing():
         total_weight = sum(p.engagement.total_engagement() + 1 for p in post_data_list)
         virality_weighted_sentiment /= total_weight
 
-        sources.append(aggregator.create_source_sentiment(
-            "virality_weighted", virality_weighted_sentiment, 0.8, "good", len(post_data_list)
-        ))
+        sources.append(
+            aggregator.create_source_sentiment(
+                "virality_weighted", virality_weighted_sentiment, 0.8, "good", len(post_data_list)
+            )
+        )
 
     # Aggregate all sources
     if sources:
@@ -209,7 +217,9 @@ async def demonstrate_enhanced_processing():
         print(f"   Final Sentiment Score: {final_result.final_score:.3f}")
         print(f"   Confidence: {final_result.confidence:.3f}")
         print(f"   Quality Score: {final_result.quality_score:.3f}")
-        print(f"   Confidence Interval: ({final_result.confidence_interval[0]:.3f}, {final_result.confidence_interval[1]:.3f})")
+        print(
+            f"   Confidence Interval: ({final_result.confidence_interval[0]:.3f}, {final_result.confidence_interval[1]:.3f})"
+        )
         print(f"   Temporal Trend: {final_result.temporal_trend}")
         print(f"   Aggregation Method: {final_result.aggregation_method}")
         print("   Source Breakdown:")
@@ -217,6 +227,7 @@ async def demonstrate_enhanced_processing():
             print(f"     {source}: Score={breakdown['sentiment_score']:.3f}, Weight={breakdown['weight']:.3f}")
 
     print("\n=== Demo Complete ===")
+
 
 if __name__ == "__main__":
     asyncio.run(demonstrate_enhanced_processing())

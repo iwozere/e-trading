@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 
 @dataclass
@@ -16,8 +16,8 @@ class IntradaySignal:
 
     # ── Identity / time ────────────────────────────────────────────────────
     ticker: str
-    ts: datetime                              # detection time (UTC)
-    source: str = ""                          # watchlist source: p17 | gapper | manual
+    ts: datetime  # detection time (UTC)
+    source: str = ""  # watchlist source: p17 | gapper | manual
     price: float = 0.0
 
     # ── Live price action (IBKR delayed reqMktData) ────────────────────────
@@ -29,31 +29,31 @@ class IntradaySignal:
     pct_from_prev_close: float = 0.0
 
     # ── Volume / RVOL (delayed, confirming context) ────────────────────────
-    day_volume: float = 0.0                   # cumulative day volume (raw, IBKR units)
-    avg_volume_30d: float = 0.0               # baseline (shares) for RVOL
+    day_volume: float = 0.0  # cumulative day volume (raw, IBKR units)
+    avg_volume_30d: float = 0.0  # baseline (shares) for RVOL
     rvol_so_far: float = 0.0
     dollar_volume_so_far: float = 0.0
     volume_is_delayed: bool = True
 
     # ── Catalyst / fundamentals (reused P17 agents) ────────────────────────
-    fresh_catalyst: bool = False              # bullish 8-K filed today
+    fresh_catalyst: bool = False  # bullish 8-K filed today
     catalyst_signals: List[str] = field(default_factory=list)
     short_squeeze_score: float = 0.0
-    dilution_penalty: float = 0.0             # >0 → fade risk
+    dilution_penalty: float = 0.0  # >0 → fade risk
 
     # ── Sentiment (context only) ───────────────────────────────────────────
     sentiment: Dict[str, float] = field(default_factory=dict)
 
     # ── Scoring / alerting ─────────────────────────────────────────────────
     severity: float = 0.0
-    trigger_reason: str = ""                  # which tripwire(s) fired; "" = no trigger
-    tier: str = ""                            # alert/escalation tier
+    trigger_reason: str = ""  # which tripwire(s) fired; "" = no trigger
+    tier: str = ""  # alert/escalation tier
 
     # ── EOD backfill (shadow dataset) ──────────────────────────────────────
-    eod_open: Optional[float] = None
-    eod_high: Optional[float] = None
-    eod_low: Optional[float] = None
-    eod_close: Optional[float] = None
+    eod_open: float | None = None
+    eod_high: float | None = None
+    eod_low: float | None = None
+    eod_close: float | None = None
 
     def to_dict(self) -> Dict:
         """Flat dict suitable for CSV / shadow-store rows."""

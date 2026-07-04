@@ -32,17 +32,17 @@ import argparse
 import glob
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
 
-from src.notification.logger import setup_logger
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -52,27 +52,35 @@ DEFAULT_RESULTS_DIR = "results/p17_penny_stocks"
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="P17 best-case ($ at peak) backtest")
     parser.add_argument(
-        "--results-dir", default=DEFAULT_RESULTS_DIR,
+        "--results-dir",
+        default=DEFAULT_RESULTS_DIR,
         help="Directory holding {date}/{date}_candidates.csv (default: %(default)s)",
     )
     parser.add_argument(
-        "--invest", type=float, default=1000.0,
+        "--invest",
+        type=float,
+        default=1000.0,
         help="USD invested per ticker at detection (default: %(default)s)",
     )
     parser.add_argument(
-        "--since", default=None,
+        "--since",
+        default=None,
         help="Only consider detection dates on/after this YYYY-MM-DD",
     )
     parser.add_argument(
-        "--tiers", default=None,
+        "--tiers",
+        default=None,
         help="Comma-separated tiers to include (e.g. A,B,C). Default: all",
     )
     parser.add_argument(
-        "--out", default=None,
+        "--out",
+        default=None,
         help="Output CSV path (default: <results-dir>/backtest_results.csv)",
     )
     parser.add_argument(
-        "--limit", type=int, default=None,
+        "--limit",
+        type=int,
+        default=None,
         help="Only process the first N tickers (for a quick smoke test)",
     )
     return parser.parse_args()
@@ -80,8 +88,8 @@ def _parse_args() -> argparse.Namespace:
 
 def collect_first_detections(
     results_dir: str,
-    since: Optional[str] = None,
-    tiers: Optional[List[str]] = None,
+    since: str | None = None,
+    tiers: List[str] | None = None,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Build a ticker -> first-detection record map from the daily candidate CSVs.
@@ -157,8 +165,17 @@ def backtest_ticker(
         df = None
 
     if df is None or df.empty or "high" not in df.columns or df["high"].dropna().empty:
-        out.update({"status": "no_data", "max_high": None, "peak_date": None,
-                    "shares": None, "peak_value": None, "profit": None, "return_pct": None})
+        out.update(
+            {
+                "status": "no_data",
+                "max_high": None,
+                "peak_date": None,
+                "shares": None,
+                "peak_value": None,
+                "profit": None,
+                "return_pct": None,
+            }
+        )
         return out
 
     high = df["high"].astype(float)
@@ -173,15 +190,17 @@ def backtest_ticker(
 
     shares = invest / rec["detection_price"]
     peak_value = shares * max_high
-    out.update({
-        "status": "ok",
-        "max_high": round(max_high, 4),
-        "peak_date": peak_date,
-        "shares": round(shares, 4),
-        "peak_value": round(peak_value, 2),
-        "profit": round(peak_value - invest, 2),
-        "return_pct": round((max_high / rec["detection_price"] - 1.0) * 100.0, 1),
-    })
+    out.update(
+        {
+            "status": "ok",
+            "max_high": round(max_high, 4),
+            "peak_date": peak_date,
+            "shares": round(shares, 4),
+            "peak_value": round(peak_value, 2),
+            "profit": round(peak_value - invest, 2),
+            "return_pct": round((max_high / rec["detection_price"] - 1.0) * 100.0, 1),
+        }
+    )
     return out
 
 
@@ -219,7 +238,7 @@ def main() -> int:
     args = _parse_args()
     tiers = [t for t in args.tiers.split(",")] if args.tiers else None
     out_path = args.out or os.path.join(args.results_dir, "backtest_results.csv")
-    end_date = datetime.now(timezone.utc).replace(tzinfo=None)
+    end_date = datetime.now(UTC).replace(tzinfo=None)
 
     records = collect_first_detections(args.results_dir, args.since, tiers)
     items = list(records.values())

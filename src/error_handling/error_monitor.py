@@ -13,21 +13,19 @@ Features:
 - Integration with notification systems
 """
 
-import time
-import logging
-from typing import Dict, List, Optional, Any, Callable
-from datetime import datetime, timedelta, timezone
-from collections import defaultdict, deque
 import json
+import logging
 import threading
+import time
+from collections import defaultdict, deque
+from datetime import UTC, datetime, timedelta
+from typing import Any, Callable, Dict, List
 
-from src.model.error_handling import AlertConfig, ErrorSeverity, ErrorEvent
 from src.error_handling.exceptions import TradingException
+from src.model.error_handling import AlertConfig, ErrorEvent, ErrorSeverity
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
-
-
 
 
 class ErrorMonitor:
@@ -42,7 +40,7 @@ class ErrorMonitor:
     - Error reporting
     """
 
-    def __init__(self, alert_config: Optional[AlertConfig] = None):
+    def __init__(self, alert_config: AlertConfig | None = None):
         """
         Initialize error monitor.
 
@@ -71,13 +69,15 @@ class ErrorMonitor:
 
         _logger.info("Error monitor initialized")
 
-    def record_error(self,
-                    error: Exception,
-                    severity: ErrorSeverity = ErrorSeverity.ERROR,
-                    component: str = "unknown",
-                    context: Optional[Dict[str, Any]] = None,
-                    user_id: Optional[str] = None,
-                    session_id: Optional[str] = None) -> None:
+    def record_error(
+        self,
+        error: Exception,
+        severity: ErrorSeverity = ErrorSeverity.ERROR,
+        component: str = "unknown",
+        context: Dict[str, Any] | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
+    ) -> None:
         """
         Record an error event.
 
@@ -92,14 +92,14 @@ class ErrorMonitor:
         with self._lock:
             # Create error event
             event = ErrorEvent(
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 error=error,
                 severity=severity,
                 component=component,
                 context=context or {},
                 stack_trace=self._get_stack_trace(error),
                 user_id=user_id,
-                session_id=session_id
+                session_id=session_id,
             )
 
             # Store error event
@@ -118,11 +118,12 @@ class ErrorMonitor:
             log_level = getattr(logging, severity.value)
             _logger.log(log_level, "Error event: %s", event)
 
-    def _get_stack_trace(self, error: Exception) -> Optional[str]:
+    def _get_stack_trace(self, error: Exception) -> str | None:
         """Get stack trace for error."""
         try:
             import traceback
-            return ''.join(traceback.format_exception(type(error), error, error.__traceback__))
+
+            return "".join(traceback.format_exception(type(error), error, error.__traceback__))
         except:
             return None
 
@@ -136,7 +137,7 @@ class ErrorMonitor:
             ErrorSeverity.INFO: 1,
             ErrorSeverity.WARNING: 2,
             ErrorSeverity.ERROR: 3,
-            ErrorSeverity.CRITICAL: 4
+            ErrorSeverity.CRITICAL: 4,
         }
 
         if severity_order[event.severity] < severity_order[self.alert_config.severity_threshold]:
@@ -157,11 +158,10 @@ class ErrorMonitor:
 
     def _calculate_error_rate(self) -> float:
         """Calculate current error rate."""
-        window_start = datetime.now(timezone.utc) - timedelta(seconds=self.alert_config.time_window)
+        window_start = datetime.now(UTC) - timedelta(seconds=self.alert_config.time_window)
 
         # Count errors in window
-        error_count = sum(1 for event in self.error_events
-                         if event.timestamp >= window_start)
+        error_count = sum(1 for event in self.error_events if event.timestamp >= window_start)
 
         # Estimate total requests (this is a simplified approach)
         total_requests = max(error_count * 10, 1)  # Assume 10% error rate max
@@ -174,9 +174,9 @@ class ErrorMonitor:
             return
 
         alert_data = {
-            'message': message,
-            'error_event': event.to_dict(),
-            'timestamp': datetime.now(timezone.utc).isoformat()
+            "message": message,
+            "error_event": event.to_dict(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         # Send alerts via configured functions
@@ -200,9 +200,7 @@ class ErrorMonitor:
             except Exception:
                 _logger.exception("Error in monitor loop: %s")
 
-    def get_error_stats(self,
-                       time_window: Optional[int] = None,
-                       component: Optional[str] = None) -> Dict[str, Any]:
+    def get_error_stats(self, time_window: int | None = None, component: str | None = None) -> Dict[str, Any]:
         """
         Get error statistics.
 
@@ -215,7 +213,7 @@ class ErrorMonitor:
         """
         with self._lock:
             if time_window:
-                cutoff_time = datetime.now(timezone.utc) - timedelta(seconds=time_window)
+                cutoff_time = datetime.now(UTC) - timedelta(seconds=time_window)
                 events = [e for e in self.error_events if e.timestamp >= cutoff_time]
             else:
                 events = list(self.error_events)
@@ -227,11 +225,11 @@ class ErrorMonitor:
             total_errors = len(events)
             if total_errors == 0:
                 return {
-                    'total_errors': 0,
-                    'error_rate': 0.0,
-                    'severity_distribution': {},
-                    'component_distribution': {},
-                    'top_errors': []
+                    "total_errors": 0,
+                    "error_rate": 0.0,
+                    "severity_distribution": {},
+                    "component_distribution": {},
+                    "top_errors": [],
                 }
 
             # Severity distribution
@@ -249,21 +247,19 @@ class ErrorMonitor:
             for event in events:
                 error_type_counts[type(event.error).__name__] += 1
 
-            top_errors = sorted(error_type_counts.items(),
-                              key=lambda x: x[1], reverse=True)[:10]
+            top_errors = sorted(error_type_counts.items(), key=lambda x: x[1], reverse=True)[:10]
 
             return {
-                'total_errors': total_errors,
-                'error_rate': total_errors / max(len(self.error_events), 1),
-                'severity_distribution': dict(severity_dist),
-                'component_distribution': dict(component_dist),
-                'top_errors': top_errors
+                "total_errors": total_errors,
+                "error_rate": total_errors / max(len(self.error_events), 1),
+                "severity_distribution": dict(severity_dist),
+                "component_distribution": dict(component_dist),
+                "top_errors": top_errors,
             }
 
-    def get_recent_errors(self,
-                         limit: int = 100,
-                         severity: Optional[ErrorSeverity] = None,
-                         component: Optional[str] = None) -> List[ErrorEvent]:
+    def get_recent_errors(
+        self, limit: int = 100, severity: ErrorSeverity | None = None, component: str | None = None
+    ) -> List[ErrorEvent]:
         """
         Get recent error events.
 
@@ -286,9 +282,7 @@ class ErrorMonitor:
 
             return events[-limit:]
 
-    def generate_error_report(self,
-                            time_window: Optional[int] = None,
-                            format: str = "json") -> str:
+    def generate_error_report(self, time_window: int | None = None, format: str = "json") -> str:
         """
         Generate error report.
 
@@ -304,16 +298,16 @@ class ErrorMonitor:
 
         if format == "json":
             report = {
-                'timestamp': datetime.now(timezone.utc).isoformat(),
-                'time_window': time_window,
-                'statistics': stats,
-                'recent_errors': [e.to_dict() for e in recent_errors]
+                "timestamp": datetime.now(UTC).isoformat(),
+                "time_window": time_window,
+                "statistics": stats,
+                "recent_errors": [e.to_dict() for e in recent_errors],
             }
             return json.dumps(report, indent=2)
 
         elif format == "text":
             lines = [
-                f"Error Report - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}",
+                f"Error Report - {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')}",
                 f"Time Window: {time_window}s" if time_window else "Time Window: All time",
                 "",
                 "Statistics:",
@@ -323,33 +317,41 @@ class ErrorMonitor:
                 "Severity Distribution:",
             ]
 
-            for severity, count in stats['severity_distribution'].items():
+            for severity, count in stats["severity_distribution"].items():
                 lines.append(f"  {severity}: {count}")
 
-            lines.extend([
-                "",
-                "Component Distribution:",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "Component Distribution:",
+                ]
+            )
 
-            for component, count in stats['component_distribution'].items():
+            for component, count in stats["component_distribution"].items():
                 lines.append(f"  {component}: {count}")
 
-            lines.extend([
-                "",
-                "Top Errors:",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "Top Errors:",
+                ]
+            )
 
-            for error_type, count in stats['top_errors']:
+            for error_type, count in stats["top_errors"]:
                 lines.append(f"  {error_type}: {count}")
 
-            lines.extend([
-                "",
-                "Recent Errors:",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "Recent Errors:",
+                ]
+            )
 
             for event in recent_errors[-10:]:  # Last 10 errors
-                lines.append(f"  {event.timestamp.strftime('%H:%M:%S')} - "
-                           f"{event.component} - {type(event.error).__name__}: {str(event.error)}")
+                lines.append(
+                    f"  {event.timestamp.strftime('%H:%M:%S')} - "
+                    f"{event.component} - {type(event.error).__name__}: {str(event.error)}"
+                )
 
             return "\n".join(lines)
 
@@ -382,8 +384,7 @@ class ErrorMonitor:
 error_monitor = ErrorMonitor()
 
 
-def monitor_errors(severity: ErrorSeverity = ErrorSeverity.ERROR,
-                  component: Optional[str] = None):
+def monitor_errors(severity: ErrorSeverity = ErrorSeverity.ERROR, component: str | None = None):
     """
     Decorator for monitoring errors in functions.
 
@@ -397,6 +398,7 @@ def monitor_errors(severity: ErrorSeverity = ErrorSeverity.ERROR,
             # Function that may fail
             pass
     """
+
     def decorator(func: Callable) -> Callable:
         from functools import wraps
 
@@ -406,7 +408,7 @@ def monitor_errors(severity: ErrorSeverity = ErrorSeverity.ERROR,
                 return func(*args, **kwargs)
             except Exception as e:
                 # Auto-detect component if not provided
-                comp = component or func.__module__.split('.')[-1]
+                comp = component or func.__module__.split(".")[-1]
 
                 # Determine severity based on exception type
                 if isinstance(e, TradingException):
@@ -422,11 +424,7 @@ def monitor_errors(severity: ErrorSeverity = ErrorSeverity.ERROR,
                         error=e,
                         severity=sev,
                         component=comp,
-                        context={
-                            'function': func.__name__,
-                            'args': str(args),
-                            'kwargs': str(kwargs)
-                        }
+                        context={"function": func.__name__, "args": str(args), "kwargs": str(kwargs)},
                     )
 
                 raise e

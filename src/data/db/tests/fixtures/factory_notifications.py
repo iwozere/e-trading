@@ -3,8 +3,9 @@ Test data factories for Notification models.
 
 Provides factory functions to create test data for Message and MessageDeliveryStatus models.
 """
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, Optional, List
+
+from datetime import UTC, datetime, timedelta
+from typing import Any, Dict, List
 
 from src.data.db.models.model_notification import DeliveryStatus
 
@@ -16,11 +17,11 @@ class MessageFactory:
     def create_data(
         message_type: str = "alert",
         priority: str = "NORMAL",
-        channels: Optional[List[str]] = None,
+        channels: List[str] | None = None,
         recipient_id: str = "user_123",
-        content: Optional[Dict[str, Any]] = None,
+        content: Dict[str, Any] | None = None,
         status: str = "PENDING",
-        **kwargs
+        **kwargs,
     ) -> Dict[str, Any]:
         """Create message data dictionary."""
         return {
@@ -30,11 +31,11 @@ class MessageFactory:
             "recipient_id": recipient_id,
             "content": content or {"title": "Test", "body": "Test message"},
             "status": status,
-            "scheduled_for": datetime.now(timezone.utc),
+            "scheduled_for": datetime.now(UTC),
             "max_retries": 3,
             "retry_count": 0,
             "message_metadata": {},
-            **kwargs
+            **kwargs,
         }
 
     @staticmethod
@@ -45,11 +46,7 @@ class MessageFactory:
             priority=priority,
             channels=["telegram"],
             recipient_id=recipient_id,
-            content={
-                "title": "Price Alert",
-                "body": "AAPL reached $150",
-                "ticker": "AAPL"
-            }
+            content={"title": "Price Alert", "body": "AAPL reached $150", "ticker": "AAPL"},
         )
 
     @staticmethod
@@ -60,11 +57,7 @@ class MessageFactory:
             priority="NORMAL",
             channels=["telegram", "email"],
             recipient_id=recipient_id,
-            content={
-                "title": "Screener Results",
-                "body": "Found 5 stocks matching criteria",
-                "results_count": 5
-            }
+            content={"title": "Screener Results", "body": "Found 5 stocks matching criteria", "results_count": 5},
         )
 
     @staticmethod
@@ -78,24 +71,20 @@ class MessageFactory:
             content={
                 "title": "Critical System Alert",
                 "body": "Trading bot encountered critical error",
-                "severity": "critical"
-            }
+                "severity": "critical",
+            },
         )
 
     @staticmethod
-    def scheduled_report(recipient_id: str = "user_123", scheduled_for: Optional[datetime] = None) -> Dict[str, Any]:
+    def scheduled_report(recipient_id: str = "user_123", scheduled_for: datetime | None = None) -> Dict[str, Any]:
         """Create a scheduled report message."""
         return MessageFactory.create_data(
             message_type="report",
             priority="LOW",
             channels=["email"],
             recipient_id=recipient_id,
-            content={
-                "title": "Daily Report",
-                "body": "Your daily trading summary",
-                "report_type": "daily"
-            },
-            scheduled_for=scheduled_for or (datetime.now(timezone.utc) + timedelta(hours=1))
+            content={"title": "Daily Report", "body": "Your daily trading summary", "report_type": "daily"},
+            scheduled_for=scheduled_for or (datetime.now(UTC) + timedelta(hours=1)),
         )
 
 
@@ -104,27 +93,22 @@ class DeliveryStatusFactory:
 
     @staticmethod
     def create_data(
-        message_id: int = 1,
-        channel: str = "telegram",
-        status: str = "PENDING",
-        **kwargs
+        message_id: int = 1, channel: str = "telegram", status: str = "PENDING", **kwargs
     ) -> Dict[str, Any]:
         """Create delivery status data dictionary."""
         return {
             "message_id": message_id,
             "channel": channel,
             "status": status,
-            "created_at": datetime.now(timezone.utc),
-            **kwargs
+            "created_at": datetime.now(UTC),
+            **kwargs,
         }
 
     @staticmethod
     def pending_delivery(message_id: int, channel: str = "telegram") -> Dict[str, Any]:
         """Create a pending delivery status."""
         return DeliveryStatusFactory.create_data(
-            message_id=message_id,
-            channel=channel,
-            status=DeliveryStatus.PENDING.value
+            message_id=message_id, channel=channel, status=DeliveryStatus.PENDING.value
         )
 
     @staticmethod
@@ -134,19 +118,18 @@ class DeliveryStatusFactory:
             message_id=message_id,
             channel=channel,
             status=DeliveryStatus.DELIVERED.value,
-            delivered_at=datetime.now(timezone.utc),
+            delivered_at=datetime.now(UTC),
             response_time_ms=response_time_ms,
-            external_id=f"ext_{channel}_{message_id}"
+            external_id=f"ext_{channel}_{message_id}",
         )
 
     @staticmethod
-    def failed_delivery(message_id: int, channel: str = "telegram", error: str = "Connection timeout") -> Dict[str, Any]:
+    def failed_delivery(
+        message_id: int, channel: str = "telegram", error: str = "Connection timeout"
+    ) -> Dict[str, Any]:
         """Create a failed delivery status."""
         return DeliveryStatusFactory.create_data(
-            message_id=message_id,
-            channel=channel,
-            status=DeliveryStatus.FAILED.value,
-            error_message=error
+            message_id=message_id, channel=channel, status=DeliveryStatus.FAILED.value, error_message=error
         )
 
 

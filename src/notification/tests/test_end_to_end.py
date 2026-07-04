@@ -8,24 +8,23 @@ service behavior under failure scenarios, and service lifecycle.
 
 import asyncio
 import sys
-import pytest
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Any, Dict
 from unittest.mock import patch
+
 import httpx
+import pytest
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.service.config import config
+from src.data.db.models.model_notification import DeliveryStatus, MessageStatus
 from src.data.db.services.database_service import get_database_service
-from src.notification.service.main import app
-from src.data.db.models.model_notification import (
-    MessageStatus, DeliveryStatus
-)
 from src.notification.logger import setup_logger
+from src.notification.service.config import config
+from src.notification.service.main import app
 
 _logger = setup_logger(__name__)
 
@@ -48,23 +47,23 @@ class MockChannel:
             return {
                 "success": False,
                 "error_message": f"Mock failure for {self.name}",
-                "response_time_ms": int(self.delay * 1000)
+                "response_time_ms": int(self.delay * 1000),
             }
 
         self.sent_messages.append(message)
         return {
             "success": True,
             "external_id": f"mock_{self.name}_{len(self.sent_messages)}",
-            "response_time_ms": int(self.delay * 1000)
+            "response_time_ms": int(self.delay * 1000),
         }
 
     async def get_health(self) -> Dict[str, Any]:
         """Mock health check."""
         return {
             "status": self.health_status,
-            "last_success": datetime.now(timezone.utc) if self.health_status == "healthy" else None,
-            "last_failure": datetime.now(timezone.utc) if self.health_status != "healthy" else None,
-            "avg_response_time_ms": int(self.delay * 1000)
+            "last_success": datetime.now(UTC) if self.health_status == "healthy" else None,
+            "last_failure": datetime.now(UTC) if self.health_status != "healthy" else None,
+            "avg_response_time_ms": int(self.delay * 1000),
         }
 
 
@@ -72,12 +71,7 @@ class MockChannel:
 async def test_client():
     """Create test client with mocked channels."""
     # Initialize database
-    init_database(
-        database_url=config.database.url,
-        echo=False,
-        pool_size=5,
-        max_overflow=10
-    )
+    init_database(database_url=config.database.url, echo=False, pool_size=5, max_overflow=10)
 
     # Create tables using database service
     db_service = get_database_service()
@@ -87,10 +81,10 @@ async def test_client():
     mock_channels = {
         "telegram": MockChannel("telegram"),
         "email": MockChannel("email", delay=0.2),
-        "sms": MockChannel("sms", delay=0.3)
+        "sms": MockChannel("sms", delay=0.3),
     }
 
-    with patch('src.notification.channels.base.channel_registry') as mock_registry:
+    with patch("src.notification.channels.base.channel_registry") as mock_registry:
         mock_registry.get_channel.side_effect = lambda name: mock_channels.get(name)
         mock_registry.list_channels.return_value = list(mock_channels.keys())
 
@@ -111,7 +105,7 @@ class TestCompleteMessageFlow:
             "channels": ["telegram"],
             "content": {"text": "Test message"},
             "recipient_id": "user123",
-            "priority": "NORMAL"
+            "priority": "NORMAL",
         }
 
         response = await client.post("/api/v1/messages", json=message_data)
@@ -152,12 +146,9 @@ class TestCompleteMessageFlow:
         message_data = {
             "message_type": "trade_alert",
             "channels": ["telegram", "email", "sms"],
-            "content": {
-                "text": "Trade executed: BTC/USD",
-                "details": {"symbol": "BTCUSD", "price": 50000}
-            },
+            "content": {"text": "Trade executed: BTC/USD", "details": {"symbol": "BTCUSD", "price": 50000}},
             "recipient_id": "trader456",
-            "priority": "HIGH"
+            "priority": "HIGH",
         }
 
         response = await client.post("/api/v1/messages", json=message_data)
@@ -196,7 +187,7 @@ class TestCompleteMessageFlow:
             "channels": ["telegram"],
             "content": {"text": "Normal priority message"},
             "recipient_id": "user1",
-            "priority": "NORMAL"
+            "priority": "NORMAL",
         }
 
         normal_response = await client.post("/api/v1/messages", json=normal_message)
@@ -208,7 +199,7 @@ class TestCompleteMessageFlow:
             "channels": ["telegram"],
             "content": {"text": "CRITICAL: System failure!"},
             "recipient_id": "user1",
-            "priority": "CRITICAL"
+            "priority": "CRITICAL",
         }
 
         critical_response = await client.post("/api/v1/messages", json=critical_message)
@@ -240,7 +231,7 @@ class TestFailureScenarios:
             "message_type": "test_failure",
             "channels": ["telegram"],
             "content": {"text": "This should fail"},
-            "recipient_id": "user123"
+            "recipient_id": "user123",
         }
 
         response = await client.post("/api/v1/messages", json=message_data)
@@ -274,7 +265,7 @@ class TestFailureScenarios:
             "message_type": "partial_failure_test",
             "channels": ["telegram", "email", "sms"],
             "content": {"text": "Partial failure test"},
-            "recipient_id": "user456"
+            "recipient_id": "user456",
         }
 
         response = await client.post("/api/v1/messages", json=message_data)
@@ -309,9 +300,9 @@ class TestFailureScenarios:
         # Send invalid message data to trigger database error
         invalid_message = {
             "message_type": "",  # Empty message type should cause validation error
-            "channels": [],      # Empty channels should cause validation error
+            "channels": [],  # Empty channels should cause validation error
             "content": {},
-            "recipient_id": None
+            "recipient_id": None,
         }
 
         response = await client.post("/api/v1/messages", json=invalid_message)
@@ -377,7 +368,7 @@ class TestServiceLifecycle:
             "message_type": "recovery_test",
             "channels": ["telegram"],
             "content": {"text": "Recovery test message"},
-            "recipient_id": "user123"
+            "recipient_id": "user123",
         }
 
         response = await client.post("/api/v1/messages", json=message_data)
@@ -417,7 +408,7 @@ class TestRateLimitingAndBatching:
                 "channels": ["telegram"],
                 "content": {"text": f"Rate limit test message {i}"},
                 "recipient_id": "rate_test_user",
-                "priority": "NORMAL"
+                "priority": "NORMAL",
             }
 
             response = await client.post("/api/v1/messages", json=message_data)
@@ -446,7 +437,7 @@ class TestRateLimitingAndBatching:
                 "channels": ["telegram"],
                 "content": {"text": f"Normal message {i}"},
                 "recipient_id": "bypass_test_user",
-                "priority": "NORMAL"
+                "priority": "NORMAL",
             }
             await client.post("/api/v1/messages", json=normal_message)
 
@@ -456,7 +447,7 @@ class TestRateLimitingAndBatching:
             "channels": ["telegram"],
             "content": {"text": "CRITICAL: Should bypass rate limit"},
             "recipient_id": "bypass_test_user",
-            "priority": "CRITICAL"
+            "priority": "CRITICAL",
         }
 
         response = await client.post("/api/v1/messages", json=critical_message)
@@ -487,7 +478,7 @@ class TestDeliveryHistory:
                 "channels": ["telegram"],
                 "content": {"text": f"History test message {i}"},
                 "recipient_id": f"history_user_{i}",
-                "priority": "NORMAL"
+                "priority": "NORMAL",
             }
             await client.post("/api/v1/messages", json=message_data)
 
@@ -513,7 +504,7 @@ class TestDeliveryHistory:
                 "message_type": "stats_test",
                 "channels": ["telegram", "email"],
                 "content": {"text": f"Stats test message {i}"},
-                "recipient_id": "stats_user"
+                "recipient_id": "stats_user",
             }
             await client.post("/api/v1/messages", json=message_data)
 
@@ -538,12 +529,14 @@ async def run_end_to_end_tests():
         import pytest
 
         test_file = __file__
-        exit_code = pytest.main([
-            test_file,
-            "-v",
-            "--tb=short",
-            "-x"  # Stop on first failure
-        ])
+        exit_code = pytest.main(
+            [
+                test_file,
+                "-v",
+                "--tb=short",
+                "-x",  # Stop on first failure
+            ]
+        )
 
         if exit_code == 0:
             print("\n🎉 All end-to-end tests passed!")

@@ -23,11 +23,10 @@ Configuration Example (New TALib Architecture):
     }
 """
 
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List
 
-import backtrader as bt
-from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
+from src.strategy.exit.base_exit_mixin import BaseExitMixin
 
 logger = setup_logger(__name__)
 
@@ -37,7 +36,7 @@ class SimpleATRExitMixin(BaseExitMixin):
     New Architecture only.
     """
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, params: Dict[str, Any] | None = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
         self.initial_stop = None
@@ -62,13 +61,7 @@ class SimpleATRExitMixin(BaseExitMixin):
     def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Define indicators required by this mixin."""
         atr_period = params.get("atr_period") or params.get("x_atr_period", 14)
-        return [
-            {
-                "type": "ATR",
-                "params": {"timeperiod": atr_period},
-                "fields_mapping": {"atr": "exit_atr"}
-            }
-        ]
+        return [{"type": "ATR", "params": {"timeperiod": atr_period}, "fields_mapping": {"atr": "exit_atr"}}]
 
     def _init_indicators(self):
         """No-op for new architecture."""
@@ -76,19 +69,19 @@ class SimpleATRExitMixin(BaseExitMixin):
 
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
-        return self._resolve_param('atr_period', 'x_atr_period', 14)
+        return self._resolve_param("atr_period", "x_atr_period", 14)
 
     def are_indicators_ready(self) -> bool:
         """Check if required indicators exist in the strategy registry."""
-        return 'exit_atr' in getattr(self.strategy, 'indicators', {})
+        return "exit_atr" in getattr(self.strategy, "indicators", {})
 
     def on_entry(self, entry_price: float, entry_time, position_size: float, direction: str):
         """Called when a position is entered"""
         self.breakeven_triggered = False
 
         if self.are_indicators_ready():
-            atr_value = self.get_indicator('exit_atr')
-            atr_multiplier = self._resolve_param('atr_multiplier', 'x_atr_multiplier', 2.0)
+            atr_value = self.get_indicator("exit_atr")
+            atr_multiplier = self._resolve_param("atr_multiplier", "x_atr_multiplier", 2.0)
 
             if atr_value is not None and atr_value > 0:
                 if direction.lower() == "long":
@@ -109,17 +102,17 @@ class SimpleATRExitMixin(BaseExitMixin):
         try:
             current_price = self.strategy.data.close[0]
 
-            atr_value = self.get_indicator('exit_atr')
-            use_breakeven = self._resolve_param('use_breakeven', 'x_use_breakeven', True)
-            breakeven_atr = self._resolve_param('breakeven_atr', 'x_breakeven_atr', 1.0)
-            atr_multiplier = self._resolve_param('atr_multiplier', 'x_atr_multiplier', 2.0)
+            atr_value = self.get_indicator("exit_atr")
+            use_breakeven = self._resolve_param("use_breakeven", "x_use_breakeven", True)
+            breakeven_atr = self._resolve_param("breakeven_atr", "x_breakeven_atr", 1.0)
+            atr_multiplier = self._resolve_param("atr_multiplier", "x_atr_multiplier", 2.0)
 
             if atr_value is None or atr_value <= 0:
                 return False
 
             # Breakeven logic
             if use_breakeven and not self.breakeven_triggered and self.initial_stop is not None:
-                entry_price = getattr(self.strategy, 'entry_price', None)
+                entry_price = getattr(self.strategy, "entry_price", None)
                 if entry_price is not None:
                     profit_threshold = atr_value * breakeven_atr
                     if self.strategy.position.size > 0:
@@ -163,4 +156,4 @@ class SimpleATRExitMixin(BaseExitMixin):
 
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""
-        return getattr(self.strategy, 'current_exit_reason', 'atr_trailing_stop')
+        return getattr(self.strategy, "current_exit_reason", "atr_trailing_stop")

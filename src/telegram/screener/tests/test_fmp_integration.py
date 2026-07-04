@@ -4,18 +4,18 @@ Test script for FMP Integration with Enhanced Screener.
 This script tests the FMP-based screening functionality.
 """
 
-import sys
 import json
+import sys
 from pathlib import Path
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.notification.logger import setup_logger
+from src.telegram.screener.enhanced_screener import enhanced_screener
 from src.telegram.screener.fmp_integration import get_fmp_integration, run_fmp_screening
 from src.telegram.screener.screener_config_parser import parse_screener_config, validate_screener_config
-from src.telegram.screener.enhanced_screener import enhanced_screener
-from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
 
@@ -49,7 +49,7 @@ def test_fmp_integration():
         "marketCapMoreThan": 1000000000,
         "peRatioLessThan": 15,
         "returnOnEquityMoreThan": 0.12,
-        "limit": 50
+        "limit": 50,
     }
 
     try:
@@ -65,36 +65,32 @@ def test_fmp_integration():
     print("\n📊 Testing Screener Config with FMP")
 
     # Test config with FMP criteria
-    fmp_config_json = json.dumps({
-        "screener_type": "hybrid",
-        "list_type": "us_medium_cap",
-        "fmp_criteria": {
-            "marketCapMoreThan": 2000000000,
-            "peRatioLessThan": 20,
-            "returnOnEquityMoreThan": 0.12,
-            "limit": 30
-        },
-        "fundamental_criteria": [
-            {
-                "indicator": "PE",
-                "operator": "max",
-                "value": 15,
-                "weight": 1.0,
-                "required": True
-            }
-        ],
-        "technical_criteria": [
-            {
-                "indicator": "RSI",
-                "parameters": {"period": 14},
-                "condition": {"operator": "<", "value": 70},
-                "weight": 0.6,
-                "required": False
-            }
-        ],
-        "max_results": 10,
-        "min_score": 7.0
-    })
+    fmp_config_json = json.dumps(
+        {
+            "screener_type": "hybrid",
+            "list_type": "us_medium_cap",
+            "fmp_criteria": {
+                "marketCapMoreThan": 2000000000,
+                "peRatioLessThan": 20,
+                "returnOnEquityMoreThan": 0.12,
+                "limit": 30,
+            },
+            "fundamental_criteria": [
+                {"indicator": "PE", "operator": "max", "value": 15, "weight": 1.0, "required": True}
+            ],
+            "technical_criteria": [
+                {
+                    "indicator": "RSI",
+                    "parameters": {"period": 14},
+                    "condition": {"operator": "<", "value": 70},
+                    "weight": 0.6,
+                    "required": False,
+                }
+            ],
+            "max_results": 10,
+            "min_score": 7.0,
+        }
+    )
 
     try:
         # Validate config
@@ -127,7 +123,7 @@ def test_fmp_integration():
             "screener_type": config.screener_type,
             "list_type": config.list_type,
             "fmp_criteria": config.fmp_criteria,
-            "fmp_strategy": config.fmp_strategy
+            "fmp_strategy": config.fmp_strategy,
         }
 
         # Run FMP screening (this will fail if no API key, but we can test the logic)
@@ -158,9 +154,9 @@ def test_fmp_integration():
             print(f"   Results found: {len(report.top_results)}")
 
             # Check if FMP results are included
-            if hasattr(report, 'fmp_results') and report.fmp_results:
+            if hasattr(report, "fmp_results") and report.fmp_results:
                 print("   FMP results included: Yes")
-                fmp_criteria = report.fmp_results.get('fmp_criteria', {})
+                fmp_criteria = report.fmp_results.get("fmp_criteria", {})
                 print(f"   FMP criteria used: {list(fmp_criteria.keys())}")
             else:
                 print("   FMP results included: No (fallback to traditional screening)")
@@ -187,22 +183,18 @@ def test_fmp_strategies():
             strategy_name = list(strategies.keys())[0]
             print(f"\nTesting strategy: {strategy_name}")
 
-            config_json = json.dumps({
-                "screener_type": "hybrid",
-                "list_type": "us_medium_cap",
-                "fmp_strategy": strategy_name,
-                "fundamental_criteria": [
-                    {
-                        "indicator": "PE",
-                        "operator": "max",
-                        "value": 15,
-                        "weight": 1.0,
-                        "required": True
-                    }
-                ],
-                "max_results": 10,
-                "min_score": 7.0
-            })
+            config_json = json.dumps(
+                {
+                    "screener_type": "hybrid",
+                    "list_type": "us_medium_cap",
+                    "fmp_strategy": strategy_name,
+                    "fundamental_criteria": [
+                        {"indicator": "PE", "operator": "max", "value": 15, "weight": 1.0, "required": True}
+                    ],
+                    "max_results": 10,
+                    "min_score": 7.0,
+                }
+            )
 
             is_valid, errors = validate_screener_config(config_json)
             if is_valid:
@@ -225,23 +217,13 @@ def test_fmp_config_examples():
             "config": {
                 "screener_type": "hybrid",
                 "list_type": "us_medium_cap",
-                "fmp_criteria": {
-                    "marketCapMoreThan": 1000000000,
-                    "peRatioLessThan": 15,
-                    "limit": 50
-                },
+                "fmp_criteria": {"marketCapMoreThan": 1000000000, "peRatioLessThan": 15, "limit": 50},
                 "fundamental_criteria": [
-                    {
-                        "indicator": "PE",
-                        "operator": "max",
-                        "value": 12,
-                        "weight": 1.0,
-                        "required": True
-                    }
+                    {"indicator": "PE", "operator": "max", "value": 12, "weight": 1.0, "required": True}
                 ],
                 "max_results": 10,
-                "min_score": 7.0
-            }
+                "min_score": 7.0,
+            },
         },
         {
             "name": "FMP Strategy",
@@ -250,17 +232,11 @@ def test_fmp_config_examples():
                 "list_type": "us_large_cap",
                 "fmp_strategy": "conservative_value",
                 "fundamental_criteria": [
-                    {
-                        "indicator": "ROE",
-                        "operator": "min",
-                        "value": 15,
-                        "weight": 1.0,
-                        "required": True
-                    }
+                    {"indicator": "ROE", "operator": "min", "value": 15, "weight": 1.0, "required": True}
                 ],
                 "max_results": 15,
-                "min_score": 7.5
-            }
+                "min_score": 7.5,
+            },
         },
         {
             "name": "Advanced FMP + Technical",
@@ -272,16 +248,10 @@ def test_fmp_config_examples():
                     "marketCapLowerThan": 2000000000,
                     "peRatioLessThan": 20,
                     "returnOnEquityMoreThan": 0.10,
-                    "limit": 40
+                    "limit": 40,
                 },
                 "fundamental_criteria": [
-                    {
-                        "indicator": "PE",
-                        "operator": "max",
-                        "value": 15,
-                        "weight": 1.0,
-                        "required": True
-                    }
+                    {"indicator": "PE", "operator": "max", "value": 15, "weight": 1.0, "required": True}
                 ],
                 "technical_criteria": [
                     {
@@ -289,20 +259,20 @@ def test_fmp_config_examples():
                         "parameters": {"period": 14},
                         "condition": {"operator": "<", "value": 70},
                         "weight": 0.6,
-                        "required": False
+                        "required": False,
                     }
                 ],
                 "max_results": 20,
-                "min_score": 6.5
-            }
-        }
+                "min_score": 6.5,
+            },
+        },
     ]
 
     for example in examples:
         print(f"\n🔍 Testing: {example['name']}")
 
         try:
-            config_json = json.dumps(example['config'])
+            config_json = json.dumps(example["config"])
 
             # Validate config
             is_valid, errors = validate_screener_config(config_json)

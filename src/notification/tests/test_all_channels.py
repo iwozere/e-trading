@@ -14,10 +14,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.channels import (
-    load_all_channels, channel_registry, MessageContent,
-    ConfigValidationError
-)
+from src.notification.channels import ConfigValidationError, MessageContent, channel_registry, load_all_channels
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -33,7 +30,7 @@ async def test_telegram_channel():
             "bot_token": "1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",  # Fake token format
             "default_chat_id": "123456789",
             "parse_mode": "HTML",
-            "rate_limit_per_minute": 25
+            "rate_limit_per_minute": 25,
         }
 
         channel = channel_registry.get_channel("telegram_channel", config)
@@ -46,11 +43,7 @@ async def test_telegram_channel():
             print(f"  Feature '{feature}': {'✓' if supported else '✗'}")
 
         # Test message formatting
-        content = MessageContent(
-            text="Hello, World!",
-            html="<b>Hello, World!</b>",
-            subject="Test Message"
-        )
+        content = MessageContent(text="Hello, World!", html="<b>Hello, World!</b>", subject="Test Message")
 
         formatted = channel.format_message(content)
         print(f"✓ Message formatting: {formatted.text[:50]}...")
@@ -92,7 +85,7 @@ async def test_email_channel():
             "from_email": "sender@example.com",
             "from_name": "Test Sender",
             "use_tls": True,
-            "rate_limit_per_minute": 5
+            "rate_limit_per_minute": 5,
         }
 
         channel = channel_registry.get_channel("email_channel", config)
@@ -108,7 +101,7 @@ async def test_email_channel():
         content = MessageContent(
             text="Hello, World!\nThis is a test email.",
             subject="Test Email",
-            attachments={"test.txt": b"Test file content"}
+            attachments={"test.txt": b"Test file content"},
         )
 
         formatted = channel.format_message(content)
@@ -144,7 +137,7 @@ async def test_sms_channel():
             "account_sid": "AC" + "1234567890123456789012345678901234",  # Fake SID format
             "auth_token": "1234567890123456789012345678901234",  # Fake token
             "default_from_number": "+1234567890",
-            "rate_limit_per_minute": 3
+            "rate_limit_per_minute": 3,
         }
 
         channel = channel_registry.get_channel("sms_channel", config)
@@ -157,11 +150,7 @@ async def test_sms_channel():
             print(f"  Feature '{feature}': {'✓' if supported else '✗'}")
 
         # Test message formatting (should strip HTML)
-        content = MessageContent(
-            text="",
-            html="<b>Hello, World!</b><br>This is a <i>test</i> SMS.",
-            subject="Test SMS"
-        )
+        content = MessageContent(text="", html="<b>Hello, World!</b><br>This is a <i>test</i> SMS.", subject="Test SMS")
 
         formatted = channel.format_message(content)
         print(f"✓ Message formatting (HTML stripped): {formatted.text}")
@@ -198,17 +187,14 @@ async def test_test_channel():
         config = {
             "simulate_delay_ms": 100,
             "failure_rate": 0.0,  # No failures for this test
-            "max_message_length": 200
+            "max_message_length": 200,
         }
 
         channel = channel_registry.get_channel("test_plugin", config)
         print("✓ Test channel created and configured")
 
         # Test actual message sending (this should work)
-        content = MessageContent(
-            text="This is a test message for the test channel.",
-            subject="Test Subject"
-        )
+        content = MessageContent(text="This is a test message for the test channel.", subject="Test Subject")
 
         result = await channel.send_message("test_recipient", content, "test_msg_001")
 
@@ -243,29 +229,32 @@ async def test_configuration_validation():
     test_cases = [
         # Telegram - missing bot_token
         ("telegram_channel", {"default_chat_id": "123"}, False),
-
         # Telegram - invalid parse_mode
-        ("telegram_channel", {
-            "bot_token": "1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
-            "default_chat_id": "123",
-            "parse_mode": "INVALID"
-        }, False),
-
+        (
+            "telegram_channel",
+            {
+                "bot_token": "1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
+                "default_chat_id": "123",
+                "parse_mode": "INVALID",
+            },
+            False,
+        ),
         # Email - missing SMTP config
         ("email_channel", {"from_email": "test@example.com"}, False),
-
         # Email - invalid email format
-        ("email_channel", {
-            "smtp_host": "smtp.gmail.com",
-            "smtp_port": 587,
-            "smtp_username": "invalid_email",
-            "smtp_password": "password",
-            "from_email": "test@example.com"
-        }, False),
-
+        (
+            "email_channel",
+            {
+                "smtp_host": "smtp.gmail.com",
+                "smtp_port": 587,
+                "smtp_username": "invalid_email",
+                "smtp_password": "password",
+                "from_email": "test@example.com",
+            },
+            False,
+        ),
         # SMS - invalid provider
         ("sms_channel", {"provider": "invalid_provider"}, False),
-
         # SMS - missing Twilio credentials
         ("sms_channel", {"provider": "twilio"}, False),
     ]

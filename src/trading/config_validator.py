@@ -9,10 +9,10 @@ schema-validation path as the DB-driven runner.
 
 import json
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Any, Dict, List, Tuple
 
-from src.notification.logger import setup_logger
 from src.config.configuration_factory import config_factory
+from src.notification.logger import setup_logger
 from src.trading.services.schema_validator import validate_bot_configuration
 
 _logger = setup_logger(__name__)
@@ -56,7 +56,7 @@ def validate_config_file(config_file: str) -> Tuple[bool, List[str], List[str]]:
         if not config_path.exists():
             return False, [f"Configuration file not found: {config_file}"], []
 
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             raw = json.load(f)
 
         hydrated = config_factory.load_manifest(raw)

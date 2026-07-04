@@ -5,30 +5,39 @@ Comprehensive integration tests for the complete data module functionality,
 including file-based caching, data handling, and all Phase 1-3 features.
 """
 
-import sys
 import os
-import tempfile
 import shutil
+import sys
+import tempfile
 import time
-from pathlib import Path
-from datetime import datetime, timedelta
-import pandas as pd
-import numpy as np
 import unittest
+from datetime import datetime, timedelta
+from pathlib import Path
 from unittest.mock import patch
+
+import numpy as np
+import pandas as pd
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
 from src.data import (
     # Core components
-    BaseDataSource, DataAggregator,
-    get_data_source_factory, register_data_source, create_data_source,
-
+    BaseDataSource,
+    DataAggregator,
+    LazyDataLoader,
+    ParallelProcessor,
+    create_data_source,
+    get_data_compressor,
     # Utilities
-    get_data_handler, validate_ohlcv_data, get_data_quality_score,
-    LazyDataLoader, ParallelProcessor, get_performance_monitor, get_memory_optimizer, get_data_compressor,
-    optimize_dataframe_performance
+    get_data_handler,
+    get_data_quality_score,
+    get_data_source_factory,
+    get_memory_optimizer,
+    get_performance_monitor,
+    optimize_dataframe_performance,
+    register_data_source,
+    validate_ohlcv_data,
 )
 
 # Import new unified cache system
@@ -48,8 +57,7 @@ class MockDataSource(BaseDataSource):
     def get_supported_intervals(self):
         return ["1m", "5m", "1h", "1d"]
 
-    def fetch_historical_data(self, symbol: str, interval: str,
-                            start_date=None, end_date=None, limit=None):
+    def fetch_historical_data(self, symbol: str, interval: str, start_date=None, end_date=None, limit=None):
         # Generate mock data
         if symbol not in self.data:
             self.data[symbol] = {}
@@ -57,9 +65,7 @@ class MockDataSource(BaseDataSource):
         if interval not in self.data[symbol]:
             # Create mock OHLCV data
             dates = pd.date_range(
-                start=start_date or datetime.now() - timedelta(days=30),
-                end=end_date or datetime.now(),
-                freq=interval
+                start=start_date or datetime.now() - timedelta(days=30), end=end_date or datetime.now(), freq=interval
             )
 
             # Generate more realistic price data to avoid validation failures
@@ -90,18 +96,13 @@ class MockDataSource(BaseDataSource):
                 high_price = max(high_price, open_price, close_price)
                 low_price = min(low_price, open_price, close_price)
 
-                ohlc_data.append({
-                    'open': open_price,
-                    'high': high_price,
-                    'low': low_price,
-                    'close': close_price
-                })
+                ohlc_data.append({"open": open_price, "high": high_price, "low": low_price, "close": close_price})
 
             df = pd.DataFrame(ohlc_data, index=dates)
-            df['volume'] = np.random.uniform(1000, 10000, len(dates))
+            df["volume"] = np.random.uniform(1000, 10000, len(dates))
 
             # Ensure the index is named 'timestamp' for compatibility
-            df.index.name = 'timestamp'
+            df.index.name = "timestamp"
             self.data[symbol][interval] = df
 
         return self.data[symbol][interval]
@@ -122,17 +123,11 @@ class TestPhase4Integration(unittest.TestCase):
         self.cache_dir = os.path.join(self.temp_dir, "cache")
 
         # Configure unified cache
-        self.cache = configure_unified_cache(
-            cache_dir=self.cache_dir,
-            max_size_gb=1.0
-        )
+        self.cache = configure_unified_cache(cache_dir=self.cache_dir, max_size_gb=1.0)
 
         # Create data source factory with mock configuration
-        with patch('src.data.sources.data_source_factory.DataSourceFactory._load_config') as mock_config:
-            mock_config.return_value = {
-                'caching': {'enabled': True, 'cache_dir': self.cache_dir},
-                'data_sources': {}
-            }
+        with patch("src.data.sources.data_source_factory.DataSourceFactory._load_config") as mock_config:
+            mock_config.return_value = {"caching": {"enabled": True, "cache_dir": self.cache_dir}, "data_sources": {}}
             self.factory = get_data_source_factory()
 
         # Register mock data source
@@ -169,9 +164,7 @@ class TestPhase4Integration(unittest.TestCase):
 
         # Step 1: Fetch data from source
         with self.performance_monitor.start_operation("data_fetch"):
-            df = self.mock_source.fetch_historical_data(
-                symbol, interval, start_date, end_date
-            )
+            df = self.mock_source.fetch_historical_data(symbol, interval, start_date, end_date)
 
         self.assertIsNotNone(df)
         self.assertGreater(len(df), 0)
@@ -181,32 +174,26 @@ class TestPhase4Integration(unittest.TestCase):
         self.assertTrue(is_valid, f"Data validation failed: {errors}")
 
         quality_score = get_data_quality_score(df)
-        self.assertGreater(quality_score['quality_score'], 0.8)
+        self.assertGreater(quality_score["quality_score"], 0.8)
 
         # Step 3: Optimize data
         optimized_df = optimize_dataframe_performance(df)
         self.assertIsNotNone(optimized_df)
 
         # Step 4: Cache data
-        cache_success = self.cache.put(
-            df, symbol, interval,
-            start_date=start_date, end_date=end_date, provider="mock"
-        )
+        cache_success = self.cache.put(df, symbol, interval, start_date=start_date, end_date=end_date, provider="mock")
         self.assertTrue(cache_success)
 
         # Step 5: Retrieve from cache
-        cached_df = self.cache.get(
-            symbol, interval,
-            start_date=start_date, end_date=end_date
-        )
+        cached_df = self.cache.get(symbol, interval, start_date=start_date, end_date=end_date)
 
         self.assertIsNotNone(cached_df)
         pd.testing.assert_frame_equal(df, cached_df, check_freq=False)
 
         # Step 6: Check cache statistics
         stats = self.cache.get_stats()
-        self.assertGreater(stats['files_count'], 0)
-        self.assertGreaterEqual(stats['total_size_gb'], 0)
+        self.assertGreater(stats["files_count"], 0)
+        self.assertGreaterEqual(stats["total_size_gb"], 0)
 
     def test_data_source_factory_integration(self):
         """Test data source factory integration."""
@@ -223,9 +210,7 @@ class TestPhase4Integration(unittest.TestCase):
         self.assertTrue(health["mock"]["is_healthy"])
 
         # Test data quality reports
-        reports = self.factory.get_data_quality_reports(
-            ["MOCK1", "MOCK2"], "1h"
-        )
+        reports = self.factory.get_data_quality_reports(["MOCK1", "MOCK2"], "1h")
         # Reports are nested by provider, then by symbol
         self.assertIn("mock", reports)
         self.assertIn("MOCK1", reports["mock"])
@@ -239,18 +224,14 @@ class TestPhase4Integration(unittest.TestCase):
 
         # Test aggregation with multiple sources
         aggregated_df = self.aggregator.aggregate_data(
-            "MOCK1", "1h", ["mock", "mock"],
-            start_date=datetime.now() - timedelta(days=1),
-            end_date=datetime.now()
+            "MOCK1", "1h", ["mock", "mock"], start_date=datetime.now() - timedelta(days=1), end_date=datetime.now()
         )
 
         self.assertIsNotNone(aggregated_df)
         self.assertGreater(len(aggregated_df), 0)
 
         # Test data comparison
-        comparison = self.aggregator.compare_data_sources(
-            "MOCK1", "1h", ["mock", "mock"]
-        )
+        comparison = self.aggregator.compare_data_sources("MOCK1", "1h", ["mock", "mock"])
 
         # Check that consistency_score exists in quality_scores
         self.assertIn("quality_scores", comparison)
@@ -261,36 +242,33 @@ class TestPhase4Integration(unittest.TestCase):
     def test_data_handler_integration(self):
         """Test data handler integration."""
         # Test data standardization
-        dates = pd.date_range('2023-01-01', periods=5, freq='h')
-        raw_df = pd.DataFrame({
-            'open': [100, 101, 102, 103, 104],
-            'high': [102, 103, 104, 105, 106],
-            'low': [99, 100, 101, 102, 103],
-            'close': [101, 102, 103, 104, 105],
-            'volume': [1000, 1100, 1200, 1300, 1400]
-        }, index=dates)
-        raw_df.index.name = 'timestamp'
-
-        standardized_df = self.data_handler.standardize_ohlcv_data(
-            raw_df, "TEST", "1h", timestamp_col="timestamp"
+        dates = pd.date_range("2023-01-01", periods=5, freq="h")
+        raw_df = pd.DataFrame(
+            {
+                "open": [100, 101, 102, 103, 104],
+                "high": [102, 103, 104, 105, 106],
+                "low": [99, 100, 101, 102, 103],
+                "close": [101, 102, 103, 104, 105],
+                "volume": [1000, 1100, 1200, 1300, 1400],
+            },
+            index=dates,
         )
+        raw_df.index.name = "timestamp"
+
+        standardized_df = self.data_handler.standardize_ohlcv_data(raw_df, "TEST", "1h", timestamp_col="timestamp")
 
         self.assertIsNotNone(standardized_df)
         self.assertTrue(isinstance(standardized_df.index, pd.DatetimeIndex))
 
         # Test data validation and scoring
-        validation_result = self.data_handler.validate_and_score_data(
-            standardized_df, "TEST"
-        )
+        validation_result = self.data_handler.validate_and_score_data(standardized_df, "TEST")
 
         self.assertIn("is_valid", validation_result)
         self.assertIn("quality_score", validation_result)
         self.assertTrue(validation_result["is_valid"])
 
         # Test data caching
-        cache_success = self.data_handler.cache_data(
-            standardized_df, "TEST", "1h"
-        )
+        cache_success = self.data_handler.cache_data(standardized_df, "TEST", "1h")
         self.assertTrue(cache_success)
 
         # Test data retrieval
@@ -300,15 +278,17 @@ class TestPhase4Integration(unittest.TestCase):
     def test_performance_optimization_integration(self):
         """Test performance optimization integration."""
         # Create large test dataset
-        large_df = pd.DataFrame({
-            'timestamp': pd.date_range('2023-01-01', periods=10000, freq='h'),
-            'open': np.random.uniform(100, 200, 10000),
-            'high': np.random.uniform(200, 300, 10000),
-            'low': np.random.uniform(50, 100, 10000),
-            'close': np.random.uniform(100, 200, 10000),
-            'volume': np.random.uniform(1000, 10000, 10000),
-            'category': np.random.choice(['A', 'B', 'C'], 10000)
-        })
+        large_df = pd.DataFrame(
+            {
+                "timestamp": pd.date_range("2023-01-01", periods=10000, freq="h"),
+                "open": np.random.uniform(100, 200, 10000),
+                "high": np.random.uniform(200, 300, 10000),
+                "low": np.random.uniform(50, 100, 10000),
+                "close": np.random.uniform(100, 200, 10000),
+                "volume": np.random.uniform(1000, 10000, 10000),
+                "category": np.random.choice(["A", "B", "C"], 10000),
+            }
+        )
 
         # Test memory optimization
         with self.performance_monitor.start_operation("memory_optimization"):
@@ -322,17 +302,13 @@ class TestPhase4Integration(unittest.TestCase):
 
         # Test data compression
         with self.performance_monitor.start_operation("data_compression"):
-            compressed_data = self.data_compressor.compress_dataframe(
-                optimized_df, format="parquet"
-            )
+            compressed_data = self.data_compressor.compress_dataframe(optimized_df, format="parquet")
 
         self.assertIsNotNone(compressed_data)
         self.assertGreater(len(compressed_data), 0)
 
         # Test decompression
-        decompressed_df = self.data_compressor.decompress_dataframe(
-            compressed_data, format="parquet"
-        )
+        decompressed_df = self.data_compressor.decompress_dataframe(compressed_data, format="parquet")
 
         pd.testing.assert_frame_equal(optimized_df, decompressed_df)
 
@@ -340,14 +316,16 @@ class TestPhase4Integration(unittest.TestCase):
         """Test lazy loading integration."""
         # Create test file
         test_file = os.path.join(self.temp_dir, "test_data.parquet")
-        test_df = pd.DataFrame({
-            'timestamp': pd.date_range('2023-01-01', periods=1000, freq='h'),
-            'open': np.random.uniform(100, 200, 1000),
-            'high': np.random.uniform(200, 300, 1000),
-            'low': np.random.uniform(50, 100, 1000),
-            'close': np.random.uniform(100, 200, 1000),
-            'volume': np.random.uniform(1000, 10000, 1000)
-        })
+        test_df = pd.DataFrame(
+            {
+                "timestamp": pd.date_range("2023-01-01", periods=1000, freq="h"),
+                "open": np.random.uniform(100, 200, 1000),
+                "high": np.random.uniform(200, 300, 1000),
+                "low": np.random.uniform(50, 100, 1000),
+                "close": np.random.uniform(100, 200, 1000),
+                "volume": np.random.uniform(1000, 10000, 1000),
+            }
+        )
 
         test_df.to_parquet(test_file)
 
@@ -368,21 +346,23 @@ class TestPhase4Integration(unittest.TestCase):
     def test_parallel_processing_integration(self):
         """Test parallel processing integration."""
         # Create test data
-        test_df = pd.DataFrame({
-            'timestamp': pd.date_range('2023-01-01', periods=1000, freq='h'),
-            'open': np.random.uniform(100, 200, 1000),
-            'high': np.random.uniform(200, 300, 1000),
-            'low': np.random.uniform(50, 100, 1000),
-            'close': np.random.uniform(100, 200, 1000),
-            'volume': np.random.uniform(1000, 10000, 1000)
-        })
+        test_df = pd.DataFrame(
+            {
+                "timestamp": pd.date_range("2023-01-01", periods=1000, freq="h"),
+                "open": np.random.uniform(100, 200, 1000),
+                "high": np.random.uniform(200, 300, 1000),
+                "low": np.random.uniform(50, 100, 1000),
+                "close": np.random.uniform(100, 200, 1000),
+                "volume": np.random.uniform(1000, 10000, 1000),
+            }
+        )
 
         # Define processing function
         def process_chunk(chunk):
             # Create a copy to avoid SettingWithCopyWarning
             chunk_copy = chunk.copy()
-            chunk_copy['sma_20'] = chunk_copy['close'].rolling(20).mean()
-            chunk_copy['rsi'] = 100 - (100 / (1 + chunk_copy['close'].pct_change().rolling(14).mean()))
+            chunk_copy["sma_20"] = chunk_copy["close"].rolling(20).mean()
+            chunk_copy["rsi"] = 100 - (100 / (1 + chunk_copy["close"].pct_change().rolling(14).mean()))
             return chunk_copy
 
         # Test parallel processing
@@ -392,8 +372,8 @@ class TestPhase4Integration(unittest.TestCase):
             )
 
         self.assertIsNotNone(processed_df)
-        self.assertIn('sma_20', processed_df.columns)
-        self.assertIn('rsi', processed_df.columns)
+        self.assertIn("sma_20", processed_df.columns)
+        self.assertIn("rsi", processed_df.columns)
 
     # def test_streaming_integration(self):
     #     """Test streaming integration."""
@@ -430,24 +410,29 @@ class TestPhase4Integration(unittest.TestCase):
 
         for symbol, interval, year in test_cases:
             # Create test data
-            dates = pd.date_range(f'{year}-01-01', periods=3, freq='D')
-            test_df = pd.DataFrame({
-                'open': [100.0, 101.0, 102.0],
-                'high': [102.0, 103.0, 104.0],
-                'low': [99.0, 100.0, 101.0],
-                'close': [101.0, 102.0, 103.0],
-                'volume': [1000, 1100, 1200]
-            }, index=dates)
+            dates = pd.date_range(f"{year}-01-01", periods=3, freq="D")
+            test_df = pd.DataFrame(
+                {
+                    "open": [100.0, 101.0, 102.0],
+                    "high": [102.0, 103.0, 104.0],
+                    "low": [99.0, 100.0, 101.0],
+                    "close": [101.0, 102.0, 103.0],
+                    "volume": [1000, 1100, 1200],
+                },
+                index=dates,
+            )
 
             # Ensure the index is named 'timestamp' for compatibility
-            test_df.index.name = 'timestamp'
+            test_df.index.name = "timestamp"
 
             # Cache data using new unified cache API
             cache_success = self.cache.put(
-                test_df, symbol, interval,
+                test_df,
+                symbol,
+                interval,
                 start_date=datetime(year, 1, 1),
                 end_date=datetime(year, 1, 3),
-                provider="test"
+                provider="test",
             )
             self.assertTrue(cache_success)
 
@@ -461,9 +446,7 @@ class TestPhase4Integration(unittest.TestCase):
 
             # Retrieve and verify data
             retrieved_df = self.cache.get(
-                symbol, interval,
-                start_date=datetime(year, 1, 1),
-                end_date=datetime(year, 1, 3)
+                symbol, interval, start_date=datetime(year, 1, 1), end_date=datetime(year, 1, 3)
             )
 
             self.assertIsNotNone(retrieved_df)
@@ -485,17 +468,20 @@ class TestPhase4Integration(unittest.TestCase):
     def test_error_handling_and_recovery(self):
         """Test error handling and recovery mechanisms."""
         # Test invalid data handling
-        dates = pd.date_range('2023-01-01', periods=3, freq='D')
-        invalid_df = pd.DataFrame({
-            'open': [100.0, np.nan, 102.0],  # Invalid data
-            'high': [102.0, 103.0, 104.0],
-            'low': [99.0, 100.0, 101.0],
-            'close': [101.0, 102.0, 103.0],
-            'volume': [1000, 1100, 1200]
-        }, index=dates)
+        dates = pd.date_range("2023-01-01", periods=3, freq="D")
+        invalid_df = pd.DataFrame(
+            {
+                "open": [100.0, np.nan, 102.0],  # Invalid data
+                "high": [102.0, 103.0, 104.0],
+                "low": [99.0, 100.0, 101.0],
+                "close": [101.0, 102.0, 103.0],
+                "volume": [1000, 1100, 1200],
+            },
+            index=dates,
+        )
 
         # Ensure the index is named 'timestamp' for compatibility
-        invalid_df.index.name = 'timestamp'
+        invalid_df.index.name = "timestamp"
 
         # Validation should catch invalid data
         is_valid, errors = validate_ohlcv_data(invalid_df)
@@ -505,10 +491,12 @@ class TestPhase4Integration(unittest.TestCase):
         # Test cache error handling
         # Try to cache with invalid provider (should succeed since validation was removed)
         cache_success = self.cache.put(
-            invalid_df, "TEST", "1h",
+            invalid_df,
+            "TEST",
+            "1h",
             start_date=datetime.now() - timedelta(days=1),
             end_date=datetime.now(),
-            provider=""  # Empty provider
+            provider="",  # Empty provider
         )
         # Cache should succeed since validation was removed from cache.put()
         self.assertTrue(cache_success)
@@ -568,7 +556,9 @@ def run_phase4_integration_tests():
     print(f"Tests run: {result.testsRun}")
     print(f"Failures: {len(result.failures)}")
     print(f"Errors: {len(result.errors)}")
-    print(f"Success rate: {((result.testsRun - len(result.failures) - len(result.errors)) / result.testsRun * 100):.1f}%")
+    print(
+        f"Success rate: {((result.testsRun - len(result.failures) - len(result.errors)) / result.testsRun * 100):.1f}%"
+    )
 
     if result.failures:
         print("\nFailures:")

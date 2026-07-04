@@ -7,26 +7,29 @@ Supports HTML formatting, MIME attachments, and health monitoring.
 
 import smtplib
 import ssl
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.image import MIMEImage
+from datetime import UTC, datetime
+from email import encoders
 from email.mime.application import MIMEApplication
 from email.mime.base import MIMEBase
-from email import encoders
-from typing import Dict, Any, List, Optional
-from datetime import datetime, timezone
-import aiosmtplib
+from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from pathlib import Path
+from typing import Any, Dict, List
 
-from src.notification.channels.base import (
-    NotificationChannel, DeliveryResult, ChannelHealth, MessageContent,
-    DeliveryStatus, ChannelHealthStatus
-)
-from src.notification.channels.config import (
-    ConfigValidator, CommonValidationRules, validate_email
-)
-from src.notification.logger import setup_logger
+import aiosmtplib
+
 from src.data.db.services.users_service import users_service
+from src.notification.channels.base import (
+    ChannelHealth,
+    ChannelHealthStatus,
+    DeliveryResult,
+    DeliveryStatus,
+    MessageContent,
+    NotificationChannel,
+)
+from src.notification.channels.config import CommonValidationRules, ConfigValidator, validate_email
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -59,87 +62,35 @@ class EmailChannel(NotificationChannel):
         validator = ConfigValidator(self.channel_name)
 
         # SMTP server configuration
-        validator.require_field(
-            "smtp_host",
-            str,
-            description="SMTP server hostname",
-            min_length=1
-        )
+        validator.require_field("smtp_host", str, description="SMTP server hostname", min_length=1)
+
+        validator.require_field("smtp_port", int, description="SMTP server port", min_value=1, max_value=65535)
 
         validator.require_field(
-            "smtp_port",
-            int,
-            description="SMTP server port",
-            min_value=1,
-            max_value=65535
+            "smtp_username", str, description="SMTP authentication username", custom_validator=validate_email
         )
 
-        validator.require_field(
-            "smtp_username",
-            str,
-            description="SMTP authentication username",
-            custom_validator=validate_email
-        )
-
-        validator.require_field(
-            "smtp_password",
-            str,
-            description="SMTP authentication password",
-            min_length=1
-        )
+        validator.require_field("smtp_password", str, description="SMTP authentication password", min_length=1)
 
         # Sender configuration
-        validator.require_field(
-            "from_email",
-            str,
-            description="Sender email address",
-            custom_validator=validate_email
-        )
+        validator.require_field("from_email", str, description="Sender email address", custom_validator=validate_email)
 
-        validator.optional_field(
-            "from_name",
-            str,
-            description="Sender display name"
-        )
+        validator.optional_field("from_name", str, description="Sender display name")
 
         # SMTP options
-        validator.optional_field(
-            "use_tls",
-            bool,
-            description="Use TLS encryption (STARTTLS)"
-        )
+        validator.optional_field("use_tls", bool, description="Use TLS encryption (STARTTLS)")
 
-        validator.optional_field(
-            "use_ssl",
-            bool,
-            description="Use SSL encryption (implicit TLS)"
-        )
+        validator.optional_field("use_ssl", bool, description="Use SSL encryption (implicit TLS)")
 
-        validator.optional_field(
-            "validate_certs",
-            bool,
-            description="Validate SSL certificates"
-        )
+        validator.optional_field("validate_certs", bool, description="Validate SSL certificates")
 
         # Email options
-        validator.optional_field(
-            "default_subject_prefix",
-            str,
-            description="Prefix to add to all email subjects"
-        )
+        validator.optional_field("default_subject_prefix", str, description="Prefix to add to all email subjects")
+
+        validator.optional_field("html_template", str, description="HTML template for email body")
 
         validator.optional_field(
-            "html_template",
-            str,
-            description="HTML template for email body"
-        )
-
-        validator.optional_field(
-            "max_attachment_size_mb",
-            int,
-            description="Maximum attachment size in MB",
-            min_value=1,
-            max_value=100
+            "max_attachment_size_mb", int, description="Maximum attachment size in MB", min_value=1, max_value=100
         )
 
         # Add common validation rules
@@ -163,11 +114,7 @@ class EmailChannel(NotificationChannel):
             self.config["max_attachment_size_mb"] = 25  # Common email limit
 
     async def send_message(
-        self,
-        recipient: str,
-        content: MessageContent,
-        message_id: Optional[str] = None,
-        priority: str = "NORMAL"
+        self, recipient: str, content: MessageContent, message_id: str | None = None, priority: str = "NORMAL"
     ) -> DeliveryResult:
         """
         Send an email message.
@@ -181,7 +128,7 @@ class EmailChannel(NotificationChannel):
         Returns:
             DeliveryResult with delivery status and metadata
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         try:
             # Extract metadata for email-specific options
@@ -214,7 +161,7 @@ class EmailChannel(NotificationChannel):
                             try:
                                 _logger.debug(f"Attempting to resolve email for telegram_id: {recipient}")
                                 user = users_service.get_user_by_telegram_id(recipient)
-                                if user and getattr(user, 'email', None):
+                                if user and getattr(user, "email", None):
                                     to_email = user.email
                                     _logger.info(f"Resolved telegram_id {recipient} to email: {to_email}")
                                 else:
@@ -223,7 +170,9 @@ class EmailChannel(NotificationChannel):
                                 _logger.error(f"Error resolving telegram_id {recipient}: {e}")
 
             if not to_email:
-                raise ValueError(f"No recipient email address provided. Could not resolve '{recipient}' to an email via User ID or Telegram ID.")
+                raise ValueError(
+                    f"No recipient email address provided. Could not resolve '{recipient}' to an email via User ID or Telegram ID."
+                )
 
             # Parse recipients (support comma-separated)
             recipients = [email.strip() for email in to_email.split(",")]
@@ -236,14 +185,12 @@ class EmailChannel(NotificationChannel):
             reply_to = metadata.get("reply_to")
 
             # Create email message
-            msg = await self._create_email_message(
-                recipients, content, cc_emails, bcc_emails, reply_to, message_id
-            )
+            msg = await self._create_email_message(recipients, content, cc_emails, bcc_emails, reply_to, message_id)
 
             # Send email
             await self._send_email_async(msg, recipients + cc_emails + bcc_emails)
 
-            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
 
             return DeliveryResult(
                 success=True,
@@ -256,8 +203,8 @@ class EmailChannel(NotificationChannel):
                     "bcc": bcc_emails,
                     "subject": msg.get("Subject"),
                     "message_id": msg.get("Message-ID"),
-                    "attachment_count": len(content.attachments) if content.attachments else 0
-                }
+                    "attachment_count": len(content.attachments) if content.attachments else 0,
+                },
             )
 
         except smtplib.SMTPAuthenticationError as e:
@@ -268,7 +215,7 @@ class EmailChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(UTC) - start_time).total_seconds() * 1000),
             )
 
         except smtplib.SMTPRecipientsRefused as e:
@@ -279,7 +226,7 @@ class EmailChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.BOUNCED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(UTC) - start_time).total_seconds() * 1000),
             )
 
         except (smtplib.SMTPException, aiosmtplib.SMTPException) as e:
@@ -290,7 +237,7 @@ class EmailChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(UTC) - start_time).total_seconds() * 1000),
             )
 
         except Exception as e:
@@ -301,7 +248,7 @@ class EmailChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(UTC) - start_time).total_seconds() * 1000),
             )
 
     async def _create_email_message(
@@ -310,8 +257,8 @@ class EmailChannel(NotificationChannel):
         content: MessageContent,
         cc_emails: List[str],
         bcc_emails: List[str],
-        reply_to: Optional[str],
-        message_id: Optional[str]
+        reply_to: str | None,
+        message_id: str | None,
     ) -> MIMEMultipart:
         """Create email message with attachments."""
         # Create message
@@ -361,9 +308,7 @@ class EmailChannel(NotificationChannel):
         html_template = self.config.get("html_template")
         if html_template:
             html_content = html_template.format(
-                content=html_content,
-                subject=subject,
-                from_name=from_name or self.config["from_email"]
+                content=html_content, subject=subject, from_name=from_name or self.config["from_email"]
             )
         else:
             # Simple HTML wrapper
@@ -437,18 +382,15 @@ class EmailChannel(NotificationChannel):
                     continue
 
                 if len(file_data) > max_size_bytes:
-                    _logger.warning(
-                        "Attachment %s too large (%d bytes), skipping",
-                        filename, len(file_data)
-                    )
+                    _logger.warning("Attachment %s too large (%d bytes), skipping", filename, len(file_data))
                     continue
 
                 # Determine MIME type and create attachment
-                if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                if filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
                     attachment = MIMEImage(file_data)
-                elif filename.lower().endswith(('.txt', '.log')):
+                elif filename.lower().endswith((".txt", ".log")):
                     try:
-                        attachment = MIMEText(file_data.decode('utf-8', errors='ignore'))
+                        attachment = MIMEText(file_data.decode("utf-8", errors="ignore"))
                     except Exception:
                         attachment = MIMEApplication(file_data)
                 else:
@@ -469,7 +411,7 @@ class EmailChannel(NotificationChannel):
             "port": self.config["smtp_port"],
             "username": self.config["smtp_username"],
             "password": self.config["smtp_password"],
-            "timeout": self.config.get("timeout_seconds", 30)
+            "timeout": self.config.get("timeout_seconds", 30),
         }
 
         # SSL/TLS configuration
@@ -495,11 +437,7 @@ class EmailChannel(NotificationChannel):
                 smtp_kwargs["tls_context"].verify_mode = ssl.CERT_NONE
 
         # Send email
-        await aiosmtplib.send(
-            msg,
-            recipients=all_recipients,
-            **smtp_kwargs
-        )
+        await aiosmtplib.send(msg, recipients=all_recipients, **smtp_kwargs)
 
     async def check_health(self) -> ChannelHealth:
         """
@@ -508,14 +446,14 @@ class EmailChannel(NotificationChannel):
         Returns:
             ChannelHealth with current status and metrics
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         try:
             # Test SMTP connection
             smtp_kwargs = {
                 "hostname": self.config["smtp_host"],
                 "port": self.config["smtp_port"],
-                "timeout": self.config.get("timeout_seconds", 30)
+                "timeout": self.config.get("timeout_seconds", 30),
             }
 
             # SSL/TLS configuration
@@ -536,34 +474,34 @@ class EmailChannel(NotificationChannel):
             async with aiosmtplib.SMTP(**smtp_kwargs) as smtp:
                 await smtp.login(self.config["smtp_username"], self.config["smtp_password"])
 
-            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
 
             return ChannelHealth(
                 status=ChannelHealthStatus.HEALTHY,
-                last_check=datetime.now(timezone.utc),
+                last_check=datetime.now(UTC),
                 response_time_ms=response_time,
                 metadata={
                     "smtp_host": self.config["smtp_host"],
                     "smtp_port": self.config["smtp_port"],
                     "use_tls": self.config.get("use_tls", False),
                     "use_ssl": self.config.get("use_ssl", False),
-                    "from_email": self.config["from_email"]
-                }
+                    "from_email": self.config["from_email"],
+                },
             )
 
         except (smtplib.SMTPAuthenticationError, aiosmtplib.SMTPAuthenticationError) as e:
-            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
             error_msg = f"SMTP authentication failed: {str(e)}"
 
             return ChannelHealth(
                 status=ChannelHealthStatus.DOWN,
-                last_check=datetime.now(timezone.utc),
+                last_check=datetime.now(UTC),
                 response_time_ms=response_time,
-                error_message=error_msg
+                error_message=error_msg,
             )
 
         except (smtplib.SMTPException, aiosmtplib.SMTPException) as e:
-            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
             error_msg = f"SMTP error: {str(e)}"
 
             # Determine if this is temporary or permanent
@@ -574,20 +512,20 @@ class EmailChannel(NotificationChannel):
 
             return ChannelHealth(
                 status=status,
-                last_check=datetime.now(timezone.utc),
+                last_check=datetime.now(UTC),
                 response_time_ms=response_time,
-                error_message=error_msg
+                error_message=error_msg,
             )
 
         except Exception as e:
-            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
             error_msg = f"Unexpected error: {str(e)}"
 
             return ChannelHealth(
                 status=ChannelHealthStatus.DOWN,
-                last_check=datetime.now(timezone.utc),
+                last_check=datetime.now(UTC),
                 response_time_ms=response_time,
-                error_message=error_msg
+                error_message=error_msg,
             )
 
     def get_rate_limit(self) -> int:
@@ -624,12 +562,12 @@ class EmailChannel(NotificationChannel):
             "delivery_receipts": False,  # Not reliable
             "encryption": True,  # TLS/SSL support
             "large_attachments": True,
-            "bulk_sending": True
+            "bulk_sending": True,
         }
 
         return supported_features.get(feature, False)
 
-    def get_max_message_length(self) -> Optional[int]:
+    def get_max_message_length(self) -> int | None:
         """
         Get maximum message length for Email.
 
@@ -657,7 +595,7 @@ class EmailChannel(NotificationChannel):
                 subject=content.subject,
                 html=html_content,
                 attachments=content.attachments,
-                metadata=content.metadata
+                metadata=content.metadata,
             )
 
         return content

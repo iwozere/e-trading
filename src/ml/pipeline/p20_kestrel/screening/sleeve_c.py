@@ -13,13 +13,13 @@ from __future__ import annotations
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.ml.pipeline.p20_kestrel.config import SLEEVE_C_MIN_ADV_USD
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+from src.ml.pipeline.p20_kestrel.config import SLEEVE_C_MIN_ADV_USD
 
 _kestrel = _KestrelService()
 get_active_tickers = _kestrel.get_active_tickers
@@ -37,7 +37,7 @@ _RS_TOP_DECILE_CUTOFF = 0.90  # top 10% of RS scores
 _CROWDING_SKIP_THRESHOLD = 2.0
 
 
-def _compute_rs_score(sig_map: Dict[str, float]) -> Optional[float]:
+def _compute_rs_score(sig_map: Dict[str, float]) -> float | None:
     """Compute RS score from 3m and 6m return signals."""
     r3m = sig_map.get("return_3m")
     r6m = sig_map.get("return_6m")
@@ -54,7 +54,7 @@ def _regime_allows_new_entry() -> bool:
     return float(spy_sig) > 0.5
 
 
-def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
+def run(as_of_date: date | None = None) -> Dict[str, Any]:
     """
     Run Sleeve C momentum screen.
 
@@ -119,24 +119,32 @@ def run(as_of_date: Optional[date] = None) -> Dict[str, Any]:
             _logger.debug("Sleeve C crowding skip: %s (crowding=%.1f)", ticker, crowding)
             continue
 
-        upsert_signals([{
-            "ticker": ticker,
-            "date": target_date,
-            "signal_type": "rs_score",
-            "value": round(rs, 4),
-            "sleeve": _SLEEVE,
-        }])
-        upsert_watchlist({
-            "ticker": ticker,
-            "sleeve": _SLEEVE,
-            "score": round(rs * 100, 1),
-            "state": "screening",
-        })
+        upsert_signals(
+            [
+                {
+                    "ticker": ticker,
+                    "date": target_date,
+                    "signal_type": "rs_score",
+                    "value": round(rs, 4),
+                    "sleeve": _SLEEVE,
+                }
+            ]
+        )
+        upsert_watchlist(
+            {
+                "ticker": ticker,
+                "sleeve": _SLEEVE,
+                "score": round(rs * 100, 1),
+                "state": "screening",
+            }
+        )
         candidates += 1
 
     _logger.info(
         "Sleeve C: %d tickers → %d top decile → %d candidates (post-crowding)",
-        len(tickers), len(top_decile), candidates,
+        len(tickers),
+        len(top_decile),
+        candidates,
     )
     return {
         "tickers_screened": len(tickers),

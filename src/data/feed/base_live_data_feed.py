@@ -16,17 +16,19 @@ Classes:
 - BaseLiveDataFeed: Abstract base class for live data feeds
 """
 
-import time
 import threading
+import time
 from abc import abstractmethod
-from typing import Optional, Callable, Dict, Any
 from datetime import datetime, timedelta
+from typing import Any, Callable, Dict
 
 import backtrader as bt
 import pandas as pd
+
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
 
 class BaseLiveDataFeed(bt.feed.DataBase):
     """
@@ -49,14 +51,16 @@ class BaseLiveDataFeed(bt.feed.DataBase):
         ("openinterest", None),
     )
 
-    def __init__(self,
-                 symbol: str,
-                 interval: str,
-                 lookback_bars: int = 1000,
-                 retry_interval: int = 60,
-                 on_new_bar: Optional[Callable] = None,
-                 data_manager: Optional[Any] = None,
-                 **kwargs):
+    def __init__(
+        self,
+        symbol: str,
+        interval: str,
+        lookback_bars: int = 1000,
+        retry_interval: int = 60,
+        on_new_bar: Callable | None = None,
+        data_manager: Any | None = None,
+        **kwargs,
+    ):
         """
         Initialize the live data feed.
 
@@ -81,6 +85,7 @@ class BaseLiveDataFeed(bt.feed.DataBase):
         if data_manager is None:
             # Import DataManager dynamically to avoid circular imports
             from src.data.data_manager import DataManager
+
             self.data_manager = DataManager()
         else:
             self.data_manager = data_manager
@@ -101,33 +106,33 @@ class BaseLiveDataFeed(bt.feed.DataBase):
         # Reset index to make datetime a column instead of index
         df_copy = historical_data.copy(deep=True)
         df_copy = df_copy.reset_index()
-        df_copy = df_copy.rename(columns={'datetime': 'timestamp'})
+        df_copy = df_copy.rename(columns={"datetime": "timestamp"})
 
         # Ensure timestamp column is datetime
-        df_copy['timestamp'] = pd.to_datetime(df_copy['timestamp'])
+        df_copy["timestamp"] = pd.to_datetime(df_copy["timestamp"])
 
         # Ensure the index is timezone-naive for Backtrader compatibility
-        if df_copy['timestamp'].dt.tz is not None:
-            df_copy['timestamp'] = df_copy['timestamp'].dt.tz_localize(None)
+        if df_copy["timestamp"].dt.tz is not None:
+            df_copy["timestamp"] = df_copy["timestamp"].dt.tz_localize(None)
 
         # Filter out parameters that are not valid for PandasData
         pandas_kwargs = {}
         for key, value in kwargs.items():
-            if key not in ['api_key', 'api_secret', 'testnet', 'data_manager']:
+            if key not in ["api_key", "api_secret", "testnet", "data_manager"]:
                 pandas_kwargs[key] = value
 
         # Create PandasData instance with the prepared data
         self.pandas_data = bt.feeds.PandasData(
             dataname=df_copy,
             datetime=0,  # 0 indicates datetime is in column 0 (timestamp)
-            open=1,      # open is now column 1
-            high=2,      # high is now column 2
-            low=3,       # low is now column 3
-            close=4,     # close is now column 4
-            volume=5,    # volume is now column 5
+            open=1,  # open is now column 1
+            high=2,  # high is now column 2
+            low=3,  # low is now column 3
+            close=4,  # close is now column 4
+            volume=5,  # volume is now column 5
             openinterest=None,
             name=symbol,
-            **pandas_kwargs
+            **pandas_kwargs,
         )
 
         # Delegate to PandasData for Backtrader compatibility
@@ -150,7 +155,7 @@ class BaseLiveDataFeed(bt.feed.DataBase):
         """Get the DataFrame for backward compatibility with tests."""
         return self.pandas_data.p.dataname
 
-    def _load_historical_data(self) -> Optional[pd.DataFrame]:
+    def _load_historical_data(self) -> pd.DataFrame | None:
         """
         Load historical data using DataManager.
 
@@ -166,15 +171,13 @@ class BaseLiveDataFeed(bt.feed.DataBase):
             end_date = datetime.now()
             start_date = self._calculate_start_date(end_date)
 
-            _logger.info("Loading historical data for %s %s from %s to %s",
-                        self.symbol, self.interval, start_date, end_date)
+            _logger.info(
+                "Loading historical data for %s %s from %s to %s", self.symbol, self.interval, start_date, end_date
+            )
 
             # Use DataManager to get historical data
             df = self.data_manager.get_ohlcv(
-                symbol=self.symbol,
-                timeframe=self.interval,
-                start_date=start_date,
-                end_date=end_date
+                symbol=self.symbol, timeframe=self.interval, start_date=start_date, end_date=end_date
             )
 
             if df is not None and not df.empty:
@@ -224,13 +227,13 @@ class BaseLiveDataFeed(bt.feed.DataBase):
         """
         interval = interval.lower()
 
-        if interval.endswith('m'):
+        if interval.endswith("m"):
             return int(interval[:-1])
-        elif interval.endswith('h'):
+        elif interval.endswith("h"):
             return int(interval[:-1]) * 60
-        elif interval.endswith('d'):
+        elif interval.endswith("d"):
             return int(interval[:-1]) * 24 * 60
-        elif interval.endswith('w'):
+        elif interval.endswith("w"):
             return int(interval[:-1]) * 7 * 24 * 60
         else:
             _logger.warning("Unknown interval format: %s", interval)
@@ -250,7 +253,7 @@ class BaseLiveDataFeed(bt.feed.DataBase):
         """Disconnect from real-time data source."""
 
     @abstractmethod
-    def _get_latest_data(self) -> Optional[pd.DataFrame]:
+    def _get_latest_data(self) -> pd.DataFrame | None:
         """
         Get the latest data from the source.
 
@@ -274,7 +277,11 @@ class BaseLiveDataFeed(bt.feed.DataBase):
                         self.is_connected = True
                         _logger.info("Connected to real-time data for %s", self.symbol)
                     else:
-                        _logger.warning("Failed to connect to real-time data for %s, retrying in %d seconds", self.symbol, self.retry_interval)
+                        _logger.warning(
+                            "Failed to connect to real-time data for %s, retrying in %d seconds",
+                            self.symbol,
+                            self.retry_interval,
+                        )
                         time.sleep(self.retry_interval)
                         continue
 
@@ -313,7 +320,7 @@ class BaseLiveDataFeed(bt.feed.DataBase):
                         close=4,
                         volume=5,
                         openinterest=None,
-                        name=self.symbol
+                        name=self.symbol,
                     )
                     self.p = self.pandas_data.p
                 else:
@@ -329,7 +336,7 @@ class BaseLiveDataFeed(bt.feed.DataBase):
                         close=4,
                         volume=5,
                         openinterest=None,
-                        name=self.symbol
+                        name=self.symbol,
                     )
                     self.p = self.pandas_data.p
 
@@ -337,7 +344,7 @@ class BaseLiveDataFeed(bt.feed.DataBase):
                 latest = self.df.iloc[-1]
                 try:
                     # Ensure lines are properly initialized before accessing
-                    if hasattr(self.lines, 'datetime') and len(self.lines.datetime) > 0:
+                    if hasattr(self.lines, "datetime") and len(self.lines.datetime) > 0:
                         self.lines.datetime[0] = bt.date2num(self.df.index[-1])
                         self.lines.open[0] = latest["open"]
                         self.lines.high[0] = latest["high"]
@@ -373,13 +380,13 @@ class BaseLiveDataFeed(bt.feed.DataBase):
         """
         # Default to 1 minute for most intervals
         interval_map = {
-            '1m': 60,
-            '5m': 60,
-            '15m': 60,
-            '30m': 60,
-            '1h': 60,
-            '4h': 300,  # 5 minutes
-            '1d': 3600,  # 1 hour
+            "1m": 60,
+            "5m": 60,
+            "15m": 60,
+            "30m": 60,
+            "1h": 60,
+            "4h": 300,  # 5 minutes
+            "1d": 3600,  # 1 hour
         }
         return interval_map.get(self.interval, 60)
 
@@ -397,7 +404,7 @@ class BaseLiveDataFeed(bt.feed.DataBase):
         _logger.info("Stopping real-time updates for %s", self.symbol)
         self.should_stop = True
         self._disconnect_realtime()
-        if hasattr(self, 'update_thread'):
+        if hasattr(self, "update_thread"):
             self.update_thread.join(timeout=5)
 
     def get_status(self) -> Dict[str, Any]:
@@ -408,11 +415,11 @@ class BaseLiveDataFeed(bt.feed.DataBase):
             Dictionary with status information
         """
         return {
-            'symbol': self.symbol,
-            'interval': self.interval,
-            'is_connected': self.is_connected,
-            'last_update': self.last_update,
-            'data_points': len(self.df) if self.df is not None else 0,
-            'should_stop': self.should_stop,
-            'data_source': self.__class__.__name__.replace('LiveDataFeed', '').lower()
+            "symbol": self.symbol,
+            "interval": self.interval,
+            "is_connected": self.is_connected,
+            "last_update": self.last_update,
+            "data_points": len(self.df) if self.df is not None else 0,
+            "should_stop": self.should_stop,
+            "data_source": self.__class__.__name__.replace("LiveDataFeed", "").lower(),
         }

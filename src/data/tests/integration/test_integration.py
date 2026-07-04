@@ -7,17 +7,15 @@ components work together correctly.
 
 import sys
 from pathlib import Path
+
 import pandas as pd
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.data import (
-    get_data_source_factory,
-    register_data_source,
-    DataAggregator
-)
 from unittest.mock import patch
+
+from src.data import DataAggregator, get_data_source_factory, register_data_source
 from src.data.feed.binance_live_feed import BinanceLiveDataFeed
 from src.data.utils import get_data_handler, validate_ohlcv_data
 
@@ -31,14 +29,16 @@ def test_data_handler():
         handler = get_data_handler("test_provider")
 
         # Create sample data
-        sample_data = pd.DataFrame({
-            'timestamp': pd.date_range('2024-01-01', periods=100, freq='1h'),
-            'open': [100 + i * 0.1 for i in range(100)],
-            'high': [101 + i * 0.1 for i in range(100)],
-            'low': [99 + i * 0.1 for i in range(100)],
-            'close': [100.5 + i * 0.1 for i in range(100)],
-            'volume': [1000 + i * 10 for i in range(100)]
-        })
+        sample_data = pd.DataFrame(
+            {
+                "timestamp": pd.date_range("2024-01-01", periods=100, freq="1h"),
+                "open": [100 + i * 0.1 for i in range(100)],
+                "high": [101 + i * 0.1 for i in range(100)],
+                "low": [99 + i * 0.1 for i in range(100)],
+                "close": [100.5 + i * 0.1 for i in range(100)],
+                "volume": [1000 + i * 10 for i in range(100)],
+            }
+        )
 
         # Test standardization
         standardized = handler.standardize_ohlcv_data(sample_data, "TEST", "1h")
@@ -62,9 +62,9 @@ def test_data_source_factory():
 
     try:
         # Get factory instance with mocked config (avoid drive D:, use temp on C:)
-        with patch('src.data.sources.data_source_factory.DataSourceFactory._load_config') as mock_cfg:
-            temp_cache = str(Path.cwd() / 'temp_cache')
-            mock_cfg.return_value = {'caching': {'enabled': True, 'cache_dir': temp_cache}, 'data_sources': {}}
+        with patch("src.data.sources.data_source_factory.DataSourceFactory._load_config") as mock_cfg:
+            temp_cache = str(Path.cwd() / "temp_cache")
+            mock_cfg.return_value = {"caching": {"enabled": True, "cache_dir": temp_cache}, "data_sources": {}}
             factory = get_data_source_factory()
         print("✓ Factory instance created")
 
@@ -93,23 +93,27 @@ def test_data_aggregator():
         print("✓ Aggregator created")
 
         # Create sample datasets for comparison
-        data1 = pd.DataFrame({
-            'timestamp': pd.date_range('2024-01-01', periods=50, freq='1h'),
-            'open': [100 + i * 0.1 for i in range(50)],
-            'high': [101 + i * 0.1 for i in range(50)],
-            'low': [99 + i * 0.1 for i in range(50)],
-            'close': [100.5 + i * 0.1 for i in range(50)],
-            'volume': [1000 + i * 10 for i in range(50)]
-        })
+        data1 = pd.DataFrame(
+            {
+                "timestamp": pd.date_range("2024-01-01", periods=50, freq="1h"),
+                "open": [100 + i * 0.1 for i in range(50)],
+                "high": [101 + i * 0.1 for i in range(50)],
+                "low": [99 + i * 0.1 for i in range(50)],
+                "close": [100.5 + i * 0.1 for i in range(50)],
+                "volume": [1000 + i * 10 for i in range(50)],
+            }
+        )
 
-        data2 = pd.DataFrame({
-            'timestamp': pd.date_range('2024-01-01 12:00:00', periods=50, freq='1h'),
-            'open': [100 + i * 0.1 for i in range(50)],
-            'high': [101 + i * 0.1 for i in range(50)],
-            'low': [99 + i * 0.1 for i in range(50)],
-            'close': [100.5 + i * 0.1 for i in range(50)],
-            'volume': [1000 + i * 10 for i in range(50)]
-        })
+        data2 = pd.DataFrame(
+            {
+                "timestamp": pd.date_range("2024-01-01 12:00:00", periods=50, freq="1h"),
+                "open": [100 + i * 0.1 for i in range(50)],
+                "high": [101 + i * 0.1 for i in range(50)],
+                "low": [99 + i * 0.1 for i in range(50)],
+                "close": [100.5 + i * 0.1 for i in range(50)],
+                "volume": [1000 + i * 10 for i in range(50)],
+            }
+        )
 
         # Test synchronization
         sync1, sync2 = aggregator.synchronize_data(data1, data2, "TEST")
@@ -128,14 +132,16 @@ def test_utility_functions():
 
     try:
         # Create sample data for validation
-        sample_data = pd.DataFrame({
-            'timestamp': pd.date_range('2024-01-01', periods=100, freq='1h'),
-            'open': [100 + i * 0.1 for i in range(100)],
-            'high': [101 + i * 0.1 for i in range(100)],
-            'low': [99 + i * 0.1 for i in range(100)],
-            'close': [100.5 + i * 0.1 for i in range(100)],
-            'volume': [1000 + i * 10 for i in range(100)]
-        })
+        sample_data = pd.DataFrame(
+            {
+                "timestamp": pd.date_range("2024-01-01", periods=100, freq="1h"),
+                "open": [100 + i * 0.1 for i in range(100)],
+                "high": [101 + i * 0.1 for i in range(100)],
+                "low": [99 + i * 0.1 for i in range(100)],
+                "close": [100.5 + i * 0.1 for i in range(100)],
+                "volume": [1000 + i * 10 for i in range(100)],
+            }
+        )
 
         # Test validation
         is_valid, errors = validate_ohlcv_data(sample_data)
@@ -155,12 +161,7 @@ def main():
     print("Phase 2 Integration Tests")
     print("=" * 40)
 
-    tests = [
-        test_data_handler,
-        test_data_source_factory,
-        test_data_aggregator,
-        test_utility_functions
-    ]
+    tests = [test_data_handler, test_data_source_factory, test_data_aggregator, test_utility_functions]
 
     passed = 0
     total = len(tests)

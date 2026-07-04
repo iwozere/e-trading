@@ -17,31 +17,32 @@ Usage:
 
 import argparse
 import sys
-from datetime import datetime, timezone, timedelta
 import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List
+
 import pandas as pd
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.data.cache.unified_cache import configure_unified_cache
-from src.data.sources.base_data_source import BaseDataSource
-
 # Import API keys from donotshare
 from config.donotshare.donotshare import ALPHA_VANTAGE_API_KEY, DATA_CACHE_DIR
-# Validation removed - data is cached as-is without validation
-from src.notification.logger import setup_logger
+from src.data.cache.unified_cache import configure_unified_cache
+
+# Import provider selector for automatic provider selection
+from src.data.data_manager import ProviderSelector
+from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
 
 # Import data downloaders
 from src.data.downloader.binance_data_downloader import BinanceDataDownloader
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
-from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
+from src.data.sources.base_data_source import BaseDataSource
 
-# Import provider selector for automatic provider selection
-from src.data.data_manager import ProviderSelector
+# Validation removed - data is cached as-is without validation
+from src.notification.logger import setup_logger
 
 # Initialize logger
 _logger = setup_logger(__name__)
@@ -59,22 +60,26 @@ class MockDataSource(BaseDataSource):
     def get_supported_intervals(self) -> List[str]:
         return ["1h", "4h", "1d"]
 
-    def fetch_historical_data(self, symbol: str, interval: str,
-                            start_date: Optional[datetime] = None,
-                            end_date: Optional[datetime] = None,
-                            limit: Optional[int] = None) -> Optional[pd.DataFrame]:
+    def fetch_historical_data(
+        self,
+        symbol: str,
+        interval: str,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        limit: int | None = None,
+    ) -> pd.DataFrame | None:
         """Generate mock historical data for testing."""
         if start_date is None:
-            start_date = datetime.now(timezone.utc) - timedelta(days=30)
+            start_date = datetime.now(UTC) - timedelta(days=30)
         if end_date is None:
-            end_date = datetime.now(timezone.utc)
+            end_date = datetime.now(UTC)
 
         # Ensure both dates are naive for consistent date range generation
         start_date_naive = start_date.replace(tzinfo=None) if start_date.tzinfo else start_date
         end_date_naive = end_date.replace(tzinfo=None) if end_date.tzinfo else end_date
 
         # Generate mock OHLCV data
-        date_range = pd.date_range(start=start_date_naive, end=end_date_naive, freq='1h')
+        date_range = pd.date_range(start=start_date_naive, end=end_date_naive, freq="1h")
         n_points = len(date_range)
 
         # Create realistic-looking price data
@@ -87,28 +92,34 @@ class MockDataSource(BaseDataSource):
             price = base_price + trend + noise
             prices.append(max(price, 1.0))  # Ensure positive prices
 
-        df = pd.DataFrame({
-            'timestamp': date_range,
-            'open': prices,
-            'high': [p * 1.02 for p in prices],  # High slightly above open
-            'low': [p * 0.98 for p in prices],   # Low slightly below open
-            'close': [p * 1.01 for p in prices], # Close slightly above open
-            'volume': [1000 + i * 10 for i in range(n_points)]  # Increasing volume
-        })
+        df = pd.DataFrame(
+            {
+                "timestamp": date_range,
+                "open": prices,
+                "high": [p * 1.02 for p in prices],  # High slightly above open
+                "low": [p * 0.98 for p in prices],  # Low slightly below open
+                "close": [p * 1.01 for p in prices],  # Close slightly above open
+                "volume": [1000 + i * 10 for i in range(n_points)],  # Increasing volume
+            }
+        )
 
         return df
 
-    def start_realtime_feed(self, symbol: str, interval: str,
-                           callback: Optional[callable] = None) -> bool:
+    def start_realtime_feed(self, symbol: str, interval: str, callback: callable | None = None) -> bool:
         return True
 
     def stop_realtime_feed(self, symbol: str) -> bool:
         return True
 
 
-def populate_cache(symbols: List[str], intervals: List[str],
-                   start_date: datetime, end_date: datetime,
-                   cache_dir: str = DATA_CACHE_DIR, file_format: str = "csv") -> Dict[str, Any]:
+def populate_cache(
+    symbols: List[str],
+    intervals: List[str],
+    start_date: datetime,
+    end_date: datetime,
+    cache_dir: str = DATA_CACHE_DIR,
+    file_format: str = "csv",
+) -> Dict[str, Any]:
     """Populate the file-based cache with historical data."""
 
     print(f"🚀 Populating cache at: {cache_dir}")
@@ -130,13 +141,13 @@ def populate_cache(symbols: List[str], intervals: List[str],
     # Initialize data downloaders
     downloaders = {}
     try:
-        downloaders['binance'] = BinanceDataDownloader()
+        downloaders["binance"] = BinanceDataDownloader()
         print("  ✅ Binance downloader initialized")
     except Exception as e:
         print(f"  ⚠️  Binance downloader failed: {str(e)}")
 
     try:
-        downloaders['yfinance'] = YahooDataDownloader()
+        downloaders["yfinance"] = YahooDataDownloader()
         print("  ✅ Yahoo downloader initialized")
     except Exception as e:
         print(f"  ⚠️  Yahoo downloader failed: {str(e)}")
@@ -144,7 +155,7 @@ def populate_cache(symbols: List[str], intervals: List[str],
     try:
         # Check if Alpha Vantage API key is available
         if ALPHA_VANTAGE_API_KEY:
-            downloaders['alpha_vantage'] = AlphaVantageDataDownloader(api_key=ALPHA_VANTAGE_API_KEY)
+            downloaders["alpha_vantage"] = AlphaVantageDataDownloader(api_key=ALPHA_VANTAGE_API_KEY)
             print("  ✅ Alpha Vantage downloader initialized")
         else:
             print("  ⚠️  Alpha Vantage downloader skipped: No API key found in donotshare.py")
@@ -157,17 +168,12 @@ def populate_cache(symbols: List[str], intervals: List[str],
 
     if not downloaders:
         print("  ❌ No data downloaders could be initialized!")
-        return {'error': 'No data downloaders available'}
+        return {"error": "No data downloaders available"}
 
     print(f"  📡 Available downloaders: {', '.join(downloaders.keys())}")
     print()
 
-    results = {
-        'success': [],
-        'failed': [],
-        'cache_stats': {},
-        'data_quality': {}
-    }
+    results = {"success": [], "failed": [], "cache_stats": {}, "data_quality": {}}
 
     total_operations = len(symbols) * len(intervals)
     current_operation = 0
@@ -175,11 +181,13 @@ def populate_cache(symbols: List[str], intervals: List[str],
     for symbol in symbols:
         for interval in intervals:
             current_operation += 1
-            print(f"🔄 Progress: {current_operation}/{total_operations} ({current_operation/total_operations*100:.1f}%)")
+            print(
+                f"🔄 Progress: {current_operation}/{total_operations} ({current_operation / total_operations * 100:.1f}%)"
+            )
             try:
                 print(f"📥 Downloading {symbol} {interval} data...")
 
-                                # Try to get data from real sources first, fallback to mock for testing
+                # Try to get data from real sources first, fallback to mock for testing
                 df = None
                 used_provider = None
 
@@ -191,9 +199,9 @@ def populate_cache(symbols: List[str], intervals: List[str],
                 print(f"  🎯 Best provider for {interval}: {best_provider}")
                 print(f"  💡 Reason: {provider_config.get('reason', 'No reason provided')}")
 
-                if provider_config.get('exchange'):
+                if provider_config.get("exchange"):
                     print(f"     Exchange: {provider_config['exchange']}")
-                if provider_config.get('base_asset') and provider_config.get('quote_asset'):
+                if provider_config.get("base_asset") and provider_config.get("quote_asset"):
                     print(f"     Crypto pair: {provider_config['base_asset']}/{provider_config['quote_asset']}")
 
                 # Check if data already exists in unified cache for the full date range
@@ -233,11 +241,15 @@ def populate_cache(symbols: List[str], intervals: List[str],
                                 last_month = last_timestamp.month
 
                                 if last_month == current_month:
-                                    print(f"     ✅ Current year data is up-to-date (last data: {last_timestamp.strftime('%Y-%m-%d %H:%M')})")
-                                    results['success'].append(f"{symbol}_{interval}")
+                                    print(
+                                        f"     ✅ Current year data is up-to-date (last data: {last_timestamp.strftime('%Y-%m-%d %H:%M')})"
+                                    )
+                                    results["success"].append(f"{symbol}_{interval}")
                                     continue
                                 else:
-                                    print(f"     ⚠️  Current year data is outdated (last data: {last_timestamp.strftime('%Y-%m-%d %H:%M')}, current month: {current_month})")
+                                    print(
+                                        f"     ⚠️  Current year data is outdated (last data: {last_timestamp.strftime('%Y-%m-%d %H:%M')}, current month: {current_month})"
+                                    )
                                     print("     📥 Will download current year data only")
 
                                     # Download only current year data
@@ -247,13 +259,15 @@ def populate_cache(symbols: List[str], intervals: List[str],
                                     # Update the date range to only current year
                                     start_date = current_year_start
                                     end_date = current_year_end
-                                    print(f"     📅 Updated date range: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+                                    print(
+                                        f"     📅 Updated date range: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+                                    )
                             except Exception as e:
                                 print(f"     ⚠️  Error checking current year data: {e}, will download")
                         else:
                             # Previous years data - keep forever
                             print("     ✅ Historical data, keeping existing data")
-                            results['success'].append(f"{symbol}_{interval}")
+                            results["success"].append(f"{symbol}_{interval}")
                             continue
                     else:
                         # Only check for missing historical years, not small gaps
@@ -270,13 +284,13 @@ def populate_cache(symbols: List[str], intervals: List[str],
                             print(f"     📥 Missing years: {sorted(missing_years)}, will download")
                         else:
                             print("     ✅ All requested years exist, skipping download")
-                            results['success'].append(f"{symbol}_{interval}")
+                            results["success"].append(f"{symbol}_{interval}")
                             continue
 
                 # Select provider based on intelligent provider selection
                 provider = best_provider
 
-                if provider == 'binance' and 'binance' in downloaders:
+                if provider == "binance" and "binance" in downloaders:
                     downloader = downloaders[provider]
                     try:
                         print(f"  📡 Using Binance data source for crypto symbol {symbol}")
@@ -285,7 +299,12 @@ def populate_cache(symbols: List[str], intervals: List[str],
                         print(f"     Reason: {provider_config.get('reason', 'Crypto symbol')}")
 
                         # Use UTC timestamps for Binance (it uses UTC)
-                        df = downloader.get_ohlcv(symbol, interval, start_date.replace(tzinfo=timezone.utc), end_date.replace(tzinfo=timezone.utc))
+                        df = downloader.get_ohlcv(
+                            symbol,
+                            interval,
+                            start_date.replace(tzinfo=UTC),
+                            end_date.replace(tzinfo=UTC),
+                        )
                         if df is not None and not df.empty:
                             print(f"  ✅ Successfully downloaded from {provider}: {len(df)} rows")
                             used_provider = provider
@@ -295,7 +314,7 @@ def populate_cache(symbols: List[str], intervals: List[str],
                         print(f"  ⚠️  {provider} failed: {str(e)}")
                         df = None
 
-                elif provider == 'yfinance' and 'yfinance' in downloaders:
+                elif provider == "yfinance" and "yfinance" in downloaders:
                     downloader = downloaders[provider]
                     try:
                         print(f"  📡 Using Yahoo Finance data source for stock symbol {symbol}")
@@ -316,7 +335,7 @@ def populate_cache(symbols: List[str], intervals: List[str],
                         print(f"  ⚠️  {provider} failed: {str(e)}")
                         df = None
 
-                elif provider == 'alpha_vantage' and 'alpha_vantage' in downloaders:
+                elif provider == "alpha_vantage" and "alpha_vantage" in downloaders:
                     downloader = downloaders[provider]
                     try:
                         print(f"  📡 Using Alpha Vantage data source for intraday data {symbol}")
@@ -363,22 +382,22 @@ def populate_cache(symbols: List[str], intervals: List[str],
                     # Data quality will be handled by a separate validation script
                     is_valid = True  # Always cache data without validation
                     errors = []
-                    quality_score = {'quality_score': 1.0}  # Default perfect score
+                    quality_score = {"quality_score": 1.0}  # Default perfect score
 
-                    if 'timestamp' in df.columns:
+                    if "timestamp" in df.columns:
                         # Set timestamp as index for proper caching
-                        df = df.set_index('timestamp')
+                        df = df.set_index("timestamp")
                         # Ensure index is timezone-naive for compatibility
                         if df.index.tz is not None:
                             df.index = df.index.tz_localize(None)
                         print("  🔄 Converted timestamp to index")
 
-                    results['data_quality'][f"{symbol}_{interval}"] = {
-                        'is_valid': is_valid,
-                        'errors': errors,
-                        'quality_score': quality_score['quality_score'],
-                        'rows': len(df),
-                        'columns': list(df.columns)
+                    results["data_quality"][f"{symbol}_{interval}"] = {
+                        "is_valid": is_valid,
+                        "errors": errors,
+                        "quality_score": quality_score["quality_score"],
+                        "rows": len(df),
+                        "columns": list(df.columns),
                     }
 
                     if is_valid:
@@ -387,43 +406,50 @@ def populate_cache(symbols: List[str], intervals: List[str],
                         _logger.info("Attempting to cache %s_%s: %d rows (no validation)", symbol, interval, len(df))
                         try:
                             cache_success = cache.put(
-                                df, symbol, interval,
-                                start_date=start_date, end_date=end_date,
-                                provider=used_provider
+                                df, symbol, interval, start_date=start_date, end_date=end_date, provider=used_provider
                             )
 
                             if cache_success:
-                                results['success'].append(f"{symbol}_{interval}")
+                                results["success"].append(f"{symbol}_{interval}")
                                 print(f"  ✅ Downloaded and cached {len(df)} rows")
                                 print(f"  📈 Quality score: {quality_score['quality_score']:.2f}")
                                 print(f"  📁 Cached to: {symbol}/{interval}/")
                                 print(f"  🔗 Provider: {used_provider}")
                                 _logger.info("SUCCESS: %s_%s cached successfully - %d rows", symbol, interval, len(df))
                             else:
-                                results['failed'].append(f"{symbol}_{interval}")
+                                results["failed"].append(f"{symbol}_{interval}")
                                 print("  ❌ Failed to cache data")
                                 _logger.error("FAILED: %s_%s - cache.put returned False", symbol, interval)
                         except Exception as cache_error:
-                            results['failed'].append(f"{symbol}_{interval}")
+                            results["failed"].append(f"{symbol}_{interval}")
                             print(f"  ❌ Cache error: {str(cache_error)}")
                             print(f"  🔍 Error details: {type(cache_error).__name__}")
-                            _logger.exception("EXCEPTION: %s_%s - %s: %s", symbol, interval, type(cache_error).__name__, str(cache_error))
+                            _logger.exception(
+                                "EXCEPTION: %s_%s - %s: %s",
+                                symbol,
+                                interval,
+                                type(cache_error).__name__,
+                                str(cache_error),
+                            )
                     # Validation is disabled - this block should never be reached
                     else:
-                        results['failed'].append(f"{symbol}_{interval}")
+                        results["failed"].append(f"{symbol}_{interval}")
                         print("  ❌ Unexpected validation failure (validation is disabled)")
-                        _logger.error("UNEXPECTED: %s_%s - validation failed but validation is disabled", symbol, interval)
+                        _logger.error(
+                            "UNEXPECTED: %s_%s - validation failed but validation is disabled", symbol, interval
+                        )
                 else:
-                    results['failed'].append(f"{symbol}_{interval}")
+                    results["failed"].append(f"{symbol}_{interval}")
                     print("  ❌ No data available from any source")
                     print(f"  🔍 Best provider: {best_provider}")
                     print(f"  🔍 Available downloaders: {list(downloaders.keys())}")
 
             except Exception as e:
-                results['failed'].append(f"{symbol}_{interval}")
+                results["failed"].append(f"{symbol}_{interval}")
                 print(f"  ❌ Error: {str(e)}")
                 print(f"  🔍 Error type: {type(e).__name__}")
                 import traceback
+
                 print(f"  📋 Traceback: {traceback.format_exc()}")
 
             print()
@@ -438,11 +464,13 @@ def populate_cache(symbols: List[str], intervals: List[str],
 
     # Get final cache statistics
     print("\n📊 Getting cache statistics...")
-    results['cache_stats'] = cache.get_stats()
+    results["cache_stats"] = cache.get_stats()
     print(f"  💾 Cache size: {results['cache_stats'].get('cache_size_gb', 0):.2f} GB")
     print(f"  📁 Files created: {results['cache_stats'].get('files_created', 0)}")
     print(f"  📊 Total operations: {results['cache_stats'].get('total_operations', 0)}")
-    print(f"  🎯 Success rate: {len(results['success'])}/{total_operations} ({len(results['success'])/total_operations*100:.1f}%)")
+    print(
+        f"  🎯 Success rate: {len(results['success'])}/{total_operations} ({len(results['success']) / total_operations * 100:.1f}%)"
+    )
 
     return results
 
@@ -454,45 +482,40 @@ def validate_cache_structure(cache_dir: str = DATA_CACHE_DIR) -> Dict[str, Any]:
 
     cache_path = Path(cache_dir)
     if not cache_path.exists():
-        return {'error': f"Cache directory does not exist: {cache_dir}"}
+        return {"error": f"Cache directory does not exist: {cache_dir}"}
 
-    results = {
-        'directory_exists': True,
-        'structure': {},
-        'files': {},
-        'total_size_mb': 0
-    }
+    results = {"directory_exists": True, "structure": {}, "files": {}, "total_size_mb": 0}
 
     # Check directory structure
     for item in cache_path.iterdir():
         if item.is_dir():
             provider = item.name
-            results['structure'][provider] = {}
+            results["structure"][provider] = {}
 
             for symbol_dir in item.iterdir():
                 if symbol_dir.is_dir():
                     symbol = symbol_dir.name
-                    results['structure'][provider][symbol] = {}
+                    results["structure"][provider][symbol] = {}
 
                     for interval_dir in symbol_dir.iterdir():
                         if interval_dir.is_dir():
                             interval = interval_dir.name
-                            results['structure'][provider][symbol][interval] = {}
+                            results["structure"][provider][symbol][interval] = {}
 
                             for year_dir in interval_dir.iterdir():
                                 if year_dir.is_dir():
                                     year = year_dir.name
-                                    year_files = list(year_dir.glob('*'))
-                                    results['structure'][provider][symbol][interval][year] = len(year_files)
+                                    year_files = list(year_dir.glob("*"))
+                                    results["structure"][provider][symbol][interval][year] = len(year_files)
 
                                     # Calculate file sizes
                                     for file_path in year_files:
                                         if file_path.is_file():
-                                            results['total_size_mb'] += file_path.stat().st_size / (1024 * 1024)
+                                            results["total_size_mb"] += file_path.stat().st_size / (1024 * 1024)
 
     # Print structure
     print("📁 Cache Directory Structure:")
-    for provider, symbols in results['structure'].items():
+    for provider, symbols in results["structure"].items():
         print(f"  📂 {provider}/")
         for symbol, intervals in symbols.items():
             print(f"    📂 {symbol}/")
@@ -509,22 +532,21 @@ def validate_cache_structure(cache_dir: str = DATA_CACHE_DIR) -> Dict[str, Any]:
 def main():
     """Main function to run the cache population and testing script."""
     parser = argparse.ArgumentParser(description="Cache Population and Testing Script")
-    parser.add_argument("--populate", action="store_true",
-                       help="Populate the cache with historical data")
-    parser.add_argument("--test-all", action="store_true",
-                       help="Test all system components")
-    parser.add_argument("--validate-cache", action="store_true",
-                       help="Validate cache structure and contents")
-    parser.add_argument("--symbols", type=str, default="BTCUSDT,ETHUSDT,LTCUSDT,ADAUSDT,VT,GOOG,TSLA,NVDA,NFLX,PSNY,VUSD.L,SMCI,RPD,QTUM,QBTS,PFE,MRNA,MASI,LULU,IONQ",
-                       help="Comma-separated list of symbols to download")
-    parser.add_argument("--intervals", type=str, default="1h,4h,1d,5m,15m",
-                       help="Comma-separated list of intervals to download")
-    parser.add_argument("--start-date", type=str, default="2020-01-01",
-                       help="Start date in YYYY-MM-DD format")
-    parser.add_argument("--end-date", type=str, default=None,
-                       help="End date in YYYY-MM-DD format (defaults to today)")
-    parser.add_argument("--cache-dir", type=str, default=DATA_CACHE_DIR,
-                       help="Cache directory path")
+    parser.add_argument("--populate", action="store_true", help="Populate the cache with historical data")
+    parser.add_argument("--test-all", action="store_true", help="Test all system components")
+    parser.add_argument("--validate-cache", action="store_true", help="Validate cache structure and contents")
+    parser.add_argument(
+        "--symbols",
+        type=str,
+        default="BTCUSDT,ETHUSDT,LTCUSDT,ADAUSDT,VT,GOOG,TSLA,NVDA,NFLX,PSNY,VUSD.L,SMCI,RPD,QTUM,QBTS,PFE,MRNA,MASI,LULU,IONQ",
+        help="Comma-separated list of symbols to download",
+    )
+    parser.add_argument(
+        "--intervals", type=str, default="1h,4h,1d,5m,15m", help="Comma-separated list of intervals to download"
+    )
+    parser.add_argument("--start-date", type=str, default="2020-01-01", help="Start date in YYYY-MM-DD format")
+    parser.add_argument("--end-date", type=str, default=None, help="End date in YYYY-MM-DD format (defaults to today)")
+    parser.add_argument("--cache-dir", type=str, default=DATA_CACHE_DIR, help="Cache directory path")
 
     args = parser.parse_args()
 
@@ -537,8 +559,8 @@ def main():
     print()
 
     # Parse arguments
-    symbols = [s.strip() for s in args.symbols.split(',')]
-    intervals = [i.strip() for i in args.intervals.split(',')]
+    symbols = [s.strip() for s in args.symbols.split(",")]
+    intervals = [i.strip() for i in args.intervals.split(",")]
 
     # Parse start date
     try:
@@ -550,7 +572,7 @@ def main():
 
     # Convert to UTC for providers that use UTC (like Binance)
     # Keep naive for providers that use market timezones (like Yahoo, Alpha Vantage)
-    start_date_utc = start_date.replace(tzinfo=timezone.utc)
+    start_date_utc = start_date.replace(tzinfo=UTC)
 
     # Parse end date (defaults to today if not specified)
     if args.end_date:
@@ -561,18 +583,20 @@ def main():
             print(f"❌ Invalid end date format: {args.end_date}. Use YYYY-MM-DD format.")
             sys.exit(1)
     else:
-        end_date = datetime.now(timezone.utc)
+        end_date = datetime.now(UTC)
         print(f"📅 End date: {end_date.strftime('%Y-%m-%d')} (today)")
 
     # Convert to UTC for providers that use UTC (like Binance)
-    end_date_utc = end_date.replace(tzinfo=timezone.utc) if end_date.tzinfo is None else end_date
+    end_date_utc = end_date.replace(tzinfo=UTC) if end_date.tzinfo is None else end_date
 
     # Ensure start_date is before end_date (compare naive versions)
     start_date_naive = start_date.replace(tzinfo=None) if start_date.tzinfo else start_date
     end_date_naive = end_date.replace(tzinfo=None) if end_date.tzinfo else end_date
 
     if start_date_naive >= end_date_naive:
-        print(f"❌ Start date ({start_date_naive.strftime('%Y-%m-%d')}) must be before end date ({end_date_naive.strftime('%Y-%m-%d')})")
+        print(
+            f"❌ Start date ({start_date_naive.strftime('%Y-%m-%d')}) must be before end date ({end_date_naive.strftime('%Y-%m-%d')})"
+        )
         sys.exit(1)
 
     try:
@@ -586,14 +610,14 @@ def main():
             print(f"✅ Successful: {len(results['success'])}")
             print(f"❌ Failed: {len(results['failed'])}")
 
-            if results['success']:
+            if results["success"]:
                 print(f"\n✅ Successfully cached: {', '.join(results['success'])}")
-            if results['failed']:
+            if results["failed"]:
                 print(f"\n❌ Failed to cache: {', '.join(results['failed'])}")
 
             print("\n📈 CACHE STATISTICS")
             print("-" * 30)
-            for key, value in results['cache_stats'].items():
+            for key, value in results["cache_stats"].items():
                 print(f"  {key}: {value}")
 
         if args.test_all:
@@ -606,7 +630,7 @@ def main():
             print("-" * 30)
             cache_results = validate_cache_structure(args.cache_dir)
 
-            if 'error' in cache_results:
+            if "error" in cache_results:
                 print(f"❌ Cache validation failed: {cache_results['error']}")
 
         print("\n🎉 OPERATION COMPLETED SUCCESSFULLY!")
@@ -614,6 +638,7 @@ def main():
     except Exception as e:
         print(f"\n❌ ERROR: {str(e)}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

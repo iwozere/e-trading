@@ -1,6 +1,7 @@
-import pandas as pd
 from pathlib import Path
-from typing import List, Dict, Any
+
+import pandas as pd
+
 
 def select_top_candidates(results_root: str = "results/p08_mtf", top_n: int = 5):
     """
@@ -24,16 +25,12 @@ def select_top_candidates(results_root: str = "results/p08_mtf", top_n: int = 5)
     numeric_cols = ["Total Trades", "Profit Factor", "Total Return [%]", "Sharpe Ratio"]
     for col in numeric_cols:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+            df[col] = pd.to_numeric(df[col], errors="coerce")
 
     # Apply Filters
-    # p08 MTF often has fewer but higher quality trades. 
+    # p08 MTF often has fewer but higher quality trades.
     # Let's use slightly more relaxed trade count but stricter PF.
-    mask = (
-        (df["Total Trades"] >= 15) &
-        (df["Profit Factor"] > 1.2) &
-        (df["Total Return [%]"] > 0)
-    )
+    mask = (df["Total Trades"] >= 15) & (df["Profit Factor"] > 1.2) & (df["Total Return [%]"] > 0)
 
     candidates = df[mask].copy()
 
@@ -54,11 +51,13 @@ def select_top_candidates(results_root: str = "results/p08_mtf", top_n: int = 5)
     print(f"Selected {len(top_pairs)} candidates for P08. Saved to {output_file}")
     print(top_pairs[["ticker", "timeframe", "Sharpe Ratio", "Profit Factor", "Total Trades"]])
 
+
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="P08 Top Candidate Selector")
     parser.add_argument("--root", type=str, default="results/p08_mtf", help="Results root directory")
     parser.add_argument("--n", type=int, default=5, help="Number of candidates to select")
     args = parser.parse_args()
-    
+
     select_top_candidates(results_root=args.root, top_n=args.n)

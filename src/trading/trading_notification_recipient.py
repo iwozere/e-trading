@@ -5,7 +5,7 @@ Resolve the single owner recipient for trading-bot notifications (Telegram + ema
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from src.notification.logger import setup_logger
 
@@ -16,8 +16,8 @@ def _resolve_notification_channels(
     config: Dict[str, Any],
     instance_id: str,
     *,
-    log_name: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
+    log_name: str | None = None,
+) -> Dict[str, Any] | None:
     """Build channel list and recipient for the bot owner; no feature-flag gating."""
     name = log_name or instance_id
     notif_config = config.get("notifications", {})
@@ -28,8 +28,8 @@ def _resolve_notification_channels(
         direct_tg = os.environ.get("TRADING_NOTIFY_TELEGRAM_CHAT_ID")
 
     channels: List[str] = []
-    email: Optional[str] = None
-    telegram_user_id: Optional[str] = None
+    email: str | None = None
+    telegram_user_id: str | None = None
 
     if notif_config.get("email_enabled", True) and direct_email:
         channels.append("email")
@@ -56,9 +56,10 @@ def _resolve_notification_channels(
         )
         return None
 
-    from src.data.db.services.database_service import get_database_service
-    from src.data.db.models.model_users import User, AuthIdentity
     from sqlalchemy import select
+
+    from src.data.db.models.model_users import AuthIdentity, User
+    from src.data.db.services.database_service import get_database_service
 
     db_service = get_database_service()
     with db_service.uow() as uow:
@@ -68,9 +69,7 @@ def _resolve_notification_channels(
             return None
 
         telegram_identity = uow.s.execute(
-            select(AuthIdentity)
-            .where(AuthIdentity.user_id == user_id)
-            .where(AuthIdentity.provider == "telegram")
+            select(AuthIdentity).where(AuthIdentity.user_id == user_id).where(AuthIdentity.provider == "telegram")
         ).scalar_one_or_none()
 
         channels_db: List[str] = []
@@ -97,8 +96,8 @@ def get_trading_bot_notification_recipient(
     instance_id: str,
     *,
     purpose: str = "any",
-    log_name: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
+    log_name: str | None = None,
+) -> Dict[str, Any] | None:
     """
     Resolve the bot owner's notification targets.
 
