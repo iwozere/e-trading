@@ -1763,18 +1763,12 @@ class DataManager:
                         _logger.warning("No fundamentals data returned from %s for %s", provider_name, symbol)
 
                 except RateLimitException as e:
-                    # Handle rate limiting with a short wait and then retry.
-                    # Use a modest fixed cooldown to allow the rate limiter to drain.
-                    # Do NOT set a multi-hour cooldown — Yahoo throttles per-IP per minute,
-                    # not permanently. A 60-second back-off is sufficient.
-                    delay = self._calculate_rate_limit_delay(e, attempt)
-                    _logger.warning("Rate limit hit for %s %s (attempt %d), waiting %.2f seconds",
-                                  provider_name, symbol, attempt + 1, delay)
-                    self._sleep_with_jitter(delay, retry_config['jitter'])
-                    # Re-acquire a rate-limited slot before retrying
-                    if provider_name in self.rate_limiters:
-                        self.rate_limiters[provider_name].wait_if_needed()
-                    continue
+                    # Break immediately — no point retrying the same ticker while
+                    # Yahoo's IP block is active.  The caller's retry pass will
+                    # re-attempt failed tickers after a global cooldown.
+                    _logger.warning("Rate limit hit for %s %s — skipping to retry pass",
+                                  provider_name, symbol)
+                    break
 
                 except TimeoutException as e:
                     # Handle timeouts with exponential backoff
@@ -1799,17 +1793,11 @@ class DataManager:
                     error_type = self._classify_error(e)
 
                     if error_type == 'rate_limit':
-                        # Treat classifier-identified rate limit errors identically to
-                        # RateLimitException — use the long delay so Yahoo's IP block
-                        # has time to expire before we retry.
-                        delay = self._calculate_rate_limit_delay(e, attempt)
+                        # Break immediately — same reasoning as RateLimitException above.
                         _logger.warning("Error (%s) for %s %s (attempt %d): %s",
                                       error_type, provider_name, symbol, attempt + 1, e)
-                        _logger.warning("Rate limit detected — waiting %.1f seconds before retry", delay)
-                        self._sleep_with_jitter(delay, retry_config['jitter'])
-                        if provider_name in self.rate_limiters:
-                            self.rate_limiters[provider_name].wait_if_needed()
-                        continue
+                        _logger.warning("Rate limit detected — skipping to retry pass")
+                        break
 
                     delay = self._calculate_exponential_backoff(attempt, retry_config)
 

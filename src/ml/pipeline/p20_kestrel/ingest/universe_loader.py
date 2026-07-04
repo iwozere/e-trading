@@ -118,23 +118,72 @@ def _fetch_fundamentals_for_ticker(ticker: str) -> Optional[Any]:
         return None
 
 
+_RETRY_COOLDOWN_SECONDS = 300   # 5-minute global wait before the retry pass
+
+
 def _fetch_all_fundamentals(tickers: List[str]) -> List[Optional[Any]]:
     """
-    Fetch fundamentals for all tickers with real thread-level concurrency.
+    Fetch fundamentals for all tickers in two passes.
 
-    asyncio.gather over get_fundamentals_unified provides NO concurrency —
-    the coroutine body is synchronous and blocks the event loop, so batches
-    ran strictly sequentially (hours for a full universe). A thread pool
-    gives true parallel HTTP fetches; cached tickers return in milliseconds.
+    Pass 1 (parallel):
+        Run with _FUNDAMENTALS_WORKERS threads.  On a 429, data_manager
+        breaks immediately (no per-ticker waits) so the main pass moves fast.
+
+    Pass 2 (single-threaded, after a global cooldown):
+        Re-attempt every ticker that returned None.  By the time we reach
+        this pass the IP block from Yahoo has typically expired.
+
+    Returns results in the same order as `tickers`.
     """
-    results: List[Optional[Any]] = []
+    import time
+
     total = len(tickers)
+
+    # ── Pass 1 ────────────────────────────────────────────────────────────
+    results: List[Optional[Any]] = [None] * total
     with ThreadPoolExecutor(max_workers=_FUNDAMENTALS_WORKERS) as pool:
-        for i, fund in enumerate(pool.map(_fetch_fundamentals_for_ticker, tickers), 1):
-            results.append(fund)
-            if i % _PROGRESS_LOG_EVERY == 0 or i == total:
-                _logger.info("Fundamentals progress: %d/%d tickers", i, total)
+        for i, fund in enumerate(pool.map(_fetch_fundamentals_for_ticker, tickers)):
+            results[i] = fund
+            done = i + 1
+            if done % _PROGRESS_LOG_EVERY == 0 or done == total:
+                _logger.info("Pass 1 progress: %d/%d tickers", done, total)
+
+    failed_indices = [i for i, r in enumerate(results) if r is None]
+    ok_count = total - len(failed_indices)
+    _logger.info(
+        "Pass 1 complete: %d/%d succeeded, %d to retry",
+        ok_count, total, len(failed_indices),
+    )
+
+    if not failed_indices:
+        return results
+
+    # ── Cooldown ──────────────────────────────────────────────────────────
+    _logger.info(
+        "Waiting %d seconds for Yahoo rate-limit to reset before retry pass ...",
+        _RETRY_COOLDOWN_SECONDS,
+    )
+    time.sleep(_RETRY_COOLDOWN_SECONDS)
+
+    # ── Pass 2 (single-threaded) ──────────────────────────────────────────
+    _logger.info("Pass 2: retrying %d failed tickers (single-threaded)", len(failed_indices))
+    recovered = 0
+    for idx in failed_indices:
+        ticker = tickers[idx]
+        result = _fetch_fundamentals_for_ticker(ticker)
+        results[idx] = result
+        if result is not None:
+            recovered += 1
+            _logger.debug("Pass 2 recovered: %s", ticker)
+        else:
+            _logger.warning("Pass 2 still failed: %s", ticker)
+
+    _logger.info(
+        "Pass 2 complete: recovered %d/%d previously-failed tickers",
+        recovered, len(failed_indices),
+    )
     return results
+
 
 
 def run() -> Dict[str, Any]:
