@@ -1797,6 +1797,20 @@ class DataManager:
                 except Exception as e:
                     # Handle other errors with classification
                     error_type = self._classify_error(e)
+
+                    if error_type == 'rate_limit':
+                        # Treat classifier-identified rate limit errors identically to
+                        # RateLimitException — use the long delay so Yahoo's IP block
+                        # has time to expire before we retry.
+                        delay = self._calculate_rate_limit_delay(e, attempt)
+                        _logger.warning("Error (%s) for %s %s (attempt %d): %s",
+                                      error_type, provider_name, symbol, attempt + 1, e)
+                        _logger.warning("Rate limit detected — waiting %.1f seconds before retry", delay)
+                        self._sleep_with_jitter(delay, retry_config['jitter'])
+                        if provider_name in self.rate_limiters:
+                            self.rate_limiters[provider_name].wait_if_needed()
+                        continue
+
                     delay = self._calculate_exponential_backoff(attempt, retry_config)
 
                     _logger.warning("Error (%s) for %s %s (attempt %d): %s",
@@ -1981,8 +1995,10 @@ class DataManager:
         if any(term in error_message for term in ['not supported', 'not available', 'not implemented']):
             return 'not_supported'
 
-        # Rate limit errors
-        if any(term in error_message for term in ['rate limit', 'too many requests', 'quota exceeded']):
+        # Rate limit errors — include Yahoo's specific exception class name
+        if any(term in error_message for term in [
+            'rate limit', 'too many requests', 'quota exceeded', 'yfratelimiterror', 'ratelimit'
+        ]):
             return 'rate_limit'
 
         # Network errors
