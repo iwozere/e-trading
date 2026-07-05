@@ -10,9 +10,9 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
-from src, Optional.data.db.models.model_notification import MessagePriority
+from src.data.db.models.model_notification import MessagePriority
 from src.notification.logger import setup_logger
 from src.notification.service.message_queue import QueuedMessage
 

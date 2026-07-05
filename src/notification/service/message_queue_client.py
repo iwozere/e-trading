@@ -11,12 +11,14 @@ This client implements the shared DB utilities pattern (Variant D from MIGRATION
 """
 
 from contextlib import contextmanager
-from datetime import UTC, datetime
-from typing import Any, Dict, List
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
-from src, Optional.data.db.models.model_notification import Message, MessagePriority, MessageStatus
+from src.data.db.models.model_notification import Message, MessagePriority, MessageStatus
 from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
+
+UTC = timezone.utc
 
 _logger = setup_logger(__name__)
 

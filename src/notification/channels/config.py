@@ -246,7 +246,7 @@ class ConfigValidator:
         schema = {"channel": self.channel_name, "fields": {}}
 
         for rule in self.rules:
-            field_info = {
+            field_info: Dict[str, Any] = {
                 "type": rule.field_type.__name__ if rule.field_type else "any",
                 "required": rule.required,
                 "description": rule.description,

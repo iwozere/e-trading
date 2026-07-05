@@ -6,9 +6,9 @@ Handles environment variables, database settings, and service configuration.
 """
 
 import os
-from typing import Any, Dict, Field, List
+from typing import Any, Dict, List, Optional
 
-from pydantic import ConfigDict, Optional, field_validator
+from pydantic import ConfigDict, Field, field_validator
 from pydantic_settings import BaseSettings
 
 try:

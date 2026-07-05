@@ -9,14 +9,16 @@ import statistics
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from typing import Any, Dict, List
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
-from sqlalchemy import event, Optional, text
+from sqlalchemy import event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from src.notification.logger import setup_logger
+
+UTC = timezone.utc
 
 _logger = setup_logger(__name__)
 

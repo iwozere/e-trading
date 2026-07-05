@@ -7,11 +7,11 @@ Provides the interface that all channel implementations must follow.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from src, Optional.notification.logger import setup_logger
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -93,7 +93,7 @@ class MessageContent:
     text: str
     subject: Optional[str] = None
     html: Optional[str] = None
-    attachments: Optional[List[Dict[str, Any]]] = None
+    attachments: Optional[Dict[str, Any]] = None
     metadata: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
@@ -470,7 +470,7 @@ class ChannelRegistry:
             except Exception as e:
                 self._logger.error("Health check failed for channel %s: %s", channel_name, e)
                 health_results[channel_name] = ChannelHealth(
-                    status=ChannelHealthStatus.DOWN, last_check=datetime.now(UTC), error_message=str(e)
+                    status=ChannelHealthStatus.DOWN, last_check=datetime.now(timezone.utc), error_message=str(e)
                 )
 
         return health_results

@@ -16,7 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.data.db.core.base import Base
-from src.data.db.core.database import engine, session_scope
+from src.data.db.core.database import get_engine, session_scope
 from src.data.db.models.model_notification import (
     DeliveryStatus,
     Message,
@@ -31,7 +31,7 @@ from src.notification.service.main import app
 def setup_database():
     """Setup database tables for testing."""
     # Create all tables
-    Base.metadata.create_all(engine)
+    Base.metadata.create_all(get_engine())
     yield
     # Cleanup is handled by the database
 

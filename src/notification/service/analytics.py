@@ -228,7 +228,7 @@ class NotificationAnalytics:
                 delivery_stats = r.notifications.delivery_status.get_delivery_statistics(channel=channel, days=days)
 
                 # Get message statistics
-                message_stats = self._get_message_statistics(repo, channel, user_id, cutoff_date)
+                message_stats = self._get_message_statistics(r.notifications, channel, user_id, cutoff_date)
 
                 # Calculate rates
                 total_messages = message_stats.get("total_messages", 0)
@@ -238,12 +238,12 @@ class NotificationAnalytics:
                 overall_success_rate = successful_deliveries / total_messages if total_messages > 0 else 0.0
 
                 # Get channel-specific rates
-                channel_rates = self._calculate_channel_rates(repo, channel, cutoff_date)
+                channel_rates = self._calculate_channel_rates(r.notifications, channel, cutoff_date)
 
                 # Get user-specific rates if requested
                 user_rates = {}
                 if user_id:
-                    user_rates = self._calculate_user_rates(repo, user_id, cutoff_date)
+                    user_rates = self._calculate_user_rates(r.notifications, user_id, cutoff_date)
 
                 return {
                     "period_days": days,
@@ -281,7 +281,7 @@ class NotificationAnalytics:
             db_service = get_database_service()
             with db_service.uow() as r:
                 # Get response time data from database
-                response_times = self._get_response_time_data(repo, channel, cutoff_date)
+                response_times = self._get_response_time_data(r.notifications, channel, cutoff_date)
 
                 if not response_times:
                     return {
@@ -320,7 +320,7 @@ class NotificationAnalytics:
                     percentiles[f"p{p}"] = response_times[index]
 
                 # Get channel breakdown
-                channel_breakdown = self._get_channel_response_breakdown(repo, cutoff_date)
+                channel_breakdown = self._get_channel_response_breakdown(r.notifications, cutoff_date)
 
                 return {
                     "period_days": days,
@@ -361,7 +361,7 @@ class NotificationAnalytics:
             db_service = get_database_service()
             with db_service.uow() as r:
                 # Get time-series data
-                time_series = self._get_time_series_data(repo, granularity, cutoff_date, channel)
+                time_series = self._get_time_series_data(r.notifications, granularity, cutoff_date, channel)
 
                 # Calculate aggregated metrics
                 aggregated_stats = self._calculate_aggregated_metrics(time_series)
@@ -404,7 +404,7 @@ class NotificationAnalytics:
             db_service = get_database_service()
             with db_service.uow() as r:
                 # Get time series data for the metric
-                time_series_data = self._get_metric_time_series(repo, metric, cutoff_date, channel)
+                time_series_data = self._get_metric_time_series(r.notifications, metric, cutoff_date, channel)
 
                 if len(time_series_data) < 2:
                     # Not enough data for trend analysis
@@ -475,7 +475,7 @@ class NotificationAnalytics:
             # Get all channels first
             db_service = get_database_service()
             with db_service.uow() as r:
-                channels = self._get_active_channels(r, cutoff_date)
+                channels = self._get_active_channels(r.notifications, cutoff_date)
 
             channel_comparisons = {}
 
@@ -483,7 +483,7 @@ class NotificationAnalytics:
             for channel in channels:
                 # Get channel statistics
                 with db_service.uow() as r:
-                    channel_stats = self._get_channel_statistics(r, channel, cutoff_date)
+                    channel_stats = self._get_channel_statistics(r.notifications, channel, cutoff_date)
 
                 # Get trend analysis for this channel
                 success_trend = await self.get_trend_analysis(metric="success_rate", days=days, channel=channel)
@@ -499,36 +499,36 @@ class NotificationAnalytics:
                     ),
                 }
 
-                # Rank channels by performance
-                ranked_channels = sorted(
-                    channel_comparisons.items(), key=lambda x: x[1]["performance_score"], reverse=True
-                )
+            # Rank channels by performance
+            ranked_channels = sorted(
+                channel_comparisons.items(), key=lambda x: x[1]["performance_score"], reverse=True
+            )
 
-                return {
-                    "period_days": days,
-                    "channel_comparisons": channel_comparisons,
-                    "rankings": {
-                        "by_performance": [
-                            {"channel": channel, "score": data["performance_score"]}
-                            for channel, data in ranked_channels
+            return {
+                "period_days": days,
+                "channel_comparisons": channel_comparisons,
+                "rankings": {
+                    "by_performance": [
+                        {"channel": channel, "score": data["performance_score"]}
+                        for channel, data in ranked_channels
+                    ],
+                    "by_success_rate": sorted(
+                        [
+                            (ch, data["statistics"].get("success_rate", 0))
+                            for ch, data in channel_comparisons.items()
                         ],
-                        "by_success_rate": sorted(
-                            [
-                                (ch, data["statistics"].get("success_rate", 0))
-                                for ch, data in channel_comparisons.items()
-                            ],
-                            key=lambda x: x[1],
-                            reverse=True,
-                        ),
-                        "by_response_time": sorted(
-                            [
-                                (ch, data["statistics"].get("avg_response_time_ms", float("inf")))
-                                for ch, data in channel_comparisons.items()
-                            ],
-                            key=lambda x: x[1],
-                        ),
-                    },
-                }
+                        key=lambda x: x[1],
+                        reverse=True,
+                    ),
+                    "by_response_time": sorted(
+                        [
+                            (ch, data["statistics"].get("avg_response_time_ms", float("inf")))
+                            for ch, data in channel_comparisons.items()
+                        ],
+                        key=lambda x: x[1],
+                    ),
+                },
+            }
 
         except Exception:
             self._logger.exception("Failed to get channel performance comparison:")

@@ -6,12 +6,12 @@ Provides a template for SMS providers with message length validation and deliver
 """
 
 import asyncio
-from datetime import UTC, datetime
-from typing import Any, Dict
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 import aiohttp
 
-from src, Optional.notification.channels.base import (
+from src.notification.channels.base import (
     ChannelHealth,
     ChannelHealthStatus,
     DeliveryResult,
@@ -21,6 +21,8 @@ from src, Optional.notification.channels.base import (
 )
 from src.notification.channels.config import CommonValidationRules, ConfigValidator, validate_phone
 from src.notification.logger import setup_logger
+
+UTC = timezone.utc
 
 _logger = setup_logger(__name__)
 

@@ -6,13 +6,15 @@ Provides reliable message storage and retrieval for the notification service.
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from src, Optional.data.db.models.model_notification import Message, MessagePriority, MessageStatus
+from src.data.db.models.model_notification import Message, MessagePriority, MessageStatus
 from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
+
+UTC = timezone.utc
 
 _logger = setup_logger(__name__)
 

@@ -7,7 +7,7 @@ Supports HTML formatting, MIME attachments, and health monitoring.
 
 import smtplib
 import ssl
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from email import encoders
 from email.mime.application import MIMEApplication
 from email.mime.base import MIMEBase
@@ -15,11 +15,11 @@ from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import aiosmtplib
 
-from src, Optional.data.db.services.users_service import users_service
+from src.data.db.services.users_service import users_service
 from src.notification.channels.base import (
     ChannelHealth,
     ChannelHealthStatus,
@@ -30,6 +30,8 @@ from src.notification.channels.base import (
 )
 from src.notification.channels.config import CommonValidationRules, ConfigValidator, validate_email
 from src.notification.logger import setup_logger
+
+UTC = timezone.utc
 
 _logger = setup_logger(__name__)
 

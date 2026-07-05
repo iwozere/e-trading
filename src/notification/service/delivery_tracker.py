@@ -9,13 +9,15 @@ import asyncio
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from enum import Enum
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
-from src, Optional.data.db.models.model_notification import MessagePriority
+from src.data.db.models.model_notification import MessagePriority
 from src.notification.logger import setup_logger
 from src.notification.service.message_queue import QueuedMessage
+
+UTC = timezone.utc
 
 _logger = setup_logger(__name__)
 
