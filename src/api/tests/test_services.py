@@ -439,7 +439,8 @@ class TestStrategyManagementService:
     def test_get_service_status_with_manager(self):
         """Test getting service status with manager available."""
         mock_strategies = [{"status": "running"}, {"status": "running"}, {"status": "stopped"}]
-        self.mock_strategy_manager.get_all_strategies_status.return_value = mock_strategies
+        self.mock_strategy_manager.get_all_status.return_value = mock_strategies
+        self.mock_strategy_manager.strategy_instances = {"s1": 1, "s2": 2, "s3": 3}
 
         result = self.service.get_service_status()
 
@@ -459,15 +460,10 @@ class TestStrategyManagementService:
 
     def test_get_strategy_templates(self):
         """Test getting strategy templates."""
-        expected_templates = [
-            {"name": "SMA Crossover", "type": "sma_crossover"},
-            {"name": "RSI Strategy", "type": "rsi"},
-        ]
-
         result = self.service.get_strategy_templates()
 
-        # Should return default templates
-        assert isinstance(result, list)
+        # Should return default templates dict
+        assert isinstance(result, dict)
         assert len(result) > 0
 
 
