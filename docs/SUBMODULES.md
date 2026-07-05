@@ -114,7 +114,7 @@ to `localhost:5003`.
 ## 3. Notification
 
 **Path:** `src/notification/`  
-**Systemd unit:** `notification_bot.service`  
+**Systemd unit:** `notification-bot.service`  
 **Entry point:** `src/notification/notification_db_centric_bot.py`
 
 ### Purpose
@@ -272,7 +272,7 @@ positions, integrates with the strategy framework.
 ## 7. Telegram
 
 **Path:** `src/telegram/`  
-**Systemd unit:** `telegram_bot.service`
+**Systemd unit:** `telegram-bot.service`
 
 ### Purpose
 Telegram bot interface for end-users. Provides market screeners, alert management,
@@ -532,9 +532,9 @@ End-to-end log monitoring and alerting for the Raspberry Pi production server.
 #### 16.3 Services Monitored
 ```
 ibgateway-docker.service   IB Gateway (Docker)
-notification_bot.service   Notification delivery bot
+notification-bot.service   Notification delivery bot
 scheduler.service          Pipeline scheduler
-telegram_bot.service       Telegram user-facing bot
+telegram-bot.service       Telegram user-facing bot
 trading.service            Live trading execution
 trading-webui.service      FastAPI backend + React frontend
 ```
@@ -545,7 +545,7 @@ Vector / ServiceMonitor
   → POST /internal/log-alert (localhost)
     → NotificationService.create_message()
       → msg_messages table
-        → notification_bot.service
+        → notification-bot.service
           → Telegram alert to admin
 ```
 

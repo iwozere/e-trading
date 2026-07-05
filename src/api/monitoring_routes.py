@@ -29,9 +29,9 @@ _notification_health = NotificationHealthService()
 
 _DISPLAY_NAMES = {
     "ibgateway-docker.service": "IB Gateway",
-    "notification_bot.service": "Notification Bot",
+    "notification-bot.service": "Notification Bot",
     "scheduler.service": "Scheduler",
-    "telegram_bot.service": "Telegram Bot",
+    "telegram-bot.service": "Telegram Bot",
     "trading.service": "Trading",
     "trading-webui.service": "Web UI",
     "trading-api.service": "API",

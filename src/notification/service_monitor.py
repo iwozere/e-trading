@@ -24,9 +24,9 @@ _logger = setup_logger(__name__)
 
 SERVICES_TO_MONITOR = [
     "ibgateway-docker.service",
-    "notification_bot.service",
+    "notification-bot.service",
     "scheduler.service",
-    "telegram_bot.service",
+    "telegram-bot.service",
     "trading.service",
     "trading-webui.service",
 ]

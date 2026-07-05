@@ -92,7 +92,7 @@ Format: most recent first, grouped by theme.
 - Deployed **Vector** (Rust binary) on Raspberry Pi to collect journald + Docker logs.
 - Pipeline: journald → normalize → error-filter → fingerprint → 30-min throttle → HTTP POST
   to `/internal/log-alert` on port 5003.
-- Alerts delivered via existing notification pipeline (PostgreSQL → `notification_bot.service` → Telegram).
+- Alerts delivered via existing notification pipeline (PostgreSQL → `notification-bot.service` → Telegram).
 - Excluded noisy patterns: apport, systemd condition-skip, IB Gateway Xlib errors.
 
 ---
@@ -122,7 +122,7 @@ Format: most recent first, grouped by theme.
 - Pipeline timeouts tuned for pipelines 06, 10, and 15.
 - Scheduler pipeline table refactored; `ScheduleRun` records now store `job_snapshot`
   with `schedule_id` for reliable pipeline ↔ run matching on the Monitoring page.
-- `notification_bot.service` and `scheduler.service` split into separate systemd units
+- `notification-bot.service` and `scheduler.service` split into separate systemd units
   for independent restart and log isolation.
 
 ---

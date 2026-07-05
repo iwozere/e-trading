@@ -6,8 +6,8 @@ OHLCV refresh???
 
 git pull origin main
 
-telegram_bot.service
-notification_bot.service
+telegram-bot.service
+notification-bot.service
 scheduler.service
 trading-webui.service
 trading.service
@@ -21,9 +21,9 @@ source .venv/bin/activate
 # Systemd
 ############################################
 ibgateway-docker.service
-notification_bot.service
+notification-bot.service
 scheduler.service
-telegram_bot.service
+telegram-bot.service
 trading.service
 trading-webui.service
 
@@ -31,17 +31,17 @@ trading-webui.service
 ############################################
 #   Systemctl
 ############################################
-sudo systemctl status telegram_bot.service
+sudo systemctl status telegram-bot.service
 sudo systemctl status scheduler.service
-sudo systemctl status notification_bot.service
+sudo systemctl status notification-bot.service
 sudo systemctl status ibgateway-docker.service
 sudo systemctl status trading-webui.service
 sudo systemctl status trading.service
 
 
-sudo journalctl -u telegram_bot.service --since "10 minutes ago"
+sudo journalctl -u telegram-bot.service --since "10 minutes ago"
 sudo journalctl -u scheduler.service --since "10 minutes ago"
-sudo journalctl -u notification_bot.service --since "10 minutes ago"
+sudo journalctl -u notification-bot.service --since "10 minutes ago"
 sudo journalctl -u trading-webui.service --since "10 minutes ago"
 sudo journalctl -u trading.service --since "10 minutes ago"
 sudo journalctl -u vector -n 30 --no-pager
@@ -61,7 +61,7 @@ Also check if it is enabled at boot:
 
 sudo systemctl is-enabled NAME
 
-sudo systemd-analyze verify /etc/systemd/system/telegram_bot.service 
+sudo systemd-analyze verify /etc/systemd/system/telegram-bot.service 
 
 sudo systemd-analyze verify /etc/systemd/system/scheduler.service
 

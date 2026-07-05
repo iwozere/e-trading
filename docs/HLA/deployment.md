@@ -17,9 +17,9 @@
 | Systemd Unit | Port | Description |
 |---|---|---|
 | `trading-webui.service` | **5003** | FastAPI backend + React frontend (unified) |
-| `notification_bot.service` | — | Notification delivery bot (Telegram + email) |
+| `notification-bot.service` | — | Notification delivery bot (Telegram + email) |
 | `scheduler.service` | — | APScheduler pipeline runner |
-| `telegram_bot.service` | — | User-facing Telegram bot |
+| `telegram-bot.service` | — | User-facing Telegram bot |
 | `trading.service` | — | Live IBKR trading execution |
 | `ibgateway-docker.service` | 4797 | IB Gateway (paper trading, Docker) |
 | `vector.service` | — | Log monitoring (journald → Telegram alerts) |
@@ -32,12 +32,12 @@ cd /opt/apps/e-trading
 
 # Restart all core services
 sudo systemctl restart trading-webui.service
-sudo systemctl restart notification_bot.service
+sudo systemctl restart notification-bot.service
 sudo systemctl restart scheduler.service
-sudo systemctl restart telegram_bot.service
+sudo systemctl restart telegram-bot.service
 
 # Check status
-sudo systemctl status trading-webui.service notification_bot.service scheduler.service telegram_bot.service
+sudo systemctl status trading-webui.service notification-bot.service scheduler.service telegram-bot.service
 ```
 
 Web UI available at `http://<pi-ip>:5003` after `trading-webui.service` starts.
