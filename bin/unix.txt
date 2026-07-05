@@ -85,3 +85,67 @@ cd /opt/apps/e-trading
 #set -a; source config/donotshare/.env; set +a
 # Run python module
 .venv/bin/python -m src.scheduler.main
+
+
+
+
+
+
+
+###########################################
+# Check after refactoring
+###########################################
+sudo systemctl status scheduler trading notification-bot trading-webui
+
+systemctl is-active scheduler trading notification-bot trading-webui
+
+# Scheduler
+sudo journalctl -u scheduler -n 100 --no-pager
+
+# Trading bot
+sudo journalctl -u trading -n 100 --no-pager
+
+# Notification bot
+sudo journalctl -u notification-bot -n 100 --no-pager
+
+# Web UI
+sudo journalctl -u trading-webui -n 100 --no-pager
+
+# All four together since boot — most useful after a reboot
+sudo journalctl -u scheduler -u trading -u notification-bot -u trading-webui --since "today" --no-pager
+
+# Follow all four live
+sudo journalctl -u scheduler -u trading -u notification-bot -u trading-webui -f
+
+
+# Most important — errors only
+tail -n 50 /opt/apps/e-trading/logs/log/app_errors.log
+
+# Full app log
+tail -n 50 /opt/apps/e-trading/logs/log/app.log
+
+# Telegram/notification logs
+tail -n 30 /opt/apps/e-trading/logs/log/telegram_alert_monitor.log
+tail -n 30 /opt/apps/e-trading/logs/log/telegram_background_services.log
+tail -n 30 /opt/apps/e-trading/logs/log/telegram_schedule_processor.log
+tail -n 30 /opt/apps/e-trading/logs/log/telegram_screener_bot.log
+
+# Trading activity
+tail -n 30 /opt/apps/e-trading/logs/log/orders.log
+tail -n 30 /opt/apps/e-trading/logs/log/trades.log
+
+
+echo "=== SERVICE STATUS ===" && \
+systemctl is-active scheduler trading notification-bot trading-webui && \
+echo "=== RECENT ERRORS ===" && \
+tail -n 20 /opt/apps/e-trading/logs/log/app_errors.log
+
+
+# See the crash reason
+sudo journalctl -u trading -n 200 --no-pager
+
+# Restart it
+sudo systemctl restart scheduler
+sudo systemctl restart trading
+sudo systemctl restart notification-bot
+sudo systemctl restart trading-webui

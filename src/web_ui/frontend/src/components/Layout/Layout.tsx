@@ -34,10 +34,12 @@ import {
   History,
   ExpandLess,
   ExpandMore,
+  LockOpen,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useTelegramPermissions } from '../Telegram/TelegramRouteGuard';
+import { ChangePasswordModal } from './ChangePasswordModal';
 
 const drawerWidth = 240;
 
@@ -58,6 +60,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const [telegramExpanded, setTelegramExpanded] = React.useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = React.useState(false);
   
   const telegramPermissions = useTelegramPermissions();
 
@@ -298,6 +301,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <AccountCircle sx={{ mr: 1 }} />
                 Profile
               </MenuItem>
+              <MenuItem onClick={() => { handleClose(); setChangePasswordOpen(true); }}>
+                <LockOpen sx={{ mr: 1 }} />
+                Change Password
+              </MenuItem>
               <MenuItem onClick={handleLogout}>
                 <Logout sx={{ mr: 1 }} />
                 Logout
@@ -343,6 +350,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <Toolbar />
         {children}
       </Box>
+      <ChangePasswordModal open={changePasswordOpen} onClose={() => setChangePasswordOpen(false)} />
     </Box>
   );
 };

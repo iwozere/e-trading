@@ -6,6 +6,7 @@ FastAPI routes for user authentication, registration,
 and token management.
 """
 
+from datetime import datetime, timezone
 import secrets
 import sys
 import time
@@ -79,6 +80,27 @@ class UserResponse(BaseModel):
 
 
 _CODE_TTL_SECONDS = 600  # 10-minute window for verification codes
+
+
+class ChangePasswordRequest(BaseModel):
+    """Request model for password change."""
+
+    current_password: str
+    new_password: str
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request model for requesting password reset code."""
+
+    identity: str
+
+
+class ConfirmResetRequest(BaseModel):
+    """Request model for confirming password reset."""
+
+    identity: str
+    code: str
+    new_password: str
 
 
 class SendCodeRequest(BaseModel):
@@ -475,3 +497,269 @@ async def verify_2fa_code(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
         )
+
+
+@router.post("/change-password")
+async def change_password(
+    request: Request,
+    body: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """
+    Allow logged-in users to change their password from the Web UI.
+    """
+    special_emails = {"admin@trading-system.local", "trader@trading-system.local", "viewer@trading-system.local"}
+    if current_user.email in special_emails:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Password changes are not permitted for system-level accounts.",
+        )
+
+    db_service = get_database_service()
+    with db_service.uow() as r:
+        db_user = r.s.query(User).filter(User.id == current_user.id).first()
+        if not db_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+
+        if db_user.password_hash:
+            if not db_user.verify_password(body.current_password):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Incorrect current password",
+                )
+
+        db_user.set_password(body.new_password)
+        db_user.updated_at = datetime.now(timezone.utc)
+
+        webui_app_service.log_user_action(
+            user_id=db_user.id,
+            action="change_password",
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+
+    _logger.info("User %s changed password successfully", current_user.email or f"ID:{current_user.id}")
+    return {"detail": "Password updated successfully"}
+
+
+@router.post("/reset-password/request")
+@limiter.limit("5/minute")
+async def request_password_reset(
+    request: Request,
+    body: ResetPasswordRequest,
+) -> dict:
+    """
+    Request a password reset verification code via Email or Telegram.
+    """
+    identity = body.identity.strip()
+    if not identity:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Identity identifier is required",
+        )
+
+    clean_identity = identity
+    if clean_identity.startswith("telegram_"):
+        clean_identity = clean_identity.replace("telegram_", "")
+
+    db_service = get_database_service()
+    user = None
+    telegram_chat_id = None
+
+    with db_service.uow() as r:
+        user = r.s.query(User).filter(User.email == clean_identity).first()
+
+        if not user:
+            ident = r.s.query(AuthIdentity).filter(
+                AuthIdentity.provider == "telegram",
+                AuthIdentity.external_id == clean_identity
+            ).first()
+            if ident:
+                user = r.s.query(User).filter(User.id == ident.user_id).first()
+                telegram_chat_id = int(ident.external_id)
+        else:
+            ident = r.s.query(AuthIdentity).filter(
+                AuthIdentity.user_id == user.id,
+                AuthIdentity.provider == "telegram"
+            ).first()
+            if ident:
+                telegram_chat_id = int(ident.external_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with that email or Telegram ID",
+        )
+
+    special_emails = {"admin@trading-system.local", "trader@trading-system.local", "viewer@trading-system.local"}
+    if user.email in special_emails:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password reset is not permitted for default system accounts.",
+        )
+
+    channel = None
+    if "@" in identity:
+        channel = "email"
+    elif identity.isdigit() or identity.startswith("telegram_"):
+        if telegram_chat_id is not None:
+            channel = "telegram"
+
+    if not channel:
+        if telegram_chat_id is not None:
+            channel = "telegram"
+        elif user.email:
+            channel = "email"
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User has no linked email or Telegram channel to send reset code",
+            )
+
+    if channel == "telegram" and telegram_chat_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No Telegram chat ID linked to this account",
+        )
+    if channel == "email" and not user.email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No email address linked to this account",
+        )
+
+    code = f"{secrets.randbelow(10**6):06d}"
+
+    with db_service.uow() as r:
+        r.s.query(VerificationCode).filter(
+            VerificationCode.user_id == user.id,
+            VerificationCode.provider == f"reset_{channel}",
+        ).delete(synchronize_session=False)
+
+        r.s.add(
+            VerificationCode(
+                user_id=user.id,
+                code=code,
+                sent_time=int(time.time()),
+                provider=f"reset_{channel}",
+            )
+        )
+
+    try:
+        async with NotificationServiceClient(service_url="database://") as notify_client:
+            await notify_client.send_notification(
+                notification_type="system",
+                title="Your password reset code",
+                message=f"Your password reset verification code is: {code}\nValid for 10 minutes.",
+                channels=[channel],
+                telegram_chat_id=telegram_chat_id,
+                email_receiver=user.email if channel == "email" else None,
+                recipient_id=str(user.id),
+            )
+    except Exception as exc:
+        _logger.error("Failed to send reset notification: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send verification code. Please try again later.",
+        )
+
+    _logger.info("Password reset code sent to user %s via %s", user.id, channel)
+    return {
+        "detail": "Verification code sent successfully",
+        "channel": channel,
+        "recipient": user.email if channel == "email" else f"Telegram ({telegram_chat_id})",
+    }
+
+
+@router.post("/reset-password/confirm")
+@limiter.limit("5/minute")
+async def confirm_password_reset(
+    request: Request,
+    body: ConfirmResetRequest,
+) -> dict:
+    """
+    Validate a password reset verification code and update password.
+    """
+    identity = body.identity.strip()
+    if not identity:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Identity identifier is required",
+        )
+
+    clean_identity = identity
+    if clean_identity.startswith("telegram_"):
+        clean_identity = clean_identity.replace("telegram_", "")
+
+    db_service = get_database_service()
+    user = None
+
+    with db_service.uow() as r:
+        user = r.s.query(User).filter(User.email == clean_identity).first()
+
+        if not user:
+            ident = r.s.query(AuthIdentity).filter(
+                AuthIdentity.provider == "telegram",
+                AuthIdentity.external_id == clean_identity
+            ).first()
+            if ident:
+                user = r.s.query(User).filter(User.id == ident.user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with that email or Telegram ID",
+        )
+
+    special_emails = {"admin@trading-system.local", "trader@trading-system.local", "viewer@trading-system.local"}
+    if user.email in special_emails:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password reset is not permitted for default system accounts.",
+        )
+
+    valid = False
+    with db_service.uow() as r:
+        code_rows = (
+            r.s.query(VerificationCode)
+            .filter(
+                VerificationCode.user_id == user.id,
+                VerificationCode.provider.like("reset_%")
+            )
+            .order_by(VerificationCode.sent_time.desc())
+            .all()
+        )
+
+        now = int(time.time())
+        matched_row = None
+        for code_row in code_rows:
+            if (now - code_row.sent_time) <= _CODE_TTL_SECONDS:
+                if code_row.code == body.code.strip():
+                    valid = True
+                    matched_row = code_row
+                    break
+
+        if valid and matched_row:
+            r.s.delete(matched_row)
+
+            db_user = r.s.query(User).filter(User.id == user.id).first()
+            db_user.set_password(body.new_password)
+            db_user.updated_at = datetime.now(timezone.utc)
+
+            webui_app_service.log_user_action(
+                user_id=db_user.id,
+                action="reset_password",
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+            )
+
+    if not valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification code",
+        )
+
+    _logger.info("Password reset successfully for user %s", user.id)
+    return {"detail": "Password reset successfully. You can now log in with your new password."}

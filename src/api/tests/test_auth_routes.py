@@ -21,6 +21,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.api.auth import create_access_token, create_refresh_token
+from src.api.rate_limiter import limiter
+
+
+@pytest.fixture(autouse=True)
+def bypass_rate_limit(monkeypatch):
+    """Disable rate limit for unit tests."""
+    monkeypatch.setattr(limiter, "enabled", False)
 
 
 class TestAuthenticationRoutes:
