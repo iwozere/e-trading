@@ -89,9 +89,9 @@ class ServiceMonitor:
 
             found_errors = []
             for pattern in error_patterns:
-                if re.search(pattern, logs, re.IGNORECASE):
+                match = re.search(pattern, logs, re.IGNORECASE)
+                if match:
                     # Extract a snippet around the first match
-                    match = re.search(pattern, logs, re.IGNORECASE)
                     start = max(0, match.start() - 100)
                     end = min(len(logs), match.end() + 300)
                     snippet = logs[start:end].strip()
