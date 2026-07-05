@@ -15,7 +15,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.channels import ConfigValidationError, MessageContent, channel_registry, load_all_channels
+from src.notification.channels.loader import plugin_loader
 from src.notification.logger import setup_logger
+
+# Add test plugin path to loader
+plugin_loader.add_plugin_path(str(Path(__file__).parent / "test_plugin.py"))
 
 _logger = setup_logger(__name__)
 

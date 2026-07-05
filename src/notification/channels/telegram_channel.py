@@ -7,11 +7,11 @@ Supports message splitting, attachments, health monitoring, and dynamic chat IDs
 
 import asyncio
 from datetime import UTC, datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from aiogram import Bot
-from aiogram, Optional.exceptions import TelegramAPIError, TelegramBadRequest, TelegramForbiddenError
-from aiogram.types import BufferedInputFile, FSInputFile
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramForbiddenError
+from aiogram.types import BufferedInputFile, FSInputFile, Message
 
 from src.notification.channels.base import (
     ChannelHealth,
@@ -165,6 +165,16 @@ class TelegramChannel(NotificationChannel):
 
             response_time = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
 
+            if not telegram_message:
+                error_msg = "Failed to send Telegram message (no response received)"
+                _logger.error(error_msg)
+                return DeliveryResult(
+                    success=False,
+                    status=DeliveryStatus.FAILED,
+                    error_message=error_msg,
+                    response_time_ms=response_time,
+                )
+
             _logger.info(
                 "Telegram message sent successfully - chat_id=%s, message_id=%s, response_time=%dms",
                 chat_id,
@@ -239,17 +249,18 @@ class TelegramChannel(NotificationChannel):
     ) -> DeliveryResult:
         """Send message with attachments."""
         try:
+            attachments = content.attachments or {}
             _logger.info(
                 "Sending message with %d attachments to chat_id=%s",
-                len(content.attachments) if content.attachments else 0,
+                len(attachments),
                 chat_id,
             )
             _logger.debug(
                 "Attachment types: %s",
-                {k: type(v).__name__ for k, v in content.attachments.items()} if content.attachments else {},
+                {k: type(v).__name__ for k, v in attachments.items()},
             )
 
-            for filename, attachment_data in content.attachments.items():
+            for filename, attachment_data in attachments.items():
                 _logger.debug("Processing attachment: filename=%s, type=%s", filename, type(attachment_data).__name__)
 
                 # Handle different attachment formats
@@ -309,7 +320,7 @@ class TelegramChannel(NotificationChannel):
                 response_time_ms=response_time,
                 metadata={
                     "chat_id": chat_id,
-                    "attachment_count": len(content.attachments),
+                    "attachment_count": len(attachments),
                     "message_thread_id": message_thread_id,
                 },
             )
@@ -463,7 +474,7 @@ class TelegramChannel(NotificationChannel):
         text: str,
         reply_to_message_id: Optional[int] = None,
         message_thread_id: Optional[int] = None,
-    ):
+    ) -> Optional[Message]:
         """Send text message with automatic splitting for long messages."""
         if len(text) <= self.MAX_MESSAGE_LENGTH:
             # Message is short enough, send normally

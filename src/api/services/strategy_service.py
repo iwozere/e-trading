@@ -6,6 +6,8 @@ Service layer for managing trading strategies through the web UI.
 Provides a clean interface between the web API and the enhanced trading system.
 """
 
+from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path
@@ -22,7 +24,8 @@ _logger = setup_logger(__name__)
 # Import trading system components with error handling
 try:
     from src.model.config_models import StrategyConfig as TradingStrategyConfig
-    from src.trading.strategy_manager import StrategyInstance, StrategyManager
+    from src.trading.strategy_instance import StrategyInstance
+    from src.trading.strategy_manager import StrategyManager
 
     TRADING_SYSTEM_AVAILABLE = True
 except ImportError as e:
