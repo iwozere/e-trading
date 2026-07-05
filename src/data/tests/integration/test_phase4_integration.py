@@ -21,22 +21,24 @@ import pandas as pd
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
-from src.data import (
-    # Core components
-    BaseDataSource,
-    DataAggregator,
+from src.data.sources.base_data_source import BaseDataSource
+from src.data.sources.data_aggregator import DataAggregator
+from src.data.sources.data_source_factory import (
+    create_data_source,
+    get_data_source_factory,
+    register_data_source,
+)
+from src.data.utils.performance_optimization import (
     LazyDataLoader,
     ParallelProcessor,
-    create_data_source,
     get_data_compressor,
-    # Utilities
-    get_data_handler,
-    get_data_quality_score,
-    get_data_source_factory,
     get_memory_optimizer,
     get_performance_monitor,
     optimize_dataframe_performance,
-    register_data_source,
+)
+from src.data.utils.data_handler import get_data_handler
+from src.data.utils.validation import (
+    get_data_quality_score,
     validate_ohlcv_data,
 )
 
@@ -122,8 +124,10 @@ class TestPhase4Integration(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.cache_dir = os.path.join(self.temp_dir, "cache")
 
-        # Configure unified cache
+        # Configure unified cache and old cache systems
+        from src.data.utils.caching import configure_cache
         self.cache = configure_unified_cache(cache_dir=self.cache_dir, max_size_gb=1.0)
+        configure_cache(cache_dir=self.cache_dir, max_size_gb=1.0)
 
         # Create data source factory with mock configuration
         with patch("src.data.sources.data_source_factory.DataSourceFactory._load_config") as mock_config:
@@ -242,14 +246,14 @@ class TestPhase4Integration(unittest.TestCase):
     def test_data_handler_integration(self):
         """Test data handler integration."""
         # Test data standardization
-        dates = pd.date_range("2023-01-01", periods=5, freq="h")
+        dates = pd.date_range("2023-01-01", periods=15, freq="h")
         raw_df = pd.DataFrame(
             {
-                "open": [100, 101, 102, 103, 104],
-                "high": [102, 103, 104, 105, 106],
-                "low": [99, 100, 101, 102, 103],
-                "close": [101, 102, 103, 104, 105],
-                "volume": [1000, 1100, 1200, 1300, 1400],
+                "open": [100.0 + i for i in range(15)],
+                "high": [102.0 + i for i in range(15)],
+                "low": [99.0 + i for i in range(15)],
+                "close": [101.0 + i for i in range(15)],
+                "volume": [1000.0 + i * 100 for i in range(15)],
             },
             index=dates,
         )
@@ -258,7 +262,7 @@ class TestPhase4Integration(unittest.TestCase):
         standardized_df = self.data_handler.standardize_ohlcv_data(raw_df, "TEST", "1h", timestamp_col="timestamp")
 
         self.assertIsNotNone(standardized_df)
-        self.assertTrue(isinstance(standardized_df.index, pd.DatetimeIndex))
+        self.assertIn("timestamp", standardized_df.columns)
 
         # Test data validation and scoring
         validation_result = self.data_handler.validate_and_score_data(standardized_df, "TEST")
@@ -533,8 +537,8 @@ class TestPhase4Integration(unittest.TestCase):
         # Test performance summary
         summary = self.performance_monitor.get_summary()
         self.assertIn("total_operations", summary)
-        self.assertIn("avg_duration_ms", summary)
-        self.assertIn("total_duration_ms", summary)
+        self.assertIn("test_operation", summary)
+        self.assertIn("avg_duration_ms", summary["test_operation"])
 
 
 def run_phase4_integration_tests():

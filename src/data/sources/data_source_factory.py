@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Type
 import yaml
 
 from src.data.sources.base_data_source import BaseDataSource
-from src.data.utils import configure_cache
+from src.data.utils.caching import configure_cache
 
 # Import cache directory setting
 try:

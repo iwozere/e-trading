@@ -18,20 +18,20 @@ import pandas as pd
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.data import (
-    # get_stream_multiplexer,  # Not implemented yet
-    # create_stream_config,    # Not implemented yet
+from src.data.utils.performance_optimization import (
     LazyDataLoader,
     ParallelProcessor,
-    TimeBasedInvalidation,
-    VersionBasedInvalidation,
-    compress_dataframe_efficiently,
-    configure_advanced_cache,
-    get_advanced_cache,
     get_data_compressor,
     get_memory_optimizer,
     get_performance_monitor,
     optimize_dataframe_performance,
+    compress_dataframe_efficiently,
+)
+from src.data.utils.advanced_caching import (
+    TimeBasedInvalidation,
+    VersionBasedInvalidation,
+    configure_advanced_cache,
+    get_advanced_cache,
 )
 
 
@@ -294,7 +294,8 @@ def test_integration_features():
         summary = monitor.get_summary()
         print("✓ Integration workflow completed:")
         for operation, stats in summary.items():
-            print(f"  - {operation}: {stats['avg_duration_ms']:.1f}ms avg")
+            if isinstance(stats, dict) and 'avg_duration_ms' in stats:
+                print(f"  - {operation}: {stats['avg_duration_ms']:.1f}ms avg")
 
         assert True  # Test passed
 

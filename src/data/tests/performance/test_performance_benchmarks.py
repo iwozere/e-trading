@@ -20,13 +20,13 @@ import pandas as pd
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
-from src.data import (
+from src.data.utils.performance_optimization import (
     ParallelProcessor,
     compress_dataframe_efficiently,
     get_performance_monitor,
     optimize_dataframe_performance,
-    validate_ohlcv_data,
 )
+from src.data.utils.validation import validate_ohlcv_data
 
 # Import new unified cache system
 from src.data.cache.unified_cache import configure_unified_cache

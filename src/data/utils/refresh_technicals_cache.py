@@ -20,7 +20,7 @@ import sys
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 import pandas as pd
 
@@ -105,7 +105,7 @@ class MockDataSource(BaseDataSource):
 
         return df
 
-    def start_realtime_feed(self, symbol: str, interval: str, callback: callable | None = None) -> bool:
+    def start_realtime_feed(self, symbol: str, interval: str, callback: Callable | None = None) -> bool:
         return True
 
     def stop_realtime_feed(self, symbol: str) -> bool:
@@ -189,7 +189,7 @@ def populate_cache(
 
                 # Try to get data from real sources first, fallback to mock for testing
                 df = None
-                used_provider = None
+                used_provider: str = ""
 
                 # Use provider selector to determine the best provider for this symbol and interval
                 best_provider = provider_selector.get_best_provider(symbol, interval)
@@ -388,7 +388,7 @@ def populate_cache(
                         # Set timestamp as index for proper caching
                         df = df.set_index("timestamp")
                         # Ensure index is timezone-naive for compatibility
-                        if df.index.tz is not None:
+                        if isinstance(df.index, pd.DatetimeIndex) and df.index.tz is not None:
                             df.index = df.index.tz_localize(None)
                         print("  🔄 Converted timestamp to index")
 
@@ -484,7 +484,7 @@ def validate_cache_structure(cache_dir: str = DATA_CACHE_DIR) -> Dict[str, Any]:
     if not cache_path.exists():
         return {"error": f"Cache directory does not exist: {cache_dir}"}
 
-    results = {"directory_exists": True, "structure": {}, "files": {}, "total_size_mb": 0}
+    results = {"directory_exists": True, "structure": {}, "files": {}, "total_size_mb": 0.0}
 
     # Check directory structure
     for item in cache_path.iterdir():

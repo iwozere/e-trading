@@ -8,11 +8,12 @@ must implement, providing consistency and reducing code duplication.
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 import pandas as pd
 
-from src.data.utils import get_data_handler, get_provider_limiter
+from src.data.utils.data_handler import get_data_handler
+from src.data.utils.rate_limiting import get_provider_limiter
 
 _logger = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ class BaseDataSource(ABC):
         pass
 
     @abstractmethod
-    def start_realtime_feed(self, symbol: str, interval: str, callback: callable | None = None) -> bool:
+    def start_realtime_feed(self, symbol: str, interval: str, callback: Callable | None = None) -> bool:
         """
         Start real-time data feed.
 

@@ -15,9 +15,28 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from unittest.mock import patch
 
-from src.data import DataAggregator, get_data_source_factory, register_data_source
+from datetime import datetime
+from typing import Callable, List, Dict
+from src.data.sources.base_data_source import BaseDataSource
+from src.data.sources.data_aggregator import DataAggregator
+from src.data.sources.data_source_factory import get_data_source_factory, register_data_source
 from src.data.feed.binance_live_feed import BinanceLiveDataFeed
-from src.data.utils import get_data_handler, validate_ohlcv_data
+from src.data.utils.data_handler import get_data_handler
+from src.data.utils.validation import validate_ohlcv_data
+
+
+class MockDataSource(BaseDataSource):
+    """Mock data source for testing."""
+    def fetch_historical_data(
+        self, symbol: str, interval: str, start_date: datetime | None = None, end_date: datetime | None = None, limit: int | None = None
+    ) -> pd.DataFrame:
+        return pd.DataFrame()
+
+    def start_realtime_feed(self, symbol: str, interval: str, callback: Callable | None = None) -> bool:
+        return True
+
+    def stop_realtime_feed(self, symbol: str) -> bool:
+        return True
 
 
 def test_data_handler():
@@ -69,7 +88,7 @@ def test_data_source_factory():
         print("✓ Factory instance created")
 
         # Register a test data source
-        register_data_source("test_binance", BinanceLiveDataFeed)
+        register_data_source("test_binance", MockDataSource)
         print("✓ Test data source registered")
 
         # Check available providers

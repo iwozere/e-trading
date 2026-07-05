@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 from src.data.sources.data_source_factory import get_data_source_factory
-from src.data.utils import get_data_handler
+from src.data.utils.data_handler import get_data_handler
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

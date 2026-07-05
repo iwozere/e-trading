@@ -17,7 +17,7 @@ Features:
 import importlib
 import inspect
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Type
+from typing import Any, Callable, Dict, List, Tuple, Type
 
 from src.notification.logger import setup_logger
 from src.trading.strategy_registry import strategy_registry
@@ -82,7 +82,7 @@ class StrategyHandler:
         class_name: str,
         description: str = "",
         requires_mixins: bool = False,
-        validator_func: callable | None = None,
+        validator_func: Callable | None = None,
     ):
         """
         Register a new strategy type.

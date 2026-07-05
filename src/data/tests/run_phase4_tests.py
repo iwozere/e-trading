@@ -178,7 +178,7 @@ def generate_test_report(unit_result, integration_result, performance_result):
 
     # Check if file-based cache is working
     try:
-        from src.data import FileBasedCache, get_file_cache
+        from src.data.utils.file_based_cache import FileBasedCache, get_file_cache
 
         print("  ✓ File-based cache system: Available")
     except ImportError as e:
