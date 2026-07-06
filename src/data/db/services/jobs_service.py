@@ -144,7 +144,7 @@ class JobsService(BaseDBService):
         # Create a run for immediate execution
         run_data = ScheduleRunCreate(
             job_type=JobType(schedule.job_type),
-            job_id=f"manual_{schedule_id}_{datetime.now(UTC).timestamp()}",
+            job_id=str(schedule_id),
             scheduled_for=datetime.now(UTC),
             job_snapshot={
                 "schedule_id": schedule_id,
