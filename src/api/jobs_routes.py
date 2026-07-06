@@ -13,7 +13,7 @@ from typing import List
 # UUID import removed - using integer IDs
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy.orm import Session
+from src.data.db.services.database_service import DatabaseService, get_database_service
 
 from src.api.auth import get_current_user, require_trader_or_admin
 from src.api.services.webui_app_service import webui_app_service
@@ -91,9 +91,9 @@ def _resolve_log_path(name_lower: str, run_date: date) -> Path | None:
     return None
 
 
-def get_jobs_service(session: Session = Depends(webui_app_service.get_db_session)) -> JobsService:
-    """Get jobs service with database session."""
-    return JobsService(session)
+def get_jobs_service(db_service: DatabaseService = Depends(get_database_service)) -> JobsService:
+    """Get jobs service with database service."""
+    return JobsService(db_service)
 
 
 # ---------- Ad-hoc Execution Endpoints ----------
@@ -196,52 +196,61 @@ async def get_run_logs(
       2. ScheduleRun.result JSON serialised as text
       3. source: "none" — no log available
     """
-    run = jobs_service.get_run(run_id)
-    if not run:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+    try:
+        run = jobs_service.get_run(run_id)
+        if not run:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
 
-    if run.user_id is not None and run.user_id != current_user.id and current_user.role not in ["admin"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        if run.user_id is not None and run.user_id != current_user.id and current_user.role not in ["admin"]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
-    snapshot = run.job_snapshot or {}
-    schedule_name = snapshot.get("schedule_name") or ""
-    job_id_str = run.job_id or ""
-    pipeline_name = schedule_name or job_id_str
-    name_lower = f"{schedule_name} {job_id_str}".lower().replace(" ", "_").replace("-", "_")
+        snapshot = run.job_snapshot or {}
+        schedule_name = snapshot.get("schedule_name") or ""
+        job_id_str = run.job_id or ""
+        pipeline_name = schedule_name or job_id_str
+        name_lower = f"{schedule_name} {job_id_str}".lower().replace(" ", "_").replace("-", "_")
 
-    run_dt = run.started_at or run.scheduled_for or run.enqueued_at
-    run_date = run_dt.date() if run_dt else date.today()
+        run_dt = run.started_at or run.scheduled_for or run.enqueued_at
+        run_date = run_dt.date() if run_dt else date.today()
 
-    log_path = _resolve_log_path(name_lower, run_date)
-    if log_path and log_path.exists():
-        log_content = log_path.read_text(encoding="utf-8", errors="replace")
+        log_path = _resolve_log_path(name_lower, run_date)
+        if log_path and log_path.exists():
+            log_content = log_path.read_text(encoding="utf-8", errors="replace")
+            return {
+                "run_id": run_id,
+                "pipeline_name": pipeline_name,
+                "started_at": run.started_at.isoformat() if run.started_at else None,
+                "log_content": log_content,
+                "source": "file",
+                "log_path": str(log_path),
+            }
+
+        if run.result:
+            return {
+                "run_id": run_id,
+                "pipeline_name": pipeline_name,
+                "started_at": run.started_at.isoformat() if run.started_at else None,
+                "log_content": json.dumps(jsonable_encoder(run.result), indent=2, ensure_ascii=False),
+                "source": "db_result",
+                "log_path": None,
+            }
+
         return {
             "run_id": run_id,
             "pipeline_name": pipeline_name,
             "started_at": run.started_at.isoformat() if run.started_at else None,
-            "log_content": log_content,
-            "source": "file",
-            "log_path": str(log_path),
-        }
-
-    if run.result:
-        return {
-            "run_id": run_id,
-            "pipeline_name": pipeline_name,
-            "started_at": run.started_at.isoformat() if run.started_at else None,
-            "log_content": json.dumps(jsonable_encoder(run.result), indent=2, ensure_ascii=False),
-            "source": "db_result",
+            "log_content": None,
+            "source": "none",
             "log_path": None,
         }
-
-    return {
-        "run_id": run_id,
-        "pipeline_name": pipeline_name,
-        "started_at": run.started_at.isoformat() if run.started_at else None,
-        "log_content": None,
-        "source": "none",
-        "log_path": None,
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception("Failed to get logs for run %s:", run_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get run logs: {str(e)}"
+        )
 
 
 @router.get("/runs", response_model=List[ScheduleRunResponse])
