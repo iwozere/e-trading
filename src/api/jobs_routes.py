@@ -42,25 +42,52 @@ router = APIRouter(prefix="/api", tags=["jobs"])
 
 import re
 
+PIPELINE_FOLDERS = {
+    "p05": "p05_ai_selector",
+    "p06": "p06_emps2",
+    "p07": "p07_combined",
+    "p08": "p08_mtf",
+    "p09": "p09_arbitrage",
+    "p10": "p10_emps3",
+    "p12": "p12_order_flow",
+    "p13": "p13_bdsh",
+    "p14": "p14_ath",
+    "p15": "p15_hidden_deps",
+    "p17": "p17_penny_stocks",
+    "p18": "p18_institutional_flow",
+    "p19": "p19_penny_intraday",
+    "p20": "p20_kestrel",
+}
+
 def _resolve_log_path(name_lower: str, run_date: date) -> Path | None:
     """Map a schedule name / job_id to its pipeline.log file path."""
     m = re.search(r'(p\d+)', name_lower)
-    if m:
-        prefix = m.group(1)
-        results_dir = _PROJECT_ROOT / "results"
-        if results_dir.exists():
-            for d in results_dir.iterdir():
-                if d.is_dir() and d.name.startswith(f"{prefix}_"):
-                    log_file = d / str(run_date) / "pipeline.log"
-                    if log_file.exists():
-                        return log_file
-                    log_file_no_date = d / "pipeline.log"
-                    if log_file_no_date.exists():
-                        return log_file_no_date
+    if not m:
+        return None
 
-    # Fallback
-    if "p05" in name_lower:
-        return _PROJECT_ROOT / "results" / "p05_ai_selector" / str(run_date) / "pipeline.log"
+    prefix = m.group(1)
+    folder_name = PIPELINE_FOLDERS.get(prefix)
+    if not folder_name:
+        return None
+
+    results_dir = _PROJECT_ROOT / "results" / folder_name
+
+    # Define candidate paths to search in order of specificity
+    candidates = [
+        # 1. Date folder (e.g. results/p06_emps2/2026-07-05/pipeline.log)
+        results_dir / str(run_date) / "pipeline.log",
+        # 2. Rotated date log (e.g. results/p15_hidden_deps/pipeline.log.2026-07-05)
+        results_dir / f"pipeline.log.{run_date}",
+        # 3. Flat log without date (e.g. results/p15_hidden_deps/pipeline.log)
+        results_dir / "pipeline.log",
+        # 4. Pipeline-specific option logs (e.g. results/p15_hidden_deps/p15_options_pipeline.log)
+        results_dir / f"{prefix}_options_pipeline.log",
+    ]
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
     return None
 
 
