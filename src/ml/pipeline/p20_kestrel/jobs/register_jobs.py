@@ -64,7 +64,13 @@ _JOB_SPECS: List[Dict[str, Any]] = [
     # LLM (weekly — 10-K/Q filings change quarterly)
     {"name": "p20_llm_risk_diff", "cron": "0 18 * * 0", "script": "run_llm_risk_diff.py", "enabled": True},
     # Maintenance
-    {"name": "p20_weekly_maintenance", "cron": "0 5 * * 1", "script": "run_weekly_maintenance.py", "enabled": True},
+    {
+        "name": "p20_weekly_maintenance",
+        "cron": "0 5 * * 1",
+        "script": "run_weekly_maintenance.py",
+        "enabled": True,
+        "task_params": {"timeout_seconds": 3600},
+    },
     {"name": "p20_trends_watchlist", "cron": "0 3 * * 1-5", "script": "run_trends_watchlist.py", "enabled": True},
     {"name": "p20_weekly_report", "cron": "0 17 * * 0", "script": "run_weekly_report.py", "enabled": True},
 ]
@@ -83,11 +89,15 @@ def run() -> Dict[str, Any]:
     with session_scope() as s:
         for spec in _JOB_SPECS:
             script_path = f"{_SCRIPT_BASE}/{spec['script']}"
+            task_params = {"script_path": script_path}
+            if "task_params" in spec:
+                task_params.update(spec["task_params"])
+
             existing = s.query(Schedule).filter_by(user_id=_SYSTEM_USER_ID, name=spec["name"]).first()
 
             if existing:
                 existing.target = script_path
-                existing.task_params = {"script_path": script_path}
+                existing.task_params = task_params
                 existing.cron = spec["cron"]
                 existing.enabled = spec["enabled"]
                 _logger.debug("Updated existing schedule: %s (%s)", spec["name"], spec["cron"])
@@ -97,7 +107,7 @@ def run() -> Dict[str, Any]:
                     name=spec["name"],
                     job_type="script",
                     target=script_path,
-                    task_params={"script_path": script_path},
+                    task_params=task_params,
                     cron=spec["cron"],
                     enabled=spec["enabled"],
                     state_json={},
