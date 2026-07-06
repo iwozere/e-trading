@@ -122,8 +122,8 @@ def _compute_spike(
     if len(vol) < lookback + recent:
         return None
 
-    baseline_avg = float(vol.iloc[-(lookback + recent) : -recent].mean())
-    recent_avg = float(vol.iloc[-recent:].mean())
+    baseline_avg = vol.iloc[-(lookback + recent) : -recent].mean()
+    recent_avg = vol.iloc[-recent:].mean()
 
     if baseline_avg == 0:
         return None
@@ -138,7 +138,7 @@ def _compute_spike(
         if len(close) >= recent + 1:
             price_change = float((close.iloc[-1] - close.iloc[-recent - 1]) / close.iloc[-recent - 1] * 100)
 
-    above_days = int((vol.iloc[-recent:] > baseline_avg * threshold).sum())
+    above_days = (vol.iloc[-recent:] > baseline_avg * threshold).sum()
 
     return {
         "volume_spike_ratio": round(spike_ratio, 2),

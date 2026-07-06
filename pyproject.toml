@@ -42,3 +42,22 @@ unfixable = []
 quote-style = "double"
 indent-style = "space"
 line-ending = "auto"
+
+[tool.mypy]
+
+[[tool.mypy.overrides]]
+module = [
+    "pandas.*",
+    "yfinance.*",
+    "psycopg2.*",
+    "apscheduler.*",
+    "asyncpg",
+    "pytz",
+    "yaml",
+    "jsonschema",
+    "vectorbt",
+    "san",
+    "binance.*",
+    "requests"
+]
+ignore_missing_imports = true

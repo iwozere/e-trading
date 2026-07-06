@@ -11,6 +11,7 @@ import sys
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -121,7 +122,8 @@ class EMPS2Pipeline:
             else None
         )
 
-        self._output_files = {}  # Initialize to avoid AttributeError in alerts stage
+        self._output_files: dict[str, Path] = {}  # Initialize to avoid AttributeError in alerts stage
+        self._sentiment_csv_path: Path | None = None
 
         _logger.info("EMPS2 Pipeline initialized (target_date: %s, results: %s)", self.target_date, self._results_dir)
 
@@ -192,7 +194,7 @@ class EMPS2Pipeline:
         _logger.info("Stage 3 analyzer: VolatilityFilter (volatility mode)")
         return VolatilityFilter(
             self.data_manager,
-            self.config.filter_config,
+            self.config.filter_config,  # type: ignore[arg-type]
             results_dir=self._results_dir,
             target_date=target_date,
         )
@@ -506,7 +508,7 @@ class EMPS2Pipeline:
         _logger.info("-" * 70)
 
         # Check if sentiment is enabled
-        if not self.config.sentiment_config.enabled:
+        if self.sentiment_filter is None:
             _logger.info("Sentiment data collection is disabled in config")
             return pd.DataFrame()
 
@@ -595,7 +597,7 @@ class EMPS2Pipeline:
         try:
             elapsed = (datetime.now() - start_time).total_seconds()
 
-            summary = {
+            summary: dict[str, Any] = {
                 "pipeline": "EMPS2",
                 "version": "2.2",  # Updated version with target_date support
                 "target_date": self.target_date,  # Target trading day

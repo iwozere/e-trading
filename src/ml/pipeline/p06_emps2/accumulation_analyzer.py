@@ -10,7 +10,7 @@ Moved from p10_emps3/accumulation_analyzer.py.  P10 now imports from here.
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, cast
 
 import numpy as np
 import pandas as pd
@@ -64,8 +64,8 @@ class AccumulationAnalyzer:
         self._results_dir = results_dir
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
-        self.chunk_size = max(1, int(chunk_size))
-        self.checkpoint_enabled = bool(checkpoint_enabled)
+        self.chunk_size = max(1, chunk_size)
+        self.checkpoint_enabled = checkpoint_enabled
         self._checkpoint_path = self._results_dir / "accumulation_checkpoint.csv"
 
         _logger.info(
@@ -160,10 +160,11 @@ class AccumulationAnalyzer:
                             )
                             continue
 
-                        trf_factor = trf_factors.get(ticker.upper(), 1.0)
-                        if trf_factor != 1.0:
-                            df_intra = self._apply_trf_volume_correction(df_intra, trf_factor)
-                            df_daily = self._apply_trf_volume_correction(df_daily, trf_factor)
+                        trf_factor_val = trf_factors.get(ticker.upper(), 1.0)
+                        if trf_factor_val != 1.0:
+                            df_intra = self._apply_trf_volume_correction(df_intra, trf_factor_val)
+                            df_daily = self._apply_trf_volume_correction(df_daily, trf_factor_val)
+                            trf_factor: float | None = trf_factor_val
                         else:
                             trf_factor = None
 
@@ -185,8 +186,8 @@ class AccumulationAnalyzer:
                     finally:
                         processed_tickers.add(ticker)
 
-                ohlcv_intraday = None
-                ohlcv_daily = None
+                del ohlcv_intraday
+                del ohlcv_daily
 
                 self._save_checkpoint(diagnostic_data)
                 passed_so_far = sum(1 for d in diagnostic_data if d.get("status") == "PASSED")
@@ -234,7 +235,7 @@ class AccumulationAnalyzer:
             if df.empty or "ticker" not in df.columns:
                 return [], set()
             records = df.to_dict(orient="records")
-            processed = {str(t).upper() for t in df["ticker"].dropna().astype(str)}
+            processed = {t.upper() for t in df["ticker"].dropna().astype(str)}
             return records, processed
         except Exception:
             _logger.exception("Failed to read accumulation checkpoint; starting fresh")
@@ -259,9 +260,12 @@ class AccumulationAnalyzer:
 
         last_price = df_intra["close"].iloc[-1]
 
-        atr_14 = talib.ATR(
-            df_daily["high"].values, df_daily["low"].values, df_daily["close"].values, timeperiod=self.config.atr_period
-        )
+        high_arr = cast(np.ndarray, df_daily["high"].to_numpy(dtype=np.float64))
+        low_arr = cast(np.ndarray, df_daily["low"].to_numpy(dtype=np.float64))
+        close_arr = cast(np.ndarray, df_daily["close"].to_numpy(dtype=np.float64))
+        volume_arr = cast(np.ndarray, df_daily["volume"].to_numpy(dtype=np.float64))
+
+        atr_14 = talib.ATR(high_arr, low_arr, close_arr, timeperiod=self.config.atr_period)
         atr = float(atr_14[-1]) if len(atr_14) > 0 and not np.isnan(atr_14[-1]) else 0.0
         atr_ratio = atr / last_price if last_price > 0 else 0.0
 
@@ -271,13 +275,13 @@ class AccumulationAnalyzer:
             else 0.0
         )
 
-        vol_zscore = self._compute_zscore(df_daily["volume"].values, 20)
+        vol_zscore = self._compute_zscore(volume_arr, 20)
 
         interval_map = {"5m": 78, "15m": 26, "30m": 13, "1h": 6.5}
         bars_per_day = interval_map.get(self.config.interval, 26)
         rv_bars_target = int(bars_per_day * 5)
         if len(df_intra) >= rv_bars_target:
-            close_intra = df_intra["close"].values[-rv_bars_target:]
+            close_intra = cast(np.ndarray, df_intra["close"].to_numpy(dtype=np.float64)[-rv_bars_target:])
             log_returns = np.log(close_intra[1:] / close_intra[:-1])
             rv = np.std(log_returns) * np.sqrt(252 * bars_per_day)
         else:
@@ -290,16 +294,16 @@ class AccumulationAnalyzer:
 
         inside_day = daily_curr["high"] < daily_prev["high"] and daily_curr["low"] > daily_prev["low"]
 
-        upper, middle, lower = talib.BBANDS(df_daily["close"].values, timeperiod=20)
+        upper, middle, lower = talib.BBANDS(close_arr, timeperiod=20)
         bb_width = (upper - lower) / middle
         bb_current_width = float(bb_width[-1]) if len(bb_width) > 0 and not np.isnan(bb_width[-1]) else 1.0
         bb_12m_min = float(np.nanmin(bb_width[-252:])) if len(bb_width) > 0 else 0.0
         bb_squeeze = bb_current_width <= (bb_12m_min * 1.1)
 
-        avg_vol_20 = np.mean(df_daily["volume"].values[-20:])
+        avg_vol_20 = np.mean(volume_arr[-20:])
         vol_ratio = daily_curr["volume"] / avg_vol_20 if avg_vol_20 > 0 else 0.0
 
-        ranges = df_daily["high"].values - df_daily["low"].values
+        ranges = high_arr - low_arr
         avg_range_20 = np.mean(ranges[-20:])
         range_ratio = (daily_curr["high"] - daily_curr["low"]) / avg_range_20 if avg_range_20 > 0 else 0.0
 
@@ -307,9 +311,9 @@ class AccumulationAnalyzer:
         squeeze_state = inside_day or bb_squeeze or vr_divergence
 
         price_change_1d = abs(daily_curr["close"] - daily_prev["close"]) / daily_prev["close"]
-        sma_20 = np.mean(df_daily["close"].values[-20:])
+        sma_20 = np.mean(close_arr[-20:])
         dist_sma_20 = abs(daily_curr["close"] - sma_20) / sma_20
-        high_52w = np.max(df_daily["high"].values[-252:]) if len(df_daily) > 0 else daily_curr["high"]
+        high_52w = np.max(high_arr[-252:]) if len(df_daily) > 0 else daily_curr["high"]
         dist_52w_high = (high_52w - daily_curr["close"]) / high_52w if high_52w > 0 else 0.0
 
         score = 0
@@ -317,7 +321,7 @@ class AccumulationAnalyzer:
             score += 30
         if bb_current_width < 0.05:
             score += 20
-        high_20 = np.max(df_daily["high"].values[-20:])
+        high_20 = np.max(high_arr[-20:])
         if (high_20 - daily_curr["close"]) / high_20 < 0.02:
             score += 30
 
@@ -326,15 +330,15 @@ class AccumulationAnalyzer:
         metrics = {
             "ticker": ticker,
             "last_price": float(last_price),
-            "vol_zscore": float(vol_zscore),
+            "vol_zscore": vol_zscore,
             "rv": float(rv),
             "absorption_ratio": float(ar),
             "atr_ratio": atr_ratio,
             "price_range_1d": price_range_1d,
-            "inside_day": bool(inside_day),
-            "bb_squeeze": bool(bb_squeeze),
-            "vr_divergence": bool(vr_divergence),
-            "squeeze_state": bool(squeeze_state),
+            "inside_day": inside_day,
+            "bb_squeeze": bb_squeeze,
+            "vr_divergence": vr_divergence,
+            "squeeze_state": squeeze_state,
             "price_change_1d": float(price_change_1d),
             "dist_sma_20": float(dist_sma_20),
             "dist_52w_high": float(dist_52w_high),
@@ -404,15 +408,15 @@ class AccumulationAnalyzer:
             return {}
 
     def _apply_trf_volume_correction(self, df: pd.DataFrame, correction_factor: float) -> pd.DataFrame:
-        df = coerce_ohlcv_timestamp_column(df.copy())
-        if df is None or df.empty or "timestamp" not in df.columns:
-            return df
+        df_coerced = coerce_ohlcv_timestamp_column(df.copy())
+        if df_coerced is None or df_coerced.empty or "timestamp" not in df_coerced.columns:
+            return df_coerced if df_coerced is not None else pd.DataFrame()
         today = datetime.now().date()
-        ts = pd.to_datetime(df["timestamp"], errors="coerce")
+        ts = pd.to_datetime(df_coerced["timestamp"], errors="coerce")
         historical_mask = ts.dt.date < today
         if historical_mask.any():
-            df.loc[historical_mask, "volume"] = df.loc[historical_mask, "volume"] * correction_factor
-        return df
+            df_coerced.loc[historical_mask, "volume"] = df_coerced.loc[historical_mask, "volume"] * correction_factor
+        return df_coerced
 
     def _save_diagnostics(self, diagnostic_data: list) -> None:
         if not diagnostic_data:

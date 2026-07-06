@@ -390,16 +390,16 @@ class AlpacaDataDownloader(BaseDataDownloader):
 
         # Ensure timestamp is timezone-naive and set as index
         df["timestamp"] = pd.to_datetime(df["timestamp"])
-        if df["timestamp"].dt.tz is not None:
+        if df["timestamp"].dt.tz is not None:  # type: ignore[attr-defined]
             # tz_convert(None) converts to UTC first, then removes tz info —
             # the correct approach for tz-aware → tz-naive UTC conversion.
             # tz_localize(None) would just drop the label without converting.
-            df["timestamp"] = df["timestamp"].dt.tz_convert(None)
+            df["timestamp"] = df["timestamp"].dt.tz_convert(None)  # type: ignore[attr-defined]
 
         # Filter data to ensure it starts from the requested start_date (UTC).
         # cast() needed because pandas stubs infer a wide union from boolean indexing.
         mask = (df["timestamp"] >= start_date) & (df["timestamp"] <= end_date)
-        df = cast(pd.DataFrame, df.loc[mask])
+        df = df.loc[mask]
 
         # Remove duplicates and sort
         df = df.drop_duplicates(subset=["timestamp"])
@@ -452,16 +452,16 @@ class AlpacaDataDownloader(BaseDataDownloader):
 
         # Ensure timestamp is timezone-naive and set as index
         df["timestamp"] = pd.to_datetime(df["timestamp"])
-        if df["timestamp"].dt.tz is not None:
+        if df["timestamp"].dt.tz is not None:  # type: ignore[attr-defined]
             # tz_convert(None) converts to UTC first, then removes tz info —
             # the correct approach for tz-aware → tz-naive UTC conversion.
             # tz_localize(None) would just drop the label without converting.
-            df["timestamp"] = df["timestamp"].dt.tz_convert(None)
+            df["timestamp"] = df["timestamp"].dt.tz_convert(None)  # type: ignore[attr-defined]
 
         # Filter data to ensure it starts from the requested start_date (UTC).
         # cast() required — pandas stubs infer a wide union from boolean indexing.
-        df = cast(pd.DataFrame, df[df["timestamp"] >= start_date])
-        df = cast(pd.DataFrame, df[df["timestamp"] <= end_date])
+        df = df[df["timestamp"] >= start_date]
+        df = df[df["timestamp"] <= end_date]
 
         df.set_index("timestamp", inplace=True)
         df.sort_index(inplace=True)

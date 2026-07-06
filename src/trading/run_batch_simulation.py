@@ -81,7 +81,7 @@ class BatchSimulationBot(BaseTradingBot):
     def __init__(self, config_file):
         """Initialize simulation bot."""
         self.config_file = config_file
-        self.config = self._load_configuration()
+        self.bot_config = self._load_configuration()
 
         # Create components
         broker = self._create_broker()
@@ -91,10 +91,10 @@ class BatchSimulationBot(BaseTradingBot):
         parameters = self._create_strategy_parameters()
 
         # BaseTradingBot expects a dict for config
-        config_dict = self.config.model_dump()
+        config_dict = self.bot_config.model_dump()
 
         # Initialize paths manually
-        data_dir = os.path.join(PROJECT_ROOT, "data", "bots", self.config.bot_id)
+        data_dir = os.path.join(PROJECT_ROOT, "data", "bots", self.bot_config.bot_id)
         os.makedirs(data_dir, exist_ok=True)
         self.state_file = os.path.join(data_dir, "state.json")
 
@@ -106,7 +106,7 @@ class BatchSimulationBot(BaseTradingBot):
             parameters=parameters,
             broker=broker,
             paper_trading=True,
-            bot_id=self.config.bot_id,
+            bot_id=self.bot_config.bot_id,
             trade_repository=mock_repo,
         )
 
@@ -116,7 +116,7 @@ class BatchSimulationBot(BaseTradingBot):
         self.should_stop = False
         self.error_count = 0
         self.monitor_thread = None
-        self.trading_pair = self.config.symbol
+        self.trading_pair = self.bot_config.symbol
         self.active_positions = {}
         self.strategy_instance = None
 
@@ -124,19 +124,19 @@ class BatchSimulationBot(BaseTradingBot):
         """Create a file-based broker for simulation."""
         from src.trading.broker.broker_factory import get_broker
 
-        broker_config = self.config.broker.model_dump()
+        broker_config = self.bot_config.broker.model_dump()
         return get_broker(broker_config)
 
     def _create_data_feed(self):
         """Create a CSV data feed for simulation."""
         from src.data.feed.data_feed_factory import DataFeedFactory
 
-        broker_cfg = self.config.broker.model_dump()
+        broker_cfg = self.bot_config.broker.model_dump()
         data_source = broker_cfg.get("data_source", {})
 
         data_config = {
             "data_source": "file",
-            "symbol": self.config.symbol,
+            "symbol": self.bot_config.symbol,
             "file_path": data_source.get("file_path"),
             "simulate_realtime": False,
         }
@@ -145,7 +145,7 @@ class BatchSimulationBot(BaseTradingBot):
 
     def _convert_to_legacy_format(self):
         """Convert config wrapper to dict format expected by BaseTradingBot."""
-        return self.config._config
+        return self.bot_config.model_dump()
 
     def _load_configuration(self) -> TradingBotConfig:
         """Load and validate configuration using TradingBotConfig model."""
@@ -158,7 +158,7 @@ class BatchSimulationBot(BaseTradingBot):
 
     def start(self):
         """Override start to run synchronously without monitoring thread."""
-        logger.info(f"Starting simulation for {self.config.bot_id}")
+        logger.info(f"Starting simulation for {self.bot_config.bot_id}")
 
         if not self._create_data_feed():
             raise RuntimeError("Failed to create data feed")
@@ -171,6 +171,8 @@ class BatchSimulationBot(BaseTradingBot):
 
     def _run_backtrader(self):
         """Run Backtrader and capture the strategy instance."""
+        if self.cerebro is None:
+            raise RuntimeError("Cerebro instance is not initialized")
         try:
             results = self.cerebro.run()
             if results and len(results) > 0:
@@ -194,12 +196,12 @@ class BatchSimulationBot(BaseTradingBot):
             self.cerebro.addstrategy(self.strategy_class, **self.parameters)
 
             # Setup initial cash on DEFAULT broker
-            initial_balance = self.config.broker.cash
+            initial_balance = self.bot_config.broker.cash
             self.cerebro.broker.setcash(initial_balance)
 
             # Setup commission on DEFAULT broker
             # Try to get from paper_trading_config, otherwise default
-            pt_config = self.config.broker.paper_trading_config
+            pt_config = self.bot_config.broker.paper_trading_config
             commission = pt_config.get("commission_rate", 0.001)
             self.cerebro.broker.setcommission(commission=commission)
 
@@ -212,7 +214,7 @@ class BatchSimulationBot(BaseTradingBot):
 
     def _create_strategy_parameters(self):
         """Override to handle strategy parameters more flexibly."""
-        strat_params = self.config.strategy.parameters
+        strat_params = self.bot_config.strategy.parameters
         return {"strategy_config": strat_params}
 
     # Override notification methods to do nothing
@@ -245,8 +247,8 @@ class BatchSimulationBot(BaseTradingBot):
                 "trades": trades,
                 "win_rate": stats.get("win_rate", 0.0),
                 "max_drawdown": stats.get("max_drawdown", 0.0),
-                "strategy_config": self.config.strategy.model_dump(),
-                "data_file": self.config.broker.model_dump().get("data_source", {}).get("file_path", ""),
+                "strategy_config": self.bot_config.strategy.model_dump(),
+                "data_file": self.bot_config.broker.model_dump().get("data_source", {}).get("file_path", ""),
             }
 
         return {
@@ -257,8 +259,8 @@ class BatchSimulationBot(BaseTradingBot):
             "total_pnl": self.total_pnl,
             "total_trades": len(self.trade_history),
             "trades": self.trade_history,
-            "strategy_config": self.config.strategy.model_dump(),
-            "data_file": self.config.broker.model_dump().get("data_source", {}).get("file_path", ""),
+            "strategy_config": self.bot_config.strategy.model_dump(),
+            "data_file": self.bot_config.broker.model_dump().get("data_source", {}).get("file_path", ""),
         }
 
 

@@ -124,7 +124,7 @@ class TradingService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def heartbeat(self, bot_id: str) -> None:
+    def heartbeat(self, bot_id: int) -> None:
         """Update bot heartbeat."""
         self.repos.bots.heartbeat(bot_id)
 
@@ -185,7 +185,7 @@ class TradingService(BaseDBService):
 
         from src.data.db.models.model_trading import BotInstance
 
-        update_data = {"status": status, "updated_at": datetime.now(UTC)}
+        update_data: Dict[str, Any] = {"status": status, "updated_at": datetime.now(UTC)}
 
         # Set started_at timestamp when bot starts running
         if status == "running" and started_at:
@@ -203,7 +203,7 @@ class TradingService(BaseDBService):
                 update_data.update({"error_count": error_count, "extra_metadata": metadata})
 
         result = self.repos.s.execute(update(BotInstance).where(BotInstance.id == bot_id).values(**update_data))
-        return result.rowcount > 0
+        return result.rowcount > 0  # type: ignore[attr-defined]
 
     @with_uow
     @handle_db_error
@@ -215,7 +215,7 @@ class TradingService(BaseDBService):
 
         from src.data.db.models.model_trading import BotInstance
 
-        update_data = {"updated_at": datetime.now(UTC)}
+        update_data: Dict[str, Any] = {"updated_at": datetime.now(UTC)}
 
         if current_balance is not None:
             update_data["current_balance"] = current_balance
@@ -223,7 +223,7 @@ class TradingService(BaseDBService):
             update_data["total_pnl"] = total_pnl
 
         result = self.repos.s.execute(update(BotInstance).where(BotInstance.id == bot_id).values(**update_data))
-        return result.rowcount > 0
+        return result.rowcount > 0  # type: ignore[attr-defined]
 
     @with_uow
     @handle_db_error

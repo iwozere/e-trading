@@ -283,7 +283,7 @@ class VolatilityFilter:
 
         except Exception:
             _logger.exception("Error applying volatility filters:")
-            return []
+            return pd.DataFrame()
 
     def _check_volatility_filters(self, ticker: str, df: pd.DataFrame) -> tuple:
         """
@@ -398,7 +398,7 @@ class VolatilityFilter:
             _logger.exception("Error checking filters for %s:", ticker)
             return False, {}, "exception_during_calculation"
 
-    def _compute_atr(self, df: pd.DataFrame) -> float:
+    def _compute_atr(self, df: pd.DataFrame) -> float | None:
         """
         Calculate ATR using TA-Lib.
 
@@ -433,9 +433,9 @@ class VolatilityFilter:
                 return None
 
             # TA-Lib expects numpy arrays
-            high = df["high"].values
-            low = df["low"].values
-            close = df["close"].values
+            high = np.array(df["high"].values, dtype=np.float64)
+            low = np.array(df["low"].values, dtype=np.float64)
+            close = np.array(df["close"].values, dtype=np.float64)
 
             # Debug: Print first few values
             # _logger.debug("First few values - High: %s, Low: %s, Close: %s", high[:5], low[:5], close[:5])
@@ -447,7 +447,7 @@ class VolatilityFilter:
             # _logger.debug("ATR values: %s", atr_values)
 
             # Return latest ATR (skip NaN values)
-            valid_atr = atr_values[~pd.isna(atr_values)]
+            valid_atr = atr_values[~np.isnan(atr_values)]
 
             if len(valid_atr) == 0:
                 _logger.warning("No valid ATR values calculated")
@@ -477,17 +477,18 @@ class VolatilityFilter:
             if len(df) < lookback + 1:
                 return 0.0
 
-            volume = df["volume"].values
+            # Calculate rolling mean and std
+            volume = df["volume"].astype(np.float64)
 
             # Calculate rolling mean and std
-            vol_mean = pd.Series(volume).rolling(window=lookback, min_periods=lookback).mean()
-            vol_std = pd.Series(volume).rolling(window=lookback, min_periods=lookback).std()
+            vol_mean = volume.rolling(window=lookback, min_periods=lookback).mean()
+            vol_std = volume.rolling(window=lookback, min_periods=lookback).std()
 
             # Z-score = (current - mean) / std
             vol_zscore = (volume - vol_mean) / vol_std
 
             # Return latest z-score
-            valid_zscore = vol_zscore[~pd.isna(vol_zscore)]
+            valid_zscore = vol_zscore.dropna()
 
             if len(valid_zscore) == 0:
                 return 0.0
@@ -530,7 +531,7 @@ class VolatilityFilter:
                 return 0.0, 0.0, 0.0
 
             # Calculate log returns for price volatility
-            close = df["close"].values
+            close = np.array(df["close"].values, dtype=np.float64)
             log_returns = np.log(close[1:] / close[:-1])
 
             # Determine bars per day based on interval
@@ -546,7 +547,7 @@ class VolatilityFilter:
                 return 0.0, 0.0, 0.0
 
             # Calculate volume z-score
-            volume = df["volume"].values
+            volume = np.array(df["volume"].values, dtype=np.float64)
             if len(volume) >= vol_window:
                 vol_mean = np.mean(volume[-vol_window:])
                 vol_std = np.std(volume[-vol_window:])
@@ -625,10 +626,13 @@ class VolatilityFilter:
 
             # ATR Z-score (using the ATR values computed earlier in the pipeline)
             # We need to compute it here on a rolling basis for the Z-score
+            high_arr = np.array(df["high"].values, dtype=np.float64)
+            low_arr = np.array(df["low"].values, dtype=np.float64)
+            close_arr = np.array(df["close"].values, dtype=np.float64)
             atr_values = talib.ATR(
-                df["high"].values, df["low"].values, df["close"].values, timeperiod=self.config.atr_period
+                high_arr, low_arr, close_arr, timeperiod=self.config.atr_period
             )
-            df["atr_vals"] = atr_values
+            df["atr_vals"] = atr_values.tolist()
             df["z_atr"] = z_score(df["atr_vals"])
 
             # 3. Phase Logic
@@ -649,14 +653,14 @@ class VolatilityFilter:
             entry_flag = phase2_flag and (last["close"] > prev["high"])
 
             return {
-                "vol_delta": last["vol_delta"],
-                "z_vol_delta": last["z_vol_delta"],
-                "intensity": last["intensity"],
-                "z_intensity": last["z_intensity"],
-                "gap": last["gap"],
-                "z_gap": last["z_gap"],
-                "z_atr": last["z_atr"],
-                "close_pos": last["close_pos"],
+                "vol_delta": float(last["vol_delta"]),
+                "z_vol_delta": float(last["z_vol_delta"]),
+                "intensity": float(last["intensity"]),
+                "z_intensity": float(last["z_intensity"]),
+                "gap": float(last["gap"]),
+                "z_gap": float(last["z_gap"]),
+                "z_atr": float(last["z_atr"]),
+                "close_pos": float(last["close_pos"]),
                 "phase1_flag": bool(phase1_flag),
                 "phase2_flag": bool(phase2_flag),
                 "entry_flag": bool(entry_flag),
@@ -714,16 +718,16 @@ class VolatilityFilter:
             DataFrame with corrected volume
         """
         try:
-            df = coerce_ohlcv_timestamp_column(df.copy())
-            if df is None or df.empty or "timestamp" not in df.columns:
-                return df if df is not None else pd.DataFrame()
+            df_coerced = coerce_ohlcv_timestamp_column(df.copy())
+            if df_coerced is None or df_coerced.empty or "timestamp" not in df_coerced.columns:
+                return df_coerced if df_coerced is not None else pd.DataFrame()
             today = datetime.now().date()
 
-            ts = pd.to_datetime(df["timestamp"], errors="coerce")
+            ts = pd.to_datetime(df_coerced["timestamp"], errors="coerce")
             historical_mask = ts.dt.date < today
 
             if historical_mask.any():
-                df.loc[historical_mask, "volume"] = df.loc[historical_mask, "volume"] * correction_factor
+                df_coerced.loc[historical_mask, "volume"] = df_coerced.loc[historical_mask, "volume"] * correction_factor
                 _logger.debug(
                     "Applied TRF correction (%.3f) to %d historical bars", correction_factor, historical_mask.sum()
                 )
@@ -732,7 +736,7 @@ class VolatilityFilter:
             if today_bars > 0:
                 _logger.debug("Kept %d today's bars unchanged (no TRF data yet)", today_bars)
 
-            return df
+            return df_coerced
 
         except Exception:
             _logger.exception("Error applying TRF volume correction:")

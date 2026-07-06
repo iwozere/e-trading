@@ -285,16 +285,16 @@ class TestProviderSelectorIntegration:
 
         # Test valid tickers
         btc_validation = selector.validate_ticker("BTCUSDT")
-        assert btc_validation["valid"] == True
+        assert btc_validation["valid"]
         assert btc_validation["symbol_type"] == "crypto"
 
         aapl_validation = selector.validate_ticker("AAPL")
-        assert aapl_validation["valid"] == True
+        assert aapl_validation["valid"]
         assert aapl_validation["symbol_type"] == "stock"
 
         # Test invalid ticker
         invalid_validation = selector.validate_ticker("INVALID")
-        assert invalid_validation["valid"] == False
+        assert not invalid_validation["valid"]
 
 
 def run_integration_tests():

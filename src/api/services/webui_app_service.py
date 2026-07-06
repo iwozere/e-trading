@@ -50,7 +50,7 @@ class WebUIAppService:
         """
         db_service = get_database_service()
         with db_service.uow() as session:
-            yield session.session
+            yield session.s
 
     # ---------- Database Initialization ----------
 

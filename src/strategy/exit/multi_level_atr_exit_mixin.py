@@ -193,14 +193,3 @@ class MultiLevelAtrExitMixin(BaseExitMixin):
             self.highest_price = -float("inf")
             self.stop_price = -float("inf")
             self.be_activated = False
-
-    def get_exit_reason(self) -> str:
-        return getattr(self.strategy, "current_exit_reason", "multi_tf_atr_exit")
-
-    def next(self):
-        super().next()
-        if not self.strategy.position:
-            self.entry_price = None
-            self.highest_price = -float("inf")
-            self.stop_price = -float("inf")
-            self.be_activated = False

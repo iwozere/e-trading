@@ -5,7 +5,7 @@ This module contains all the logic for generating recommendations
 based on technical indicators like RSI, MACD, Bollinger Bands, etc.
 """
 
-from typing import Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from .types import RecommendationType
 
@@ -102,7 +102,7 @@ class TechnicalRecommendationRules:
 
     @staticmethod
     def get_sma_recommendation(
-        current_price: float, sma: float, context: Dict = None
+        current_price: float, sma: float, context: Optional[Dict[Any, Any]] = None
     ) -> Tuple[RecommendationType, float, str]:
         """Get improved SMA recommendation with trend and distance analysis."""
         if current_price is None or sma is None:
@@ -161,7 +161,7 @@ class TechnicalRecommendationRules:
             return RecommendationType.HOLD, 0.5, "MFI in neutral zone"
 
     @staticmethod
-    def get_obv_recommendation(obv: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+    def get_obv_recommendation(obv: float, context: Optional[Dict[Any, Any]] = None) -> Tuple[RecommendationType, float, str]:
         """Get OBV recommendation."""
         if obv is None:
             return RecommendationType.HOLD, 0.5, "Insufficient OBV data"
@@ -181,7 +181,7 @@ class TechnicalRecommendationRules:
                 return RecommendationType.HOLD, 0.5, "OBV neutral - No clear signal"
 
     @staticmethod
-    def get_adr_recommendation(adr: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+    def get_adr_recommendation(adr: float, context: Optional[Dict[Any, Any]] = None) -> Tuple[RecommendationType, float, str]:
         """Get ADR (Average Daily Range) recommendation."""
         if adr is None:
             return RecommendationType.HOLD, 0.5, "Insufficient ADR data"

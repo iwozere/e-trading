@@ -17,11 +17,12 @@ import functools
 import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
-from typing import Callable
+from typing import Any, Callable
 
 from src.error_handling.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from src.error_handling.error_monitor import ErrorSeverity, error_monitor
 from src.error_handling.retry_manager import RetryConfig, RetryManager
+from src.model.error_handling import RetryStrategy
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -131,15 +132,18 @@ def resilient(
                     raise e
 
         # Add resilience info to wrapper
-        wrapper.resilience_info = {
-            "retry_manager": retry_manager,
-            "circuit_breaker": circuit_breaker,
-            "fallback_func": fallback_func,
-            "timeout": timeout,
-            "monitor_errors": monitor_errors,
-            "component": component,
-        }
-
+        setattr(
+            wrapper,
+            "resilience_info",
+            {
+                "retry_manager": retry_manager,
+                "circuit_breaker": circuit_breaker,
+                "fallback_func": fallback_func,
+                "timeout": timeout,
+                "monitor_errors": monitor_errors,
+                "component": component,
+            },
+        )
         return wrapper
 
     return decorator
@@ -274,7 +278,7 @@ def resilient_api_call(
             # API call with comprehensive resilience
             pass
     """
-    retry_config = RetryConfig(max_attempts=max_attempts, base_delay=2.0, strategy="exponential")
+    retry_config = RetryConfig(max_attempts=max_attempts, base_delay=2.0, strategy=RetryStrategy.EXPONENTIAL)
 
     circuit_breaker_config = CircuitBreakerConfig(
         failure_threshold=failure_threshold, recovery_timeout=60, failure_exceptions=(Exception,)
@@ -304,7 +308,7 @@ def resilient_database_call(max_attempts: int = 2, failure_threshold: int = 3, t
             # Database query with resilience
             pass
     """
-    retry_config = RetryConfig(max_attempts=max_attempts, base_delay=1.0, strategy="fixed")
+    retry_config = RetryConfig(max_attempts=max_attempts, base_delay=1.0, strategy=RetryStrategy.FIXED)
 
     circuit_breaker_config = CircuitBreakerConfig(
         failure_threshold=failure_threshold, recovery_timeout=30, failure_exceptions=(Exception,)
@@ -332,18 +336,18 @@ def resilient_strategy_call(max_attempts: int = 2, timeout_seconds: float = 5.0)
             # Strategy signal generation with resilience
             pass
     """
-    retry_config = RetryConfig(max_attempts=max_attempts, base_delay=0.5, strategy="fixed")
+    retry_config = RetryConfig(max_attempts=max_attempts, base_delay=0.5, strategy=RetryStrategy.FIXED)
 
     return resilient(retry_config=retry_config, timeout=timeout_seconds, component="strategy")
 
 
 # Utility decorators for specific scenarios
-def with_caching(cache_func: Callable, ttl: int = 300):
+def with_caching(cache_func: Any, ttl: int = 300):
     """
     Decorator for adding caching with resilience.
 
     Args:
-        cache_func: Cache function (get/set)
+        cache_func: Cache object (get/set)
         ttl: Time to live in seconds
 
     Example:
@@ -421,12 +425,12 @@ def with_rate_limiting(max_calls: int, time_window: int):
     return decorator
 
 
-def with_metrics(metric_func: Callable):
+def with_metrics(metric_func: Any):
     """
     Decorator for adding metrics collection.
 
     Args:
-        metric_func: Function to record metrics
+        metric_func: Object to record metrics
 
     Example:
         @with_metrics(prometheus_metrics)

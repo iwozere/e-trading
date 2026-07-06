@@ -57,7 +57,7 @@ class ConfigManager:
     - Configuration registry and discovery
     """
 
-    def __init__(self, config_dir: str = "config", environment: str = None):
+    def __init__(self, config_dir: str = "config", environment: str | None = None):
         """
         Initialize the configuration manager.
 
@@ -208,7 +208,7 @@ class ConfigManager:
         else:
             return ConfigSchema(**config_data)
 
-    def save_config(self, config: Any, filename: str = None) -> str:
+    def save_config(self, config: Any, filename: str | None = None) -> str:
         """Save a configuration to file"""
         if not filename:
             if hasattr(config, "bot_id"):
@@ -250,7 +250,7 @@ class ConfigManager:
                 return False
         return False
 
-    def reload_config(self, config_path: str = None):
+    def reload_config(self, config_path: str | None = None):
         """Reload configuration(s)"""
         if config_path:
             # Reload specific file
@@ -281,7 +281,7 @@ class ConfigManager:
 
     def get_environment_config(self, key: str, default: Any = None) -> Any:
         """Get environment-specific configuration value"""
-        env_config_file = self.config_dir / "%s.json" % self.environment
+        env_config_file = self.config_dir / f"{self.environment}.json"
 
         if env_config_file.exists():
             with open(env_config_file) as f:
@@ -294,21 +294,22 @@ class ConfigManager:
         """List all available configurations by type"""
         return self.registry.list_configs()
 
-    def validate_config_file(self, config_path: str) -> tuple[bool, List[str]]:
+    def validate_config_file(self, config_path: str) -> tuple[bool, List[str], List[str]]:
         """Validate a configuration file"""
         errors = []
+        warnings = []
         try:
             config = self._load_config_file(Path(config_path))
             if config is None:
                 errors.append("Failed to load configuration file")
-                return False, errors
+                return False, errors, warnings
 
             # Validation is done in _validate_and_cache_config
-            return True, []
+            return True, [], []
 
         except Exception as e:
             errors.append(str(e))
-            return False, errors
+            return False, errors, warnings
 
     def get_config_summary(self) -> Dict[str, Any]:
         """Get a summary of all configurations"""

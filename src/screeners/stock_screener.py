@@ -15,6 +15,8 @@ A backward-compatible re-export remains at src/util/stock_screener.py.
 import pandas as pd
 import yfinance as yf
 
+from typing import Any
+
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -62,22 +64,19 @@ class StockScreener:
                         capex_latest = (
                             fcf_info["CapEx (oldest → newest)"][-1] if fcf_info["CapEx (oldest → newest)"] else None
                         )
-                if all(
-                    [
-                        pe,
-                        roe,
-                        debt_equity,
-                        price,
-                        fifty_day,
-                        two_hundred_day,
-                        fcf_latest,
-                    ]
+                if (
+                    pe is not None
+                    and roe is not None
+                    and debt_equity is not None
+                    and price is not None
+                    and fifty_day is not None
+                    and two_hundred_day is not None
+                    and fcf_latest is not None
                 ):
                     if (
                         pe < 25
                         and roe > 0.15
                         and debt_equity < 100
-                        and fcf_latest
                         and fcf_latest > 0
                         and price > fifty_day > two_hundred_day
                     ):
@@ -100,7 +99,7 @@ class StockScreener:
         return pd.DataFrame(results)
 
     @staticmethod
-    def get_fcf_growth(ticker):
+    def get_fcf_growth(ticker: str) -> dict[str, Any] | None:
         try:
             t = yf.Ticker(ticker)
             cf = t.cashflow
@@ -115,12 +114,13 @@ class StockScreener:
             capex = cf.loc["Capital Expenditures"]
             fcf = ocf + capex
 
-            ocf = ocf.dropna().astype(float)[::-1]
-            capex = capex.dropna().astype(float)[::-1]
-            fcf = fcf.dropna().astype(float)[::-1]
+            ocf = ocf.dropna().astype('float')[::-1]
+            capex = capex.dropna().astype('float')[::-1]
+            fcf = fcf.dropna().astype('float')[::-1]
 
-            is_positive = (fcf > 0).all()
-            is_growing = all(earlier <= later for earlier, later in zip(fcf, fcf[1:]))
+            is_positive = bool((fcf > 0).all())
+            fcf_list: list[float] = [float(x) for x in fcf]  # type: ignore
+            is_growing = all(earlier <= later for earlier, later in zip(fcf_list, fcf_list[1:]))
 
             return {
                 "Ticker": ticker,

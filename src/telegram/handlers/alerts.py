@@ -53,5 +53,7 @@ def register(dp: Dispatcher) -> None:
 
     @dp.message(Command("alerts", ignore_case=True))
     async def cmd_alerts(msg: Message):
+        if msg.from_user is None:
+            return
         parsed = parse_command(msg.text or "")
         await audit_command_wrapper(msg, process_alerts_command_immediate, str(msg.from_user.id), parsed, msg)

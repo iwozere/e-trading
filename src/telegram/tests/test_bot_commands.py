@@ -77,6 +77,7 @@ async def test_unknown_command(mock_get_services):
 
     await misc_handler.unknown_command(message)
     message.reply.assert_awaited()
+    assert message.reply.await_args is not None
     args, kwargs = message.reply.await_args
     assert "Unknown command." in args[0]
 

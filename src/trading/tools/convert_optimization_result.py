@@ -156,7 +156,7 @@ if __name__ == "__main__":
 
     # Fallback to DEFAULT_INPUT_FILE if not provided via CLI
     if not input_path:
-        if DEFAULT_INPUT_FILE:
+        if len(DEFAULT_INPUT_FILE) > 0:
             input_path = DEFAULT_INPUT_FILE
             print(f"ℹ️  Using default input file from code: {input_path}")
         else:

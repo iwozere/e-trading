@@ -238,7 +238,7 @@ class LazyDataLoader:
         if self.format == "parquet" and PARQUET_AVAILABLE:
             # Calculate row range for chunk
             start_row = chunk_index * self.chunk_size
-            end_row = start_row + self.chunk_size
+            start_row + self.chunk_size
 
             # Read specific rows
             table = pq.read_table(self.file_path, row_groups=[chunk_index])

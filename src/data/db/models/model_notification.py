@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import datetime
 from datetime import datetime as dt
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -35,7 +35,7 @@ from src.data.db.models.model_system_health import SystemHealthStatus
 # Logger will be set up by importing modules as needed
 
 
-class MessagePriority(str, Enum):
+class MessagePriority(StrEnum):
     """Message priority enumeration."""
 
     LOW = "LOW"
@@ -44,7 +44,7 @@ class MessagePriority(str, Enum):
     CRITICAL = "CRITICAL"
 
 
-class MessageStatus(str, Enum):
+class MessageStatus(StrEnum):
     """Message status enumeration."""
 
     PENDING = "PENDING"
@@ -54,7 +54,7 @@ class MessageStatus(str, Enum):
     CANCELLED = "CANCELLED"
 
 
-class DeliveryStatus(str, Enum):
+class DeliveryStatus(StrEnum):
     """Delivery status enumeration."""
 
     PENDING = "PENDING"
@@ -157,7 +157,7 @@ class RateLimit(Base):
     user_id: Mapped[str] = mapped_column(String(100), index=True)
     channel: Mapped[str] = mapped_column(String(50), index=True)
     tokens: Mapped[int] = mapped_column(Integer)
-    last_refill: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), index=True)
+    last_refill: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=func.now(), index=True)
     max_tokens: Mapped[int] = mapped_column(Integer)
     refill_rate: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now())
@@ -185,7 +185,7 @@ class RateLimit(Base):
             return True
         return False
 
-    def refill_tokens(self, current_time: datetime) -> None:
+    def refill_tokens(self, current_time: dt) -> None:
         """Refill tokens based on time elapsed."""
         if self.last_refill is None:
             self.last_refill = current_time

@@ -136,7 +136,7 @@ class SchemaValidator:
                 if path_parts:
                     path_parts.append(f".{part}")
                 else:
-                    path_parts.append(str(part))
+                    path_parts.append(part)
 
         field_path = "".join(path_parts) if path_parts else "root"
 
@@ -150,7 +150,10 @@ class SchemaValidator:
             return f"Invalid type for '{field_path}': expected {expected_type}"
 
         elif error.validator == "enum":
-            valid_values = ", ".join(f"'{v}'" for v in error.validator_value)
+            if isinstance(error.validator_value, (list, tuple)):
+                valid_values = ", ".join(f"'{v}'" for v in error.validator_value)
+            else:
+                valid_values = str(error.validator_value)
             actual_value = error.instance
             return f"Invalid value '{actual_value}' for '{field_path}': must be one of [{valid_values}]"
 

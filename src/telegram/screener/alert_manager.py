@@ -192,9 +192,9 @@ class AlertManager:
         self,
         telegram_user_id: str,
         alert_id_str: str,
-        new_price_str: str = None,
-        new_condition: str = None,
-        email: bool = None,
+        new_price_str: str | None = None,
+        new_condition: str | None = None,
+        email: bool | None = None,
     ) -> Dict[str, Any]:
         """Edit an existing alert."""
         try:

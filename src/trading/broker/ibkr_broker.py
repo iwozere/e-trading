@@ -77,14 +77,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
     - IBKR-specific margin calculation and requirements
     """
 
-    def __init__(
-        self,
-        host: str = "127.0.0.1",
-        port: int | None = None,
-        client_id: int = 1,
-        cash: float = 10000.0,
-        config: Dict[str, Any] = None,
-    ):
+    def __init__(self, host: str, port: int, client_id: int, cash: float = 10000.0, config: Dict[str, Any] | None = None):
         # Initialize configuration
         if config is None:
             config = {}
@@ -175,7 +168,8 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
 
             # Cancel market data subscriptions
             for ticker in self.market_data_subscriptions.values():
-                self.ib.cancelMktData(ticker.contract)
+                if ticker.contract is not None:
+                    self.ib.cancelMktData(ticker.contract)
             self.market_data_subscriptions.clear()
 
             # Disconnect from IBKR
@@ -278,7 +272,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                         # Update market data for subscribed symbols
                         for symbol, ticker in self.market_data_subscriptions.items():
                             if ticker.last and ticker.last > 0:
-                                self.update_market_data_cache(symbol, float(ticker.last))
+                                self.update_market_data_cache(symbol, ticker.last)
 
                         # Process pending paper orders
                         if hasattr(self, "market_data_cache") and self.market_data_cache:
@@ -328,6 +322,8 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
 
     async def place_order(self, order: Order) -> str:
         """Place an order on IBKR with mode-specific handling."""
+        if order.order_id is None:
+            raise ValueError("Order ID cannot be None")
         try:
             # Validate order
             is_valid, validation_message = await self.validate_order(order)
@@ -412,6 +408,8 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
 
     async def _place_live_order(self, order: Order) -> str:
         """Place a live order on IBKR."""
+        if order.order_id is None:
+            raise ValueError("Order ID cannot be None")
         try:
             # Get or create contract
             if order.symbol not in self.contracts:
@@ -467,17 +465,17 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
             ibkr_order = MarketOrder(action, order.quantity)
 
         elif order.order_type == OrderType.LIMIT:
-            ibkr_order = LimitOrder(action, order.quantity, order.price)
+            ibkr_order = LimitOrder(action, order.quantity, order.price or 0.0)
 
         elif order.order_type == OrderType.STOP:
-            ibkr_order = StopOrder(action, order.quantity, order.stop_price)
+            ibkr_order = StopOrder(action, order.quantity, order.stop_price or 0.0)
 
         elif order.order_type == OrderType.STOP_LIMIT:
-            ibkr_order = StopLimitOrder(action, order.quantity, order.price, order.stop_price)
+            ibkr_order = StopLimitOrder(action, order.quantity, order.price or 0.0, order.stop_price or 0.0)
 
         elif order.order_type == OrderType.BRACKET:
             # Bracket order with stop loss and take profit
-            parent_order = LimitOrder(action, order.quantity, order.price)
+            parent_order = LimitOrder(action, order.quantity, order.price or 0.0)
 
             # This would need additional parameters for stop loss and take profit
             # For now, create a simple limit order
@@ -527,7 +525,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
 
                     # Get the most recent status from the ib_insync Trade object
                     # ib_insync automatically updates trade status in the background
-                    ib_status = trade.status
+                    ib_status = trade.orderStatus.status
 
                     status_map = {
                         "Submitted": OrderStatus.PENDING,
@@ -539,21 +537,30 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                         "Inactive": OrderStatus.REJECTED,
                     }
 
+                    order_type_map = {
+                        "MKT": OrderType.MARKET,
+                        "LMT": OrderType.LIMIT,
+                        "STP": OrderType.STOP,
+                        "STP LMT": OrderType.STOP_LIMIT,
+                    }
+                    order_type = order_type_map.get(trade.order.orderType, OrderType.LIMIT)
+
                     # Create Order object
                     order = Order(
                         symbol=trade.contract.symbol,
                         side=OrderSide.BUY if trade.order.action == "BUY" else OrderSide.SELL,
-                        quantity=float(trade.order.totalQuantity),
-                        price=float(trade.order.lmtPrice) if trade.order.lmtPrice > 0 else None,
+                        quantity=trade.order.totalQuantity,
+                        price=trade.order.lmtPrice if trade.order.lmtPrice > 0 else None,
+                        order_type=order_type,
                         order_id=order_id,
                         status=status_map.get(ib_status, OrderStatus.PENDING),
                     )
 
                     # Add execution details
                     order.metadata["ibkr_status"] = ib_status
-                    order.metadata["filled_quantity"] = trade.filled()
-                    order.metadata["remaining_quantity"] = trade.remaining()
-                    order.metadata["average_fill_price"] = trade.avgFillPrice()
+                    order.metadata["filled_quantity"] = trade.orderStatus.filled
+                    order.metadata["remaining_quantity"] = trade.orderStatus.remaining
+                    order.metadata["average_fill_price"] = trade.orderStatus.avgFillPrice
 
                     return order
                 else:
@@ -711,6 +718,8 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
 
             if details:
                 detail = details[0]
+                if detail.contract is None:
+                    return None
                 return {
                     "symbol": symbol,
                     "contract_id": detail.contract.conId,
@@ -744,15 +753,15 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
 
             return {
                 "symbol": symbol,
-                "last": float(ticker.last) if ticker.last else None,
-                "bid": float(ticker.bid) if ticker.bid else None,
-                "ask": float(ticker.ask) if ticker.ask else None,
+                "last": ticker.last if ticker.last else None,
+                "bid": ticker.bid if ticker.bid else None,
+                "ask": ticker.ask if ticker.ask else None,
                 "bid_size": int(ticker.bidSize) if ticker.bidSize else None,
                 "ask_size": int(ticker.askSize) if ticker.askSize else None,
                 "volume": int(ticker.volume) if ticker.volume else None,
-                "high": float(ticker.high) if ticker.high else None,
-                "low": float(ticker.low) if ticker.low else None,
-                "close": float(ticker.close) if ticker.close else None,
+                "high": ticker.high if ticker.high else None,
+                "low": ticker.low if ticker.low else None,
+                "close": ticker.close if ticker.close else None,
                 "timestamp": datetime.now(UTC),
             }
 
@@ -798,10 +807,10 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                 return [
                     {
                         "timestamp": bar.date,
-                        "open": float(bar.open),
-                        "high": float(bar.high),
-                        "low": float(bar.low),
-                        "close": float(bar.close),
+                        "open": bar.open,
+                        "high": bar.high,
+                        "low": bar.low,
+                        "close": bar.close,
                         "volume": int(bar.volume),
                     }
                     for bar in bars
@@ -821,7 +830,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                 "host": self.host,
                 "port": self.port,
                 "client_id": self.client_id,
-                "connected": self.ib.isConnected() if self.ib else False,
+                "connected": self.ib.isConnected(),
             },
             "trading_mode": self.trading_mode.value,
             "paper_trading": self.paper_trading_enabled,

@@ -23,7 +23,7 @@ import os
 import re
 from typing import List, Tuple
 
-import astor
+import astor  # type: ignore
 
 LOG_METHODS = {"debug", "info", "warning", "warn", "error", "critical", "exception", "log"}
 
@@ -71,7 +71,8 @@ class FstringToLazyLoggingTransformer(ast.NodeTransformer):
         remaining_pos_args = node.args[1:]  # остальные, если были
 
         # Новые args: [new_msg_node] + value_exprs + remaining_pos_args
-        new_args = [new_msg_node] + value_exprs + remaining_pos_args
+        from typing import cast
+        new_args = cast(List[ast.expr], [new_msg_node] + value_exprs + remaining_pos_args)
 
         new_call = ast.Call(func=node.func, args=new_args, keywords=node.keywords)
         return ast.copy_location(new_call, node)
@@ -175,8 +176,6 @@ class FstringToLazyLoggingTransformer(ast.NodeTransformer):
                 + (m.group("num") or "")
                 + ("." + m.group("num") if (m.group("dot") and m.group("num")) else "")
                 + m.group("spec")
-                if False
-                else None
             )
         # Попробуем простой перевод: если содержит 'f' или 'd' в конце — сохранить
         if s.endswith("f") or s.endswith("d"):

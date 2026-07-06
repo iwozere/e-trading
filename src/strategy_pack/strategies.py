@@ -34,7 +34,7 @@ class RunContext:
 
 
 def _window_start(end: datetime, lookback_days: int) -> datetime:
-    return end - timedelta(days=int(lookback_days))
+    return end - timedelta(days=lookback_days)
 
 
 def _load_df(dm: DataManager, symbol: str, timeframe: str, end: datetime, lookback_days: int) -> pd.DataFrame:
@@ -139,8 +139,8 @@ def run_strategy_2(ctx: RunContext) -> List[PackSignal]:
         if use_fast and sma_f is not None:
             uptrend = uptrend & (c > sma_f)
 
-        prev_up = bool(uptrend.iloc[-2])
-        curr_up = bool(uptrend.iloc[-1])
+        prev_up = uptrend.iloc[-2]
+        curr_up = uptrend.iloc[-1]
         cross_up = curr_up and not prev_up
         cross_down = (not curr_up) and prev_up
 
@@ -196,8 +196,8 @@ def run_strategy_3(ctx: RunContext) -> List[PackSignal]:
             continue
         sma = c.rolling(w_sma).mean()
         uptrend = c > sma
-        prev_up = bool(uptrend.iloc[-2])
-        curr_up = bool(uptrend.iloc[-1])
+        prev_up = uptrend.iloc[-2]
+        curr_up = uptrend.iloc[-1]
         cross_up = curr_up and not prev_up
         cross_down = (not curr_up) and prev_up
 
@@ -305,7 +305,7 @@ def run_strategy_5(ctx: RunContext) -> List[PackSignal]:
         risk = max(price - sl, 1e-8)
         tp = price + rr * risk
         sig = "BUY" if breakout else "STATUS"
-        notify = bool(breakout)
+        notify = breakout
         return [
             PackSignal(
                 strategy_id=STRATEGY_IDS[5],

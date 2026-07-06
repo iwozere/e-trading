@@ -173,6 +173,8 @@ class BasePlotter:
 
     def _plot_price(self):
         """Plot price data"""
+        if self.axes is None:
+            return
         ax = self.axes[0]
 
         # Get datetime and price data from Backtrader data feed
@@ -235,6 +237,8 @@ class BasePlotter:
 
     def _plot_indicators(self):
         """Plot all indicators using their respective plotters"""
+        if self.axes is None:
+            return
         current_ax = 0
         for plotter in self.indicator_plotters:
             try:
@@ -251,6 +255,8 @@ class BasePlotter:
 
     def _plot_trades(self):
         """Plot trade markers"""
+        if self.axes is None:
+            return
         ax = self.axes[0]
         for trade in self.trades:
             try:
@@ -291,6 +297,8 @@ class BasePlotter:
 
     def _plot_equity(self):
         """Plot equity curve"""
+        if self.axes is None:
+            return
         if len(self.axes) > 1:  # Only plot if we have a second subplot
             ax = self.axes[-1]  # Always last subplot
 

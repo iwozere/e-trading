@@ -12,7 +12,7 @@ import json
 import sys
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, cast
 
 import pandas as pd
 
@@ -137,7 +137,7 @@ def _read_p15_13dg(as_of_date: date) -> List[Dict[str, Any]]:
 
     try:
         df = pd.read_csv(cache_file, compression="gzip", dtype=str)
-        return df.to_dict("records")
+        return cast(List[Dict[str, Any]], df.to_dict("records"))
     except Exception:
         _logger.exception("Failed to read P15 13D/G cache %s", cache_file)
         return []
@@ -191,7 +191,7 @@ def _process_form4(as_of_date: date, target_tickers: Set[str]) -> int:
             upsert_signals(signal_rows)
             _logger.info("Form 4: recorded insider buys for %d tickers", len(signal_rows))
 
-        return int(df_buys.shape[0])
+        return df_buys.shape[0]
     except Exception:
         _logger.exception("Form 4 processing failed for %s", as_of_date)
         return 0

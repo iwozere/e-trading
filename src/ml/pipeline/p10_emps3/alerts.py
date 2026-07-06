@@ -16,7 +16,7 @@ _logger = setup_logger(__name__)
 
 class EMPS3AlertSender:
     def __init__(self, user_id: str | None = None):
-        self.client = None
+        self.client: NotificationServiceClient | None = None
         self.user_id = user_id
         try:
             self.client = NotificationServiceClient()
@@ -67,6 +67,9 @@ See attached CSV."""
             self.client = None
 
     async def _send_notifications(self, title: str, message: str, attachments: dict):
+        if not self.client:
+            _logger.warning("Notification client not available, cannot send notification")
+            return
         await self.client.send_notification(
             notification_type="alert",
             title=title,

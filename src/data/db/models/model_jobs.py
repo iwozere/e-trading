@@ -8,7 +8,7 @@ Includes Schedule and Run models with proper relationships and validation.
 from __future__ import annotations
 
 from datetime import datetime as dt
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -19,7 +19,7 @@ from src.data.db.core.json_types import JsonType
 ## For PostgreSQL we prefer the native JSONB type
 
 
-class JobType(str, Enum):
+class JobType(StrEnum):
     """Job type enumeration."""
 
     SCHEDULE = "schedule"
@@ -32,7 +32,7 @@ class JobType(str, Enum):
     SCRIPT = "script"
 
 
-class RunStatus(str, Enum):
+class RunStatus(StrEnum):
     """Run status enumeration."""
 
     PENDING = "pending"

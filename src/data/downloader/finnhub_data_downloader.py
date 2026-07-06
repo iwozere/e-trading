@@ -100,7 +100,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
             raise ValueError("Finnhub API key is required. Get one at: https://finnhub.io/")
 
         # Rate limiting state
-        self._last_request_time = 0
+        self._last_request_time: float = 0.0
         self._request_delay = 1.1  # 1.1s delay to stay under 60 RPM
 
     def _make_request(self, url: str, params: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any] | None:
@@ -437,8 +437,8 @@ class FinnhubDataDownloader(BaseDataDownloader):
             start_date = end_date - timedelta(hours=hours_back)
 
             # Convert to required format (YYYY-MM-DD)
-            start_str = start_date.strftime("%Y-%m-%d")
-            end_str = end_date.strftime("%Y-%m-%d")
+            start_date.strftime("%Y-%m-%d")
+            end_date.strftime("%Y-%m-%d")
 
             # Get news sentiment
             news_url = "https://finnhub.io/api/v1/news-sentiment"
@@ -796,7 +796,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
             params = {"symbol": symbol.upper(), "token": self.api_key}
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:  # type: ignore[arg-type]
                     if response.status == 429:
                         _logger.warning("Finnhub API rate limit exceeded for news sentiment")
                         return None
@@ -890,7 +890,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
             }
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:  # type: ignore[arg-type]
                     if response.status == 429:
                         _logger.warning("Finnhub API rate limit exceeded for social sentiment")
                         return None
@@ -1012,7 +1012,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
             if news_data and social_data:
                 # Both available - average the scores
                 combined_score = (
-                    float(news_data.sentiment_score or 0.0) + float(social_data.sentiment_score or 0.0)
+                    (news_data.sentiment_score or 0.0) + (social_data.sentiment_score or 0.0)
                 ) / 2.0
 
                 combined_data = SentimentData(
@@ -1071,7 +1071,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
             params = {"symbol": symbol.upper(), "from": from_date, "to": to_date, "token": self.api_key}
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:  # type: ignore[arg-type]
                     if response.status == 429:
                         _logger.warning("Finnhub API rate limit exceeded for company news")
                         return []

@@ -65,9 +65,10 @@ class AlertsService(BaseDBService):
                 "validation_errors": validation_result.errors,
             }
 
+        from src.data.db.models.model_jobs import ScheduleCreate
+        
         # Create job schedule for the alert
         job_data = {
-            "user_id": user_id,
             "name": f"Alert: {alert_config.get('ticker', 'Unknown')}",
             "job_type": "alert",
             "target": alert_config.get("ticker", ""),
@@ -76,7 +77,7 @@ class AlertsService(BaseDBService):
             "enabled": True,
         }
 
-        job = self.jobs_service.create_job(job_data)
+        job = self.jobs_service.create_schedule(user_id, ScheduleCreate(**job_data))
         self._logger.info("Created alert job %s for user %s", job.id, user_id)
 
         return {"success": True, "job_id": job.id, "alert_config": alert_config}
@@ -129,8 +130,9 @@ class AlertsService(BaseDBService):
     @handle_db_error
     def update_alert(self, job_id: int, updates: Dict[str, Any]) -> bool:
         """Update an alert."""
+        from src.data.db.models.model_jobs import ScheduleUpdate
         try:
-            return self.jobs_service.update_job(job_id, updates)
+            return self.jobs_service.update_schedule(job_id, ScheduleUpdate(**updates)) is not None
         except Exception:
             self._logger.exception("Error updating alert %s", job_id)
             return False
@@ -139,7 +141,7 @@ class AlertsService(BaseDBService):
     def delete_alert(self, job_id: int) -> bool:
         """Delete an alert."""
         try:
-            return self.jobs_service.delete_job(job_id)
+            return self.jobs_service.delete_schedule(job_id)
         except Exception:
             self._logger.exception("Error deleting alert %s", job_id)
             return False

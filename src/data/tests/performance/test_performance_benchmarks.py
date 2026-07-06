@@ -20,6 +20,8 @@ import pandas as pd
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
+# Import new unified cache system
+from src.data.cache.unified_cache import configure_unified_cache
 from src.data.utils.performance_optimization import (
     ParallelProcessor,
     compress_dataframe_efficiently,
@@ -27,9 +29,6 @@ from src.data.utils.performance_optimization import (
     optimize_dataframe_performance,
 )
 from src.data.utils.validation import validate_ohlcv_data
-
-# Import new unified cache system
-from src.data.cache.unified_cache import configure_unified_cache
 
 
 class PerformanceBenchmarks(unittest.TestCase):
@@ -167,7 +166,7 @@ class PerformanceBenchmarks(unittest.TestCase):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             read_futures = [executor.submit(read_operation) for _ in range(20)]
-            results = [future.result() for future in concurrent.futures.as_completed(read_futures)]
+            [future.result() for future in concurrent.futures.as_completed(read_futures)]
 
         read_time = time.time() - start_time
 
@@ -180,7 +179,7 @@ class PerformanceBenchmarks(unittest.TestCase):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             write_futures = [executor.submit(write_operation, i) for i in range(10)]
-            results = [future.result() for future in concurrent.futures.as_completed(write_futures)]
+            [future.result() for future in concurrent.futures.as_completed(write_futures)]
 
         write_time = time.time() - start_time
 

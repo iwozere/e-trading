@@ -68,7 +68,8 @@ class StudyManager:
 
         if n_jobs is None:
             # Senior Architect Recommendation: Cap parallelism for SQLite sanity
-            n_jobs = min(os.cpu_count() - 1, 6)
+            cpu_count = os.cpu_count() or 4
+            n_jobs = min(cpu_count - 1, 6)
 
         # 0. Handle Isolation Logic
         symbol_slug = self._get_symbols_slug(symbols) if symbols else "PORTFOLIO"

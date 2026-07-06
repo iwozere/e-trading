@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -31,7 +31,7 @@ class GlobalLimitConfig:
 
     max_global_requests_per_second: float = 10.0
     max_concurrent_requests: int = 20
-    adapter_priority_weights: Dict[str, float] = None
+    adapter_priority_weights: Optional[Dict[str, float]] = None
     enable_fair_sharing: bool = True
     enable_adaptive_global_limit: bool = True
     system_load_threshold: float = 0.9  # 90% CPU

@@ -150,6 +150,10 @@ class PaperTradingMixin:
         if not hasattr(self, "paper_trading_enabled") or not self.paper_trading_enabled:
             raise ValueError("Not in paper trading mode")
 
+        if not order.order_id:
+            from uuid import uuid4
+            order.order_id = str(uuid4())
+
         # Validate order
         if hasattr(self, "validate_order"):
             is_valid, validation_message = await self.validate_order(order)
@@ -189,7 +193,7 @@ class PaperTradingMixin:
             order.status.value,
         )
 
-        return order.order_id
+        return order.order_id or ""
 
     async def _execute_paper_market_order(self, order: Order, market_price: float) -> None:
         """Execute a market order in paper trading mode."""
@@ -214,16 +218,17 @@ class PaperTradingMixin:
     async def _process_paper_limit_order(self, order: Order, market_price: float) -> None:
         """Process a limit order in paper trading mode."""
         # Check if limit order can be filled immediately
-        if (order.side == OrderSide.BUY and market_price <= order.price) or (
-            order.side == OrderSide.SELL and market_price >= order.price
+        if order.price is not None and (
+            (order.side == OrderSide.BUY and market_price <= order.price) or
+            (order.side == OrderSide.SELL and market_price >= order.price)
         ):
             # Fill at limit price (better execution)
             start_time = datetime.now(UTC)
-            success, _, executed_quantity, reason = await self.simulate_realistic_execution(order, order.price)
+            success, _, executed_quantity, reason = await self.simulate_realistic_execution(order, order.price or market_price)
 
             if success:
                 latency_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
-                await self._fill_paper_order(order, order.price, executed_quantity, latency_ms)
+                await self._fill_paper_order(order, order.price or market_price, executed_quantity, latency_ms)
             else:
                 order.status = OrderStatus.REJECTED
                 order.metadata["rejection_reason"] = reason
@@ -257,6 +262,7 @@ class PaperTradingMixin:
         order.status = OrderStatus.FILLED if order.filled_quantity >= order.quantity else OrderStatus.PARTIALLY_FILLED
 
         # Record execution metrics
+        metrics = None
         if hasattr(self, "record_execution_metrics"):
             metrics = self.record_execution_metrics(order, executed_price, executed_quantity, latency_ms)
 
@@ -355,7 +361,7 @@ class PaperTradingMixin:
                 realized_pnl=0.0,
                 paper_trading=True,
                 entry_timestamp=datetime.now(UTC),
-                entry_orders=[order.order_id],
+                entry_orders=[order.order_id] if order.order_id else [],
                 commission_paid=commission,
             )
 
@@ -397,7 +403,8 @@ class PaperTradingMixin:
 
         # Update position metadata
         position.commission_paid += commission
-        position.entry_orders.append(order.order_id)
+        if order.order_id:
+            position.entry_orders.append(order.order_id)
         position.timestamp = datetime.now(UTC)
         position.update_holding_period()
 
@@ -422,9 +429,9 @@ class PaperTradingMixin:
         self.paper_portfolio.total_commission += commission
 
         # Recalculate portfolio value and unrealized P&L
-        await self._recalculate_paper_portfolio_value()
+        await self._async_recalculate_paper_portfolio_value()
 
-    async def _recalculate_paper_portfolio_value(self) -> None:
+    async def _async_recalculate_paper_portfolio_value(self) -> None:
         """Recalculate paper portfolio total value and unrealized P&L."""
         if not self.paper_portfolio:
             return
@@ -459,7 +466,7 @@ class PaperTradingMixin:
             return self.market_data_cache[symbol].get("price")
         return None
 
-    def update_market_data_cache(self, symbol: str, price: float, timestamp: datetime = None) -> None:
+    def update_market_data_cache(self, symbol: str, price: float, timestamp: datetime | None = None) -> None:
         """Update market data cache for paper trading simulation."""
         if timestamp is None:
             timestamp = datetime.now(UTC)
@@ -489,7 +496,7 @@ class PaperTradingMixin:
     async def get_paper_positions(self) -> Dict[str, Position]:
         """Get current paper trading positions."""
         # Update market values before returning
-        await self._recalculate_paper_portfolio_value()
+        await self._async_recalculate_paper_portfolio_value()
         return self.paper_positions.copy()
 
     async def get_paper_portfolio(self) -> Portfolio:
@@ -498,7 +505,11 @@ class PaperTradingMixin:
             self._initialize_paper_portfolio()
 
         # Update portfolio values
-        await self._recalculate_paper_portfolio_value()
+        await self._async_recalculate_paper_portfolio_value()
+        
+        if self.paper_portfolio is None:
+            raise RuntimeError("Portfolio failed to initialize")
+            
         return self.paper_portfolio
 
     def get_paper_order_status(self, order_id: str) -> Order | None:
@@ -605,28 +616,32 @@ class PaperTradingMixin:
             should_fill = False
 
             if order.order_type == OrderType.LIMIT:
-                if (order.side == OrderSide.BUY and current_price <= order.price) or (
-                    order.side == OrderSide.SELL and current_price >= order.price
+                if order.price is not None and (
+                    (order.side == OrderSide.BUY and current_price <= order.price) or
+                    (order.side == OrderSide.SELL and current_price >= order.price)
                 ):
                     should_fill = True
 
             elif order.order_type == OrderType.STOP:
-                if (order.side == OrderSide.BUY and current_price >= order.stop_price) or (
-                    order.side == OrderSide.SELL and current_price <= order.stop_price
+                if order.stop_price is not None and (
+                    (order.side == OrderSide.BUY and current_price >= order.stop_price) or
+                    (order.side == OrderSide.SELL and current_price <= order.stop_price)
                 ):
                     # Convert to market order
                     order.order_type = OrderType.MARKET
                     should_fill = True
 
             elif order.order_type == OrderType.STOP_LIMIT:
-                if (order.side == OrderSide.BUY and current_price >= order.stop_price) or (
-                    order.side == OrderSide.SELL and current_price <= order.stop_price
+                if order.stop_price is not None and (
+                    (order.side == OrderSide.BUY and current_price >= order.stop_price) or
+                    (order.side == OrderSide.SELL and current_price <= order.stop_price)
                 ):
                     # Convert to limit order
                     order.order_type = OrderType.LIMIT
                     # Check if limit can be filled immediately
-                    if (order.side == OrderSide.BUY and current_price <= order.price) or (
-                        order.side == OrderSide.SELL and current_price >= order.price
+                    if order.price is not None and (
+                        (order.side == OrderSide.BUY and current_price <= order.price) or
+                        (order.side == OrderSide.SELL and current_price >= order.price)
                     ):
                         should_fill = True
 

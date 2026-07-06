@@ -1,3 +1,5 @@
+from typing import Any, Optional, cast
+
 import numpy as np
 import talib
 
@@ -15,7 +17,7 @@ async def analyze_ticker(
     ticker: str,
     period: str = "2y",
     interval: str = "1d",
-    provider: str = None,
+    provider: Optional[str] = None,
     force_refresh: bool = False,
     force_refresh_fundamentals: bool = False,
 ) -> TickerAnalysis:
@@ -61,13 +63,13 @@ async def analyze_ticker(
                 fundamentals = None
 
         # Calculate technical indicators using TA-Lib
-        df_with_indicators = df.copy()
+        df_with_indicators: Any = df.copy()
         try:
             # Validate data types and quality
-            close = df_with_indicators["close"].values.astype(float)
-            high = df_with_indicators["high"].values.astype(float)
-            low = df_with_indicators["low"].values.astype(float)
-            volume = df_with_indicators["volume"].values.astype(float)
+            close: Any = df_with_indicators["close"].values.astype(float)
+            high: Any = df_with_indicators["high"].values.astype(float)
+            low: Any = df_with_indicators["low"].values.astype(float)
+            volume: Any = df_with_indicators["volume"].values.astype(float)
 
             # Check for NaN or infinite values
             if np.any(np.isnan(close)) or np.any(np.isinf(close)):
@@ -163,7 +165,7 @@ async def analyze_ticker(
             # Continue without indicators
 
         # Extract current indicator values from the DataFrame for technical analysis
-        current_indicators = {}
+        current_indicators: dict[str, Any] = {}
         current_price = None
         if not df_with_indicators.empty:
             # Get the last row (most recent data)
@@ -435,7 +437,7 @@ async def analyze_ticker(
         )
         # Generate chart
         try:
-            chart_bytes = generate_chart(temp_analysis.ticker, temp_analysis.ohlcv)
+            chart_bytes = generate_chart(temp_analysis.ticker, cast(Any, temp_analysis.ohlcv))
         except Exception:
             _logger.exception("Error generating chart:")
             chart_bytes = None
@@ -474,7 +476,7 @@ def format_ticker_report(analysis: TickerAnalysis) -> dict:
     chart_bytes = None
     if analysis.ohlcv is not None:
         try:
-            chart_bytes = generate_chart(analysis.ticker, analysis.ohlcv)
+            chart_bytes = generate_chart(analysis.ticker, cast(Any, analysis.ohlcv))
             analysis.chart_image = chart_bytes
         except Exception:
             _logger.exception("Error generating chart:")

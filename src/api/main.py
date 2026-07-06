@@ -72,7 +72,7 @@ class _SensitiveDataFilter(logging.Filter):
         if record.args:
             try:
                 sanitized = tuple(
-                    _JWT_RE.sub("[JWT]", str(a)) if isinstance(a, str) else a
+                    _JWT_RE.sub("[JWT]", a) if isinstance(a, str) else a
                     for a in (record.args if isinstance(record.args, tuple) else (record.args,))
                 )
                 record.args = sanitized
@@ -119,12 +119,13 @@ from src.data.db.models.model_users import User
 strategy_manager: StrategyManager | None = None
 strategy_service: StrategyManagementService | None = None
 monitoring_service: SystemMonitoringService | None = None
+api_heartbeat_manager: Any = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    global strategy_manager, strategy_service, monitoring_service
+    global strategy_manager, strategy_service, monitoring_service, api_heartbeat_manager
 
     # Startup
     _logger.info("Starting Trading Web UI Backend...")
@@ -134,7 +135,7 @@ async def lifespan(app: FastAPI):
     _logger.info("Database initialized")
 
     # Initialize strategy manager if available
-    if TRADING_SYSTEM_AVAILABLE:
+    if TRADING_SYSTEM_AVAILABLE and StrategyManager is not None:
         strategy_manager = StrategyManager()
 
         # Load existing strategies if config exists
@@ -217,8 +218,9 @@ async def lifespan(app: FastAPI):
 
     # Stop heartbeat
     try:
-        api_heartbeat_manager.stop_heartbeat()
-        _logger.info("Stopped API service heartbeat")
+        if api_heartbeat_manager is not None:
+            api_heartbeat_manager.stop_heartbeat()
+            _logger.info("Stopped API service heartbeat")
     except Exception:
         _logger.debug("Heartbeat manager was not running at shutdown")
 
@@ -235,8 +237,8 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-app.add_exception_handler(AppError, app_error_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore
+app.add_exception_handler(AppError, app_error_handler)  # type: ignore
 
 # Configure CORS - origins loaded from CORS_ORIGINS env var (comma-separated)
 _cors_origins = settings.cors_origins_list
@@ -437,7 +439,7 @@ async def test_auth(current_user: User = Depends(get_current_user)):
 def list_strategies(current_user: User = Depends(get_current_user)):
     """List all configured strategies."""
     try:
-        strategies = strategy_service.get_all_strategies_status()
+        strategies = strategy_service.get_all_strategies_status()  # type: ignore
         return [StrategyStatus(**strategy) for strategy in strategies]
     except Exception:
         _logger.exception("Error listing strategies:")
@@ -452,8 +454,7 @@ async def create_strategy(strategy_config: StrategyConfig, current_user: User = 
         config_dict = strategy_config.model_dump()
 
         # Create strategy using service
-        result = await strategy_service.create_strategy(config_dict)
-
+        result = await strategy_service.create_strategy(config_dict)  # type: ignore
         return {"message": result["message"], "strategy_id": result["strategy_id"]}
 
     except StrategyValidationError as e:
@@ -469,7 +470,7 @@ async def create_strategy(strategy_config: StrategyConfig, current_user: User = 
 def get_strategy(strategy_id: str, current_user: User = Depends(get_current_user)):
     """Get details of a specific strategy."""
     try:
-        status = strategy_service.get_strategy_status(strategy_id)
+        status = strategy_service.get_strategy_status(strategy_id)  # type: ignore
         if not status:
             raise HTTPException(status_code=404, detail="Strategy not found")
 
@@ -492,8 +493,7 @@ async def update_strategy(
         config_dict = strategy_config.model_dump()
 
         # Update strategy using service
-        result = await strategy_service.update_strategy(strategy_id, config_dict)
-
+        result = await strategy_service.update_strategy(strategy_id, config_dict)  # type: ignore
         return {"message": result["message"], "strategy_id": result["strategy_id"]}
 
     except StrategyValidationError as e:
@@ -510,8 +510,7 @@ async def delete_strategy(strategy_id: str, current_user: User = Depends(require
     """Delete a strategy."""
     try:
         # Delete strategy using service
-        result = await strategy_service.delete_strategy(strategy_id)
-
+        result = await strategy_service.delete_strategy(strategy_id)  # type: ignore
         return {"message": result["message"], "strategy_id": result["strategy_id"]}
 
     except StrategyOperationError as e:
@@ -531,8 +530,7 @@ async def start_strategy(
     """Start a strategy."""
     try:
         # Start strategy using service
-        result = await strategy_service.start_strategy(strategy_id, confirm_live_trading=action.confirm_live_trading)
-
+        result = await strategy_service.start_strategy(strategy_id, confirm_live_trading=action.confirm_live_trading)  # type: ignore
         return {"message": result["message"], "strategy_id": result["strategy_id"]}
 
     except StrategyOperationError as e:
@@ -552,8 +550,7 @@ async def stop_strategy(strategy_id: str, current_user: User = Depends(require_t
     """Stop a strategy."""
     try:
         # Stop strategy using service
-        result = await strategy_service.stop_strategy(strategy_id)
-
+        result = await strategy_service.stop_strategy(strategy_id)  # type: ignore
         return {"message": result["message"], "strategy_id": result["strategy_id"]}
 
     except StrategyOperationError as e:
@@ -570,8 +567,7 @@ async def restart_strategy(
     """Restart a strategy."""
     try:
         # Restart strategy using service
-        result = await strategy_service.restart_strategy(strategy_id, confirm_live_trading=action.confirm_live_trading)
-
+        result = await strategy_service.restart_strategy(strategy_id, confirm_live_trading=action.confirm_live_trading)  # type: ignore
         return {"message": result["message"], "strategy_id": result["strategy_id"]}
 
     except StrategyOperationError as e:
@@ -594,10 +590,10 @@ def get_system_status(current_user: User = Depends(get_current_user)):
     """Get overall system status."""
     try:
         # Get service status
-        service_status_info = strategy_service.get_service_status()
+        service_status_info = strategy_service.get_service_status()  # type: ignore
 
         # Get real system metrics
-        metrics = monitoring_service.get_comprehensive_metrics()
+        metrics = monitoring_service.get_comprehensive_metrics()  # type: ignore
         system_metrics = {
             "cpu_percent": metrics["cpu"]["usage_percent"],
             "memory_percent": metrics["memory"]["usage_percent"],
@@ -633,8 +629,7 @@ async def update_strategy_parameters(
     """Update strategy parameters while running."""
     try:
         parameters = body.model_dump()
-        result = await strategy_service.update_strategy_parameters(strategy_id, parameters)
-
+        result = await strategy_service.update_strategy_parameters(strategy_id, parameters)  # type: ignore
         return result
 
     except StrategyOperationError as e:
@@ -648,7 +643,7 @@ async def update_strategy_parameters(
 def get_strategy_templates(current_user: User = Depends(get_current_user)):
     """Get available strategy templates."""
     try:
-        templates = strategy_service.get_strategy_templates()
+        templates = strategy_service.get_strategy_templates()  # type: ignore
         return {"templates": templates}
 
     except Exception:
@@ -661,7 +656,7 @@ def validate_configuration(body: ValidateConfigBody, current_user: User = Depend
     """Validate a strategy configuration."""
     try:
         config = body.model_dump()
-        strategy_service.validate_strategy_config(config)
+        strategy_service.validate_strategy_config(config)  # type: ignore
         return {"valid": True, "errors": []}
 
     except StrategyValidationError as e:
@@ -676,7 +671,7 @@ def validate_configuration(body: ValidateConfigBody, current_user: User = Depend
 def get_system_metrics(current_user: User = Depends(get_current_user)):
     """Get comprehensive system metrics."""
     try:
-        metrics = monitoring_service.get_comprehensive_metrics()
+        metrics = monitoring_service.get_comprehensive_metrics()  # type: ignore
         return metrics
     except Exception:
         _logger.exception("Error getting system metrics:")
@@ -687,7 +682,7 @@ def get_system_metrics(current_user: User = Depends(get_current_user)):
 def get_system_alerts(unacknowledged_only: bool = False, current_user: User = Depends(get_current_user)):
     """Get system alerts."""
     try:
-        alerts = monitoring_service.get_alerts(unacknowledged_only)
+        alerts = monitoring_service.get_alerts(unacknowledged_only)  # type: ignore
         return {"alerts": alerts}
     except Exception:
         _logger.exception("Error getting system alerts:")
@@ -698,7 +693,7 @@ def get_system_alerts(unacknowledged_only: bool = False, current_user: User = De
 def acknowledge_alert(alert_index: int, current_user: User = Depends(require_trader_or_admin)):
     """Acknowledge a system alert."""
     try:
-        success = monitoring_service.acknowledge_alert(alert_index)
+        success = monitoring_service.acknowledge_alert(alert_index)  # type: ignore
         if success:
             return {"message": "Alert acknowledged successfully"}
         else:
@@ -717,7 +712,7 @@ def get_performance_history(hours: int = 1, current_user: User = Depends(get_cur
         if hours < 1 or hours > 24:
             raise HTTPException(status_code=400, detail="Hours must be between 1 and 24")
 
-        history = monitoring_service.get_performance_history(hours)
+        history = monitoring_service.get_performance_history(hours)  # type: ignore
         return {"history": history}
     except HTTPException:
         raise

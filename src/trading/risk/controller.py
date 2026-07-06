@@ -71,7 +71,7 @@ class RiskController:
         """
         if exit_size <= 0 or exit_price <= 0 or account_equity <= 0:
             return False
-        sym_exp = float(current_exposures.get(symbol) or 0.0)
+        sym_exp = current_exposures.get(symbol) or 0.0
         if sym_exp <= 0:
             return False
         notional = exit_size * exit_price

@@ -61,7 +61,7 @@ def calculate_metrics(simulation_data: Dict[str, Any]) -> Dict[str, Any]:
     base_metrics = {
         "bot_id": simulation_data.get("bot_id"),
         "symbol": simulation_data.get("symbol"),
-        "strategy": simulation_data.get("bot_id").split("-strategy-")[-1]
+        "strategy": simulation_data.get("bot_id", "").split("-strategy-")[-1]
         if "-strategy-" in simulation_data.get("bot_id", "")
         else "unknown",
         "initial_balance": simulation_data.get("initial_balance"),

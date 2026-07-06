@@ -22,7 +22,10 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.ml.pipeline.p06_emps2.config import EMPS2PipelineConfig
 
 
-def _make_config(analyzer_type: str = "volatility") -> EMPS2PipelineConfig:
+from typing import Literal
+
+
+def _make_config(analyzer_type: Literal["volatility", "accumulation"] = "volatility") -> EMPS2PipelineConfig:
     cfg = EMPS2PipelineConfig.create_default()
     cfg.analyzer_type = analyzer_type
     return cfg

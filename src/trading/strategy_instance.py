@@ -361,9 +361,10 @@ class StrategyInstance:
                     return
                 try:
                     price = float(signal.get("price") or 0.0)
-                    size = float(
-                        signal.get("size") if signal.get("size") is not None else signal.get("quantity") or 0.0
-                    )
+                    s = signal.get("size")
+                    q = signal.get("quantity")
+                    size_val = s if s is not None else (q if q is not None else 0.0)
+                    size = float(size_val)
                 except (TypeError, ValueError):
                     _logger.warning("Ignoring Backtrader signal with non-numeric price/size: %s", signal)
                     return
@@ -394,7 +395,8 @@ class StrategyInstance:
     async def _run_backtrader_async(self):
         """Run Backtrader engine in background."""
         try:
-            await asyncio.get_event_loop().run_in_executor(None, self.cerebro.run)
+            if self.cerebro is not None:
+                await asyncio.get_event_loop().run_in_executor(None, self.cerebro.run)
         except Exception:
             _logger.exception("Error in Backtrader engine for %s: %s", self.name)
             self.status = "error"
@@ -441,7 +443,7 @@ class StrategyInstance:
             except Exception:
                 time.sleep(5)
 
-    async def _send_trade_notification(self, order_type: str, price: float, size: float, pnl: float = None):
+    async def _send_trade_notification(self, order_type: str, price: float, size: float, pnl: float | None = None):
         """
         Send notification for trade execution (async fire-and-forget).
         """
@@ -616,7 +618,7 @@ class StrategyInstance:
     ) -> None:
         """Backtrader order.Completed callback (may run on the BT thread)."""
         try:
-            side = "buy" if str(order_type).upper() == "BUY" else "sell"
+            side = "buy" if order_type.upper() == "BUY" else "sell"
             _run_async(self._send_trade_notification(side, price, size))
         except Exception:
             _logger.exception("Error scheduling trade notification for %s:", self.name)

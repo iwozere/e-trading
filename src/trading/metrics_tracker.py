@@ -59,11 +59,11 @@ class PerformanceMetrics:
             self.peak_balance = self.current_balance
             self.current_drawdown = 0.0
         else:
-            peak = float(self.peak_balance)
+            peak = self.peak_balance
             if peak <= _PEAK_DRAWDOWN_EPS:
                 self.current_drawdown = 0.0
             else:
-                dd = (peak - float(self.current_balance)) / peak * 100.0
+                dd = (peak - self.current_balance) / peak * 100.0
                 self.current_drawdown = dd
                 if dd > self.max_drawdown:
                     self.max_drawdown = dd

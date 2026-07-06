@@ -25,5 +25,5 @@ class VolumePlotter(BaseIndicatorPlotter):
             _logger.exception("Error plotting Volume: %s")
 
     @property
-    def subplot_type(self):
+    def subplot_type(self) -> str:
         return "separate"

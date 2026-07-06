@@ -301,7 +301,7 @@ class TestFileBasedCache(unittest.TestCase):
             self.assertGreaterEqual(deleted_count, 0)  # Allow 0 if no cleanup needed
 
             # Verify data is gone or still there (depending on cleanup)
-            df = self.cache.get("binance", "BTCUSDT", "1h", format="csv")
+            self.cache.get("binance", "BTCUSDT", "1h", format="csv")
             # Note: Data might still be there if cleanup didn't remove it
         else:
             # Skip test if file doesn't exist
@@ -386,10 +386,11 @@ class TestGlobalFunctions(unittest.TestCase):
 
     def test_configure_file_cache(self):
         """Test configure_file_cache function."""
-        from src.data.utils.file_based_cache import _file_cache_instance, configure_file_cache
+        import src.data.utils.file_based_cache as fbc
+        from src.data.utils.file_based_cache import configure_file_cache
 
         # Reset global instance
-        _file_cache_instance = None
+        fbc._file_cache_instance = None
 
         # Configure cache
         cache = configure_file_cache(

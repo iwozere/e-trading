@@ -101,7 +101,7 @@ def fit_scaler(
     if cls is None:
         raise ValueError(f"Unknown scaler_type '{scaler_type}'. Supported: {list(_SCALER_MAP)}")
     scaler = cls()
-    scaler.fit(X_train)
+    scaler.fit(X_train)  # type: ignore[attr-defined]
     _logger.debug("fit_scaler: fitted %s on %d samples", scaler_type, len(X_train))
     return scaler
 
@@ -122,7 +122,7 @@ def apply_scaler(
     Returns:
         Scaled feature matrix with the same type as ``X``.
     """
-    scaled = scaler.transform(X)
+    scaled = scaler.transform(X)  # type: ignore[attr-defined]
     if isinstance(X, pd.DataFrame):
         return pd.DataFrame(scaled, index=X.index, columns=X.columns)
     return scaled

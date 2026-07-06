@@ -532,7 +532,7 @@ async def change_password(
                 )
 
         db_user.set_password(body.new_password)
-        db_user.updated_at = datetime.now(timezone.utc)
+        db_user.updated_at = datetime.now(timezone.utc)  # type: ignore
 
         webui_app_service.log_user_action(
             user_id=db_user.id,
@@ -745,15 +745,16 @@ async def confirm_password_reset(
             r.s.delete(matched_row)
 
             db_user = r.s.query(User).filter(User.id == user.id).first()
-            db_user.set_password(body.new_password)
-            db_user.updated_at = datetime.now(timezone.utc)
+            if db_user:
+                db_user.set_password(body.new_password)
+                db_user.updated_at = datetime.now(timezone.utc)  # type: ignore
 
-            webui_app_service.log_user_action(
-                user_id=db_user.id,
-                action="reset_password",
-                ip_address=request.client.host if request.client else None,
-                user_agent=request.headers.get("user-agent"),
-            )
+                webui_app_service.log_user_action(
+                    user_id=db_user.id,
+                    action="reset_password",
+                    ip_address=request.client.host if request.client else None,
+                    user_agent=request.headers.get("user-agent"),
+                )
 
     if not valid:
         raise HTTPException(

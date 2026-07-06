@@ -81,14 +81,14 @@ class FinraDataDownloader(BaseDataDownloader):
 
         # Set output paths for TRF data
         if output_dir is not None:
-            self.output_dir = Path(output_dir)
+            self.output_dir: Path | None = Path(output_dir)
         elif self.date:
             self.output_dir = Path("results") / "finra_trf" / self.date.strftime("%Y-%m-%d")
         else:
             self.output_dir = None
 
         if self.output_dir:
-            self.output_file = self.output_dir / output_filename
+            self.output_file: Path | None = self.output_dir / output_filename
             # Ensure output directory exists
             self.output_dir.mkdir(parents=True, exist_ok=True)
         else:
@@ -148,7 +148,7 @@ class FinraDataDownloader(BaseDataDownloader):
     # Short Interest Data Methods (from FINRADataDownloader)
     # ============================================================================
 
-    def get_available_dates(self, start_date: datetime = None, end_date: datetime = None) -> List[datetime]:
+    def get_available_dates(self, start_date: datetime | None = None, end_date: datetime | None = None) -> List[datetime]:
         """
         Get list of available FINRA short interest report dates.
 
@@ -263,7 +263,7 @@ class FinraDataDownloader(BaseDataDownloader):
         except Exception:
             return False
 
-    def get_short_interest_data(self, date: Union[datetime, date] = None) -> pd.DataFrame | None:
+    def get_short_interest_data(self, date: Union[datetime, date] | None = None) -> pd.DataFrame | None:
         """
         Download FINRA short interest data for a specific date.
 
@@ -321,13 +321,13 @@ class FinraDataDownloader(BaseDataDownloader):
         except Exception as e:
             _logger.error(
                 "Error downloading FINRA data for %s: %s",
-                date_for_format.strftime("%Y-%m-%d") if date else "unknown",
+                date.strftime("%Y-%m-%d") if date else "unknown",
                 e,
             )
             return None
 
     def get_short_interest_for_symbol(
-        self, symbol: str, date: Union[datetime, date] = None
+        self, symbol: str, date: Union[datetime, date] | None = None
     ) -> Dict[str, Any] | None:
         """
         Get short interest data for a specific symbol.
@@ -361,7 +361,7 @@ class FinraDataDownloader(BaseDataDownloader):
             _logger.error("Error getting FINRA data for symbol %s: %s", symbol, e)
             return None
 
-    def get_bulk_short_interest(self, symbols: List[str], date: datetime = None) -> Dict[str, Dict[str, Any]]:
+    def get_bulk_short_interest(self, symbols: List[str], date: datetime | None = None) -> Dict[str, Dict[str, Any]]:
         """
         Get short interest data for multiple symbols efficiently.
 
@@ -397,7 +397,7 @@ class FinraDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting bulk FINRA data:")
             return {}
 
-    def calculate_short_interest_metrics(self, finra_data: Dict[str, Any], shares_outstanding: int) -> Dict[str, float]:
+    def calculate_short_interest_metrics(self, finra_data: Dict[str, Any], shares_outstanding: int) -> Dict[str, Any]:
         """
         Calculate short interest metrics from FINRA data.
 
@@ -554,7 +554,7 @@ class FinraDataDownloader(BaseDataDownloader):
         try:
             # Use Basic Auth with Client ID and Secret
             response = requests.post(
-                self.FINRA_AUTH_URL, auth=(self._finra_api_client, self._finra_api_secret), timeout=30
+                self.FINRA_AUTH_URL, auth=(self._finra_api_client or "", self._finra_api_secret or ""), timeout=30
             )
             response.raise_for_status()
 

@@ -192,7 +192,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
             df = df.reset_index(drop=True)
             df = df.sort_values("timestamp")
             mask = (df["timestamp"] >= pd.to_datetime(start_str)) & (df["timestamp"] <= pd.to_datetime(end_str))
-            df = cast(pd.DataFrame, df[mask])
+            df = df[mask]
             # Ensure all required columns are present
             required_columns = ["timestamp", "open", "high", "low", "close", "volume"]
             for col in required_columns:
@@ -349,7 +349,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
                 params["time_from"] = time_from
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=60)) as response:
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=60)) as response:  # type: ignore[arg-type]
                     if response.status == 429:
                         _logger.warning("Alpha Vantage API rate limit exceeded for news sentiment")
                         return None

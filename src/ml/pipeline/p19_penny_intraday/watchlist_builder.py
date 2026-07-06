@@ -211,10 +211,10 @@ class WatchlistBuilder:
         """
         feed = self.cfg.feed_config
         try:  # prefer maintained ib_async (Py3.13-safe)
-            from ib_async import IB, ScannerSubscription, TagValue
+            from ib_async import IB, ScannerSubscription, TagValue  # type: ignore[import-not-found]
         except ImportError:
             try:
-                from ib_insync import IB, ScannerSubscription, TagValue
+                from ib_insync import IB, ScannerSubscription, TagValue  # type: ignore[import-not-found]
             except Exception:
                 _logger.warning("ib_async/ib_insync unavailable — gappers source skipped")
                 return []

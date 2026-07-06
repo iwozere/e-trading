@@ -168,4 +168,4 @@ def check_config_required(mapper, connection, instance):
     """
     if not hasattr(instance, "config") or instance.config is None:
         # Let the Session handle rollback when this exception bubbles up.
-        raise IntegrityError("Config field is required", None, None)
+        raise IntegrityError("Config field is required", None, Exception("Config field is required"))

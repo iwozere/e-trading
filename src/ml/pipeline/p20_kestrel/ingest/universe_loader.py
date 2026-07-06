@@ -209,7 +209,7 @@ def run() -> Dict[str, Any]:
         mcap_vals = pd.Series([_parse_mcap(v) for v in df["mcap_raw"]], index=df.index, dtype=object)
         below_floor = mcap_vals.notna() & (mcap_vals.astype(float) < UNIVERSE_MIN_MCAP_USD)
         if below_floor.any():
-            _logger.info("Mcap filter (<$%.0f): removed %d tickers", UNIVERSE_MIN_MCAP_USD, int(below_floor.sum()))
+            _logger.info("Mcap filter (<$%.0f): removed %d tickers", UNIVERSE_MIN_MCAP_USD, below_floor.sum())
             df = df[~below_floor].reset_index(drop=True)  # type: ignore[union-attr]
 
     tickers_list = df["ticker"].tolist()

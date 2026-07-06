@@ -385,7 +385,7 @@ class BinanceOrderFormatter:
         Returns:
             Dictionary with validation results and formatted parameters
         """
-        result = {
+        result: Dict[str, Any] = {
             "valid": True,
             "errors": [],
             "formatted_quantity": None,
@@ -541,7 +541,7 @@ def get_popular_binance_symbols() -> List[str]:
 
 def calculate_binance_fees(
     quantity: float, price: float, is_maker: bool = False, use_bnb: bool = False, vip_level: int = 0
-) -> Dict[str, float]:
+) -> Dict[str, Any]:
     """
     Calculate Binance trading fees based on VIP level and BNB usage.
 

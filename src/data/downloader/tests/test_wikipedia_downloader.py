@@ -79,7 +79,7 @@ def test_download_index_changes(downloader):
             ],
         ),
     ):
-        result = downloader.download_index_changes(date(2026, 7, 3))
+        downloader.download_index_changes(date(2026, 7, 3))
 
     # Assert cache file was created
     expected_cache = downloader._cache_dir / "2026-07-03.csv.gz"

@@ -29,7 +29,7 @@ _logger = setup_logger(__name__)
 
 try:
     import torch
-    from transformers import pipeline
+    from transformers import pipeline  # type: ignore
 
     HF_AVAILABLE = True
 except Exception:
@@ -380,7 +380,7 @@ class EnhancedHFAnalyzer:
             # Clean and validate texts
             clean_texts = []
             for text in texts:
-                clean_text = str(text).strip()
+                clean_text = text.strip()
                 if not clean_text:
                     clean_text = "neutral"
                 clean_texts.append(clean_text)

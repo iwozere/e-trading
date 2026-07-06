@@ -24,6 +24,7 @@ from datetime import datetime as dt
 
 import optuna
 import pandas as pd
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.backtester.optimizer.custom_optimizer import CustomOptimizer
 
@@ -414,8 +415,8 @@ def run_window_optimization(
     symbol: str,
     timeframe: str,
     optimizer_config: dict,
-    entry_strategies: list = None,
-    exit_strategies: list = None,
+    entry_strategies: Optional[list] = None,
+    exit_strategies: Optional[list] = None,
     data_dir: str = "data",
 ) -> tuple:
     """

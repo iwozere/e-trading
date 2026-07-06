@@ -14,6 +14,7 @@ Features:
 """
 
 import asyncio
+import json
 import os
 import sys
 import time
@@ -138,7 +139,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                             await asyncio.sleep(wait_time)
                             continue
 
-                    async with self._session.get(url, params=params, headers=headers, timeout=timeout) as resp:
+                    async with self._session.get(url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
                         response_time_ms = (time.time() - start_time) * 1000
 
                         # Log rate limit info for debugging
@@ -510,7 +511,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                 "bullish": bullish,
                 "bearish": bearish,
                 "neutral": neutral,
-                "sentiment_score": float(score),
+                "sentiment_score": score,
                 "total_engagement": int(total_engagement),
                 "avg_engagement": float(avg_engagement),
                 "avg_followers": float(avg_followers),

@@ -497,6 +497,6 @@ class JobsRepository:
                 )
             )
         )
-        deleted_count: int = result.rowcount
+        deleted_count: int = result.rowcount  # type: ignore
         _logger.info("Cleaned up %s old runs", deleted_count)
         return deleted_count

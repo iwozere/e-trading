@@ -6,7 +6,7 @@ Includes ScreenerSnapshot, DeepScanMetrics, SqueezeAlert, and AdHocCandidateMode
 """
 
 from datetime import date, datetime
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import (
     BigInteger,
@@ -27,7 +27,7 @@ from src.data.db.core.base import Base
 from src.data.db.core.json_types import JsonType
 
 
-class AlertLevel(str, Enum):
+class AlertLevel(StrEnum):
     """Alert level enumeration."""
 
     LOW = "LOW"
@@ -35,7 +35,7 @@ class AlertLevel(str, Enum):
     HIGH = "HIGH"
 
 
-class CandidateSource(str, Enum):
+class CandidateSource(StrEnum):
     """Candidate source enumeration."""
 
     SCREENER = "screener"
@@ -53,14 +53,14 @@ class ScreenerSnapshot(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     ticker: Mapped[str] = mapped_column(String(10), index=True)
     run_date: Mapped[date] = mapped_column(Date, index=True)
-    short_interest_pct: Mapped[Numeric | None] = mapped_column(Numeric(5, 4))
-    days_to_cover: Mapped[Numeric | None] = mapped_column(Numeric(8, 2))
+    short_interest_pct: Mapped[float | None] = mapped_column(Numeric(5, 4))
+    days_to_cover: Mapped[float | None] = mapped_column(Numeric(8, 2))
     float_shares: Mapped[int | None] = mapped_column(BigInteger)
     avg_volume_14d: Mapped[int | None] = mapped_column(BigInteger)
     market_cap: Mapped[int | None] = mapped_column(BigInteger)
-    screener_score: Mapped[Numeric | None] = mapped_column(Numeric(5, 4))
+    screener_score: Mapped[float | None] = mapped_column(Numeric(5, 4))
     raw_payload: Mapped[dict | None] = mapped_column(JsonType())
-    data_quality: Mapped[Numeric | None] = mapped_column(Numeric(3, 2))
+    data_quality: Mapped[float | None] = mapped_column(Numeric(3, 2))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
 
     __table_args__ = (
@@ -82,23 +82,21 @@ class ScreenerSnapshot(Base):
         # Import here to avoid circular imports
         from src.ml.pipeline.p04_short_squeeze.core.models import StructuralMetrics
 
-        if not all(
-            [
-                self.short_interest_pct is not None,
-                self.days_to_cover is not None,
-                self.float_shares is not None,
-                self.avg_volume_14d is not None,
-                self.market_cap is not None,
-            ]
+        if (
+            self.short_interest_pct is None
+            or self.days_to_cover is None
+            or self.float_shares is None
+            or self.avg_volume_14d is None
+            or self.market_cap is None
         ):
             return None
 
         return StructuralMetrics(
-            short_interest_pct=float(self.short_interest_pct),
-            days_to_cover=float(self.days_to_cover),
-            float_shares=int(self.float_shares),
-            avg_volume_14d=int(self.avg_volume_14d),
-            market_cap=int(self.market_cap),
+            short_interest_pct=self.short_interest_pct,
+            days_to_cover=self.days_to_cover,
+            float_shares=self.float_shares,
+            avg_volume_14d=self.avg_volume_14d,
+            market_cap=self.market_cap,
         )
 
 
@@ -110,11 +108,11 @@ class DeepScanMetrics(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     ticker: Mapped[str] = mapped_column(String(10), index=True)
     date: Mapped[date] = mapped_column(Date, index=True)
-    volume_spike: Mapped[Numeric | None] = mapped_column(Numeric(6, 2))
-    call_put_ratio: Mapped[Numeric | None] = mapped_column(Numeric(6, 2))
-    sentiment_24h: Mapped[Numeric | None] = mapped_column(Numeric(4, 3))
-    borrow_fee_pct: Mapped[Numeric | None] = mapped_column(Numeric(5, 4))
-    squeeze_score: Mapped[Numeric | None] = mapped_column(Numeric(5, 4))
+    volume_spike: Mapped[float | None] = mapped_column(Numeric(6, 2))
+    call_put_ratio: Mapped[float | None] = mapped_column(Numeric(6, 2))
+    sentiment_24h: Mapped[float | None] = mapped_column(Numeric(4, 3))
+    borrow_fee_pct: Mapped[float | None] = mapped_column(Numeric(5, 4))
+    squeeze_score: Mapped[float | None] = mapped_column(Numeric(5, 4))
     alert_level: Mapped[str | None] = mapped_column(String(10))
     raw_payload: Mapped[dict | None] = mapped_column(JsonType())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
@@ -146,10 +144,10 @@ class DeepScanMetrics(Base):
             return None
 
         return TransientMetrics(
-            volume_spike=float(self.volume_spike),
-            call_put_ratio=float(self.call_put_ratio) if self.call_put_ratio is not None else None,
-            sentiment_24h=float(self.sentiment_24h),
-            borrow_fee_pct=float(self.borrow_fee_pct) if self.borrow_fee_pct is not None else None,
+            volume_spike=self.volume_spike,
+            call_put_ratio=self.call_put_ratio,
+            sentiment_24h=self.sentiment_24h,
+            borrow_fee_pct=self.borrow_fee_pct,
         )
 
 
@@ -162,7 +160,7 @@ class SqueezeAlert(Base):
     ticker: Mapped[str] = mapped_column(String(10), index=True)
     alert_level: Mapped[str] = mapped_column(String(10))
     reason: Mapped[str | None] = mapped_column(Text)
-    squeeze_score: Mapped[Numeric | None] = mapped_column(Numeric(5, 4))
+    squeeze_score: Mapped[float | None] = mapped_column(Numeric(5, 4))
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
     sent: Mapped[bool] = mapped_column(Boolean, default=False)
     cooldown_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -189,7 +187,7 @@ class SqueezeAlert(Base):
             ticker=self.ticker,
             alert_level=AlertLevel(self.alert_level),
             reason=self.reason or "",
-            squeeze_score=float(self.squeeze_score) if self.squeeze_score is not None else 0.0,
+            squeeze_score=self.squeeze_score if self.squeeze_score is not None else 0.0,
             timestamp=self.timestamp,
             cooldown_expires=self.cooldown_expires,
             sent=self.sent,

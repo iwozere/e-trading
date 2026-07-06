@@ -54,8 +54,8 @@ class _TestableBroker(BaseBroker):
 
     async def get_portfolio(self):
         return Portfolio(
-            total_value=float(self.paper_trading_config.initial_balance),
-            cash=float(self.paper_trading_config.initial_balance),
+            total_value=self.paper_trading_config.initial_balance,
+            cash=self.paper_trading_config.initial_balance,
             positions={},
             unrealized_pnl=0.0,
             realized_pnl=0.0,

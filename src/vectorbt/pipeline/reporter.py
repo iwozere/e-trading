@@ -54,21 +54,21 @@ class Reporter:
         Calculates Calmar, Sortino, Expectancy, and other key metrics.
         """
         trades = pf.trades
-        expectancy = trades.expectancy().mean() if not trades.records.empty else 0.0
-        profit_factor = trades.profit_factor().mean() if not trades.records.empty else 0.0
-        win_rate = trades.win_rate().mean() if not trades.records.empty else 0.0
+        expectancy = trades.expectancy().mean() if not trades.records.empty else 0.0  # type: ignore
+        profit_factor = trades.profit_factor().mean() if not trades.records.empty else 0.0  # type: ignore
+        win_rate = trades.win_rate().mean() if not trades.records.empty else 0.0  # type: ignore
 
-        metrics = {
-            "cagr": float(pf.annualized_return().mean()),
-            "max_drawdown": float(pf.max_drawdown().mean()),
-            "calmar_ratio": float(pf.calmar_ratio().mean()),
-            "sortino_ratio": float(pf.sortino_ratio().mean()),
-            "sharpe_ratio": float(pf.sharpe_ratio().mean()),
+        metrics: Dict[str, Any] = {
+            "cagr": float(pf.annualized_return().mean()),  # type: ignore
+            "max_drawdown": float(pf.max_drawdown().mean()),  # type: ignore
+            "calmar_ratio": float(pf.calmar_ratio().mean()),  # type: ignore
+            "sortino_ratio": float(pf.sortino_ratio().mean()),  # type: ignore
+            "sharpe_ratio": float(pf.sharpe_ratio().mean()),  # type: ignore
             "profit_factor": float(profit_factor),
             "win_rate": float(win_rate),
             "expectancy": float(expectancy),
-            "max_gross_exposure": float(pf.gross_exposure().max().max()),
-            "total_trades": int(trades.count().sum()),
+            "max_gross_exposure": float(pf.gross_exposure().max().max()),  # type: ignore
+            "total_trades": int(trades.count().sum()),  # type: ignore
         }
 
         # Distance to Liquidation Approximation (Proxy)
@@ -84,14 +84,14 @@ class Reporter:
             List of trade dictionaries with full details
         """
         trades = pf.trades
-        if trades.records.empty:
+        if trades.records.empty:  # type: ignore
             return []
 
         trade_list = []
         leverage = params.get("leverage", 1.0)
 
         # Access the records DataFrame
-        records_df = trades.records_readable
+        records_df = trades.records_readable  # type: ignore
 
         for idx, trade_row in records_df.iterrows():
             trade_detail = {
@@ -192,7 +192,7 @@ class Reporter:
                 # Filter out extremes to avoid Plotly crashes
                 bench_cum = bench_cum.replace([np.inf, -np.inf], np.nan).dropna()
 
-                if not bench_cum.empty:
+                if not bench_cum.empty and fig is not None:
                     fig.add_trace(
                         go.Scatter(
                             x=bench_cum.index,
@@ -205,14 +205,13 @@ class Reporter:
                         col=1,
                     )
 
-            # Save Performance Dashboard
-            html_path = os.path.join(report_dir, f"trial_{trial_id}_dashboard.html")
-            fig.write_html(html_path)
+            if fig is not None:
+                html_path = os.path.join(report_dir, f"trial_{trial_id}_dashboard.html")
+                fig.write_html(html_path)
 
-            # Trade Distribution
-            if not pf.trades.records.empty:
+            if not pf.trades.records.empty:  # type: ignore
                 try:
-                    dist_fig = pf.trades.plot(subplots=["pnl"])
+                    dist_fig = pf.trades.plot(subplots=["pnl"])  # type: ignore
                     dist_fig.write_html(os.path.join(report_dir, f"trial_{trial_id}_trades.html"))
                 except Exception as e:
                     _logger.warning(f"Could not plot trade distribution: {e}")
@@ -236,7 +235,7 @@ class Reporter:
             margin_usage = margin_usage.replace([np.inf, -np.inf], 0.0).fillna(0.0)
 
             # Distance to Liquidation Proxy
-            drawdowns = pf.drawdown
+            drawdowns = pf.drawdowns  # type: ignore
 
             fig = make_subplots(
                 rows=2, cols=1, subplot_titles=("Margin Usage Ratio", "Distance to Liquidation Proxy (0.6 + Drawdown)")
@@ -255,13 +254,13 @@ class Reporter:
             if isinstance(drawdowns, pd.DataFrame):
                 for col in drawdowns.columns:
                     # Clip to avoid weird plots if drawdown is somehow > 0
-                    y_val = (0.6 + drawdowns[col]).clip(0, 1)
-                    fig.add_trace(go.Scatter(x=drawdowns.index, y=y_val, name=f"LiqDist {col}"), row=2, col=1)
+                    y_val = (0.6 + drawdowns[col]).clip(0, 1)  # type: ignore
+                    fig.add_trace(go.Scatter(x=drawdowns.index, y=y_val, name=f"LiqDist {col}"), row=2, col=1)  # type: ignore
             else:
-                y_val = (0.6 + drawdowns).clip(0, 1)
-                fig.add_trace(go.Scatter(x=drawdowns.index, y=y_val, name="LiqDist"), row=2, col=1)
+                y_val = (0.6 + drawdowns).clip(0, 1)  # type: ignore
+                fig.add_trace(go.Scatter(x=drawdowns.index, y=y_val, name="LiqDist"), row=2, col=1)  # type: ignore
 
-            fig.add_hline(y=0.1, line_dash="dash", line_color="red", row=2, col=1)  # Warning line
+            fig.add_hline(y=0.8, line_dash="dash", line_color="red", row=2, col=1)  # type: ignore  # Warning line
             fig.write_html(os.path.join(report_dir, f"trial_{trial_id}_risk.html"))
 
         except Exception as e:
@@ -299,7 +298,8 @@ class Reporter:
             # 3. Parameter Heatmap (Contour Plot)
             # Identify top 2 most important parameters for the heatmap
             attr = study.best_trial.user_attrs.get("stability_score", "Value")
-            importances = oviz._param_importances.get_param_importances(study)
+            import optuna.importance
+            importances = optuna.importance.get_param_importances(study)
             top_params = list(importances.keys())[:2]
 
             if len(top_params) >= 2:

@@ -138,7 +138,7 @@ class SystemHealth(Base):
                 self.avg_response_time_ms = int((self.avg_response_time_ms * 0.7) + (response_time_ms * 0.3))
 
         if metadata:
-            self.metadata = metadata
+            self.system_metadata = metadata
 
     @classmethod
     def get_system_status(cls, session, system: str, component: str | None = None):

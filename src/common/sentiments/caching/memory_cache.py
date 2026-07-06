@@ -293,7 +293,7 @@ class MemoryCache:
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
         with self._lock:
-            stats = {
+            stats: Dict[str, Any] = {
                 "size": len(self._cache),
                 "max_size": self.max_size,
                 "memory_usage_bytes": self.get_memory_usage(),

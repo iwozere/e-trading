@@ -151,6 +151,7 @@ async def summary(json_output):
 @click.option("--interval", default=60, help="Check interval in seconds")
 async def monitor(interval):
     """Start continuous health monitoring."""
+    health_monitor = None
     try:
         health_monitor = get_health_monitor()
         click.echo(f"Starting health monitoring with {interval}s interval...")
@@ -160,7 +161,8 @@ async def monitor(interval):
 
     except KeyboardInterrupt:
         click.echo("\nStopping health monitoring...")
-        health_monitor.stop_monitoring()
+        if health_monitor is not None:
+            health_monitor.stop_monitoring()
     except Exception as e:
         click.echo(f"Error during monitoring: {e}", err=True)
         sys.exit(1)

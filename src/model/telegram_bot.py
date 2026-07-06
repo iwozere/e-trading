@@ -53,39 +53,40 @@ class Fundamentals:
     # Data source information
     data_source: str | None = None
     last_updated: str | None = None
+    description: str | None = None
     # Track which provider supplied each value
     sources: Dict[str, str] | None = field(default_factory=dict)
 
 
 @dataclass
 class Technicals:
-    rsi: float
-    sma_fast: float
-    sma_slow: float
-    ema_fast: float
-    ema_slow: float
-    macd: float
-    macd_signal: float
-    macd_histogram: float
-    stoch_k: float
-    stoch_d: float
-    adx: float
-    plus_di: float
-    minus_di: float
-    obv: float
-    adr: float
-    avg_adr: float
-    trend: str
-    bb_upper: float
-    bb_middle: float
-    bb_lower: float
-    bb_width: float
-    cci: float
-    roc: float
-    mfi: float
-    williams_r: float
-    atr: float
-    recommendations: Dict[str, Any]
+    rsi: float | None = None
+    sma_fast: float | None = None
+    sma_slow: float | None = None
+    ema_fast: float | None = None
+    ema_slow: float | None = None
+    macd: float | None = None
+    macd_signal: float | None = None
+    macd_histogram: float | None = None
+    stoch_k: float | None = None
+    stoch_d: float | None = None
+    adx: float | None = None
+    plus_di: float | None = None
+    minus_di: float | None = None
+    obv: float | None = None
+    adr: float | None = None
+    avg_adr: float | None = None
+    trend: str | None = None
+    bb_upper: float | None = None
+    bb_middle: float | None = None
+    bb_lower: float | None = None
+    bb_width: float | None = None
+    cci: float | None = None
+    roc: float | None = None
+    mfi: float | None = None
+    williams_r: float | None = None
+    atr: float | None = None
+    recommendations: Dict[str, Any] | None = field(default_factory=dict)
 
 
 @dataclass
@@ -145,6 +146,7 @@ class ScreenerReport:
     summary_stats: Dict[str, Any] | None = None
     generated_at: str | None = None
     error: str | None = None
+    fmp_results: Dict[str, Any] | None = None
 
 
 @dataclass

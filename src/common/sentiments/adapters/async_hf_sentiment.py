@@ -28,7 +28,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 try:
-    from transformers import pipeline
+    from transformers import pipeline  # type: ignore
 
     HF_AVAILABLE = True
 except Exception:
@@ -97,7 +97,7 @@ class AsyncHFSentiment(BaseSentimentAdapter):
             # Clean texts
             clean_texts = []
             for text in texts:
-                clean_text = str(text).strip()
+                clean_text = text.strip()
                 if not clean_text:
                     clean_text = "neutral"  # Fallback for empty texts
                 clean_texts.append(clean_text)

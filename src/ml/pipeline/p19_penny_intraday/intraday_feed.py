@@ -47,9 +47,9 @@ class IBKRIntradayFeed:
         """
         try:
             try:
-                from ib_async import IB
+                from ib_async import IB  # type: ignore[import-not-found]
             except ImportError:
-                from ib_insync import IB
+                from ib_insync import IB  # type: ignore[import-not-found]
         except Exception:
             _logger.warning("ib_async/ib_insync unavailable — intraday feed disabled")
             return False
@@ -98,9 +98,9 @@ class IBKRIntradayFeed:
             return {}
         from_ib = self._ib
         try:
-            from ib_async import Stock
+            from ib_async import Stock  # type: ignore[import-not-found]
         except ImportError:
-            from ib_insync import Stock
+            from ib_insync import Stock  # type: ignore[import-not-found]
 
         subs = {}
         for sym in tickers:

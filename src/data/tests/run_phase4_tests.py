@@ -178,7 +178,7 @@ def generate_test_report(unit_result, integration_result, performance_result):
 
     # Check if file-based cache is working
     try:
-        from src.data.utils.file_based_cache import FileBasedCache, get_file_cache
+        from src.data.utils.file_based_cache import FileBasedCache, get_file_cache  # noqa: F401
 
         print("  ✓ File-based cache system: Available")
     except ImportError as e:
@@ -186,7 +186,7 @@ def generate_test_report(unit_result, integration_result, performance_result):
 
     # Check if Redis dependency is removed
     try:
-        from src.data import RedisCache
+        from src.data import RedisCache  # noqa: F401
 
         print("  ✗ Redis dependency: Still present (should be removed)")
     except ImportError:
@@ -195,7 +195,7 @@ def generate_test_report(unit_result, integration_result, performance_result):
     # Test enhanced CSV cache functionality
     print("\nEnhanced CSV Cache Functionality:")
     try:
-        from src.data.utils.file_based_cache import (
+        from src.data.utils.file_based_cache import (  # noqa: F401
             CacheMetadata,
             CSVFormatConventions,
             SafeCSVAppender,

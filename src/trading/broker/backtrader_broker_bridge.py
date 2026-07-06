@@ -24,7 +24,7 @@ if BACKTRADER_AVAILABLE:
             self._core = core
             core.enable_backtrader_trading_mode()
             # Writers / analyzers expect ``startingcash`` and ``cash`` (see ``BackBroker``).
-            _cash = float(self._core._bt_getcash())
+            _cash = self._core._bt_getcash()
             self.startingcash = _cash
             self.cash = _cash
 
@@ -109,7 +109,7 @@ if BACKTRADER_AVAILABLE:
             return self._core.cancel(order)
 
         def next(self) -> None:
-            self.cash = float(self._core._bt_getcash())
+            self.cash = self._core._bt_getcash()
             return self._core.next()
 
         def get_notification(self):

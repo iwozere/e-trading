@@ -52,7 +52,7 @@ class UserProfile:
     verified: bool
     profile_image_default: bool
     bio_length: int
-    creation_date: datetime | None
+    creation_date: datetime | None = None
 
 
 @dataclass

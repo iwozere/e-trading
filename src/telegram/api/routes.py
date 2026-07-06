@@ -194,5 +194,8 @@ def create_api_app() -> web.Application:
     app.router.add_post("/api/notify", api_notify)
     app.router.add_get("/api/status", api_status)  # authenticated — returns service internals
     app.router.add_get("/api/health", api_health)  # unauthenticated — minimal liveness probe
-    app.router.add_get("/api/test", lambda r: web.json_response({"status": "ok", "message": "Bot API is working!"}))
+    async def _test_handler(r: web.Request) -> web.StreamResponse:
+        return web.json_response({"status": "ok", "message": "Bot API is working!"})
+
+    app.router.add_get("/api/test", _test_handler)
     return app

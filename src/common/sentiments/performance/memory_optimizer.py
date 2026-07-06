@@ -11,9 +11,9 @@ import threading
 import weakref
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterator, List
+from typing import Any, Callable, Dict, Iterator, List
 
 import psutil
 
@@ -36,7 +36,7 @@ class MemoryStats:
     percent_used: float
     process_rss_mb: float
     process_vms_mb: float
-    timestamp: datetime = field(default_factory=timezone.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class MemoryMonitor:
@@ -130,7 +130,7 @@ class StreamingDataProcessor:
         self.chunk_size = chunk_size
         self.memory_monitor = memory_monitor or MemoryMonitor()
 
-    def process_in_chunks(self, data: List[Any], processor: callable) -> Iterator[Any]:
+    def process_in_chunks(self, data: List[Any], processor: Callable) -> Iterator[Any]:
         """
         Process data in chunks to minimize memory usage.
 
@@ -167,7 +167,7 @@ class StreamingDataProcessor:
                 # Clean up chunk reference
                 del chunk
 
-    def aggregate_streaming_results(self, results_iterator: Iterator[Any], aggregator: callable) -> Any:
+    def aggregate_streaming_results(self, results_iterator: Iterator[Any], aggregator: Callable) -> Any:
         """
         Aggregate streaming results efficiently.
 
@@ -323,7 +323,7 @@ class MemoryEfficientDataStructures:
 
     @staticmethod
     def batch_process_with_memory_limit(
-        data: List[Any], processor: callable, memory_limit_mb: float = 500.0
+        data: List[Any], processor: Callable, memory_limit_mb: float = 500.0
     ) -> List[Any]:
         """
         Process data in batches with memory limit enforcement.
@@ -374,10 +374,10 @@ class MemoryOptimizer:
         """
         self.monitor = MemoryMonitor(warning_threshold, critical_threshold)
         self.auto_cleanup = auto_cleanup
-        self._cleanup_callbacks: List[callable] = []
+        self._cleanup_callbacks: List[Callable] = []
         self._weak_refs: List[weakref.ref] = []
 
-    def register_cleanup_callback(self, callback: callable) -> None:
+    def register_cleanup_callback(self, callback: Callable) -> None:
         """Register a callback to be called during cleanup."""
         self._cleanup_callbacks.append(callback)
 

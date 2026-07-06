@@ -21,6 +21,8 @@ import pandas as pd
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
+# Import new unified cache system
+from src.data.cache.unified_cache import configure_unified_cache
 from src.data.sources.base_data_source import BaseDataSource
 from src.data.sources.data_aggregator import DataAggregator
 from src.data.sources.data_source_factory import (
@@ -28,6 +30,7 @@ from src.data.sources.data_source_factory import (
     get_data_source_factory,
     register_data_source,
 )
+from src.data.utils.data_handler import get_data_handler
 from src.data.utils.performance_optimization import (
     LazyDataLoader,
     ParallelProcessor,
@@ -36,14 +39,10 @@ from src.data.utils.performance_optimization import (
     get_performance_monitor,
     optimize_dataframe_performance,
 )
-from src.data.utils.data_handler import get_data_handler
 from src.data.utils.validation import (
     get_data_quality_score,
     validate_ohlcv_data,
 )
-
-# Import new unified cache system
-from src.data.cache.unified_cache import configure_unified_cache
 
 
 class MockDataSource(BaseDataSource):
@@ -223,8 +222,8 @@ class TestPhase4Integration(unittest.TestCase):
     def test_data_aggregator_integration(self):
         """Test data aggregator integration."""
         # Create multiple data sources
-        source1 = create_data_source("mock", cache_enabled=True)
-        source2 = create_data_source("mock", cache_enabled=True)
+        create_data_source("mock", cache_enabled=True)
+        create_data_source("mock", cache_enabled=True)
 
         # Test aggregation with multiple sources
         aggregated_df = self.aggregator.aggregate_data(

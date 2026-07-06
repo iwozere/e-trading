@@ -4,16 +4,24 @@ from sqlalchemy.orm import Session
 
 from src.data.db.repos.repo_telegram import BroadcastRepo, CommandAuditRepo, FeedbackRepo, SettingsRepo
 from src.data.db.repos.repo_users import UsersRepo
+from src.data.db.models.model_users import AuthIdentity, User
+from src.data.db.core.constants import PROVIDER_TG
 
 
 def test_settings_and_feedback_and_broadcasts(db_session: Session):
-    users = UsersRepo(db_session)
-    u = users.ensure_user_for_telegram("7070", defaults_user={"email": "tg@example.com"})
+    u = User(username="tg_user", email="tg@example.com")
+    db_session.add(u)
+    db_session.flush()
+    identity = AuthIdentity(user_id=u.id, provider=PROVIDER_TG, external_id="7070")
+    db_session.add(identity)
+    db_session.flush()
 
     # Settings
     settings = SettingsRepo(db_session)
     settings.set("welcome_message", "Hello!")
-    assert settings.get("welcome_message").value == "Hello!"
+    setting = settings.get("welcome_message")
+    assert setting is not None
+    assert setting.value == "Hello!"
 
     # Feedback
     fb = FeedbackRepo(db_session)

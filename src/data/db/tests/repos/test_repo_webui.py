@@ -21,8 +21,8 @@ def test_webui_repos(db_session: Session):
 
     # performance snapshots
     snaps = SnapshotRepo(db_session)
-    s1 = snaps.add({"strategy_id": "s1", "timestamp": datetime.now(UTC), "pnl": {"net": 0}})
-    s2 = snaps.add({"strategy_id": "s1", "pnl": {"net": 1}})
+    snaps.add({"strategy_id": "s1", "timestamp": datetime.now(UTC), "pnl": {"net": 0}})
+    snaps.add({"strategy_id": "s1", "pnl": {"net": 1}})
     latest = snaps.latest("s1", limit=2)
     assert len(latest) >= 2
 

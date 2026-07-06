@@ -147,7 +147,7 @@ class ShortSqueezeAgent:
         for c in candidates:
             ratio = ratios.get(c.ticker)
             if ratio is not None:
-                c.finra_short_vol_ratio = float(ratio)
+                c.finra_short_vol_ratio = ratio
                 enriched_n += 1
 
         _logger.info("FINRA short-vol ratio: enriched %d/%d candidates", enriched_n, len(candidates))

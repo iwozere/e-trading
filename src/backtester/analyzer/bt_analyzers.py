@@ -11,6 +11,7 @@ This module provides several custom analyzers for use with Backtrader strategies
 - Portfolio Volatility
 """
 
+from collections import OrderedDict
 import math
 
 import backtrader as bt
@@ -30,7 +31,7 @@ class CalmarRatio(bt.Analyzer):
         self.drawdown_analyzer = bt.analyzers.DrawDown()
 
     def stop(self):
-        self.rets = {}
+        self.rets = OrderedDict()
 
         # Получаем результаты от других анализаторов
         cagr = self.cagr_analyzer.get_analysis()["cagr"]
@@ -60,7 +61,7 @@ class CAGR(bt.Analyzer):
         self.start_value = self.strategy.broker.getvalue()
 
     def stop(self):
-        self.rets = {}
+        self.rets = OrderedDict()
         end_value = self.strategy.broker.getvalue()
         days = len(self.strategy)
         years = days / 365.0
@@ -95,7 +96,7 @@ class SortinoRatio(bt.Analyzer):
         self.prev_value = value
 
     def stop(self):
-        self.rets = {}
+        self.rets = OrderedDict()
         returns = np.array(self.returns)
 
         if len(returns) == 0:
@@ -142,7 +143,7 @@ class ProfitFactor(bt.Analyzer):
                 self.gross_loss += abs(trade.pnl)
 
     def stop(self):
-        self.rets = {}
+        self.rets = OrderedDict()
         if self.gross_loss != 0:
             pf = self.gross_profit / self.gross_loss
         else:
@@ -174,7 +175,7 @@ class WinRate(bt.Analyzer):
                 self.loss_amounts.append(abs(trade.pnl))
 
     def stop(self):
-        self.rets = {}
+        self.rets = OrderedDict()
         self.rets["win_rate"] = (self.winning_trades / self.total_trades * 100) if self.total_trades > 0 else 0.0
         self.rets["avg_win"] = np.mean(self.win_amounts) if self.win_amounts else 0.0
         self.rets["avg_loss"] = np.mean(self.loss_amounts) if self.loss_amounts else 0.0
@@ -208,10 +209,10 @@ class ConsecutiveWinsLosses(bt.Analyzer):
                     self.max_losses = self.current_losses
 
     def stop(self):
-        self.rets = {
-            "max_consecutive_wins": self.max_wins,
-            "max_consecutive_losses": self.max_losses,
-        }
+        self.rets = OrderedDict([
+            ("max_consecutive_wins", self.max_wins),
+            ("max_consecutive_losses", self.max_losses),
+        ])
 
     def get_analysis(self):
         return self.rets
@@ -236,7 +237,7 @@ class PortfolioVolatility(bt.Analyzer):
         self.prev_value = current_value
 
     def stop(self):
-        self.rets = {}
+        self.rets = OrderedDict()
         if len(self.returns) > 1:
             volatility = np.std(self.returns)
             if self.p.annualize:

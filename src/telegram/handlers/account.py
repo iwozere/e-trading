@@ -336,6 +336,9 @@ async def cmd_info(msg: Message):
     """Handle /info command."""
     from src.telegram.handlers.common import audit_command_wrapper
 
+    if msg.from_user is None:
+        return
+
     await audit_command_wrapper(msg, process_info_command_immediate, str(msg.from_user.id), msg)
 
 
@@ -343,7 +346,10 @@ async def cmd_register(msg: Message):
     """Handle /register command."""
     from src.telegram.handlers.common import audit_command_wrapper
 
-    parsed = parse_command(msg.text)
+    if msg.from_user is None:
+        return
+
+    parsed = parse_command(msg.text or "")
     await audit_command_wrapper(msg, process_register_command_immediate, str(msg.from_user.id), parsed, msg)
 
 
@@ -351,7 +357,10 @@ async def cmd_verify(msg: Message):
     """Handle /verify command."""
     from src.telegram.handlers.common import audit_command_wrapper
 
-    parsed = parse_command(msg.text)
+    if msg.from_user is None:
+        return
+
+    parsed = parse_command(msg.text or "")
     await audit_command_wrapper(msg, process_verify_command_immediate, str(msg.from_user.id), parsed, msg)
 
 
@@ -359,7 +368,10 @@ async def cmd_language(msg: Message):
     """Handle /language command."""
     from src.telegram.handlers.common import audit_command_wrapper
 
-    parsed = parse_command(msg.text)
+    if msg.from_user is None:
+        return
+
+    parsed = parse_command(msg.text or "")
     await audit_command_wrapper(msg, process_language_command_immediate, str(msg.from_user.id), parsed, msg)
 
 
@@ -367,7 +379,10 @@ async def cmd_request_approval(msg: Message):
     """Handle /request_approval command."""
     from src.telegram.handlers.common import audit_command_wrapper
 
-    parsed = parse_command(msg.text)
+    if msg.from_user is None:
+        return
+
+    parsed = parse_command(msg.text or "")
     await audit_command_wrapper(msg, process_request_approval_command_immediate, str(msg.from_user.id), parsed, msg)
 
 

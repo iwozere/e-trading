@@ -11,6 +11,7 @@ import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
+from typing import Dict, Any
 
 import pytest
 
@@ -61,7 +62,7 @@ class TestBrokerFactory:
 
     def test_validate_broker_config_live_trading_requirements(self):
         """Test live trading configuration requirements."""
-        config = {"type": "binance", "trading_mode": "live"}
+        config: Dict[str, Any] = {"type": "binance", "trading_mode": "live"}
 
         # Should fail without confirmation and risk management
         with pytest.raises(BrokerConfigurationError):

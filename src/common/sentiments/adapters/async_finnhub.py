@@ -130,7 +130,7 @@ class AsyncFinnhubSentimentAdapter(BaseSentimentAdapter):
 
             return {
                 "mentions": mentions,
-                "sentiment_score": float(sentiment_score),
+                "sentiment_score": sentiment_score,
                 "bullish": bullish,
                 "bearish": bearish,
                 "neutral": neutral,
@@ -213,7 +213,7 @@ class AsyncFinnhubSentimentAdapter(BaseSentimentAdapter):
 
             return {
                 "mentions": mentions,
-                "sentiment_score": float(final_score),
+                "sentiment_score": final_score,
                 "bullish": 1 if final_score > 0.1 else 0,  # Rough mapping for basic metrics
                 "bearish": 1 if final_score < -0.1 else 0,
                 "neutral": 1 if -0.1 <= final_score <= 0.1 else 0,

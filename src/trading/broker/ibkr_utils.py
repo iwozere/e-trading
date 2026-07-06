@@ -123,17 +123,28 @@ class IBKRContractManager:
                     symbol, kwargs.get("exchange", "SMART"), kwargs.get("currency", "USD")
                 )
             elif asset_class == "OPT":
+                expiry = kwargs.get("expiry")
+                strike = kwargs.get("strike")
+                right = kwargs.get("right")
+                if expiry is None or strike is None or right is None:
+                    _logger.warning("Missing required OPT arguments for %s", symbol)
+                    return None
                 contract = self.create_option_contract(
                     symbol,
-                    kwargs.get("expiry"),
-                    kwargs.get("strike"),
-                    kwargs.get("right"),
+                    str(expiry),
+                    float(strike),
+                    str(right),
                     kwargs.get("exchange", "SMART"),
                     kwargs.get("currency", "USD"),
                 )
             elif asset_class == "FUT":
+                expiry = kwargs.get("expiry")
+                exchange = kwargs.get("exchange")
+                if expiry is None or exchange is None:
+                    _logger.warning("Missing required FUT arguments for %s", symbol)
+                    return None
                 contract = self.create_future_contract(
-                    symbol, kwargs.get("expiry"), kwargs.get("exchange"), kwargs.get("currency", "USD")
+                    symbol, str(expiry), str(exchange), kwargs.get("currency", "USD")
                 )
             elif asset_class == "CASH":
                 base_currency = symbol[:3] if len(symbol) >= 6 else symbol
@@ -212,7 +223,7 @@ class IBKRCommissionCalculator:
             "default": 1.0,  # 1.0 pip for other pairs
         }
 
-    def calculate_stock_commission(self, quantity: int, price: float) -> Dict[str, float]:
+    def calculate_stock_commission(self, quantity: int, price: float) -> Dict[str, Any]:
         """
         Calculate commission for US stock trades.
 
@@ -325,7 +336,7 @@ class IBKRMarginCalculator:
 
     def calculate_stock_margin(
         self, symbol: str, quantity: int, price: float, margin_type: str = "initial"
-    ) -> Dict[str, float]:
+    ) -> Dict[str, Any]:
         """
         Calculate margin requirement for stock position.
 
@@ -360,7 +371,7 @@ class IBKRMarginCalculator:
 
     def calculate_option_margin(
         self, option_type: str, contracts: int, premium: float, underlying_price: float, strike: float
-    ) -> Dict[str, float]:
+    ) -> Dict[str, Any]:
         """
         Calculate margin requirement for option position.
 
@@ -440,9 +451,6 @@ class IBKROrderValidator:
         if quantity <= 0:
             return False, "Quantity must be positive"
 
-        if quantity != int(quantity):
-            return False, "Stock quantity must be a whole number"
-
         # Validate price (if provided)
         if price is not None:
             if price <= 0:
@@ -493,9 +501,6 @@ class IBKROrderValidator:
         # Validate contracts
         if contracts <= 0:
             return False, "Number of contracts must be positive"
-
-        if contracts != int(contracts):
-            return False, "Number of contracts must be a whole number"
 
         return True, ""
 
@@ -617,7 +622,7 @@ def create_ibkr_config_template(trading_mode: str = "paper") -> Dict[str, Any]:
         base_config["_WARNING"] = "LIVE TRADING MODE - REAL MONEY WILL BE USED"
 
         # More conservative settings for live trading
-        base_config["ibkr_config"]["market_data_update_interval"] = 0.5  # Faster updates
+        base_config["ibkr_config"]["market_data_update_interval"] = 1  # Faster updates
         base_config["risk_management"]["max_margin_usage"] = 0.3  # More conservative
 
     return base_config
@@ -702,7 +707,7 @@ def get_popular_ibkr_symbols() -> Dict[str, List[str]]:
     }
 
 
-def calculate_ibkr_fees_comprehensive(asset_class: str, **kwargs) -> Dict[str, float]:
+def calculate_ibkr_fees_comprehensive(asset_class: str, **kwargs) -> Dict[str, Any]:
     """
     Calculate comprehensive IBKR fees for different asset classes.
 
@@ -734,7 +739,7 @@ def calculate_ibkr_fees_comprehensive(asset_class: str, **kwargs) -> Dict[str, f
         return {"error": f"Unsupported asset class: {asset_class}"}
 
 
-def validate_ibkr_trading_hours(symbol: str, asset_class: str, timestamp: datetime = None) -> Tuple[bool, str]:
+def validate_ibkr_trading_hours(symbol: str, asset_class: str, timestamp: datetime | None = None) -> Tuple[bool, str]:
     """
     Validate if trading is allowed for a symbol at a given time.
 

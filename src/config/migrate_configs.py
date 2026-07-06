@@ -184,7 +184,7 @@ class ConfigMigrator:
 
     def _transform_trading_config(self, old_config: Dict[str, Any], config_path: Path) -> Dict[str, Any]:
         """Transform old trading configuration to new format"""
-        new_config = {
+        new_config: Dict[str, Any] = {
             "environment": "development",
             "version": "1.0.0",
             "description": old_config.get("description", f"Migrated from {config_path.name}"),
@@ -256,7 +256,7 @@ class ConfigMigrator:
 
     def _transform_optimizer_config(self, old_config: Dict[str, Any], config_path: Path) -> Dict[str, Any]:
         """Transform old optimizer configuration to new format"""
-        new_config = {
+        new_config: Dict[str, Any] = {
             "environment": "development",
             "version": "1.0.0",
             "description": f"Migrated optimizer config from {config_path.name}",
@@ -278,7 +278,7 @@ class ConfigMigrator:
 
     def _transform_data_config(self, old_config: Dict[str, Any], config_path: Path) -> Dict[str, Any]:
         """Transform old data configuration to new format"""
-        new_config = {
+        new_config: Dict[str, Any] = {
             "environment": "development",
             "version": "1.0.0",
             "description": f"Migrated data config from {config_path.name}",

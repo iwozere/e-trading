@@ -120,13 +120,13 @@ async def initialize_services() -> bool:
                 _logger.info("All service health checks passed")
                 return True
             _logger.error("Service health checks failed — limited functionality")
-            if telegram_service_instance:
+            if telegram_service_instance is not None:
                 _logger.info("TelegramService available — continuing with limited functionality")
                 return True
             return False
         except Exception as exc:
             _logger.error("Error during health checks: %s", exc)
-            return bool(telegram_service_instance)
+            return telegram_service_instance is not None
 
     except Exception as exc:
         _logger.exception("Unexpected error during service initialisation: %s", exc)

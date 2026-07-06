@@ -9,6 +9,8 @@ import asyncio
 import signal
 import sys
 from pathlib import Path
+from typing import Any
+
 
 # Add project root to path if not already present
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -112,6 +114,8 @@ class SchedulerApplication:
             await self.initialize_services()
 
             # Start scheduler service
+            if self.scheduler_service is None:
+                raise RuntimeError("Scheduler service is not initialized")
             await self.scheduler_service.start()
 
             _logger.info("Scheduler application started successfully")
@@ -155,9 +159,9 @@ class SchedulerApplication:
         _logger.info("Reloaded %d schedules", count)
         return count
 
-    def get_status(self) -> dict:
+    def get_status(self) -> dict[str, Any]:
         """Get application status."""
-        status = {
+        status: dict[str, Any] = {
             "service": self.config.service.name,
             "version": self.config.service.version,
             "environment": self.config.service.environment,
@@ -171,6 +175,7 @@ class SchedulerApplication:
             status["scheduler"] = self.scheduler_service.get_scheduler_status()
 
         return status
+
 
 
 # Global application instance

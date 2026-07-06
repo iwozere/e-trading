@@ -7,7 +7,7 @@ to all configured channels (Telegram, Email).
 
 from datetime import UTC, datetime
 from html import escape
-from typing import List, Optional, Sequence
+from typing import Any, List, Optional, Sequence
 
 from src.notification.logger import setup_logger
 from src.portfolio.pnl_alert.pnl_evaluator import AlertRow
@@ -142,7 +142,7 @@ async def send_alert(
     channels: Sequence[str],
     threshold_pct: float,
     recipient_id: int | None = None,
-    client: Optional["object"] = None,
+    client: Any = None,
     dry_run: bool = False,
     as_of: datetime | None = None,
 ) -> bool:

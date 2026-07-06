@@ -72,7 +72,7 @@ class SystemHealthRepository:
                 existing.failure_count = health_data.get("failure_count", existing.failure_count)
                 existing.avg_response_time_ms = health_data.get("avg_response_time_ms", existing.avg_response_time_ms)
                 existing.error_message = health_data.get("error_message", existing.error_message)
-                existing.metadata = health_data.get("metadata", existing.metadata)
+                existing.system_metadata = health_data.get("metadata", existing.system_metadata)
                 existing.checked_at = health_data.get("checked_at", datetime.now(UTC))
 
                 self.session.flush()
@@ -89,7 +89,7 @@ class SystemHealthRepository:
                     failure_count=health_data.get("failure_count", 0),
                     avg_response_time_ms=health_data.get("avg_response_time_ms"),
                     error_message=health_data.get("error_message"),
-                    metadata=health_data.get("metadata"),
+                    system_metadata=health_data.get("metadata"),
                     checked_at=health_data.get("checked_at", datetime.now(UTC)),
                 )
 
@@ -266,7 +266,7 @@ class SystemHealthRepository:
 
         if not health_record:
             # Create new record if it doesn't exist
-            health_data = {
+            health_data: Dict[str, Any] = {
                 "system": system,
                 "component": component,
                 "status": status.value,

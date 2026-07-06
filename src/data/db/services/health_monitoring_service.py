@@ -70,7 +70,7 @@ class HealthMonitoringService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_notification_service_health(self, enabled_channels: List[str] = None) -> Dict[str, Any]:
+    def get_notification_service_health(self, enabled_channels: List[str] | None = None) -> Dict[str, Any]:
         """
         Get Notification Service health status.
 
@@ -111,7 +111,7 @@ class HealthMonitoringService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_comprehensive_health(self, notification_enabled_channels: List[str] = None) -> Dict[str, Any]:
+    def get_comprehensive_health(self, notification_enabled_channels: List[str] | None = None) -> Dict[str, Any]:
         """
         Get comprehensive health status for all services.
 
@@ -229,4 +229,4 @@ class HealthMonitoringService(BaseDBService):
             return "degraded", f"High failure rate: {failed_last_hour} failures in last hour"
 
         # All checks passed
-        return "healthy", None
+        return "healthy", ""

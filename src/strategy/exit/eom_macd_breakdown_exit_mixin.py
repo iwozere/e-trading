@@ -214,7 +214,3 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""
         return self._exit_reason if self._exit_reason else "macd_breakdown"
-
-    def get_exit_reason(self) -> str:
-        """Get the reason for exit"""
-        return self._exit_reason if self._exit_reason else "macd_breakdown"

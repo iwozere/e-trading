@@ -124,7 +124,7 @@ class FinraTRFDownloader:
 
         try:
             # Use Basic Auth with Client ID and Secret
-            response = requests.post(self.FINRA_AUTH_URL, auth=(FINRA_API_CLIENT, FINRA_API_SECRET), timeout=30)
+            response = requests.post(self.FINRA_AUTH_URL, auth=(FINRA_API_CLIENT or "", FINRA_API_SECRET or ""), timeout=30)
             response.raise_for_status()
 
             token_data = response.json()

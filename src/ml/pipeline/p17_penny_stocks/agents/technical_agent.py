@@ -85,7 +85,7 @@ class TechnicalAgent:
 
         # ── Relative volume ────────────────────────────────────────────────
         lookback = min(self.config.rvol_lookback_days, n - 1)
-        avg_vol = float(volume.iloc[-lookback - 1 : -1].mean()) if lookback > 0 else float(volume.mean())
+        avg_vol = volume.iloc[-lookback - 1 : -1].mean() if lookback > 0 else volume.mean()
         today_vol = float(volume.iloc[-1])
         c.relative_volume = today_vol / avg_vol if avg_vol > 0 else 0.0
 
@@ -139,7 +139,7 @@ class TechnicalAgent:
 
         # ── OBV slope ─────────────────────────────────────────────────────
         if n >= 10:
-            diff_arr = np.diff(np.concatenate([[close_arr[0]], close_arr]))
+            diff_arr = np.diff(np.insert(close_arr, 0, close_arr[0]))  # type: ignore[call-overload]
             direction_arr = np.sign(diff_arr)
             obv_arr = np.cumsum(direction_arr * volume_arr)
             c.obv_slope = self._linear_slope(obv_arr[-10:])

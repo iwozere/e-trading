@@ -1,4 +1,5 @@
 # model_users.py  (patched)
+from datetime import datetime
 from typing import Any, Dict
 
 import bcrypt
@@ -16,11 +17,11 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role: Mapped[str] = mapped_column(String(20), server_default="trader")
     is_active: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[DateTime | None] = mapped_column(
+    created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP")
     )
-    updated_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
-    last_login: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
         CheckConstraint("role IN ('admin','trader','viewer')", name="ck_users_role"),
@@ -67,7 +68,7 @@ class AuthIdentity(Base):
     external_id: Mapped[str] = mapped_column(String(255), nullable=False)
     # IMPORTANT: attribute renamed; keep DB column name as "metadata"
     identity_metadata: Mapped[dict | None] = mapped_column("metadata", JsonType, nullable=True)
-    created_at: Mapped[DateTime | None] = mapped_column(
+    created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP")
     )
 
@@ -97,7 +98,7 @@ class VerificationCode(Base):
     code: Mapped[str] = mapped_column(String(32), nullable=False)
     sent_time: Mapped[int] = mapped_column(Integer, nullable=False)
     provider: Mapped[str | None] = mapped_column(String(20), server_default="'telegram'", nullable=True)
-    created_at: Mapped[DateTime | None] = mapped_column(
+    created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"), nullable=True
     )
 

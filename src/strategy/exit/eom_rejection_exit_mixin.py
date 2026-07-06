@@ -179,7 +179,3 @@ class EOMRejectionExitMixin(BaseExitMixin):
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""
         return self._exit_reason if self._exit_reason else "resistance_rejection"
-
-    def get_exit_reason(self) -> str:
-        """Get the reason for exit"""
-        return self._exit_reason if self._exit_reason else "resistance_rejection"

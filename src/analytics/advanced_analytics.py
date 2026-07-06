@@ -148,14 +148,14 @@ class AdvancedAnalytics:
         kelly_criterion = self._calculate_kelly_criterion()
 
         # Trade analysis
-        avg_win = np.mean([t.net_pnl for t in winning_trades]) if winning_trades else 0
-        avg_loss = np.mean([t.net_pnl for t in losing_trades]) if losing_trades else 0
+        avg_win = float(np.mean([t.net_pnl for t in winning_trades])) if winning_trades else 0.0
+        avg_loss = float(np.mean([t.net_pnl for t in losing_trades])) if losing_trades else 0.0
         largest_win = max([t.net_pnl for t in self.trades]) if self.trades else 0
         largest_loss = min([t.net_pnl for t in self.trades]) if self.trades else 0
 
         # Duration analysis
         durations = [t.duration for t in self.trades]
-        avg_trade_duration = np.mean(durations) if durations else timedelta()
+        avg_trade_duration = sum(durations, timedelta()) / len(durations) if durations else timedelta()
 
         # Consecutive analysis
         max_consecutive_wins, max_consecutive_losses = self._calculate_consecutive_trades()
@@ -166,7 +166,7 @@ class AdvancedAnalytics:
 
         # Additional metrics
         recovery_factor = total_return / abs(max_drawdown) if max_drawdown != 0 else 0
-        payoff_ratio = avg_win / abs(avg_loss) if avg_loss != 0 else 0
+        payoff_ratio = avg_win / abs(avg_loss) if avg_loss != 0.0 else 0.0
         expectancy = (win_rate / 100 * avg_win) + ((1 - win_rate / 100) * avg_loss)
 
         self.metrics = PerformanceMetrics(
@@ -346,8 +346,8 @@ class AdvancedAnalytics:
         if avg_loss == 0:
             return 0.0
 
-        kelly = (win_rate * avg_win - (1 - win_rate) * avg_loss) / avg_win
-        return max(0, min(kelly, 1))  # Clamp between 0 and 1
+        kelly = float((win_rate * avg_win - (1 - win_rate) * avg_loss) / avg_win)
+        return max(0.0, min(kelly, 1.0))  # Clamp between 0 and 1
 
     def _calculate_consecutive_trades(self) -> Tuple[int, int]:
         """Calculate maximum consecutive wins and losses"""
@@ -482,7 +482,7 @@ class AdvancedAnalytics:
 
     def _generate_pdf_report(self, filepath: str):
         """Generate PDF performance report"""
-        if not REPORTLAB_AVAILABLE:
+        if not REPORTLAB_AVAILABLE or self.metrics is None:
             return
 
         doc = SimpleDocTemplate(filepath, pagesize=A4)
@@ -536,11 +536,13 @@ class AdvancedAnalytics:
 
     def _generate_excel_report(self, filepath: str):
         """Generate Excel performance report"""
-        if not OPENPYXL_AVAILABLE:
+        if not OPENPYXL_AVAILABLE or self.metrics is None:
             return
 
         wb = openpyxl.Workbook()
         ws = wb.active
+        if ws is None:
+            return
         ws.title = "Performance Summary"
 
         # Headers
@@ -625,6 +627,8 @@ class AdvancedAnalytics:
 
     def _generate_json_report(self, filepath: str):
         """Generate JSON performance report"""
+        if self.metrics is None:
+            return
         report_data = {
             "report_generated": datetime.now().isoformat(),
             "strategy_info": {
@@ -666,8 +670,10 @@ class AdvancedAnalytics:
             json.dump(report_data, f, indent=2, default=str)
 
     def _generate_recommendations(self) -> List[str]:
-        """Generate trading recommendations based on metrics"""
+        """Generate performance-based recommendations"""
         recommendations = []
+        if self.metrics is None:
+            return recommendations
 
         if self.metrics.win_rate < 40:
             recommendations.append("Consider improving entry criteria - win rate is below 40%")
@@ -718,6 +724,8 @@ class StrategyComparator:
                 analytics.calculate_metrics()
 
             metrics = analytics.metrics
+            if metrics is None:
+                continue
             comparison_data.append(
                 {
                     "Strategy": name,
@@ -748,6 +756,8 @@ class StrategyComparator:
                 analytics.calculate_metrics()
 
             metrics = analytics.metrics
+            if metrics is None:
+                continue
 
             # Calculate composite score (weighted average)
             score = (

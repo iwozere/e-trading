@@ -39,7 +39,7 @@ class UnifiedConfigManager:
         self.config_path = config_path
         self.config = self._load_config()
         self._current_preset = "default"
-        self._runtime_overrides = {}
+        self._runtime_overrides: Dict[str, Dict[str, Any]] = {}
         self._presets = self._load_presets()
 
     def _load_config(self) -> Dict[str, Any]:
@@ -60,7 +60,7 @@ class UnifiedConfigManager:
 
     def _get_default_config(self) -> Dict[str, Any]:
         """Get default configuration based on registry metadata."""
-        default_config = {
+        default_config: Dict[str, Any] = {
             "version": "2.0",
             "default_parameters": {},
             "presets": {

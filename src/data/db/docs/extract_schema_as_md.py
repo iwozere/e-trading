@@ -141,7 +141,7 @@ def reconstruct_create_table(conn: sqlite3.Connection, table: str) -> str:
                 clause += f" MATCH {match}"
             constraint_lines.append(clause)
 
-    all_lines = col_lines + (["  ,"] if (col_lines and constraint_lines) else [])  # pretty comma separator
+    col_lines + (["  ,"] if (col_lines and constraint_lines) else [])  # pretty comma separator
     # Actually commas must be between every definition; rebuild with commas properly:
     defs = col_lines + constraint_lines
     ddl = f"CREATE TABLE {ident(table)} (\n" + ",\n".join(defs) + "\n);"

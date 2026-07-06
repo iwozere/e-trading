@@ -8,7 +8,7 @@ from src.vectorbt.indicators.signals import StrategyInd
 def test_signal_consistency():
     # 1. Create dummy data
     dates = pd.date_range("2024-01-01", periods=100, freq="1H")
-    close = pd.Series(np.random.randn(100).cumsum() + 100, index=dates, name="Close")
+    close = pd.Series(np.random.randn(100).cumsum() + 100, index=dates, name="Close")  # type: ignore
 
     # 2. Generate signals via StrategyInd
     # StrategyInd.run returns a wrapper with outputs as attributes
@@ -18,12 +18,12 @@ def test_signal_consistency():
     rsi_vals = RSI.compute(close, window=14)
     bb_vals = BBANDS.compute(close, window=20, nbdevup=2.0, nbdevdn=2.0)
 
-    expected_entries = (rsi_vals < 30) & (close < bb_vals["lowerband"])
-    expected_short_entries = (rsi_vals > 70) & (close > bb_vals["upperband"])
+    expected_entries = (rsi_vals < 30) & (close < bb_vals["lowerband"])  # type: ignore
+    expected_short_entries = (rsi_vals > 70) & (close > bb_vals["upperband"])  # type: ignore
 
     # 4. Compare
-    pd.testing.assert_series_equal(res.entries, expected_entries, check_names=False)
-    pd.testing.assert_series_equal(res.short_entries, expected_short_entries, check_names=False)
+    pd.testing.assert_series_equal(res.entries, expected_entries, check_names=False)  # type: ignore
+    pd.testing.assert_series_equal(res.short_entries, expected_short_entries, check_names=False)  # type: ignore
 
     print("✅ Signal consistency test passed")
 

@@ -60,19 +60,20 @@ class AdvancedPlotter:
         _logger.info(f"Generating native Plotly report for {symbol}...")
         fig = pf.plot(subplots=["cum_returns", "underwater", "orders", "net_exposure"], column=symbol, group_by=False)
 
-        fig.update_layout(
-            height=1000,
-            title_text=f"Vectorbt Native Report: {symbol} ({interval})",
-            showlegend=True,
-            xaxis_rangeslider_visible=False,
-        )
+        if fig is not None:
+            fig.update_layout(
+                height=1000,
+                title_text=f"Vectorbt Native Report: {symbol} ({interval})",
+                showlegend=True,
+                xaxis_rangeslider_visible=False,
+            )
 
-        # 4. Save
-        output_dir = Path(f"results/vectorbt/{symbol}/{interval}")
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = output_dir / "visual_backtest.html"
-        fig.write_html(str(output_path))
-        _logger.info(f"✅ Visual backtest saved to {output_path.absolute()}")
+            # 4. Save
+            output_dir = Path(f"results/vectorbt/{symbol}/{interval}")
+            output_dir.mkdir(parents=True, exist_ok=True)
+            output_path = output_dir / "visual_backtest.html"
+            fig.write_html(str(output_path))
+            _logger.info(f"✅ Visual backtest saved to {output_path.absolute()}")
 
 
 def main():

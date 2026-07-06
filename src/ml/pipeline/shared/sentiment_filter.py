@@ -16,7 +16,7 @@ import asyncio
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List, cast
 
 import pandas as pd
 
@@ -107,7 +107,7 @@ class SentimentFilter:
             _logger.info("Applying sentiment filters to %d tickers", len(tickers))
 
             # Collect sentiment data (concurrent API calls)
-            sentiment_data = await self.collect_sentiment_batch(tickers, lookback_hours=24)
+            sentiment_data = cast(Dict[str, Any], await self.collect_sentiment_batch(tickers, lookback_hours=24))
 
             # Apply filters
             results = []
@@ -277,4 +277,4 @@ def create_sentiment_filter(config: SentimentFilterConfig, target_date: str | No
     Returns:
         SentimentFilter instance
     """
-    return SentimentFilter(config, target_date)
+    return SentimentFilter(config, target_date=target_date)

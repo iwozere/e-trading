@@ -13,7 +13,7 @@ class MockBroker(BaseBroker):
     Mock broker for testing. Simulates order execution without real API calls.
     """
 
-    def __init__(self, cash: float = 1000.0, config: dict = None) -> None:
+    def __init__(self, cash: float = 1000.0, config: dict | None = None) -> None:
         # Create a default config if none provided
         if config is None:
             config = {
@@ -36,7 +36,7 @@ class MockBroker(BaseBroker):
         self.orders = []
         self.positions = {}
 
-    def simulate_market_buy(self, symbol: str, qty: float, price: float = None) -> dict:
+    def simulate_market_buy(self, symbol: str, qty: float, price: float | None = None) -> dict:
         """Simulate a simple buy (dict result). Does not implement Backtrader ``buy``."""
         order = {
             "type": "buy",
@@ -51,7 +51,7 @@ class MockBroker(BaseBroker):
         self._notify_order(order)
         return order
 
-    def simulate_market_sell(self, symbol: str, qty: float, price: float = None) -> dict:
+    def simulate_market_sell(self, symbol: str, qty: float, price: float | None = None) -> dict:
         """Simulate a simple sell (dict result). Does not implement Backtrader ``sell``."""
         order = {
             "type": "sell",

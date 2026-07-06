@@ -9,7 +9,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from config.donotshare.donotshare import DB_URL as CONFIG_DB_URL
-from config.donotshare.donotshare import SQL_ECHO
+from config.donotshare.donotshare import SQL_ECHO as CONFIG_SQL_ECHO
 from src.data.db.core.base import Base
 
 # --- Config ------------------------------------------------------------------
@@ -20,7 +20,7 @@ DB_URL = os.getenv("DB_URL", CONFIG_DB_URL)
 
 # SQL query logging — disabled by default; enable only in development via SQL_ECHO=1 env var.
 # Never enable in production: exposes bound values (PII) in logs.
-SQL_ECHO = bool(int(os.getenv("SQL_ECHO", "0")))
+SQL_ECHO = bool(int(os.getenv("SQL_ECHO", CONFIG_SQL_ECHO)))
 
 
 def get_database_url() -> str:

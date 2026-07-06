@@ -246,7 +246,7 @@ class NotificationService(BaseDBService):
         external_id: str | None = None,
     ) -> MessageDeliveryStatus | None:
         """Update delivery status."""
-        update_data = {"status": status}
+        update_data: Dict[str, Any] = {"status": status}
 
         if delivered_at:
             update_data["delivered_at"] = delivered_at

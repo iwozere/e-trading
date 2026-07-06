@@ -13,14 +13,13 @@ import pandas as pd
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from datetime import datetime
+from typing import Callable
 from unittest.mock import patch
 
-from datetime import datetime
-from typing import Callable, List, Dict
 from src.data.sources.base_data_source import BaseDataSource
 from src.data.sources.data_aggregator import DataAggregator
 from src.data.sources.data_source_factory import get_data_source_factory, register_data_source
-from src.data.feed.binance_live_feed import BinanceLiveDataFeed
 from src.data.utils.data_handler import get_data_handler
 from src.data.utils.validation import validate_ohlcv_data
 

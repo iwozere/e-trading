@@ -40,7 +40,7 @@ class RSI:
         Handles Series, DataFrame, and numpy arrays (1D/2D).
         """
         if isinstance(close, pd.DataFrame):
-            return close.apply(lambda x: talib.RSI(x.values, timeperiod=window))
+            return close.apply(lambda x: talib.RSI(x.values, timeperiod=window))  # type: ignore
         elif isinstance(close, np.ndarray):
             if close.ndim == 1:
                 return talib.RSI(close, timeperiod=window)
@@ -49,7 +49,7 @@ class RSI:
                 return np.apply_along_axis(lambda x: talib.RSI(x, timeperiod=window), 0, close)
 
         # Assume Series
-        return pd.Series(talib.RSI(close.values, timeperiod=window), index=close.index)
+        return pd.Series(talib.RSI(close.values, timeperiod=window), index=close.index)  # type: ignore
 
 
 class BBANDS:
@@ -63,24 +63,24 @@ class BBANDS:
         """
         if isinstance(close, pd.DataFrame):
             # For vectorbt broadcasting, returning a dict of DataFrames is often best
-            upper = close.apply(lambda x: talib.BBANDS(x.values, window, nbdevup, nbdevdn, 0)[0])
-            middle = close.apply(lambda x: talib.BBANDS(x.values, window, nbdevup, nbdevdn, 0)[1])
-            lower = close.apply(lambda x: talib.BBANDS(x.values, window, nbdevup, nbdevdn, 0)[2])
+            upper = close.apply(lambda x: talib.BBANDS(x.values, window, nbdevup, nbdevdn, 0)[0])  # type: ignore
+            middle = close.apply(lambda x: talib.BBANDS(x.values, window, nbdevup, nbdevdn, 0)[1])  # type: ignore
+            lower = close.apply(lambda x: talib.BBANDS(x.values, window, nbdevup, nbdevdn, 0)[2])  # type: ignore
             return {"upperband": upper, "middleband": middle, "lowerband": lower}
         elif isinstance(close, np.ndarray):
             if close.ndim == 1:
-                u, m, l = talib.BBANDS(close, window, nbdevup, nbdevdn, 0)
+                u, m, l = talib.BBANDS(close, window, nbdevup, nbdevdn, 0)  # type: ignore
                 return {"upperband": u, "middleband": m, "lowerband": l}
             else:
                 # 2D array
-                u = np.apply_along_axis(lambda x: talib.BBANDS(x, window, nbdevup, nbdevdn, 0)[0], 0, close)
-                m = np.apply_along_axis(lambda x: talib.BBANDS(x, window, nbdevup, nbdevdn, 0)[1], 0, close)
-                l = np.apply_along_axis(lambda x: talib.BBANDS(x, window, nbdevup, nbdevdn, 0)[2], 0, close)
+                u = np.apply_along_axis(lambda x: talib.BBANDS(x, window, nbdevup, nbdevdn, 0)[0], 0, close)  # type: ignore
+                m = np.apply_along_axis(lambda x: talib.BBANDS(x, window, nbdevup, nbdevdn, 0)[1], 0, close)  # type: ignore
+                l = np.apply_along_axis(lambda x: talib.BBANDS(x, window, nbdevup, nbdevdn, 0)[2], 0, close)  # type: ignore
                 return {"upperband": u, "middleband": m, "lowerband": l}
 
         # Assume Series
-        upper, middle, lower = talib.BBANDS(close.values, timeperiod=window, nbdevup=nbdevup, nbdevdn=nbdevdn, matype=0)
-        return pd.DataFrame({"upperband": upper, "middleband": middle, "lowerband": lower}, index=close.index)
+        upper, middle, lower = talib.BBANDS(close.values, timeperiod=window, nbdevup=nbdevup, nbdevdn=nbdevdn, matype=0)  # type: ignore
+        return pd.DataFrame({"upperband": upper, "middleband": middle, "lowerband": lower}, index=close.index)  # type: ignore
 
 
 class SMA:
@@ -89,12 +89,12 @@ class SMA:
         close: Union[pd.Series, pd.DataFrame, np.ndarray], window: int
     ) -> Union[pd.Series, pd.DataFrame, np.ndarray]:
         if isinstance(close, pd.DataFrame):
-            return close.apply(lambda x: talib.SMA(x.values, timeperiod=window))
+            return close.apply(lambda x: talib.SMA(x.values, timeperiod=window))  # type: ignore
         elif isinstance(close, np.ndarray):
             if close.ndim == 1:
                 return talib.SMA(close, timeperiod=window)
             return np.apply_along_axis(lambda x: talib.SMA(x, timeperiod=window), 0, close)
-        return pd.Series(talib.SMA(close.values, timeperiod=window), index=close.index)
+        return pd.Series(talib.SMA(close.values, timeperiod=window), index=close.index)  # type: ignore
 
 
 class EMA:
@@ -103,12 +103,12 @@ class EMA:
         close: Union[pd.Series, pd.DataFrame, np.ndarray], window: int
     ) -> Union[pd.Series, pd.DataFrame, np.ndarray]:
         if isinstance(close, pd.DataFrame):
-            return close.apply(lambda x: talib.EMA(x.values, timeperiod=window))
+            return close.apply(lambda x: talib.EMA(x.values, timeperiod=window))  # type: ignore
         elif isinstance(close, np.ndarray):
             if close.ndim == 1:
                 return talib.EMA(close, timeperiod=window)
             return np.apply_along_axis(lambda x: talib.EMA(x, timeperiod=window), 0, close)
-        return pd.Series(talib.EMA(close.values, timeperiod=window), index=close.index)
+        return pd.Series(talib.EMA(close.values, timeperiod=window), index=close.index)  # type: ignore
 
 
 class ADX:
@@ -126,11 +126,11 @@ class ADX:
             # Alignment check: Ensure all inputs are DataFrames with matching columns
             res = {}
             for col in close.columns:
-                res[col] = talib.ADX(high[col].values, low[col].values, close[col].values, timeperiod=window)
+                res[col] = talib.ADX(high[col].values, low[col].values, close[col].values, timeperiod=window)  # type: ignore
             return pd.DataFrame(res, index=close.index)
 
         # Assume Series
-        return pd.Series(talib.ADX(high.values, low.values, close.values, timeperiod=window), index=close.index)
+        return pd.Series(talib.ADX(high.values, low.values, close.values, timeperiod=window), index=close.index)  # type: ignore
 
 
 class ATR:
@@ -148,8 +148,8 @@ class ATR:
         if isinstance(close, pd.DataFrame):
             res = {}
             for col in close.columns:
-                res[col] = talib.ATR(high[col].values, low[col].values, close[col].values, timeperiod=window)
+                res[col] = talib.ATR(high[col].values, low[col].values, close[col].values, timeperiod=window)  # type: ignore
             return pd.DataFrame(res, index=close.index)
 
         # Assume Series
-        return pd.Series(talib.ATR(high.values, low.values, close.values, timeperiod=window), index=close.index)
+        return pd.Series(talib.ATR(high.values, low.values, close.values, timeperiod=window), index=close.index)  # type: ignore

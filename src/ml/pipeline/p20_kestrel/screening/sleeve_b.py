@@ -87,7 +87,7 @@ def screen_b1(as_of_date: date) -> List[Dict[str, Any]]:
         # already spiked. (Entry window is T-90..T-10, so every check here is
         # "before T-10" by construction.)
         crowding = get_latest_signal(ticker, "z_social")
-        if crowding is not None and float(crowding) > _CROWDING_SPIKE_THRESHOLD:
+        if crowding is not None and crowding > _CROWDING_SPIKE_THRESHOLD:
             _logger.info("B1 crowding skip: %s (z=%.1f, T-%d)", ticker, crowding, days_out)
             continue
 
@@ -173,7 +173,7 @@ def screen_b3_activist(as_of_date: date) -> List[Dict[str, Any]]:
 
     for ticker in tickers:
         activist_value = get_latest_signal(ticker, "activist_13d")
-        has_activist = activist_value is not None and float(activist_value) > 0
+        has_activist = activist_value is not None and activist_value > 0
         if has_activist:
             candidates.append(
                 {

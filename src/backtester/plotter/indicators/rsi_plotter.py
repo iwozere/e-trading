@@ -74,5 +74,5 @@ class RSIPlotter(BaseIndicatorPlotter):
             _logger.error("Data feed length: %d", len(self.data))
 
     @property
-    def subplot_type(self):
+    def subplot_type(self) -> str:
         return "separate"

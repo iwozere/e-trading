@@ -18,7 +18,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.db.repos.repo_trading import TradingBotsRepo, TradingTradesRepo
+from src.data.db.repos.repo_trading import BotsRepo, TradesRepo
 
 
 class TestLiveBotDatabase:
@@ -26,7 +26,7 @@ class TestLiveBotDatabase:
 
     def test_bot_initialization_database(self, db_session):
         """Test bot instance creation in database."""
-        bots_repo = TradingBotsRepo(db_session)
+        bots_repo = BotsRepo(db_session)
 
         # Create a bot instance
         bot_id = "test_bot"
@@ -82,8 +82,8 @@ class TestLiveBotDatabase:
 
     def test_restart_recovery(self, db_session):
         """Test that bot can recover open positions on restart."""
-        bots_repo = TradingBotsRepo(db_session)
-        trades_repo = TradingTradesRepo(db_session)
+        bots_repo = BotsRepo(db_session)
+        trades_repo = TradesRepo(db_session)
 
         config_file = "test_bot.json"
         bot_id = config_file
@@ -96,7 +96,7 @@ class TestLiveBotDatabase:
             "config_file": config_file,
             "status": "running",
         }
-        bot = bots_repo.create(bot_data)
+        bots_repo.create(bot_data)
         db_session.flush()
 
         # Create a test open trade

@@ -727,7 +727,7 @@ async def create_notification(notification: NotificationCreate, current_user: Us
             "template_name": notification.template_name,
             "content": notification.content,
             "message_metadata": {
-                **notification.metadata,
+                **(notification.metadata or {}),
                 "created_by_user_id": current_user.id,
                 "created_by_username": current_user.username or current_user.email,
             },

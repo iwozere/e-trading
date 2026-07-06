@@ -1,5 +1,6 @@
 from pathlib import Path
-from typing import List
+from typing import List, Any, Dict
+import pandas as pd
 
 import onnxmltools
 from onnxconverter_common.data_types import FloatTensorType

@@ -29,7 +29,7 @@ class UsersRepo:
 
     def get_identity(self, provider: str, external_id: str) -> AuthIdentity | None:
         """Get identity by provider and external ID."""
-        q = select(AuthIdentity).where(AuthIdentity.provider == provider, AuthIdentity.external_id == str(external_id))
+        q = select(AuthIdentity).where(AuthIdentity.provider == provider, AuthIdentity.external_id == external_id)
         return self.s.execute(q).scalar_one_or_none()
 
     # ---------- telegram-specific wrappers ----------
@@ -114,7 +114,7 @@ class UsersRepo:
         q = select(User).where(User.email.like(f"{username}@%"))
         return self.s.execute(q).scalar_one_or_none()
 
-    def get_user_notification_channels(self, user_id: int) -> Dict[str, str] | None:
+    def get_user_notification_channels(self, user_id: int) -> Dict[str, str | None] | None:
         """
         Get user's notification channels (email + telegram_chat_id).
 
@@ -163,4 +163,4 @@ class VerificationRepo:
             VerificationCode.user_id == user_id,
             VerificationCode.sent_time >= cutoff,
         )
-        return int(self.s.execute(q).scalar_one() or 0)
+        return self.s.execute(q).scalar_one() or 0

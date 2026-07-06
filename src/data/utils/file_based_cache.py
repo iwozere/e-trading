@@ -844,10 +844,10 @@ class FileBasedCache:
                                     # Try to load CSV with timestamp column first
                                     try:
                                         df = pd.read_csv(data_path, parse_dates=["timestamp"], index_col="timestamp")
-                                    except:
+                                    except Exception:
                                         try:
                                             df = pd.read_csv(data_path, parse_dates=["datetime"], index_col="datetime")
-                                        except:
+                                        except Exception:
                                             df = pd.read_csv(data_path)
 
                                 if df.empty or not isinstance(df.index, pd.DatetimeIndex):
@@ -1519,7 +1519,7 @@ class FileBasedCache:
                                         created_dt = datetime.fromisoformat(created_at)
                                         if info["last_updated"] is None or created_dt > info["last_updated"]:
                                             info["last_updated"] = created_dt
-                                    except:
+                                    except Exception:
                                         pass
                         except ValueError:
                             # Skip files that don't have year as filename

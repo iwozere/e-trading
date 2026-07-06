@@ -72,15 +72,12 @@ These tickers showed persistent accumulation (5+ days) and are now showing:
 See attached CSV for full details."""
 
         # Prepare attachments (flat dictionary: filename -> path)
-        attachments = {}
+        attachments: dict[str, str] = {}
         if phase2_csv_path and phase2_csv_path.exists():
             attachments[phase2_csv_path.name] = str(phase2_csv_path)
 
         if sentiment_csv_path and sentiment_csv_path.exists():
             attachments[sentiment_csv_path.name] = str(sentiment_csv_path)
-
-        if not attachments:
-            attachments = None
 
         # Send notification via Telegram and Email separately
         # This avoids a race condition where one service marks a multi-channel message
@@ -89,13 +86,13 @@ See attached CSV for full details."""
             # 1. Send Telegram alert (handled by Telegram Bot)
             asyncio.run(
                 self._send_async_notification(
-                    title=title, message=message, attachments=attachments, channels=["telegram"]
+                    title=title, message=message, attachments=attachments or None, channels=["telegram"]
                 )
             )
 
             # 2. Send Email alert (handled by Notification Service)
             asyncio.run(
-                self._send_async_notification(title=title, message=message, attachments=attachments, channels=["email"])
+                self._send_async_notification(title=title, message=message, attachments=attachments or None, channels=["email"])
             )
 
             _logger.info("Sent Phase 2 alerts for %d candidates (Telegram + Email)", count)
@@ -114,6 +111,7 @@ See attached CSV for full details."""
             attachments: Optional attachments dict
             channels: List of channels to use
         """
+        assert self.client is not None
         try:
             await self.client.send_notification(
                 notification_type="alert",
@@ -159,25 +157,22 @@ These tickers appeared 5+ times in the last 10 days, showing persistent accumula
 Watchlist updated. See attached CSV for full details."""
 
         # Prepare attachments (flat dictionary: filename -> path)
-        attachments = {}
+        attachments: dict[str, str] = {}
         if phase1_csv_path and phase1_csv_path.exists():
             attachments[phase1_csv_path.name] = str(phase1_csv_path)
-
-        if not attachments:
-            attachments = None
 
         # Send notification via Telegram and Email separately
         try:
             # 1. Send Telegram alert
             asyncio.run(
                 self._send_async_notification(
-                    title=title, message=message, attachments=attachments, channels=["telegram"]
+                    title=title, message=message, attachments=attachments or None, channels=["telegram"]
                 )
             )
 
             # 2. Send Email alert
             asyncio.run(
-                self._send_async_notification(title=title, message=message, attachments=attachments, channels=["email"])
+                self._send_async_notification(title=title, message=message, attachments=attachments or None, channels=["email"])
             )
 
             _logger.info("Sent Phase 1 alerts for %d candidates (Telegram + Email)", count)

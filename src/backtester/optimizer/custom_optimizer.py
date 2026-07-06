@@ -66,8 +66,8 @@ class CustomOptimizer:
         """
         self.config = config
         self.data = config.get("data")
-        self.entry_logic = config.get("entry_logic")
-        self.exit_logic = config.get("exit_logic")
+        self.entry_logic: dict = config.get("entry_logic") or {}
+        self.exit_logic: dict = config.get("exit_logic") or {}
         self.optimizer_settings = config.get("optimizer_settings", {})
         self.visualization_settings = config.get("visualization_settings", {})
         self.symbol = config.get("symbol", "")
@@ -107,40 +107,49 @@ class CustomOptimizer:
         if include_analyzers:
             cerebro = bt.Cerebro()
         else:
-            cerebro = bt.Cerebro(optdatas=True, optreturn=True)
+            cerebro = bt.Cerebro(optdatas=True, optreturn=True)  # type: ignore
 
-            # 1. Suggest parameters first so we know if we need resampling
+        assert isinstance(self.entry_logic, dict)
+        assert isinstance(self.exit_logic, dict)
+
+        # 1. Suggest parameters first so we know if we need resampling
         entry_logic_params = {}
-        for param_name, param_config in self.entry_logic["params"].items():
+        entry_params_config = self.entry_logic.get("params") or {}
+        for param_name, param_config in entry_params_config.items():
+            if not isinstance(param_config, dict):
+                continue
             if trial:
-                if param_config["type"] == "int":
+                if param_config.get("type") == "int":
                     entry_logic_params[param_name] = trial.suggest_int(
-                        param_name, param_config["low"], param_config["high"]
+                        param_name, param_config.get("low", 0), param_config.get("high", 0)
                     )
-                elif param_config["type"] == "float":
+                elif param_config.get("type") == "float":
                     entry_logic_params[param_name] = trial.suggest_float(
-                        param_name, param_config["low"], param_config["high"]
+                        param_name, param_config.get("low", 0.0), param_config.get("high", 0.0)
                     )
-                elif param_config["type"] == "categorical":
-                    entry_logic_params[param_name] = trial.suggest_categorical(param_name, param_config["choices"])
+                elif param_config.get("type") == "categorical":
+                    entry_logic_params[param_name] = trial.suggest_categorical(param_name, param_config.get("choices", []))
             else:
-                entry_logic_params[param_name] = param_config["default"]
+                entry_logic_params[param_name] = param_config.get("default")
 
         exit_logic_params = {}
-        for param_name, param_config in self.exit_logic["params"].items():
+        exit_params_config = self.exit_logic.get("params") or {}
+        for param_name, param_config in exit_params_config.items():
+            if not isinstance(param_config, dict):
+                continue
             if trial:
-                if param_config["type"] == "int":
+                if param_config.get("type") == "int":
                     exit_logic_params[param_name] = trial.suggest_int(
-                        param_name, param_config["low"], param_config["high"]
+                        param_name, param_config.get("low", 0), param_config.get("high", 0)
                     )
-                elif param_config["type"] == "float":
+                elif param_config.get("type") == "float":
                     exit_logic_params[param_name] = trial.suggest_float(
-                        param_name, param_config["low"], param_config["high"]
+                        param_name, param_config.get("low", 0.0), param_config.get("high", 0.0)
                     )
-                elif param_config["type"] == "categorical":
-                    exit_logic_params[param_name] = trial.suggest_categorical(param_name, param_config["choices"])
+                elif param_config.get("type") == "categorical":
+                    exit_logic_params[param_name] = trial.suggest_categorical(param_name, param_config.get("choices", []))
             else:
-                exit_logic_params[param_name] = param_config["default"]
+                exit_logic_params[param_name] = param_config.get("default")
 
         # 2. Add data to cerebro
         cerebro.adddata(self.data)

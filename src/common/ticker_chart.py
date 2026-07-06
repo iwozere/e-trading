@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 matplotlib.use("Agg")
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -298,7 +298,7 @@ def _plot_comprehensive_price_chart(ax: plt.Axes, df: pd.DataFrame, indicators: 
     """Plot comprehensive main price chart with Bollinger Bands, SMA 50, SMA 200."""
 
     # Extract data from DataFrame
-    dates = df["timestamp"] if "timestamp" in df else df.index
+    dates: Any = df["timestamp"] if "timestamp" in df else df.index
     high = df["high"].values
     low = df["low"].values
     close = df["close"].values
@@ -350,7 +350,7 @@ def _plot_comprehensive_price_chart(ax: plt.Axes, df: pd.DataFrame, indicators: 
     ax.grid(True, alpha=CHART_CONFIG["grid_alpha"])
 
 
-def _plot_comprehensive_rsi(ax: plt.Axes, dates: pd.Series, indicators: Dict[str, np.ndarray], ticker: str):
+def _plot_comprehensive_rsi(ax: plt.Axes, dates: Any, indicators: Dict[str, np.ndarray], ticker: str):
     """Plot RSI with 30/70 oversold/overbought lines."""
     if "rsi" in indicators:
         rsi = indicators["rsi"]
@@ -369,7 +369,7 @@ def _plot_comprehensive_rsi(ax: plt.Axes, dates: pd.Series, indicators: Dict[str
     ax.set_title("RSI (Relative Strength Index)", fontsize=CHART_CONFIG["font_size"], fontweight="bold")
 
 
-def _plot_comprehensive_macd(ax: plt.Axes, dates: pd.Series, indicators: Dict[str, np.ndarray], ticker: str):
+def _plot_comprehensive_macd(ax: plt.Axes, dates: Any, indicators: Dict[str, np.ndarray], ticker: str):
     """Plot MACD (MACD, Signal, Histogram)."""
     if "macd" in indicators and "macd_signal" in indicators and "macd_hist" in indicators:
         macd = indicators["macd"]
@@ -390,7 +390,7 @@ def _plot_comprehensive_macd(ax: plt.Axes, dates: pd.Series, indicators: Dict[st
     ax.set_title("MACD (Moving Average Convergence Divergence)", fontsize=CHART_CONFIG["font_size"], fontweight="bold")
 
 
-def _plot_comprehensive_stochastic(ax: plt.Axes, dates: pd.Series, indicators: Dict[str, np.ndarray], ticker: str):
+def _plot_comprehensive_stochastic(ax: plt.Axes, dates: Any, indicators: Dict[str, np.ndarray], ticker: str):
     """Plot Stochastic oscillator."""
     if "stoch_k" in indicators and "stoch_d" in indicators:
         stoch_k = indicators["stoch_k"]
@@ -411,7 +411,7 @@ def _plot_comprehensive_stochastic(ax: plt.Axes, dates: pd.Series, indicators: D
     ax.set_title("Stochastic Oscillator", fontsize=CHART_CONFIG["font_size"], fontweight="bold")
 
 
-def _plot_comprehensive_adx(ax: plt.Axes, dates: pd.Series, indicators: Dict[str, np.ndarray], ticker: str):
+def _plot_comprehensive_adx(ax: plt.Axes, dates: Any, indicators: Dict[str, np.ndarray], ticker: str):
     """Plot ADX (ADX, +DI, -DI, Trend Threshold)."""
     if "adx" in indicators and "plus_di" in indicators and "minus_di" in indicators:
         adx = indicators["adx"]
@@ -434,7 +434,7 @@ def _plot_comprehensive_adx(ax: plt.Axes, dates: pd.Series, indicators: Dict[str
 
 
 def _plot_comprehensive_volume(
-    ax: plt.Axes, dates: pd.Series, volume: np.ndarray, indicators: Dict[str, np.ndarray], ticker: str
+    ax: plt.Axes, dates: Any, volume: np.ndarray, indicators: Dict[str, np.ndarray], ticker: str
 ):
     """Plot Volume (OBV and volume histogram)."""
 
@@ -464,7 +464,7 @@ def _plot_comprehensive_volume(
 
 def _plot_enhanced_price_chart(
     ax: plt.Axes,
-    dates: pd.Series,
+    dates: Any,
     high: np.ndarray,
     low: np.ndarray,
     close: np.ndarray,
@@ -529,7 +529,7 @@ def _plot_enhanced_price_chart(
 
 
 def _plot_candlesticks(
-    ax: plt.Axes, dates: pd.Series, open_price: np.ndarray, high: np.ndarray, low: np.ndarray, close: np.ndarray
+    ax: plt.Axes, dates: Any, open_price: Any, high: Any, low: Any, close: Any
 ):
     """Plot candlestick chart."""
     # For simplicity, use line plot for now - can be enhanced with proper candlesticks later
@@ -539,7 +539,7 @@ def _plot_candlesticks(
     ax.fill_between(dates, low, high, alpha=0.1, color=CHART_COLORS["light"])
 
 
-def _plot_bollinger_bands(ax: plt.Axes, dates: pd.Series, indicators: Dict[str, np.ndarray]):
+def _plot_bollinger_bands(ax: plt.Axes, dates: Any, indicators: Dict[str, np.ndarray]):
     """Plot Bollinger Bands."""
     bb_upper = indicators["bb_upper"]
     bb_middle = indicators["bb_middle"]
@@ -574,7 +574,7 @@ def _plot_bollinger_bands(ax: plt.Axes, dates: pd.Series, indicators: Dict[str, 
     ax.fill_between(dates, bb_upper, bb_lower, alpha=0.1, color=CHART_COLORS["light"])
 
 
-def _plot_atr_bands(ax: plt.Axes, dates: pd.Series, close: np.ndarray, atr: np.ndarray):
+def _plot_atr_bands(ax: plt.Axes, dates: Any, close: np.ndarray, atr: np.ndarray):
     """Plot ATR bands around the price."""
     # Calculate ATR bands (using SMA of close as center)
     sma_close = np.convolve(close, np.ones(20) / 20, mode="valid")
@@ -606,7 +606,7 @@ def _plot_atr_bands(ax: plt.Axes, dates: pd.Series, close: np.ndarray, atr: np.n
 
 
 def _plot_indicator_subplot(
-    ax: plt.Axes, dates: pd.Series, indicator_name: str, indicator_data: np.ndarray, ticker: str
+    ax: plt.Axes, dates: Any, indicator_name: str, indicator_data: np.ndarray, ticker: str
 ):
     """Plot individual technical indicator."""
     if indicator_name == "rsi":
@@ -629,7 +629,7 @@ def _plot_indicator_subplot(
         _plot_volume_obv(ax, dates, indicator_data, ticker)
 
 
-def _plot_rsi(ax: plt.Axes, dates: pd.Series, rsi: np.ndarray):
+def _plot_rsi(ax: plt.Axes, dates: Any, rsi: np.ndarray):
     """Plot RSI indicator."""
     ax.plot(dates, rsi, label="RSI", color=CHART_COLORS["rsi"], linewidth=CHART_CONFIG["line_width"])
     ax.axhline(y=70, color=CHART_COLORS["danger"], linestyle="--", alpha=0.7, label="Overbought")
@@ -641,7 +641,7 @@ def _plot_rsi(ax: plt.Axes, dates: pd.Series, rsi: np.ndarray):
     ax.set_ylim(0, 100)
 
 
-def _plot_macd(ax: plt.Axes, dates: pd.Series, macd: np.ndarray, ticker: str):
+def _plot_macd(ax: plt.Axes, dates: Any, macd: np.ndarray, ticker: str):
     """Plot MACD indicator."""
     ax.plot(dates, macd, label="MACD", color=CHART_COLORS["macd"], linewidth=CHART_CONFIG["line_width"])
     ax.axhline(y=0, color=CHART_COLORS["dark"], linestyle="-", alpha=0.5)
@@ -650,7 +650,7 @@ def _plot_macd(ax: plt.Axes, dates: pd.Series, macd: np.ndarray, ticker: str):
     ax.grid(True, alpha=CHART_CONFIG["grid_alpha"])
 
 
-def _plot_stochastic(ax: plt.Axes, dates: pd.Series, stoch_k: np.ndarray, ticker: str):
+def _plot_stochastic(ax: plt.Axes, dates: Any, stoch_k: np.ndarray, ticker: str):
     """Plot Stochastic indicator."""
     ax.plot(dates, stoch_k, label="%K", color=CHART_COLORS["stoch"], linewidth=CHART_CONFIG["line_width"])
     ax.axhline(y=80, color=CHART_COLORS["danger"], linestyle="--", alpha=0.7, label="Overbought")
@@ -661,7 +661,7 @@ def _plot_stochastic(ax: plt.Axes, dates: pd.Series, stoch_k: np.ndarray, ticker
     ax.set_ylim(0, 100)
 
 
-def _plot_adx(ax: plt.Axes, dates: pd.Series, adx: np.ndarray, ticker: str):
+def _plot_adx(ax: plt.Axes, dates: Any, adx: np.ndarray, ticker: str):
     """Plot ADX indicator."""
     ax.plot(dates, adx, label="ADX", color=CHART_COLORS["adx"], linewidth=CHART_CONFIG["line_width"])
     ax.axhline(y=25, color=CHART_COLORS["dark"], linestyle="--", alpha=0.7, label="Trend Threshold")
@@ -671,7 +671,7 @@ def _plot_adx(ax: plt.Axes, dates: pd.Series, adx: np.ndarray, ticker: str):
     ax.set_ylim(0, 100)
 
 
-def _plot_cci(ax: plt.Axes, dates: pd.Series, cci: np.ndarray):
+def _plot_cci(ax: plt.Axes, dates: Any, cci: np.ndarray):
     """Plot CCI indicator."""
     ax.plot(dates, cci, label="CCI", color=CHART_COLORS["cci"], linewidth=CHART_CONFIG["line_width"])
     ax.axhline(y=100, color=CHART_COLORS["danger"], linestyle="--", alpha=0.7, label="Overbought")
@@ -682,7 +682,7 @@ def _plot_cci(ax: plt.Axes, dates: pd.Series, cci: np.ndarray):
     ax.grid(True, alpha=CHART_CONFIG["grid_alpha"])
 
 
-def _plot_mfi(ax: plt.Axes, dates: pd.Series, mfi: np.ndarray):
+def _plot_mfi(ax: plt.Axes, dates: Any, mfi: np.ndarray):
     """Plot MFI indicator."""
     ax.plot(dates, mfi, label="MFI", color=CHART_COLORS["mfi"], linewidth=CHART_CONFIG["line_width"])
     ax.axhline(y=80, color=CHART_COLORS["danger"], linestyle="--", alpha=0.7, label="Overbought")
@@ -694,7 +694,7 @@ def _plot_mfi(ax: plt.Axes, dates: pd.Series, mfi: np.ndarray):
     ax.set_ylim(0, 100)
 
 
-def _plot_williams_r(ax: plt.Axes, dates: pd.Series, williams_r: np.ndarray):
+def _plot_williams_r(ax: plt.Axes, dates: Any, williams_r: np.ndarray):
     """Plot Williams %R indicator."""
     ax.plot(
         dates, williams_r, label="Williams %R", color=CHART_COLORS["williams"], linewidth=CHART_CONFIG["line_width"]
@@ -708,7 +708,7 @@ def _plot_williams_r(ax: plt.Axes, dates: pd.Series, williams_r: np.ndarray):
     ax.set_ylim(-100, 0)
 
 
-def _plot_roc(ax: plt.Axes, dates: pd.Series, roc: np.ndarray):
+def _plot_roc(ax: plt.Axes, dates: Any, roc: np.ndarray):
     """Plot ROC indicator."""
     ax.plot(dates, roc, label="ROC", color=CHART_COLORS["roc"], linewidth=CHART_CONFIG["line_width"])
     ax.axhline(y=0, color=CHART_COLORS["dark"], linestyle="-", alpha=0.5)
@@ -717,37 +717,22 @@ def _plot_roc(ax: plt.Axes, dates: pd.Series, roc: np.ndarray):
     ax.grid(True, alpha=CHART_CONFIG["grid_alpha"])
 
 
-def _plot_volume_obv(ax: plt.Axes, df: pd.DataFrame, indicators: Dict[str, np.ndarray], ticker: str):
-    """Plot Volume and OBV indicator."""
-    # Extract data from DataFrame
-    dates = df["timestamp"] if "timestamp" in df else df.index
-    volume = df["volume"].values
-
-    # Plot volume histogram
-    ax.bar(dates, volume, label="Volume", color=CHART_COLORS["volume"], alpha=0.3, width=0.8)
-
-    # Plot OBV if available
-    if "obv" in indicators:
-        obv = indicators["obv"]
-        # Normalize OBV to fit on the same scale as volume
-        obv_normalized = (obv - np.min(obv)) / (np.max(obv) - np.min(obv)) * np.max(volume)
-        ax.plot(
-            dates,
-            obv_normalized,
-            label="OBV (Normalized)",
-            color=CHART_COLORS["obv"],
-            linewidth=CHART_CONFIG["line_width"],
-        )
-    else:
-        _logger.warning("✗ OBV not found in indicators")
-
-    ax.set_ylabel("Volume", fontsize=CHART_CONFIG["font_size"])
+def _plot_volume_obv(ax: plt.Axes, dates: Any, obv: Any, ticker: str):
+    """Plot OBV indicator."""
+    ax.plot(
+        dates,
+        obv,
+        label="OBV",
+        color=CHART_COLORS["obv"],
+        linewidth=CHART_CONFIG["line_width"],
+    )
+    ax.set_ylabel("OBV", fontsize=CHART_CONFIG["font_size"])
     ax.legend(loc="upper left", fontsize=CHART_CONFIG["legend_font_size"])
     ax.grid(True, alpha=CHART_CONFIG["grid_alpha"])
-    ax.set_title("Volume & OBV", fontsize=CHART_CONFIG["font_size"], fontweight="bold")
+    ax.set_title("On-Balance Volume (OBV)", fontsize=CHART_CONFIG["font_size"], fontweight="bold")
 
 
-def _format_all_axes(axes: List[plt.Axes], dates: pd.Series):
+def _format_all_axes(axes: List[plt.Axes], dates: Any):
     """Format all axes with consistent styling."""
     for ax in axes:
         # Format x-axis

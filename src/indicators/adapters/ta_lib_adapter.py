@@ -12,7 +12,7 @@
 # ---------------------------------------------------------------------------
 from __future__ import annotations
 
-from typing import Dict
+from typing import Any, Callable, Dict
 
 import numpy as np
 import pandas as pd
@@ -125,7 +125,7 @@ def _xlate(indicator: str, params: dict | None) -> dict:
 class TaLibAdapter(BaseAdapter):
     """Adapter using TA-Lib backend with strict input validation."""
 
-    _map = {
+    _map: Dict[str, Any] = {
         # Basic indicators
         "rsi": talib.RSI,
         "ema": talib.EMA,

@@ -201,11 +201,13 @@ def _job_nasdaq_screener() -> Dict[str, Any] | None:
                 part = part[part["ETF"] != "Y"]
             if "Test Issue" in part.columns:
                 part = part[part["Test Issue"] != "Y"]
-            parts.append(cast(pd.DataFrame, part[["Symbol", "Name", "Exchange"]]))
+            parts.append(part[["Symbol", "Name", "Exchange"]])
 
-        merged: pd.DataFrame = cast(pd.DataFrame, pd.concat(parts, ignore_index=True))
+        merged = pd.concat(parts, ignore_index=True)
+        assert isinstance(merged, pd.DataFrame)
         # Dollar-sign suffixes denote warrants/units — exclude them
-        merged = cast(pd.DataFrame, merged[~merged["Symbol"].str.endswith("$", na=False)])
+        merged = merged[~merged["Symbol"].str.endswith("$", na=False)]
+        assert isinstance(merged, pd.DataFrame)
         df = merged.drop_duplicates(subset=["Symbol"])
         _logger.info("nasdaq_screener fallback: %d tickers from nasdaqtrader.com", len(df))
 

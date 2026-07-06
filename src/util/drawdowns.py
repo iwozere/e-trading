@@ -59,20 +59,22 @@ def analyze_drawdowns(ticker, years=5, threshold=0.10):
                 }
             elif dd <= -threshold and in_drawdown:
                 # Continuation of drawdown event
-                if dd < current_event["max_drawdown"]:
-                    current_event["max_drawdown"] = dd
-                    current_event["max_drawdown_date"] = date
-                    current_event["min_price"] = low_prices[date]
-                elif low_prices[date] < current_event["min_price"]:
-                    # Update min_price if current low price is lower
-                    current_event["min_price"] = low_prices[date]
+                if current_event is not None:
+                    if dd < current_event["max_drawdown"]:
+                        current_event["max_drawdown"] = dd
+                        current_event["max_drawdown_date"] = date
+                        current_event["min_price"] = low_prices[date]
+                    elif low_prices[date] < current_event["min_price"]:
+                        # Update min_price if current low price is lower
+                        current_event["min_price"] = low_prices[date]
             elif dd > -threshold and in_drawdown:
                 # End of drawdown event
                 in_drawdown = False
-                current_event["end_date"] = date
-                current_event["recovery_price"] = prices[date]
-                current_event["duration_days"] = (date - current_event["start_date"]).days
-                drawdown_events.append(current_event)
+                if current_event is not None:
+                    current_event["end_date"] = date
+                    current_event["recovery_price"] = prices[date]
+                    current_event["duration_days"] = (date - current_event["start_date"]).days
+                    drawdown_events.append(current_event)
 
         # If last event hasn't ended
         if in_drawdown and current_event:

@@ -74,7 +74,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
     - Binance-specific trading rules validation
     """
 
-    def __init__(self, api_key: str, api_secret: str, cash: float = 10000.0, config: Dict[str, Any] = None):
+    def __init__(self, api_key: str, api_secret: str, cash: float = 10000.0, config: Dict[str, Any] | None = None):
         # Initialize configuration
         if config is None:
             config = {}
@@ -271,6 +271,8 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
 
     async def place_order(self, order: Order) -> str:
         """Place an order on Binance with mode-specific handling."""
+        if order.order_id is None:
+            raise ValueError("Order ID cannot be None")
         try:
             # Validate order
             is_valid, validation_message = await self.validate_order(order)
@@ -383,6 +385,8 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
 
     async def _place_live_order(self, order: Order) -> str:
         """Place a live order on Binance."""
+        if order.order_id is None:
+            raise ValueError("Order ID cannot be None")
         try:
             # Convert our order format to Binance format
             binance_params = {

@@ -168,7 +168,7 @@ class KestrelLLMClient:
                 system=system_prompt,
                 messages=[{"role": "user", "content": user_prompt}],
             )
-            raw_text = response.content[0].text if response.content else ""
+            raw_text = getattr(response.content[0], "text", "") if response.content else ""
             tokens_in = response.usage.input_tokens
             tokens_out = response.usage.output_tokens
 

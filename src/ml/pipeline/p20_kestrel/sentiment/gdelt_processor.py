@@ -226,10 +226,10 @@ def _aggregate_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "date": row_date,
                 "source": "gdelt",
                 "mentions": len(grp),
-                "avg_tone": float(grp["avg_tone"].mean()),
-                "tone_std": float(grp["avg_tone"].std()) if len(grp) > 1 else 0.0,
-                "pos_score": float(grp["pos_score"].mean()),
-                "neg_score": float(grp["neg_score"].mean()),
+                "avg_tone": grp["avg_tone"].mean(),
+                "tone_std": grp["avg_tone"].std() if len(grp) > 1 else 0.0,
+                "pos_score": grp["pos_score"].mean(),
+                "neg_score": grp["neg_score"].mean(),
                 "top_domains": top_domains,
             }
         )
@@ -273,10 +273,10 @@ def _compute_zscores(
             row["tone_z20"] = None
             continue
 
-        mention_mean = float(hist_df["mentions"].mean())
-        mention_std = float(hist_df["mentions"].std())
-        tone_mean = float(hist_df["avg_tone"].mean())
-        tone_std_hist = float(hist_df["avg_tone"].std())
+        mention_mean = hist_df["mentions"].mean()
+        mention_std = hist_df["mentions"].std()
+        tone_mean = hist_df["avg_tone"].mean()
+        tone_std_hist = hist_df["avg_tone"].std()
 
         row["mention_z20"] = float((row["mentions"] - mention_mean) / mention_std) if mention_std > 0 else None
         row["tone_z20"] = float((row["avg_tone"] - tone_mean) / tone_std_hist) if tone_std_hist > 0 else None

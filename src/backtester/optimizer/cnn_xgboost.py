@@ -52,7 +52,7 @@ class CNNXGBoostOptimizer(BaseOptimizer):
         _logger.info("CNN-XGBoost optimizer initialized")
         _logger.info("Available combinations: %d", len(self.available_combinations))
 
-    def discover_available_combinations(self) -> List[Dict[str, str]]:
+    def discover_available_combinations(self) -> List[Dict[str, Any]]:
         """
         Discover available data and model combinations.
 
@@ -169,7 +169,7 @@ class CNNXGBoostOptimizer(BaseOptimizer):
             _logger.exception("Error finding XGBoost models:")
             return None
 
-    def _load_models(self, combination: Dict[str, str]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    def _load_models(self, combination: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """
         Load CNN and XGBoost models for the given combination.
 
@@ -230,7 +230,7 @@ class CNNXGBoostOptimizer(BaseOptimizer):
             _logger.exception("Error loading models:")
             raise
 
-    def run_backtest(self, combination: Dict[str, str], strategy_params: Dict[str, Any]) -> Dict[str, Any]:
+    def run_backtest(self, combination: Dict[str, Any], strategy_params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Run backtest for a specific combination.
 

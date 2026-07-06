@@ -77,13 +77,14 @@ class UsersService(BaseDBService):
                 u.email = email
                 self.repos.users.create_user(u)  # create_user acts as add/update if attached
 
-        # Update metadata
-        # Create a copy to ensure SQLAlchemy detects the change (handles in-place mutation issues)
-        meta = dict(ident.identity_metadata or {})
-        # Filter out None values to allow specific updates (or partial updates)
-        meta.update({k: v for k, v in fields.items() if v is not None})
-        ident.identity_metadata = meta
-        self.repos.users.create_identity(ident)  # flush
+        if ident:
+            # Update metadata
+            # Create a copy to ensure SQLAlchemy detects the change (handles in-place mutation issues)
+            meta = dict(ident.identity_metadata or {})
+            # Filter out None values to allow specific updates (or partial updates)
+            meta.update({k: v for k, v in fields.items() if v is not None})
+            ident.identity_metadata = meta
+            self.repos.users.create_identity(ident)  # flush
 
     @with_uow
     @handle_db_error
@@ -152,7 +153,7 @@ class UsersService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_user_notification_channels(self, user_id: int) -> Dict[str, str] | None:
+    def get_user_notification_channels(self, user_id: int) -> Dict[str, str | None] | None:
         """
         Get user's notification channels (email + telegram_chat_id).
 

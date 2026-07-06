@@ -30,12 +30,15 @@ def test_protocol_requires_apply_filters():
     assert not isinstance(NoMethod(), ScreenerAnalyzer)
 
 
+import pandas as pd
+
+
 def test_protocol_satisfied_by_object_with_apply_filters():
     """An object that has apply_filters() satisfies ScreenerAnalyzer at runtime."""
 
     class GoodAnalyzer:
-        def apply_filters(self, tickers):
-            return []
+        def apply_filters(self, tickers: list[str]) -> pd.DataFrame:
+            return pd.DataFrame()
 
     assert isinstance(GoodAnalyzer(), ScreenerAnalyzer)
 

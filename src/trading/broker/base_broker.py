@@ -31,6 +31,7 @@ Backtrader Integration:
 import asyncio
 import math
 import random
+import uuid
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Tuple
@@ -430,14 +431,14 @@ class BaseBroker(ABC):
     def _bt_getcash(self) -> float:
         """Cash for Backtrader ``getcash`` (paper portfolio or configured initial)."""
         if self.paper_trading_enabled and self.paper_portfolio is not None:
-            return float(self.paper_portfolio.cash)
-        return float(self.paper_trading_config.initial_balance)
+            return self.paper_portfolio.cash
+        return self.paper_trading_config.initial_balance
 
     def _bt_getvalue(self, datas=None) -> float:
         """Portfolio value for Backtrader ``getvalue``."""
         if self.paper_trading_enabled and self.paper_portfolio is not None:
-            return float(self.paper_portfolio.total_value)
-        return float(self.paper_trading_config.initial_balance)
+            return self.paper_portfolio.total_value
+        return self.paper_trading_config.initial_balance
 
     def _bt_getposition(self, data):
         """Build a ``backtrader.position.Position`` from paper state."""
@@ -544,7 +545,7 @@ class BaseBroker(ABC):
 
         metrics = ExecutionMetrics(
             execution_id=str(uuid.uuid4()),
-            order_id=order.order_id,
+            order_id=order.order_id or "",
             symbol=order.symbol,
             side=order.side,
             requested_quantity=order.quantity,
@@ -635,7 +636,7 @@ class BaseBroker(ABC):
         except Exception:
             self._logger.exception("Error sending position notification:")
 
-    async def notify_error(self, error_message: str, context: Dict[str, Any] = None):
+    async def notify_error(self, error_message: str, context: Dict[str, Any] | None = None):
         """Send error notifications."""
         try:
             error_data = {
@@ -850,6 +851,8 @@ class BaseBroker(ABC):
 
         try:
             if self.paper_trading_enabled:
+                if order.order_id is None:
+                    raise ValueError("Order ID cannot be None")
                 # In paper trading mode, process immediately
                 self.paper_orders[order.order_id] = order
                 order.status = OrderStatus.PENDING
@@ -1130,7 +1133,7 @@ class BaseBroker(ABC):
                 slippage = self.calculate_slippage(order, market_price)
                 executed_price = market_price + slippage
 
-            elif order.order_type == OrderType.LIMIT:
+            elif order.order_type == OrderType.LIMIT and order.price is not None:
                 # Limit order execution logic
                 if order.side == OrderSide.BUY and market_price <= order.price:
                     should_execute = True
@@ -1139,7 +1142,7 @@ class BaseBroker(ABC):
                     should_execute = True
                     executed_price = order.price
 
-            elif order.order_type == OrderType.STOP:
+            elif order.order_type == OrderType.STOP and order.stop_price is not None:
                 # Stop order execution logic
                 if order.side == OrderSide.BUY and market_price >= order.stop_price:
                     should_execute = True
@@ -1180,6 +1183,8 @@ class BaseBroker(ABC):
                     commission,
                 )
 
+                if executed_price is None:
+                    raise ValueError("Executed price cannot be None")
                 # Record execution metrics
                 self.record_execution_metrics(order, executed_price, executed_quantity, latency_ms)
 
@@ -1205,7 +1210,7 @@ class BaseBroker(ABC):
             price:  Current bar close price (must be > 0).
         """
         if price > 0:
-            self._current_bar_prices[symbol] = float(price)
+            self._current_bar_prices[symbol] = price
 
     def _get_simulated_market_price(self, symbol: str) -> float:
         """Return the current market price for *symbol*.
@@ -1248,7 +1253,7 @@ class BaseBroker(ABC):
         try:
             symbol = order.symbol
             executed_qty = order.filled_quantity
-            executed_price = order.average_price
+            executed_price = order.average_price or 0.0
             commission = order.commission
 
             # Update cash

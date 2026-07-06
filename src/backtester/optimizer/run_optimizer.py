@@ -24,6 +24,7 @@ else:
 
 import json
 from datetime import datetime as dt
+from typing import Any, Dict, List, Optional, Tuple
 
 import backtrader as bt
 import numpy as np
@@ -111,7 +112,8 @@ def prepare_data_frame(data_file) -> pd.DataFrame:
     df.set_index("datetime", inplace=True)
 
     # Ensure the index is timezone-naive for Backtrader compatibility
-    df.index = df.index.tz_localize(None)
+    if isinstance(df.index, pd.DatetimeIndex):
+        df.index = df.index.tz_localize(None)
 
     # Ensure the index is pandas datetime, not numpy float64
     df.index = pd.to_datetime(df.index)
@@ -195,6 +197,9 @@ class DynamicPandasData(bt.feeds.PandasData):
     pass
 
 
+_DATA_FEED_CLASS_CACHE = {}
+
+
 def prepare_data_feed(df: pd.DataFrame, symbol: str):
     """Prepare data feed from pandas dataframe with robust datetime handling"""
     # Validate DataFrame before creating feed
@@ -223,17 +228,14 @@ def prepare_data_feed(df: pd.DataFrame, symbol: str):
     # to avoid the overhead of creating it 150 times.
 
     cache_key = tuple(sorted(atr_cols))
-    if not hasattr(prepare_data_feed, "_class_cache"):
-        prepare_data_feed._class_cache = {}
-
-    if cache_key not in prepare_data_feed._class_cache:
-        prepare_data_feed._class_cache[cache_key] = type(
+    if cache_key not in _DATA_FEED_CLASS_CACHE:
+        _DATA_FEED_CLASS_CACHE[cache_key] = type(
             "DynamicPandasData",
             (bt.feeds.PandasData,),
             {"lines": tuple(atr_cols), "params": tuple((col, -1) for col in atr_cols)},
         )
 
-    DataClass = prepare_data_feed._class_cache[cache_key]
+    DataClass = _DATA_FEED_CLASS_CACHE[cache_key]
 
     data_feed = DataClass(
         dataname=df_copy,
@@ -293,7 +295,7 @@ def load_mixin_config(mixin_name: str, config_type: str, timeframe: str) -> dict
         raise
 
 
-def parse_data_file_name(data_file: str) -> dict:
+def parse_data_file_name(data_file: str) -> List[str]:
     """Parse data file name and return a dictionary with symbol, interval, start_date, end_date"""
     parts = data_file.replace(".csv", "").split("_")
     return parts
@@ -462,7 +464,7 @@ def save_results(result, data_file, initial_deposit=None):
         raise
 
 
-def calculate_optimization_metrics(study: optuna.Study) -> dict:
+def calculate_optimization_metrics(study: optuna.Study) -> Optional[dict]:
     """
     Calculate comprehensive metrics from optimization study.
 
@@ -541,7 +543,7 @@ def evaluate_combination_promise(metrics: dict, thresholds: dict) -> tuple:
     return True, "Passed all criteria"
 
 
-def perform_statistical_validation(promising_results: dict, unpromising_results: dict) -> dict:
+def perform_statistical_validation(promising_results: dict, unpromising_results: dict) -> Optional[dict]:
     """
     Perform statistical tests to validate that promising combinations are significantly better.
 
@@ -578,7 +580,7 @@ def perform_statistical_validation(promising_results: dict, unpromising_results:
         return None
 
 
-def generate_summary_report(all_results: dict, statistical_validation: dict, output_dir: str = "results") -> None:
+def generate_summary_report(all_results: dict, statistical_validation: Optional[dict], output_dir: str = "results") -> None:
     """
     Generate summary report comparing all combinations.
 
@@ -723,13 +725,13 @@ def optimize_combination(
     """
     Worker function to process a single combination of data + entry + exit logic.
     """
+    global _logger
     try:
         # Load and prepare data (Reload per process for safety on Windows spawn)
         df = prepare_data_frame(full_data_path)
         df = pre_calculate_htf_data(df, [60, 120, 240, 480])
 
         # Initialize logger with the shared queue
-        global _logger
         _logger = setup_logger(__name__, use_multiprocessing=True, external_queue=log_queue)
 
         symbol, interval, start_date, end_date = parse_data_file_name(data_file)

@@ -220,7 +220,7 @@ def _create_telegram_friendly_help(help_content: str) -> str:
     return "\n".join(summary_lines)
 
 
-def send_screener_email(email: str, report, config):
+async def send_screener_email(email: str, report, config, telegram_user_id: str = "default"):
     """Send screener results via email."""
     try:
         # Create email content
@@ -461,13 +461,24 @@ def send_screener_email(email: str, report, config):
         if len(report.top_results) > 20:
             body += f"<p><em>... and {len(report.top_results) - 20} more results</em></p>"
 
-        # Send email using existing email infrastructure
-        from src.notification.emailer import EmailNotifier
+        # Send email using central notification service
+        from src.telegram.lifecycle import get_notification_client
+        from src.notification.service.client import MessagePriority, MessageType
 
-        email_notifier = EmailNotifier()
-        email_notifier.send_email(email, subject, body)
-
-        _logger.info("Screener results sent via email to %s", email)
+        notification_client = await get_notification_client()
+        if notification_client:
+            await notification_client.send_notification(
+                notification_type=MessageType.INFO,
+                title=subject,
+                message=body,
+                priority=MessagePriority.NORMAL,
+                channels=["email"],
+                email_receiver=email,
+                recipient_id=telegram_user_id,
+            )
+            _logger.info("Screener results sent via email notification service to %s", email)
+        else:
+            _logger.error("Failed to get notification client to send screener email")
 
     except Exception:
         _logger.exception("Error sending screener email to %s", email)
@@ -486,7 +497,7 @@ def _get_recommendation_color(recommendation: str) -> str:
         return "#95a5a6"  # Gray
 
 
-def _get_unified_recommendation(indicator: str, value: float, context: dict = None) -> str:
+def _get_unified_recommendation(indicator: str, value: float, context: dict | None = None) -> str:
     """Get recommendation using unified recommendation engine."""
     try:
         if value is None:
@@ -549,6 +560,12 @@ async def process_help_command(message, telegram_user_id, message_text=None, not
     initialized in bot.py.
     """
     try:
+        from src.telegram.lifecycle import get_notification_client
+        if notification_client is None:
+            notification_client = await get_notification_client()
+        if not notification_client:
+            _logger.error("Notification client not available")
+            return {"status": "error", "message": "Notification client not available"}
         # Parse command to check for -email flag
         if message_text:
             parsed = parse_command(message_text)
@@ -851,8 +868,14 @@ async def process_verify_command(message, telegram_user_id, parsed: ParsedComman
         parsed.args["telegram_user_id"] = telegram_user_id
         result = await handle_command(parsed)
         channels = ["telegram"]
+        user_email = None
         if result.get("email", False):
             channels.append("email")
+            telegram_svc, _ = get_service_instances()
+            if telegram_svc:
+                user_status = telegram_svc.get_user_status(telegram_user_id)
+                if user_status:
+                    user_email = user_status.get("email")
         await notification_client.send_notification(
             notification_type=MessageType.INFO if result["status"] == "ok" else MessageType.ERROR,
             title=result.get("title", "Verify"),
@@ -938,8 +961,14 @@ async def process_language_command(message, telegram_user_id, parsed: ParsedComm
         parsed.args["telegram_user_id"] = telegram_user_id
         result = await handle_command(parsed)
         channels = ["telegram"]
+        user_email = None
         if result.get("email", False):
             channels.append("email")
+            telegram_svc, _ = get_service_instances()
+            if telegram_svc:
+                user_status = telegram_svc.get_user_status(telegram_user_id)
+                if user_status:
+                    user_email = user_status.get("email")
         await notification_client.send_notification(
             notification_type=MessageType.INFO if result["status"] == "ok" else MessageType.ERROR,
             title=result.get("title", "Language"),

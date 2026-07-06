@@ -13,7 +13,14 @@ from typing import Any, Dict, Union
 import yaml
 from pydantic import ValidationError
 
-from src.model.config_models import DataConfig, OptimizerConfig, TradingBotConfig
+from src.model.config_models import (
+    BrokerConfig,
+    DataConfig,
+    DataSourceType,
+    OptimizerConfig,
+    StrategyParamsConfig,
+    TradingBotConfig,
+)
 
 
 def load_config(config_path: Union[str, Path]) -> TradingBotConfig:
@@ -170,13 +177,17 @@ def validate_config_file(config_path: Union[str, Path]) -> tuple[bool, list[str]
         config = load_config(config_path)
 
         # Additional validation checks
-        if config.take_profit_pct <= config.stop_loss_pct:
+        take_profit = config.risk.get("take_profit_pct", 0.0)
+        stop_loss = config.risk.get("stop_loss_pct", 0.0)
+        if take_profit <= stop_loss:
             warnings.append("Take profit should be greater than stop loss")
 
-        if config.risk_per_trade > 0.05:
+        risk_per_trade = config.risk.get("risk_per_trade", 0.0)
+        if risk_per_trade > 0.05:
             warnings.append("Risk per trade is quite high (>5%)")
 
-        if config.max_open_trades > 10:
+        max_open_trades = config.trading.get("max_open_trades", 0)
+        if max_open_trades > 10:
             warnings.append("Maximum open trades is quite high (>10)")
 
         return True, errors, warnings
@@ -198,14 +209,30 @@ def create_sample_config(output_path: Union[str, Path], config_type: str = "trad
         sample_config = TradingBotConfig(
             bot_id="sample_bot_001",
             symbol="BTCUSDT",
-            broker_type="binance_paper",
-            data_source="binance",
-            description="Sample trading bot configuration",
+            broker=BrokerConfig(type="binance_paper"),
+            strategy=StrategyParamsConfig(type="rsi_bb"),
+            data={"data_source": "binance"},
         )
     elif config_type == "optimizer":
-        sample_config = OptimizerConfig(optimizer_type="optuna", initial_capital=10000.0, n_trials=100)
+        sample_config = OptimizerConfig(
+            optimizer_id="sample_opt_001",
+            name="Sample Optimizer",
+            optimizer_type="optuna",
+            initial_capital=10000.0,
+            n_trials=100,
+            strategy_name="rsi_bb",
+            param_ranges={"rsi_period": {"low": 10, "high": 20}},
+            symbol="BTCUSDT",
+            start_date="2023-01-01",
+            end_date="2023-12-31",
+        )
     elif config_type == "data":
-        sample_config = DataConfig(data_source="binance", symbol="BTCUSDT")
+        sample_config = DataConfig(
+            data_id="sample_data_001",
+            name="Sample Data Config",
+            data_source=DataSourceType.BINANCE,
+            symbols=["BTCUSDT"],
+        )
     else:
         raise ValueError(f"Unknown config type: {config_type}")
 
@@ -248,33 +275,39 @@ def _convert_old_to_new_format(old_config: Dict[str, Any]) -> TradingBotConfig:
     broker_type = old_config.get("broker", {}).get("type", "binance_paper")
     data_source = old_config.get("data", {}).get("data_source", "binance")
 
+    strategy_type = old_config.get("strategy", {}).get("type", "custom")
+    strategy_params = old_config.get("strategy", {}).get("parameters", {})
+    if not strategy_type and "strategy_params" in old_config:
+        strategy_type = "custom"
+        strategy_params = old_config["strategy_params"]
+
     # Create new config
     new_config = TradingBotConfig(
         bot_id=bot_id,
         symbol=symbol,
-        broker_type=broker_type,
-        data_source=data_source,
-        description=f"Converted from old format: {bot_id}",
+        broker=BrokerConfig(type=broker_type),
+        strategy=StrategyParamsConfig(type=strategy_type, parameters=strategy_params),
+        data={"data_source": data_source},
     )
 
     # Copy over other values if they exist
     if "trading" in old_config:
         trading = old_config["trading"]
         if "position_size" in trading:
-            new_config.position_size = trading["position_size"]
+            new_config.trading["position_size"] = trading["position_size"]
         if "max_positions" in trading:
-            new_config.max_open_trades = trading["max_positions"]
+            new_config.trading["max_open_trades"] = trading["max_positions"]
 
     if "risk_management" in old_config:
         risk = old_config["risk_management"]
         if "stop_loss_pct" in risk:
-            new_config.stop_loss_pct = risk["stop_loss_pct"]
+            new_config.risk["stop_loss_pct"] = risk["stop_loss_pct"]
         if "take_profit_pct" in risk:
-            new_config.take_profit_pct = risk["take_profit_pct"]
+            new_config.risk["take_profit_pct"] = risk["take_profit_pct"]
 
     if "logging" in old_config:
         logging = old_config["logging"]
         if "level" in logging:
-            new_config.log_level = logging["level"]
+            new_config.logging["level"] = logging["level"]
 
     return new_config

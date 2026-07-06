@@ -111,7 +111,7 @@ class LiveTradingBot:
 
     def get_status(self) -> Dict[str, Any]:
         """Get status from the manager."""
-        return self.manager.get_instance_status(self.instance_id)
+        return self.manager.get_instance_status(self.instance_id) or {}
 
     def restart(self):
         """Restart via the manager."""

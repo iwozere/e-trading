@@ -10,7 +10,7 @@ class BaseExitMixin(ABC):
     """Base class for all exit mixins"""
 
     def __init__(self, params: Dict[str, Any] | None = None):
-        self.strategy = None
+        self.strategy: Any = None
         self.params = params or {}
         self.indicators = {}
 
@@ -107,10 +107,10 @@ class BaseExitMixin(ABC):
         """Called when a position is entered. Default implementation does nothing."""
         pass
 
-    def get_param(self, key: str, default=None):
+    def get_param(self, key: str, default: Any = None) -> Any:
         return self.params.get(key, default)
 
-    def _resolve_param(self, key: str, e_key: str, default=None):
+    def _resolve_param(self, key: str, e_key: str, default: Any = None) -> Any:
         """
         Resolve a param with e_-prefixed fallback, correctly handling falsy values.
 

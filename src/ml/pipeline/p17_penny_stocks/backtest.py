@@ -144,7 +144,7 @@ def collect_first_detections(
 
 
 def backtest_ticker(
-    downloader: YahooDataDownloader,
+    downloader: Any,
     rec: Dict[str, Any],
     invest: float,
     end_date: datetime,
@@ -179,12 +179,12 @@ def backtest_ticker(
         return out
 
     high = df["high"].astype(float)
-    max_high = float(high.max())
+    max_high = high.max()
     peak_idx = high.idxmax()
     peak_date = None
     if "timestamp" in df.columns:
         try:
-            peak_date = str(pd.to_datetime(df.loc[peak_idx, "timestamp"]).date())
+            peak_date = str(pd.to_datetime(df.loc[peak_idx, "timestamp"]).date())  # type: ignore[call-overload]
         except Exception:
             peak_date = None
 

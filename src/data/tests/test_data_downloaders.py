@@ -258,7 +258,6 @@ class TestAlphaVantageDataDownloader(TestDataDownloaders):
             "PayoutRatio": "0.25",
             "PEGRatio": "1.5",
             "PriceToSalesRatioTTM": "5.0",
-            "MarketCapitalization": "2500000000000",
             "EVToEBITDA": "20.0",
         }
         mock_get.return_value = mock_response
@@ -683,7 +682,6 @@ class TestTiingoDataDownloader(TestDataDownloaders):
             "startDate": "1980-12-12",
             "endDate": "2024-01-01",
             "exchangeCode": "NASDAQ",
-            "ticker": "AAPL",
         }
         mock_get.return_value = mock_response
 

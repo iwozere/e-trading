@@ -65,7 +65,7 @@ class ScreenerEngine:
                     return {"status": "error", "message": "Email not registered. Use /register first."}
                 from src.telegram.screener.notifications import send_screener_email
 
-                send_screener_email(status["email"], report, screener_config)
+                await send_screener_email(status["email"], report, screener_config, telegram_user_id)
                 return {"status": "success", "message": "Screener results sent to your email"}
             else:
                 return {"status": "success", "message": message, "report": report}

@@ -87,7 +87,9 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
             self._session = aiohttp.ClientSession()
 
         _logger.info("Fetching new Reddit OAuth token")
-        auth = aiohttp.BasicAuth(self.client_id, self.client_secret)
+        client_id = self.client_id or ""
+        client_secret = self.client_secret or ""
+        auth = aiohttp.BasicAuth(client_id, client_secret)
         data = {"grant_type": "client_credentials"}
         headers = {"User-Agent": self.user_agent}
 
@@ -114,6 +116,8 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
     ) -> Dict | None:
         """Make an authenticated request to Reddit API with retry logic."""
         await self._ensure_token()
+        if not self._session:
+            self._session = aiohttp.ClientSession()
 
         url = f"{REDDIT_OAUTH_BASE}{path}"
         headers = {"Authorization": f"Bearer {self._token}", "User-Agent": self.user_agent}
@@ -123,6 +127,7 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
             async with self.semaphore:
                 try:
                     start_time = time.time()
+                    assert self._session is not None
                     async with self._session.request(method, url, params=params, data=data, headers=headers) as resp:
                         response_time_ms = (time.time() - start_time) * 1000
 
@@ -281,7 +286,7 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
                 "pos": pos,
                 "neg": neg,
                 "neutral": neutral,
-                "sentiment_score": float(avg_score),
+                "sentiment_score": avg_score,
                 "unique_authors": len({m["user"]["id"] for m in msgs if m["user"]["id"]}),
                 "provider": self.name,
                 "timestamp": datetime.now(UTC).isoformat(),

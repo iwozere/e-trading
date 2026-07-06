@@ -25,8 +25,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
-
+from typing import Any, Callable, Dict, List, Optional, Union, cast
 import pandas as pd
 import yfinance as yf
 from curl_cffi import requests as curl_requests
@@ -74,7 +73,7 @@ def _get_rotated_session() -> curl_requests.Session:
     """
     if not hasattr(_thread_local, "session"):
         target = random.choice(_BROWSER_IMPERSONATION_POOL)
-        _thread_local.session = curl_requests.Session(impersonate=target)
+        _thread_local.session = curl_requests.Session(impersonate=cast(Any, target))
         _logger.debug("Created curl_cffi session impersonating: %s", target)
     return _thread_local.session
 
@@ -250,12 +249,12 @@ class YahooDataDownloader(BaseDataDownloader):
         except Exception as e:
             if "YFTzMissingError" in str(type(e)):
                 _logger.warning("Delisted or invalid timezone for %s: returning empty DataFrame.", symbol)
-                return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+                return pd.DataFrame(columns=cast(Any, ["timestamp", "open", "high", "low", "close", "volume"]))
             raise e
 
         if df.empty:
             _logger.warning("No data returned for %s", symbol)
-            return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+            return pd.DataFrame(columns=cast(Any, ["timestamp", "open", "high", "low", "close", "volume"]))
 
         # Convert to standard format (lowercase columns, timestamp index to column)
         df = df.reset_index()
@@ -279,11 +278,11 @@ class YahooDataDownloader(BaseDataDownloader):
         # Ensure timestamp
         if "timestamp" in df.columns:
             df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-            if df["timestamp"].dt.tz is not None:
-                df["timestamp"] = df["timestamp"].dt.tz_localize(None)
+            if hasattr(cast(pd.Series, df["timestamp"]).dt, "tz") and cast(pd.Series, df["timestamp"]).dt.tz is not None:  # type: ignore[attr-defined]
+                df["timestamp"] = cast(pd.Series, df["timestamp"]).dt.tz_convert(None)  # type: ignore[attr-defined]
 
         _logger.debug("Downloaded %d rows for %s", len(df), symbol)
-        return df
+        return cast(pd.DataFrame, df)
 
     def _download_ohlcv_batched(
         self, symbol: str, interval: str, start_date: datetime, end_date: datetime, max_period: str
@@ -308,7 +307,7 @@ class YahooDataDownloader(BaseDataDownloader):
 
         if not all_data:
             _logger.warning("No data downloaded for %s in any batch", symbol)
-            return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+            return pd.DataFrame(columns=cast(Any, ["timestamp", "open", "high", "low", "close", "volume"]))
 
         # Combine all batches
         combined_df = pd.concat(all_data, ignore_index=True)
@@ -355,14 +354,14 @@ class YahooDataDownloader(BaseDataDownloader):
                     return self._fallback_individual_downloads(symbols, interval, start_date, end_date)
                 raise e
 
-            if df_batch.empty:
+            if df_batch is None or getattr(df_batch, "empty", True):
                 _logger.debug(
                     "No data returned for batch download %s → %s (market closure or holiday)",
                     start_date.date(),
                     end_date.date(),
                 )
                 return {
-                    symbol: pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+                    symbol: pd.DataFrame(columns=cast(Any, ["timestamp", "open", "high", "low", "close", "volume"]))
                     for symbol in symbols
                 }
 
@@ -371,7 +370,7 @@ class YahooDataDownloader(BaseDataDownloader):
             # Process multi-level DataFrame
             if len(symbols) == 1:
                 # Single ticker case
-                df = df_batch.reset_index()
+                df = cast(pd.DataFrame, df_batch).reset_index()
 
                 # Handle different column structures from YFinance
                 expected_columns = ["timestamp", "open", "high", "low", "close", "volume"]
@@ -405,8 +404,8 @@ class YahooDataDownloader(BaseDataDownloader):
                 for symbol in symbols:
                     try:
                         # Extract data for this symbol
-                        if symbol in df_batch.columns.get_level_values(0):
-                            df_symbol = df_batch[symbol].reset_index()
+                        if hasattr(df_batch, "columns") and symbol in df_batch.columns.get_level_values(0):
+                            df_symbol = cast(pd.DataFrame, df_batch)[symbol].reset_index()
 
                             # Handle different column structures from YFinance
                             expected_columns = ["timestamp", "open", "high", "low", "close", "volume"]
@@ -438,11 +437,11 @@ class YahooDataDownloader(BaseDataDownloader):
                         else:
                             _logger.warning("No data found for %s in batch download", symbol)
                             results[symbol] = pd.DataFrame(
-                                columns=["timestamp", "open", "high", "low", "close", "volume"]
+                                columns=cast(Any, ["timestamp", "open", "high", "low", "close", "volume"])
                             )
                     except Exception:
                         _logger.exception("Error processing %s from batch download:", symbol)
-                        results[symbol] = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+                        results[symbol] = pd.DataFrame(columns=cast(Any, ["timestamp", "open", "high", "low", "close", "volume"]))
 
             _logger.info(
                 "Batch download completed. %d/%d symbols processed successfully",
@@ -467,7 +466,7 @@ class YahooDataDownloader(BaseDataDownloader):
                 results[symbol] = self.get_ohlcv(symbol, interval, start_date, end_date)
             except Exception:
                 _logger.exception("Fallback download failed for %s:", symbol)
-                results[symbol] = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+                results[symbol] = pd.DataFrame(columns=cast(Any, ["timestamp", "open", "high", "low", "close", "volume"]))
         return results
 
     def get_fundamentals(self, symbol: str) -> OptionalFundamentals:
@@ -728,7 +727,7 @@ class YahooDataDownloader(BaseDataDownloader):
                         if basic_data is not None and symbol in basic_data.columns.get_level_values(0):
                             try:
                                 # Extract current price from basic data
-                                symbol_data = basic_data[symbol]
+                                symbol_data = cast(pd.DataFrame, basic_data[symbol])
                                 if not symbol_data.empty:
                                     current_price = symbol_data["Close"].iloc[-1]
                             except Exception:
@@ -833,8 +832,13 @@ class YahooDataDownloader(BaseDataDownloader):
         return results
 
     def download_multiple_symbols(
-        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
-    ) -> Dict[str, str]:
+        self,
+        symbols: List[str],
+        download_func: Any = None,
+        interval: str = "1d",
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> Dict[str, pd.DataFrame]:
         """
         Download data for multiple symbols with rate limiting.
 
@@ -845,10 +849,10 @@ class YahooDataDownloader(BaseDataDownloader):
             end_date: End date as datetime.datetime
 
         Returns:
-            Dict[str, str]: Dictionary mapping symbols to file paths
+            Dict mapping symbols to DataFrames
         """
 
-        def download_func(symbol, interval, start_date, end_date):
+        def download_func_impl(symbol, interval, start_date, end_date):
             return self.get_ohlcv(symbol, interval, start_date, end_date)
 
         # Override the base method to add rate limiting between symbols
@@ -857,9 +861,9 @@ class YahooDataDownloader(BaseDataDownloader):
             try:
                 _logger.info("Processing symbol %s (%d/%d)", symbol, len(results) + 1, len(symbols))
 
-                df = download_func(symbol, interval, start_date, end_date)
-                filepath = self.save_data(df, symbol, interval, start_date, end_date)
-                results[symbol] = filepath
+                df = download_func_impl(symbol, interval, start_date, end_date)
+                if df is not None:
+                    results[symbol] = df
 
                 # Process next symbol
 
@@ -869,8 +873,12 @@ class YahooDataDownloader(BaseDataDownloader):
         return results
 
     def download_multiple_symbols_batch(
-        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
-    ) -> Dict[str, str]:
+        self,
+        symbols: List[str],
+        interval: str = "1d",
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> Dict[str, pd.DataFrame]:
         """
         Download data for multiple symbols using batch operations.
 
@@ -881,30 +889,23 @@ class YahooDataDownloader(BaseDataDownloader):
             end_date: End date as datetime.datetime
 
         Returns:
-            Dict[str, str]: Dictionary mapping symbols to file paths
+            Dict mapping symbols to DataFrames
         """
         try:
             _logger.info("Starting batch download for %d symbols", len(symbols))
 
             # Use batch OHLCV download
-            ohlcv_data = self.get_ohlcv_batch(symbols, interval, start_date, end_date)
+            ohlcv_data = self.get_ohlcv_batch(symbols, interval, start_date or datetime.now() - timedelta(days=365), end_date or datetime.now())
 
             results = {}
             for symbol, df in ohlcv_data.items():
-                try:
-                    filepath = self.save_data(df, symbol, interval, start_date, end_date)
-                    results[symbol] = filepath
-                except Exception:
-                    _logger.exception("Error saving data for %s:", symbol)
-                    continue
+                if df is not None:
+                    results[symbol] = df
 
-            _logger.info("Batch download completed. %d/%d symbols saved successfully", len(results), len(symbols))
             return results
-
         except Exception:
             _logger.exception("Error in batch download:")
-            # Fallback to individual downloads
-            return self.download_multiple_symbols(symbols, interval, start_date, end_date)
+            return self.download_multiple_symbols(symbols, None, interval, start_date, end_date)
 
     def get_periods(self) -> list:
         return ["1d", "7d", "1mo", "3mo", "6mo", "1y", "2y"]
@@ -1205,7 +1206,7 @@ class YahooDataDownloader(BaseDataDownloader):
             for exp in expirations:
                 try:
                     chain = _fetch_with_retry(lambda e=exp: ticker.option_chain(e), f"expiration {exp}")
-                    for side, df in (("call", chain.calls), ("put", chain.puts)):
+                    for side, df in (("call", getattr(chain, "calls", pd.DataFrame())), ("put", getattr(chain, "puts", pd.DataFrame()))):
                         if df.empty:
                             continue
                         df = df.copy()
@@ -1257,19 +1258,19 @@ class YahooDataDownloader(BaseDataDownloader):
         puts = chain_df[chain_df["type"] == "put"]
         calls = chain_df[chain_df["type"] == "call"]
 
-        put_vol = float(puts["volume"].fillna(0).sum())
-        call_vol = float(calls["volume"].fillna(0).sum())
-        put_oi = float(puts["openInterest"].fillna(0).sum())
-        call_oi = float(calls["openInterest"].fillna(0).sum())
+        put_vol = float(getattr(puts["volume"], "fillna", lambda x: puts["volume"])(0).sum())
+        call_vol = float(getattr(calls["volume"], "fillna", lambda x: calls["volume"])(0).sum())
+        put_oi = float(getattr(puts["openInterest"], "fillna", lambda x: puts["openInterest"])(0).sum())
+        call_oi = float(getattr(calls["openInterest"], "fillna", lambda x: calls["openInterest"])(0).sum())
 
         def _wavg_iv(df: pd.DataFrame) -> float | None:
-            oi = df["openInterest"].fillna(0)
-            iv = df["impliedVolatility"].fillna(0)
+            oi = getattr(df["openInterest"], "fillna", lambda x: df["openInterest"])(0)
+            iv = getattr(df["impliedVolatility"], "fillna", lambda x: df["impliedVolatility"])(0)
             total = float(oi.sum())
             if total > 0:
                 return float((iv * oi).sum() / total)
             positive = iv[iv > 0]
-            return float(positive.mean()) if not positive.empty else None
+            return float(positive.mean()) if not getattr(positive, "empty", True) else None
 
         return {
             "put_volume": put_vol,
@@ -1280,5 +1281,5 @@ class YahooDataDownloader(BaseDataDownloader):
             "pc_oi_ratio": put_oi / call_oi if call_oi > 0 else None,
             "put_iv_wavg": _wavg_iv(puts),
             "call_iv_wavg": _wavg_iv(calls),
-            "n_expirations": int(chain_df["expiration"].nunique()),
+            "n_expirations": chain_df["expiration"].nunique(),
         }

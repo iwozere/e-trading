@@ -116,7 +116,9 @@ class RetryManager:
 
         # This should never be reached, but just in case
         self.stats["failed_calls"] += 1
-        raise last_exception
+        if last_exception is not None:
+            raise last_exception
+        raise RuntimeError("Retry loop finished without an exception")
 
     def _should_retry(self, exception: Exception) -> bool:
         """Determine if exception should trigger a retry."""
@@ -241,7 +243,7 @@ def retry(config: RetryConfig | None = None):
             return retry_manager.execute(func, *args, **kwargs)
 
         # Add retry manager to wrapper for access to stats
-        wrapper.retry_manager = retry_manager
+        setattr(wrapper, "retry_manager", retry_manager)
         return wrapper
 
     return decorator

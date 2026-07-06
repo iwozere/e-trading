@@ -8,6 +8,7 @@ intelligent key strategies, and comprehensive monitoring.
 
 import asyncio
 import hashlib
+import inspect
 import os
 import sys
 from dataclasses import dataclass
@@ -313,7 +314,7 @@ class CacheManager:
 
         # Generate new value
         try:
-            if asyncio.iscoroutinefunction(factory):
+            if inspect.iscoroutinefunction(factory):
                 value = await factory()
             else:
                 value = factory()

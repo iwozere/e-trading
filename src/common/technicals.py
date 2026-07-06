@@ -1,3 +1,5 @@
+from typing import Any
+
 import numpy as np
 import pandas as pd
 import talib
@@ -28,10 +30,10 @@ def calculate_technicals_talib(df: pd.DataFrame) -> Technicals:
         raise ValueError(f"Missing required columns: {missing_cols}")
 
     # Extract price data
-    close = df["close"].values.astype(float)
-    high = df["high"].values.astype(float)
-    low = df["low"].values.astype(float)
-    volume = df["volume"].values.astype(float)
+    close: Any = df["close"].values.astype(float)
+    high: Any = df["high"].values.astype(float)
+    low: Any = df["low"].values.astype(float)
+    volume: Any = df["volume"].values.astype(float)
 
     # Check for sufficient data
     if len(close) < 50:
@@ -90,7 +92,7 @@ def calculate_technicals_talib(df: pd.DataFrame) -> Technicals:
         return float(last_val)
 
     # Build technical data dictionary with current indicator values
-    technical_data = {
+    technical_data: dict[str, Any] = {
         "rsi": get_last_value(rsi),
         "sma_fast": get_last_value(sma_fast),
         "sma_slow": get_last_value(sma_slow),
@@ -288,15 +290,12 @@ def calculate_technicals_talib(df: pd.DataFrame) -> Technicals:
     return Technicals(**technical_data)
 
 
-def format_technical_analysis(ticker: str, technicals: Technicals, current_price: float = None) -> str:
+def format_technical_analysis(ticker: str, technicals: Technicals, current_price: float | None = None) -> str:
     if not technicals:
         return f"❌ Unable to analyze {ticker}"
 
     # Use the actual current price if provided, otherwise fall back to bb_middle
-    if current_price is not None:
-        close = current_price
-    else:
-        close = technicals.bb_middle  # Fallback to Bollinger Bands middle line
+    close: float | None = current_price if current_price is not None else technicals.bb_middle
 
     # Handle None values for price
     if close is not None:

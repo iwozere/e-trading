@@ -196,7 +196,3 @@ class EOMBreakdownExitMixin(BaseExitMixin):
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""
         return self._exit_reason if self._exit_reason else "breakdown_momentum"
-
-    def get_exit_reason(self) -> str:
-        """Get the reason for exit"""
-        return self._exit_reason if self._exit_reason else "breakdown_momentum"

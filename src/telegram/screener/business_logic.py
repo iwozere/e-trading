@@ -74,7 +74,7 @@ class TelegramBusinessLogic:
 
     def handle_help(self, parsed: ParsedCommand) -> Dict[str, Any]:
         """Business logic for /help command."""
-        telegram_user_id = parsed.args.get("telegram_user_id")
+        telegram_user_id = parsed.args.get("telegram_user_id") or ""
         is_admin = self.user_service.is_admin_user(telegram_user_id)
 
         help_text = (
@@ -125,7 +125,8 @@ class TelegramBusinessLogic:
 
     def handle_admin(self, parsed: ParsedCommand) -> Dict[str, Any]:
         """Delegates admin commands to user_service."""
-        access_check = self.user_service.check_admin_access(parsed.args.get("telegram_user_id"))
+        telegram_user_id = parsed.args.get("telegram_user_id") or ""
+        access_check = self.user_service.check_admin_access(telegram_user_id)
         if access_check["status"] != "ok":
             return access_check
 
@@ -133,9 +134,9 @@ class TelegramBusinessLogic:
         params = parsed.positionals[1:] if len(parsed.positionals) > 1 else []
 
         if action in ["users", "listusers"]:
-            return self.user_service.handle_admin_list_users(parsed.args.get("telegram_user_id"))
+            return self.user_service.handle_admin_list_users(telegram_user_id)
         elif action == "pending":
-            return self.user_service.handle_admin_list_pending_approvals(parsed.args.get("telegram_user_id"))
+            return self.user_service.handle_admin_list_pending_approvals(telegram_user_id)
         elif action == "resetemail" and params:
             return self.user_service.handle_admin_reset_email(params[0])
         elif action == "verify" and params:
@@ -203,7 +204,7 @@ def check_approved_access(user_id: str) -> Dict[str, Any]:
     )
 
 
-async def get_ohlcv(ticker: str, period: str = "1y", interval: str = "1d", provider: str = None) -> Any:
+async def get_ohlcv(ticker: str, period: str = "1y", interval: str = "1d", provider: str | None = None) -> Any:
     """Wrapper for IndicatorService.get_ohlcv."""
     _, isvc = get_service_instances()
     if isvc:
@@ -219,14 +220,14 @@ async def get_indicator_data(ticker: str, indicators: list, period: str = "1y", 
     return {"status": "error", "message": "Service unavailable"}
 
 
-async def get_fundamentals(ticker: str, provider: str = None) -> Any:
+async def get_fundamentals(ticker: str, provider: str | None = None) -> Any:
     """Wrapper for src.common.fundamentals.get_fundamentals."""
     from src.common.fundamentals import get_fundamentals as gf
 
     return gf(ticker, provider)
 
 
-async def analyze_ticker_business(ticker: str, provider: str = None, period: str = "2y", interval: str = "1d") -> Any:
+async def analyze_ticker_business(ticker: str, provider: str | None = None, period: str = "2y", interval: str = "1d") -> Any:
     """Legacy wrapper for TickerAnalyzer.analyze_ticker."""
     from src.common.ticker_analyzer import analyze_ticker
 

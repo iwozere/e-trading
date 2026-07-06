@@ -178,10 +178,10 @@ def probe_ibkr() -> None:
     port = int(os.getenv("IBKR_PAPER_PORT", "4002"))
     client_id = 19  # unique to p19; avoid clashing with running bots
     try:
-        from ib_async import IB, Stock
+        from ib_async import IB, Stock  # type: ignore[import-not-found]
     except ImportError:
         try:
-            from ib_insync import IB, Stock
+            from ib_insync import IB, Stock  # type: ignore[import-not-found]
         except Exception:
             print("  ib_async/ib_insync not installed — skipped")
             return

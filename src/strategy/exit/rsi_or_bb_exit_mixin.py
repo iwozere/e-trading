@@ -143,7 +143,3 @@ class RSIOrBBExitMixin(BaseExitMixin):
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""
         return getattr(self.strategy, "current_exit_reason", "rsi_or_bb_exit")
-
-    def get_exit_reason(self) -> str:
-        """Get the reason for exit"""
-        return getattr(self.strategy, "current_exit_reason", "rsi_or_bb_exit")

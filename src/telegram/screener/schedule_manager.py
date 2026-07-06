@@ -94,10 +94,10 @@ class ScheduleManager:
         ticker: str,
         time: str,
         email: bool = False,
-        indicators: str = None,
+        indicators: str | None = None,
         period: str = "2y",
         interval: str = "1d",
-        provider: str = None,
+        provider: str | None = None,
     ) -> Dict[str, Any]:
         """Add a new scheduled report."""
         try:
@@ -148,7 +148,7 @@ class ScheduleManager:
             return {"status": "error", "message": "Failed to add JSON schedule."}
 
     def handle_schedules_screener(
-        self, telegram_user_id: str, list_type: str, time: str, email: bool = False, indicators: str = None
+        self, telegram_user_id: str, list_type: str, time: str, email: bool = False, indicators: str | None = None
     ) -> Dict[str, Any]:
         """Handle fundamental screener schedule."""
         try:
@@ -195,7 +195,7 @@ class ScheduleManager:
             return {"status": "error", "message": "Failed to schedule enhanced screener."}
 
     def handle_schedules_edit(
-        self, telegram_user_id: str, schedule_id_str: str, new_time: str = None, args: dict = None
+        self, telegram_user_id: str, schedule_id_str: str, new_time: str | None = None, args: dict | None = None
     ) -> Dict[str, Any]:
         """Edit an existing schedule."""
         try:

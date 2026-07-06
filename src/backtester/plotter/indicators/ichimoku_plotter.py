@@ -51,5 +51,5 @@ class IchimokuPlotter(BaseIndicatorPlotter):
             _logger.exception("Error plotting Ichimoku Cloud: ")
 
     @property
-    def subplot_type(self):
+    def subplot_type(self) -> str:
         return "price"

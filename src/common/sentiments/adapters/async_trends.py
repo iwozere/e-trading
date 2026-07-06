@@ -56,7 +56,7 @@ class AsyncTrendsAdapter(BaseSentimentAdapter):
         self._session = session
         self.max_retries = max_retries
         self._tokens = {}
-        self._token_expiry = 0
+        self._token_expiry: float = 0.0
         self._cookies_fetched = False
         self._cookie_lock = asyncio.Lock()
         self.user_agents = [
@@ -77,7 +77,7 @@ class AsyncTrendsAdapter(BaseSentimentAdapter):
             session = await self._get_session()
             try:
                 # Visit the main page to get NID cookies etc.
-                async with session.get("https://trends.google.com/?geo=US", timeout=10) as r:
+                async with session.get("https://trends.google.com/?geo=US", timeout=aiohttp.ClientTimeout(total=10)) as r:
                     if r.status == 200:
                         self._cookies_fetched = True
                         return True
@@ -103,7 +103,7 @@ class AsyncTrendsAdapter(BaseSentimentAdapter):
 
         for attempt in range(self.max_retries + 1):
             try:
-                async with session.get(url, params=params, headers=headers, timeout=15) as resp:
+                async with session.get(url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                     if resp.status == 200:
                         text = (await resp.text()).strip()
                         if text.startswith(")]}'"):
@@ -202,7 +202,7 @@ class AsyncTrendsAdapter(BaseSentimentAdapter):
 
         return {
             "mentions": len(msgs),
-            "sentiment_score": float(direction * 0.2),  # Basics
+            "sentiment_score": direction * 0.2,  # Basics
             "total_search_volume": volume,
             "trend_direction": direction,
             "provider": "trends",

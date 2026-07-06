@@ -17,4 +17,9 @@ Usage:
     python -m pytest src/backtester/tests/test_custom_strategy.py
 """
 
-__all__ = ["BacktesterTestCase", "run_backtest_from_config"]
+from src.backtester.tests.backtester_test_framework import (
+    BacktesterTestFramework,
+    run_backtest_from_config,
+)
+
+__all__ = ["BacktesterTestFramework", "run_backtest_from_config"]

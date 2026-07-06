@@ -160,7 +160,6 @@ class UnifiedCache:
 
             # Skip validation - data is cached as-is without validation
             # Validation will be handled by validate_and_fill_gaps.py script
-            is_valid = True
             quality_score = {"quality_score": 1.0}
 
             # Create cache directory

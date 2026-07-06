@@ -54,7 +54,7 @@ def _fetch_trends_batch(terms: List[str], anchor: str, timeframe: str = "today 1
         Dict mapping term → anchor-normalized interest (0–100), or None on failure.
     """
     try:
-        from pytrends.request import TrendReq
+        from pytrends.request import TrendReq  # type: ignore[import-not-found]
 
         pytrends = TrendReq(hl="en-US", tz=0, timeout=(10, 25))
         kw_list = [anchor] + terms[:_BATCH_SIZE]

@@ -5,6 +5,7 @@ Repository layer for notification service operations.
 Provides data access methods for messages, delivery status, channel health, rate limits, and channel configs.
 """
 
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List
 
@@ -305,7 +306,7 @@ class MessageRepository:
             self.session.query(func.count(Message.id))
             .filter(
                 Message.status == MessageStatus.FAILED.value,
-                Message.updated_at >= one_hour_ago,
+                Message.created_at >= one_hour_ago,
                 Message.channels.overlap(cast(channels, ARRAY(TEXT))),
             )
             .scalar()
@@ -317,7 +318,7 @@ class MessageRepository:
             self.session.query(func.count(Message.id))
             .filter(
                 Message.status == MessageStatus.DELIVERED.value,
-                Message.delivered_at >= one_hour_ago,
+                Message.processed_at >= one_hour_ago,
                 Message.channels.overlap(cast(channels, ARRAY(TEXT))),
             )
             .scalar()
@@ -329,7 +330,7 @@ class MessageRepository:
             self.session.query(func.count(Message.id))
             .filter(
                 Message.status == MessageStatus.PROCESSING.value,
-                Message.updated_at < five_min_ago,
+                Message.created_at < five_min_ago,
                 Message.channels.overlap(cast(channels, ARRAY(TEXT))),
             )
             .scalar()
@@ -345,7 +346,7 @@ class MessageRepository:
         }
 
     def get_pending_messages_with_lock(
-        self, limit: int = 10, lock_instance_id: str = None, channels: List[str] | None = None
+        self, limit: int = 10, lock_instance_id: str | None = None, channels: List[str] | None = None
     ) -> List[Message]:
         """
         Get pending messages with distributed locking for database-centric processing.
@@ -410,7 +411,7 @@ class MessageRepository:
                 "limit": limit,
             }
             if channels:
-                params["channels"] = channels
+                params["channels"] = channels  # type: ignore
 
             result = self.session.execute(query, params)
 
@@ -992,7 +993,7 @@ class ChannelConfigRepository:
         query = self.session.query(ChannelConfig)
 
         if enabled_only:
-            query = query.filter(ChannelConfig.enabled == True)
+            query = query.filter(ChannelConfig.enabled)
 
         return query.order_by(asc(ChannelConfig.channel)).all()
 
@@ -1052,7 +1053,7 @@ class ChannelConfigRepository:
         Returns:
             List of enabled channel names
         """
-        channels = self.session.query(ChannelConfig.channel).filter(ChannelConfig.enabled == True).all()
+        channels = self.session.query(ChannelConfig.channel).filter(ChannelConfig.enabled).all()
 
         return [channel[0] for channel in channels]
 
@@ -1072,9 +1073,9 @@ class NotificationRepository:
 
         if use_optimized:
             # Use optimized implementations for better performance
-            self.messages = OptimizedMessageRepository(session)
-            self.delivery_status = OptimizedDeliveryStatusRepository(session)
-            self.rate_limits = OptimizedRateLimitRepository(session)
+            self.messages: MessageRepository = OptimizedMessageRepository(session)  # type: ignore
+            self.delivery_status: DeliveryStatusRepository = OptimizedDeliveryStatusRepository(session)  # type: ignore
+            self.rate_limits: RateLimitRepository = OptimizedRateLimitRepository(session)  # type: ignore
             # Keep standard implementations for these
             self.channel_configs = ChannelConfigRepository(session)
         else:
@@ -1126,14 +1127,14 @@ class NotificationRepository:
         return self.delivery_status.get_delivery_statuses_by_message(message_id)
 
     def update_delivery_status(self, status_id: int, update_data: Dict[str, Any]) -> MessageDeliveryStatus | None:
-        return self.delivery_status.update_delivery_status(status_id, update_data)
+        return self.delivery_status.update_delivery_status(status_id, update_data)  # type: ignore
 
     def get_delivery_statistics(self, **kwargs) -> Dict[str, Any]:
         return self.delivery_status.get_delivery_statistics(**kwargs)
 
     # ---------- Rate Limit Delegation ----------
     def check_and_consume_token(self, user_id: str, channel: str, default_config: Dict[str, Any]) -> bool:
-        return self.rate_limits.check_and_consume_token(user_id, channel, default_config)
+        return self.rate_limits.check_and_consume_token(user_id, channel, default_config)  # type: ignore
 
     # ---------- Channel Health (System Health Delegation) ----------
     def list_channel_health(self) -> List[ChannelHealth]:
@@ -1150,7 +1151,7 @@ class NotificationRepository:
                     response_time_ms=record.avg_response_time_ms,
                     error_message=record.error_message,
                     failure_count=record.failure_count,
-                    metadata=record.metadata,
+                    metadata=json.loads(record.system_metadata) if record.system_metadata else None,
                 )
             )
         return results
@@ -1172,7 +1173,7 @@ class NotificationRepository:
             status=db_status,
             response_time_ms=health_data.get("response_time_ms"),
             error_message=health_data.get("error_message"),
-            metadata=health_data.get("metadata"),
+            metadata=json.dumps(health_data.get("metadata")) if health_data.get("metadata") else None,
         )
 
         return ChannelHealth(
@@ -1181,7 +1182,7 @@ class NotificationRepository:
             response_time_ms=record.avg_response_time_ms,
             error_message=record.error_message,
             failure_count=record.failure_count,
-            metadata=record.metadata,
+            metadata=json.loads(record.system_metadata) if record.system_metadata else None,
         )
 
     def commit(self):

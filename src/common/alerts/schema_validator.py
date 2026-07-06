@@ -45,9 +45,11 @@ class AlertSchemaValidator:
         if schema_dir is None:
             # Default to schemas directory relative to this file
             current_dir = Path(__file__).parent
-            schema_dir = current_dir / "schemas"
+            schema_path = current_dir / "schemas"
+        else:
+            schema_path = Path(schema_dir)
 
-        self.schema_dir = Path(schema_dir)
+        self.schema_dir = schema_path
         self._schema_cache: Dict[str, Dict[str, Any]] = {}
 
         if not self.schema_dir.exists():
@@ -236,11 +238,18 @@ class AlertSchemaValidator:
         """
         path = " -> ".join(str(p) for p in error.absolute_path) if error.absolute_path else "root"
 
+        validator_value = error.validator_value
         if error.validator == "required":
-            missing_props = ", ".join(error.validator_value)
+            if hasattr(validator_value, "__iter__") and not isinstance(validator_value, (str, bytes)):
+                missing_props = ", ".join(str(p) for p in validator_value)  # type: ignore
+            else:
+                missing_props = str(validator_value)
             return f"Missing required properties at {path}: {missing_props}"
         elif error.validator == "enum":
-            allowed_values = ", ".join(str(v) for v in error.validator_value)
+            if hasattr(validator_value, "__iter__") and not isinstance(validator_value, (str, bytes)):
+                allowed_values = ", ".join(str(v) for v in validator_value)  # type: ignore
+            else:
+                allowed_values = str(validator_value)
             return f"Invalid value at {path}: '{error.instance}'. Allowed values: {allowed_values}"
         elif error.validator == "type":
             return f"Invalid type at {path}: expected {error.validator_value}, got {type(error.instance).__name__}"

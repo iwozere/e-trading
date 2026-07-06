@@ -1,7 +1,7 @@
 # src/data/db/repos/repo_telegram.py
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Sequence
 
 from sqlalchemy import func, select, update
@@ -15,7 +15,8 @@ from src.data.db.models.model_telegram import (
 )
 
 UTC = UTC
-utcnow = lambda: datetime.now(UTC)
+def utcnow():
+    return datetime.now(UTC)
 
 
 # -------------------- Settings --------------------
@@ -64,7 +65,7 @@ class FeedbackRepo:
     def set_status(self, feedback_id: int, status: str) -> bool:
         """Update the status of a feedback entry."""
         res = self.s.execute(update(TelegramFeedback).where(TelegramFeedback.id == feedback_id).values(status=status))
-        return (res.rowcount or 0) > 0
+        return (res.rowcount or 0) > 0  # type: ignore[attr-defined]
 
 
 # -------------------- Broadcasts --------------------
@@ -101,11 +102,11 @@ class BroadcastRepo:
         # Total recipients and successful deliveries
         recipients_q = select(func.sum(TelegramBroadcastLog.total_count), func.sum(TelegramBroadcastLog.success_count))
         result = self.s.execute(recipients_q).first()
-        total_recipients = result[0] or 0
-        successful_deliveries = result[1] or 0
+        total_recipients = result[0] if result and result[0] else 0
+        successful_deliveries = result[1] if result and result[1] else 0
 
         # Recent activity (last 24 hours)
-        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+        yesterday = datetime.now(UTC) - timedelta(days=1)
         recent_q = select(func.count(TelegramBroadcastLog.id)).where(TelegramBroadcastLog.created_at >= yesterday)
         recent_broadcasts = self.s.execute(recent_q).scalar_one() or 0
 
@@ -173,21 +174,21 @@ class CommandAuditRepo:
         if success_only:
             q = q.where(TelegramCommandAudit.success.is_(True))
         if start_date:
-            q = q.where(TelegramCommandAudit.created >= start_date)
+            q = q.where(TelegramCommandAudit.created_at >= start_date)
         if end_date:
-            q = q.where(TelegramCommandAudit.created <= end_date)
+            q = q.where(TelegramCommandAudit.created_at <= end_date)
         q = q.order_by(TelegramCommandAudit.id.desc()).offset(offset).limit(limit)
         return list(self.s.execute(q).scalars())
 
     def stats(self) -> Dict[str, Any]:
         """Get command usage statistics."""
-        total = int(self.s.execute(select(func.count(TelegramCommandAudit.id))).scalar_one() or 0)
+        total = self.s.execute(select(func.count(TelegramCommandAudit.id))).scalar_one() or 0
         rows = self.s.execute(
             select(TelegramCommandAudit.command, func.count(TelegramCommandAudit.id)).group_by(
                 TelegramCommandAudit.command
             )
         ).all()
-        success = int(
+        success = (
             self.s.execute(
                 select(func.count(TelegramCommandAudit.id)).where(TelegramCommandAudit.success.is_(True))
             ).scalar_one()

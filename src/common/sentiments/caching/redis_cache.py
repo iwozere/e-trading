@@ -24,8 +24,8 @@ _logger = setup_logger(__name__)
 
 # Optional Redis dependency
 try:
-    import redis
-    from redis.connection import ConnectionPool
+    import redis  # type: ignore
+    from redis.connection import ConnectionPool  # type: ignore
 
     REDIS_AVAILABLE = True
 except ImportError:
@@ -81,12 +81,12 @@ class RedisCache:
         self.serialization = serialization
         self._metrics = get_cache_metrics()
         self._pool: ConnectionPool | None = None
-        self._client: redis.Redis | None = None
+        self._client: Any = None
         self._available = False
-        self._last_connection_attempt = 0
+        self._last_connection_attempt: float = 0.0
         self._connection_retry_interval = 30  # seconds
 
-        if not REDIS_AVAILABLE:
+        if not REDIS_AVAILABLE or ConnectionPool is None or redis is None:
             _logger.warning("Redis not available, RedisCache will always fail")
             return
 

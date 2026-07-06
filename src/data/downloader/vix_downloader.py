@@ -11,8 +11,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from datetime import datetime, timedelta
-from typing import List
+from datetime import date, datetime, timedelta
+from typing import Any, cast, List
 
 import pandas as pd
 import yfinance as yf
@@ -118,7 +118,7 @@ class VIXDataDownloader(BaseDataDownloader):
 
         # Load existing CSV if available
         vix_local: pd.DataFrame
-        last_date: datetime.date
+        last_date: date
 
         if vix_file.exists():
             try:
@@ -128,21 +128,21 @@ class VIXDataDownloader(BaseDataDownloader):
                     # Already in normalized format
                     vix_local["date"] = pd.to_datetime(vix_local["date"])
                     vix_local.set_index("date", inplace=True)
-                    last_date = vix_local.index[-1].date()
+                    last_date = cast(datetime, pd.to_datetime(vix_local.index[-1])).date()
                     _logger.debug("Loaded existing normalized VIX data, last date: %s", last_date)
                 else:
                     # Old format, convert to normalized
                     vix_local = pd.read_csv(vix_file, parse_dates=["Date"], index_col="Date")
-                    vix_local = vix_local[["Close"]].rename(columns={"Close": "vix"})
+                    vix_local = vix_local[["Close"]].rename(columns={"Close": "vix"})  # type: ignore[call-overload]
                     vix_local["regime"] = vix_local["vix"].map(self.calculate_regime)
-                    last_date = vix_local.index[-1].date()
+                    last_date = cast(datetime, pd.to_datetime(vix_local.index[-1])).date()
                     _logger.debug("Converted old format VIX data to normalized format, last date: %s", last_date)
             except Exception as e:
                 _logger.warning("Error loading existing VIX data, starting fresh: %s", e)
-                vix_local = pd.DataFrame(columns=["vix", "regime"])
+                vix_local = pd.DataFrame(columns=cast(Any, ["vix", "regime"]))
                 last_date = datetime(1990, 1, 1).date()
         else:
-            vix_local = pd.DataFrame(columns=["vix", "regime"])
+            vix_local = pd.DataFrame(columns=cast(Any, ["vix", "regime"]))
             last_date = datetime(1990, 1, 1).date()  # First date for VIX
             _logger.info("No existing VIX data found, starting from %s", last_date)
 
@@ -159,7 +159,7 @@ class VIXDataDownloader(BaseDataDownloader):
         )
 
         try:
-            vix_new = yf.download("^VIX", start=last_date, end=end_date)
+            vix_new = cast(pd.DataFrame, yf.download("^VIX", start=last_date, end=end_date))
             vix_new.reset_index(inplace=True)
 
             # Handle multi-index columns from yfinance
@@ -174,7 +174,7 @@ class VIXDataDownloader(BaseDataDownloader):
 
         if not vix_new.empty:
             # Convert to normalized format
-            vix_new = vix_new[["Date", "Close"]].rename(columns={"Close": "vix"})
+            vix_new = vix_new[["Date", "Close"]].rename(columns={"Close": "vix"})  # type: ignore[call-overload]
             vix_new.set_index("Date", inplace=True)
             vix_new["regime"] = vix_new["vix"].map(self.calculate_regime)
 
@@ -190,17 +190,18 @@ class VIXDataDownloader(BaseDataDownloader):
 
             # Ensure the date column is named correctly
             if "Date" in vix_all.columns:
-                vix_all.rename(columns={"Date": "date"}, inplace=True)
+                vix_all.rename(columns={"Date": "date"}, inplace=True)  # type: ignore[call-overload]
             elif "date" not in vix_all.columns:
                 # If the index name is different, rename it
-                vix_all.rename(columns={vix_all.columns[0]: "date"}, inplace=True)
+                vix_all.rename(columns={vix_all.columns[0]: "date"}, inplace=True)  # type: ignore[call-overload]
 
             # Save to CSV in normalized format with only the required columns
-            vix_all[["date", "vix", "regime"]].to_csv(vix_file, index=False)
+            vix_all_df = cast(pd.DataFrame, vix_all)
+            vix_all_df[["date", "vix", "regime"]].to_csv(vix_file, index=False)
 
-            _logger.info("VIX data updated successfully. Last date: %s", vix_all["date"].iloc[-1].date())
-            _logger.info("Total records: %d", len(vix_all))
-            _logger.info("Current regime: %s (VIX: %.2f)", vix_all["regime"].iloc[-1], vix_all["vix"].iloc[-1])
+            _logger.info("VIX data updated successfully. Last date: %s", pd.to_datetime(vix_all_df["date"].iloc[-1]).date())
+            _logger.info("Total records: %d", len(vix_all_df))
+            _logger.info("Current regime: %s (VIX: %.2f)", vix_all_df["regime"].iloc[-1], vix_all_df["vix"].iloc[-1])
         else:
             _logger.warning("No new VIX data available")
 

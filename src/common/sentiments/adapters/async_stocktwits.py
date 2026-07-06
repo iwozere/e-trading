@@ -78,7 +78,7 @@ class AsyncStocktwitsAdapter(BaseSentimentAdapter):
                 try:
                     start_time = time.time()
 
-                    async with self._session.get(url, params=params, timeout=timeout) as resp:
+                    async with self._session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
                         response_time_ms = (time.time() - start_time) * 1000
 
                         if resp.status == 429:
@@ -341,7 +341,7 @@ class AsyncStocktwitsAdapter(BaseSentimentAdapter):
                 "bullish": bullish,
                 "bearish": bearish,
                 "neutral": neutral,
-                "sentiment_score": float(score),
+                "sentiment_score": score,
                 "provider": "stocktwits",
                 "timestamp": datetime.now(UTC).isoformat(),
             }

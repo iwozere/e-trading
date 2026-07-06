@@ -212,7 +212,7 @@ class FMPIntegration:
         # Get supported criteria from FMP downloader
         try:
             downloader = self._get_fmp_downloader()
-            if downloader:
+            if downloader and hasattr(downloader, "_validate_screener_criteria"):
                 # Use the validation method from FMP downloader
                 downloader._validate_screener_criteria(fmp_criteria)
             else:

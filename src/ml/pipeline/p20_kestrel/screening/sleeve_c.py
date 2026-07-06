@@ -51,7 +51,7 @@ def _regime_allows_new_entry() -> bool:
     spy_sig = get_latest_signal("SPY", "price_vs_200dma")
     if spy_sig is None:
         return True  # fail-open if no data
-    return float(spy_sig) > 0.5
+    return spy_sig > 0.5
 
 
 def run(as_of_date: date | None = None) -> Dict[str, Any]:

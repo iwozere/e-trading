@@ -15,7 +15,7 @@ Features:
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Union
 
 import pandas as pd
 
@@ -145,6 +145,8 @@ class BacktestDebugger:
 
     def _analyze_rsi_conditions(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze RSI-related conditions."""
+        if self.data is None:
+            raise ValueError("Data not loaded. Call load_data() first.")
         df = self.data.copy()
 
         # Calculate RSI
@@ -183,6 +185,8 @@ class BacktestDebugger:
 
     def _analyze_bb_conditions(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze Bollinger Bands conditions."""
+        if self.data is None:
+            raise ValueError("Data not loaded. Call load_data() first.")
         df = self.data.copy()
 
         bb_period = params.get("e_bb_period") or params.get("bb_period", 20)
@@ -216,6 +220,8 @@ class BacktestDebugger:
 
     def _analyze_volume_conditions(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze volume conditions."""
+        if self.data is None:
+            raise ValueError("Data not loaded. Call load_data() first.")
         df = self.data.copy()
 
         vol_ma_period = params.get("e_vol_ma_period") or params.get("volume_ma_period", 20)
@@ -262,6 +268,8 @@ class BacktestDebugger:
         """
         if self.data is None:
             self.load_data()
+        if self.data is None:
+            raise ValueError("Data not loaded. Call load_data() first.")
 
         print("\n" + "=" * 80)
         print("PARAMETER SUGGESTIONS")
@@ -274,6 +282,8 @@ class BacktestDebugger:
 
         # Adjust RSI if present
         if "rsi" in entry_logic["name"].lower():
+            if self.data is None:
+                raise ValueError("Data not loaded. Call load_data() first.")
             df = self.data.copy()
             delta = df["close"].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
@@ -291,6 +301,8 @@ class BacktestDebugger:
 
         # Adjust volume if present
         if "volume" in entry_logic["name"].lower():
+            if self.data is None:
+                raise ValueError("Data not loaded. Call load_data() first.")
             df = self.data.copy()
             vol_ma = df["volume"].rolling(window=20).mean()
             vol_ratio = df["volume"] / vol_ma
@@ -307,7 +319,7 @@ class BacktestDebugger:
 
         return suggested_params
 
-    def generate_debug_report(self, output_path: Path | None = None) -> str:
+    def generate_debug_report(self, output_path: Optional[Union[str, Path]] = None) -> str:
         """
         Generate comprehensive debug report.
 
@@ -331,6 +343,8 @@ class BacktestDebugger:
         # Load data
         if self.data is None:
             self.load_data()
+        if self.data is None:
+            raise ValueError("Data not loaded. Call load_data() first.")
 
         report_lines.append("Data Summary:")
         report_lines.append(f"  Rows: {len(self.data)}")

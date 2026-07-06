@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Iterator
+from typing import Generator
 
 from sqlalchemy.orm import Session
 
@@ -135,7 +135,7 @@ class DatabaseService:
         return self
 
     @contextmanager
-    def uow(self) -> Iterator[ReposBundle]:
+    def uow(self) -> Generator[ReposBundle, None, None]:
         """
         Open a new Session and yield a bundle of repos bound to that session.
         Commits on success; rolls back on error; always closes the session.

@@ -17,7 +17,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 # Import models for autogenerate support
-from src.api.models import Base
+from src.data.db.core.base import Base
+import src.api.models  # Ensure all models are registered on Base.metadata
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

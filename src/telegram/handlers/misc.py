@@ -64,6 +64,9 @@ async def cmd_start(msg: Message):
     """Handle /start command."""
     from src.telegram.handlers.common import HELP_TEXT, audit_command_wrapper
 
+    if msg.from_user is None:
+        return
+
     _logger.info("Received /start from user %s", msg.from_user.id)
     try:
         welcome_text = f"Welcome to the Alkotrader Bot! 🤖\n\n{HELP_TEXT}"
@@ -90,6 +93,9 @@ async def cmd_start(msg: Message):
 async def cmd_help(msg: Message):
     """Handle /help command."""
     from src.telegram.handlers.common import HELP_TEXT, audit_command_wrapper
+
+    if msg.from_user is None:
+        return
 
     try:
         await msg.answer(HELP_TEXT)
@@ -120,7 +126,10 @@ async def cmd_schedules(msg: Message):
     from src.telegram.handlers.common import audit_command_wrapper
     from src.telegram.screener.notifications import process_schedules_command
 
-    parsed = parse_command(msg.text)
+    if msg.from_user is None:
+        return
+
+    parsed = parse_command(msg.text or "")
     client = await get_notification_client()
     await audit_command_wrapper(msg, process_schedules_command, msg, str(msg.from_user.id), parsed, client)
 
@@ -129,7 +138,10 @@ async def cmd_feedback(msg: Message):
     """Handle /feedback command."""
     from src.telegram.handlers.common import audit_command_wrapper
 
-    parsed = parse_command(msg.text)
+    if msg.from_user is None:
+        return
+
+    parsed = parse_command(msg.text or "")
     await audit_command_wrapper(msg, process_feedback_command_immediate, str(msg.from_user.id), parsed, msg)
 
 
@@ -137,7 +149,10 @@ async def cmd_feature(msg: Message):
     """Handle /feature command."""
     from src.telegram.handlers.common import audit_command_wrapper
 
-    parsed = parse_command(msg.text)
+    if msg.from_user is None:
+        return
+
+    parsed = parse_command(msg.text or "")
     await audit_command_wrapper(msg, process_feature_command_immediate, str(msg.from_user.id), parsed, msg)
 
 
@@ -152,6 +167,9 @@ async def unknown_command(msg: Message):
     """
     from src.telegram.handlers.common import HELP_TEXT, audit_command_wrapper
 
+    if msg.from_user is None:
+        return
+
     _logger.info("Unknown command: %s from user %s", msg.text, msg.from_user.id)
     try:
         await audit_command_wrapper(msg, process_unknown_command_immediate, str(msg.from_user.id), msg, HELP_TEXT)
@@ -163,6 +181,9 @@ async def unknown_command(msg: Message):
 async def all_messages(msg: Message):
     """Handle non-command messages."""
     from src.telegram.handlers.common import audit_command_wrapper
+
+    if msg.from_user is None:
+        return
 
     _logger.info("Received non-command message from user %s: %s", msg.from_user.id, msg.text)
     if msg.text and not msg.text.startswith("/"):

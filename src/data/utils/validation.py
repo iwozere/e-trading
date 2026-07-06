@@ -171,7 +171,7 @@ def validate_timestamps(
             # For daily data, allow weekend gaps (48+ hours)
             if max_gap_hours == 24:
                 # Filter out weekend gaps (48-72 hours) for daily data
-                weekend_gaps = large_gaps[(large_gaps >= timedelta(hours=48)) & (large_gaps <= timedelta(hours=72))]
+                large_gaps[(large_gaps >= timedelta(hours=48)) & (large_gaps <= timedelta(hours=72))]
                 non_weekend_gaps = large_gaps[
                     ~((large_gaps >= timedelta(hours=48)) & (large_gaps <= timedelta(hours=72)))
                 ]
@@ -297,7 +297,7 @@ def validate_data_gaps(timestamps: pd.Series, expected_interval: str, tolerance_
 
     # Check actual gaps
     gaps = timestamps.diff().dropna()
-    expected_gaps = gaps[(gaps >= expected_gap - tolerance_gap) & (gaps <= expected_gap + tolerance_gap)]
+    gaps[(gaps >= expected_gap - tolerance_gap) & (gaps <= expected_gap + tolerance_gap)]
     unexpected_gaps = gaps[~((gaps >= expected_gap - tolerance_gap) & (gaps <= expected_gap + tolerance_gap))]
 
     if len(unexpected_gaps) > 0:
@@ -421,7 +421,7 @@ def _determine_smart_gap_tolerance(
         # Convert to Series to use mode()
         gap_series = pd.Series(gap_hours)
         mode_gap = gap_series.mode().iloc[0] if not gap_series.mode().empty else 24
-    except:
+    except Exception:
         # Fallback to median if mode fails
         mode_gap = gap_hours.median() if not gap_hours.empty else 24
 

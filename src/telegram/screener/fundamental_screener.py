@@ -36,7 +36,7 @@ _logger = setup_logger(__name__)
 class FundamentalScreener:
     """Core fundamental screener for undervalued stocks."""
 
-    def __init__(self, indicator_service: IndicatorService = None):
+    def __init__(self, indicator_service: IndicatorService | None = None):
         """Initialize the fundamental screener."""
         self.indicator_service = indicator_service or IndicatorService()
         self.screening_thresholds = {
@@ -335,27 +335,28 @@ class FundamentalScreener:
                 if "Total Revenue" in financials.index:
                     revenue_data = financials.loc["Total Revenue"]
                     if len(revenue_data) >= 2:
-                        current_revenue = revenue_data.iloc[0]
-                        previous_revenue = revenue_data.iloc[1]
+                        current_revenue: Any = revenue_data.iloc[0]
+                        previous_revenue: Any = revenue_data.iloc[1]
                         if previous_revenue and previous_revenue > 0:
-                            fundamentals.revenue_growth = (current_revenue - previous_revenue) / previous_revenue * 100
+                            fundamentals.revenue_growth = float((current_revenue - previous_revenue) / previous_revenue * 100)
 
             # Calculate net income growth if not available
             if fundamentals.net_income_growth is None and not financials.empty:
                 if "Net Income" in financials.index:
                     net_income_data = financials.loc["Net Income"]
                     if len(net_income_data) >= 2:
-                        current_ni = net_income_data.iloc[0]
-                        previous_ni = net_income_data.iloc[1]
+                        current_ni: Any = net_income_data.iloc[0]
+                        previous_ni: Any = net_income_data.iloc[1]
                         if previous_ni and previous_ni > 0:
-                            fundamentals.net_income_growth = (current_ni - previous_ni) / previous_ni * 100
+                            fundamentals.net_income_growth = float((current_ni - previous_ni) / previous_ni * 100)
 
             # Calculate free cash flow if not available
             if fundamentals.free_cash_flow is None and not cash_flow.empty:
                 if "Free Cash Flow" in cash_flow.index:
                     fcf_data = cash_flow.loc["Free Cash Flow"]
                     if len(fcf_data) > 0:
-                        fundamentals.free_cash_flow = fcf_data.iloc[0]
+                        fcf_val: Any = fcf_data.iloc[0]
+                        fundamentals.free_cash_flow = float(fcf_val)
 
         except Exception as e:
             _logger.exception("Error calculating additional metrics: %s", e)
@@ -463,7 +464,7 @@ class FundamentalScreener:
         else:
             return 0
 
-    def _calculate_dcf_valuation(self, fundamentals: Fundamentals) -> DCFResult:
+    def _calculate_dcf_valuation(self, fundamentals: Fundamentals) -> DCFResult | None:
         """Calculate DCF valuation for a ticker."""
         try:
             # Get required data
@@ -473,8 +474,9 @@ class FundamentalScreener:
             revenue_growth = fundamentals.revenue_growth or 0.05
             net_income_growth = fundamentals.net_income_growth or 0.05
 
+            ticker = fundamentals.ticker or ""
             if not current_price or not free_cash_flow or free_cash_flow <= 0:
-                return DCFResult(ticker=fundamentals.ticker, error="Insufficient data for DCF calculation")
+                return DCFResult(ticker=ticker, error="Insufficient data for DCF calculation")
 
             # Calculate discount rate (CAPM)
             market_risk_premium = 0.06  # 6% market risk premium
@@ -512,7 +514,7 @@ class FundamentalScreener:
             confidence_level = self._assess_dcf_confidence(fundamentals)
 
             return DCFResult(
-                ticker=fundamentals.ticker,
+                ticker=ticker,
                 fair_value=fair_value,
                 growth_rate=growth_rate,
                 discount_rate=discount_rate,
@@ -652,7 +654,8 @@ class FundamentalScreener:
         message += f"📈 **Processed**: {report.total_tickers_processed} tickers\n"
         message += f"✅ **With Data**: {report.total_tickers_with_data} tickers\n"
         message += f"🏆 **Top Results**: {len(report.top_results)} undervalued stocks\n"
-        message += f"⏰ **Generated**: {datetime.fromisoformat(report.generated_at).strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+        gen_at = report.generated_at or datetime.now().isoformat()
+        message += f"⏰ **Generated**: {datetime.fromisoformat(gen_at).strftime('%Y-%m-%d %H:%M UTC')}\n\n"
 
         # Summary statistics
         if report.summary_stats:
@@ -684,6 +687,11 @@ class FundamentalScreener:
             # Emoji for recommendation
             rec_emoji = "🟢" if recommendation == "BUY" else "🟡" if recommendation == "HOLD" else "🔴"
 
+            fundamentals = result.fundamentals
+            if not fundamentals:
+                message += f"{i}. {rec_emoji} **{result.ticker}** - No fundamental data available\n\n"
+                continue
+
             message += f"{i}. {rec_emoji} **{result.ticker}** - {fundamentals.company_name}\n"
             message += f"   💯 Score: {score:.1f}/10 | {recommendation}\n"
             message += f"   💰 Price: ${fundamentals.current_price:.2f}\n"
@@ -703,8 +711,9 @@ class FundamentalScreener:
             if result.dcf_valuation and result.dcf_valuation.fair_value:
                 dcf = result.dcf_valuation
                 current_price = fundamentals.current_price
-                upside = ((dcf.fair_value - current_price) / current_price) * 100
-                message += f"   💎 DCF Fair Value: ${dcf.fair_value:.2f} ({upside:+.1f}%)\n"
+                if current_price is not None and current_price > 0 and dcf.fair_value is not None:
+                    upside = ((dcf.fair_value - current_price) / current_price) * 100
+                    message += f"   💎 DCF Fair Value: ${dcf.fair_value:.2f} ({upside:+.1f}%)\n"
 
             message += "\n"
 

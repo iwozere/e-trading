@@ -66,7 +66,7 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
                 try:
                     start_time = time.time()
 
-                    async with self._session.get(url, params=params, timeout=timeout) as resp:
+                    async with self._session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
                         response_time_ms = (time.time() - start_time) * 1000
 
                         if resp.status == 429:
@@ -168,6 +168,8 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
 
         return []
 
+    async def fetch_submissions(self, ticker: str, since_ts: int | None = None, limit: int = 100) -> List[Dict]:
+        """Fetch Reddit submissions mentioning the ticker."""
         if not self.enabled:
             return []
 
@@ -296,7 +298,7 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
                 "pos": pos,
                 "neg": neg,
                 "neutral": neutral,
-                "sentiment_score": float(score),
+                "sentiment_score": score,
                 "unique_authors": unique_authors,
                 "provider": "reddit",
                 "timestamp": datetime.now(UTC).isoformat(),

@@ -21,8 +21,10 @@ _logger = setup_logger("telegram_screener_bot")
 
 async def send_email_notification_if_requested(message: Message, response_text: str, command: str) -> None:
     """Send email copy of a command response if -email flag is present."""
+    if not message.from_user:
+        return
     try:
-        parsed = parse_command(message.text)
+        parsed = parse_command(message.text or "")
         if not parsed.args.get("email", False):
             return
 
@@ -63,11 +65,13 @@ async def send_email_notification_if_requested(message: Message, response_text: 
 
 
 async def send_email_notification_with_attachments(
-    message: Message, response_text: str, command: str, attachments: dict = None
+    message: Message, response_text: str, command: str, attachments: dict | None = None
 ) -> None:
     """Send email copy with optional file attachments."""
+    if not message.from_user:
+        return
     try:
-        parsed = parse_command(message.text)
+        parsed = parse_command(message.text or "")
         if not parsed.args.get("email", False):
             return
 
@@ -155,12 +159,16 @@ def register(dp: Dispatcher) -> None:
 
     @dp.message(Command("report"))
     async def cmd_report(msg: Message):
-        parsed = parse_command(msg.text)
+        if msg.from_user is None:
+            return
+        parsed = parse_command(msg.text or "")
         client = await get_notification_client()
         await audit_command_wrapper(msg, process_report_command, msg, str(msg.from_user.id), parsed, client)
 
     @dp.message(Command("screener"))
     async def cmd_screener(msg: Message):
-        parsed = parse_command(msg.text)
+        if msg.from_user is None:
+            return
+        parsed = parse_command(msg.text or "")
         client = await get_notification_client()
         await audit_command_wrapper(msg, process_screener_command, msg, str(msg.from_user.id), parsed, client)

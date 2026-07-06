@@ -78,6 +78,8 @@ async def audit_command_wrapper(message: Message, command_func, *args, **kwargs)
     Handlers access services via lifecycle.get_service_instances(), which in turn
     delegates to business_logic.get_service_instances().
     """
+    if message.from_user is None:
+        return
     start_time = time.time()
     telegram_user_id = str(message.from_user.id)
     command = message.text.split()[0] if message.text else ""

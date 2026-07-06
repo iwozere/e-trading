@@ -226,7 +226,7 @@ def main():
 
     # Check if pytest is available
     try:
-        import pytest
+        import pytest  # noqa: F401
     except ImportError:
         print("Error: pytest is not installed. Please install it with:")
         print("pip install pytest pytest-cov")

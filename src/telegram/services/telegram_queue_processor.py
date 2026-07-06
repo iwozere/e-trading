@@ -106,7 +106,7 @@ class TelegramQueueProcessor:
                         try:
                             await self._process_message(message)
                         except Exception:
-                            self._logger.exception("Failed to process message %s:", message.id)
+                            self._logger.exception("Failed to process message %s:", message.get("id"))
 
                 # Successful poll — reset error counter and use normal interval
                 self._consecutive_errors = 0
@@ -239,8 +239,9 @@ class TelegramQueueProcessor:
         # 2. Try DB lookup first — works for internal user IDs of any magnitude
         try:
             channels = users_service.get_user_notification_channels(recipient_id_int)
-            if channels and channels.get("telegram_chat_id"):
-                resolved = int(channels["telegram_chat_id"])
+            chat_id_val = channels.get("telegram_chat_id") if channels else None
+            if chat_id_val is not None:
+                resolved = int(chat_id_val)
                 self._logger.debug(
                     "Resolved recipient_id %s to Telegram chat ID %s via DB",
                     recipient_id_int,
@@ -283,7 +284,7 @@ class TelegramQueueProcessor:
             return body or "Empty message"
 
     async def _send_with_attachments(
-        self, chat_id: int, text: str, attachments: Dict[str, Any], reply_to_message_id: int | None = None
+        self, chat_id: int, text: str | None, attachments: Dict[str, Any], reply_to_message_id: int | None = None
     ):
         """
         Send message with attachments.

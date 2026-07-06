@@ -17,7 +17,7 @@ class BaseIndicatorPlotter(ABC):
 
     @property
     @abstractmethod
-    def subplot_type(self):
+    def subplot_type(self) -> str:
         """Return the type of subplot needed for this indicator:
         - 'price': plot on the same subplot as price
         - 'separate': plot on a separate subplot

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Sequence
+from typing import Any, Sequence
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
@@ -30,7 +30,7 @@ def _uuid() -> str:
     return str(uuid.uuid4())
 
 
-def _dec(x: float | Decimal | None) -> Decimal:
+def _dec(x: Any) -> Decimal:
     if x is None:
         return Decimal("0")
     return x if isinstance(x, Decimal) else Decimal(str(x))
@@ -69,7 +69,7 @@ class MetricsRepo:
         self.s.flush()
         return m
 
-    def latest_for_bot(self, bot_id: str, limit: int = 20) -> Sequence[PerformanceMetric]:
+    def latest_for_bot(self, bot_id: int, limit: int = 20) -> Sequence[PerformanceMetric]:
         q = (
             select(PerformanceMetric)
             .where(PerformanceMetric.bot_id == bot_id)
@@ -89,7 +89,7 @@ class TradesRepo:
         self.s.flush()
         return t
 
-    def close_trade(self, trade_id: str, **fields) -> None:
+    def close_trade(self, trade_id: int, **fields) -> None:
         self.s.execute(update(Trade).where(Trade.id == trade_id).values(**fields))
 
     def open_trades(self, symbol: str | None = None) -> Sequence[Trade]:
@@ -98,7 +98,7 @@ class TradesRepo:
             q = q.where(Trade.symbol == symbol)
         return list(self.s.execute(q).scalars())
 
-    def pnl_summary(self, bot_id: str | None = None):
+    def pnl_summary(self, bot_id: int | None = None):
         q = select(func.sum(Trade.net_pnl).label("net_pnl"), func.count(Trade.id).label("n_trades")).where(
             Trade.status == "closed"
         )
@@ -114,7 +114,7 @@ class PositionsRepo:
     def ensure_open(
         self,
         *,
-        bot_id: str,
+        bot_id: int,
         trade_type: str,
         symbol: str,
         direction: str,
@@ -151,7 +151,7 @@ class PositionsRepo:
         self.s.flush()
         return p
 
-    def open_positions(self, *, bot_id: str | None = None, symbol: str | None = None) -> Sequence[Position]:
+    def open_positions(self, *, bot_id: int | None = None, symbol: str | None = None) -> Sequence[Position]:
         q = select(Position).where(Position.status == "open")
         if bot_id:
             q = q.where(Position.bot_id == bot_id)
@@ -162,7 +162,7 @@ class PositionsRepo:
     def apply_fill(
         self,
         *,
-        position_id: str,
+        position_id: int,
         action: str,
         qty: float,
         price: float,
@@ -192,8 +192,8 @@ class PositionsRepo:
             else:
                 new_qty = cur_qty + qty_d
                 new_avg = (avg * cur_qty + price_d * qty_d) / new_qty
-            p.qty_open = new_qty
-            p.avg_price = new_avg
+            p.qty_open = new_qty  # type: ignore
+            p.avg_price = new_avg  # type: ignore
 
         elif action == reduce_side:
             if qty_d > cur_qty:
@@ -203,13 +203,13 @@ class PositionsRepo:
             else:
                 realized += (avg - price_d) * qty_d
             new_qty = cur_qty - qty_d
-            p.qty_open = new_qty
-            p.realized_pnl = realized
+            p.qty_open = new_qty  # type: ignore
+            p.realized_pnl = realized  # type: ignore
             if new_qty == 0:
                 p.avg_price = None
                 if close_when_flat:
                     p.status = "closed"
-                    p.closed_at = ts or datetime.now(UTC)
+                    p.closed_at = ts or datetime.now(UTC)  # type: ignore
 
         # DO NOT set p.updated_at here unless your model has that column
         self.s.flush()
@@ -221,7 +221,7 @@ class PositionsRepo:
             raise ValueError(f"Position {position_id} not found")
         if _dec(p.qty_open) == 0 and p.status != "closed":
             p.status = "closed"
-            p.closed_at = ts or datetime.now(UTC)
+            p.closed_at = ts or datetime.now(UTC)  # type: ignore
         self.s.flush()
         return p
 
@@ -230,9 +230,9 @@ class PositionsRepo:
         if not p:
             raise ValueError(f"Position {position_id} not found")
         p.status = "closed"
-        p.closed_at = ts or datetime.now(UTC)
+        p.closed_at = ts or datetime.now(UTC)  # type: ignore
         if _dec(p.qty_open) != 0:
-            p.qty_open = Decimal("0")
+            p.qty_open = Decimal("0")  # type: ignore
             p.avg_price = None
         self.s.flush()
         return p

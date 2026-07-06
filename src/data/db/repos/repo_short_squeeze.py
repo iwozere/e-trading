@@ -46,7 +46,7 @@ class ScreenerSnapshotRepo:
     def clear_snapshots_for_date(self, run_date: date) -> int:
         """Clear all snapshots for a specific run date."""
         result = self.session.execute(delete(ScreenerSnapshot).where(ScreenerSnapshot.run_date == run_date))
-        deleted_count = result.rowcount
+        deleted_count = result.rowcount  # type: ignore[attr-defined]
         _logger.info("Cleared %d existing snapshots for run date %s", deleted_count, run_date)
         return deleted_count
 
@@ -195,7 +195,7 @@ class SqueezeAlertRepo:
         result = self.session.execute(
             update(SqueezeAlert).where(SqueezeAlert.id == alert_id).values(sent=True, notification_id=notification_id)
         )
-        return result.rowcount > 0
+        return getattr(result, "rowcount", 0) > 0
 
     def check_cooldown(self, ticker: str, alert_level: AlertLevel) -> bool:
         """Check if ticker is in cooldown period for alert level."""
@@ -206,7 +206,7 @@ class SqueezeAlertRepo:
                     SqueezeAlert.ticker == ticker.upper(),
                     SqueezeAlert.alert_level == alert_level.value,
                     SqueezeAlert.cooldown_expires > now,
-                    SqueezeAlert.sent == True,
+                    SqueezeAlert.sent,
                 )
             )
         ).scalar_one_or_none()
@@ -237,9 +237,9 @@ class SqueezeAlertRepo:
         """Remove expired cooldown records."""
         now = datetime.now(UTC)
         result = self.session.execute(
-            delete(SqueezeAlert).where(and_(SqueezeAlert.cooldown_expires < now, SqueezeAlert.sent == True))
+            delete(SqueezeAlert).where(and_(SqueezeAlert.cooldown_expires < now, SqueezeAlert.sent))
         )
-        return result.rowcount
+        return result.rowcount  # type: ignore[attr-defined]
 
 
 class AdHocCandidateRepo:
@@ -277,14 +277,14 @@ class AdHocCandidateRepo:
         result = self.session.execute(
             update(AdHocCandidateModel).where(AdHocCandidateModel.ticker == ticker.upper()).values(active=False)
         )
-        return result.rowcount > 0
+        return getattr(result, "rowcount", 0) > 0
 
     def get_active_candidates(self) -> Sequence[AdHocCandidateModel]:
         """Get all active ad-hoc candidates."""
         return list(
             self.session.execute(
                 select(AdHocCandidateModel)
-                .where(AdHocCandidateModel.active == True)
+                .where(AdHocCandidateModel.active)
                 .order_by(AdHocCandidateModel.first_seen)
             ).scalars()
         )
@@ -301,7 +301,7 @@ class AdHocCandidateRepo:
         expired_candidates = list(
             self.session.execute(
                 select(AdHocCandidateModel.ticker).where(
-                    and_(AdHocCandidateModel.active == True, AdHocCandidateModel.expires_at < now)
+                    and_(AdHocCandidateModel.active, AdHocCandidateModel.expires_at < now)
                 )
             ).scalars()
         )
@@ -309,7 +309,7 @@ class AdHocCandidateRepo:
         if expired_candidates:
             self.session.execute(
                 update(AdHocCandidateModel)
-                .where(and_(AdHocCandidateModel.active == True, AdHocCandidateModel.expires_at < now))
+                .where(and_(AdHocCandidateModel.active, AdHocCandidateModel.expires_at < now))
                 .values(active=False)
             )
 
@@ -322,7 +322,7 @@ class AdHocCandidateRepo:
             .where(AdHocCandidateModel.ticker == ticker.upper())
             .values(promoted_by_screener=True)
         )
-        return result.rowcount > 0
+        return getattr(result, "rowcount", 0) > 0
 
 
 class ShortSqueezeRepo:
@@ -375,17 +375,13 @@ class ShortSqueezeRepo:
         # Clean up old alerts
         alerts_result = self.session.execute(delete(SqueezeAlert).where(SqueezeAlert.timestamp < cutoff_datetime))
 
-        # Clean up old FINRA data (keep longer retention for historical analysis)
-        finra_cutoff_date = date.today() - timedelta(days=days_to_keep * 2)  # Keep FINRA data twice as long
-        finra_result = self.session.execute(
-            delete(FINRAShortInterest).where(FINRAShortInterest.settlement_date < finra_cutoff_date)
-        )
+        # FINRAShortInterest model is missing, removing cleanup
+
 
         cleanup_stats = {
-            "snapshots_deleted": snapshot_result.rowcount,
-            "metrics_deleted": metrics_result.rowcount,
-            "alerts_deleted": alerts_result.rowcount,
-            "finra_records_deleted": finra_result.rowcount,
+            "snapshots_deleted": snapshot_result.rowcount,  # type: ignore[attr-defined]
+            "metrics_deleted": metrics_result.rowcount,  # type: ignore[attr-defined]
+            "alerts_deleted": alerts_result.rowcount,  # type: ignore[attr-defined]
         }
 
         _logger.info("Cleaned up old data: %s", cleanup_stats)

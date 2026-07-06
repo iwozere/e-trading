@@ -39,8 +39,8 @@ def _build_regime_line() -> str:
     spy_200 = get_latest_signal("SPY", "price_vs_200dma")
     vix = get_latest_signal("VIX", "close")
 
-    spy_above = spy_200 is not None and float(spy_200) > 0.5
-    vix_val = float(vix) if vix is not None else None
+    spy_above = spy_200 is not None and spy_200 > 0.5
+    vix_val = vix if vix is not None else None
 
     regime = "RISK-ON" if spy_above else "RISK-OFF"
     vix_str = f"VIX {vix_val:.1f}" if vix_val is not None else "VIX n/a"
@@ -61,7 +61,7 @@ def _build_positions_section() -> str:
         t1_px = p.get("t1_px")
 
         close_sig = get_latest_signal(ticker, "close")
-        close_px = float(close_sig) if close_sig is not None else None
+        close_px = close_sig if close_sig is not None else None
 
         if close_px is not None and entry_px:
             pnl = (close_px - float(entry_px)) / float(entry_px)

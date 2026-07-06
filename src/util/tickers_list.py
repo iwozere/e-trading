@@ -124,7 +124,7 @@ def get_sp_midcap_yfinance():
 
     try:
         # Попытка получить компоненты индекса
-        components = sp_midcap.components
+        components = sp_midcap.components  # type: ignore
         return list(components.index)
     except Exception:
         print("Could not get components from yfinance.")

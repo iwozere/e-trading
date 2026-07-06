@@ -117,7 +117,7 @@ class TestNotificationServiceMessages:
 
         # Create messages with different statuses
         pending_data = MessageFactory.alert_message(recipient_id="user_1")
-        pending_msg = service.create_message(message_data=pending_data)
+        service.create_message(message_data=pending_data)
 
         delivered_data = MessageFactory.alert_message(recipient_id="user_2")
         delivered_msg = service.create_message(message_data=delivered_data)

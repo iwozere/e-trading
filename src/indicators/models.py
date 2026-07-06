@@ -187,8 +187,8 @@ class IndicatorCalculationRequest(BaseModel):
 
     ticker: TickerSymbol = Field(min_length=1, description="Stock ticker symbol")
     indicators: List[IndicatorName] = Field(min_length=1, description="List of indicator names")
-    timeframe: TimeFrame = Field(default="1d", description="Data timeframe")
-    period: Period = Field(default="2y", description="Data period")
+    timeframe: TimeFrame = Field(default=TimeFrame("1d"), description="Data timeframe")
+    period: Period = Field(default=Period("2y"), description="Data period")
     provider: ProviderName | None = Field(default=None, description="Data provider")
     force_refresh: bool = Field(default=False, description="Force cache refresh")
     include_recommendations: bool = Field(default=True, description="Include trading recommendations")
@@ -230,8 +230,8 @@ class BatchIndicatorRequest(BaseModel):
 
     tickers: List[TickerSymbol] = Field(min_length=1, description="List of ticker symbols")
     indicators: List[IndicatorName] = Field(min_length=1, description="List of indicator names")
-    timeframe: TimeFrame = Field(default="1d", description="Data timeframe")
-    period: Period = Field(default="2y", description="Data period")
+    timeframe: TimeFrame = Field(default=TimeFrame("1d"), description="Data timeframe")
+    period: Period = Field(default=Period("2y"), description="Data period")
     provider: ProviderName | None = Field(default=None, description="Data provider")
     force_refresh: bool = Field(default=False, description="Force cache refresh")
     include_recommendations: bool = Field(default=True, description="Include trading recommendations")
@@ -276,8 +276,8 @@ class TickerIndicatorsRequest(BaseModel):
     """Request for ticker-based computation (tech + fundamentals)."""
 
     ticker: TickerSymbol = Field(min_length=1, description="Stock ticker symbol")
-    timeframe: TimeFrame = Field(default="1d", description="OHLCV timeframe")
-    period: Period = Field(default="1y", description="Data period")
+    timeframe: TimeFrame = Field(default=TimeFrame("1d"), description="OHLCV timeframe")
+    period: Period = Field(default=Period("1y"), description="Data period")
     provider: ProviderName | None = Field(default=None, description="Data provider")
     indicators: List[IndicatorName] = Field(min_length=1, description="Indicator names from registry")
     fillna: FillNASpec | None = Field(default=None)

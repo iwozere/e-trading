@@ -60,7 +60,7 @@ class UOAAnalyzer:
 
         return pd.concat(all_data, ignore_index=True)
 
-    def save_uoa_data(self, uoa_df: pd.DataFrame, target_date: str | None = None) -> Path:
+    def save_uoa_data(self, uoa_df: pd.DataFrame, target_date: str | None = None) -> Path | None:
         """Save UOA data to the appropriate directory"""
         if uoa_df.empty:
             _logger.warning("No UOA data to save")

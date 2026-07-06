@@ -386,7 +386,7 @@ class JobsService(BaseDBService):
             except ValueError as e:
                 raise ValueError(f"Invalid screener set: {e}")
         else:
-            expanded_tickers = [ticker.strip().upper() for ticker in tickers]
+            expanded_tickers = [ticker.strip().upper() for ticker in (tickers or [])]
 
         # Create job snapshot
         job_snapshot = {

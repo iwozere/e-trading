@@ -217,7 +217,7 @@ class RedisCache:
 
     def get(self, key: str) -> Any | None:
         """Get value from cache."""
-        start_time = time.time()
+        time.time()
 
         try:
             redis_client = self._get_redis()
@@ -464,7 +464,7 @@ class AdvancedDataCache(DataCache):
         file_format: str = "parquet",
     ) -> Any | None:
         """Get data from cache (Redis first, then file)."""
-        start_time = time.time()
+        time.time()
         cache_key = self._make_cache_key(provider, symbol, interval, start_date, end_date)
 
         # Try Redis first

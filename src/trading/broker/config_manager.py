@@ -166,7 +166,7 @@ class ConfigTemplate:
             return True
         return False
 
-    def create_from_template(self, template_name: str, overrides: Dict[str, Any] = None) -> Dict[str, Any]:
+    def create_from_template(self, template_name: str, overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Create configuration from template with optional overrides."""
         template = self.get_template(template_name)
         if not template:
@@ -209,7 +209,7 @@ class EnvironmentManager:
         self.current_environment = environment
         _logger.info("Set environment to %s", environment.value)
 
-    def get_environment_config(self, environment: Environment = None) -> Dict[str, Any]:
+    def get_environment_config(self, environment: Environment | None = None) -> Dict[str, Any]:
         """Get configuration for an environment."""
         env = environment or self.current_environment
         return self.environments.get(env, {})
@@ -230,7 +230,7 @@ class EnvironmentManager:
             raise
 
     def apply_environment_overrides(
-        self, base_config: Dict[str, Any], environment: Environment = None
+        self, base_config: Dict[str, Any], environment: Environment | None = None
     ) -> Dict[str, Any]:
         """Apply environment-specific overrides to base configuration."""
         env = environment or self.current_environment
@@ -374,7 +374,7 @@ class ConfigManager:
             _logger.exception("Failed to update configuration %s:", name)
             return False
 
-    def get_configuration(self, name: str, environment: Environment = None) -> Dict[str, Any] | None:
+    def get_configuration(self, name: str, environment: Environment | None = None) -> Dict[str, Any] | None:
         """
         Get a configuration with optional environment overrides.
 
@@ -390,7 +390,7 @@ class ConfigManager:
             return None
 
         # Apply environment overrides if specified
-        if environment:
+        if environment is not None:
             return self.environment_manager.apply_environment_overrides(base_config, environment)
 
         return base_config.copy()
@@ -446,7 +446,7 @@ class ConfigManager:
 
         return configs
 
-    def create_from_template(self, name: str, template_name: str, overrides: Dict[str, Any] = None) -> bool:
+    def create_from_template(self, name: str, template_name: str, overrides: Dict[str, Any] | None = None) -> bool:
         """
         Create configuration from template.
 

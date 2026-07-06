@@ -21,6 +21,7 @@ import pandas as pd
 from src.common.alerts.plugins import registry as plugin_registry
 from src.common.alerts.schema_validator import AlertSchemaValidator
 from src.data.data_manager import DataManager
+from src.data.db.models.model_jobs import ScheduleRunResponse, JobType
 from src.data.db.services.jobs_service import JobsService
 from src.indicators.service import IndicatorService
 from src.notification.logger import setup_logger
@@ -113,7 +114,7 @@ class AlertEvaluator:
         try:
             # Get job details from the schedule
             # job_run.job_id is used as the schedule_id for SCHEDULE type jobs
-            schedule_id = int(job_run.job_id) if job_run.job_id and str(job_run.job_id).isdigit() else None
+            schedule_id = int(job_run.job_id) if job_run.job_id and job_run.job_id.isdigit() else None
             if not schedule_id:
                 return AlertEvaluationResult(
                     triggered=False,
@@ -245,7 +246,7 @@ class AlertEvaluator:
             timeframe = task_params.get("timeframe")
             rule = task_params.get("rule")
 
-            if not all([ticker, timeframe, rule]):
+            if ticker is None or timeframe is None or rule is None:
                 _logger.error(
                     "Missing required fields in alert config: ticker=%s, timeframe=%s, rule=%s", ticker, timeframe, rule
                 )
@@ -264,7 +265,7 @@ class AlertEvaluator:
             _logger.exception("Error parsing alert configuration:")
             return None
 
-    def _load_alert_state(self, state_json: str | None) -> Dict[str, Any]:
+    def _load_alert_state(self, state_json: str | dict | None) -> Dict[str, Any]:
         """
         Load alert state from JSON string with comprehensive error recovery.
 
@@ -979,7 +980,7 @@ class AlertEvaluator:
             snapshot.update(lower_snap)
             snapshot.update(upper_snap)
 
-            if None in (value, lower, upper):
+            if value is None or lower is None or upper is None:
                 return False, sides, snapshot
 
             inside = lower <= value <= upper
@@ -1530,7 +1531,7 @@ class AlertEvaluator:
 
         return sanitized
 
-    def _load_alert_state_with_recovery(self, state_json: str | None) -> Dict[str, Any]:
+    def _load_alert_state_with_recovery(self, state_json: str | dict | None) -> Dict[str, Any]:
         """
         Load alert state with comprehensive error recovery.
 
@@ -1560,8 +1561,11 @@ class AlertEvaluator:
             return default_state
 
         try:
-            # Parse JSON
-            state = json.loads(state_json)
+            if isinstance(state_json, dict):
+                state = state_json
+            else:
+                # Parse JSON
+                state = json.loads(state_json)
             if not isinstance(state, dict):
                 _logger.warning("State JSON is not a dictionary, using default state")
                 return default_state
@@ -1664,10 +1668,11 @@ class AlertEvaluator:
         try:
             # Get active alert jobs from the jobs service
             active_jobs = await asyncio.to_thread(
-                lambda: self.jobs_service.get_active_jobs(
-                    job_type="alert",
+                lambda: self.jobs_service.list_schedules(
+                    job_type=JobType.ALERT,
                     user_id=user_id,
-                    limit=limit,
+                    enabled=True,
+                    limit=limit or 100,
                 )
             )
 
@@ -1706,7 +1711,7 @@ class AlertEvaluator:
                     # Update job state if needed
                     if result.state_updates:
                         await asyncio.to_thread(
-                            lambda: self.jobs_service.update_job_state(job.id, result.state_updates)
+                            lambda: self.jobs_service.update_schedule_state(job.id, result.state_updates)
                         )
 
                 except Exception as e:

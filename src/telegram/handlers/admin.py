@@ -27,7 +27,10 @@ async def cmd_admin(msg: Message):
     """Handle /admin command."""
     from src.telegram.handlers.common import audit_command_wrapper
 
-    parsed = parse_command(msg.text)
+    if msg.from_user is None:
+        return
+
+    parsed = parse_command(msg.text or "")
     await audit_command_wrapper(msg, process_admin_command_immediate, str(msg.from_user.id), parsed, msg)
 
 

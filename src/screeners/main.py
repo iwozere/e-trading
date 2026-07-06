@@ -23,9 +23,10 @@ async def main():
 
     # 1. Configuration - Load from donotshare.py
     ibkr_host = donotshare.IBKR_HOST or "raspberrypi"
-    ibkr_port = donotshare.IBKR_PAPER_PORT or donotshare.IBKR_PORT
-    if ibkr_port:
-        ibkr_port = int(ibkr_port)
+    ibkr_port = 7497
+    port_val = donotshare.IBKR_PAPER_PORT or donotshare.IBKR_PORT
+    if port_val:
+        ibkr_port = int(port_val)
     ibkr_client_id = int(donotshare.IBKR_CLIENT_ID) if donotshare.IBKR_CLIENT_ID else 3
 
     # 2. Setup Broker

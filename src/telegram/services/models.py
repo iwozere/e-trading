@@ -35,10 +35,10 @@ class Node(BaseModel):
     and_: List["Node"] | None = Field(default=None, alias="and")
     or_: List["Node"] | None = Field(default=None, alias="or")
     not_: Optional["Node"] = Field(default=None, alias="not")
-    model_config = ConfigDict(allow_population_by_field_name=True)
+    model_config = ConfigDict(populate_by_name=True)
 
 
-Node.update_forward_refs()
+Node.model_rebuild()
 
 
 class NotifyCfg(BaseModel):

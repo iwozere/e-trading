@@ -87,8 +87,9 @@ class SchedulerServiceConfig:
     def _load_from_environment(self) -> None:
         """Load configuration values from environment variables."""
         # Database configuration
-        if os.getenv("DATABASE_URL"):
-            self.database.url = os.getenv("DATABASE_URL")
+        db_url = os.getenv("DATABASE_URL")
+        if db_url is not None:
+            self.database.url = db_url
         self.database.pool_size = int(os.getenv("DB_POOL_SIZE", self.database.pool_size))
         self.database.max_overflow = int(os.getenv("DB_MAX_OVERFLOW", self.database.max_overflow))
         self.database.echo = os.getenv("SQL_ECHO", "false").lower() == "true"

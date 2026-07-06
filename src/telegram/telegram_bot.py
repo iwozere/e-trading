@@ -52,8 +52,6 @@ misc.register(dp)  # misc must be last — contains the catch-all @dp.message()
 
 
 async def main() -> None:
-    global notification_client
-
     _logger.info("Starting bot initialisation…")
     if not TELEGRAM_BOT_TOKEN:
         _logger.error("TELEGRAM_BOT_TOKEN is not set!")

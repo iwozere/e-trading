@@ -206,7 +206,7 @@ async def run_once(
         dry_run=dry_run,
         as_of=ran_at,
     )
-    summary.notification_sent = bool(sent)
+    summary.notification_sent = sent
     return summary
 
 

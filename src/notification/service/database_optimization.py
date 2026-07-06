@@ -412,17 +412,6 @@ class OptimizedMessageRepository:
             self.session.rollback()
             raise
 
-    def get_message(self, message_id: int) -> Optional[Message]:
-        """
-        Get a message by ID.
-
-        Args:
-            message_id: Message ID
-
-        Returns:
-            Message object or None if not found
-        """
-        return self.session.query(Message).filter(Message.id == message_id).first()
 
     def get_failed_messages_for_retry(
         self, current_time: datetime, retry_delay_minutes: int = 5, limit: int = 50
@@ -620,6 +609,22 @@ class OptimizedDeliveryStatusRepository:
         """
         self.session = session
 
+    def get_delivery_statuses_by_message(self, message_id: int) -> List[MessageDeliveryStatus]:
+        """
+        Get all delivery statuses for a message.
+
+        Args:
+            message_id: Message ID
+
+        Returns:
+            List of MessageDeliveryStatus objects
+        """
+        return (
+            self.session.query(MessageDeliveryStatus)
+            .filter(MessageDeliveryStatus.message_id == message_id)
+            .all()
+        )
+
     def create_delivery_status(self, status_data: Dict[str, Any]) -> MessageDeliveryStatus:
         """
         Create a single delivery status record.
@@ -647,8 +652,7 @@ class OptimizedDeliveryStatusRepository:
             return []
 
         # Use PostgreSQL's INSERT ... RETURNING for efficiency
-        stmt = insert(MessageDeliveryStatus).values(delivery_data)
-        stmt = stmt.returning(MessageDeliveryStatus)
+        stmt = insert(MessageDeliveryStatus).values(delivery_data).returning(MessageDeliveryStatus)
 
         result = self.session.execute(stmt)
         delivery_statuses = list(result.scalars().all())

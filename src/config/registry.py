@@ -40,7 +40,7 @@ class ConfigRegistry:
         self._tags: Dict[str, List[str]] = {}
 
     def register_config(
-        self, config_id: str, config: Any, config_type: str, metadata: Dict[str, Any] = None, tags: List[str] = None
+        self, config_id: str, config: Any, config_type: str, metadata: Dict[str, Any] | None = None, tags: List[str] | None = None
     ):
         """
         Register a configuration in the registry.
@@ -140,7 +140,7 @@ class ConfigRegistry:
         """Get related configuration IDs"""
         return self._relationships.get(config_id, [])
 
-    def search_configs(self, query: str, config_type: str = None) -> List[str]:
+    def search_configs(self, query: str, config_type: str | None = None) -> List[str]:
         """
         Search configurations by query string.
 

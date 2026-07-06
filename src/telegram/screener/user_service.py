@@ -336,7 +336,7 @@ class UserService:
             _logger.exception("Error rejecting user")
             return {"status": "error", "message": f"Error rejecting user: {str(e)}"}
 
-    def handle_admin_set_limit(self, limit_type: str, limit_value: str, target_user_id: str = None) -> Dict[str, Any]:
+    def handle_admin_set_limit(self, limit_type: str, limit_value: str, target_user_id: str | None = None) -> Dict[str, Any]:
         """Set user limits."""
         try:
             if limit_type not in ["alerts", "schedules"]:

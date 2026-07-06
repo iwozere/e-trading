@@ -447,4 +447,4 @@ def validate_and_create_broker_config(raw_config: Dict[str, Any]) -> Dict[str, A
     if result.warnings:
         _logger.warning("Configuration warnings:\n" + "\n".join(result.warnings))
 
-    return result.normalized_config
+    return result.normalized_config or {}

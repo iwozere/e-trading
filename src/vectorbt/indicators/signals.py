@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Any
 
 import pandas as pd
 
@@ -22,7 +22,7 @@ class SignalFactory:
         rsi_upper: float = 70,
         bb_window: int = 20,
         bb_std: float = 2.0,
-    ) -> Dict[str, pd.DataFrame]:
+    ) -> Dict[str, Any]:
         """
         Calculates signals based on RSI and Bollinger Bands.
         Returns entries and exits DataFrames.
@@ -99,5 +99,5 @@ if __name__ == "__main__":
     # Example of broadcasting across multiple rsi_windows
     strat = StrategyInd.run(close, rsi_window=[14, 21], rsi_lower=30, rsi_upper=70, bb_window=20, bb_std=2.0)
 
-    print("Entries shape:", strat.entries.shape)
+    print("Entries shape:", strat.entries.shape)  # type: ignore
     print("Broadcasting test successful.")

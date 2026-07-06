@@ -204,7 +204,7 @@ async def create_trading_bot(config: BotConfigRequest, current_user: User = Depe
     """
     try:
         user_id = current_user.id
-        config_dict = config.dict()
+        config_dict = config.model_dump()
 
         # Generate bot ID if not provided
         if "id" not in config_dict:
@@ -270,7 +270,7 @@ async def update_trading_bot(bot_id: str, config: BotConfigRequest, current_user
     """
     try:
         user_id = current_user.id
-        config_dict = config.dict()
+        config_dict = config.model_dump()
 
         # Get existing bot to verify ownership
         existing_bot = trading_service.get_bot_by_id(bot_id)
@@ -543,7 +543,7 @@ async def validate_bot_configuration(
     """
     try:
         user_id = current_user.id
-        config_dict = config.dict()
+        config_dict = config.model_dump()
 
         # Create validation record
         bot_record = {

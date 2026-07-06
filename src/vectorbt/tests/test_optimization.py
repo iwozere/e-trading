@@ -54,14 +54,14 @@ def test_liquidation_penalty():
         names=["symbol", "column"],
     )
     data = pd.DataFrame(index=dates, columns=cols)
-    data[("BTC", "Open")] = prices
-    data[("BTC", "High")] = prices * 1.01
-    data[("BTC", "Low")] = prices * 0.99
-    data[("BTC", "Close")] = prices
-    data[("BTC", "Volume")] = 1000
+    data[("BTC", "Open")] = prices  # type: ignore
+    data[("BTC", "High")] = prices * 1.01  # type: ignore
+    data[("BTC", "Low")] = prices * 0.99  # type: ignore
+    data[("BTC", "Close")] = prices  # type: ignore
+    data[("BTC", "Volume")] = 1000  # type: ignore
 
     # 2. Setup objective with this crash data
-    obj = Objective(data_splits=[data])
+    obj = Objective(data_splits=[data], strategy_config={})
 
     # 3. Create a mock trial with high leverage (which will surely cause >60% DD)
     class MockTrial:

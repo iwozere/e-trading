@@ -153,7 +153,7 @@ class NasdaqUniverseDownloader:
             # Optionally exclude ETFs early to reduce unnecessary downstream
             # fundamentals lookups and related debug noise.
             if getattr(self.config, "exclude_etfs", False):
-                etf_col = next((col for col in df.columns if str(col).strip().upper() == "ETF"), None)
+                etf_col = next((col for col in df.columns if col.strip().upper() == "ETF"), None)
                 if etf_col:
                     initial_count = len(df)
                     etf_flags = df[etf_col].astype(str).str.strip().str.upper()

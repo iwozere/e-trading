@@ -16,6 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 import pandas as pd
+from typing import Optional
 
 from src.backtester.plotter.run_plotter import ResultPlotter
 from src.notification.logger import setup_logger
@@ -106,7 +107,7 @@ def select_top_strategies(df: pd.DataFrame, n: int = 5) -> dict:
     return selections
 
 
-def get_json_path_for_strategy(strategy_id: str, is_period: str) -> str:
+def get_json_path_for_strategy(strategy_id: str, is_period: str) -> Optional[str]:
     """
     Get the JSON file path for a strategy.
 

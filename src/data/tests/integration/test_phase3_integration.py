@@ -18,20 +18,20 @@ import pandas as pd
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.data.utils.performance_optimization import (
-    LazyDataLoader,
-    ParallelProcessor,
-    get_data_compressor,
-    get_memory_optimizer,
-    get_performance_monitor,
-    optimize_dataframe_performance,
-    compress_dataframe_efficiently,
-)
 from src.data.utils.advanced_caching import (
     TimeBasedInvalidation,
     VersionBasedInvalidation,
     configure_advanced_cache,
     get_advanced_cache,
+)
+from src.data.utils.performance_optimization import (
+    LazyDataLoader,
+    ParallelProcessor,
+    compress_dataframe_efficiently,
+    get_data_compressor,
+    get_memory_optimizer,
+    get_performance_monitor,
+    optimize_dataframe_performance,
 )
 
 
@@ -150,7 +150,7 @@ def test_performance_optimization():
         optimizer = get_memory_optimizer()
         initial_usage = optimizer.get_memory_usage(large_data)
         optimized_data = optimizer.optimize_dataframe(large_data)
-        final_usage = optimizer.get_memory_usage(optimized_data)
+        optimizer.get_memory_usage(optimized_data)
 
         memory_reduction = optimizer.estimate_memory_reduction(large_data)
         print(f"✓ Memory optimization: {memory_reduction['reduction_percent']:.1f}% reduction")
@@ -280,14 +280,14 @@ def test_integration_features():
 
         # Step 2: Compress
         metrics2 = monitor.start_operation("compression")
-        compressed_data = compress_dataframe_efficiently(optimized_data)
+        compress_dataframe_efficiently(optimized_data)
         monitor.end_operation(metrics2)
 
         # Step 3: Cache
         cache = get_advanced_cache()
         metrics3 = monitor.start_operation("caching")
         cache.put(optimized_data, "test", "INTEGRATION", "1h")
-        cached_data = cache.get("test", "INTEGRATION", "1h")
+        cache.get("test", "INTEGRATION", "1h")
         monitor.end_operation(metrics3)
 
         # Get performance summary

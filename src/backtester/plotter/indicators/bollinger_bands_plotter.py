@@ -100,5 +100,5 @@ class BollingerBandsPlotter(BaseIndicatorPlotter):
             _logger.exception("Error plotting Bollinger Bands: %s")
 
     @property
-    def subplot_type(self):
+    def subplot_type(self) -> str:
         return "price"

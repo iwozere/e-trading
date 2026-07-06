@@ -104,14 +104,14 @@ def run_backtest(config_path: str, generate_report: bool = True, verbose: bool =
     Returns:
         Exit code (0 = success, 1 = test failed, 2 = error)
     """
-    config_path = Path(config_path)
+    config_path_obj = Path(config_path)
 
     # Handle relative paths from project root
-    if not config_path.is_absolute():
-        config_path = PROJECT_ROOT / config_path
+    if not config_path_obj.is_absolute():
+        config_path_obj = PROJECT_ROOT / config_path_obj
 
-    if not config_path.exists():
-        print(f"\n[ERROR] Configuration file not found: {config_path}")
+    if not config_path_obj.exists():
+        print(f"\n[ERROR] Configuration file not found: {config_path_obj}")
         print("\nUse --list-configs to see available configurations")
         return 1
 
@@ -119,12 +119,12 @@ def run_backtest(config_path: str, generate_report: bool = True, verbose: bool =
         print("\n" + "=" * 80)
         print("RUNNING BACKTEST")
         print("=" * 80)
-        print(f"Config: {config_path}")
+        print(f"Config: {config_path_obj}")
         print(f"Mode: {'Debug' if DEBUG_MODE else 'CLI'}")
         print()
 
         # Run backtest
-        results = run_backtest_from_config(str(config_path), generate_report=generate_report)
+        results = run_backtest_from_config(str(config_path_obj), generate_report=generate_report)
 
         # Print report (console-safe version for Windows)
         report_text = results["report"]

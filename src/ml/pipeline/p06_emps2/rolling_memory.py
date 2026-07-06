@@ -9,7 +9,7 @@ Scans historical daily results to identify:
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict
 
 import pandas as pd
 
@@ -121,7 +121,7 @@ class RollingMemoryScanner:
             return pd.DataFrame()
 
         # Group by ticker and aggregate
-        agg_dict = {
+        agg_dict: dict[str, Any] = {
             "scan_date": ["count", "min", "max"],
         }
 

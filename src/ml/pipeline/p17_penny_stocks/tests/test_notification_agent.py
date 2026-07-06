@@ -59,8 +59,8 @@ def _inject_services(monkeypatch, email="me@example.com"):
         def create_message(self, payload):
             created["payload"] = payload
 
-    users_mod.UsersService = UsersService
-    notif_mod.NotificationService = NotificationService
+    setattr(users_mod, "UsersService", UsersService)
+    setattr(notif_mod, "NotificationService", NotificationService)
     monkeypatch.setitem(sys.modules, "src.data.db.services.users_service", users_mod)
     monkeypatch.setitem(sys.modules, "src.data.db.services.notification_service", notif_mod)
     return created

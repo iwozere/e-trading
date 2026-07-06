@@ -118,7 +118,8 @@ class BaseOptimizer:
             df.set_index("datetime", inplace=True)
 
             # Ensure the index is timezone-naive for Backtrader compatibility
-            df.index = df.index.tz_localize(None)
+            if isinstance(df.index, pd.DatetimeIndex):
+                df.index = df.index.tz_localize(None)
 
             # Ensure the index is pandas datetime, not numpy float64
             df.index = pd.to_datetime(df.index)
@@ -181,7 +182,8 @@ class BaseOptimizer:
             df_copy["timestamp"] = pd.to_datetime(df_copy["timestamp"])
 
             # Add data feed
-            data = bt.feeds.PandasData(
+            PandasDataFeed: Any = bt.feeds.PandasData
+            data = PandasDataFeed(
                 dataname=df_copy,
                 datetime=0,  # 0 indicates datetime is in column 0 (timestamp)
                 open=1,  # open is now column 1
@@ -420,7 +422,7 @@ class BaseOptimizer:
         except Exception:
             _logger.exception("Error generating performance report:")
 
-    def discover_available_combinations(self) -> List[Dict[str, str]]:
+    def discover_available_combinations(self) -> List[Dict[str, Any]]:
         """
         Discover available data and model combinations.
 
@@ -432,7 +434,7 @@ class BaseOptimizer:
         """
         raise NotImplementedError("Subclasses must implement discover_available_combinations")
 
-    def run_backtest(self, combination: Dict[str, str], strategy_params: Dict[str, Any]) -> Dict[str, Any]:
+    def run_backtest(self, combination: Dict[str, Any], strategy_params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Run backtest for a specific combination.
 
@@ -448,7 +450,7 @@ class BaseOptimizer:
         """
         raise NotImplementedError("Subclasses must implement run_backtest")
 
-    def optimize_parameters(self, combination: Dict[str, str], n_trials: int = 100) -> Dict[str, Any]:
+    def optimize_parameters(self, combination: Dict[str, Any], n_trials: int = 100) -> Dict[str, Any]:
         """
         Optimize strategy parameters using Optuna.
 

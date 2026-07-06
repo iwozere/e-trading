@@ -22,4 +22,4 @@ class CreatedTrade:
     @classmethod
     def synthetic(cls, trade_id: str, row: Dict[str, Any] | None = None) -> CreatedTrade:
         """Test / offline mocks without a real database row."""
-        return cls(id=str(trade_id), row=dict(row or {}))
+        return cls(id=trade_id, row=dict(row or {}))

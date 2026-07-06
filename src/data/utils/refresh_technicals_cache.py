@@ -212,7 +212,6 @@ def populate_cache(
                 start_date_naive = start_date.replace(tzinfo=None) if start_date.tzinfo else start_date
                 end_date_naive = end_date.replace(tzinfo=None) if end_date.tzinfo else end_date
                 existing_data = cache.get(symbol, interval, start_date=start_date_naive, end_date=end_date_naive)
-                existing_provider = None
 
                 if existing_data is not None and not existing_data.empty:
                     # Check if the existing data covers the full requested date range
@@ -572,7 +571,7 @@ def main():
 
     # Convert to UTC for providers that use UTC (like Binance)
     # Keep naive for providers that use market timezones (like Yahoo, Alpha Vantage)
-    start_date_utc = start_date.replace(tzinfo=UTC)
+    start_date.replace(tzinfo=UTC)
 
     # Parse end date (defaults to today if not specified)
     if args.end_date:
@@ -587,7 +586,7 @@ def main():
         print(f"📅 End date: {end_date.strftime('%Y-%m-%d')} (today)")
 
     # Convert to UTC for providers that use UTC (like Binance)
-    end_date_utc = end_date.replace(tzinfo=UTC) if end_date.tzinfo is None else end_date
+    end_date.replace(tzinfo=UTC) if end_date.tzinfo is None else end_date
 
     # Ensure start_date is before end_date (compare naive versions)
     start_date_naive = start_date.replace(tzinfo=None) if start_date.tzinfo else start_date

@@ -8,6 +8,7 @@ Usage:
 """
 
 from datetime import UTC
+from typing import Optional
 
 from src.data.data_manager import ProviderSelector
 from src.data.downloader.data_downloader_factory import DataDownloaderFactory
@@ -127,7 +128,7 @@ def _get_data_manager():
     return _data_manager
 
 
-def get_ohlcv(ticker: str, interval: str, period: str, provider: str = None, **kwargs):
+def get_ohlcv(ticker: str, interval: str, period: str, provider: Optional[str] = None, **kwargs):
     """
     Retrieve OHLCV data for a ticker using the DataManager with caching support.
     If provider is None, the DataManager will automatically select the best provider.

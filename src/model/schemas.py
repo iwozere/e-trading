@@ -105,7 +105,7 @@ class NotificationType(Enum):
 
 
 @runtime_checkable
-class Fundamentals(Protocol):
+class FundamentalsProtocol(Protocol):
     """
     Protocol for fundamentals data that can be returned by data providers.
 
@@ -226,7 +226,7 @@ class DataCacheConfig:
         cache_dir: Union[str, Path] = DATA_CACHE_DIR,
         max_cache_size_gb: float = 10.0,
         compression: str = "snappy",
-        partition_by: list = None,
+        partition_by: Optional[list[Any]] = None,
     ):
         self.cache_dir = Path(cache_dir)
         self.max_cache_size_gb = max_cache_size_gb
@@ -262,7 +262,7 @@ class DataCacheConfig:
 
 # Type aliases for common use cases
 DataFrameOrOHLCV = Union[pd.DataFrame, OHLCVData]
-OptionalFundamentals = Optional[Fundamentals]
+OptionalFundamentals = Optional["Fundamentals"]
 CachePath = Union[str, Path]
 
 __all__ = [
@@ -281,7 +281,7 @@ __all__ = [
 @dataclass
 class Fundamentals:
     """
-    Concrete implementation of Fundamentals Protocol.
+    Concrete implementation of FundamentalsProtocol.
 
     This class provides all the fundamental data fields that can be returned
     by data providers, maintaining compatibility with existing code.

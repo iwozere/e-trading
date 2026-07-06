@@ -82,7 +82,7 @@ class LogicEvaluator:
             results: dict of calculated indicators { "rsi_main": pd.DataFrame, ... }
             close: price data for 'close' references
         """
-        if "operator" in node:
+        if isinstance(node, dict) and "operator" in node:
             op = node["operator"].upper()
             conditions = [cls.evaluate(c, results, close) for c in node["conditions"]]
 
@@ -101,11 +101,15 @@ class LogicEvaluator:
             else:
                 raise ValueError(f"Unsupported logic operator: {op}")
 
-        # Leaf condition: {"indicator": "id", "field": "rsi", "op": "<", "target": 30}
+        if not isinstance(node, dict):
+            raise ValueError("Expected dictionary for logic node")
         indicator_id = node.get("indicator")
         field = node.get("field", "close")
         op_str = node.get("op")
         target = node.get("target")
+
+        if indicator_id is None:
+            raise ValueError("Indicator ID cannot be None")
 
         # Get the left value for comparison
         if indicator_id == "close" or field == "close":
@@ -128,6 +132,12 @@ class LogicEvaluator:
         else:
             right_val = target
 
+        if op_str is None:
+            raise ValueError("Operator string cannot be None")
+            
+        if right_val is None:
+            raise ValueError("Right value cannot be None")
+
         # Execute comparison
         op_func = cls.OPERATORS.get(op_str)
         if not op_func:
@@ -144,7 +154,7 @@ class StrategyEngine:
         self.indicators_config = config.get("indicators", {})
         self.logic_config = config.get("logic", {})
 
-    def run(self, data: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, pd.DataFrame]:
+    def run(self, data: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Executes the strategy.
 
@@ -245,7 +255,7 @@ class StrategyEngine:
         for signal_type in ["long_entry", "long_exit", "short_entry", "short_exit"]:
             logic_node = self.logic_config.get(signal_type)
             if logic_node:
-                signals[signal_type] = LogicEvaluator.evaluate(logic_node, results, close)
+                signals[signal_type] = LogicEvaluator.evaluate(logic_node, results, close)  # type: ignore
             else:
                 # Default to false if not defined
                 signals[signal_type] = pd.DataFrame(False, index=close.index, columns=close.columns)
@@ -258,4 +268,4 @@ class StrategyEngine:
                 "short_exits": signals.get("short_exits"),
             },
             "results": results,
-        }
+        }  # type: ignore

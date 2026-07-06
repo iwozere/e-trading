@@ -126,7 +126,7 @@ class TelegramService(BaseDBService):
             text("UPDATE usr_users SET language = :language WHERE id = :user_id"),
             {"language": language, "user_id": uid},
         )
-        return result.rowcount > 0
+        return result.rowcount > 0  # type: ignore[attr-defined]
 
     @with_uow
     @handle_db_error
@@ -559,13 +559,13 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def log_command_audit(self, telegram_user_id: str, command: str, **kwargs) -> int:
-        row = self.repos.telegram_audit.log(str(telegram_user_id), command, **kwargs)
+        row = self.repos.telegram_audit.log(telegram_user_id, command, **kwargs)
         return row.id
 
     @with_uow
     @handle_db_error
     def get_user_command_history(self, telegram_user_id: str, limit: int = 20):
-        logs = self.repos.telegram_audit.last_commands(str(telegram_user_id), limit=limit)
+        logs = self.repos.telegram_audit.last_commands(telegram_user_id, limit=limit)
         return [
             {
                 "id": log.id,
@@ -577,7 +577,7 @@ class TelegramService(BaseDBService):
                 "success": log.success,
                 "error_message": log.error_message,
                 "response_time_ms": log.response_time_ms,
-                "created": log.created_at.isoformat() if log.created_at else None,
+                "created": str(log.created_at) if log.created_at else None,
             }
             for log in logs
         ]
@@ -615,7 +615,7 @@ class TelegramService(BaseDBService):
                 "success": log.success,
                 "error_message": log.error_message,
                 "response_time_ms": log.response_time_ms,
-                "created": log.created_at.isoformat() if log.created_at else None,
+                "created": str(log.created_at) if log.created_at else None,
             }
             for log in logs
         ]
@@ -649,7 +649,7 @@ class TelegramService(BaseDBService):
                 if log.total_count and log.success_count
                 else 0,
                 "delivery_status": "completed" if log.success_count is not None else "pending",
-                "sent_at": log.created_at.isoformat() if log.created_at else None,
+                "sent_at": str(log.created_at) if log.created_at else None,
             }
             for log in logs
         ]

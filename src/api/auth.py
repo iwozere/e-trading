@@ -197,7 +197,7 @@ def authenticate_user(db: Session, username: str, password: str) -> User | None:
         return None
 
     # Update last login
-    user.last_login = datetime.now(UTC)
+    user.last_login = datetime.now(UTC)  # type: ignore
     db.commit()
 
     return user

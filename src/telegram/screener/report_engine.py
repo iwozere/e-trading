@@ -35,8 +35,12 @@ class ReportEngine:
                         "message": f"Invalid config: {'; '.join(errors)}",
                     }
                 report_config = ReportConfigParser.parse_report_config(config_json)
+                if not report_config:
+                    return {"status": "error", "message": "Failed to parse report configuration"}
                 tickers = [t.upper() for t in report_config.tickers]
-                period, interval, provider = report_config.period, report_config.interval, report_config.provider
+                period = report_config.period
+                interval = report_config.interval
+                provider: str | None = report_config.provider
                 email = report_config.email
             except Exception as e:
                 return {"status": "error", "message": f"JSON config error: {str(e)}"}
@@ -84,7 +88,7 @@ class ReportEngine:
         }
 
     async def analyze_ticker_business(
-        self, ticker: str, provider: str = None, period: str = "2y", interval: str = "1d", force_refresh: bool = True
+        self, ticker: str, provider: str | None = None, period: str = "2y", interval: str = "1d", force_refresh: bool = True
     ) -> TickerAnalysis:
         """Fetch OHLCV and return TickerAnalysis."""
         try:
@@ -94,5 +98,5 @@ class ReportEngine:
         except Exception as e:
             _logger.exception(f"Error analyzing {ticker}")
             return TickerAnalysis(
-                ticker=ticker.upper(), provider=provider, period=period, interval=interval, error=str(e)
+                ticker=ticker.upper(), provider=provider or "unknown", period=period, interval=interval, error=str(e)
             )

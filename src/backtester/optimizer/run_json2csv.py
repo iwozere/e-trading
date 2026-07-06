@@ -163,13 +163,15 @@ def process_json_file(file_path):
 
     # Add entry logic parameters
     entry_params = extract_nested_value(best_params, ["entry_logic", "params"], {})
-    for param_name, param_value in entry_params.items():
-        result[f"entry_{param_name}"] = param_value
+    if isinstance(entry_params, dict):
+        for param_name, param_value in entry_params.items():
+            result[f"entry_{param_name}"] = param_value
 
     # Add exit logic parameters
     exit_params = extract_nested_value(best_params, ["exit_logic", "params"], {})
-    for param_name, param_value in exit_params.items():
-        result[f"exit_{param_name}"] = param_value
+    if isinstance(exit_params, dict):
+        for param_name, param_value in exit_params.items():
+            result[f"exit_{param_name}"] = param_value
 
     return result
 

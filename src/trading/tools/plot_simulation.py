@@ -228,7 +228,7 @@ class SimulationPlotter:
             if dir_arr[i] == -1 and upper_arr[i] > upper_arr[i - 1]:
                 upper_arr[i] = upper_arr[i - 1]
             st[i] = lower_arr[i] if dir_arr[i] == 1 else upper_arr[i]
-        return pd.Series(st, index=df.index)
+        return pd.Series(st.tolist(), index=df.index)
 
     def _calculate_ichimoku(self, df, tp, kp, sbp):
         h, l = df["high"], df["low"]
@@ -243,7 +243,10 @@ class SimulationPlotter:
             return pd.Series()
         sorted_trades = sorted(trades, key=lambda x: x.get("exit_time", ""))
         equity = [initial]
-        times = [pd.Timestamp(sorted_trades[0].get("entry_time")) - pd.Timedelta(days=1)]
+        first_trade_time = sorted_trades[0].get("entry_time")
+        if not first_trade_time:
+            return pd.Series()
+        times = [pd.Timestamp(first_trade_time) - pd.Timedelta(days=1)]
         curr = initial
         for t in sorted_trades:
             if t.get("net_pnl") is not None:

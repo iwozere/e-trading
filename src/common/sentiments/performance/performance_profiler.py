@@ -8,6 +8,7 @@ and optimization recommendations for sentiment analysis operations.
 import asyncio
 import cProfile
 import functools
+import inspect
 import io
 import pstats
 import sys
@@ -130,7 +131,7 @@ class PerformanceProfiler:
         def decorator(func: Callable) -> Callable:
             name = func_name or f"{func.__module__}.{func.__name__}"
 
-            if asyncio.iscoroutinefunction(func):
+            if inspect.iscoroutinefunction(func):
 
                 @functools.wraps(func)
                 async def async_wrapper(*args, **kwargs):

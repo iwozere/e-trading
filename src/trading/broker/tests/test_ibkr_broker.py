@@ -119,13 +119,13 @@ class TestIBKRBroker:
         # Paper mode should default to port 7497
         paper_config = {"trading_mode": "paper", "type": "ibkr"}
         with patch("src.trading.broker.ibkr_broker.IB"):
-            paper_broker = IBKRBroker(config=paper_config)
+            paper_broker = IBKRBroker(host="127.0.0.1", port=7497, client_id=1, config=paper_config)
             assert paper_broker.port == 7497
 
         # Live mode should default to port 4001
         live_config = {"trading_mode": "live", "type": "ibkr", "live_trading_confirmed": True}
         with patch("src.trading.broker.ibkr_broker.IB"):
-            live_broker = IBKRBroker(config=live_config)
+            live_broker = IBKRBroker(host="127.0.0.1", port=4001, client_id=1, config=live_config)
             assert live_broker.port == 4001
 
     @pytest.mark.asyncio

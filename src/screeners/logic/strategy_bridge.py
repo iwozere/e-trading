@@ -52,7 +52,7 @@ class ScreenerStrategyBridge:
         cerebro = bt.Cerebro()
 
         # 1. Add Data
-        data = bt.feeds.PandasData(dataname=df)
+        data = bt.feeds.PandasData(dataname=df)  # type: ignore
         cerebro.adddata(data, name=symbol)
 
         # 2. Add Strategy

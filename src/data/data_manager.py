@@ -1529,7 +1529,7 @@ class DataManager:
             Dictionary with compatibility result and reasoning
         """
         symbol_type = symbol_classification.get("symbol_type", "unknown")
-        country = symbol_classification.get("country", "unknown")
+        symbol_classification.get("country", "unknown")
         market = symbol_classification.get("market", "unknown")
         international = symbol_classification.get("international", False)
         exchange = symbol_classification.get("exchange", "unknown")

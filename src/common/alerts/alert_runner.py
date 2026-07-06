@@ -10,6 +10,7 @@ import asyncio
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Optional
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -42,7 +43,7 @@ class AlertRunner:
 
         _logger.info("AlertRunner initialized successfully")
 
-    async def run_evaluation(self, user_id: int = None, limit: int = None) -> dict:
+    async def run_evaluation(self, user_id: Optional[int] = None, limit: Optional[int] = None) -> dict:
         """
         Run alert evaluation for specified user or all users.
 
@@ -110,7 +111,7 @@ class AlertRunner:
             message = notification_data.get("message", f"Alert for {alert_result['ticker']} has been triggered")
 
             # Get user ID from job
-            job = self.jobs_service.get_job(alert_result["job_id"])
+            job = self.jobs_service.get_schedule(alert_result["job_id"])
             if not job:
                 _logger.error("Could not find job %s for notification", alert_result["job_id"])
                 return

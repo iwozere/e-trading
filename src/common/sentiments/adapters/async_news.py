@@ -137,7 +137,7 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
                 try:
                     start_time = time.time()
 
-                    async with self._session.get(url, params=params, timeout=timeout) as resp:
+                    async with self._session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
                         response_time_ms = (time.time() - start_time) * 1000
                         self._record_request(api)
 
@@ -612,7 +612,7 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
                 "bullish": bullish,
                 "bearish": bearish,
                 "neutral": neutral,
-                "sentiment_score": float(score),
+                "sentiment_score": score,
                 "avg_credibility": float(avg_credibility),
                 "source_distribution": dict(top_sources),
                 "bias_indicators": bias_counts,

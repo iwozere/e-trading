@@ -46,7 +46,7 @@ class AsyncApeWisdomAdapter(BaseSentimentAdapter):
         self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         # Cache pages to avoid hitting ApeWisdom multiple times for different tickers in the same batch
         self._cache = []
-        self._cache_timestamp = 0
+        self._cache_timestamp: float = 0.0
 
     async def _ensure_session(self):
         if not self._session or self._session.closed:
@@ -70,7 +70,8 @@ class AsyncApeWisdomAdapter(BaseSentimentAdapter):
                 async with self.semaphore:
                     try:
                         start_time = time.time()
-                        async with self._session.get(url, timeout=10) as resp:
+                        assert self._session is not None
+                        async with self._session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                             response_time_ms = (time.time() - start_time) * 1000
 
                             if resp.status == 429:
@@ -164,7 +165,7 @@ class AsyncApeWisdomAdapter(BaseSentimentAdapter):
                 "bullish": int(mentions * 0.7) if score > 0 else int(mentions * 0.2),
                 "bearish": int(mentions * 0.7) if score < 0 else int(mentions * 0.2),
                 "neutral": int(mentions * 0.3),
-                "sentiment_score": float(score),
+                "sentiment_score": score,
                 "provider": "apewisdom",
                 "timestamp": datetime.now(UTC).isoformat(),
             }

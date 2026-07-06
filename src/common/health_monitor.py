@@ -173,20 +173,26 @@ class HealthMonitor:
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Convert exceptions to error results
+            final_results: List[HealthCheckResult] = []
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
                     system = list(self._health_checkers.keys())[i]
-                    results[i] = HealthCheckResult(
-                        system=system,
-                        component=None,
-                        status=SystemHealthStatus.DOWN,
-                        response_time_ms=None,
-                        error_message=str(result),
+                    final_results.append(
+                        HealthCheckResult(
+                            system=system,
+                            component=None,
+                            status=SystemHealthStatus.DOWN,
+                            response_time_ms=None,
+                            error_message=str(result),
+                        )
                     )
+                elif isinstance(result, HealthCheckResult):
+                    final_results.append(result)
         except Exception:
             _logger.exception("Failed to check all systems health:")
+            final_results = []
 
-        return results
+        return final_results
 
     async def update_health_status(self, result: HealthCheckResult):
         """
@@ -218,7 +224,7 @@ class HealthMonitor:
                     metadata=metadata_json,
                 )
 
-                uow.commit()
+                uow.s.commit()
 
         except Exception:
             _logger.exception("Failed to update health status for %s:", result.system)
@@ -303,11 +309,12 @@ class HealthMonitor:
                 query_time = int((time.time() - start_time) * 1000)
 
                 if result == 1:
-                    # Additional checks for database health
+                    from src.data.db.core.database import get_engine
+                    engine = getattr(self.db_service, "engine", None) or get_engine()
                     metadata = {
                         "query_time_ms": query_time,
-                        "connection_pool_size": getattr(self.db_service.engine.pool, "size", "unknown"),
-                        "checked_out_connections": getattr(self.db_service.engine.pool, "checkedout", "unknown"),
+                        "connection_pool_size": getattr(engine.pool, "size", "unknown"),
+                        "checked_out_connections": getattr(engine.pool, "checkedout", "unknown"),
                     }
 
                     status = SystemHealthStatus.HEALTHY

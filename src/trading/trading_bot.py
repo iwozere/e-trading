@@ -48,12 +48,15 @@ def main(config_name: str | None = None):
         _logger.warning("Configuration has warnings. Please review them above.")
 
     # Create and start the live trading bot
+    bot = None
+    heartbeat_manager = None
+
     try:
         _logger.info("Creating live trading bot with config: %s", config_name)
         bot = LiveTradingBot(config_name)
 
         # Setup signal handlers for graceful shutdown
-        def signal_handler(signum):
+        def signal_handler(signum, frame=None):
             _logger.info("Received signal %s, shutting down...", signum)
             bot.stop()
             sys.exit(0)
@@ -63,7 +66,7 @@ def main(config_name: str | None = None):
 
         # Initialize heartbeat manager
         _logger.info("Initializing heartbeat manager...")
-        heartbeat_manager = None
+        _logger.info("Initializing heartbeat manager...")
         try:
             from src.common.heartbeat_manager import HeartbeatManager
 
@@ -71,14 +74,14 @@ def main(config_name: str | None = None):
                 """Health check function for trading bot."""
                 try:
                     # Check if bot is running and healthy
-                    if bot and hasattr(bot, "is_running") and bot.is_running:
+                    if bot and getattr(bot, "is_running", False):
                         # You can add more specific health checks here
                         # For example, check last trade time, connection status, etc.
                         return {
                             "status": "HEALTHY",
                             "metadata": {"config_name": config_name, "bot_running": True, "last_check": time.time()},
                         }
-                    elif bot:
+                    elif bot is not None:
                         return {
                             "status": "DOWN",
                             "error_message": "Trading bot not running",
@@ -108,7 +111,7 @@ def main(config_name: str | None = None):
             _logger.exception("Failed to initialize heartbeat manager:")
 
         # Update signal handler to stop heartbeat
-        def signal_handler_with_heartbeat(signum):
+        def signal_handler_with_heartbeat(signum, frame=None):
             _logger.info("Received signal %s, shutting down...", signum)
             if heartbeat_manager:
                 heartbeat_manager.stop_heartbeat()
@@ -127,13 +130,13 @@ def main(config_name: str | None = None):
         _logger.info("Received keyboard interrupt, shutting down...")
         if heartbeat_manager:
             heartbeat_manager.stop_heartbeat()
-        if "bot" in locals():
+        if "bot" in locals() and bot is not None:
             bot.stop()
     except Exception:
         _logger.exception("Error running live trading bot:")
         if heartbeat_manager:
             heartbeat_manager.stop_heartbeat()
-        if "bot" in locals():
+        if "bot" in locals() and bot is not None:
             bot.stop()
         sys.exit(1)
 

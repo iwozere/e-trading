@@ -263,7 +263,7 @@ class ReportingAgent:
                     return None
                 row = prior.iloc[-1]
 
-            score = float(row["fear_greed_score"])
+            score = float(row["fear_greed_score"])  # type: ignore[arg-type]
             label = str(row["label"])
             date_str = str(pd.Timestamp(row.name).date())  # type: ignore[arg-type]
             _logger.info("Fear & Greed (%s): %.0f — %s", date_str, score, label)

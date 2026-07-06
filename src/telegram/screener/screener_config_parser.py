@@ -189,7 +189,7 @@ class ScreenerConfigParser:
             weight = criteria.get("weight", 1.0)
             required = criteria.get("required", False)
 
-            if not all([indicator, operator, value is not None]):
+            if not indicator or not operator or value is None:
                 raise ValueError("Fundamental criteria must have indicator, operator, and value")
 
             parsed_criteria.append(
@@ -211,7 +211,7 @@ class ScreenerConfigParser:
             weight = criteria.get("weight", 1.0)
             required = criteria.get("required", False)
 
-            if not all([indicator, condition]):
+            if not indicator or not condition:
                 raise ValueError("Technical criteria must have indicator and condition")
 
             parsed_criteria.append(
@@ -667,7 +667,7 @@ def get_screener_summary(config_json: str) -> Dict[str, Any]:
     """Get a summary of the screener configuration."""
     try:
         config = parse_screener_config(config_json)
-        summary = {
+        summary: dict[str, Any] = {
             "screener_type": config.screener_type,
             "list_type": config.list_type,
             "fundamental_criteria_count": len(config.fundamental_criteria) if config.fundamental_criteria else 0,

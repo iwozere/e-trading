@@ -9,7 +9,7 @@ import re
 import sys
 from datetime import date
 from pathlib import Path
-from typing import List
+from typing import Any, Callable, List, cast
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
@@ -117,4 +117,4 @@ class WikipediaDownloader(BaseDataDownloader):
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         merged.to_csv(dest, index=False, compression="gzip")
         _logger.info("wikipedia_downloader: cached %d constituent changes -> %s", len(merged), dest)
-        return merged
+        return cast(pd.DataFrame, merged)

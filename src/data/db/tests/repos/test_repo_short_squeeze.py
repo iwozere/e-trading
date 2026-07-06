@@ -8,7 +8,6 @@ from src.data.db.models.model_short_squeeze import AlertLevel
 from src.data.db.repos.repo_short_squeeze import (
     AdHocCandidateRepo,
     DeepScanMetricsRepo,
-    FINRAShortInterestRepo,
     ScreenerSnapshotRepo,
     SqueezeAlertRepo,
 )
@@ -50,7 +49,6 @@ def test_screener_and_metrics_and_alerts(db_session: Session):
 
 def test_adhoc_and_finra(db_session: Session):
     adhoc = AdHocCandidateRepo(db_session)
-    finra = FINRAShortInterestRepo(db_session)
 
     cand = adhoc.add_candidate("bbb", reason="user-request")
     assert cand.ticker == "BBB"

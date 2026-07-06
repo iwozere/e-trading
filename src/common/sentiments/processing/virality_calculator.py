@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -96,8 +96,8 @@ class PostData:
     timestamp: datetime
     engagement: EngagementMetrics
     platform: Platform
-    hashtags: List[str] = None
-    mentions: List[str] = None
+    hashtags: Optional[List[str]] = None
+    mentions: Optional[List[str]] = None
 
     def __post_init__(self):
         if self.hashtags is None:
@@ -587,12 +587,14 @@ class ViralityCalculator:
 
         for post in posts:
             # Add hashtags
-            for hashtag in post.hashtags:
-                all_topics[f"#{hashtag}"] += 1
+            if post.hashtags:
+                for hashtag in post.hashtags:
+                    all_topics[f"#{hashtag}"] += 1
 
             # Add mentions
-            for mention in post.mentions:
-                all_topics[f"@{mention}"] += 1
+            if post.mentions:
+                for mention in post.mentions:
+                    all_topics[f"@{mention}"] += 1
 
         # Filter by minimum mentions and calculate trending scores
         trending_topics = {}

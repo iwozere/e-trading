@@ -18,7 +18,7 @@ class ConfigurationFactory:
     3. Validate using the single runtime schema validator
     """
 
-    def __init__(self, root_path: str = None):
+    def __init__(self, root_path: str | None = None):
         """
         Initialize the factory.
 

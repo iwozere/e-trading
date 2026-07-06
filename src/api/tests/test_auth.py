@@ -414,8 +414,8 @@ class TestUserActionLogging:
         # Should not raise exception, just log error
         log_user_action(user=mock_admin_user, action="login")
 
-        mock_logger.error.assert_called_once()
-        assert "Failed to log user action" in str(mock_logger.error.call_args)
+        mock_logger.exception.assert_called_once()
+        assert "Failed to log user action" in str(mock_logger.exception.call_args)
 
     @patch("src.api.auth.webui_app_service")
     def test_log_user_action_minimal_params(self, mock_service, mock_admin_user):

@@ -22,7 +22,7 @@ import pickle
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, cast
 
 import backtrader as bt
 import matplotlib.pyplot as plt
@@ -255,7 +255,8 @@ class HMMLSTMOptimizer(BaseOptimizer):
         df.set_index("datetime", inplace=True)
 
         # Convert to timezone-naive for compatibility
-        df.index = df.index.tz_localize(None)
+        if isinstance(df.index, pd.DatetimeIndex):
+            df.index = df.index.tz_localize(None)
 
         # Ensure we have required OHLCV columns
         required_cols = ["open", "high", "low", "close", "volume"]
@@ -328,18 +329,19 @@ class HMMLSTMOptimizer(BaseOptimizer):
             df_copy["timestamp"] = pd.to_datetime(df_copy["timestamp"])
 
             # Add data feed
-            data = bt.feeds.PandasData(
-                dataname=df_copy,
-                datetime=0,  # 0 indicates datetime is in column 0 (timestamp)
-                open=1,  # open is now column 1
-                high=2,  # high is now column 2
-                low=3,  # low is now column 3
-                close=4,  # close is now column 4
-                volume=5,  # volume is now column 5
-                openinterest=None,
-                fromdate=df.index[0],
-                todate=df.index[-1],
-            )
+            feed_args = {
+                "dataname": df_copy,
+                "datetime": 0,  # 0 indicates datetime is in column 0 (timestamp)
+                "open": 1,  # open is now column 1
+                "high": 2,  # high is now column 2
+                "low": 3,  # low is now column 3
+                "close": 4,  # close is now column 4
+                "volume": 5,  # volume is now column 5
+                "openinterest": None,
+                "fromdate": df.index[0],
+                "todate": df.index[-1],
+            }
+            data = cast(Any, bt.feeds.PandasData)(**feed_args)
             cerebro.adddata(data)
 
             # Add strategy with correct model data structure
@@ -399,6 +401,7 @@ class HMMLSTMOptimizer(BaseOptimizer):
                 combination["symbol"],
                 combination["timeframe"],
             )
+            raise
 
     def to_dict(self, obj):
         """Convert object to dictionary (same as custom_optimizer.py)."""
@@ -482,37 +485,6 @@ class HMMLSTMOptimizer(BaseOptimizer):
         except Exception:
             _logger.exception("Error in parameter optimization:")
             raise
-
-        # 3. Max drawdown
-        axes[1, 0].bar(symbols, summary_df["Max Drawdown (%)"])
-        axes[1, 0].set_xlabel("Symbol")
-        axes[1, 0].set_ylabel("Max Drawdown (%)")
-        axes[1, 0].set_title("Maximum Drawdown by Symbol")
-        axes[1, 0].grid(True, alpha=0.3)
-
-        # 4. Risk-return scatter
-        axes[1, 1].scatter(summary_df["Max Drawdown (%)"], summary_df["Total Return (%)"], s=100, alpha=0.7)
-        for i, symbol in enumerate(symbols):
-            axes[1, 1].annotate(
-                symbol,
-                (summary_df.iloc[i]["Max Drawdown (%)"], summary_df.iloc[i]["Total Return (%)"]),
-                xytext=(5, 5),
-                textcoords="offset points",
-            )
-        axes[1, 1].set_xlabel("Max Drawdown (%)")
-        axes[1, 1].set_ylabel("Total Return (%)")
-        axes[1, 1].set_title("Risk-Return Profile")
-        axes[1, 1].grid(True, alpha=0.3)
-
-        plt.tight_layout()
-
-        # Save plot
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        plot_file = self.output_dir / f"hmm_lstm_performance_{timestamp}.png"
-        plt.savefig(plot_file, dpi=300, bbox_inches="tight")
-        plt.close()
-
-        _logger.info("Performance plots saved to %s", plot_file)
 
     def discover_available_combinations(self) -> List[Dict[str, str]]:
         """

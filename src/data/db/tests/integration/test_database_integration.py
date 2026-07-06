@@ -21,7 +21,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.db.repos.repo_trading import TradingBotsRepo, TradingMetricsRepo, TradingTradesRepo
+from src.data.db.repos.repo_trading import BotsRepo, MetricsRepo, TradesRepo
 
 
 class TestDatabaseIntegration:
@@ -37,8 +37,8 @@ class TestDatabaseIntegration:
 
     def test_trade_operations(self, db_session):
         """Test trade CRUD operations."""
-        trades_repo = TradingTradesRepo(db_session)
-        bots_repo = TradingBotsRepo(db_session)
+        trades_repo = TradesRepo(db_session)
+        bots_repo = BotsRepo(db_session)
 
         # Test data
         bot_id = "test_bot_001"
@@ -53,7 +53,7 @@ class TestDatabaseIntegration:
             "status": "running",
             "current_balance": 10000.0,
         }
-        bot_instance = bots_repo.create(bot_data)
+        bots_repo.create(bot_data)
         db_session.flush()
 
         # Create trade
@@ -110,7 +110,7 @@ class TestDatabaseIntegration:
 
     def test_bot_instance_operations(self, db_session):
         """Test bot instance operations."""
-        bots_repo = TradingBotsRepo(db_session)
+        bots_repo = BotsRepo(db_session)
 
         # Test data
         bot_id = "test_bot_instance_001"
@@ -153,8 +153,8 @@ class TestDatabaseIntegration:
 
     def test_performance_metrics(self, db_session):
         """Test performance metrics operations."""
-        metrics_repo = TradingMetricsRepo(db_session)
-        bots_repo = TradingBotsRepo(db_session)
+        metrics_repo = MetricsRepo(db_session)
+        bots_repo = BotsRepo(db_session)
 
         # Create bot first
         bot_id = "test_metrics_001"
@@ -197,8 +197,8 @@ class TestDatabaseIntegration:
 
     def test_restart_recovery(self, db_session):
         """Test restart recovery by simulating bot restart."""
-        trades_repo = TradingTradesRepo(db_session)
-        bots_repo = TradingBotsRepo(db_session)
+        trades_repo = TradesRepo(db_session)
+        bots_repo = BotsRepo(db_session)
 
         # Create bot
         bot_id = "restart_test_bot"

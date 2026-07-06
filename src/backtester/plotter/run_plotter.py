@@ -160,11 +160,11 @@ class ResultPlotter:
         for indicator in indicators:
             try:
                 if indicator == "rsi":
-                    period = self._get_param_value(strategy_params, "rsi_period", 14)
+                    period = int(self._get_param_value(strategy_params, "rsi_period", 14))
                     calculated_indicators["rsi"] = self._calculate_rsi(df["close"], period)
 
                 elif indicator in ("bollinger_bands", "bbands"):
-                    period = self._get_param_value(strategy_params, "bb_period", 20)
+                    period = int(self._get_param_value(strategy_params, "bb_period", 20))
                     std_dev = self._get_param_value(strategy_params, "bb_std", 2)
                     # Store with both names for compatibility
                     bb_data = self._calculate_bollinger_bands(df["close"], period, std_dev)
@@ -172,15 +172,15 @@ class ResultPlotter:
                     calculated_indicators["bbands"] = bb_data
 
                 elif indicator == "ichimoku":
-                    tenkan_period = self._get_param_value(strategy_params, "tenkan_period", 9)
-                    kijun_period = self._get_param_value(strategy_params, "kijun_period", 26)
-                    senkou_span_b_period = self._get_param_value(strategy_params, "senkou_span_b_period", 52)
+                    tenkan_period = int(self._get_param_value(strategy_params, "tenkan_period", 9))
+                    kijun_period = int(self._get_param_value(strategy_params, "kijun_period", 26))
+                    senkou_span_b_period = int(self._get_param_value(strategy_params, "senkou_span_b_period", 52))
                     calculated_indicators["ichimoku"] = self._calculate_ichimoku(
                         df, tenkan_period, kijun_period, senkou_span_b_period
                     )
 
                 elif indicator == "supertrend":
-                    period = self._get_param_value(strategy_params, "supertrend_period", 10)
+                    period = int(self._get_param_value(strategy_params, "supertrend_period", 10))
                     multiplier = self._get_param_value(strategy_params, "supertrend_multiplier", 3)
                     calculated_indicators["supertrend"] = self._calculate_supertrend(df, period, multiplier)
 
@@ -188,7 +188,7 @@ class ResultPlotter:
                     calculated_indicators["volume"] = df["volume"]
 
                 elif indicator == "atr":
-                    period = self._get_param_value(strategy_params, "atr_period", 14)
+                    period = int(self._get_param_value(strategy_params, "atr_period", 14))
                     calculated_indicators["atr"] = self._calculate_atr(df, period)
 
             except Exception as e:

@@ -6,6 +6,8 @@ Usage:
     fundamentals = get_fundamentals('AAPL', provider='yf')
 """
 
+from typing import Any
+
 from src.data.data_manager import get_data_manager
 from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 from src.model.schemas import Fundamentals as SchemasFundamentals
@@ -15,7 +17,7 @@ PROVIDER_CODES = ["fmp", "yf", "av", "fh", "td", "pg", "bnc", "cg"]
 
 
 async def get_fundamentals_unified(
-    ticker: str, provider: str = None, force_refresh: bool = False, **kwargs
+    ticker: str, provider: str | None = None, force_refresh: bool = False, **kwargs
 ) -> Fundamentals:
     """
     Get fundamentals using the unified indicator service.
@@ -52,7 +54,7 @@ async def get_fundamentals_unified(
 
     combined = dm.get_fundamentals(symbol=ticker, providers=providers_list, force_refresh=force_refresh)
 
-    fundamental_data = {
+    fundamental_data: dict[str, Any] = {
         "ticker": ticker,
         "company_name": None,
         "current_price": None,
@@ -179,7 +181,7 @@ async def get_fundamentals_unified(
     return Fundamentals(**fundamental_data)
 
 
-def get_fundamentals(ticker: str, provider: str = None, **kwargs) -> Fundamentals:
+def get_fundamentals(ticker: str, provider: str | None = None, **kwargs) -> Fundamentals:
     """
     Retrieve fundamentals for a ticker using the specified data provider.
     If provider is None, try all providers and merge results for the most complete Fundamentals.
@@ -229,7 +231,7 @@ def normalize_fundamentals(sources: dict) -> Fundamentals:
     """
     field_sources = {}
 
-    def get_first_with_source(field_name, *provider_fields):
+    def get_first_with_source(field_name: str, *provider_fields: Any) -> Any:
         """
         Get the first non-None value from providers, recording the source.
         Supports nested paths using dot notation (e.g., "profile.companyName").
@@ -245,7 +247,7 @@ def normalize_fundamentals(sources: dict) -> Fundamentals:
                     # Support nested paths (e.g., "profile.companyName")
                     if "." in field_key:
                         keys = field_key.split(".")
-                        value = data
+                        value: Any = data
                         for key in keys:
                             if isinstance(value, dict) and key in value:
                                 value = value[key]

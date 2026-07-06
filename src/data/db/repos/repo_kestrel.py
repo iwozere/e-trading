@@ -73,7 +73,7 @@ class KestrelRepo:
         result = self.session.execute(
             update(K20Universe).where(K20Universe.ticker.in_(tickers)).values(status="delisted")
         )
-        return result.rowcount
+        return result.rowcount  # type: ignore
 
     # ------------------------------------------------------------------
     # Signals
@@ -127,7 +127,7 @@ class KestrelRepo:
             .scalars()
             .first()
         )
-        return float(row) if row is not None else None
+        return row
 
     # ------------------------------------------------------------------
     # Sentiment
@@ -302,7 +302,7 @@ class KestrelRepo:
         """Stamp an alert-time column (t10_alerted_at / t3_alerted_at) to now."""
         allowed = {"t10_alerted_at", "t3_alerted_at", "datechange_alerted_at"}
         if column not in allowed:
-            raise ValueError("column must be one of %s" % allowed)
+            raise ValueError(f"column must be one of {allowed}")
         self.session.execute(
             update(K20Catalyst).where(K20Catalyst.id == catalyst_id).values(**{column: datetime.now(UTC)})
         )
@@ -337,7 +337,7 @@ class KestrelRepo:
         )
         result = self.session.execute(stmt)
         self.session.flush()
-        pk = result.inserted_primary_key
+        pk = result.inserted_primary_key  # type: ignore
         return pk[0] if pk else 0
 
     def get_pending_llm_runs(self, task_type: str, limit: int = 50) -> List[Dict[str, Any]]:
@@ -458,7 +458,7 @@ class KestrelRepo:
             .scalars()
             .first()
         )
-        return int(row or 0)
+        return row or 0
 
     def update_budget_notes(self, source: str, run_date: date, notes: dict) -> None:
         """Store carry-over metadata in the notes JSON column."""

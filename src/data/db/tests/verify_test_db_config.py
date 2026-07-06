@@ -70,7 +70,6 @@ def check_conftest_uses_test_db(file_path: Path) -> List[str]:
 
     # Check for production database usage
     has_production_import = "from config.donotshare.donotshare import DB_URL" in content
-    has_database_url = "DATABASE_URL" in content and "TEST" not in content
 
     if has_production_import:
         issues.append("[CRITICAL] Imports production DB_URL from donotshare!")

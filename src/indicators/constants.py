@@ -5,7 +5,7 @@ This module provides standardized naming conventions, constants, and mappings
 for all indicators across the unified indicator system.
 """
 
-from typing import Dict, List, Set
+from typing import Any, Dict, List, Set
 
 from src.indicators.models import (
     FUNDAMENTAL_INDICATORS,
@@ -231,10 +231,10 @@ def get_indicator_inputs(indicator_name: str) -> List[str]:
     return INDICATOR_INPUTS.get(canonical_name, [])
 
 
-def get_default_parameters(indicator_name: str) -> Dict[str, any]:
+def get_default_parameters(indicator_name: str) -> Dict[str, Any]:
     """Get default parameters for an indicator."""
     canonical_name = get_canonical_name(indicator_name)
-    return DEFAULT_PARAMETERS.get(canonical_name, {}).copy()
+    return dict(DEFAULT_PARAMETERS.get(canonical_name, {}))
 
 
 def get_parameter_aliases(indicator_name: str) -> Dict[str, List[str]]:

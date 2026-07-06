@@ -6,7 +6,7 @@ across all data sources in the system.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict
 
@@ -126,7 +126,7 @@ class DataHandler:
         df_std.attrs["symbol"] = symbol
         df_std.attrs["interval"] = interval
         df_std.attrs["provider"] = self.provider
-        df_std.attrs["standardized_at"] = datetime.now(timezone.utc).isoformat()
+        df_std.attrs["standardized_at"] = datetime.now(UTC).isoformat()
 
         return df_std
 

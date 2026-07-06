@@ -175,7 +175,7 @@ class TestUsersServiceAdmin:
         # Create an admin user manually
         from src.data.db.repos.repo_users import UsersRepo
 
-        repos = UsersRepo(db_session)
+        UsersRepo(db_session)
 
         # Create admin user with proper structure
         user_data = UserFactory.admin_user(email="admin@example.com")

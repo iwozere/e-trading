@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import inspect
 import math
 import os
 from dataclasses import asdict, dataclass
@@ -202,8 +203,12 @@ def get_default_config() -> Dict[str, Any]:
         env_config = _load_config_from_env()
         # Deep merge environment config
         for key, value in env_config.items():
-            if isinstance(value, dict) and key in config and isinstance(config[key], dict):
-                config[key].update(value)
+            if isinstance(value, dict) and key in config:
+                existing = config[key]
+                if isinstance(existing, dict):
+                    existing.update(value)
+                else:
+                    config[key] = value
             else:
                 config[key] = value
     except Exception as e:
@@ -303,7 +308,7 @@ def compute_engagement(m: Dict[str, Any]) -> float:
     replies = int(m.get("replies") or 0)
     retweets = int(m.get("retweets") or m.get("retweets_count") or 0)
     # engagement formula: likes + 2*replies + 1.5*retweets
-    return float(likes + 2 * replies + 1.5 * retweets)
+    return likes + 2 * replies + 1.5 * retweets
 
 
 def message_weight(engagement: float, engagement_weight_formula: str = "sqrt") -> float:
@@ -660,7 +665,7 @@ async def collect_sentiment_batch(
                     mentions_growth = None
                     if history_lookup and total_mentions > 0:
                         try:
-                            if asyncio.iscoroutinefunction(history_lookup):
+                            if inspect.iscoroutinefunction(history_lookup):
                                 prev_avg = await history_lookup(tk)
                             else:
                                 loop = asyncio.get_running_loop()
@@ -713,7 +718,15 @@ async def collect_sentiment_batch(
         async def process_ticker_batch(ticker_batch: List[str]) -> List[SentimentFeatures | None]:
             """Process a batch of tickers."""
             batch_tasks = [asyncio.create_task(process_one_ticker(ticker)) for ticker in ticker_batch]
-            return await asyncio.gather(*batch_tasks, return_exceptions=True)
+            raw_res = await asyncio.gather(*batch_tasks, return_exceptions=True)
+            res: List[SentimentFeatures | None] = []
+            for item in raw_res:
+                if isinstance(item, BaseException):
+                    _logger.error("Error processing ticker: %s", item)
+                    res.append(None)
+                else:
+                    res.append(item)
+            return res
 
         batch_results = await batch_optimizer.process_batches_parallel(
             ticker_batches, process_ticker_batch, "sentiment_collection"
@@ -906,29 +919,31 @@ if __name__ == "__main__":
         tickers=test_tickers, lookback_hours=24, config=cfg, output_format="dataclass"
     )
 
-    # 5. Print summary
-    print("\n--- Results Summary ---")
-    for ticker, features in results.items():
-        if features:
-            print(f"\n[{ticker}]")
-            print(
-                f"  Sentiment Score: {features.sentiment_score_24h:.4f} (Normalized: {features.sentiment_normalized:.4f})"
-            )
-            print(f"  Total Mentions: {features.mentions_24h}")
-            print(f"  Virality Index: {features.virality_index:.2f}")
-            print(f"  Data Quality: {features.data_quality}")
+    if isinstance(results, dict):
+        # 5. Print summary
+        print("\n--- Results Summary ---")
+        for ticker, features in results.items():
+            if isinstance(features, SentimentFeatures):
+                print(f"\n[{ticker}]")
+                print(
+                    f"  Sentiment Score: {features.sentiment_score_24h:.4f} (Normalized: {features.sentiment_normalized:.4f})"
+                )
+                print(f"  Total Mentions: {features.mentions_24h}")
+                print(f"  Virality Index: {features.virality_index:.2f}")
+                print(f"  Data Quality: {features.data_quality}")
 
-            # Diagnostic for missing providers
-            missing = [p for p, q in features.data_quality.items() if q == "missing"]
-            if missing:
-                print(f"  [!] Missing data from: {missing}")
-                # Check raw_payload for hints
-                for p in missing:
-                    if p in features.raw_payload and "error" in features.raw_payload[p]:
-                        print(f"      - {p} error: {features.raw_payload[p]['error']}")
-        else:
-            print(f"\n[{ticker}] Failed to collect sentiment.")
+                # Diagnostic for missing providers
+                missing = [p for p, q in features.data_quality.items() if q == "missing"]
+                if missing:
+                    print(f"  [!] Missing data from: {missing}")
+                    # Check raw_payload for hints
+                    for p in missing:
+                        if p in features.raw_payload and "error" in features.raw_payload[p]:
+                            print(f"      - {p} error: {features.raw_payload[p]['error']}")
+            else:
+                print(f"\n[{ticker}] Failed to collect sentiment.")
 
-    print("\n--- Raw Payload Sample (AAPL) ---")
-    if results.get("AAPL"):
-        pprint.pprint(results["AAPL"].raw_payload)
+        print("\n--- Raw Payload Sample (AAPL) ---")
+        aapl_feat = results.get("AAPL")
+        if isinstance(aapl_feat, SentimentFeatures):
+            pprint.pprint(aapl_feat.raw_payload)

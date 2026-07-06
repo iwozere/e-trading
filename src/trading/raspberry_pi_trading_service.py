@@ -201,7 +201,7 @@ class RaspberryPiTradingService:
                 "disk_percent": disk.percent,
                 "disk_free_gb": disk.free / (1024**3),
                 "temperature_c": temperature,
-                "load_average": os.getloadavg() if hasattr(os, "getloadavg") else None,
+                "load_average": os.getloadavg() if hasattr(os, "getloadavg") else None,  # type: ignore
             },
             "strategies": {
                 "total": len(strategy_status),
@@ -229,7 +229,11 @@ class RaspberryPiTradingService:
                 )
 
                 # Check for alerts
-                alerts = self.config.get("global_settings", {}).get("monitoring", {}).get("alert_thresholds", {})
+                alerts = {}
+                if self.config:
+                    global_settings = self.config.get("global_settings") or {}
+                    monitoring = global_settings.get("monitoring") or {}
+                    alerts = monitoring.get("alert_thresholds") or {}
 
                 if system["cpu_percent"] > alerts.get("cpu_usage", 80):
                     _logger.warning("⚠️  High CPU usage: %.1f%%", system["cpu_percent"])
@@ -256,7 +260,8 @@ class RaspberryPiTradingService:
         except Exception:
             try:
                 # Try alternative method
-                result = os.popen("vcgencmd measure_temp").readline()
+                import subprocess
+                result = subprocess.check_output(["vcgencmd", "measure_temp"], text=True)
                 temp = float(result.replace("temp=", "").replace("'C\n", ""))
                 return temp
             except Exception:

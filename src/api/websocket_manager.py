@@ -169,7 +169,7 @@ class WebSocketManager:
 
         _logger.info("WebSocket manager stopped")
 
-    async def connect(self, websocket: WebSocket, user_id: str, connection_id: str = None) -> str:
+    async def connect(self, websocket: WebSocket, user_id: str, connection_id: str | None = None) -> str | None:
         """Accept a new WebSocket connection."""
         try:
             await websocket.accept()
@@ -489,8 +489,6 @@ class WebSocketManager:
 
             # Try to get current user (this will be mocked in tests)
             try:
-                from src.api.websocket_manager import get_current_user
-
                 user = get_current_user(token)
             except Exception:
                 # Authentication failed
@@ -525,7 +523,7 @@ class WebSocketManager:
             except:
                 pass
 
-    async def handle_message_obj(self, connection: WebSocketConnection, message: Dict[str, Any]):
+    async def handle_message_obj(self, connection: WebSocketConnection | None, message: Dict[str, Any]):
         """Handle incoming WebSocket message object."""
         if not connection:
             return

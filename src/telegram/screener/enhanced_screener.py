@@ -21,8 +21,8 @@ import yfinance as yf
 # Use optimized batch fundamentals download for maximum performance
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.indicators.models import TickerIndicatorsRequest
-from src.indicators.service import IndicatorService
-from src.model.telegram_bot import DCFResult, Fundamentals, ScreenerReport, ScreenerResult
+from src.indicators.service import IndicatorService, UnifiedIndicatorService
+from src.model.telegram_bot import DCFResult, Fundamentals, ScreenerReport, ScreenerResult, Technicals
 from src.notification.logger import setup_logger
 from src.telegram.screener.screener_config_parser import FundamentalCriteria, ScreenerConfig, TechnicalCriteria
 from src.util.tickers_list import (
@@ -41,7 +41,7 @@ class EnhancedScreener:
     based on JSON configuration.
     """
 
-    def __init__(self, indicator_service: IndicatorService = None):
+    def __init__(self, indicator_service: UnifiedIndicatorService | None = None):
         """Initialize the enhanced screener."""
         self.risk_free_rate = 0.04  # 4% risk-free rate (can be made configurable)
         self.indicator_service = indicator_service or IndicatorService()
@@ -269,7 +269,7 @@ class EnhancedScreener:
 
     async def collect_technical_data(
         self, tickers: List[str], period: str, interval: str, provider: str
-    ) -> Dict[str, Dict[str, Any]]:
+    ) -> Dict[str, Technicals]:
         """Collect technical data for a list of tickers using IndicatorService."""
         if not tickers:
             return {}
@@ -319,7 +319,7 @@ class EnhancedScreener:
         )
         return technical_data
 
-    def _convert_indicator_result_to_technicals(self, result_set) -> Dict[str, Any]:
+    def _convert_indicator_result_to_technicals(self, result_set) -> Technicals:
         """Convert IndicatorResultSet to the format expected by screener logic."""
         from src.model.telegram_bot import Technicals
 
@@ -434,7 +434,7 @@ class EnhancedScreener:
             _logger.error("Error getting fundamentals for %s: %s", ticker, e)
             return None
 
-    def _validate_fundamental_data(self, fundamentals: Fundamentals) -> bool:
+    def _validate_fundamental_data(self, fundamentals: Any) -> bool:
         """Validate that fundamental data has sufficient information."""
         # Check if we have at least some key metrics
         key_metrics = [
@@ -450,7 +450,7 @@ class EnhancedScreener:
         self,
         config: ScreenerConfig,
         fundamentals_data: Dict[str, Fundamentals],
-        technical_data: Dict[str, Dict[str, Any]],
+        technical_data: Dict[str, Technicals],
     ) -> List[ScreenerResult]:
         """Apply enhanced screening criteria combining fundamental and technical analysis."""
         results = []
@@ -538,7 +538,7 @@ class EnhancedScreener:
         return results[: config.max_results]
 
     def _calculate_fundamental_score(
-        self, criteria: List[FundamentalCriteria], fundamentals: Fundamentals
+        self, criteria: List[FundamentalCriteria] | None, fundamentals: Fundamentals
     ) -> Tuple[float, Dict[str, Any]]:
         """Calculate fundamental score based on criteria."""
         if not criteria:
@@ -613,20 +613,24 @@ class EnhancedScreener:
     def _evaluate_fundamental_criterion(self, criterion: FundamentalCriteria, value: float) -> float:
         """Evaluate a fundamental criterion and return a score (0-1)."""
         if criterion.operator == "max":
-            if value <= criterion.value:
-                return 1.0
-            else:
-                # Linear penalty for exceeding max
-                penalty = min(1.0, (value - criterion.value) / criterion.value)
-                return max(0.0, 1.0 - penalty)
+            limit = criterion.value
+            if isinstance(limit, (int, float)):
+                if value <= limit:
+                    return 1.0
+                else:
+                    # Linear penalty for exceeding max
+                    penalty = min(1.0, (value - limit) / limit) if limit != 0 else 1.0
+                    return max(0.0, 1.0 - penalty)
 
         elif criterion.operator == "min":
-            if value >= criterion.value:
-                return 1.0
-            else:
-                # Linear penalty for being below min
-                penalty = min(1.0, (criterion.value - value) / criterion.value)
-                return max(0.0, 1.0 - penalty)
+            limit = criterion.value
+            if isinstance(limit, (int, float)):
+                if value >= limit:
+                    return 1.0
+                else:
+                    # Linear penalty for being below min
+                    penalty = min(1.0, (limit - value) / limit) if limit != 0 else 1.0
+                    return max(0.0, 1.0 - penalty)
 
         elif criterion.operator == "range":
             if isinstance(criterion.value, dict):
@@ -647,7 +651,7 @@ class EnhancedScreener:
         return 0.0
 
     def _calculate_technical_score(
-        self, criteria: List[TechnicalCriteria], technical_data: Dict[str, Any]
+        self, criteria: List[TechnicalCriteria] | None, technical_data: Technicals
     ) -> Tuple[float, Dict[str, Any]]:
         """Calculate technical score based on criteria."""
         if not criteria:
@@ -670,7 +674,7 @@ class EnhancedScreener:
         final_score = (total_score / total_weight * 10) if total_weight > 0 else 0.0
         return final_score, analysis
 
-    def _evaluate_technical_criterion(self, criterion: TechnicalCriteria, technical_data: Dict[str, Any]) -> float:
+    def _evaluate_technical_criterion(self, criterion: TechnicalCriteria, technical_data: Technicals) -> float:
         """Evaluate a technical criterion and return a score (0-1)."""
         try:
             # technical_data is a Technicals object, not a dictionary
@@ -783,8 +787,8 @@ class EnhancedScreener:
 
     def _calculate_dcf_valuation(self, fundamentals: Fundamentals | None) -> DCFResult | None:
         """Calculate DCF valuation if fundamental data is available."""
-        if not fundamentals:
-            _logger.debug("DCF: No fundamentals data available")
+        if not fundamentals or not fundamentals.ticker:
+            _logger.debug("DCF: No fundamentals data or ticker available")
             return None
 
         try:
@@ -854,7 +858,7 @@ class EnhancedScreener:
         config: ScreenerConfig,
         results: List[ScreenerResult],
         total_tickers: int,
-        fmp_results: Dict[str, Any] = None,
+        fmp_results: Dict[str, Any] | None = None,
     ) -> ScreenerReport:
         """Generate enhanced screener report with optional FMP information."""
         # Add FMP information to the report if available
@@ -918,7 +922,8 @@ class EnhancedScreener:
             else:
                 message += "🔴 "
 
-            message += f"({result.recommendation.replace('_', ' ')})"
+            rec_str = result.recommendation.replace("_", " ") if result.recommendation else ""
+            message += f"({rec_str})"
 
             # Add fundamental score if available
             if (

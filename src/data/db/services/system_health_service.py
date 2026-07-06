@@ -334,15 +334,15 @@ class SystemHealthService(BaseDBService):
     def _format_health_record(self, record: SystemHealth) -> Dict[str, Any]:
         """Format a SystemHealth record as a dictionary."""
         metadata = None
-        if record.metadata:
+        if record.system_metadata:
             try:
                 # Check if it's already a string before parsing
-                if isinstance(record.metadata, str):
-                    metadata = json.loads(record.metadata)
+                if isinstance(record.system_metadata, str):
+                    metadata = json.loads(record.system_metadata)
                 else:
-                    metadata = record.metadata
+                    metadata = record.system_metadata
             except (json.JSONDecodeError, TypeError):
-                metadata = {"raw": str(record.metadata)}
+                metadata = {"raw": record.system_metadata}
 
         return {
             "system": record.system,
@@ -364,15 +364,15 @@ class SystemHealthService(BaseDBService):
     def _format_channel_health_record(self, record: SystemHealth) -> Dict[str, Any]:
         """Format a SystemHealth record as a channel health dictionary (backward compatibility)."""
         metadata = None
-        if record.metadata:
+        if record.system_metadata:
             try:
                 # Check if it's already a string before parsing
-                if isinstance(record.metadata, str):
-                    metadata = json.loads(record.metadata)
+                if isinstance(record.system_metadata, str):
+                    metadata = json.loads(record.system_metadata)
                 else:
-                    metadata = record.metadata
+                    metadata = record.system_metadata
             except (json.JSONDecodeError, TypeError):
-                metadata = {"raw": str(record.metadata)}
+                metadata = {"raw": record.system_metadata}
 
         return {
             "channel": record.component,  # Map component to channel for backward compatibility

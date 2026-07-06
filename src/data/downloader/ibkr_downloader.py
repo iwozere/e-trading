@@ -9,7 +9,7 @@ delayed market data support.
 
 import os
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, cast
 
 import pandas as pd
 from ib_insync import IB, Contract, Forex, Stock
@@ -49,7 +49,7 @@ class IBKRDownloader(BaseDataDownloader):
             try:
                 self.ib = IB()
                 # Use a specific clientId offset to avoid conflicts with main brokers
-                self.ib.connect(IBKR_HOST, IBKR_PORT, clientId=int(IBKR_CLIENT_ID) + 50)
+                self.ib.connect(IBKR_HOST or "127.0.0.1", int(IBKR_PORT or 7497), clientId=int(IBKR_CLIENT_ID or 1) + 50)
                 self.ib.reqMarketDataType(self.market_data_type)
                 _logger.info("Connected to IBKR for downloading (Delayed Data Mode)")
             except Exception as e:
@@ -117,7 +117,7 @@ class IBKRDownloader(BaseDataDownloader):
             last_ts = df_cached.index[-1]
             if last_ts < now - timedelta(minutes=self._get_interval_minutes(interval) * 2):
                 sync_required = True
-                sync_start = last_ts
+                sync_start = cast(datetime, pd.to_datetime(last_ts))
             else:
                 _logger.debug("Cache for %s is up to date.", symbol)
 

@@ -8,7 +8,7 @@ Used by the web UI to dynamically generate configuration forms.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 class ParameterType(Enum):
@@ -28,10 +28,10 @@ class ParameterDefinition:
     type: ParameterType
     label: str
     default: Any
-    min_value: float = None
-    max_value: float = None
-    step: float = None
-    options: List[str] = None
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    step: Optional[float] = None
+    options: Optional[List[str]] = None
     description: str = ""
     required: bool = False
 

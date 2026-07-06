@@ -244,7 +244,8 @@ class SchedulerService:
             try:
                 await self._initialize_scheduler()
                 await self._load_and_register_schedules()
-                self.scheduler.start()
+                if self.scheduler is not None:
+                    self.scheduler.start()
 
                 # Start DB listener
                 self._db_listener_task = asyncio.create_task(self._listen_for_db_changes())
@@ -390,7 +391,7 @@ class SchedulerService:
         Returns:
             Dictionary with scheduler status information
         """
-        status = {
+        status: Dict[str, Any] = {
             "is_running": self.is_running,
             "startup_retry_count": self.startup_retry_count,
             "max_workers": self.max_workers,

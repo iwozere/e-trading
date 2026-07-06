@@ -56,7 +56,7 @@ def _get_db_url() -> str:
         return DB_URL.replace("postgres://", "postgresql://")
     except Exception:
         # Last resort, return ini placeholder which will fail loudly if used
-        return ini_url
+        return ini_url or ""
 
 
 def run_migrations_offline() -> None:

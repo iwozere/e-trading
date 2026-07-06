@@ -128,7 +128,7 @@ class WebUIService(BaseDBService):
             ip_address=ip_address,
             user_agent=user_agent,
         )
-        return int(row.id)
+        return row.id
 
     # Keep DTO helpers as instance methods for convenience
     def _config_to_dict(self, c) -> Dict[str, Any]:

@@ -157,7 +157,7 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
                     start_time = time.time()
                     headers = self._get_headers()
 
-                    async with self._session.get(url, params=params, headers=headers, timeout=timeout) as resp:
+                    async with self._session.get(url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
                         response_time_ms = (time.time() - start_time) * 1000
                         self._record_request(channel_id)
 
@@ -375,7 +375,7 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
 
                 try:
                     # Build API parameters
-                    params = {
+                    params: Dict[str, Any] = {
                         "limit": min(100, messages_per_channel)  # Discord API limit is 100 per request
                     }
 
@@ -541,7 +541,7 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
                 "bullish": bullish,
                 "bearish": bearish,
                 "neutral": neutral,
-                "sentiment_score": float(score),
+                "sentiment_score": score,
                 "total_reactions": int(total_reactions),
                 "avg_reactions": float(avg_reactions),
                 "unique_users": unique_user_count,

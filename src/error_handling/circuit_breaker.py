@@ -252,13 +252,14 @@ class CircuitBreaker:
             return self.state == CircuitState.HALF_OPEN
 
 
-def circuit_breaker(name: str, config: CircuitBreakerConfig | None = None):
+def circuit_breaker(name: str, config: CircuitBreakerConfig | None = None, **kwargs):
     """
     Decorator for adding circuit breaker functionality to functions.
 
     Args:
         name: Name of the circuit breaker
         config: Circuit breaker configuration
+        **kwargs: Config parameter overrides for CircuitBreakerConfig
 
     Example:
         @circuit_breaker("api_calls", CircuitBreakerConfig(failure_threshold=5))
@@ -266,6 +267,12 @@ def circuit_breaker(name: str, config: CircuitBreakerConfig | None = None):
             # Function that may fail
             pass
     """
+    if config is None:
+        config = CircuitBreakerConfig(**kwargs)
+    elif kwargs:
+        for k, v in kwargs.items():
+            if hasattr(config, k):
+                setattr(config, k, v)
 
     def decorator(func: Callable) -> Callable:
         cb = CircuitBreaker(name, config)
@@ -275,7 +282,7 @@ def circuit_breaker(name: str, config: CircuitBreakerConfig | None = None):
             return cb.call(func, *args, **kwargs)
 
         # Add circuit breaker to wrapper for access
-        wrapper.circuit_breaker = cb
+        setattr(wrapper, "circuit_breaker", cb)
         return wrapper
 
     return decorator

@@ -37,7 +37,7 @@ class SuperTrendPlotter(BaseIndicatorPlotter):
             _logger.exception("Error plotting SuperTrend: %s")
 
     @property
-    def subplot_type(self):
+    def subplot_type(self) -> str:
         return "price"
 
     # Plot ATR if available

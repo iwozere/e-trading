@@ -325,7 +325,7 @@ async def get_telegram_user_stats(current_user: User = Depends(get_current_user)
         stats_data = telegram_app_service.get_user_stats()
         stats = UserStats(**stats_data)
 
-        _logger.info("Retrieved Telegram user statistics: %s", stats.dict())
+        _logger.info("Retrieved Telegram user statistics: %s", stats.model_dump())
         return stats
 
     except Exception as e:
@@ -445,7 +445,7 @@ async def get_telegram_alert_stats(current_user: User = Depends(get_current_user
         stats_data = telegram_app_service.get_alert_stats()
         stats = AlertStats(**stats_data)
 
-        _logger.info("Retrieved Telegram alert statistics: %s", stats.dict())
+        _logger.info("Retrieved Telegram alert statistics: %s", stats.model_dump())
         return stats
 
     except Exception as e:
@@ -564,7 +564,7 @@ async def get_telegram_schedule_stats(current_user: User = Depends(get_current_u
         stats_data = telegram_app_service.get_schedule_stats()
         stats = ScheduleStats(**stats_data)
 
-        _logger.info("Retrieved Telegram schedule statistics: %s", stats.dict())
+        _logger.info("Retrieved Telegram schedule statistics: %s", stats.model_dump())
         return stats
 
     except Exception as e:
@@ -589,7 +589,7 @@ async def send_telegram_broadcast(broadcast: BroadcastMessage, current_user: Use
 
         result = BroadcastResult(**result_data)
 
-        _logger.info("Broadcast result: %s", result.dict())
+        _logger.info("Broadcast result: %s", result.model_dump())
         return result
 
     except Exception as e:
@@ -698,7 +698,7 @@ async def get_telegram_audit_stats(current_user: User = Depends(get_current_user
             top_commands=stats_data.get("top_commands", []),
         )
 
-        _logger.info("Retrieved Telegram audit statistics: %s", stats.dict())
+        _logger.info("Retrieved Telegram audit statistics: %s", stats.model_dump())
         return stats
 
     except Exception as e:

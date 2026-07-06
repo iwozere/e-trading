@@ -92,7 +92,7 @@ class BaseTradingBot:
         parameters: Dict[str, Any],
         broker: Any = None,
         paper_trading: bool = True,
-        bot_id: str = None,
+        bot_id: str | None = None,
         trade_repository: Any = None,
         trade_notification_hook: Callable[[str, float, float, float | None], None] | None = None,
     ) -> None:
@@ -133,7 +133,7 @@ class BaseTradingBot:
         self.trade_repository = trade_repository or trading_bot_service
 
         # P1-1: Derive absolute state file path from repo root
-        _state_dir = TRADING_STATE_DIR / str(self.bot_id)
+        _state_dir = TRADING_STATE_DIR / self.bot_id
         _state_dir.mkdir(parents=True, exist_ok=True)
         self.state_file = str(_state_dir / "state.json")
 
@@ -203,9 +203,9 @@ class BaseTradingBot:
         async def _send() -> None:
             recipient = get_trading_bot_notification_recipient(
                 self.config,
-                str(self.bot_id),
+                self.bot_id,
                 purpose=purpose,
-                log_name=str(self.bot_id),
+                log_name=self.bot_id,
             )
             if not recipient:
                 return
@@ -481,7 +481,7 @@ class BaseTradingBot:
         Runs pre-trade risk checks before placing any order.
         """
         # P2-3: Pre-trade risk gate — block trades that breach limits
-        if trade_type == "buy" and hasattr(self, "risk_controller") and self.risk_controller:
+        if trade_type == "buy" and hasattr(self, "risk_controller") and self.risk_controller is not None:
             with self._positions_lock:
                 current_exposures = {
                     pair: pos["entry_price"] * pos["size"] for pair, pos in self.active_positions.items()
@@ -510,7 +510,7 @@ class BaseTradingBot:
             if sell_position is None:
                 _logger.warning("No active position found for SELL on %s", self.trading_pair)
                 return
-            if self.risk_controller:
+            if self.risk_controller is not None:
                 with self._positions_lock:
                     current_exposures = {
                         pair: pos["entry_price"] * pos["size"] for pair, pos in self.active_positions.items()

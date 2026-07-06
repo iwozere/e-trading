@@ -21,7 +21,7 @@ import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import List
+from typing import List, cast
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
@@ -216,7 +216,7 @@ class Russell3000Downloader(BaseDataDownloader):
         df["ticker"] = df["ticker"].astype(str).str.strip()
         mask: pd.Series = df["ticker"].str.len() > 0  # type: ignore[assignment]
         df = df[mask]
-        df = df.drop_duplicates(subset=["ticker"])  # type: ignore[call-overload]
+        df = df.drop_duplicates(subset=["ticker"])
         return df.reset_index(drop=True)
 
     def _write_cache(self, df: pd.DataFrame) -> None:

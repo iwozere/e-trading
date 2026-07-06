@@ -699,7 +699,7 @@ class StrategyManager:
             await self.broker_manager.shutdown()
 
             # Close notification client
-            if self.notification_client:
+            if self.notification_client is not None:
                 _logger.info("Closing notification client...")
                 await self.notification_client.close()
 

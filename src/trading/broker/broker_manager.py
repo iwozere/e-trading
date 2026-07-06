@@ -282,7 +282,7 @@ class BrokerManager:
     - Error handling and recovery
     """
 
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: Dict[str, Any] | None = None):
         self.config = config or {}
         self.brokers: Dict[str, BaseBroker] = {}
         self.broker_configs: Dict[str, Dict[str, Any]] = {}

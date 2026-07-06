@@ -213,7 +213,8 @@ def simulate_trade(
     armed = False
     run_high = buy
     for r in hold.itertuples():
-        hi, lo = float(r.high), float(r.low)
+        hi = float(getattr(r, "high"))
+        lo = float(getattr(r, "low"))
         if not armed:
             if lo <= stop_level:
                 return stop_level, "stop"
@@ -230,7 +231,7 @@ def simulate_trade(
     return float(hold.iloc[-1].close), "open"
 
 
-def _holding(df: pd.DataFrame, entry: str) -> Tuple[float | None, pd.DataFrame | None]:
+def _holding(df: pd.DataFrame | None, entry: str) -> Tuple[float | None, pd.DataFrame | None]:
     """Return (buy_price, holding-rows) for the chosen entry convention."""
     if df is None or len(df) < 2:
         return None, None
@@ -259,7 +260,7 @@ def evaluate(
     for rec in records:
         df = paths.get(rec["ticker"])
         buy, hold = _holding(df, entry)
-        if buy is None:
+        if buy is None or hold is None:
             continue
         exit_price, reason = simulate_trade(buy, hold, params, rec["atr"])
         ret = exit_price / buy - 1.0
@@ -317,7 +318,7 @@ def objective_value(result: Dict[str, Any], objective: str) -> float:
             return 0.0
         s = pd.Series(rets)
         std = s.std()
-        return float(s.mean() / std) if std > 0 else 0.0
+        return s.mean() / std if std > 0 else 0.0
     raise ValueError(f"Unknown objective: {objective}")
 
 

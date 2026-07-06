@@ -65,7 +65,7 @@ def create_admin(telegram_user_id: str, email: str):
             sent_time = int(time.time())
 
             # Update user info and set as admin
-            users_service.update_user(
+            users_service.update_user(  # type: ignore
                 telegram_user_id=telegram_user_id, email=email, is_admin=True, is_verified=True, is_approved=True
             )
 

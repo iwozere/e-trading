@@ -9,7 +9,7 @@ validates their performance metrics, and inserts them into the trading_bots tabl
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -68,7 +68,7 @@ class StrategyPromoter:
 
             # Get all trials sorted by value (descending)
             trials = study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.COMPLETE])
-            trials_sorted = sorted(trials, key=lambda t: t.value, reverse=True)
+            trials_sorted = sorted(trials, key=lambda t: t.value if t.value is not None else 0.0, reverse=True)
 
             return trials_sorted[:top_n]
         except Exception as e:
@@ -178,7 +178,7 @@ class StrategyPromoter:
             "params": trial.params,
             "metrics": metrics,
             "user_attrs": trial.user_attrs,
-            "promoted_at": datetime.utcnow().isoformat(),
+            "promoted_at": datetime.now(timezone.utc).isoformat(),
         }
 
         # Default description

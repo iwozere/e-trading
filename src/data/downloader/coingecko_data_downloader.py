@@ -18,7 +18,7 @@ Classes:
 """
 
 from datetime import datetime
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import pandas as pd
 import requests
@@ -143,9 +143,7 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
             ohlcv = ohlcv.rename(columns={"timestamp": "timestamp"})
             ohlcv = ohlcv[["timestamp", "open", "high", "low", "close", "volume"]]
 
-            # Save to CSV if requested
-            if save_to_csv:
-                self.save_data(ohlcv, symbol, start_date, end_date)
+            # Save to CSV is now handled by the cache system
 
             return ohlcv
         except Exception as e:
@@ -235,8 +233,17 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
         raise NotImplementedError("CoinGecko is for cryptocurrencies, not stocks")
 
     def download_multiple_symbols(
-        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
-    ) -> Dict[str, str]:
+        self,
+        symbols: List[str],
+        download_func: Any = None,
+        interval: str = "1d",
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> Dict[str, pd.DataFrame]:
+        if start_date is None:
+            start_date = datetime.now() - pd.Timedelta(days=365)
+        if end_date is None:
+            end_date = datetime.now()
         def download_func(symbol, interval, start_date, end_date):
             return self.download_historical_data(symbol, interval, start_date, end_date, save_to_csv=False)
 
