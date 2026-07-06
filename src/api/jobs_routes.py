@@ -12,6 +12,7 @@ from typing import List
 
 # UUID import removed - using integer IDs
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 
 from src.api.auth import get_current_user, require_trader_or_admin
@@ -39,8 +40,25 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 router = APIRouter(prefix="/api", tags=["jobs"])
 
 
+import re
+
 def _resolve_log_path(name_lower: str, run_date: date) -> Path | None:
     """Map a schedule name / job_id to its pipeline.log file path."""
+    m = re.search(r'(p\d+)', name_lower)
+    if m:
+        prefix = m.group(1)
+        results_dir = _PROJECT_ROOT / "results"
+        if results_dir.exists():
+            for d in results_dir.iterdir():
+                if d.is_dir() and d.name.startswith(f"{prefix}_"):
+                    log_file = d / str(run_date) / "pipeline.log"
+                    if log_file.exists():
+                        return log_file
+                    log_file_no_date = d / "pipeline.log"
+                    if log_file_no_date.exists():
+                        return log_file_no_date
+
+    # Fallback
     if "p05" in name_lower:
         return _PROJECT_ROOT / "results" / "p05_ai_selector" / str(run_date) / "pipeline.log"
     return None
@@ -184,7 +202,7 @@ async def get_run_logs(
             "run_id": run_id,
             "pipeline_name": pipeline_name,
             "started_at": run.started_at.isoformat() if run.started_at else None,
-            "log_content": json.dumps(run.result, indent=2, ensure_ascii=False),
+            "log_content": json.dumps(jsonable_encoder(run.result), indent=2, ensure_ascii=False),
             "source": "db_result",
             "log_path": None,
         }
