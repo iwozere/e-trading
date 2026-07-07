@@ -119,12 +119,18 @@ type = "filter"
 inputs = ["exclude_ib_reconnect"]
 condition = "!(match(string!(.source_name), r'^docker\\.service$') && match(string!(.message), r'failed to query external DNS server.*i/o timeout'))"
 
+# Docker corrupted log files containing null bytes — docker daemon logs warning, self-recovers
+[transforms.exclude_docker_log_decode]
+type = "filter"
+inputs = ["exclude_docker_dns"]
+condition = "!(match(string!(.source_name), r'^docker\\.service$') && match(string!(.message), r'Error decoding log file.*invalid character'))"
+
 # ─── Fingerprint ──────────────────────────────────────────────────────────────
 # Build a stable dedup key by stripping timestamps, UUIDs, and numbers.
 
 [transforms.fingerprint]
 type = "remap"
-inputs = ["exclude_docker_dns"]
+inputs = ["exclude_docker_log_decode"]
 source = '''
   fp = replace(string!(.message), r'[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}[^ ]*', "<TS>")
   fp = replace(fp, r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', "<UUID>")
