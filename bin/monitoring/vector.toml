@@ -111,13 +111,13 @@ condition = "!match(string!(.message), r'(?i)(apport|ConditionPath|unmet conditi
 [transforms.exclude_ib_reconnect]
 type = "filter"
 inputs = ["exclude_infra_noise"]
-condition = "!match(string!(.message), r'ConnectionRefusedError.*127\.0\.0\.1.*7497')"
+condition = "!match(string!(.message), r'ConnectionRefusedError.*127\\.0\\.0\\.1.*7497')"
 
 # Docker internal DNS resolver transient timeouts — single retries auto-recover
 [transforms.exclude_docker_dns]
 type = "filter"
 inputs = ["exclude_ib_reconnect"]
-condition = "!(match(string!(.source_name), r'^docker\.service$') && match(string!(.message), r'failed to query external DNS server.*i/o timeout'))"
+condition = "!(match(string!(.source_name), r'^docker\\.service$') && match(string!(.message), r'failed to query external DNS server.*i/o timeout'))"
 
 # ─── Fingerprint ──────────────────────────────────────────────────────────────
 # Build a stable dedup key by stripping timestamps, UUIDs, and numbers.
