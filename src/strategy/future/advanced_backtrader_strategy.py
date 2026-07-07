@@ -1,3 +1,4 @@
+# pyright: reportAttributeAccessIssue=false
 """
 Advanced Backtrader Strategy
 
@@ -12,8 +13,8 @@ import backtrader as bt
 import pandas as pd
 
 from src.notification.logger import setup_logger
-from src.strategy.entry.entry_mixin_factory import EntryMixinFactory
-from src.strategy.exit.exit_mixin_factory import ExitMixinFactory
+from src.strategy.entry.entry_mixin_factory import get_entry_mixin
+from src.strategy.exit.exit_mixin_factory import get_exit_mixin
 from src.strategy.future.composite_strategy_manager import AdvancedStrategyFramework, CompositeSignal
 
 logger = setup_logger(__name__)
@@ -129,10 +130,6 @@ class AdvancedBacktraderStrategy(bt.Strategy):
 
     def _initialize_mixins(self):
         """Initialize entry and exit mixins."""
-        # Initialize entry mixins based on strategy configuration
-        entry_factory = EntryMixinFactory()
-        exit_factory = ExitMixinFactory()
-
         # Get strategy configuration
         strategy_config = self._get_strategy_config()
 
@@ -142,7 +139,7 @@ class AdvancedBacktraderStrategy(bt.Strategy):
                 strategy_name = strategy.get("name", "")
                 if strategy_name:
                     try:
-                        entry_mixin = entry_factory.create_entry_mixin(strategy_name, strategy.get("params", {}))
+                        entry_mixin = get_entry_mixin(strategy_name, strategy.get("params", {}))
                         self.entry_mixins[strategy_name] = entry_mixin
                     except Exception as e:
                         logger.warning("Could not initialize entry mixin for %s: %s", strategy_name, e)
@@ -151,7 +148,7 @@ class AdvancedBacktraderStrategy(bt.Strategy):
             exit_config = strategy_config.get("risk_management", {})
             if exit_config:
                 try:
-                    exit_mixin = exit_factory.create_exit_mixin("atr_exit", exit_config)
+                    exit_mixin = get_exit_mixin("ATRExitMixin", exit_config)
                     self.exit_mixins["atr_exit"] = exit_mixin
                 except Exception as e:
                     logger.warning("Could not initialize exit mixin: %s", e)

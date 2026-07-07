@@ -70,12 +70,12 @@ class HMMLSTMEntryMixin(BaseEntryMixin):
 
     def __init__(self, params: Dict[str, Any] | None = None):
         super().__init__(params)
-        self.symbol = self.get_param("symbol", "BTCUSDT")
-        self.timeframe = self.get_param("timeframe", "1h")
-        self.prediction_threshold = self.get_param("prediction_threshold", 0.001)
-        self.regime_confidence_threshold = self.get_param("regime_confidence_threshold", 0.6)
-        self.models_dir = Path(self.get_param("models_dir", "src/ml/pipeline/p01_hmm_lstm/models"))
-        self.results_dir = Path(self.get_param("results_dir", "results"))
+        self.symbol = str(self.get_param("symbol", "BTCUSDT") or "BTCUSDT")
+        self.timeframe = str(self.get_param("timeframe", "1h") or "1h")
+        self.prediction_threshold = float(self.get_param("prediction_threshold", 0.001) or 0.001)
+        self.regime_confidence_threshold = float(self.get_param("regime_confidence_threshold", 0.6) or 0.6)
+        self.models_dir = Path(str(self.get_param("models_dir", "src/ml/pipeline/p01_hmm_lstm/models") or "src/ml/pipeline/p01_hmm_lstm/models"))
+        self.results_dir = Path(str(self.get_param("results_dir", "results") or "results"))
 
         self.hmm_model = None
         self.lstm_model = None
@@ -182,14 +182,14 @@ class HMMLSTMEntryMixin(BaseEntryMixin):
         # Existing calculation logic remains same
         try:
             lookback = 100
-            if len(self.strategy.data) < lookback:
+            if self.strategy is None or len(self.strategy.data) < lookback:
                 return {}
             high = np.array([self.strategy.data.high[-i] for i in range(lookback, 0, -1)])
             low = np.array([self.strategy.data.low[-i] for i in range(lookback, 0, -1)])
             close = np.array([self.strategy.data.close[-i] for i in range(lookback, 0, -1)])
 
             indicators = {}
-            params = self.optimized_indicators
+            params = self.optimized_indicators or {}
 
             rsi = talib.RSI(close, timeperiod=params.get("rsi_period", 14))
             indicators["rsi_optimized"] = rsi[-1] if not np.isnan(rsi[-1]) else 50.0
@@ -217,6 +217,8 @@ class HMMLSTMEntryMixin(BaseEntryMixin):
         """Determine if entry signal is present."""
         if not self.are_indicators_ready():
             return False
+        if self.strategy is None:
+            return False
         try:
             current_features = {
                 "open": self.strategy.data.open[0],
@@ -243,7 +245,7 @@ class HMMLSTMEntryMixin(BaseEntryMixin):
     def _predict_regime(self, features: Dict[str, float]) -> Tuple[int, float]:
         """Predict market regime using HMM."""
         try:
-            if not self.hmm_model:
+            if not self.hmm_model or not self.hmm_scaler or not self.hmm_features:
                 return 1, 0.5
             vals = [features.get(f, 0.0) for f in self.hmm_features]
             self.feature_buffer.append(vals)
@@ -259,7 +261,7 @@ class HMMLSTMEntryMixin(BaseEntryMixin):
     def _predict_price(self, features: Dict[str, float], regime: int) -> float:
         """Predict next price change using LSTM."""
         try:
-            if not self.lstm_model:
+            if not self.lstm_model or not self.lstm_scalers or not self.lstm_features or self.lstm_sequence_buffer is None:
                 return 0.0
             vals = [features.get(f, 0.0) for f in self.lstm_features]
             self.lstm_sequence_buffer.append(vals)

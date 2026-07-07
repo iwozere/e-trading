@@ -254,19 +254,19 @@ class StrategyConfigBuilder:
     """Helper for creating strategy configurations."""
 
     def __init__(self):
-        self.config = {
+        self.config: Dict[str, Any] = {
             "entry_logic": None,
             "exit_logic": None,
             "position_size": 0.1,
             "use_talib": False,
         }
 
-    def set_entry_mixin(self, name: str, params: Dict[str, Any] = None):
+    def set_entry_mixin(self, name: str, params: Dict[str, Any] | None = None):
         """Set entry mixin configuration."""
         self.config["entry_logic"] = {"name": name, "params": params or {}}
         return self
 
-    def set_exit_mixin(self, name: str, params: Dict[str, Any] = None):
+    def set_exit_mixin(self, name: str, params: Dict[str, Any] | None = None):
         """Set exit mixin configuration."""
         self.config["exit_logic"] = {"name": name, "params": params or {}}
         return self

@@ -1,3 +1,4 @@
+# pyright: reportOptionalMemberAccess=false, reportAttributeAccessIssue=false
 """
 Composite Strategy Manager Module
 
@@ -148,7 +149,7 @@ class AdvancedStrategyFramework:
         self.performance_tracker = {}
 
         # Load configurations
-        self._load_configs()
+        self.configs = self._load_configs()
 
         # Initialize strategy components
         self.initialize_composite_strategies()
@@ -203,7 +204,7 @@ class AdvancedStrategyFramework:
                 logger.info("Initialized composite strategy: %s", strategy_name)
 
             except Exception:
-                logger.exception("Error initializing composite strategy %s: ", strategy.name)
+                logger.exception("Error initializing composite strategy %s: ", strategy_name)
 
     def initialize_multi_timeframe_strategies(self):
         """Initialize multi-timeframe strategies from configuration."""
@@ -230,7 +231,7 @@ class AdvancedStrategyFramework:
                 logger.info("Initialized multi-timeframe strategy: %s", strategy_name)
 
             except Exception:
-                logger.exception("Error initializing multi-timeframe strategy%s: ", strategy.name)
+                logger.exception("Error initializing multi-timeframe strategy%s: ", strategy_name)
 
     def initialize_dynamic_switching(self):
         """Initialize dynamic strategy switching configuration."""

@@ -62,8 +62,8 @@ class BaseStrategy(bt.Strategy):
         self.config = self.p.strategy_config or {}
         self.symbol = self.p.symbol
         self.timeframe = self.p.timeframe
-        self.asset_type = self.config.get("asset_type", self.p.asset_type)
-        self.min_order_value = self.config.get("min_order_value", self.p.min_order_value)
+        self.asset_type = str(self.config.get("asset_type", self.p.asset_type) or "")
+        self.min_order_value = float(self.config.get("min_order_value", self.p.min_order_value) or 0.0)
 
         # Auto-detect asset type from symbol if not explicitly set
         if not self.asset_type or self.asset_type == "crypto":
@@ -104,9 +104,9 @@ class BaseStrategy(bt.Strategy):
         self.peak_equity = 0.0
 
         # Position sizing
-        self.base_position_size = self.config.get("position_size", self.p.position_size)
-        self.max_position_size = self.config.get("max_position_size", 0.2)
-        self.min_position_size = self.config.get("min_position_size", 0.05)
+        self.base_position_size = float(self.config.get("position_size", self.p.position_size) or 0.1)
+        self.max_position_size = float(self.config.get("max_position_size", 0.2))
+        self.min_position_size = float(self.config.get("min_position_size", 0.05))
 
         # Indicator management (for new TALib-based architecture)
         self.indicators = {}  # Dict[str, bt.Indicator] - stores indicator line objects by alias
@@ -847,11 +847,18 @@ class BaseStrategy(bt.Strategy):
                 }
 
                 # Get the original position trade
-                original_trade = self.trade_repository.get_trade_by_id(self.current_position_id)
-                if original_trade:
-                    self.trade_repository.create_partial_exit_trade(trade_data, original_trade.get("id"))
+                if self.current_position_id is not None:
+                    original_trade = self.trade_repository.get_trade_by_id(self.current_position_id)
+                    if original_trade:
+                        original_id = original_trade.get("id")
+                        if original_id is not None:
+                            self.trade_repository.create_partial_exit_trade(trade_data, str(original_id))
+                        else:
+                            _logger.warning("Original position trade has no ID")
+                    else:
+                        _logger.warning("Original position trade not found for partial exit")
                 else:
-                    _logger.warning("Original position trade not found for partial exit")
+                    _logger.warning("current_position_id is None for partial exit")
 
             else:
                 # Store as new position

@@ -28,6 +28,12 @@ class P07XGBModel:
         """Map [-1, 0, 1] to [0, 1, 2]."""
         return y.map({-1: 0, 0: 1, 1: 2})
 
+    def load(self, model_path: str):
+        """Load model from file."""
+        booster = xgb.Booster()
+        booster.load_model(model_path)
+        self.model = booster
+
     def fit(self, X: pd.DataFrame, y: pd.Series):
         y_mapped = self._map_labels(y)
         dtrain = xgb.DMatrix(X, label=y_mapped)

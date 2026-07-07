@@ -1,3 +1,4 @@
+# pyright: reportOptionalMemberAccess=false
 """
 Unit tests for EOM Entry Mixins
 
@@ -37,17 +38,17 @@ class TestEOMBreakoutEntryMixin(unittest.TestCase):
         """Test mixin initialization"""
         mixin = EOMBreakoutEntryMixin()
         self.assertIsNotNone(mixin)
-        self.assertEqual(mixin.get_param("e_breakout_threshold"), 0.002)
-        self.assertEqual(mixin.get_param("e_use_atr_filter"), True)
-        self.assertEqual(mixin.get_param("e_rsi_overbought"), 70)
+        self.assertEqual(mixin.get_param("breakout_threshold"), 0.002)
+        self.assertEqual(mixin.get_param("use_atr_filter"), True)
+        self.assertEqual(mixin.get_param("rsi_overbought"), 70)
 
     def test_custom_params(self):
         """Test mixin with custom parameters"""
-        params = {"e_breakout_threshold": 0.005, "e_use_atr_filter": False, "e_rsi_overbought": 75}
+        params = {"breakout_threshold": 0.005, "use_atr_filter": False, "rsi_overbought": 75}
         mixin = EOMBreakoutEntryMixin(params=params)
-        self.assertEqual(mixin.get_param("e_breakout_threshold"), 0.005)
-        self.assertEqual(mixin.get_param("e_use_atr_filter"), False)
-        self.assertEqual(mixin.get_param("e_rsi_overbought"), 75)
+        self.assertEqual(mixin.get_param("breakout_threshold"), 0.005)
+        self.assertEqual(mixin.get_param("use_atr_filter"), False)
+        self.assertEqual(mixin.get_param("rsi_overbought"), 75)
 
     def test_breakout_entry_signal(self):
         """Test entry signal on breakout with EOM confirmation"""
@@ -167,9 +168,9 @@ class TestEOMPullbackEntryMixin(unittest.TestCase):
         """Test mixin initialization"""
         mixin = EOMPullbackEntryMixin()
         self.assertIsNotNone(mixin)
-        self.assertEqual(mixin.get_param("e_support_threshold"), 0.005)
-        self.assertEqual(mixin.get_param("e_rsi_oversold"), 40)
-        self.assertEqual(mixin.get_param("e_atr_floor_multiplier"), 0.9)
+        self.assertEqual(mixin.get_param("support_threshold"), 0.005)
+        self.assertEqual(mixin.get_param("rsi_oversold"), 40)
+        self.assertEqual(mixin.get_param("atr_floor_multiplier"), 0.9)
 
     def test_pullback_entry_signal(self):
         """Test entry signal on pullback with EOM reversal"""
@@ -268,9 +269,9 @@ class TestEOMMAcdBreakoutEntryMixin(unittest.TestCase):
         """Test mixin initialization"""
         mixin = EOMMAcdBreakoutEntryMixin()
         self.assertIsNotNone(mixin)
-        self.assertEqual(mixin.get_param("e_resistance_range_low"), 0.995)
-        self.assertEqual(mixin.get_param("e_resistance_range_high"), 1.002)
-        self.assertEqual(mixin.get_param("e_volume_threshold"), 0.8)
+        self.assertEqual(mixin.get_param("resistance_range_low"), 0.995)
+        self.assertEqual(mixin.get_param("resistance_range_high"), 1.002)
+        self.assertEqual(mixin.get_param("volume_threshold"), 0.8)
 
     def test_macd_breakout_entry_signal(self):
         """Test entry signal on MACD bullish with price near resistance"""
@@ -290,6 +291,7 @@ class TestEOMMAcdBreakoutEntryMixin(unittest.TestCase):
 
         self.mixin.get_indicator_prev = Mock(
             side_effect=lambda x, offset=1: {
+                "entry_macd": 0.3,
                 "entry_macd_signal": 0.4,  # Was below signal
                 "entry_macd_hist": 0.1,  # Histogram rising
             }[x]

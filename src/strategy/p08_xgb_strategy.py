@@ -1,3 +1,4 @@
+# pyright: reportAttributeAccessIssue=false, reportCallIssue=false
 import sys
 from pathlib import Path
 
@@ -55,7 +56,7 @@ class P08XGBStrategy(BaseStrategy):
                 return
 
             # Initialize XGB model wrapper
-            self.model = P07XGBModel(model_type="classifier")
+            self.model = P07XGBModel()
             self.model.load(str(model_file))
             _logger.info(f"Successfully loaded P08 XGBoost model from {model_file}")
 

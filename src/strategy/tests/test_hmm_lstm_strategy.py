@@ -1,3 +1,4 @@
+# pyright: reportAttributeAccessIssue=false, reportCallIssue=false
 """
 Test Script for HMM-LSTM Pipeline Strategy
 
@@ -21,7 +22,7 @@ project_root = Path(__file__).resolve().parents[2]
 sys.path.append(str(project_root))
 
 from src.notification.logger import setup_logger
-from src.strategy.hmm_lstm_strategy import HMMLSTMPipelineStrategy
+from src.strategy.hmm_lstm_strategy import HMMLSTMStrategy
 
 _logger = setup_logger(__name__)
 
@@ -109,7 +110,7 @@ def run_backtest(strategy_config: dict, data_path: str, variant: str = "default"
 
     # Add strategy
     cerebro.addstrategy(
-        HMMLSTMPipelineStrategy, strategy_config=config, symbol=symbol, timeframe=config.get("timeframe", "1h")
+        HMMLSTMStrategy, strategy_config=config, symbol=symbol, timeframe=config.get("timeframe", "1h")
     )
 
     # Set broker parameters

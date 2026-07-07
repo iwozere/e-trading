@@ -1,3 +1,4 @@
+# pyright: reportCallIssue=false, reportArgumentType=false
 """
 Strategy Core Module
 
@@ -106,7 +107,7 @@ class MarketRegimeDetector:
         # Calculate trend strength using linear regression R-squared
         import numpy as np
 
-        prices = data["close"].values
+        prices = np.asarray(data["close"], dtype=float)
         x = np.arange(len(prices))
 
         # Fit linear regression

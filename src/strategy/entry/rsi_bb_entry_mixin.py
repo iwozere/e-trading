@@ -119,7 +119,7 @@ class RSIBBEntryMixin(BaseEntryMixin):
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
         return max(
-            self._resolve_param("rsi_period", "e_rsi_period", 14), self._resolve_param("bb_period", "e_bb_period", 20)
+            int(self._resolve_param("rsi_period", "e_rsi_period", 14) or 14), int(self._resolve_param("bb_period", "e_bb_period", 20) or 20)
         )
 
     def are_indicators_ready(self) -> bool:
@@ -141,8 +141,10 @@ class RSIBBEntryMixin(BaseEntryMixin):
             return False
 
         try:
+            if self.strategy is None:
+                return False
             # Check cooldown period
-            cooldown_bars = self._resolve_param("cooldown_bars", "e_cooldown_bars", 0)
+            cooldown_bars = int(self._resolve_param("cooldown_bars", "e_cooldown_bars", 0) or 0)
             if cooldown_bars > 0:
                 current_bar = len(self.strategy.data)
                 if self.last_entry_bar is not None and current_bar - self.last_entry_bar < cooldown_bars:
@@ -151,10 +153,10 @@ class RSIBBEntryMixin(BaseEntryMixin):
             current_price = self.strategy.data.close[0]
 
             # Standardized parameter retrieval
-            oversold = self._resolve_param("rsi_oversold", "e_rsi_oversold", 30)
-            use_bb_touch = self._resolve_param("use_bb_touch", "e_use_bb_touch", True)
-            rsi_cross = self._resolve_param("rsi_cross", "e_rsi_cross", False)
-            bb_reentry = self._resolve_param("bb_reentry", "e_bb_reentry", False)
+            oversold = float(self._resolve_param("rsi_oversold", "e_rsi_oversold", 30) or 30)
+            use_bb_touch = bool(self._resolve_param("use_bb_touch", "e_use_bb_touch", True))
+            rsi_cross = bool(self._resolve_param("rsi_cross", "e_rsi_cross", False))
+            bb_reentry = bool(self._resolve_param("bb_reentry", "e_bb_reentry", False))
 
             # Unified Indicator Access
             rsi_value = self.get_indicator("entry_rsi")

@@ -221,8 +221,8 @@ class HMMLSTMStrategy(BaseStrategy):
     def _load_models(self):
         """Load trained HMM and LSTM models with their parameters."""
         try:
-            models_dir = Path(self.config.get("models_dir", "src/ml/pipeline/p01_hmm_lstm/models"))
-            results_dir = Path(self.config.get("results_dir", "results"))
+            models_dir = Path(str(self.config.get("models_dir", "src/ml/pipeline/p01_hmm_lstm/models") or "src/ml/pipeline/p01_hmm_lstm/models"))
+            results_dir = Path(str(self.config.get("results_dir", "results") or "results"))
 
             # Load HMM model
             hmm_pattern = f"hmm_{self.symbol}_{self.timeframe}_*.pkl"
@@ -351,7 +351,7 @@ class HMMLSTMStrategy(BaseStrategy):
             volume = np.array([self.data.volume[-i] for i in range(lookback, 0, -1)])
 
             indicators = {}
-            params = self.optimized_indicators
+            params = self.optimized_indicators or {}
 
             # RSI
             rsi_period = params.get("rsi_period", 14)
@@ -433,7 +433,7 @@ class HMMLSTMStrategy(BaseStrategy):
     def _predict_regime(self, features: Dict[str, float]) -> Tuple[int, float]:
         """Predict market regime using HMM model."""
         try:
-            if not self.hmm_model or not self.hmm_features:
+            if not self.hmm_model or not self.hmm_features or not self.hmm_scaler:
                 return 1, 0.5  # Default to neutral regime
 
             # Prepare features for HMM
@@ -484,7 +484,7 @@ class HMMLSTMStrategy(BaseStrategy):
     def _predict_price(self, features: Dict[str, float], regime: int, regime_confidence: float) -> float:
         """Predict next price change using LSTM model."""
         try:
-            if not self.lstm_model or not self.lstm_features:
+            if not self.lstm_model or not self.lstm_features or not self.lstm_scalers:
                 return 0.0
 
             # Prepare features for LSTM
@@ -506,7 +506,7 @@ class HMMLSTMStrategy(BaseStrategy):
 
             self.lstm_sequence_buffer.append(feature_values)
 
-            if len(self.lstm_sequence_buffer) < self.sequence_length:
+            if self.sequence_length is None or len(self.lstm_sequence_buffer) < self.sequence_length:
                 return 0.0
 
             # Scale features

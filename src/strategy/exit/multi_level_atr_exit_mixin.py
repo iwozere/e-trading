@@ -104,12 +104,12 @@ class MultiLevelAtrExitMixin(BaseExitMixin):
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
         periods = [
-            self._resolve_param("htf_atr_period", "x_htf_atr_period", 14),
-            self._resolve_param("ltf_atr_period", "x_ltf_atr_period", 14),
-            self._resolve_param("micro_atr_period", "x_micro_atr_period", 14),
+            int(self._resolve_param("htf_atr_period", "x_htf_atr_period", 14) or 14),
+            int(self._resolve_param("ltf_atr_period", "x_ltf_atr_period", 14) or 14),
+            int(self._resolve_param("micro_atr_period", "x_micro_atr_period", 14) or 14),
         ]
         if self._resolve_param("use_dynamic_k", "x_use_dynamic_k", False):
-            periods.append(self._resolve_param("vol_sma_period", "x_vol_sma_period", 50))
+            periods.append(int(self._resolve_param("vol_sma_period", "x_vol_sma_period", 50) or 50))
 
         return max(periods)
 
@@ -123,6 +123,8 @@ class MultiLevelAtrExitMixin(BaseExitMixin):
 
     def should_exit(self) -> bool:
         if not self.are_indicators_ready() or self.entry_price is None:
+            return False
+        if self.data_ltf is None:
             return False
 
         try:
@@ -142,8 +144,8 @@ class MultiLevelAtrExitMixin(BaseExitMixin):
                 if atr_ltf_sma > 0:
                     vol_ratio = atr_ltf / atr_ltf_sma
 
-            htf_sl_multiplier = self._resolve_param("htf_sl_multiplier", "x_htf_sl_multiplier", 2.5)
-            ltf_sl_multiplier = self._resolve_param("ltf_sl_multiplier", "x_ltf_sl_multiplier", 2.0)
+            htf_sl_multiplier = float(self._resolve_param("htf_sl_multiplier", "x_htf_sl_multiplier", 2.5) or 2.5)
+            ltf_sl_multiplier = float(self._resolve_param("ltf_sl_multiplier", "x_ltf_sl_multiplier", 2.0) or 2.0)
 
             k_htf = htf_sl_multiplier * vol_ratio
             k_ltf = ltf_sl_multiplier * vol_ratio
@@ -158,14 +160,14 @@ class MultiLevelAtrExitMixin(BaseExitMixin):
             s2 = -float("inf")
             profit_in_atr = (current_close - self.entry_price) / atr_ltf if atr_ltf > 0 else 0
 
-            be_activation_atr = self._resolve_param("be_activation_atr", "x_be_activation_atr", 1.0)
+            be_activation_atr = float(self._resolve_param("be_activation_atr", "x_be_activation_atr", 1.0) or 1.0)
             if profit_in_atr >= be_activation_atr:
                 if not self.be_activated:
                     logger.info(f"Break-even activated at profit {profit_in_atr:.2f} ATR")
                     self.be_activated = True
 
                 # S2 = entry + small buffer based on Micro ATR
-                be_buffer_multiplier = self._resolve_param("be_buffer_multiplier", "x_be_buffer_multiplier", 0.3)
+                be_buffer_multiplier = float(self._resolve_param("be_buffer_multiplier", "x_be_buffer_multiplier", 0.3) or 0.3)
                 s2 = self.entry_price + atr_micro * be_buffer_multiplier
 
             # Final STOP = max(S0, S1, S2) - only moves UP

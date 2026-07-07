@@ -51,7 +51,9 @@ def _first_fire_dows(weekday_field: str, start: datetime, count: int) -> list[st
     fires: list[str] = []
     cursor = start
     for _ in range(count):
-        cursor = trigger.get_next_fire_time(None, cursor)
+        next_time = trigger.get_next_fire_time(None, cursor)
+        assert next_time is not None
+        cursor = next_time
         fires.append(cursor.strftime("%a"))
         cursor = cursor + timedelta(minutes=1)
     return fires
@@ -75,4 +77,5 @@ def test_mon_fri_excludes_saturday() -> None:
         day_of_week=crontab_weekday_to_apscheduler("1-5"),
         timezone=UTC,
     ).get_next_fire_time(None, saturday)
+    assert next_fire is not None
     assert next_fire.strftime("%a") == "Mon"

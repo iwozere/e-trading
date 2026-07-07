@@ -72,7 +72,8 @@ class TestBaseStrategy(unittest.TestCase):
 
         strategy.set_data(test_data)
         self.assertIsNotNone(strategy.data)
-        self.assertEqual(len(strategy.data), 3)
+        if strategy.data is not None:
+            self.assertEqual(len(strategy.data), 3)
 
     def test_indicator_management(self):
         """Test adding and retrieving indicators."""
@@ -205,7 +206,7 @@ class TestSignalAggregator(unittest.TestCase):
         from src.strategy.future.strategy_core import AggregationMethod, SignalAggregator
 
         aggregator = SignalAggregator(AggregationMethod.WEIGHTED_VOTING)
-        aggregator.method = "invalid_method"
+        aggregator.method = "invalid_method"  # type: ignore
         with self.assertRaises(ValueError):
             aggregator.aggregate_signals([self.buy_signal, self.sell_signal])
 

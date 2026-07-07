@@ -107,7 +107,7 @@ class RSIVolumeSupertrendEntryMixin(BaseEntryMixin):
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
         return max(
-            self.get_param("rsi_period", 14), self.get_param("vol_ma_period", 20), self.get_param("st_period", 10)
+            int(self.get_param("rsi_period", 14) or 14), int(self.get_param("vol_ma_period", 20) or 20), int(self.get_param("st_period", 10) or 10)
         )
 
     def are_indicators_ready(self) -> bool:
@@ -121,11 +121,13 @@ class RSIVolumeSupertrendEntryMixin(BaseEntryMixin):
             return False
 
         try:
+            if self.strategy is None:
+                return False
             current_volume = self.strategy.data.volume[0]
 
             # Standardized parameter retrieval
-            rsi_oversold = self._resolve_param("rsi_oversold", "e_rsi_oversold", 30)
-            min_volume_ratio = self._resolve_param("min_volume_ratio", "e_min_volume_ratio", 1.5)
+            rsi_oversold = float(self._resolve_param("rsi_oversold", "e_rsi_oversold", 30) or 30)
+            min_volume_ratio = float(self._resolve_param("min_volume_ratio", "e_min_volume_ratio", 1.5) or 1.5)
 
             # Unified Indicator Access
             current_rsi = self.get_indicator("entry_rsi")

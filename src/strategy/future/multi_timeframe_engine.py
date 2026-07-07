@@ -1,3 +1,4 @@
+# pyright: reportReturnType=false, reportArgumentType=false, reportAttributeAccessIssue=false
 """
 Multi-Timeframe Engine Module
 
@@ -63,7 +64,7 @@ class TimeframeSyncer:
         """Get data for all timeframes."""
         return self.data_feeds.copy()
 
-    def align_timeframes(self, reference_timeframe: str = None) -> Dict[str, pd.DataFrame]:
+    def align_timeframes(self, reference_timeframe: str | None = None) -> Dict[str, pd.DataFrame]:
         """
         Align all timeframes to a reference timeframe.
 

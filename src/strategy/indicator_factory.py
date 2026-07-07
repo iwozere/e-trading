@@ -1,3 +1,4 @@
+# pyright: reportAttributeAccessIssue=false
 """
 IndicatorFactory - Creates TALib indicators from configuration
 
@@ -44,43 +45,43 @@ class IndicatorFactory:
     # Mapping of indicator types to their TALib classes and output fields
     INDICATOR_MAP = {
         "RSI": {
-            "class": bt.talib.RSI,
+            "class": bt.talib.RSI,  # type: ignore
             "outputs": ["rsi"],
             "required_params": ["timeperiod"],
             "data_inputs": ["close"],  # Only close price needed
         },
         "BBANDS": {
-            "class": bt.talib.BBANDS,
+            "class": bt.talib.BBANDS,  # type: ignore
             "outputs": ["upperband", "middleband", "lowerband"],
             "required_params": ["timeperiod"],
             "data_inputs": ["close"],  # Only close price needed
         },
         "ATR": {
-            "class": bt.talib.ATR,
+            "class": bt.talib.ATR,  # type: ignore
             "outputs": ["atr"],
             "required_params": ["timeperiod"],
             "data_inputs": ["high", "low", "close"],  # Needs HLC
         },
         "MACD": {
-            "class": bt.talib.MACD,
+            "class": bt.talib.MACD,  # type: ignore
             "outputs": ["macd", "macdsignal", "macdhist"],
             "required_params": ["fastperiod", "slowperiod", "signalperiod"],
             "data_inputs": ["close"],  # Only close price needed
         },
         "SMA": {
-            "class": bt.talib.SMA,
+            "class": bt.talib.SMA,  # type: ignore
             "outputs": ["sma"],
             "required_params": ["timeperiod"],
             "data_inputs": ["close"],  # Only close price needed
         },
         "EMA": {
-            "class": bt.talib.EMA,
+            "class": bt.talib.EMA,  # type: ignore
             "outputs": ["ema"],
             "required_params": ["timeperiod"],
             "data_inputs": ["close"],  # Only close price needed
         },
         "STOCH": {
-            "class": bt.talib.STOCH,
+            "class": bt.talib.STOCH,  # type: ignore
             "outputs": ["slowk", "slowd"],
             "required_params": ["fastk_period", "slowk_period", "slowd_period"],
             "data_inputs": ["high", "low", "close"],  # Needs HLC
@@ -159,7 +160,7 @@ class IndicatorFactory:
 
     @staticmethod
     def _create_single_indicator(
-        data: bt.feeds.DataBase, ind_config: Dict[str, Any], existing_indicators: Dict[str, Any] = None
+        data: bt.feeds.DataBase, ind_config: Dict[str, Any], existing_indicators: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
         """
         Create a single indicator and return mapped outputs.
@@ -237,7 +238,7 @@ class IndicatorFactory:
                     logger.debug(f"Mapped field '{output_field}' to alias '{alias}'")
                 except AttributeError:
                     logger.error(
-                        f"Failed to find output field '{output_field}' on {ind_type} object. Available lines: {indicator.lines.getlinealias(0)}"
+                        f"Failed to find output field '{output_field}' on {ind_type} object. Available lines: {indicator.lines.getlinealiases()}"  # type: ignore
                     )
                     raise
 

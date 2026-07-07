@@ -1,3 +1,4 @@
+# pyright: reportAbstractUsage=false
 """
 Unit tests for entry/exit mixin factories and CustomStrategy config builder.
 

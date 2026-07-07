@@ -84,11 +84,11 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
         periods = [
-            self.get_param("eom_period", 14),
-            self.get_param("rsi_period", 14),
-            self.get_param("atr_period", 14),
-            self.get_param("atr_sma_period", 100),
-            self.get_param("resistance_lookback", 2) * 5,
+            int(self.get_param("eom_period", 14) or 14),
+            int(self.get_param("rsi_period", 14) or 14),
+            int(self.get_param("atr_period", 14) or 14),
+            int(self.get_param("atr_sma_period", 100) or 100),
+            int(self.get_param("resistance_lookback", 2) or 2) * 5,
         ]
         return max(periods)
 
@@ -104,6 +104,8 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
 
         try:
             # Get current price data
+            if self.strategy is None:
+                return False
             close = self.strategy.data.close[0]
             open_price = self.strategy.data.open[0]
             low = self.strategy.data.low[0]
@@ -118,9 +120,9 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
             atr_sma = self.get_indicator("entry_atr_sma")
 
             # Get parameters
-            support_threshold = self._resolve_param("support_threshold", "e_support_threshold", 0.005)
-            rsi_oversold = self._resolve_param("rsi_oversold", "e_rsi_oversold", 40)
-            atr_floor_multiplier = self._resolve_param("atr_floor_multiplier", "e_atr_floor_multiplier", 0.9)
+            support_threshold = float(self._resolve_param("support_threshold", "e_support_threshold", 0.005) or 0.005)
+            rsi_oversold = float(self._resolve_param("rsi_oversold", "e_rsi_oversold", 40) or 40)
+            atr_floor_multiplier = float(self._resolve_param("atr_floor_multiplier", "e_atr_floor_multiplier", 0.9) or 0.9)
 
             # Check if support is valid (not NaN)
             if math.isnan(support):

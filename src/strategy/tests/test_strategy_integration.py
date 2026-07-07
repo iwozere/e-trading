@@ -1,3 +1,4 @@
+# pyright: reportCallIssue=false
 """
 Integration test: full buy → hold → sell cycle via an entry/exit mixin pair.
 

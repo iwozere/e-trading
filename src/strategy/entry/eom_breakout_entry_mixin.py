@@ -101,12 +101,12 @@ class EOMBreakoutEntryMixin(BaseEntryMixin):
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
         periods = [
-            self.get_param("eom_period", 14),
-            self.get_param("volume_sma_period", 20),
-            self.get_param("atr_period", 14),
-            self.get_param("atr_sma_period", 100),
-            self.get_param("rsi_period", 14),
-            self.get_param("resistance_lookback", 2) * 5,  # S/R needs some data
+            int(self.get_param("eom_period", 14) or 14),
+            int(self.get_param("volume_sma_period", 20) or 20),
+            int(self.get_param("atr_period", 14) or 14),
+            int(self.get_param("atr_sma_period", 100) or 100),
+            int(self.get_param("rsi_period", 14) or 14),
+            int(self.get_param("resistance_lookback", 2) or 2) * 5,  # S/R needs some data
         ]
         return max(periods)
 
@@ -125,6 +125,8 @@ class EOMBreakoutEntryMixin(BaseEntryMixin):
 
         try:
             # Get current price data
+            if self.strategy is None:
+                return False
             close = self.strategy.data.close[0]
             volume = self.strategy.data.volume[0]
 
@@ -136,9 +138,9 @@ class EOMBreakoutEntryMixin(BaseEntryMixin):
             rsi = self.get_indicator("entry_rsi")
 
             # Get parameters
-            breakout_threshold = self._resolve_param("breakout_threshold", "e_breakout_threshold", 0.002)
-            use_atr_filter = self._resolve_param("use_atr_filter", "e_use_atr_filter", True)
-            rsi_overbought = self._resolve_param("rsi_overbought", "e_rsi_overbought", 70)
+            breakout_threshold = float(self._resolve_param("breakout_threshold", "e_breakout_threshold", 0.002) or 0.002)
+            use_atr_filter = bool(self._resolve_param("use_atr_filter", "e_use_atr_filter", True))
+            rsi_overbought = float(self._resolve_param("rsi_overbought", "e_rsi_overbought", 70) or 70)
 
             # Check if resistance is valid (not NaN)
             if math.isnan(resistance):

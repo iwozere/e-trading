@@ -94,10 +94,10 @@ class EOMMAcdBreakoutEntryMixin(BaseEntryMixin):
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
         periods = [
-            self.get_param("macd_slow", 26) + self.get_param("macd_signal", 9),
-            self.get_param("eom_period", 14),
-            self.get_param("vol_sma_period", 20),
-            self.get_param("resistance_lookback", 2) * 5,
+            int(self.get_param("macd_slow", 26) or 26) + int(self.get_param("macd_signal", 9) or 9),
+            int(self.get_param("eom_period", 14) or 14),
+            int(self.get_param("vol_sma_period", 20) or 20),
+            int(self.get_param("resistance_lookback", 2) or 2) * 5,
         ]
         return max(periods)
 
@@ -127,6 +127,8 @@ class EOMMAcdBreakoutEntryMixin(BaseEntryMixin):
 
         try:
             # Get current price data
+            if self.strategy is None:
+                return False
             close = self.strategy.data.close[0]
             volume = self.strategy.data.volume[0]
 
@@ -142,9 +144,9 @@ class EOMMAcdBreakoutEntryMixin(BaseEntryMixin):
             volume_sma = self.get_indicator("entry_volume_sma")
 
             # Get parameters
-            resistance_range_low = self._resolve_param("resistance_range_low", "e_resistance_range_low", 0.995)
-            resistance_range_high = self._resolve_param("resistance_range_high", "e_resistance_range_high", 1.002)
-            volume_threshold = self._resolve_param("volume_threshold", "e_volume_threshold", 0.8)
+            resistance_range_low = float(self._resolve_param("resistance_range_low", "e_resistance_range_low", 0.995) or 0.995)
+            resistance_range_high = float(self._resolve_param("resistance_range_high", "e_resistance_range_high", 1.002) or 1.002)
+            volume_threshold = float(self._resolve_param("volume_threshold", "e_volume_threshold", 0.8) or 0.8)
 
             # Check if resistance is valid (not NaN)
             if math.isnan(resistance):

@@ -32,7 +32,7 @@ _logger = setup_logger(__name__)
 def register_hmm_lstm_mixin():
     """Register the HMM-LSTM entry mixin."""
     try:
-        ENTRY_MIXIN_REGISTRY["HMMLSTMEntryMixin"] = HMMLSTMEntryMixin
+        ENTRY_MIXIN_REGISTRY["HMMLSTMEntryMixin"] = HMMLSTMEntryMixin  # type: ignore
         _logger.info("Successfully registered HMMLSTMEntryMixin")
         return True
     except Exception:

@@ -94,7 +94,7 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
         """
         Returns the minimum number of bars required (Kijun period for Ichimoku cloud).
         """
-        return self._resolve_param("kijun_period", "e_kijun", 26)
+        return int(self._resolve_param("kijun_period", "e_kijun", 26) or 26)
 
     def are_indicators_ready(self) -> bool:
         """
@@ -109,10 +109,12 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
             return False
 
         try:
+            if self.strategy is None:
+                return False
             current_price = self.strategy.data.close[0]
 
             # Standardized parameter retrieval
-            rsi_oversold = self.get_param("rsi_oversold", 30)
+            rsi_oversold = float(self.get_param("rsi_oversold", 30) or 30)
             kijun_period = 26  # Standard lookback for Ichimoku Span A/B
 
             # Access indicators via the unified registry
@@ -124,6 +126,9 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
             tenkan = self.get_indicator("entry_ichimoku_tenkan")
             prev_tenkan = self.get_indicator_prev("entry_ichimoku_tenkan", 1)
             prev_price = self.strategy.data.close[-1]
+
+            if span_a is None or span_b is None or tenkan is None or prev_tenkan is None or current_rsi is None:
+                return False
 
             # Cross-over logic
             cross_over_tenkan = prev_price <= prev_tenkan and current_price > tenkan

@@ -37,13 +37,13 @@ class TestEOMBreakdownExitMixin(unittest.TestCase):
         """Test mixin initialization"""
         mixin = EOMBreakdownExitMixin()
         self.assertIsNotNone(mixin)
-        self.assertEqual(mixin.get_param("x_breakdown_threshold"), 0.002)
+        self.assertEqual(mixin.get_param("breakdown_threshold"), 0.002)
 
     def test_custom_params(self):
         """Test mixin with custom parameters"""
-        params = {"x_breakdown_threshold": 0.005}
+        params = {"breakdown_threshold": 0.005}
         mixin = EOMBreakdownExitMixin(params=params)
-        self.assertEqual(mixin.get_param("x_breakdown_threshold"), 0.005)
+        self.assertEqual(mixin.get_param("breakdown_threshold"), 0.005)
 
     def test_breakdown_exit_signal(self):
         """Test exit signal on breakdown with EOM negative"""
@@ -160,8 +160,8 @@ class TestEOMRejectionExitMixin(unittest.TestCase):
         """Test mixin initialization"""
         mixin = EOMRejectionExitMixin()
         self.assertIsNotNone(mixin)
-        self.assertEqual(mixin.get_param("x_resistance_threshold"), 0.995)
-        self.assertEqual(mixin.get_param("x_rsi_overbought"), 60)
+        self.assertEqual(mixin.get_param("resistance_threshold"), 0.995)
+        self.assertEqual(mixin.get_param("rsi_overbought"), 60)
 
     def test_rejection_exit_signal(self):
         """Test exit signal on resistance rejection with EOM reversal"""
@@ -254,7 +254,7 @@ class TestEOMMAcdBreakdownExitMixin(unittest.TestCase):
         """Test mixin initialization"""
         mixin = EOMMAcdBreakdownExitMixin()
         self.assertIsNotNone(mixin)
-        self.assertEqual(mixin.get_param("x_support_threshold"), 0.002)
+        self.assertEqual(mixin.get_param("support_threshold"), 0.002)
 
     def test_macd_breakdown_exit_signal(self):
         """Test exit signal on MACD bearish with breakdown"""

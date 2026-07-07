@@ -1,0 +1,56 @@
+[Monitoring/scheduler.service] [systemd/scheduler.service] 2026-07-07 20:15:00,195 - [PID 1902] - WARNING - Script stderr: 2026-07-07 20:15:00,165 - [P
+
+[systemd/scheduler.service] 2026-07-07 20:15:00,195 - [PID 1902] - WARNING - Script stderr: 2026-07-07 20:15:00,165 - [PID 532629] - WARNING - No watchlist at results/p19_penny_intraday/2026-07-07/watchlist.json — run build-watchlist first
+---
+[Monitoring/scheduler.service] [systemd/scheduler.service] 2026-07-07 19:30:00,236 - [PID 1902] - WARNING - Script stderr: 2026-07-07 19:30:00,192 - [P
+
+[systemd/scheduler.service] 2026-07-07 19:30:00,236 - [PID 1902] - WARNING - Script stderr: 2026-07-07 19:30:00,192 - [PID 513192] - WARNING - No watchlist at results/p19_penny_intraday/2026-07-07/watchlist.json — run build-watchlist first
+---
+[Monitoring/scheduler.service] [systemd/scheduler.service] 2026-07-07 19:00:00,225 - [PID 1902] - WARNING - Script stderr: 2026-07-07 19:00:00,185 - [P
+
+[systemd/scheduler.service] 2026-07-07 19:00:00,225 - [PID 1902] - WARNING - Script stderr: 2026-07-07 19:00:00,185 - [PID 505039] - WARNING - No watchlist at results/p19_penny_intraday/2026-07-07/watchlist.json — run build-watchlist first
+---
+[Monitoring/scheduler.service] [systemd/scheduler.service] 2026-07-07 18:15:00,186 - [PID 1902] - WARNING - Script stderr: 2026-07-07 18:15:00,156 - [P
+
+[systemd/scheduler.service] 2026-07-07 18:15:00,186 - [PID 1902] - WARNING - Script stderr: 2026-07-07 18:15:00,156 - [PID 492762] - WARNING - No watchlist at results/p19_penny_intraday/2026-07-07/watchlist.json — run build-watchlist first
+---
+[Monitoring/scheduler.service] [systemd/scheduler.service] 2026-07-07 17:30:00,248 - [PID 1902] - WARNING - Script stderr: 2026-07-07 17:30:00,206 - [P
+
+[systemd/scheduler.service] 2026-07-07 17:30:00,248 - [PID 1902] - WARNING - Script stderr: 2026-07-07 17:30:00,206 - [PID 480424] - WARNING - No watchlist at results/p19_penny_intraday/2026-07-07/watchlist.json — run build-watchlist first
+---
+[Monitoring/scheduler.service] [systemd/scheduler.service] 2026-07-07 17:00:00,245 - [PID 1902] - WARNING - Script stderr: 2026-07-07 17:00:00,202 - [P
+
+[systemd/scheduler.service] 2026-07-07 17:00:00,245 - [PID 1902] - WARNING - Script stderr: 2026-07-07 17:00:00,202 - [PID 472268] - WARNING - No watchlist at results/p19_penny_intraday/2026-07-07/watchlist.json — run build-watchlist first
+---
+[Monitoring/scheduler.service] [systemd/scheduler.service] 2026-07-07 16:15:00,233 - [PID 1902] - WARNING - Script stderr: 2026-07-07 16:15:00,202 - [P
+
+[systemd/scheduler.service] 2026-07-07 16:15:00,233 - [PID 1902] - WARNING - Script stderr: 2026-07-07 16:15:00,202 - [PID 460008] - WARNING - No watchlist at results/p19_penny_intraday/2026-07-07/watchlist.json — run build-watchlist first
+---
+[Monitoring/scheduler.service] [systemd/scheduler.service] 2026-07-07 15:45:00,207 - [PID 1902] - WARNING - Script stderr: 2026-07-07 15:45:00,176 - [P
+
+[systemd/scheduler.service] 2026-07-07 15:45:00,207 - [PID 1902] - WARNING - Script stderr: 2026-07-07 15:45:00,176 - [PID 451843] - WARNING - No watchlist at results/p19_penny_intraday/2026-07-07/watchlist.json — run build-watchlist first
+---
+[Monitoring/scheduler.service] [systemd/scheduler.service] 2026-07-07 15:00:00,339 - [PID 1902] - WARNING - Script stderr: 2026-07-07 15:00:00,268 - [P
+
+[systemd/scheduler.service] 2026-07-07 15:00:00,339 - [PID 1902] - WARNING - Script stderr: 2026-07-07 15:00:00,268 - [PID 439610] - WARNING - No watchlist at results/p19_penny_intraday/2026-07-07/watchlist.json — run build-watchlist first
+---
+[Monitoring/scheduler.service] [systemd/scheduler.service] 2026-07-07 09:00:01,352 - [PID 1902] - WARNING - Script stderr: Traceback (most recent call 
+
+[systemd/scheduler.service] 2026-07-07 09:00:01,352 - [PID 1902] - WARNING - Script stderr: Traceback (most recent call last):
+---
+[Monitoring/scheduler.service] [systemd/scheduler.service] 2026-07-07 08:00:01,035 - [PID 315011] - WARNING - gdelt: no GKG files found for 2026-07-07 
+
+[systemd/scheduler.service] 2026-07-07 08:00:01,035 - [PID 315011] - WARNING - gdelt: no GKG files found for 2026-07-07 or 2026-07-06
+---
+[Monitoring/notification-bot.service] [systemd/notification-bot.service] 2026-07-07 07:00:41,127 - [PID 1901] - ERROR - Channel instance not available: telegr
+
+[systemd/notification-bot.service] 2026-07-07 07:00:41,127 - [PID 1901] - ERROR - Channel instance not available: telegram
+---
+[Monitoring/docker.service] [systemd/docker.service] time="2026-07-07T06:55:32.091310098+02:00" level=warning msg="Error decoding log file" error="i
+
+[systemd/docker.service] time="2026-07-07T06:55:32.091310098+02:00" level=warning msg="Error decoding log file" error="invalid character '\\x00' looking for beginning of value"
+---
+[Monitoring/init.scope] [systemd/init.scope] wpa_supplicant@wlan0.service: Main process exited, code=exited, status=255/EXCEPTION
+
+[systemd/init.scope] wpa_supplicant@wlan0.service: Main process exited, code=exited, status=255/EXCEPTION
+---

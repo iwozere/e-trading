@@ -11,6 +11,7 @@ It uses the models trained in pipeline p03_cnn_xgboost to make predictions on mu
 The strategy integrates these predictions to make trading decisions with proper risk management.
 """
 
+# pyright: reportCallIssue=false
 import json
 import pickle
 import sys
@@ -153,7 +154,7 @@ class CNNXGBoostStrategy(BaseStrategy):
     The strategy integrates these predictions to make trading decisions with proper risk management.
     """
 
-    params = (
+    params = (  # type: ignore
         ("prediction_threshold", 0.6),  # Minimum confidence for trading signals
         ("direction_weight", 0.4),  # Weight for direction prediction
         ("volatility_weight", 0.2),  # Weight for volatility prediction
@@ -264,16 +265,16 @@ class CNNXGBoostStrategy(BaseStrategy):
     def _load_xgb_models(self, models_dir: str):
         """Load XGBoost models for all targets."""
         try:
-            models_dir = Path(models_dir)
+            models_path = Path(models_dir)
 
             for target in self.targets:
-                model_path = models_dir / f"{target}_model.pkl"
+                model_path = models_path / f"{target}_model.pkl"
                 if model_path.exists():
                     with open(model_path, "rb") as f:
                         self.xgb_models[target] = pickle.load(f)
 
                     # Load scaler if available
-                    scaler_path = models_dir / f"{target}_scaler.pkl"
+                    scaler_path = models_path / f"{target}_scaler.pkl"
                     if scaler_path.exists():
                         with open(scaler_path, "rb") as f:
                             self.xgb_scalers[target] = pickle.load(f)
@@ -302,31 +303,31 @@ class CNNXGBoostStrategy(BaseStrategy):
                 }
 
             # RSI
-            self.rsi = bt.indicators.RSI(self.data.close, period=params.get("rsi_period", 14))
+            self.rsi = bt.indicators.RSI(self.data.close, period=params.get("rsi_period", 14))  # type: ignore
 
             # Bollinger Bands
-            self.bb = bt.indicators.BollingerBands(
-                self.data.close, period=params.get("bb_period", 20), devfactor=params.get("bb_std", 2.0)
+            self.bb = bt.indicators.BollingerBands(  # type: ignore
+                self.data.close, period=params.get("bb_period", 20), devfactor=params.get("bb_std", 2.0)  # type: ignore
             )
 
             # MACD
-            self.macd = bt.indicators.MACD(
-                self.data.close,
-                period_me1=params.get("macd_fast", 12),
-                period_me2=params.get("macd_slow", 26),
-                period_signal=params.get("macd_signal", 9),
+            self.macd = bt.indicators.MACD(  # type: ignore
+                self.data.close,  # type: ignore
+                period_me1=params.get("macd_fast", 12),  # type: ignore
+                period_me2=params.get("macd_slow", 26),  # type: ignore
+                period_signal=params.get("macd_signal", 9),  # type: ignore
             )
 
             # Moving averages
-            self.sma_short = bt.indicators.SMA(self.data.close, period=10)
-            self.sma_long = bt.indicators.SMA(self.data.close, period=30)
+            self.sma_short = bt.indicators.SMA(self.data.close, period=10)  # type: ignore
+            self.sma_long = bt.indicators.SMA(self.data.close, period=30)  # type: ignore
 
             # ATR for volatility
-            self.atr = bt.indicators.ATR(self.data, period=14)
+            self.atr = bt.indicators.ATR(self.data, period=14)  # type: ignore
 
             # Additional indicators for feature matching
-            self.ema_fast = bt.indicators.EMA(self.data.close, period=12)
-            self.sma_20 = bt.indicators.SMA(self.data.close, period=20)
+            self.ema_fast = bt.indicators.EMA(self.data.close, period=12)  # type: ignore
+            self.sma_20 = bt.indicators.SMA(self.data.close, period=20)  # type: ignore
 
             _logger.debug("Technical indicators initialized")
 
@@ -334,7 +335,7 @@ class CNNXGBoostStrategy(BaseStrategy):
             _logger.exception("Error initializing indicators:")
             raise
 
-    def _prepare_ohlcv_data(self) -> np.ndarray:
+    def _prepare_ohlcv_data(self) -> np.ndarray | None:
         """Prepare OHLCV data for CNN input."""
         try:
             # Get recent OHLCV data
@@ -358,7 +359,7 @@ class CNNXGBoostStrategy(BaseStrategy):
             _logger.exception("Error preparing OHLCV data:")
             return None
 
-    def _extract_cnn_features(self, ohlcv_data: np.ndarray) -> np.ndarray:
+    def _extract_cnn_features(self, ohlcv_data: np.ndarray) -> np.ndarray | None:
         """Extract features using CNN model."""
         try:
             if self.cnn_model is None:
@@ -380,7 +381,7 @@ class CNNXGBoostStrategy(BaseStrategy):
             _logger.exception("Error extracting CNN features:")
             return None
 
-    def _prepare_xgb_features(self) -> np.ndarray:
+    def _prepare_xgb_features(self) -> np.ndarray | None:
         """Prepare features for XGBoost models."""
         try:
             # Technical indicators - match the pipeline's feature set
@@ -397,9 +398,9 @@ class CNNXGBoostStrategy(BaseStrategy):
             )
 
             # Bollinger Bands
-            features.append(self.bb.lines.top[0] if not np.isnan(self.bb.lines.top[0]) else self.data.close[0])
-            features.append(self.bb.lines.mid[0] if not np.isnan(self.bb.lines.mid[0]) else self.data.close[0])
-            features.append(self.bb.lines.bot[0] if not np.isnan(self.bb.lines.bot[0]) else self.data.close[0])
+            features.append(self.bb.lines.top[0] if not np.isnan(self.bb.lines.top[0]) else self.data.close[0])  # type: ignore
+            features.append(self.bb.lines.mid[0] if not np.isnan(self.bb.lines.mid[0]) else self.data.close[0])  # type: ignore
+            features.append(self.bb.lines.bot[0] if not np.isnan(self.bb.lines.bot[0]) else self.data.close[0])  # type: ignore
 
             # Moving averages
             features.append(self.sma_short[0] if not np.isnan(self.sma_short[0]) else self.data.close[0])
@@ -688,7 +689,7 @@ class CNNXGBoostStrategy(BaseStrategy):
         except Exception:
             _logger.exception("Error setting exit orders:")
 
-    def _calculate_position_size(self, confidence: float, risk_multiplier: float) -> float:
+    def _calculate_position_size(self, confidence: float = 1.0, risk_multiplier: float = 1.0) -> float:
         """Calculate position size based on confidence and risk."""
         try:
             # Base position size

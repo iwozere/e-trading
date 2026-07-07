@@ -114,7 +114,7 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
         return max(
-            self.get_param("rsi_period", 14), self.get_param("bb_period", 20), self.get_param("vol_ma_period", 20)
+            int(self.get_param("rsi_period", 14) or 14), int(self.get_param("bb_period", 20) or 20), int(self.get_param("vol_ma_period", 20) or 20)
         )
 
     def are_indicators_ready(self) -> bool:
@@ -128,13 +128,15 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
             return False
 
         try:
+            if self.strategy is None:
+                return False
             current_price = self.strategy.data.close[0]
             current_volume = self.strategy.data.volume[0]
 
             # Standardized parameter retrieval
-            oversold = self.get_param("oversold") or self._resolve_param("rsi_oversold", "e_rsi_oversold", 30)
-            use_bb_touch = self.get_param("use_bb_touch", self.get_param("e_use_bb_touch", True))
-            min_volume_ratio = self.get_param("min_volume_ratio", self.get_param("e_min_volume_ratio", 1.1))
+            oversold = float(self.get_param("oversold") or self._resolve_param("rsi_oversold", "e_rsi_oversold", 30) or 30)
+            use_bb_touch = bool(self.get_param("use_bb_touch", self.get_param("e_use_bb_touch", True)))
+            min_volume_ratio = float(self.get_param("min_volume_ratio", self.get_param("e_min_volume_ratio", 1.1)) or 1.1)
 
             # Unified Indicator Access
             rsi_value = self.get_indicator("entry_rsi")

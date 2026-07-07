@@ -121,7 +121,7 @@ class BBVolumeSupertrendEntryMixin(BaseEntryMixin):
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
         return max(
-            self.get_param("bb_period", 20), self.get_param("vol_ma_period", 20), self.get_param("st_period", 10)
+            int(self.get_param("bb_period", 20) or 20), int(self.get_param("vol_ma_period", 20) or 20), int(self.get_param("st_period", 10) or 10)
         )
 
     def are_indicators_ready(self) -> bool:
@@ -135,12 +135,14 @@ class BBVolumeSupertrendEntryMixin(BaseEntryMixin):
             return False
 
         try:
+            if self.strategy is None:
+                return False
             current_price = self.strategy.data.close[0]
             current_volume = self.strategy.data.volume[0]
 
             # Standardized parameter retrieval
-            use_bb_touch = self._resolve_param("use_bb_touch", "e_use_bb_touch", True)
-            min_volume_ratio = self._resolve_param("min_volume_ratio", "e_min_volume_ratio", 1.1)
+            use_bb_touch = bool(self._resolve_param("use_bb_touch", "e_use_bb_touch", True))
+            min_volume_ratio = float(self._resolve_param("min_volume_ratio", "e_min_volume_ratio", 1.1) or 1.1)
 
             # Unified Indicator Access
             bb_lower = self.get_indicator("entry_bb_lower")
