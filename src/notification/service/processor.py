@@ -319,7 +319,10 @@ class MessageProcessor:
         while self._running:
             try:
                 # Check for retry messages less frequently
-                messages = self.queue.dequeue_for_retry(limit=10, retry_delay_minutes=self.retry_delay_minutes)
+                enabled_channels = list(self._channel_instances.keys())
+                messages = self.queue.dequeue_for_retry(
+                    limit=10, retry_delay_minutes=self.retry_delay_minutes, channels=enabled_channels
+                )
 
                 if messages:
                     self._logger.info("Processing %s retry messages", len(messages))

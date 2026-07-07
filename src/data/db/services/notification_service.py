@@ -311,10 +311,10 @@ class NotificationService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_failed_messages_for_retry(self, limit: int = 50) -> List[Message]:
+    def get_failed_messages_for_retry(self, limit: int = 50, channels: List[str] | None = None) -> List[Message]:
         """Get failed messages that can be retried."""
         current_time = datetime.now(UTC)
-        return self.repos.notifications.get_failed_messages_for_retry(current_time, limit=limit)
+        return self.repos.notifications.get_failed_messages_for_retry(current_time, limit=limit, channels=channels)
 
     @with_uow
     @handle_db_error

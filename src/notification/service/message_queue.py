@@ -272,13 +272,16 @@ class MessageQueue:
             self._logger.exception("Failed to dequeue high priority messages:")
             raise
 
-    def dequeue_for_retry(self, limit: int = 20, retry_delay_minutes: int = 5) -> List[QueuedMessage]:
+    def dequeue_for_retry(
+        self, limit: int = 20, retry_delay_minutes: int = 5, channels: List[str] | None = None
+    ) -> List[QueuedMessage]:
         """
         Dequeue failed messages that are ready for retry.
 
         Args:
             limit: Maximum number of messages to dequeue
             retry_delay_minutes: Minimum delay before retry
+            channels: Optional list of channels to filter by
 
         Returns:
             List of QueuedMessage objects ready for retry
@@ -290,7 +293,7 @@ class MessageQueue:
             with db_service.uow() as r:
                 # Get failed messages ready for retry
                 messages = r.notifications.messages.get_failed_messages_for_retry(
-                    current_time=current_time, retry_delay_minutes=retry_delay_minutes, limit=limit
+                    current_time=current_time, retry_delay_minutes=retry_delay_minutes, limit=limit, channels=channels
                 )
 
                 # Mark messages as processing and increment retry count

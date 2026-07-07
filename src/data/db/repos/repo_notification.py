@@ -203,7 +203,7 @@ class MessageRepository:
         return query.order_by(priority_order, asc(Message.scheduled_for)).limit(limit).all()
 
     def get_failed_messages_for_retry(
-        self, current_time: datetime, retry_delay_minutes: int = 5, limit: int = 50
+        self, current_time: datetime, retry_delay_minutes: int = 5, limit: int = 50, channels: List[str] | None = None
     ) -> List[Message]:
         """
         Get failed messages that can be retried.
@@ -212,22 +212,26 @@ class MessageRepository:
             current_time: Current timestamp
             retry_delay_minutes: Minimum delay before retry
             limit: Maximum number of results
+            channels: Optional list of channels to filter by
 
         Returns:
             List of failed Message objects ready for retry
         """
         retry_cutoff = current_time - timedelta(minutes=retry_delay_minutes)
 
-        return (
-            self.session.query(Message)
-            .filter(
-                and_(
-                    Message.status == MessageStatus.FAILED.value,
-                    Message.retry_count < Message.max_retries,
-                    or_(Message.processed_at.is_(None), Message.processed_at <= retry_cutoff),
-                )
+        query = self.session.query(Message).filter(
+            and_(
+                Message.status == MessageStatus.FAILED.value,
+                Message.retry_count < Message.max_retries,
+                or_(Message.processed_at.is_(None), Message.processed_at <= retry_cutoff),
             )
-            .order_by(asc(Message.processed_at))
+        )
+
+        if channels:
+            query = query.filter(Message.channels.overlap(cast(channels, ARRAY(TEXT))))
+
+        return (
+            query.order_by(asc(Message.processed_at))
             .limit(limit)
             .all()
         )
