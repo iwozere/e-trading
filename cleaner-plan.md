@@ -82,7 +82,7 @@ Batch per module; after each batch: `mypy <module>` + run that module's tests.
 
 ## Status
 - [x] Phase A — commit pyproject + fresh baseline (d553773; baseline confirmed 1,168 errors — overrides were already active in phase-0 log)
-- [x] Phase B — real bugs (commits 5ea45ef + follow-up). Notable findings beyond the plan:
+- [x] Phase B — real bugs (commits 5ea45ef + 60e0d3a). Post-phase count: **1,028 errors in 221 files** (−140 errors, −24 files vs baseline). Notable findings beyond the plan:
   - Enabled `pydantic.mypy` plugin — killed ~15 false "missing named argument" errors in config_loader/api/portfolio; converted config_models Field defaults to keyword form for Pyright parity.
   - candidate_store.py had `return` inside the for loop (returned after first snapshot) + wrong `service.repo` accessor + wrong deep-scan method name.
   - volume_squeeze_detector_yf built Candidate with nonexistent kwargs AND nonexistent enum member `VOLUME_DETECTOR` — detector could never emit candidates (TypeError swallowed by except).
