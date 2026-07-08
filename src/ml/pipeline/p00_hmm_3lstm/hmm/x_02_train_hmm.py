@@ -67,6 +67,9 @@ HiddenMarkovModel = None
 NormalDistribution = None
 DEFAULT_FEATURES = ["log_return", "volatility"]
 
+# Parsed CLI arguments; assigned in main() and read by objective()
+args: argparse.Namespace
+
 
 def parse_args() -> argparse.Namespace:
     """Parses command-line arguments for the HMM training script.

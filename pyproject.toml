@@ -44,6 +44,9 @@ indent-style = "space"
 line-ending = "auto"
 
 [tool.mypy]
+# The pydantic plugin teaches mypy about Field() defaults and validators;
+# without it every model instantiation reports false "missing named argument".
+plugins = ["pydantic.mypy"]
 
 # Third-party packages that ship no type information and have no stub package
 # available on PyPI. Packages with real stubs (types-psutil, types-tqdm,

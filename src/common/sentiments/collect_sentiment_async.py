@@ -26,7 +26,7 @@ import math
 import os
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Callable, Dict, List, Union
+from typing import Any, Awaitable, Callable, Dict, List, Union
 
 from src.notification.logger import setup_logger
 
@@ -71,7 +71,7 @@ class SentimentFeatures:
 # -------------------------
 def _load_config_from_env() -> Dict[str, Any]:
     """Load configuration from environment variables."""
-    config = {}
+    config: Dict[str, Any] = {}
 
     # Provider settings
     config["providers"] = {
@@ -412,7 +412,7 @@ async def collect_sentiment_batch(
     tickers: List[str],
     lookback_hours: int | None = None,
     config: Dict[str, Any] | None = None,
-    history_lookup: Callable[[str], float | None] | None = None,
+    history_lookup: Callable[[str], float | None] | Callable[[str], Awaitable[float | None]] | None = None,
     output_format: str = "dataclass",
 ) -> Union[Dict[str, SentimentFeatures | None], Dict[str, Dict[str, Any] | None], str]:
     """
@@ -752,7 +752,7 @@ async def collect_sentiment_batch(
             return output
         elif output_format == "dict":
             return {k: v.to_dict() if v else None for k, v in output.items()}
-        elif output_format == "json":
+        else:  # "json" — output_format was validated above
             dict_output = {k: v.to_dict() if v else None for k, v in output.items()}
             return json.dumps(dict_output, default=str, indent=2)
 

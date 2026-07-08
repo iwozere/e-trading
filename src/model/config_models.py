@@ -54,10 +54,10 @@ class StrategyType(str, Enum):
 class BrokerConfig(BaseModel):
     """Configuration for a broker."""
 
-    type: str = Field(..., description="Broker type (binance, ibkr, mock)")
-    trading_mode: str = Field("paper", description="Trading mode (paper, live)")
-    cash: float = Field(10000.0, description="Initial balance")
-    live_trading_confirmed: bool = Field(False, description="Explicit confirmation for live trading")
+    type: str = Field(default=..., description="Broker type (binance, ibkr, mock)")
+    trading_mode: str = Field(default="paper", description="Trading mode (paper, live)")
+    cash: float = Field(default=10000.0, description="Initial balance")
+    live_trading_confirmed: bool = Field(default=False, description="Explicit confirmation for live trading")
     paper_trading_config: Dict[str, Any] = Field(default_factory=dict, description="Paper trading specific settings")
     risk_management: Dict[str, Any] = Field(default_factory=dict, description="Broker-level risk settings")
 
@@ -65,7 +65,7 @@ class BrokerConfig(BaseModel):
 class StrategyParamsConfig(BaseModel):
     """Configuration for strategy parameters."""
 
-    type: str = Field(..., description="Strategy type name")
+    type: str = Field(default=..., description="Strategy type name")
     parameters: Dict[str, Any] = Field(default_factory=dict, description="Strategy parameters")
 
 
@@ -75,12 +75,12 @@ class TradingBotConfig(BaseModel):
     Aligns with StrategyManager Nested structure.
     """
 
-    bot_id: str = Field(..., description="Unique bot identifier")
-    name: str = Field("TradingBot", description="Bot name")
-    symbol: str = Field(..., description="Trading symbol")
+    bot_id: str = Field(default=..., description="Unique bot identifier")
+    name: str = Field(default="TradingBot", description="Bot name")
+    symbol: str = Field(default=..., description="Trading symbol")
 
-    broker: BrokerConfig = Field(..., description="Broker configuration")
-    strategy: StrategyParamsConfig = Field(..., description="Strategy configuration")
+    broker: BrokerConfig = Field(default=..., description="Broker configuration")
+    strategy: StrategyParamsConfig = Field(default=..., description="Strategy configuration")
 
     data: Dict[str, Any] = Field(default_factory=dict, description="Data feed configuration")
     risk: Dict[str, Any] = Field(default_factory=dict, description="Risk management configuration")
@@ -102,26 +102,26 @@ class TradingBotConfig(BaseModel):
 class OptimizerConfig(BaseModel):
     """Configuration for strategy optimization."""
 
-    optimizer_id: str = Field(..., description="Unique optimizer identifier")
-    name: str = Field(..., description="Optimizer name")
-    description: str | None = Field(None, description="Optimizer description")
+    optimizer_id: str = Field(default=..., description="Unique optimizer identifier")
+    name: str = Field(default=..., description="Optimizer name")
+    description: str | None = Field(default=None, description="Optimizer description")
     # Optimization parameters
-    optimizer_type: str = Field("optuna", description="Optimizer type (optuna, hyperopt, etc.)")
-    n_trials: int = Field(100, description="Number of optimization trials")
-    timeout: int | None = Field(None, description="Optimization timeout in seconds")
+    optimizer_type: str = Field(default="optuna", description="Optimizer type (optuna, hyperopt, etc.)")
+    n_trials: int = Field(default=100, description="Number of optimization trials")
+    timeout: int | None = Field(default=None, description="Optimization timeout in seconds")
     # Strategy parameters
-    strategy_name: str = Field(..., description="Strategy to optimize")
-    param_ranges: Dict[str, Any] = Field(..., description="Parameter ranges for optimization")
+    strategy_name: str = Field(default=..., description="Strategy to optimize")
+    param_ranges: Dict[str, Any] = Field(default=..., description="Parameter ranges for optimization")
     # Data parameters
-    symbol: str = Field(..., description="Trading symbol")
-    start_date: str = Field(..., description="Backtest start date (YYYY-MM-DD)")
-    end_date: str = Field(..., description="Backtest end date (YYYY-MM-DD)")
-    interval: str = Field("1h", description="Data interval")
+    symbol: str = Field(default=..., description="Trading symbol")
+    start_date: str = Field(default=..., description="Backtest start date (YYYY-MM-DD)")
+    end_date: str = Field(default=..., description="Backtest end date (YYYY-MM-DD)")
+    interval: str = Field(default="1h", description="Data interval")
     # Capital and risk
-    initial_capital: float = Field(10000.0, description="Initial capital for backtesting")
-    commission: float = Field(0.001, description="Commission rate")
+    initial_capital: float = Field(default=10000.0, description="Initial capital for backtesting")
+    commission: float = Field(default=0.001, description="Commission rate")
     # Optimization metrics
-    optimization_metric: str = Field("sharpe_ratio", description="Metric to optimize")
+    optimization_metric: str = Field(default="sharpe_ratio", description="Metric to optimize")
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.now, description="Creation timestamp")
     updated_at: datetime = Field(default_factory=datetime.now, description="Last update timestamp")
@@ -130,15 +130,15 @@ class OptimizerConfig(BaseModel):
 class StrategyConfig(BaseModel):
     """Configuration for trading strategies."""
 
-    id: str = Field(..., description="Unique strategy identifier")
-    name: str = Field(..., description="Strategy name")
-    description: str | None = Field(None, description="Strategy description")
-    enabled: bool = Field(True, description="Whether strategy is enabled")
+    id: str = Field(default=..., description="Unique strategy identifier")
+    name: str = Field(default=..., description="Strategy name")
+    description: str | None = Field(default=None, description="Strategy description")
+    enabled: bool = Field(default=True, description="Whether strategy is enabled")
 
     # Trading parameters
-    symbol: str = Field(..., description="Trading symbol (e.g., BTCUSDT)")
-    broker: Dict[str, Any] = Field(..., description="Broker configuration")
-    strategy: Dict[str, Any] = Field(..., description="Strategy parameters")
+    symbol: str = Field(default=..., description="Trading symbol (e.g., BTCUSDT)")
+    broker: Dict[str, Any] = Field(default=..., description="Broker configuration")
+    strategy: Dict[str, Any] = Field(default=..., description="Strategy parameters")
 
     # Optional configurations
     data: Dict[str, Any] = Field(default_factory=dict, description="Data configuration")
@@ -160,21 +160,21 @@ class StrategyConfig(BaseModel):
 class DataConfig(BaseModel):
     """Configuration for data sources."""
 
-    data_id: str = Field(..., description="Unique data configuration identifier")
-    name: str = Field(..., description="Data configuration name")
-    description: str | None = Field(None, description="Data configuration description")
+    data_id: str = Field(default=..., description="Unique data configuration identifier")
+    name: str = Field(default=..., description="Data configuration name")
+    description: str | None = Field(default=None, description="Data configuration description")
     # Data source
-    data_source: DataSourceType = Field(..., description="Data source type")
+    data_source: DataSourceType = Field(default=..., description="Data source type")
     # Data parameters
-    symbols: List[str] = Field(..., description="List of symbols to fetch")
-    interval: str = Field("1h", description="Data interval")
-    lookback: int = Field(1000, description="Number of historical bars")
+    symbols: List[str] = Field(default=..., description="List of symbols to fetch")
+    interval: str = Field(default="1h", description="Data interval")
+    lookback: int = Field(default=1000, description="Number of historical bars")
     # Storage
-    save_to_csv: bool = Field(False, description="Save data to CSV files")
-    csv_directory: str | None = Field(None, description="CSV output directory")
+    save_to_csv: bool = Field(default=False, description="Save data to CSV files")
+    csv_directory: str | None = Field(default=None, description="CSV output directory")
     # Real-time data
-    enable_live_feed: bool = Field(False, description="Enable real-time data feed")
-    live_feed_interval: str | None = Field(None, description="Live feed update interval")
+    enable_live_feed: bool = Field(default=False, description="Enable real-time data feed")
+    live_feed_interval: str | None = Field(default=None, description="Live feed update interval")
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.now, description="Creation timestamp")
     updated_at: datetime = Field(default_factory=datetime.now, description="Last update timestamp")

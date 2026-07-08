@@ -4,6 +4,7 @@ import backtrader as bt
 import pandas as pd
 
 from src.ml.pipeline.p07_combined.features import P07FeatureEngine
+from src.notification.logger import setup_logger
 
 
 class P07Strategy(bt.Strategy):

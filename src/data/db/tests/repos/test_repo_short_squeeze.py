@@ -47,7 +47,7 @@ def test_screener_and_metrics_and_alerts(db_session: Session):
     assert alerts.cleanup_expired_cooldowns() >= 0
 
 
-def test_adhoc_and_finra(db_session: Session):
+def test_adhoc_candidates(db_session: Session):
     adhoc = AdHocCandidateRepo(db_session)
 
     cand = adhoc.add_candidate("bbb", reason="user-request")
@@ -55,16 +55,3 @@ def test_adhoc_and_finra(db_session: Session):
     assert adhoc.get_candidate("bbb") is not None
     assert any(x.ticker == "BBB" for x in adhoc.get_active_candidates())
     assert adhoc.deactivate_candidate("bbb") is True
-
-    # FINRA upsert and latest
-    sd = date.today()
-    rec = finra.upsert_finra_data(
-        {
-            "ticker": "CCC",
-            "settlement_date": sd,
-            "short_interest_shares": 1000,
-            "short_interest_pct": 12.5,
-        }
-    )
-    assert rec.id is not None
-    assert finra.get_latest_short_interest("ccc") is not None

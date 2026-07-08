@@ -181,7 +181,7 @@ class NotificationServiceClient:
 
         self.timeout = aiohttp.ClientTimeout(total=timeout)
         self.max_retries = max_retries
-        self._session: aiohttp.Optional[ClientSession] = None
+        self._session: Optional[aiohttp.ClientSession] = None
 
         if self.database_only_mode:
             _logger.info("NotificationServiceClient initialized for database-only mode")

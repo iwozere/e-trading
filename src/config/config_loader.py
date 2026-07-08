@@ -8,7 +8,7 @@ using Pydantic models. Provides error handling and validation feedback.
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict, List, Union
 
 import yaml
 from pydantic import ValidationError
@@ -169,8 +169,8 @@ def validate_config_file(config_path: Union[str, Path]) -> tuple[bool, list[str]
     Returns:
         Tuple of (is_valid, errors, warnings)
     """
-    errors = []
-    warnings = []
+    errors: List[str] = []
+    warnings: List[str] = []
 
     try:
         # Try to load the config
@@ -205,6 +205,7 @@ def create_sample_config(output_path: Union[str, Path], config_type: str = "trad
         output_path: Output file path
         config_type: Type of configuration ("trading", "optimizer", "data")
     """
+    sample_config: Union[TradingBotConfig, OptimizerConfig, DataConfig]
     if config_type == "trading":
         sample_config = TradingBotConfig(
             bot_id="sample_bot_001",

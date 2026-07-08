@@ -1,8 +1,9 @@
 # exit_mixin_factory.py
 
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 from src.strategy.exit.advanced_atr_exit_mixin import AdvancedATRExitMixin
+from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.strategy.exit.atr_exit_mixin import ATRExitMixin
 from src.strategy.exit.eom_breakdown_exit_mixin import EOMBreakdownExitMixin
 from src.strategy.exit.eom_macd_breakdown_exit_mixin import EOMMAcdBreakdownExitMixin
@@ -16,8 +17,9 @@ from src.strategy.exit.simple_atr_exit_mixin import SimpleATRExitMixin
 from src.strategy.exit.time_based_exit_mixin import TimeBasedExitMixin
 from src.strategy.exit.trailing_stop_exit_mixin import TrailingStopExitMixin
 
-# Registry of all available exit mixins
-EXIT_MIXIN_REGISTRY = {
+# Registry of all available exit mixins.
+# Typed as Callable so mypy does not treat values as the abstract base class.
+EXIT_MIXIN_REGISTRY: Dict[str, Callable[..., BaseExitMixin]] = {
     "ATRExitMixin": ATRExitMixin,
     "AdvancedATRExitMixin": AdvancedATRExitMixin,
     "SimpleATRExitMixin": SimpleATRExitMixin,

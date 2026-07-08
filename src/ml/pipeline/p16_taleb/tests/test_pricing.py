@@ -5,15 +5,7 @@ Validates Black-Scholes put price, Greeks, and skew model against
 known analytical values from options theory.
 """
 
-import sys
-from pathlib import Path
-
-# Make p16_taleb/src/ importable
-_pipeline_dir = Path(__file__).resolve().parents[1]
-if str(_pipeline_dir) not in sys.path:
-    sys.path.insert(0, str(_pipeline_dir))
-
-from src.pricing import bs_greeks, bs_put_price, skew_adjusted_sigma
+from src.ml.pipeline.p16_taleb.src.pricing import bs_greeks, bs_put_price, skew_adjusted_sigma
 
 # ---------------------------------------------------------------------------
 # Black-Scholes put price

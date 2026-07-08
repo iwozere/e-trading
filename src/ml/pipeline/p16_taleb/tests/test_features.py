@@ -4,17 +4,10 @@ Unit tests for src/features.py.
 Uses synthetic price data to validate all feature formulas.
 """
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 
-_pipeline_dir = Path(__file__).resolve().parents[1]
-if str(_pipeline_dir) not in sys.path:
-    sys.path.insert(0, str(_pipeline_dir))
-
-from src.features import build_features
+from src.ml.pipeline.p16_taleb.src.features import build_features
 
 
 def _make_df(

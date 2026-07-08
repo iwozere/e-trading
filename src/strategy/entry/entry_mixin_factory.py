@@ -1,7 +1,8 @@
 # entry_mixin_factory.py
 
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
+from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 from src.strategy.entry.bb_volume_supertrend_entry_mixin import BBVolumeSupertrendEntryMixin
 from src.strategy.entry.eom_breakout_entry_mixin import EOMBreakoutEntryMixin
 from src.strategy.entry.eom_macd_breakout_entry_mixin import EOMMAcdBreakoutEntryMixin
@@ -12,8 +13,9 @@ from src.strategy.entry.rsi_ichimoku_entry_mixin import RSIIchimokuEntryMixin
 from src.strategy.entry.rsi_or_bb_entry_mixin import RSIOrBBEntryMixin
 from src.strategy.entry.rsi_volume_supertrend_entry_mixin import RSIVolumeSupertrendEntryMixin
 
-# Registry of all available entry mixins
-ENTRY_MIXIN_REGISTRY = {
+# Registry of all available entry mixins.
+# Typed as Callable so mypy does not treat values as the abstract base class.
+ENTRY_MIXIN_REGISTRY: Dict[str, Callable[..., BaseEntryMixin]] = {
     "RSIBBEntryMixin": RSIBBEntryMixin,
     "RSIIchimokuEntryMixin": RSIIchimokuEntryMixin,
     "RSIOrBBEntryMixin": RSIOrBBEntryMixin,

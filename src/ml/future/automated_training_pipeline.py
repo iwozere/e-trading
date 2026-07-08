@@ -18,7 +18,6 @@ from typing import Any, Dict, List, Tuple
 
 import lightgbm as lgb
 import numpy as np
-import numpy as pd
 import optuna
 import pandas as pd
 import schedule

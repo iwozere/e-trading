@@ -121,9 +121,9 @@ def _build_registry() -> List[ProviderSpec]:
         ),
     ]
 
-    if _IBKR:
+    if _IBKR is not None:
         specs.append(ProviderSpec("ibkr", "Interactive Brokers", _IBKR, aliases=[], requires_api_key=False))
-    if _NewsAPI:
+    if _NewsAPI is not None:
         specs.append(ProviderSpec("newsapi", "NewsAPI", _NewsAPI, aliases=[], requires_api_key=True))
 
     return specs

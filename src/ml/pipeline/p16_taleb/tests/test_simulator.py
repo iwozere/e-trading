@@ -8,17 +8,10 @@ Validates simulation mechanics using synthetic price data:
 - March 2020-like scenario: put purchased before crash pays out
 """
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 
-_pipeline_dir = Path(__file__).resolve().parents[1]
-if str(_pipeline_dir) not in sys.path:
-    sys.path.insert(0, str(_pipeline_dir))
-
-from src.simulator import simulate_barbell
+from src.ml.pipeline.p16_taleb.src.simulator import simulate_barbell
 
 
 def _make_master(

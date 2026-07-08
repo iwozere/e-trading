@@ -19,8 +19,16 @@ from src.data.db.services.short_squeeze_service import ShortSqueezeService
 from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.ml.pipeline.p04_short_squeeze.config.data_classes import DeepScanConfig, SentimentConfig
-from src.ml.pipeline.p04_short_squeeze.core.models import Candidate, CandidateSource, ScoredCandidate, TransientMetrics
+from src.ml.pipeline.p04_short_squeeze.core.models import (
+    Candidate,
+    CandidateSource,
+    ScoredCandidate,
+    StructuralMetrics,
+    TransientMetrics,
+)
 from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
 
 # Sentiment module import (with feature flag)
 try:
@@ -30,8 +38,6 @@ try:
 except ImportError:
     _logger.warning("Sentiment module not available, will use legacy Finnhub sentiment")
     SENTIMENT_MODULE_AVAILABLE = False
-
-_logger = setup_logger(__name__)
 
 
 @dataclass
@@ -810,7 +816,7 @@ class DailyDeepScan:
             return None
 
     def _calculate_preliminary_squeeze_score(
-        self, screener_score: float, transient_metrics: TransientMetrics, structural_metrics: "StructuralMetrics"
+        self, screener_score: float, transient_metrics: TransientMetrics, structural_metrics: StructuralMetrics
     ) -> float:
         """
         Calculate preliminary squeeze score combining screener, transient, and FINRA metrics.

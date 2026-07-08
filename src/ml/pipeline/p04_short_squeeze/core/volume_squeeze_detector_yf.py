@@ -19,7 +19,7 @@ import yfinance as yf
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.ml.pipeline.p04_short_squeeze.core.models import Candidate, CandidateSource
+from src.ml.pipeline.p04_short_squeeze.core.models import Candidate, CandidateSource, StructuralMetrics
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -377,12 +377,21 @@ class VolumeSqueezeDetectorYF:
             if indicators.momentum_score < self.min_momentum_score:
                 return None
 
-            # Create candidate
+            # Create candidate. The volume detector has no FINRA structural data,
+            # so neutral placeholders satisfy the model; downstream consumers use
+            # only the ticker and the accompanying SqueezeIndicators.
             candidate = Candidate(
                 ticker=ticker,
-                source=CandidateSource.VOLUME_DETECTOR,
-                detection_date=datetime.now().date(),
-                confidence_score=indicators.combined_score,
+                screener_score=float(indicators.combined_score),
+                structural_metrics=StructuralMetrics(
+                    short_interest_pct=0.0,
+                    days_to_cover=0.0,
+                    float_shares=1,
+                    avg_volume_14d=max(int(volume_metrics.avg_volume_14d), 1),
+                    market_cap=1,
+                ),
+                last_updated=datetime.now(),
+                source=CandidateSource.VOLUME_SCREENER,
             )
 
             return (candidate, indicators)
@@ -402,7 +411,7 @@ class VolumeSqueezeDetectorYF:
         Returns:
             List of (Candidate, SqueezeIndicators) tuples
         """
-        candidates = []
+        candidates: List[Tuple[Candidate, SqueezeIndicators]] = []
 
         _logger.info("Screening %d tickers for volume squeeze candidates", len(tickers))
 
@@ -416,11 +425,12 @@ class VolumeSqueezeDetectorYF:
                     candidate, indicators = result
                     if indicators.combined_score >= min_score:
                         candidates.append(result)
+                        volume_metrics = self.calculate_volume_metrics(ticker)
                         _logger.info(
                             "Found candidate: %s (score=%.3f, volume_spike=%.2fx)",
                             ticker,
                             indicators.combined_score,
-                            self.calculate_volume_metrics(ticker).volume_spike_ratio,
+                            volume_metrics.volume_spike_ratio if volume_metrics else 0.0,
                         )
 
             except Exception as e:
