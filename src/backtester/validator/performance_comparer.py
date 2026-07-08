@@ -24,7 +24,7 @@ import csv
 import json
 from collections import defaultdict
 from datetime import datetime as dt
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import pandas as pd
 
@@ -43,7 +43,7 @@ def load_all_results(base_dir: str) -> Dict[str, Dict]:
     Returns:
         dict: Nested dictionary mapping year -> strategy_key -> result
     """
-    results_by_year = {}
+    results_by_year: dict[Any, Any] = {}
 
     if not os.path.exists(base_dir):
         _logger.warning("Directory not found: %s", base_dir)

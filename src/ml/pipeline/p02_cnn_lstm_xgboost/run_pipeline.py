@@ -66,7 +66,7 @@ class PipelineRunner:
         }
 
         # Pipeline state
-        self.pipeline_state = {
+        self.pipeline_state: dict[str, Any] = {
             "start_time": None,
             "end_time": None,
             "completed_stages": [],

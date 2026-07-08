@@ -145,7 +145,7 @@ class FundamentalsConfigValidator:
 
     def _validate_field_priorities(self, priorities: Dict[str, Any]) -> List[str]:
         """Validate field priorities section."""
-        errors = []
+        errors: list[Any] = []
 
         if not isinstance(priorities, dict):
             errors.append("field_priorities must be a dictionary")

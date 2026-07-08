@@ -280,7 +280,7 @@ def validate_data_gaps(timestamps: pd.Series, expected_interval: str, tolerance_
     Returns:
         List of validation errors
     """
-    errors = []
+    errors: list[Any] = []
 
     if len(timestamps) < 2:
         return errors

@@ -425,8 +425,8 @@ class BaseBroker(ABC):
         ``BacktraderBrokerBridge``; do not use for standalone live brokers.
         """
         self._backtrader_mode = True
-        self._bt_notification_queue = []
-        self._bt_processed_orders = {}
+        self._bt_notification_queue: list[Any] = []
+        self._bt_processed_orders: dict[Any, Any] = {}
 
     def _bt_getcash(self) -> float:
         """Cash for Backtrader ``getcash`` (paper portfolio or configured initial)."""

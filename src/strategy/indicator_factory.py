@@ -130,7 +130,7 @@ class IndicatorFactory:
         Raises:
             ValueError: If configuration is invalid
         """
-        all_indicators = {}
+        all_indicators: dict[Any, Any] = {}
         used_aliases = set()
 
         for ind_config in indicator_configs:

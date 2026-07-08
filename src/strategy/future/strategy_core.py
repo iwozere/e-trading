@@ -22,7 +22,7 @@ class BaseStrategy(ABC):
         self.name = name
         self.weight = weight
         self.data = None
-        self.indicators = {}
+        self.indicators: dict[Any, Any] = {}
 
     @abstractmethod
     def generate_signal(self) -> StrategySignal:

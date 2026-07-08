@@ -297,7 +297,7 @@ class ConfigManager:
     def validate_config_file(self, config_path: str) -> tuple[bool, List[str], List[str]]:
         """Validate a configuration file"""
         errors = []
-        warnings = []
+        warnings: list[Any] = []
         try:
             config = self._load_config_file(Path(config_path))
             if config is None:

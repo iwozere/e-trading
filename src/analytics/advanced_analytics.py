@@ -671,7 +671,7 @@ class AdvancedAnalytics:
 
     def _generate_recommendations(self) -> List[str]:
         """Generate performance-based recommendations"""
-        recommendations = []
+        recommendations: list[Any] = []
         if self.metrics is None:
             return recommendations
 

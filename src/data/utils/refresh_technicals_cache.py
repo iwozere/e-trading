@@ -173,7 +173,7 @@ def populate_cache(
     print(f"  📡 Available downloaders: {', '.join(downloaders.keys())}")
     print()
 
-    results = {"success": [], "failed": [], "cache_stats": {}, "data_quality": {}}
+    results: dict[str, Any] = {"success": [], "failed": [], "cache_stats": {}, "data_quality": {}}
 
     total_operations = len(symbols) * len(intervals)
     current_operation = 0
@@ -380,7 +380,7 @@ def populate_cache(
                     # Skip validation - cache data as-is
                     # Data quality will be handled by a separate validation script
                     is_valid = True  # Always cache data without validation
-                    errors = []
+                    errors: list[Any] = []
                     quality_score = {"quality_score": 1.0}  # Default perfect score
 
                     if "timestamp" in df.columns:

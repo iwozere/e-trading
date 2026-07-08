@@ -12,7 +12,7 @@ class BaseExitMixin(ABC):
     def __init__(self, params: Dict[str, Any] | None = None):
         self.strategy: Any = None
         self.params = params or {}
-        self.indicators = {}
+        self.indicators: dict[Any, Any] = {}
 
         self._validate_params()
         self._set_defaults()

@@ -20,7 +20,7 @@ import pickle
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -762,7 +762,7 @@ class LSTMTrainer:
         Returns a dict keyed by regime_id with per-regime results.
         """
         min_samples = self.config["lstm"].get("min_regime_samples", 200)
-        regime_results = {}
+        regime_results: dict[Any, Any] = {}
 
         if "regime" not in df.columns:
             _logger.error("'regime' column not found; cannot train in multi-regime mode.")

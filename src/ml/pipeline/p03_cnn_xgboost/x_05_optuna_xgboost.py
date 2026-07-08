@@ -145,7 +145,7 @@ class XGBoostOptimizer:
         _logger.info("Preparing training data from %d files", len(feature_files))
 
         all_features = []
-        all_targets = {target: [] for target in self.targets}
+        all_targets: dict[str, list[Any]] = {target: [] for target in self.targets}
 
         # Track processing statistics
         processed_count = 0

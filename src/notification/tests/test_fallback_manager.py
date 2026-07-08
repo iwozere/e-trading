@@ -26,7 +26,7 @@ from src.notification.service.fallback_manager import (
     MessageFailureReason,
 )
 from src.notification.service.health_monitor import HealthMonitor, HealthStatus
-from typing import Optional
+from typing import Any, Optional
 
 
 class MockChannel(NotificationChannel):
@@ -36,7 +36,7 @@ class MockChannel(NotificationChannel):
         self.channel_name = channel_name
         self.config = config
         self.should_fail = should_fail
-        self.send_calls = []
+        self.send_calls: list[Any] = []
 
     def validate_config(self, config: dict) -> None:
         pass

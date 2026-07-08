@@ -402,7 +402,7 @@ def with_rate_limiting(max_calls: int, time_window: int):
     """
 
     def decorator(func: Callable) -> Callable:
-        call_times = []
+        call_times: list[Any] = []
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs):

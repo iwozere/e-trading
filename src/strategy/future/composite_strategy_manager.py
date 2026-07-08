@@ -45,7 +45,7 @@ class StrategyComposer:
         """
         self.strategies = strategies
         self.aggregator = SignalAggregator(aggregation_method, consensus_threshold)
-        self.performance_history = {}
+        self.performance_history: dict[Any, Any] = {}
         self.regime_detector = MarketRegimeDetector()
 
     def aggregate_signals(self) -> CompositeSignal:
@@ -143,10 +143,10 @@ class AdvancedStrategyFramework:
             config_path: Path to strategy configuration files
         """
         self.config_path = config_path
-        self.composite_strategies = {}
-        self.multi_timeframe_strategies = {}
-        self.dynamic_switching_config = {}
-        self.performance_tracker = {}
+        self.composite_strategies: dict[Any, Any] = {}
+        self.multi_timeframe_strategies: dict[Any, Any] = {}
+        self.dynamic_switching_config: dict[Any, Any] = {}
+        self.performance_tracker: dict[Any, Any] = {}
 
         # Load configurations
         self.configs = self._load_configs()

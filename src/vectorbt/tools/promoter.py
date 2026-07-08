@@ -237,7 +237,7 @@ class StrategyPromoter:
             _logger.warning(f"No trials found in study '{study_name}'")
             return []
 
-        promoted_ids = []
+        promoted_ids: list[Any] = []
         for trial in trials:
             if len(promoted_ids) >= top_n:
                 break

@@ -73,8 +73,8 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
         self.finnhub_rate_limit = 60  # requests per minute
         self.alpha_vantage_rate_limit = 5  # requests per minute
 
-        self._finnhub_requests = []
-        self._alpha_vantage_requests = []
+        self._finnhub_requests: list[Any] = []
+        self._alpha_vantage_requests: list[Any] = []
 
         # Initialize downloaders
         self.finnhub_downloader = FinnhubDataDownloader(api_key=self.finnhub_token)

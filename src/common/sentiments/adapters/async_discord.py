@@ -73,7 +73,7 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
         # Rate limiting - Discord API limits
         self.global_rate_limit = 50  # requests per second
         self.channel_rate_limit = 5  # requests per 5 seconds per channel
-        self._request_times = []
+        self._request_times: list[Any] = []
         self._channel_requests: Dict[str, List[float]] = {}
 
         # Cache for channel information

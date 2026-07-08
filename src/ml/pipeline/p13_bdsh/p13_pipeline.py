@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Optional, List
+from typing import Any, Optional, List
 
 import pandas as pd
 
@@ -26,7 +26,7 @@ class P13Pipeline:
         # Use typed config model
         self.p13_config = P13Config.from_module(config)
         self.engine = VIXScalingEngine(self.p13_config)
-        self.results_summary = []
+        self.results_summary: list[Any] = []
 
     def run(self):
         """Orchestrates the pipeline execution."""

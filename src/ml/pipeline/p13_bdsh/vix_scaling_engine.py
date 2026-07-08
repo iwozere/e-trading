@@ -1,5 +1,5 @@
 import logging
-from typing import Dict
+from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
@@ -106,7 +106,7 @@ class VIXScalingEngine:
         in_cooldown = False
 
         results_data = []
-        markers = {"buy": [], "sell": [], "stop_loss": []}
+        markers: dict[str, list[Any]] = {"buy": [], "sell": [], "stop_loss": []}
 
         for i in range(len(price_series)):
             current_date = price_series.index[i]

@@ -281,7 +281,7 @@ class RiskManagementValidator:
             Tuple of (errors, warnings)
         """
         errors = []
-        warnings = []
+        warnings: list[Any] = []
 
         # Risk management is required for live trading
         if trading_mode == "live" and not config:

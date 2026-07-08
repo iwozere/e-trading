@@ -45,7 +45,7 @@ class AsyncApeWisdomAdapter(BaseSentimentAdapter):
         self._consecutive_failures = 0
         self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         # Cache pages to avoid hitting ApeWisdom multiple times for different tickers in the same batch
-        self._cache = []
+        self._cache: list[Any] = []
         self._cache_timestamp: float = 0.0
 
     async def _ensure_session(self):

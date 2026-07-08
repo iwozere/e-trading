@@ -39,7 +39,7 @@ class ProviderSelector:
         self.config_path = config_path or "config/data/provider_rules.yaml"
         self.cache_dir = cache_dir
         self.rules = self._load_provider_rules()
-        self.downloaders = {}  # Lazy initialization
+        self.downloaders: dict[Any, Any] = {}  # Lazy initialization
 
     def _load_provider_rules(self) -> Dict[str, Any]:
         """Load provider selection rules from configuration file."""

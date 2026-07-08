@@ -1,4 +1,5 @@
 import sys
+from typing import Any
 from pathlib import Path
 
 import joblib
@@ -29,7 +30,7 @@ class P07RegimeModel:
 
         self.model = hmm.GaussianHMM(n_components=n_components, covariance_type="diag", n_iter=1000, random_state=42)
         self.scaler = StandardScaler()
-        self.state_mapping = {}  # To be defined after inspection (e.g., 0=Bear, 1=Sideways, 2=Bull)
+        self.state_mapping: dict[Any, Any] = {}  # To be defined after inspection (e.g., 0=Bear, 1=Sideways, 2=Bull)
 
     def prepare_features(self, df: pd.DataFrame, fit: bool = False) -> np.ndarray:
         """

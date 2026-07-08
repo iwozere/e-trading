@@ -501,7 +501,7 @@ class PerformanceMonitor:
                 return {}
 
             # Group by operation
-            operation_groups = {}
+            operation_groups: dict[Any, Any] = {}
             for metric in self.metrics:
                 if metric.operation_name not in operation_groups:
                     operation_groups[metric.operation_name] = []

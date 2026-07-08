@@ -11,7 +11,7 @@ import sys
 from datetime import datetime
 from ftplib import FTP
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
 import pandas as pd
 
@@ -120,7 +120,7 @@ class NasdaqUniverseDownloader:
 
             # Download NASDAQ listed
             _logger.debug("Fetching nasdaqlisted.txt")
-            nasdaq_data = []
+            nasdaq_data: list[Any] = []
             ftp.retrlines("RETR nasdaqlisted.txt", nasdaq_data.append)
             nasdaq_text = "\n".join(nasdaq_data)
             df1 = pd.read_csv(io.StringIO(nasdaq_text), sep="|")
@@ -128,7 +128,7 @@ class NasdaqUniverseDownloader:
 
             # Download other listed (NYSE, AMEX, etc.)
             _logger.debug("Fetching otherlisted.txt")
-            other_data = []
+            other_data: list[Any] = []
             ftp.retrlines("RETR otherlisted.txt", other_data.append)
             other_text = "\n".join(other_data)
             df2 = pd.read_csv(io.StringIO(other_text), sep="|")

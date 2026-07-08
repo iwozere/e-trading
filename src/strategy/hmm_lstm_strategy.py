@@ -502,7 +502,7 @@ class HMMLSTMStrategy(BaseStrategy):
             # For this example, we'll use a simplified approach
             # In a real implementation, you'd maintain a proper sequence buffer
             if not hasattr(self, "lstm_sequence_buffer"):
-                self.lstm_sequence_buffer = deque(maxlen=self.sequence_length)
+                self.lstm_sequence_buffer: deque[Any] = deque(maxlen=self.sequence_length)
 
             self.lstm_sequence_buffer.append(feature_values)
 

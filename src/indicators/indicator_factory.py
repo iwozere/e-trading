@@ -24,7 +24,7 @@ class IndicatorFactory:
 
     def __init__(self, data: Optional[Union[pd.DataFrame, Any]] = None):
         self.data = data
-        self.indicators = {}
+        self.indicators: dict[Any, Any] = {}
 
         # Initialize adapter components
         self._backtrader_adapter = BacktraderAdapter()

@@ -175,7 +175,7 @@ class BotDetector:
         if cache_key in self._user_cache:
             return self._user_cache[cache_key]
 
-        detection_reasons = []
+        detection_reasons: list[Any] = []
         bot_score = 0.0
 
         # Account analysis

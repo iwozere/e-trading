@@ -1,4 +1,5 @@
 import sys
+from typing import Any
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -156,7 +157,7 @@ def _create_telegram_friendly_message(message: str, ticker: str) -> str:
     summary_lines.append("\n📊 **Summary Report** (Full details sent via email)")
 
     # Try to extract key metrics
-    key_metrics = []
+    key_metrics: list[Any] = []
     for line in lines:
         if any(keyword in line.lower() for keyword in ["price:", "pe ratio:", "roe:", "rsi:", "macd:"]):
             if len(key_metrics) < 8:  # Limit to 8 key metrics
@@ -198,7 +199,7 @@ def _create_telegram_friendly_help(help_content: str) -> str:
     summary_lines.append("\n📋 **Quick Command Reference**")
 
     # Extract key command categories
-    command_categories = []
+    command_categories: list[Any] = []
     for line in lines:
         if (
             line.startswith("📊")

@@ -66,7 +66,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
         # Rate limiting - Twitter API v2 limits
         self.search_rate_limit = 300  # requests per 15 minutes
         self.search_window = 15 * 60  # 15 minutes in seconds
-        self._search_requests = []
+        self._search_requests: list[Any] = []
         self.use_cashtags = True  # Fallback flag for restricted API plans
 
         # Tweet fields to request

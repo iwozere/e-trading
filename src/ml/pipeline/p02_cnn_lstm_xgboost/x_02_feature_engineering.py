@@ -18,7 +18,7 @@ Features:
 import sys
 import warnings
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -464,7 +464,7 @@ class FeatureEngineer:
 
         # Process each file
         successful_processing = []
-        failed_processing = []
+        failed_processing: list[Any] = []
 
         for filepath in csv_files:
             result = self.process_single_file(filepath)

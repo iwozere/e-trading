@@ -856,7 +856,7 @@ class YahooDataDownloader(BaseDataDownloader):
             return self.get_ohlcv(symbol, interval, start_date, end_date)
 
         # Override the base method to add rate limiting between symbols
-        results = {}
+        results: dict[Any, Any] = {}
         for symbol in symbols:
             try:
                 _logger.info("Processing symbol %s (%d/%d)", symbol, len(results) + 1, len(symbols))

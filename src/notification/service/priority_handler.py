@@ -272,7 +272,7 @@ class PriorityMessageHandler:
             List of messages with specified priority
         """
         target_priority = self._priority_mapping.get(priority, PriorityLevel.NORMAL.value)
-        messages = []
+        messages: list[Any] = []
 
         with self._lock:
             # Extract messages with matching priority

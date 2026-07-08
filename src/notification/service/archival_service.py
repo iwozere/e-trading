@@ -621,7 +621,7 @@ class MessageArchivalService:
         if current_time is None:
             current_time = datetime.now(UTC)
 
-        results = {}
+        results: dict[Any, Any] = {}
 
         _logger.info("Starting full archival cycle at %s", current_time.isoformat())
 
@@ -780,7 +780,7 @@ class RetentionPolicyManager:
             session: Database session
         """
         self.session = session
-        self._policies = {}
+        self._policies: dict[Any, Any] = {}
         self._load_default_policies()
 
     def _load_default_policies(self):
@@ -861,7 +861,7 @@ class ScheduledCleanupService:
         self.policy_manager = policy_manager or RetentionPolicyManager(session)
         self.archival_service = MessageArchivalService(session)
         self._running = False
-        self._cleanup_tasks = []
+        self._cleanup_tasks: list[Any] = []
 
     def is_cleanup_time(self, current_time: Optional[datetime] = None) -> bool:
         """
@@ -911,7 +911,7 @@ class ScheduledCleanupService:
         if current_time is None:
             current_time = datetime.now(UTC)
 
-        results = {}
+        results: dict[Any, Any] = {}
 
         if not self.is_cleanup_time(current_time):
             _logger.info("Not in cleanup time window, skipping cleanup cycle")

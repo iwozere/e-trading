@@ -116,12 +116,12 @@ class BaseTradingBot:
         self.strategy_class = strategy_class
         self.parameters = parameters
         self.is_running = False
-        self.active_positions = {}
+        self.active_positions: dict[Any, Any] = {}
         self._positions_lock = threading.RLock()  # P2-4: thread-safe position access
-        self.trade_history = []
+        self.trade_history: list[Any] = []
         self.current_balance = self.initial_balance
         self.total_pnl = 0.0
-        self._signal_queue = []  # Thread-safe signal queue for decoupled strategies
+        self._signal_queue: list[Any] = []  # Thread-safe signal queue for decoupled strategies
         self._signal_lock = threading.Lock()
         self.broker = broker
         self.paper_trading = paper_trading

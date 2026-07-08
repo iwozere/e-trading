@@ -426,8 +426,8 @@ class ViralityCalculator:
             return 0.0
 
         # Analyze hashtag frequency
-        hashtag_counts = Counter()
-        mention_counts = Counter()
+        hashtag_counts: Counter[str] = Counter()
+        mention_counts: Counter[str] = Counter()
 
         for post in posts:
             hashtag_counts.update(post.hashtags)
@@ -529,7 +529,7 @@ class ViralityCalculator:
 
     def _find_top_contributors(self, posts: List[PostData]) -> List[Tuple[str, float]]:
         """Find top contributing authors by influence and engagement."""
-        author_contributions = defaultdict(float)
+        author_contributions: defaultdict[str, float] = defaultdict(float)
 
         for post in posts:
             author_influence = self._get_author_influence_score(post.author)
@@ -583,7 +583,7 @@ class ViralityCalculator:
             return {}
 
         # Collect all hashtags and mentions
-        all_topics = Counter()
+        all_topics: Counter[str] = Counter()
 
         for post in posts:
             # Add hashtags

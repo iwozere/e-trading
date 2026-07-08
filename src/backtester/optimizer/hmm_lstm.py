@@ -493,7 +493,7 @@ class HMMLSTMOptimizer(BaseOptimizer):
         Returns:
             List of dictionaries with symbol, timeframe, and model information
         """
-        available_combinations = []
+        available_combinations: list[Any] = []
         data_dir = Path(self.config["data"]["data_dir"])
 
         if not data_dir.exists():

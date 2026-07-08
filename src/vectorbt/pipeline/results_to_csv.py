@@ -7,7 +7,7 @@ import pandas as pd
 
 def flatten_dict(d: Dict[str, Any], parent_key: str = "", sep: str = "_") -> Dict[str, Any]:
     """Recursively flatten a nested dictionary."""
-    items = []
+    items: list[Any] = []
     for k, v in d.items():
         new_key = f"{parent_key}{sep}{k}" if parent_key else k
         if isinstance(v, dict):

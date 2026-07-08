@@ -32,7 +32,7 @@ Usage:
 
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -89,7 +89,7 @@ class CachePopulator:
         Returns:
             Set of ticker symbols found in cache
         """
-        tickers = set()
+        tickers: set[Any] = set()
 
         if not self.ohlcv_dir.exists():
             _logger.info("OHLCV cache directory does not exist: %s", self.ohlcv_dir)

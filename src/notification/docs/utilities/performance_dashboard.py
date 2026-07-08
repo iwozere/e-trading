@@ -127,7 +127,7 @@ class PerformanceDashboard:
             """)
             )
 
-            delivery_stats = {}
+            delivery_stats: dict[Any, Any] = {}
             for row in result:
                 if row.channel not in delivery_stats:
                     delivery_stats[row.channel] = {}

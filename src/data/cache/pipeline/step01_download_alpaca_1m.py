@@ -101,7 +101,7 @@ class AlpacaPipelineDownloader:
         Returns:
             Set of ticker symbols found in cache
         """
-        tickers = set()
+        tickers: set[Any] = set()
 
         if not self.ohlcv_dir.exists():
             _logger.warning("OHLCV cache directory does not exist: %s", self.ohlcv_dir)

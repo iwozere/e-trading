@@ -110,9 +110,9 @@ class DataManager:
         """
         self.cache = UnifiedCache(cache_dir)
         self.provider_selector = ProviderSelector(config_path, cache_dir)
-        self.rate_limiters = {}
-        self._rate_limited_providers = set()  # Session-level blacklist (legacy)
-        self._provider_cooldowns = {}  # Temporary cooldowns: {provider_name: expiration_time}
+        self.rate_limiters: dict[Any, Any] = {}
+        self._rate_limited_providers: set[Any] = set()  # Session-level blacklist (legacy)
+        self._provider_cooldowns: dict[Any, Any] = {}  # Temporary cooldowns: {provider_name: expiration_time}
 
         # Initialize rate limiters for each provider
         self._initialize_rate_limiters()
@@ -340,7 +340,7 @@ class DataManager:
             same shape as freshly merged downloads. See ``src.data.ohlcv_contract``.
         """
         results = {}
-        missing_ranges = {}  # {symbol: (missing_start, end_date)}
+        missing_ranges: dict[Any, Any] = {}  # {symbol: (missing_start, end_date)}
 
         _logger.info("Batch request for %d symbols (%s) from %s to %s", len(symbols), timeframe, start_date, end_date)
 
@@ -400,7 +400,7 @@ class DataManager:
             return results
 
         # 2. Group missing ranges by their dates to optimize batching
-        ranges_to_symbols = {}
+        ranges_to_symbols: dict[Any, Any] = {}
         for sym, segments in missing_ranges.items():
             for m_start, m_end in segments:
                 date_key = (m_start.strftime("%Y-%m-%d"), m_end.strftime("%Y-%m-%d"))
@@ -1171,7 +1171,7 @@ class DataManager:
         Returns:
             List of available provider names
         """
-        available_providers = []
+        available_providers: list[Any] = []
 
         # Handle case where provider_sequence might be None or empty
         if not provider_sequence:

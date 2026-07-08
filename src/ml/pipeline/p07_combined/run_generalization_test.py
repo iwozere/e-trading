@@ -1,4 +1,5 @@
 import argparse
+from typing import Any
 import sys
 from pathlib import Path
 
@@ -60,7 +61,7 @@ def run_generalization(source_ticker: str, source_tf: str, merge: bool = False):
     data_dir = Path("data")
     all_data_files = list(data_dir.glob("*_*_*.csv"))
 
-    groups = {}
+    groups: dict[Any, Any] = {}
     if merge:
         for f in all_data_files:
             ticker, tf, _, _ = data_loader.parse_filename(f)

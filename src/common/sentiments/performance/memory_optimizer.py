@@ -212,7 +212,7 @@ class MemoryEfficientDict:
         self.max_size = max_size
         self.cleanup_ratio = cleanup_ratio
         self._data: Dict[Any, Any] = {}
-        self._access_order = deque()
+        self._access_order: deque[str] = deque()
         self._lock = threading.RLock()
 
     def __getitem__(self, key: Any) -> Any:

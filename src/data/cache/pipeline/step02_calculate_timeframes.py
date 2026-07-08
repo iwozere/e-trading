@@ -121,7 +121,7 @@ class TimeframeCalculator:
         Returns:
             Set of ticker symbols with 1m data
         """
-        tickers = set()
+        tickers: set[Any] = set()
 
         if not self.ohlcv_dir.exists():
             _logger.warning("OHLCV cache directory does not exist: %s", self.ohlcv_dir)
@@ -333,7 +333,7 @@ class TimeframeCalculator:
             Dictionary mapping year to DataFrame
         """
         ticker_dir = self.ohlcv_dir / ticker / timeframe
-        existing_data = {}
+        existing_data: dict[Any, Any] = {}
 
         if not ticker_dir.exists():
             return existing_data

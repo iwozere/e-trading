@@ -11,7 +11,7 @@ This script checks:
 import re
 import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 # Colors for terminal output
 GREEN = "\033[92m"
@@ -22,7 +22,7 @@ RESET = "\033[0m"
 
 def check_file_for_production_imports(file_path: Path) -> List[str]:
     """Check if file imports production DB_URL."""
-    issues = []
+    issues: list[Any] = []
 
     # Skip the verification script itself
     if file_path.name == "verify_test_db_config.py":

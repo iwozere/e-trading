@@ -85,7 +85,7 @@ class HMMLSTMEntryMixin(BaseEntryMixin):
         self.lstm_features = None
         self.hmm_features = None
 
-        self.feature_buffer = deque(maxlen=100)
+        self.feature_buffer: deque[Any] = deque(maxlen=100)
         self.lstm_sequence_buffer = None
         self.sequence_length = 60
 

@@ -13,7 +13,7 @@ class P07Strategy(bt.Strategy):
     Implements latency simulation and Store readiness.
     """
 
-    params = (
+    params: tuple[tuple[str, Any], ...] = (
         ("model", None),
         ("feature_config", {}),
         ("thresholds", {"buy_prob_min": 0.5, "sell_prob_min": 0.5}),

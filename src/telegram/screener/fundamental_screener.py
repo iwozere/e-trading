@@ -625,7 +625,7 @@ class FundamentalScreener:
         sell_count = sum(1 for r in results if r.recommendation == "SELL")
 
         # Sector distribution
-        sectors = {}
+        sectors: dict[Any, Any] = {}
         for r in results:
             if r.fundamentals and r.fundamentals.sector:
                 sector = r.fundamentals.sector

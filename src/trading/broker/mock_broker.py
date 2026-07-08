@@ -4,6 +4,7 @@ Simulates order execution and portfolio management without real API calls.
 """
 
 from datetime import UTC
+from typing import Any
 
 from src.trading.broker.base_broker import BaseBroker
 
@@ -33,8 +34,8 @@ class MockBroker(BaseBroker):
         super().__init__(config)
         self.broker_name = "Mock Broker"
         self._cash = cash
-        self.orders = []
-        self.positions = {}
+        self.orders: list[Any] = []
+        self.positions: dict[Any, Any] = {}
 
     def simulate_market_buy(self, symbol: str, qty: float, price: float | None = None) -> dict:
         """Simulate a simple buy (dict result). Does not implement Backtrader ``buy``."""

@@ -271,7 +271,7 @@ class FundamentalsCombiner:
         field_sources = {}
 
         # Get all unique fields across all providers
-        all_fields = set()
+        all_fields: set[Any] = set()
         for provider in providers:
             all_fields.update(provider.data.keys())
 
@@ -329,7 +329,7 @@ class FundamentalsCombiner:
         field_sources = {}
 
         # Group fields by name across all providers
-        all_fields = set()
+        all_fields: set[Any] = set()
         for provider in providers:
             all_fields.update(provider.data.keys())
 
@@ -382,7 +382,7 @@ class FundamentalsCombiner:
         field_sources = {}
 
         # Group fields by name across all providers
-        all_fields = set()
+        all_fields: set[Any] = set()
         for provider in providers:
             all_fields.update(provider.data.keys())
 

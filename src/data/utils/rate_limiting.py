@@ -49,8 +49,8 @@ class RateLimiter:
         self._lock = threading.RLock()
 
         # Request tracking
-        self._second_requests = []
-        self._minute_requests = []
+        self._second_requests: list[Any] = []
+        self._minute_requests: list[Any] = []
         self._consecutive_failures = 0
         self._last_failure_time = None
 

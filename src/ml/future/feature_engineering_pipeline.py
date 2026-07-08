@@ -27,7 +27,7 @@ class TechnicalIndicatorFeatures:
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
-        self.features = {}
+        self.features: dict[Any, Any] = {}
 
     def generate_all_features(self, data: pd.DataFrame) -> pd.DataFrame:
         """Generate all technical indicator features."""
@@ -484,8 +484,8 @@ class FeatureSelector:
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
-        self.selected_features = []
-        self.feature_importance = {}
+        self.selected_features: list[Any] = []
+        self.feature_importance: dict[Any, Any] = {}
         self.correlation_matrix = None
 
     def select_features(
@@ -658,8 +658,8 @@ class FeatureEngineeringPipeline:
         self.feature_selector = FeatureSelector(config.get("selection", {}))
 
         # Feature scalers
-        self.scalers = {}
-        self.feature_names = []
+        self.scalers: dict[Any, Any] = {}
+        self.feature_names: list[Any] = []
 
     def generate_features(
         self, data: pd.DataFrame, orderbook_data: Optional[pd.DataFrame] = None, target_column: Optional[str] = None

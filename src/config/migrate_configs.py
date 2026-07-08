@@ -58,7 +58,7 @@ class ConfigMigrator:
         Returns:
             Dictionary mapping config types to file paths
         """
-        configs = {"trading": [], "optimizer": [], "data": [], "plotter": [], "unknown": []}
+        configs: dict[str, list[Path]] = {"trading": [], "optimizer": [], "data": [], "plotter": [], "unknown": []}
 
         if not self.old_config_dir.exists():
             _logger.warning("Old config directory not found: %s", self.old_config_dir)

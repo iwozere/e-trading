@@ -38,7 +38,7 @@ class NotificationServiceMigrations:
         """
         _logger.info("Starting notification service database optimizations...")
 
-        results = {
+        results: dict[str, Any] = {
             "indexes_created": [],
             "indexes_failed": [],
             "constraints_added": [],
@@ -344,7 +344,7 @@ class NotificationServiceMigrations:
         """Create database views for monitoring and analytics."""
         _logger.info("Creating monitoring views...")
 
-        results = {"views_created": [], "views_failed": []}
+        results: dict[str, Any] = {"views_created": [], "views_failed": []}
 
         views = [
             {
@@ -438,7 +438,7 @@ class NotificationServiceMigrations:
         """Analyze current database performance."""
         _logger.info("Analyzing current database performance...")
 
-        analysis = {"table_stats": {}, "index_stats": {}, "query_stats": {}, "recommendations": []}
+        analysis: dict[str, Any] = {"table_stats": {}, "index_stats": {}, "query_stats": {}, "recommendations": []}
 
         with self.engine.connect() as conn:
             try:

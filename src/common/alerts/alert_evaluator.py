@@ -176,7 +176,7 @@ class AlertEvaluator:
 
             # Evaluate rearm logic if configured
             rearmed = False
-            rearm_sides = {}
+            rearm_sides: dict[Any, Any] = {}
             rearm_snapshot = None
 
             if alert_config.rearm:
@@ -632,7 +632,7 @@ class AlertEvaluator:
 
         try:
             # Extract indicator specs from rule and rearm expressions
-            indicator_specs = []
+            indicator_specs: list[Any] = []
             self._extract_indicator_specs(alert_config.rule, indicator_specs)
             if alert_config.rearm:
                 self._extract_indicator_specs(alert_config.rearm, indicator_specs)
@@ -940,7 +940,7 @@ class AlertEvaluator:
 
             return None, {}
 
-        sides = {}
+        sides: dict[Any, Any] = {}
         snapshot = {}
 
         # Simple comparison operators

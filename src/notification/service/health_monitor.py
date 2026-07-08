@@ -755,7 +755,7 @@ class HealthMonitor:
     def get_health_summary(self) -> Dict[str, Any]:
         """Get overall health summary."""
         with self._lock:
-            status_counts = defaultdict(int)
+            status_counts: defaultdict[str, int] = defaultdict(int)
             total_channels = len(self._status)
 
             for status in self._status.values():

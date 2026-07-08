@@ -69,7 +69,7 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
 
         # Rate limiting: CoinGecko allows 50 calls per minute
         self.max_calls_per_minute = 50
-        self.call_times = []
+        self.call_times: list[Any] = []
 
         super().__init__(symbol=symbol, interval=interval, **kwargs)
 

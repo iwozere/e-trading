@@ -228,7 +228,7 @@ class SystemMonitoringService:
             Dict: Temperature metrics for available sensors
         """
         try:
-            temperatures = {}
+            temperatures: dict[Any, Any] = {}
 
             # Try to get temperature sensors
             if hasattr(psutil, "sensors_temperatures"):

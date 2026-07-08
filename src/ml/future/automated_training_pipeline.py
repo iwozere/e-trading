@@ -46,7 +46,7 @@ class ModelTrainer:
         self.mlflow_manager = mlflow_manager
         self.feature_pipeline = FeatureEngineeringPipeline()
         self.current_model = None
-        self.best_params = {}
+        self.best_params: dict[Any, Any] = {}
 
         # Model factory
         self.model_factory = {
@@ -207,7 +207,7 @@ class PerformanceMonitor:
 
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.performance_history = []
+        self.performance_history: list[Any] = []
         self.alert_threshold = config.get("alert_threshold", 0.1)
         self.degradation_threshold = config.get("degradation_threshold", 0.2)
 
@@ -383,7 +383,7 @@ class ABTestingFramework:
 
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.experiments = {}
+        self.experiments: dict[Any, Any] = {}
         self.traffic_split = config.get("traffic_split", 0.5)
         self.significance_level = config.get("significance_level", 0.05)
 
@@ -655,7 +655,7 @@ class AutomatedTrainingPipeline:
 
             # Concept drift detection (if model is available)
             concept_drift_detected = False
-            concept_drift_details = {}
+            concept_drift_details: dict[Any, Any] = {}
 
             if self.trainer.current_model is not None:
                 # Get target data (placeholder)

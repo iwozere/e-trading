@@ -115,10 +115,10 @@ class AdvancedATRExitMixin(BaseExitMixin):
         self.lowest_low_since_entry = 0.0
         self.last_trail_bar = 0
         self.last_tighten_bar = 0
-        self.pt_levels_hit = set()
+        self.pt_levels_hit: set[Any] = set()
         self.direction = "long"
 
-        self.price_history = deque(maxlen=self.swing_lookback * 2)
+        self.price_history: deque[tuple[float, float]] = deque(maxlen=self.swing_lookback * 2)
 
     def get_required_params(self) -> list:
         return []

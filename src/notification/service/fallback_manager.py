@@ -248,7 +248,7 @@ class FallbackManager:
             return False, [], failed_msg
 
         delivery_results = []
-        attempted_channels = set()
+        attempted_channels: set[Any] = set()
 
         # Try each channel with fallback
         for primary_channel in channels:

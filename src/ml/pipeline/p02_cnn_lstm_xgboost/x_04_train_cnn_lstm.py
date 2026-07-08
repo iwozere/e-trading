@@ -261,7 +261,7 @@ class CNNLSTMTrainer:
         y_val_tensor = torch.tensor(self.data["y_val"], dtype=torch.float32).to(self.device)
 
         # Training history
-        history = {"train_loss": [], "val_loss": [], "learning_rate": []}
+        history: dict[str, list[float]] = {"train_loss": [], "val_loss": [], "learning_rate": []}
 
         best_val_loss = float("inf")
         patience_counter = 0

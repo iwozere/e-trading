@@ -27,7 +27,7 @@ class P08BTStrategy(bt.Strategy):
     - Uses pre-calculated features for speed while maintaining point-in-time safety.
     """
 
-    params = (
+    params: tuple[tuple[str, Any], ...] = (
         ("model", None),
         ("feature_columns", []),
         ("thresholds", {"buy_prob_min": 0.5, "sell_prob_min": 0.5}),
@@ -140,7 +140,7 @@ def run_bt_simulation(ticker: str, timeframe: str, df_full: pd.DataFrame, model:
     _logger.info(f"Starting Backtrader Simulation for {ticker} {timeframe}...")
 
     # Store value over time to calculate period metrics
-    values = []
+    values: list[Any] = []
 
     class ValueObserver(bt.Observer):
         lines = ("value",)

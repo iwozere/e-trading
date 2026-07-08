@@ -40,7 +40,7 @@ class BinanceSymbolValidator:
 
     def _build_symbol_filters(self) -> Dict[str, Dict[str, Any]]:
         """Build symbol filters dictionary for quick access."""
-        filters = {}
+        filters: dict[Any, Any] = {}
 
         if not self.exchange_info or "symbols" not in self.exchange_info:
             return filters

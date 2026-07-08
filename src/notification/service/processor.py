@@ -89,7 +89,7 @@ class MessageProcessor:
         self.fallback_manager = FallbackManager(self._health_monitor)
 
         # Channel instances cache
-        self._channel_instances = {}
+        self._channel_instances: dict[Any, Any] = {}
 
         # Processing state
         self._running = False

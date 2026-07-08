@@ -158,8 +158,8 @@ class CNNTrainer:
         # Initialize components
         self.model = None
         self.scaler = StandardScaler()
-        self.training_history = []
-        self.optimization_results = []
+        self.training_history: list[Any] = []
+        self.optimization_results: list[Any] = []
 
     def run(self) -> Dict[str, Any]:
         """

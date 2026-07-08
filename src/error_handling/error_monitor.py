@@ -233,17 +233,17 @@ class ErrorMonitor:
                 }
 
             # Severity distribution
-            severity_dist = defaultdict(int)
+            severity_dist: defaultdict[str, int] = defaultdict(int)
             for event in events:
                 severity_dist[event.severity.value] += 1
 
             # Component distribution
-            component_dist = defaultdict(int)
+            component_dist: defaultdict[str, int] = defaultdict(int)
             for event in events:
                 component_dist[event.component] += 1
 
             # Top errors
-            error_type_counts = defaultdict(int)
+            error_type_counts: defaultdict[str, int] = defaultdict(int)
             for event in events:
                 error_type_counts[type(event.error).__name__] += 1
 

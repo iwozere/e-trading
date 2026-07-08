@@ -6,6 +6,7 @@ including file-based caching, data handling, and all Phase 1-3 features.
 """
 
 import os
+from typing import Any
 import shutil
 import sys
 import tempfile
@@ -50,7 +51,7 @@ class MockDataSource(BaseDataSource):
 
     def __init__(self, provider_name: str = "mock", **kwargs):
         super().__init__(provider_name, **kwargs)
-        self.data = {}
+        self.data: dict[Any, Any] = {}
 
     def get_available_symbols(self):
         return ["MOCK1", "MOCK2", "MOCK3"]

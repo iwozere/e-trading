@@ -30,8 +30,8 @@ class TimeframeSyncer:
         """
         self.primary_tf = primary_tf
         self.timeframes = [primary_tf] + secondary_tfs
-        self.data_feeds = {}
-        self.indicator_factories = {}
+        self.data_feeds: dict[Any, Any] = {}
+        self.indicator_factories: dict[Any, Any] = {}
 
     def add_data_feed(self, timeframe: str, data: pd.DataFrame):
         """Add a data feed for a specific timeframe."""

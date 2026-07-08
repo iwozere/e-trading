@@ -19,7 +19,7 @@ import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import aiohttp
 
@@ -55,7 +55,7 @@ class AsyncTrendsAdapter(BaseSentimentAdapter):
         super().__init__(name, concurrency, rate_limit_delay)
         self._session = session
         self.max_retries = max_retries
-        self._tokens = {}
+        self._tokens: dict[Any, Any] = {}
         self._token_expiry: float = 0.0
         self._cookies_fetched = False
         self._cookie_lock = asyncio.Lock()

@@ -96,14 +96,14 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
         # WebSocket connection for real-time data
         self.ws_client = None
         self.ws_thread = None
-        self.subscribed_symbols = set()
+        self.subscribed_symbols: set[Any] = set()
 
         # Binance-specific order tracking
         self.binance_orders: Dict[str, Dict[str, Any]] = {}
 
         # Trading rules cache
         self.exchange_info = None
-        self.symbol_filters = {}
+        self.symbol_filters: dict[Any, Any] = {}
 
         _logger.info(
             "Enhanced Binance broker initialized - Mode: %s, URL: %s", self.trading_mode.value, self.client.API_URL

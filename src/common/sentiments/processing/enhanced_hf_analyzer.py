@@ -112,7 +112,7 @@ class EnhancedHFAnalyzer:
         self.fallback_model = self.config.get("fallback_model", "default")
 
         # Initialize models
-        self._initialization_tasks = {}
+        self._initialization_tasks: dict[Any, Any] = {}
         self._initialize_models()
 
     def _get_device(self) -> Union[str, int]:

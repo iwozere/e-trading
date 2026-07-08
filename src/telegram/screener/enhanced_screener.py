@@ -75,8 +75,8 @@ class EnhancedScreener:
             _logger.info("Starting enhanced screener for %s", config.list_type)
 
             # Stage 1: FMP Pre-filtering (if FMP criteria provided)
-            tickers = []
-            fmp_results = {}
+            tickers: list[Any] = []
+            fmp_results: dict[Any, Any] = {}
 
             if config.fmp_criteria or config.fmp_strategy:
                 _logger.info("Running FMP pre-filtering")
@@ -474,7 +474,7 @@ class EnhancedScreener:
 
                 # Calculate fundamental score
                 fundamental_score = 0.0
-                fundamental_analysis = {}
+                fundamental_analysis: dict[Any, Any] = {}
 
                 if config.screener_type in ["fundamental", "hybrid"] and ticker in fundamentals_data:
                     fundamental_score, fundamental_analysis = self._calculate_fundamental_score(
@@ -484,7 +484,7 @@ class EnhancedScreener:
 
                 # Calculate technical score (only if data available)
                 technical_score = 0.0
-                technical_analysis = {}
+                technical_analysis: dict[Any, Any] = {}
 
                 if config.screener_type in ["technical", "hybrid"] and ticker in technical_data:
                     technical_score, technical_analysis = self._calculate_technical_score(

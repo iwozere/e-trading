@@ -304,7 +304,7 @@ class P07Pipeline:
     def run_batch(self, ticker_files: List[Path], mode: str = "optimize", train_years: List[str] | None = None):
         """Process multiple files with Cross-File Validation logic."""
         # 1. Group files by (ticker, timeframe)
-        groups = {}
+        groups: dict[Any, Any] = {}
         for filepath in ticker_files:
             ticker, timeframe, start, end = self.data_loader.parse_filename(filepath)
             if not ticker:

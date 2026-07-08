@@ -59,7 +59,7 @@ def validate_cached_data(symbols: List[str], intervals: List[str], cache_dir: st
     # Configure cache
     cache = configure_unified_cache(cache_dir=cache_dir)
 
-    results = {
+    results: dict[str, Any] = {
         "valid": [],
         "invalid": [],
         "missing": [],

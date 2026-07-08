@@ -181,7 +181,7 @@ class ModelValidator:
         _logger.info("Preparing validation data from %d files", len(feature_files))
 
         all_features = []
-        all_targets = {target: [] for target in self.targets}
+        all_targets: dict[str, list[Any]] = {target: [] for target in self.targets}
 
         for file_path in feature_files:
             try:

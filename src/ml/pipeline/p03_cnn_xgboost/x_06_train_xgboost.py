@@ -233,7 +233,7 @@ class XGBoostTrainer:
         _logger.info("Preparing training data from %d files", len(feature_files))
 
         all_features = []
-        all_targets = {target: [] for target in self.targets}
+        all_targets: dict[str, list[Any]] = {target: [] for target in self.targets}
 
         for file_path in feature_files:
             try:
@@ -312,7 +312,7 @@ class XGBoostTrainer:
 
         # Time series cross-validation
         tscv = TimeSeriesSplit(n_splits=self.cv_splits)
-        cv_results = {"train_scores": [], "val_scores": [], "train_metrics": [], "val_metrics": []}
+        cv_results: dict[str, list[Any]] = {"train_scores": [], "val_scores": [], "train_metrics": [], "val_metrics": []}
 
         models = []
 

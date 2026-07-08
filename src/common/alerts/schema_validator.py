@@ -155,7 +155,7 @@ class AlertSchemaValidator:
         Recursively find 'plugin' nodes in the rule AST and validate their 'params'
         against the schema exported by the specific plugin.
         """
-        errors = []
+        errors: list[Any] = []
         if not expr:
             return errors
 

@@ -25,7 +25,7 @@ class BaseEntryMixin(ABC):
         """
         self.strategy = None
         self.params = params or {}
-        self.indicators = {}
+        self.indicators: dict[Any, Any] = {}
 
         # Validate class method implementation
         self._validate_class_methods()

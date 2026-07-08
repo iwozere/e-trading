@@ -33,7 +33,7 @@ class MockNotificationChannel:
         self.name = name
         self.should_fail = should_fail
         self.delay = delay
-        self.sent_messages = []
+        self.sent_messages: list[Any] = []
         self.health_status = "healthy"
         self.call_count = 0
 
