@@ -82,14 +82,29 @@ def main():
             # Send to Telegram if requested
             if args.notify:
                 try:
-                    from src.notification.notification_service import NotificationService
+                    import asyncio
 
-                    service = NotificationService()
+                    from src.notification.service.client import NotificationServiceClient
+
                     message = "📊 *P13 Daily Signals*\n\n"
                     for item in summary_info:
                         message += f"• *{item['ticker']}*: {item['status']}\n  (VIX Z: {item['vix_z']:.2f}, SL: ${item['stop_loss']:.2f})\n"
 
-                    service.send_telegram(message)
+                    async def _send_notification(text: str) -> None:
+                        client = NotificationServiceClient()
+                        try:
+                            await client.send_notification(
+                                notification_type="alert",
+                                title="P13 Daily Signals",
+                                message=text,
+                                priority="normal",
+                                channels=["telegram"],
+                                source="p13_bdsh",
+                            )
+                        finally:
+                            await client.close()
+
+                    asyncio.run(_send_notification(message))
                     logging.info("Telegram notification sent.")
                 except Exception as ne:
                     logging.error(f"Failed to send notification: {ne}")

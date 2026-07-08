@@ -81,8 +81,20 @@ Batch per module; after each batch: `mypy <module>` + run that module's tests.
 - Regenerate error counts per module after each phase to measure decline.
 
 ## Status
-- [ ] Phase A — commit pyproject + fresh baseline
-- [ ] Phase B — real bugs
+- [x] Phase A — commit pyproject + fresh baseline (d553773; baseline confirmed 1,168 errors — overrides were already active in phase-0 log)
+- [x] Phase B — real bugs (commits 5ea45ef + follow-up). Notable findings beyond the plan:
+  - Enabled `pydantic.mypy` plugin — killed ~15 false "missing named argument" errors in config_loader/api/portfolio; converted config_models Field defaults to keyword form for Pyright parity.
+  - candidate_store.py had `return` inside the for loop (returned after first snapshot) + wrong `service.repo` accessor + wrong deep-scan method name.
+  - volume_squeeze_detector_yf built Candidate with nonexistent kwargs AND nonexistent enum member `VOLUME_DETECTOR` — detector could never emit candidates (TypeError swallowed by except).
+  - `import numpy as pd` shadowed pandas in ml/future/automated_training_pipeline.py.
+  - collect_sentiment_batch: widened history_lookup to accept async callables (runtime already supported both); fixed fall-through return; annotated env config dict (killed ~28 dict-item errors).
+  - Deleted orphaned artifacts: 4 notification delivery-history tests (service.main removed in 81aeb50), migration_example.py, client_usage.py (documents nonexistent client API), example_usage.py (FundamentalsDownloader gone), test_regime_colors.py (method removed), FINRA test's run_migration step (alembic owns schema now).
+  - p16_taleb tests: converted to absolute imports and removed tests/__init__.py — its `src/` package shadowed the project `src` via pytest basedir insertion. 39/39 tests pass.
+  - p13 run_p13.py --notify rewired from removed NotificationService to NotificationServiceClient.send_notification.
+  - Also fixed Phase D item early: dropped `ReduceLROnPlateau(verbose=)` (p02 x_03/x_04).
 - [ ] Phase C — mechanical passes
-- [ ] Phase D — ml pipeline structural
+- [ ] Phase D — ml pipeline structural (x_NN dynamic-import override still open)
 - [ ] Phase E — long tail per module
+
+Note: pytest.ini uses `[tool:pytest]` section header which pytest ignores in pytest.ini
+(needs `[pytest]`) — config there (testpaths, cov, markers) is currently inert. Surface to user.

@@ -252,7 +252,7 @@ class CNNLSTMTrainer:
         optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
 
         # Learning rate scheduler
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=5, verbose=True)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=5)
 
         # Convert to tensors
         X_train_tensor = torch.tensor(self.data["X_train"], dtype=torch.float32).to(self.device)

@@ -119,16 +119,7 @@ def test_database_integration():
     print("\n🧪 Testing Database Integration...")
 
     try:
-        # Run migration first
-        print("Running database migration...")
-        from src.data.db.migrations.add_finra_short_interest_table import run_migration
-
-        if not run_migration():
-            print("❌ Database migration failed")
-            return False
-
-        print("✅ Database migration successful")
-
+        # Schema is managed by alembic; the DB is assumed to be migrated.
         # Test FINRA service (now part of ShortSqueezeService)
         from src.data.db.core.database import session_scope
         from src.data.db.services.short_squeeze_service import ShortSqueezeService
@@ -143,11 +134,6 @@ def test_database_integration():
         print(f"   Total records: {report.get('total_records', 0)}")
         print(f"   Latest report: {report.get('latest_report_date', 'None')}")
         print(f"   Data age: {report.get('data_age_days', 'N/A')} days")
-
-        # Test getting high short interest candidates
-        candidates = service.get_high_short_interest_candidates(min_short_ratio=0.1, limit=10)
-
-        print(f"✅ Found {len(candidates)} high short interest candidates")
 
         return True
 

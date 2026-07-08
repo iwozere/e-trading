@@ -7,7 +7,8 @@ import pandas as pd
 from . import config
 from .data_loader import download_data, preprocess_data
 from .models import P13Config
-from .vix_scaling_engine import P13Plotter, VIXScalingEngine
+from .visualizer import P13Plotter
+from .vix_scaling_engine import VIXScalingEngine
 
 logger = logging.getLogger(__name__)
 
