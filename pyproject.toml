@@ -87,3 +87,16 @@ module = [
     "zstandard",
 ]
 ignore_missing_imports = true
+
+# ml pipeline runner scripts import sibling x_NN modules by bare name at runtime
+# (they chdir / sys.path-insert their own directory); mypy cannot resolve those.
+[[tool.mypy.overrides]]
+module = [
+    "src.ml.pipeline.p00_hmm_3lstm.hmm.x_02_train_hmm",
+    "src.ml.pipeline.p01_hmm_lstm.tests.test_pipeline_error_handling",
+    "src.ml.pipeline.p02_cnn_lstm_xgboost.run_pipeline",
+    "src.ml.pipeline.p02_cnn_lstm_xgboost.x_04_train_cnn_lstm",
+    "src.ml.pipeline.p02_cnn_lstm_xgboost.x_05_extract_features",
+    "src.ml.pipeline.p03_cnn_xgboost.tests.test_complete_pipeline",
+]
+disable_error_code = ["import-not-found"]
