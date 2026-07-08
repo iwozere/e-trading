@@ -7,7 +7,7 @@ and quality across all pipeline stages.
 
 import logging
 from pathlib import Path
-from typing import List, Tuple
+from typing import Optional, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -141,7 +141,7 @@ def validate_feature_columns(df: pd.DataFrame, exclude_columns: List[str]) -> Tu
     return len(issues) == 0, issues
 
 
-def validate_dataframe_structure(df: pd.DataFrame, expected_columns: List[str] = None) -> Tuple[bool, List[str]]:
+def validate_dataframe_structure(df: pd.DataFrame, expected_columns: Optional[List[str]] = None) -> Tuple[bool, List[str]]:
     """
     Validate basic DataFrame structure.
 

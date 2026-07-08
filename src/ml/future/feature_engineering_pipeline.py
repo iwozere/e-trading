@@ -8,7 +8,7 @@ This module provides comprehensive feature engineering capabilities:
 - Feature selection and validation
 """
 
-from typing import Any, Dict, List
+from typing import Optional, Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -25,7 +25,7 @@ logger = setup_logger(__name__)
 class TechnicalIndicatorFeatures:
     """Generates technical indicator features."""
 
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
         self.features = {}
 
@@ -263,10 +263,10 @@ class TechnicalIndicatorFeatures:
 class MarketMicrostructureFeatures:
     """Generates market microstructure features."""
 
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
 
-    def generate_features(self, data: pd.DataFrame, orderbook_data: pd.DataFrame = None) -> pd.DataFrame:
+    def generate_features(self, data: pd.DataFrame, orderbook_data: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """Generate market microstructure features."""
         features_df = data.copy()
 
@@ -395,7 +395,7 @@ class MarketMicrostructureFeatures:
 class StatisticalFeatures:
     """Generates statistical features."""
 
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
 
     def generate_features(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -482,7 +482,7 @@ class StatisticalFeatures:
 class FeatureSelector:
     """Handles feature selection and validation."""
 
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
         self.selected_features = []
         self.feature_importance = {}
@@ -648,7 +648,7 @@ class FeatureSelector:
 class FeatureEngineeringPipeline:
     """Main feature engineering pipeline."""
 
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
 
         # Initialize components
@@ -662,7 +662,7 @@ class FeatureEngineeringPipeline:
         self.feature_names = []
 
     def generate_features(
-        self, data: pd.DataFrame, orderbook_data: pd.DataFrame = None, target_column: str = None
+        self, data: pd.DataFrame, orderbook_data: Optional[pd.DataFrame] = None, target_column: Optional[str] = None
     ) -> pd.DataFrame:
         """Generate all features."""
         try:

@@ -218,7 +218,7 @@ class FallbackManager:
         recipient: str,
         content: MessageContent,
         priority: str = "NORMAL",
-        channel_instances: Dict[str, NotificationChannel] = None,
+        channel_instances: Optional[Dict[str, NotificationChannel]] = None,
     ) -> Tuple[bool, List[DeliveryResult], Optional[FailedMessage]]:
         """
         Attempt message delivery with automatic fallback.

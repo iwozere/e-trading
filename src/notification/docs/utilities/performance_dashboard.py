@@ -10,7 +10,7 @@ import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Optional, Any, Dict, List
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -292,7 +292,7 @@ class PerformanceDashboard:
                 if total > 0:
                     print(f"      • {channel}: {limited}/{total} users rate limited")
 
-    def export_metrics(self, filename: str = None) -> str:
+    def export_metrics(self, filename: Optional[str] = None) -> str:
         """Export current metrics to JSON file."""
         if not filename:
             timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")

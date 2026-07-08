@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Optional, Any, Dict
 
 import numpy as np
 import pandas as pd
@@ -11,7 +11,7 @@ class P07XGBModel:
     Optimized for CPU and ONNX compatibility.
     """
 
-    def __init__(self, params: Dict[str, Any] = None):
+    def __init__(self, params: Optional[Dict[str, Any]] = None):
         default_params = {
             "objective": "multi:softprob",
             "num_class": 3,  # [-1, 0, 1] mapped to [0, 1, 2]
@@ -48,7 +48,7 @@ class P07XGBModel:
         dtest = xgb.DMatrix(X)
         return self.model.predict(dtest)
 
-    def predict_signal(self, X: pd.DataFrame, thresholds: Dict[str, float] = None) -> pd.Series:
+    def predict_signal(self, X: pd.DataFrame, thresholds: Optional[Dict[str, float]] = None) -> pd.Series:
         """
         Produce discrete signals [-1, 0, 1] with confidence thresholds.
         """

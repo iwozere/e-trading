@@ -13,7 +13,7 @@ import gzip
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Optional, Any, Dict, List
 
 import pandas as pd
 
@@ -243,8 +243,8 @@ class UnifiedCache:
         self,
         symbol: str,
         timeframe: str,
-        start_date: datetime = None,
-        end_date: datetime = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
         format: str = "csv",
         data_type: str = "ohlcv",
     ) -> pd.DataFrame | None:

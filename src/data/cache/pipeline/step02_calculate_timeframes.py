@@ -44,6 +44,7 @@ Usage:
 
 import sys
 from pathlib import Path
+from typing import Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -91,7 +92,7 @@ class TimeframeCalculator:
         "1d": 960,  # 16 hours * 60 minutes
     }
 
-    def __init__(self, cache_dir: str = None):
+    def __init__(self, cache_dir: Optional[str] = None):
         """
         Initialize the timeframe calculator.
 

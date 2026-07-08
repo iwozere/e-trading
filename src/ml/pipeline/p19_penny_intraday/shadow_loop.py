@@ -14,7 +14,7 @@ import json
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Dict, List
+from typing import Optional, Any, Callable, Dict, List
 
 from src.ml.pipeline.p19_penny_intraday.config import P19Config
 from src.ml.pipeline.p19_penny_intraday.metrics import compute_signal
@@ -52,7 +52,7 @@ class ShadowLoop:
         config: P19Config,
         target_date: str,
         output_dir: str = DEFAULT_OUTPUT_DIR,
-        feed: Any = None,
+        feed: Optional[Any] = None,
         store: ShadowStore | None = None,
     ) -> None:
         self.cfg = config

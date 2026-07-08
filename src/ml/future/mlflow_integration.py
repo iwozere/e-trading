@@ -15,7 +15,7 @@ import shutil
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Optional, Any, Dict, List
 
 import mlflow
 import mlflow.lightgbm
@@ -74,7 +74,7 @@ class MLflowManager:
             logger.exception("Error setting up experiment: ")
             raise
 
-    def start_run(self, run_name: str = None, tags: Dict[str, str] = None) -> str:
+    def start_run(self, run_name: Optional[str] = None, tags: Optional[Dict[str, str]] = None) -> str:
         """Start a new MLflow run."""
         try:
             mlflow.start_run(run_name=run_name)
@@ -114,7 +114,7 @@ class MLflowManager:
             logger.exception("Error logging parameters: ")
             raise
 
-    def log_metrics(self, metrics: Dict[str, float], step: int = None):
+    def log_metrics(self, metrics: Dict[str, float], step: Optional[int] = None):
         """Log metrics to MLflow."""
         try:
             mlflow.log_metrics(metrics, step=step)
@@ -124,7 +124,7 @@ class MLflowManager:
             raise
 
     def log_model(
-        self, model, model_name: str, model_type: str, metadata: ModelMetadata, artifacts: Dict[str, str] = None
+        self, model, model_name: str, model_type: str, metadata: ModelMetadata, artifacts: Optional[Dict[str, str]] = None
     ):
         """Log model to MLflow with metadata."""
         try:
@@ -156,7 +156,7 @@ class MLflowManager:
             logger.exception("Error logging model: ")
             raise
 
-    def register_model(self, model_name: str, model_uri: str, stage: str = "Staging", description: str = None):
+    def register_model(self, model_name: str, model_uri: str, stage: str = "Staging", description: Optional[str] = None):
         """Register model in MLflow Model Registry."""
         try:
             # Create model if it doesn't exist
@@ -499,7 +499,7 @@ class ExperimentManager:
     def __init__(self, mlflow_manager: MLflowManager):
         self.mlflow_manager = mlflow_manager
 
-    def create_experiment(self, experiment_name: str, description: str = None, tags: Dict[str, str] = None) -> str:
+    def create_experiment(self, experiment_name: str, description: Optional[str] = None, tags: Optional[Dict[str, str]] = None) -> str:
         """Create a new experiment."""
         try:
             experiment_id = mlflow.create_experiment(experiment_name, tags=tags)

@@ -54,10 +54,10 @@ class MessageProcessor:
 
     def __init__(
         self,
-        max_workers: int = None,
-        batch_size: int = None,
-        batch_timeout_seconds: int = None,
-        retry_delay_minutes: int = None,
+        max_workers: Optional[int] = None,
+        batch_size: Optional[int] = None,
+        batch_timeout_seconds: Optional[int] = None,
+        retry_delay_minutes: Optional[int] = None,
         *,
         queue=None,
         notification_config=None,

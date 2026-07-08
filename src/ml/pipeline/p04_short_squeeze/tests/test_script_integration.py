@@ -15,6 +15,7 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from typing import Optional
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
@@ -41,7 +42,7 @@ class ScriptIntegrationTestBase(unittest.TestCase):
         shutil.rmtree(self.test_dir, ignore_errors=True)
 
     def run_script(
-        self, script_name: str, args: list = None, expect_success: bool = True
+        self, script_name: str, args: Optional[list] = None, expect_success: bool = True
     ) -> subprocess.CompletedProcess:
         """
         Run a script with given arguments.

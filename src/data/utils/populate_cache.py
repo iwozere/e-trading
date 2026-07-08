@@ -32,6 +32,7 @@ Usage:
 
 import sys
 from pathlib import Path
+from typing import Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -434,8 +435,8 @@ class CachePopulator:
         self,
         tickers: List[str] | None = None,
         intervals: List[str] | None = None,
-        start_date: datetime = None,
-        end_date: datetime = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
     ) -> Dict[str, Dict[str, bool]]:
         """
         Main method to populate cache data.

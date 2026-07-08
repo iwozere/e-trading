@@ -7,7 +7,7 @@ Used for testing and as an example for plugin development.
 
 import asyncio
 from datetime import UTC, datetime
-from typing import Any, Dict
+from typing import Optional, Any, Dict
 
 from src.notification.channels.base import (
     ChannelHealth,
@@ -70,7 +70,7 @@ class TestChannel(NotificationChannel):
         self.config.update(validated_config)
 
     async def send_message(
-        self, recipient: str, content: MessageContent, message_id: str = None, priority: str = "NORMAL"
+        self, recipient: str, content: MessageContent, message_id: Optional[str] = None, priority: str = "NORMAL"
     ) -> DeliveryResult:
         """
         Simulate sending a message.

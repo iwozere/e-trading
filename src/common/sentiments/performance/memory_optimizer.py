@@ -13,7 +13,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List
+from typing import Optional, Any, Callable, Dict, Iterator, List
 
 import psutil
 
@@ -247,7 +247,7 @@ class MemoryEfficientDict:
         """Check if key exists."""
         return key in self._data
 
-    def get(self, key: Any, default: Any = None) -> Any:
+    def get(self, key: Any, default: Optional[Any] = None) -> Any:
         """Get item with default value."""
         try:
             return self[key]

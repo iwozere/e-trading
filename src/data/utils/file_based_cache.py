@@ -24,7 +24,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Optional, Any, Dict, List, Union
 
 import pandas as pd
 
@@ -84,7 +84,7 @@ class CSVFormatConventions:
         return True
 
     @staticmethod
-    def standardize_dataframe(df: pd.DataFrame, provider: str = None) -> pd.DataFrame:
+    def standardize_dataframe(df: pd.DataFrame, provider: Optional[str] = None) -> pd.DataFrame:
         """Standardize DataFrame to CSV conventions."""
         # Ensure timestamp column exists and is datetime
         if "timestamp" not in df.columns:

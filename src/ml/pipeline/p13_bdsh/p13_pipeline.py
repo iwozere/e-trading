@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import List
+from typing import Optional, List
 
 import pandas as pd
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class P13Pipeline:
-    def __init__(self, tickers: List[str], start_date: str = None, end_date: str = None):
+    def __init__(self, tickers: List[str], start_date: Optional[str] = None, end_date: Optional[str] = None):
         self.tickers = tickers
         self.start_date = start_date or config.DEFAULT_START_DATE
         self.end_date = end_date or config.DEFAULT_END_DATE

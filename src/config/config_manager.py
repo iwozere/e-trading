@@ -14,7 +14,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Optional, Any, Dict, List
 
 import yaml
 from watchdog.events import FileSystemEventHandler
@@ -279,7 +279,7 @@ class ConfigManager:
             self._hot_reload_enabled = False
             _logger.info("Hot-reload disabled")
 
-    def get_environment_config(self, key: str, default: Any = None) -> Any:
+    def get_environment_config(self, key: str, default: Optional[Any] = None) -> Any:
         """Get environment-specific configuration value"""
         env_config_file = self.config_dir / f"{self.environment}.json"
 

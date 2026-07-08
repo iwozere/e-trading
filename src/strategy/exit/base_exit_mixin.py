@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Optional, Any, Dict, List
 
 from src.notification.logger import setup_logger
 
@@ -107,10 +107,10 @@ class BaseExitMixin(ABC):
         """Called when a position is entered. Default implementation does nothing."""
         pass
 
-    def get_param(self, key: str, default: Any = None) -> Any:
+    def get_param(self, key: str, default: Optional[Any] = None) -> Any:
         return self.params.get(key, default)
 
-    def _resolve_param(self, key: str, e_key: str, default: Any = None) -> Any:
+    def _resolve_param(self, key: str, e_key: str, default: Optional[Any] = None) -> Any:
         """
         Resolve a param with e_-prefixed fallback, correctly handling falsy values.
 

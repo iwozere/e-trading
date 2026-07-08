@@ -26,6 +26,7 @@ from src.notification.service.fallback_manager import (
     MessageFailureReason,
 )
 from src.notification.service.health_monitor import HealthMonitor, HealthStatus
+from typing import Optional
 
 
 class MockChannel(NotificationChannel):
@@ -41,7 +42,7 @@ class MockChannel(NotificationChannel):
         pass
 
     async def send_message(
-        self, recipient: str, content: MessageContent, message_id: str = None, priority: str = "NORMAL"
+        self, recipient: str, content: MessageContent, message_id: Optional[str] = None, priority: str = "NORMAL"
     ) -> DeliveryResult:
         self.send_calls.append(
             {"recipient": recipient, "content": content, "message_id": message_id, "priority": priority}

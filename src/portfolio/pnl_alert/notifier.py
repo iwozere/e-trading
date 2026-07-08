@@ -142,7 +142,7 @@ async def send_alert(
     channels: Sequence[str],
     threshold_pct: float,
     recipient_id: int | None = None,
-    client: Any = None,
+    client: Optional[Any] = None,
     dry_run: bool = False,
     as_of: datetime | None = None,
 ) -> bool:

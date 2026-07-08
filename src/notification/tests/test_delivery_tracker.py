@@ -10,6 +10,7 @@ import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Optional
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -30,7 +31,7 @@ _logger = setup_logger(__name__)
 
 def create_test_message(
     message_id: int,
-    channels: list = None,
+    channels: Optional[list] = None,
     priority: MessagePriority = MessagePriority.NORMAL,
     recipient_id: str = "test_user",
 ) -> QueuedMessage:

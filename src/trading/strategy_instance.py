@@ -9,7 +9,7 @@ import asyncio
 import threading
 import time
 from datetime import UTC, datetime
-from typing import Any, Dict
+from typing import Optional, Any, Dict
 
 from src.data.db.services.trading_service import trading_service
 from src.data.feed.data_feed_factory import DataFeedFactory
@@ -32,7 +32,7 @@ class StrategyInstance:
         instance_id: str,
         config: Dict[str, Any],
         notification_client: NotificationServiceClient | None = None,
-        trade_repository: Any = None,
+        trade_repository: Optional[Any] = None,
     ):
         """Initialize strategy instance."""
         self.instance_id = instance_id

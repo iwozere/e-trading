@@ -18,7 +18,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple
 
 import numpy as np
 import optuna
@@ -697,7 +697,7 @@ class LSTMOptimizer:
             _logger.exception("Error in LSTM objective function: %s", str(e))
             return 999.0  # Return large value for failed trials
 
-    def optimize_lstm(self, symbol: str, timeframe: str, provider: str = None) -> Dict:
+    def optimize_lstm(self, symbol: str, timeframe: str, provider: Optional[str] = None) -> Dict:
         """
         Optimize LSTM hyperparameters for a specific symbol-timeframe combination.
 

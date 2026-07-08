@@ -44,7 +44,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Optional, Any, Dict, List
 
 import pandas as pd
 
@@ -257,7 +257,7 @@ class AnnualDataDownloader:
         tickers: List[str],
         timeframes: List[str],
         start_year: int,
-        end_year: int = None,
+        end_year: Optional[int] = None,
         force_refresh: bool = False,
         delay: float = 0.5,
     ) -> List[Dict[str, Any]]:

@@ -7,7 +7,7 @@ This module provides adapter integration for multiple indicator backends (TALib,
 Primary use case: Backtrader strategy indicator creation via BacktraderAdapter.
 """
 
-from typing import Any, Dict, Union
+from typing import Optional, Any, Dict, Union
 
 import numpy as np
 import pandas as pd
@@ -22,7 +22,7 @@ logger = setup_logger(__name__)
 class IndicatorFactory:
     """Factory class for creating technical indicators for pandas DataFrames and Backtrader strategies."""
 
-    def __init__(self, data: Union[pd.DataFrame, Any] = None):
+    def __init__(self, data: Optional[Union[pd.DataFrame, Any]] = None):
         self.data = data
         self.indicators = {}
 

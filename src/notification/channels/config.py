@@ -17,7 +17,7 @@ _logger = setup_logger(__name__)
 class ConfigValidationError(Exception):
     """Exception raised when configuration validation fails."""
 
-    def __init__(self, message: str, field: Optional[str] = None, value: Any = None):
+    def __init__(self, message: str, field: Optional[str] = None, value: Optional[Any] = None):
         """
         Initialize configuration validation error.
 
@@ -168,7 +168,7 @@ class ConfigValidator:
         self.add_rule(rule)
 
     def optional_field(
-        self, field_name: str, field_type: Type, default_value: Any = None, description: str = "", **kwargs
+        self, field_name: str, field_type: Type, default_value: Optional[Any] = None, description: str = "", **kwargs
     ) -> None:
         """
         Add an optional field validation rule.

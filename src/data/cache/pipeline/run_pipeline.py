@@ -31,6 +31,7 @@ Usage:
 
 import sys
 from pathlib import Path
+from typing import Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -63,7 +64,7 @@ class DataPipelineRunner:
             "step_results": {},
         }
 
-    def run_step(self, step_num: int, step_name: str, script_path: Path, args: List[str] = None) -> Dict[str, Any]:
+    def run_step(self, step_num: int, step_name: str, script_path: Path, args: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Run a single pipeline step.
 
@@ -136,12 +137,12 @@ class DataPipelineRunner:
     def run_pipeline(
         self,
         steps: List[int],
-        tickers: str = None,
-        timeframes: str = None,
-        start_date: str = None,
-        end_date: str = None,
+        tickers: Optional[str] = None,
+        timeframes: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         force_refresh: bool = False,
-        cache_dir: str = None,
+        cache_dir: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Run the complete pipeline or specific steps.

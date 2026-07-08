@@ -11,7 +11,7 @@ over when a second StrategyManager is created (tests, hot-reload).
 """
 
 import asyncio
-from typing import Any, Dict, List
+from typing import Optional, Any, Dict, List
 
 from src.notification.logger import setup_logger
 from src.notification.service.client import NotificationServiceClient
@@ -33,7 +33,7 @@ class InstanceService:
     def __init__(
         self,
         notification_client: NotificationServiceClient | None = None,
-        trade_repository: Any = None,
+        trade_repository: Optional[Any] = None,
     ):
         """
         Initialize the instance service.

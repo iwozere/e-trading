@@ -18,7 +18,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict
+from typing import Optional, Dict
 
 import numpy as np
 import optuna
@@ -311,7 +311,7 @@ class IndicatorOptimizer:
             _logger.warning("Error in objective function: %s", str(e))
             return 999  # Return large positive value for failed trials
 
-    def optimize_indicators(self, symbol: str, timeframe: str, provider: str = None) -> Dict:
+    def optimize_indicators(self, symbol: str, timeframe: str, provider: Optional[str] = None) -> Dict:
         """
         Optimize indicator parameters for a specific symbol-timeframe combination.
 

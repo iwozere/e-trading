@@ -31,6 +31,7 @@ from contextvars import ContextVar
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 from multiprocessing import Manager, Queue
 from pathlib import Path
+from typing import Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -494,7 +495,7 @@ def shutdown_multiprocessing_logging():
         _logger.info("Multiprocessing-safe logging shut down")
 
 
-def get_multiprocessing_logger(name: str, level: int = logging.DEBUG, external_queue: Queue = None) -> logging.Logger:
+def get_multiprocessing_logger(name: str, level: int = logging.DEBUG, external_queue: Optional[Queue] = None) -> logging.Logger:
     """
     Get a logger configured for multiprocessing.
 
@@ -556,7 +557,7 @@ class ContextAwareLogger:
     This allows child modules to log to the same file as their calling module.
     """
 
-    def __init__(self, name: str, parent_logger_name: str = None):
+    def __init__(self, name: str, parent_logger_name: Optional[str] = None):
         self.name = name
         self.parent_logger_name = parent_logger_name
         self.logger = logging.getLogger(name)
@@ -639,9 +640,9 @@ def get_logging_context() -> str:
 
 def setup_logger(
     name: str,
-    log_file: str = None,
+    log_file: Optional[str] = None,
     level: int = logging.DEBUG,
-    inherit_from: str = None,
+    inherit_from: Optional[str] = None,
     use_multiprocessing: bool = False,
     **kwargs,
 ) -> logging.Logger:

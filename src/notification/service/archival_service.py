@@ -804,7 +804,7 @@ class RetentionPolicyManager:
             ),
         }
 
-    def get_policy(self, message_type: str = None, priority: str = None) -> ArchivalPolicy:
+    def get_policy(self, message_type: Optional[str] = None, priority: Optional[str] = None) -> ArchivalPolicy:
         """
         Get retention policy for a message type and priority.
 

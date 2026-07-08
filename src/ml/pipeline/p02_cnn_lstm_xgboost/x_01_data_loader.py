@@ -18,7 +18,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple
 
 import pandas as pd
 import yaml
@@ -78,7 +78,7 @@ class DataLoader:
         return provider_name
 
     def _generate_filename(
-        self, symbol: str, timeframe: str, start_date: datetime, end_date: datetime, provider: str = None
+        self, symbol: str, timeframe: str, start_date: datetime, end_date: datetime, provider: Optional[str] = None
     ) -> str:
         """
         Generate filename for downloaded data.

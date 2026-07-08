@@ -14,7 +14,7 @@ pipeline, whose results are already written to disk by the reporting agent.
 
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Optional, Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -40,7 +40,7 @@ class NotificationAgent:
         self,
         alert_config: P17AlertConfig,
         target_date: str,
-        user_id: Any = None,
+        user_id: Optional[Any] = None,
     ) -> None:
         self.cfg = alert_config
         self.target_date = target_date

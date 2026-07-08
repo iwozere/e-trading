@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Optional, Any, Dict
 
 import backtrader as bt
 import optuna
@@ -182,7 +182,7 @@ def run_bt_simulation(ticker: str, timeframe: str, df_full: pd.DataFrame, model:
     }
 
 
-def run_backtrader_batch(candidates_path: Path, ticker: str = None, tf: str = None):
+def run_backtrader_batch(candidates_path: Path, ticker: Optional[str] = None, tf: Optional[str] = None):
     """
     Refactored batch logic for automation integration.
     """

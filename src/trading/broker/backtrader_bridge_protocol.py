@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Optional, Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -17,7 +17,7 @@ class SupportsBacktraderBridge(Protocol):
 
     def _bt_getcash(self) -> float: ...
 
-    def _bt_getvalue(self, datas: Any = None) -> float: ...
+    def _bt_getvalue(self, datas: Optional[Any] = None) -> float: ...
 
     def _bt_getposition(self, data: Any) -> Any: ...
 

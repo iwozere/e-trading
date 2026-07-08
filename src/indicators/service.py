@@ -5,7 +5,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Optional, Any, Dict, List
 
 # Third party
 import pandas as pd
@@ -40,7 +40,7 @@ _logger = setup_logger(__name__)
 class IndicatorServiceError(Exception):
     """Base exception for indicator service errors."""
 
-    def __init__(self, message: str, error_code: str = None, context: Dict[str, Any] = None):
+    def __init__(self, message: str, error_code: Optional[str] = None, context: Optional[Dict[str, Any]] = None):
         super().__init__(message)
         self.error_code = error_code
         self.context = context or {}
@@ -249,7 +249,7 @@ class PerformanceTracker:
         if error:
             self.error_counts[operation] += 1
 
-    def get_stats(self, operation: str = None) -> Dict[str, Any]:
+    def get_stats(self, operation: Optional[str] = None) -> Dict[str, Any]:
         """Get performance statistics."""
         if operation:
             if operation not in self.operation_times:
@@ -370,7 +370,7 @@ class BenchmarkRunner:
         return results
 
     async def benchmark_batch_processing(
-        self, tickers: List[str], indicators: List[str], batch_sizes: List[int] = None
+        self, tickers: List[str], indicators: List[str], batch_sizes: Optional[List[int]] = None
     ) -> Dict[str, Any]:
         """Benchmark batch processing with different batch sizes."""
         if batch_sizes is None:
@@ -445,7 +445,7 @@ class UnifiedIndicatorService:
     and intelligent recommendations.
     """
 
-    def __init__(self, prefer: Dict[str, int] | None = None, batch_config: BatchProcessingConfig = None):
+    def __init__(self, prefer: Dict[str, int] | None = None, batch_config: Optional[BatchProcessingConfig] = None):
         import warnings
 
         warnings.warn(
@@ -1100,7 +1100,7 @@ class UnifiedIndicatorService:
         return self.performance_monitor.get_performance_report()
 
     async def run_benchmark(
-        self, ticker: str = "AAPL", indicators: List[str] = None, iterations: int = 10
+        self, ticker: str = "AAPL", indicators: Optional[List[str]] = None, iterations: int = 10
     ) -> Dict[str, Any]:
         """Run performance benchmark."""
         if indicators is None:
@@ -1109,7 +1109,7 @@ class UnifiedIndicatorService:
         return await self.benchmark_runner.benchmark_single_ticker(ticker, indicators, iterations)
 
     async def run_batch_benchmark(
-        self, tickers: List[str] = None, indicators: List[str] = None, batch_sizes: List[int] = None
+        self, tickers: Optional[List[str]] = None, indicators: Optional[List[str]] = None, batch_sizes: Optional[List[int]] = None
     ) -> Dict[str, Any]:
         """Run batch processing benchmark."""
         if tickers is None:

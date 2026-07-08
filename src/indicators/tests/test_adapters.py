@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+from typing import Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -90,7 +91,7 @@ def mock_fundamentals():
 def fundamentals_getter(mock_fundamentals):
     """Create a mock fundamentals getter function."""
 
-    def getter(ticker: str, provider: str = None):
+    def getter(ticker: str, provider: Optional[str] = None):
         return mock_fundamentals
 
     return getter

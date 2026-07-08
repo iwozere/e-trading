@@ -29,7 +29,7 @@ import time
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Optional, Any, Dict, List
 
 import yaml
 
@@ -428,7 +428,7 @@ class PipelineRunner:
 
         return results
 
-    def run(self, start_stage: int = 1, end_stage: int = 8, skip_stages: List[int] = None) -> Dict[str, Any]:
+    def run(self, start_stage: int = 1, end_stage: int = 8, skip_stages: Optional[List[int]] = None) -> Dict[str, Any]:
         """
         Run the complete pipeline or a subset of stages.
 

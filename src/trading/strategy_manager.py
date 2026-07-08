@@ -19,7 +19,7 @@ import json
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Optional, Any, Dict, List
 
 from src.data.db.services.trading_service import trading_service
 from src.data.db.services.users_service import UsersService
@@ -84,7 +84,7 @@ class StrategyManager:
         self,
         user_id: int | None = None,
         notification_client: NotificationServiceClient | None = None,
-        trade_repository: Any = None,
+        trade_repository: Optional[Any] = None,
     ):
         """Initialize the strategy manager."""
         self.user_id = user_id

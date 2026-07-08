@@ -18,7 +18,7 @@ Classes:
 """
 
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Optional, Any, Dict, List
 
 import pandas as pd
 import requests
@@ -235,7 +235,7 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
     def download_multiple_symbols(
         self,
         symbols: List[str],
-        download_func: Any = None,
+        download_func: Optional[Any] = None,
         interval: str = "1d",
         start_date: datetime | None = None,
         end_date: datetime | None = None,

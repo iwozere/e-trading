@@ -22,7 +22,7 @@ import threading
 import time
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Callable, Dict, List
+from typing import Optional, Any, Callable, Dict, List
 
 from src.notification.logger import setup_logger
 from src.notification.service.client import (
@@ -90,10 +90,10 @@ class BaseTradingBot:
         config: Dict[str, Any],
         strategy_class: Any,
         parameters: Dict[str, Any],
-        broker: Any = None,
+        broker: Optional[Any] = None,
         paper_trading: bool = True,
         bot_id: str | None = None,
-        trade_repository: Any = None,
+        trade_repository: Optional[Any] = None,
         trade_notification_hook: Callable[[str, float, float, float | None], None] | None = None,
     ) -> None:
         """
