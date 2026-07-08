@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 from src.ml.pipeline.p20_kestrel.config import (
@@ -43,18 +43,23 @@ _P15_GKG_DIR = DATA_CACHE_PATH / "gdelt" / "gkg"
 
 def check_gdelt_freshness(today: date) -> str | None:
     """
-    Check whether today's or yesterday's GKG file is present.
+    Check whether a recent GKG orgs-slice file is present.
+
+    GDELT publishes day D in full only after D ends (UTC) and
+    p20_gdelt_download fetches it early on D+1, so the freshest possible
+    file at check time (06:00 UTC) is yesterday's — accept yesterday or
+    the day before to tolerate one missed download.
 
     Returns:
         Warning string if stale, None if fresh.
     """
-    for check_date in (today, today - timedelta(days=1)):
+    for check_date in (today - timedelta(days=1), today - timedelta(days=2)):
         date_prefix = check_date.strftime("%Y%m%d")
-        files = list(_P15_GKG_DIR.glob(f"{date_prefix}*.gkg.csv*"))
+        files = list(_P15_GKG_DIR.glob(f"{date_prefix}*.gkg-orgs.csv*"))
         if files:
             return None  # found
 
-    return f"gdelt: no GKG files found for {today} or {today - timedelta(days=1)}"
+    return f"gdelt: no GKG orgs-slice files found for {today - timedelta(days=1)} or {today - timedelta(days=2)}"
 
 
 def check_sentiment_staleness(today: date) -> List[str]:

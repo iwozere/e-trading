@@ -24,8 +24,7 @@ from pathlib import Path
 # (already on the path) and as a plain script (``python src/strategy_pack/run.py``),
 # which is how SchedulerService invokes data_processing jobs.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 import argparse
 import asyncio

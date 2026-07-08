@@ -17,8 +17,7 @@ from pathlib import Path
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.trading_service import trading_service
 from src.notification.logger import setup_logger

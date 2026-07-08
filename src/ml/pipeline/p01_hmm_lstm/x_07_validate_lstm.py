@@ -39,7 +39,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[4]
-sys.path.append(str(project_root))
+sys.path.insert(0, str(project_root))
 
 from src.notification.logger import setup_logger
 

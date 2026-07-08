@@ -12,7 +12,7 @@ from pathlib import Path
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.channels import ConfigValidationError, MessageContent, channel_registry, load_all_channels
 from src.notification.channels.loader import plugin_loader

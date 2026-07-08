@@ -13,7 +13,7 @@ from unittest.mock import Mock, patch
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p04_short_squeeze.core.models import AdHocCandidate
 from src.ml.pipeline.p04_short_squeeze.data.adhoc_manager import AdHocManager

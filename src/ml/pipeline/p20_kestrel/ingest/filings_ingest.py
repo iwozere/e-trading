@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Set, cast
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 from src.data.downloader.edgar_downloader import EdgarDownloader

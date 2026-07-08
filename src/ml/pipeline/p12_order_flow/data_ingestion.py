@@ -6,8 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.data_manager import DataManager
 from src.ml.pipeline.p12_order_flow.config import OrderFlowConfig

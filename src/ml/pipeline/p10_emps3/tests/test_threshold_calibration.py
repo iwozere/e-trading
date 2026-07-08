@@ -28,8 +28,7 @@ import pandas as pd
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p06_emps2.accumulation_analyzer import AccumulationAnalyzer
 from src.ml.pipeline.p06_emps2.config import EMPS2FilterConfig

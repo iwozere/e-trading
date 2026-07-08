@@ -15,8 +15,7 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.strategy.entry.bb_volume_supertrend_entry_mixin import BBVolumeSupertrendEntryMixin
 from src.strategy.entry.eom_breakout_entry_mixin import EOMBreakoutEntryMixin

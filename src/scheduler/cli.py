@@ -12,8 +12,7 @@ from pathlib import Path
 
 # Add project root to path if not already present
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 from src.scheduler.config import SchedulerServiceConfig

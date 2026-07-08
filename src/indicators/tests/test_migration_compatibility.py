@@ -14,7 +14,7 @@ import pandas as pd
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.indicators.indicator_factory import IndicatorFactory
 from src.indicators.models import IndicatorBatchConfig, IndicatorSpec, TickerIndicatorsRequest

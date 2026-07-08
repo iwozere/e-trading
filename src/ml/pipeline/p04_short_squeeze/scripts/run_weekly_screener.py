@@ -34,7 +34,7 @@ from typing import Any, Dict, List
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.short_squeeze_service import ShortSqueezeService
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader

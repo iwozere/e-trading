@@ -23,7 +23,7 @@ from fastapi.security import HTTPBearer
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.api.auth import get_current_user, require_admin
 from src.api.services.telegram_app_service import TelegramAppService

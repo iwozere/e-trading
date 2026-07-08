@@ -11,8 +11,7 @@ import pytest
 
 # Ensure project root is on path
 project_root = Path(__file__).resolve().parents[5]
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(project_root))
 
 from src.ml.pipeline.p01_hmm_lstm.run_pipeline import PipelineRunner
 

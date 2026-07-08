@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.core.database import session_scope
 from src.data.db.models.model_jobs import Schedule
@@ -37,6 +37,8 @@ _SCRIPT_BASE = "src/ml/pipeline/p20_kestrel/jobs"
 # Each entry: (name, cron_utc, script_filename, enabled)
 _JOB_SPECS: List[Dict[str, Any]] = [
     # Morning chain
+    # GKG download must precede data_health (06:00) and gdelt_process (06:15)
+    {"name": "p20_gdelt_download", "cron": "30 5 * * 1-5", "script": "run_gdelt_download.py", "enabled": True},
     {"name": "p20_data_health", "cron": "0 6 * * 1-5", "script": "run_data_health.py", "enabled": True},
     {"name": "p20_gdelt_process", "cron": "15 6 * * 1-5", "script": "run_gdelt_process.py", "enabled": True},
     {"name": "p20_social_poll", "cron": "30 6 * * 1-5", "script": "run_social_poll.py", "enabled": True},
@@ -83,7 +85,7 @@ def run() -> Dict[str, Any]:
     Returns:
         Summary dict with inserted count.
     """
-    _logger.info("Registering %d P20 job schedules", len(_JOB_SPECS))  # expect 19
+    _logger.info("Registering %d P20 job schedules", len(_JOB_SPECS))  # expect 20
     count = 0
 
     with session_scope() as s:

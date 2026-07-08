@@ -5,8 +5,7 @@ import pandas as pd
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p07_combined.labeling import get_triple_barrier_labels
 

@@ -1,9 +1,11 @@
 """
 P20 Kestrel — GDELT processor.
 
-Reads P15's GKG file cache (14-day rolling, already on disk).
-Matches rows to k20_company_aliases, aggregates per (ticker, date),
-computes rolling z-scores, and upserts into k20_sentiment_daily.
+Reads the slim per-article orgs-slice files (``YYYYMMDD.gkg-orgs.csv.gz``)
+from the shared GDELT cache, downloaded early each morning by
+``p20_gdelt_download``. Matches organization mentions to k20_company_aliases,
+aggregates per (ticker, date), computes rolling z-scores, and upserts into
+k20_sentiment_daily.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from difflib import SequenceMatcher
 
@@ -42,12 +44,9 @@ _P15_GKG_DIR = DATA_CACHE_PATH / "gdelt" / "gkg"
 _MIN_PERIODS = 15  # warm-up rule: z-score requires at least 15 days of history
 _FUZZY_THRESHOLD = 0.93
 
-# GKG column indices (tab-separated, 27 columns)
-_COL_DATE = 0
-_COL_V2ORGS = 7
-_COL_V2THEMES = 6
-_COL_V2TONE = 15
-_COL_SOURCES = 8
+# Slim orgs-slice format written by GdeltDownloader (YYYYMMDD.gkg-orgs.csv.gz):
+# tab-separated with header row — date, source, themes, orgs, tone.
+_ORGS_HEADER = ["date", "source", "themes", "orgs", "tone"]
 
 _FINANCE_THEMES = re.compile(r"\b(ECON_|MARKET|INVEST|STOCK|FINANCE)\b")
 
@@ -146,10 +145,14 @@ class GdeltProcessor:
 
     def process_gkg_file(self, gkg_path: Path) -> List[Dict[str, Any]]:
         """
-        Process one GKG file and return per-article matched records.
+        Process one GKG orgs-slice file and return per-article matched records.
+
+        Expects the slim format written by GdeltDownloader
+        (``YYYYMMDD.gkg-orgs.csv.gz``): tab-separated with a header row —
+        date, source, themes, orgs, tone.
 
         Args:
-            gkg_path: Path to a GKG .csv or .csv.gz file.
+            gkg_path: Path to a .gkg-orgs.csv or .gkg-orgs.csv.gz file.
 
         Returns:
             List of dicts with: ticker, date, avg_tone, pos_score, neg_score, source_domain.
@@ -158,21 +161,20 @@ class GdeltProcessor:
         opener = gzip.open if gkg_path.suffix == ".gz" else open
         try:
             with opener(gkg_path, "rt", encoding="utf-8", errors="replace") as f:  # type: ignore[call-overload]
+                header = f.readline().rstrip("\n").split("\t")
+                if header != _ORGS_HEADER:
+                    _logger.warning("Unexpected orgs-slice header in %s: %s", gkg_path, header)
+                    return records
                 for line in f:
                     parts = line.rstrip("\n").split("\t")
-                    if len(parts) < 16:
+                    if len(parts) < len(_ORGS_HEADER):
                         continue
 
-                    date_str = parts[_COL_DATE]
+                    date_str, source, v2themes, orgs_raw, tone_raw = parts[:5]
                     try:
-                        row_date = date(int(date_str[:4]), int(date_str[4:6]), int(date_str[6:8]))
-                    except (ValueError, IndexError):
+                        row_date = date.fromisoformat(date_str)
+                    except ValueError:
                         continue
-
-                    v2themes = parts[_COL_V2THEMES] if len(parts) > _COL_V2THEMES else ""
-                    orgs_raw = parts[_COL_V2ORGS] if len(parts) > _COL_V2ORGS else ""
-                    tone_raw = parts[_COL_V2TONE] if len(parts) > _COL_V2TONE else ""
-                    source = parts[_COL_SOURCES] if len(parts) > _COL_SOURCES else ""
 
                     tone_parsed = _parse_v2tone(tone_raw)
                     if tone_parsed is None:
@@ -303,8 +305,8 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
         processor.load_alias_table()
 
         date_prefix = target_date.strftime("%Y%m%d")
-        gkg_files = sorted(_P15_GKG_DIR.glob(f"{date_prefix}*.gkg.csv*"))
-        _logger.info("Found %d GKG files for %s", len(gkg_files), target_date)
+        gkg_files = sorted(_P15_GKG_DIR.glob(f"{date_prefix}*.gkg-orgs.csv*"))
+        _logger.info("Found %d GKG orgs-slice files for %s", len(gkg_files), target_date)
 
         all_records: List[Dict[str, Any]] = []
         files_processed = 0

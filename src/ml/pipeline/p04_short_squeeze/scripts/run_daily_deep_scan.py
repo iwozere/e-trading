@@ -38,7 +38,7 @@ from typing import Any, Dict, List
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader

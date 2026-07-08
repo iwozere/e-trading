@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.base_service import BaseDBService, handle_db_error, with_uow
 from src.notification.logger import setup_logger

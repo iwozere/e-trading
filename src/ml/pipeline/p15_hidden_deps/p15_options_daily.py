@@ -45,7 +45,7 @@ import pandas as pd
 import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from config.donotshare.donotshare import DATA_CACHE_DIR as _cache_root
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader

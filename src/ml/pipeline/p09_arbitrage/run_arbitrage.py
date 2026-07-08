@@ -6,8 +6,7 @@ from typing import List
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p09_arbitrage.arbitrage_pipeline import ArbitragePipeline
 from src.ml.pipeline.p09_arbitrage.config import ArbitrageConfig

@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.api.auth import create_access_token, get_current_user, require_admin, require_trader_or_admin
 from src.api.main import app

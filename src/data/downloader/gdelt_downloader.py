@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Union
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
 import requests
@@ -280,12 +280,16 @@ class GdeltDownloader(BaseDataDownloader):
         """
         Download, aggregate, and cache GKG data for a single calendar day.
 
-        Fetches up to ``files_per_day`` 15-minute GKG CSV zip files, parses
-        V2Themes and V2Tone, and produces a per-theme daily summary saved to
-        DATA_CACHE_DIR/gdelt/gkg/YYYYMMDD.gkg.csv.gz.
+        Fetches up to ``files_per_day`` 15-minute GKG CSV zip files and, from
+        the same pass, produces two cache files under DATA_CACHE_DIR/gdelt/gkg/:
 
-        Schema (DatetimeIndex = date):
-            theme, article_count, avg_tone, positive_avg, negative_avg, polarity_avg
+        - ``YYYYMMDD.gkg.csv.gz`` — per-theme daily summary.
+          Schema (DatetimeIndex = date):
+              theme, article_count, avg_tone, positive_avg, negative_avg, polarity_avg
+        - ``YYYYMMDD.gkg-orgs.csv.gz`` — slim per-article slice for
+          organization→ticker sentiment matching (P20 Kestrel). Tab-separated
+          with header: date, source, themes, orgs, tone. Only articles that
+          mention at least one organization are kept.
 
         Args:
             date: Calendar day to download. Time component is ignored.
@@ -297,8 +301,13 @@ class GdeltDownloader(BaseDataDownloader):
         """
         date_str = date.strftime("%Y%m%d")
         day_file = self._gkg_dir / f"{date_str}.gkg.csv.gz"
+        orgs_file = self._gkg_dir / f"{date_str}.gkg-orgs.csv.gz"
 
-        if day_file.exists() and not force:
+        # A day counts as cached only when both outputs exist, so days cached
+        # before the orgs slice existed are re-fetched on direct calls.
+        # (Range fills skip existing days by aggregate filename upstream in
+        # _range_download, so this does not trigger historical re-downloads.)
+        if day_file.exists() and orgs_file.exists() and not force:
             _logger.debug("GKG %s already cached at %s", date.date(), day_file)
             return day_file
 
@@ -327,7 +336,18 @@ class GdeltDownloader(BaseDataDownloader):
 
         self._gkg_dir.mkdir(parents=True, exist_ok=True)
         aggregated.set_index("date").to_csv(day_file, compression="gzip")
-        _logger.info("Saved GKG %s: %d theme-rows → %s", date.date(), len(aggregated), day_file)
+
+        orgs_slice = _extract_orgs_slice(raw, date)
+        orgs_slice.to_csv(orgs_file, sep="\t", index=False, compression="gzip")
+
+        _logger.info(
+            "Saved GKG %s: %d theme-rows → %s; %d org-articles → %s",
+            date.date(),
+            len(aggregated),
+            day_file,
+            len(orgs_slice),
+            orgs_file,
+        )
         return day_file
 
     def download_gkg_range(
@@ -709,6 +729,40 @@ def _parse_themes(themes_str: Any) -> List[str]:
         if code:
             themes.append(code)
     return themes
+
+
+_ORGS_SLICE_COLS = ["date", "source", "themes", "orgs", "tone"]
+
+
+def _extract_orgs_slice(raw: pd.DataFrame, date: datetime) -> pd.DataFrame:
+    """
+    Extract a slim per-article slice for organization→ticker sentiment matching.
+
+    Keeps only articles that mention at least one organization and carry a
+    V2Tone value. The tone string is preserved raw (comma-separated) so
+    downstream consumers parse it themselves.
+
+    Args:
+        raw: Concatenated raw GKG DataFrames for the day (``_GKG_COLS`` schema).
+        date: Calendar day being processed (populates the ``date`` column).
+
+    Returns:
+        DataFrame with columns: date, source, themes, orgs, tone.
+    """
+    if raw.empty:
+        return pd.DataFrame(columns=pd.Index(_ORGS_SLICE_COLS))
+
+    slim = pd.DataFrame(
+        {
+            "date": date.strftime("%Y-%m-%d"),
+            "source": raw["SourceCommonName"].fillna(""),
+            "themes": raw["V2Themes"].fillna(""),
+            "orgs": raw["V2Organizations"].fillna(""),
+            "tone": raw["V2Tone"].fillna(""),
+        }
+    )
+    slim = slim.loc[(slim["orgs"] != "") & (slim["tone"] != "")].reset_index(drop=True)
+    return slim
 
 
 def _aggregate_gkg(raw: pd.DataFrame, date: datetime) -> pd.DataFrame:

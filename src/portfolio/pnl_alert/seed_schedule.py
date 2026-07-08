@@ -19,8 +19,7 @@ from pathlib import Path
 from typing import Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.models.model_jobs import JobType, ScheduleCreate, ScheduleUpdate  # noqa: E402
 from src.data.db.services.jobs_service import JobsService  # noqa: E402

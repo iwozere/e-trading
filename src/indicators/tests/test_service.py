@@ -13,7 +13,7 @@ import pytest
 
 # Ensure project root (where registry.py, service.py, models.py live) is importable
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 
 # Import your real modules

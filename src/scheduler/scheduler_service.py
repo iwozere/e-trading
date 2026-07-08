@@ -9,14 +9,13 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 import asyncio
 import json
 import traceback
 from datetime import UTC, datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import asyncpg
 from apscheduler.events import (
@@ -111,6 +110,16 @@ async def execute_job_wrapper(schedule_id: int) -> None:
         await _service_instance._execute_job(schedule_id)
     else:
         _logger.error("Cannot execute job %d: SchedulerService instance not available", schedule_id)
+
+
+def is_failed_job_result(result: Any) -> bool:
+    """
+    True when a job result explicitly reports failure (``success: False``).
+
+    Only data_processing/script results carry a ``success`` key; results from
+    other job types (or non-dict results) never mark the run failed here.
+    """
+    return isinstance(result, dict) and result.get("success") is False
 
 
 class SchedulerService:
@@ -653,13 +662,21 @@ class SchedulerService:
                     await self._complete_run_record(run_record, RunStatus.FAILED, None, timeout_msg)
                 return
 
-            # Update run record with success
-            await self._complete_run_record(run_record, RunStatus.COMPLETED, result)
+            # A script that exited nonzero is a failed run, even though the
+            # executor itself ran to completion.
+            if is_failed_job_result(result):
+                error_msg = (
+                    f"Script exited with code {result.get('exit_code')}; "
+                    f"stderr tail: {(result.get('stderr_preview') or '')[-500:]}"
+                )
+                await self._complete_run_record(run_record, RunStatus.FAILED, result, error_msg)
+                _logger.error("Job for schedule %s (ID: %d) failed: %s", schedule.name, schedule.id, error_msg)
+            else:
+                await self._complete_run_record(run_record, RunStatus.COMPLETED, result)
+                _logger.info("Successfully completed job for schedule %s (ID: %d)", schedule.name, schedule.id)
 
             # Update schedule's next run time
             await asyncio.to_thread(lambda: self.jobs_service.update_schedule_next_run(schedule_id))
-
-            _logger.info("Successfully completed job for schedule %s (ID: %d)", schedule.name, schedule.id)
 
         except Exception as e:
             error_msg = f"Job execution failed: {str(e)}"
@@ -874,7 +891,16 @@ class SchedulerService:
 
             _logger.info("Script exit code: %d", exit_code)
             if stderr_str:
-                _logger.warning("Script stderr: %s", stderr_str[:1000])  # Log first 1000 chars
+                # Keep the tail — that's where Python tracebacks are.
+                if len(stderr_str) <= 4000:
+                    _logger.warning("Script stderr: %s", stderr_str)
+                else:
+                    _logger.warning(
+                        "Script stderr (%d chars, middle truncated): %s\n... [truncated] ...\n%s",
+                        len(stderr_str),
+                        stderr_str[:1000],
+                        stderr_str[-3000:],
+                    )
 
             # Parse result from stdout
             script_result = self._parse_script_output(stdout_str)
@@ -887,14 +913,14 @@ class SchedulerService:
                 "exit_code": exit_code,
                 "script_result": script_result,
                 "stdout_preview": stdout_str[-500:] if len(stdout_str) > 500 else stdout_str,  # Last 500 chars
-                "stderr_preview": stderr_str[-500:] if len(stderr_str) > 500 else stderr_str,
+                "stderr_preview": stderr_str[-2000:] if len(stderr_str) > 2000 else stderr_str,
                 "notification_sent": False,
             }
 
-            # Evaluate notification rules if script succeeded
-            if success:
-                notification_sent = await self._evaluate_notification_rules(schedule, script_result, task_params)
-                result["notification_sent"] = notification_sent
+            # Evaluate notification rules on success AND failure so event
+            # conditions like {"on": "failure"} can fire.
+            notification_sent = await self._evaluate_notification_rules(schedule, script_result, task_params, success)
+            result["notification_sent"] = notification_sent
 
             return result
 
@@ -931,7 +957,11 @@ class SchedulerService:
         return result
 
     async def _evaluate_notification_rules(
-        self, schedule: ScheduleResponse, script_result: Dict[str, Any], task_params: Dict[str, Any]
+        self,
+        schedule: ScheduleResponse,
+        script_result: Dict[str, Any],
+        task_params: Dict[str, Any],
+        success: bool = True,
     ) -> bool:
         """
         Evaluate notification rules and send notifications if conditions are met.
@@ -940,6 +970,7 @@ class SchedulerService:
             schedule: Schedule object
             script_result: Parsed script result
             task_params: Task parameters with notification rules
+            success: Whether the job run succeeded (drives "on" event conditions)
 
         Returns:
             True if any notification was sent, False otherwise
@@ -971,8 +1002,8 @@ class SchedulerService:
         matching_channels = set()
 
         for condition in conditions:
-            if self._check_condition(condition, script_result):
-                channels = condition.get("channels", [])
+            if self._check_condition(condition, script_result, success):
+                channels = self._condition_channels(condition)
                 matching_channels.update(channels)
                 _logger.info("Notification condition met: %s -> channels: %s", condition, channels)
 
@@ -985,6 +1016,7 @@ class SchedulerService:
         message_body_parts = [
             f"**Scheduled Job:** {schedule.name}",
             f"**Job Type:** {schedule.job_type}",
+            f"**Status:** {'SUCCESS' if success else 'FAILED'}",
             f"**Execution Time:** {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}",
             "",
         ]
@@ -1099,11 +1131,28 @@ class SchedulerService:
                     except Exception:
                         pass
 
-    def _check_condition(self, condition: Dict[str, Any], script_result: Dict[str, Any]) -> bool:
+    @staticmethod
+    def _condition_channels(condition: Dict[str, Any]) -> List[str]:
+        """Channels for a condition — accepts "channels": [...] or the singular "channel": "..."."""
+        channels = condition.get("channels") or []
+        if not channels and condition.get("channel"):
+            channels = [condition["channel"]]
+        return list(channels)
+
+    def _check_condition(
+        self, condition: Dict[str, Any], script_result: Dict[str, Any], success: bool = True
+    ) -> bool:
         """
         Check if a notification condition is met.
 
-        Supports conditions like:
+        Supports two condition shapes:
+
+        Event-based (run outcome):
+        {
+            "on": "success" | "failure" | "always"
+        }
+
+        Threshold-based (script result field):
         {
             "check_field": "vix_current",
             "operator": ">=",
@@ -1113,10 +1162,22 @@ class SchedulerService:
         Args:
             condition: Condition configuration
             script_result: Script result data
+            success: Whether the job run succeeded
 
         Returns:
             True if condition is met, False otherwise
         """
+        event = condition.get("on")
+        if event is not None:
+            if event == "always":
+                return True
+            if event == "success":
+                return success
+            if event == "failure":
+                return not success
+            _logger.warning("Unknown event condition %r (expected success/failure/always)", event)
+            return False
+
         check_field = condition.get("check_field")
         operator = condition.get("operator", ">=")
         threshold = condition.get("threshold")

@@ -3,8 +3,7 @@ from pathlib import Path
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p07_combined.json2csv import aggregate_results
 from src.ml.pipeline.p07_combined.pipeline import P07Pipeline

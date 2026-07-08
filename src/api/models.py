@@ -12,7 +12,7 @@ from pathlib import Path
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 # Re-export models from the main data layer
 from src.data.db.models.model_jobs import (

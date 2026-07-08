@@ -32,8 +32,7 @@ def _norm_index(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 _here = Path(__file__).resolve()
 _project_root = _here.parents[5]  # src/ml/pipeline/p16_taleb/src/ -> project root
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
+sys.path.insert(0, str(_project_root))
 
 try:
     from config.donotshare.donotshare import DATA_CACHE_DIR as _DEFAULT_CACHE_DIR

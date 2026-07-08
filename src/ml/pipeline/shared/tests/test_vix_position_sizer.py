@@ -10,8 +10,7 @@ import pandas as pd
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def _make_vix_series(n: int = 200, seed: int = 0) -> pd.Series:

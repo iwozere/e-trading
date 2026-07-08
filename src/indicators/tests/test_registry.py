@@ -9,7 +9,7 @@ import pytest
 
 # Add project root (adjust if your registry.py lives elsewhere)
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 # Import the registry directly
 from src.indicators.registry import INDICATOR_META

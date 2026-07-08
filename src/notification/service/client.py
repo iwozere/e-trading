@@ -14,8 +14,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import aiohttp# Add project root to path if needed (P3.3 Fix)
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger  # noqa: E402
 

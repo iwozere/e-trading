@@ -16,7 +16,7 @@ import pytest
 
 # Add src to path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.repos.repo_trading import BotsRepo, TradesRepo
 

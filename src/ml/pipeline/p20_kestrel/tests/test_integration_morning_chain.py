@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p20_kestrel.reporting.data_health import run as run_data_health
 from src.ml.pipeline.p20_kestrel.sentiment.sentiment_aggregator import run as run_aggregator

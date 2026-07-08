@@ -14,7 +14,7 @@ from unittest.mock import Mock
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p04_short_squeeze.config.data_classes import UniverseConfig
 from src.ml.pipeline.p04_short_squeeze.core.universe_loader import UniverseLoader, create_universe_loader

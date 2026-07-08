@@ -25,7 +25,7 @@ import yaml
 
 # Add project root to path to import common utilities
 project_root = Path(__file__).resolve().parents[4]
-sys.path.append(str(project_root))
+sys.path.insert(0, str(project_root))
 
 from src.common import analyze_period_interval, get_ohlcv
 from src.data.downloader.data_downloader_factory import DataDownloaderFactory

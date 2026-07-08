@@ -23,8 +23,7 @@ import pandas as pd
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.strategy.entry.rsi_or_bb_entry_mixin import RSIOrBBEntryMixin
 from src.strategy.exit.fixed_ratio_exit_mixin import FixedRatioExitMixin

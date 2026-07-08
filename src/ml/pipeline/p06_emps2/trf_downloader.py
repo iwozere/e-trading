@@ -15,8 +15,10 @@ from pathlib import Path
 # parents[3] = src
 # parents[4] = <root>
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+# Insert unconditionally: when PYTHONPATH already contains the root it sits
+# *after* the script dir, so this package's config.py would shadow the
+# top-level config package ("'config' is not a package").
+sys.path.insert(0, str(PROJECT_ROOT))
 
 # Import and run the shared implementation
 from src.ml.pipeline.shared.trf_downloader import main

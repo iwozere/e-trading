@@ -18,7 +18,7 @@ import pytest
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.models.model_notification import DeliveryStatus, MessageStatus
 from src.data.db.services.database_service import get_database_service

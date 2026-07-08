@@ -13,7 +13,7 @@ from unittest.mock import Mock, patch
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[3]
-sys.path.append(str(project_root))
+sys.path.insert(0, str(project_root))
 
 from src.data.data_manager import DataManager
 

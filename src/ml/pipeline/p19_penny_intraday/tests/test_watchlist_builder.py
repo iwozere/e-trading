@@ -10,6 +10,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import pandas as pd
 
 from src.ml.pipeline.p19_penny_intraday.config import P19Config
+from src.ml.pipeline.p19_penny_intraday.models.watchlist_entry import WatchlistEntry
 from src.ml.pipeline.p19_penny_intraday.watchlist_builder import WatchlistBuilder
 
 _COLS = [
@@ -174,3 +175,67 @@ def test_no_p17_csv_yields_empty(tmp_path):
     cfg.use_gappers = False
     b = WatchlistBuilder(cfg, "2026-06-26", p17_results_dir=str(tmp_path / "empty"), output_dir=str(tmp_path / "p19"))
     assert b.build() == []
+
+
+# ── NaN safety (prod 2026-07-06/07: enrichment NaN crashed write()) ─────────
+
+
+def test_write_survives_nan_baseline_enrichment(tmp_path):
+    # A fetcher returning NaN (all-NaN cached bars) must not crash write().
+    rows = [_row("AAA", tier="B")]
+    p17 = _p17_dir(tmp_path, "2026-06-26", rows)
+    cfg = P19Config.create_default()
+    cfg.use_gappers = False
+    cfg.manual_pins = ["MAN"]
+
+    def nan_fetcher(_ticker):
+        return {"avg_volume_30d": float("nan"), "prior_close": float("nan")}
+
+    b = WatchlistBuilder(
+        cfg, "2026-06-26", p17_results_dir=p17, output_dir=str(tmp_path / "p19"), baseline_fetcher=nan_fetcher
+    )
+    summary = b.run()
+    payload = json.loads(Path(summary["path"]).read_text())
+    by_ticker = {e["ticker"]: e for e in payload["entries"]}
+    assert by_ticker["MAN"]["avg_volume_30d"] == 0
+    assert by_ticker["MAN"]["prior_close"] == 0.0
+
+
+class _StubDataManager:
+    def __init__(self, df):
+        self._df = df
+
+    def get_ohlcv(self, *_args, **_kwargs):
+        return self._df
+
+
+def test_default_fetcher_sanitizes_nan(tmp_path, monkeypatch):
+    rows = [_row("AAA", tier="B")]
+    b = _builder(tmp_path, rows)
+
+    all_nan = pd.DataFrame({"volume": [float("nan")] * 5, "close": [float("nan")] * 5})
+    monkeypatch.setattr(b, "_data_manager", _StubDataManager(all_nan))
+    assert b._default_baseline_fetcher("AAA") is None
+
+    close_only = pd.DataFrame({"volume": [float("nan")] * 5, "close": [1.0, 1.1, 1.2, 1.3, 1.4]})
+    monkeypatch.setattr(b, "_data_manager", _StubDataManager(close_only))
+    assert b._default_baseline_fetcher("AAA") == {"avg_volume_30d": 0.0, "prior_close": 1.4}
+
+
+def test_to_dict_is_nan_safe():
+    e = WatchlistEntry(
+        ticker="NAN",
+        source="gapper",
+        prior_close=float("nan"),
+        avg_volume_30d=float("nan"),
+        float_shares=float("nan"),
+        market_cap=float("inf"),
+        dilution_penalty=float("nan"),
+        short_interest_pct_float=float("nan"),
+        priority=float("nan"),
+    )
+    d = e.to_dict()
+    assert d["avg_volume_30d"] == 0 and d["float_shares"] == 0 and d["market_cap"] == 0
+    assert d["prior_close"] == 0.0 and d["dilution_penalty"] == 0.0 and d["priority"] == 0.0
+    assert d["short_interest_pct_float"] is None
+    json.dumps(d, allow_nan=False)  # must be strictly valid JSON

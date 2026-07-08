@@ -19,7 +19,7 @@ import psutil
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.indicators.models import IndicatorBatchConfig, IndicatorSpec, TickerIndicatorsRequest
 from src.indicators.service import IndicatorService

@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 # Assuming your project structure - adjust imports as needed
 from src.indicators.adapters.fundamentals_adapter import FundamentalsAdapter

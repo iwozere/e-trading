@@ -15,7 +15,7 @@ from pathlib import Path
 
 # Add src to path using pathlib
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from datetime import date, datetime
 from decimal import Decimal

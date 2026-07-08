@@ -136,11 +136,22 @@ class WatchlistBuilder:
         try:
             from datetime import datetime, timedelta
 
+            import pandas as pd
+
             end = datetime.now()
             df = self._get_data_manager().get_ohlcv(ticker, "1d", end - timedelta(days=45), end)
             if df is None or df.empty or "volume" not in df.columns:
                 return None
-            return {"avg_volume_30d": float(df["volume"].tail(30).mean()), "prior_close": float(df["close"].iloc[-1])}
+            # Cached bars can have all-NaN windows (e.g. after provider rate-limit
+            # gaps); NaN here would crash JSON serialization downstream.
+            avg_volume = df["volume"].tail(30).mean()
+            prior_close = df["close"].iloc[-1]
+            if pd.isna(avg_volume) and pd.isna(prior_close):
+                return None
+            return {
+                "avg_volume_30d": 0.0 if pd.isna(avg_volume) else float(avg_volume),
+                "prior_close": 0.0 if pd.isna(prior_close) else float(prior_close),
+            }
         except Exception:
             _logger.debug("Baseline fetch failed for %s", ticker)
             return None

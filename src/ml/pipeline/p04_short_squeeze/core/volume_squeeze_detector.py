@@ -16,7 +16,7 @@ import numpy as np
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
-sys.path.append(str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.ml.pipeline.p04_short_squeeze.core.models import Candidate, CandidateSource, StructuralMetrics
