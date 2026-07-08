@@ -4,4 +4,12 @@ pytest-asyncio>=0.21.0
 black>=23.0.0
 flake8>=6.0.0
 mypy>=1.5.0
-autoflake>=2.2.0 
+autoflake>=2.2.0
+# Type stubs for mypy
+types-croniter
+types-openpyxl
+types-psutil
+types-PyJWT
+types-reportlab
+types-requests
+types-tqdm 

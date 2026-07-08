@@ -45,6 +45,10 @@ line-ending = "auto"
 
 [tool.mypy]
 
+# Third-party packages that ship no type information and have no stub package
+# available on PyPI. Packages with real stubs (types-psutil, types-tqdm,
+# types-croniter, types-openpyxl, types-reportlab, types-PyJWT, scipy) are
+# installed as dev dependencies instead of being ignored here.
 [[tool.mypy.overrides]]
 module = [
     "pandas.*",
@@ -58,6 +62,25 @@ module = [
     "vectorbt",
     "san",
     "binance.*",
-    "requests"
+    "requests",
+    "backtrader.*",
+    "hmmlearn.*",
+    "joblib",
+    "numba",
+    "plotly.*",
+    "pyarrow.*",
+    "sklearn.*",
+    "statsmodels.*",
+    "seaborn",
+    "scipy.*",
+    "websocket",
+    "anthropic",
+    "onnxmltools",
+    "onnxmltools.*",
+    "onnxconverter_common.*",
+    "onnxruntime",
+    "pomegranate.*",
+    "redis",
+    "zstandard",
 ]
 ignore_missing_imports = true
