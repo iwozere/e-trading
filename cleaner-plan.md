@@ -92,9 +92,50 @@ Batch per module; after each batch: `mypy <module>` + run that module's tests.
   - p16_taleb tests: converted to absolute imports and removed tests/__init__.py — its `src/` package shadowed the project `src` via pytest basedir insertion. 39/39 tests pass.
   - p13 run_p13.py --notify rewired from removed NotificationService to NotificationServiceClient.send_notification.
   - Also fixed Phase D item early: dropped `ReduceLROnPlateau(verbose=)` (p02 x_03/x_04).
-- [ ] Phase C — mechanical passes
-- [ ] Phase D — ml pipeline structural (x_NN dynamic-import override still open)
-- [ ] Phase E — long tail per module
+- [x] Phase C — mechanical passes (commits f7989a7, bb38e15, 8f1ad6c, a982cb5).
+  C1 no_implicit_optional codemod (1,028→963); C2 var-annotated sweep via mypy's own
+  hints, 107 scripted + 27 manual (963→778); C3 Optional attribute annotations + guards
+  (→665); C4 heterogeneous-dict annotations (→502). Backtrader `lines`/`params`
+  metaclass tuples typed as ClassVar[Any] (subclass assignments re-infer, so each
+  subclass needs its own annotation).
+- [x] Phase D — x_NN dynamic-import override in pyproject (commit 2913820; −20 errors).
+- [x] Phase E — long tail to **zero: `Success: no issues found in 1092 source files`**
+  (commits 742c82d…09b63d6). Real runtime bugs found on the way:
+  - adhoc_manager + alert_engine used nonexistent `service.repo` (AttributeError on
+    every ad-hoc/alert DB call); p04 database helper returned dicts where tickers
+    were promised.
+  - x_01 data loaders imported get_ohlcv from `src.common` (removed export —
+    ImportError at runtime); the call itself also used a nonexistent signature.
+  - p07 `models/` artifact dir shadowed `models.py` for type checkers — moved the
+    joblib artifact to `model_artifacts/`.
+  - optuna `trial.report(epoch=)` (TypeError) and `Study.export_data` (never existed);
+    talib EMA/ATR ndarrays used with .shift()/.values (AttributeError paths).
+  - UnifiedCache lacked the clear_* methods DataManager.clear_cache called;
+    advanced_caching passed retention_days as the `compression` positional and
+    called nonexistent super().cleanup(); RedisDataCache.put dropped `overwrite`.
+  - cleanup_failed_cache used `Path.parent[3]` (TypeError) instead of `parents[3]`.
+  - websocket_manager had two method pairs silently shadowed by later same-name
+    definitions (dead ones removed); query_analyzer.disable_monitoring referenced
+    listener methods that were never stored.
+  - pydantic-v1 `Field(env=...)` in notification service config was silently ignored
+    by pydantic v2 — env names actually come from env_prefix + field name (documented).
+  - feature_engineering_pipeline.__init__ read configs from the possibly-None param
+    instead of self.config; run_daily_deep_scan's progress monkeypatch dropped the
+    third argument (TypeError on every scan with progress enabled).
+  - PyJWT installed (was missing; requirements.txt already listed it) and stale
+    types-PyJWT stub dropped; repo tests migrated off removed UsersRepo convenience
+    methods; ReposBundle test fixtures gained the missing kestrel repo.
 
-Note: pytest.ini uses `[tool:pytest]` section header which pytest ignores in pytest.ini
-(needs `[pytest]`) — config there (testpaths, cov, markers) is currently inert. Surface to user.
+Verification: mypy 0 errors; p16/p17/p19/strategy_pack suites 180 passed; notification
+suite 97 passed with `-o asyncio_mode=auto` — remaining failures are pre-existing
+(stale client-API tests, DB-dependent errors, pandas_ta broken on numpy 2.x).
+
+Notes for follow-up (pre-existing, not addressed here):
+- pytest.ini uses `[tool:pytest]` section header which pytest ignores in pytest.ini
+  (needs `[pytest]`) — config there (testpaths, cov, markers, asyncio_mode) is inert.
+  Async tests only pass with `-o asyncio_mode=auto`.
+- pandas_ta cannot import on numpy 2.x (`from numpy import NaN`) — indicators adapter
+  tests error at collection.
+- notification test_client.py tests a removed client API (circuit_breaker_enabled).
+- indicators test_registry.py expects fundamental keys (pe, pb, ps, peg, de_ratio,
+  div_yield) missing from INDICATOR_META — fails identically before this work.
