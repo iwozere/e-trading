@@ -301,7 +301,7 @@ class DeliveryStats:
                             self.avg_response_time_ms = attempt.response_time_ms
                         else:
                             self.min_response_time_ms = min(self.min_response_time_ms, attempt.response_time_ms)
-                            self.max_response_time_ms = max(self.max_response_time_ms, attempt.response_time_ms)
+                            self.max_response_time_ms = max(self.max_response_time_ms or 0, attempt.response_time_ms)
 
                             # Update running average
                             total_time = (
@@ -415,7 +415,7 @@ class DeliveryTracker:
             message_type=message.message_type,
             priority=message.priority,
             channels=message.channels.copy(),
-            recipient_id=message.recipient_id,
+            recipient_id=message.recipient_id or "",
             created_at=message.created_at,
         )
 
@@ -518,7 +518,7 @@ class DeliveryTracker:
                 if attempt:
                     break
 
-        if not attempt:
+        if not attempt or delivery_status is None:
             self._logger.warning("Cannot complete unknown attempt %s", attempt_id)
             return False
 

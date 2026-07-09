@@ -34,7 +34,7 @@ import threading
 import time
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
@@ -377,6 +377,9 @@ class DailyDeepScanRunner:
         try:
             _logger.info("Starting daily deep scan run for date: %s", scan_date)
 
+            if self.config_manager is None or self.fmp_downloader is None:
+                raise RuntimeError("setup() must be called before running the deep scan")
+
             config = self.config_manager.get_deep_scan_config()
 
             # Override batch size if specified
@@ -390,7 +393,9 @@ class DailyDeepScanRunner:
             if dry_run:
                 _logger.info("DRY RUN MODE: Results will not be saved to database")
                 original_store = deep_scan._store_results
-                deep_scan._store_results = lambda *args, **kwargs: _logger.info("DRY RUN: Skipping database write")
+                deep_scan._store_results = (  # type: ignore[method-assign]
+                    lambda *args, **kwargs: _logger.info("DRY RUN: Skipping database write")
+                )
 
             # Setup progress tracking if enabled
             if enable_progress and candidates:
@@ -399,16 +404,16 @@ class DailyDeepScanRunner:
                 # Monkey patch the scan method to update progress
                 original_scan = deep_scan._scan_candidate
 
-                def progress_scan_candidate(candidate, metrics):
+                def progress_scan_candidate(candidate, metrics, sentiment_features=None):
                     try:
-                        result = original_scan(candidate, metrics)
+                        result = original_scan(candidate, metrics, sentiment_features)
                         self.progress_tracker.update(success=result is not None)
                         return result
                     except Exception:
                         self.progress_tracker.update(success=False)
                         raise
 
-                deep_scan._scan_candidate = progress_scan_candidate
+                deep_scan._scan_candidate = progress_scan_candidate  # type: ignore[method-assign]
 
                 # Start progress logging thread
                 progress_thread = threading.Thread(target=self._log_progress_periodically, daemon=True)
@@ -443,8 +448,12 @@ class DailyDeepScanRunner:
                         sentiment_cfg = None
 
                     # Run sync wrapper (it will internally run async loop and return dict)
-                    sentiment_map = collect_sentiment_batch_sync(
-                        batch_tickers, lookback_hours=24, config=sentiment_cfg, history_lookup=None
+                    # default output_format is the dataclass mapping
+                    sentiment_map = cast(
+                        Dict[str, Any],
+                        collect_sentiment_batch_sync(
+                            batch_tickers, lookback_hours=24, config=sentiment_cfg, history_lookup=None
+                        ),
                     )
 
                     # Attach sentiment to candidate transient_metrics (or fallback to candidate._sentiment)
@@ -452,11 +461,12 @@ class DailyDeepScanRunner:
                         feats = sentiment_map.get(c.ticker)
                         if not feats:
                             # mark missing or neutral
-                            try:
-                                setattr(c.transient_metrics, "sentiment_24h", 0.5)
-                                setattr(c.transient_metrics, "sentiment_score_raw", 0.0)
-                                setattr(c.transient_metrics, "sentiment_payload", None)
-                            except Exception:
+                            tm = getattr(c, "transient_metrics", None)
+                            if tm is not None:
+                                setattr(tm, "sentiment_24h", 0.5)
+                                setattr(tm, "sentiment_score_raw", 0.0)
+                                setattr(tm, "sentiment_payload", None)
+                            else:
                                 setattr(c, "_sentiment", None)
                             continue
 
@@ -503,7 +513,7 @@ class DailyDeepScanRunner:
 
             # Restore original methods if they were patched
             if dry_run:
-                deep_scan._store_results = original_store
+                deep_scan._store_results = original_store  # type: ignore[method-assign]
 
             # Convert results to dictionary for easier handling
             results_dict = {

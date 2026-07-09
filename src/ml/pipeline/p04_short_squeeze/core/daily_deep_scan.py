@@ -9,7 +9,7 @@ import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -63,7 +63,7 @@ class DailyDeepScan:
     def __init__(
         self,
         fmp_downloader: FMPDataDownloader,
-        finnhub_downloader: FinnhubDataDownloader,
+        finnhub_downloader: FinnhubDataDownloader | None,
         config: DeepScanConfig,
         sentiment_config: SentimentConfig | None = None,
     ):
@@ -467,14 +467,18 @@ class DailyDeepScan:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                sentiment_map = loop.run_until_complete(
-                    collect_sentiment_batch(
-                        tickers=ticker_list,
-                        lookback_hours=24,
-                        config=sentiment_config_dict,
-                        history_lookup=self._get_historical_mentions_async,
-                        output_format="dataclass",
-                    )
+                # output_format='dataclass' selects the SentimentFeatures mapping from the union
+                sentiment_map = cast(
+                    Dict[str, Any],
+                    loop.run_until_complete(
+                        collect_sentiment_batch(
+                            tickers=ticker_list,
+                            lookback_hours=24,
+                            config=sentiment_config_dict,
+                            history_lookup=self._get_historical_mentions_async,
+                            output_format="dataclass",
+                        )
+                    ),
                 )
             finally:
                 loop.close()
@@ -920,7 +924,7 @@ class DailyDeepScan:
 
 
 def create_daily_deep_scan(
-    fmp_downloader: FMPDataDownloader, finnhub_downloader: FinnhubDataDownloader, config: DeepScanConfig
+    fmp_downloader: FMPDataDownloader, finnhub_downloader: FinnhubDataDownloader | None, config: DeepScanConfig
 ) -> DailyDeepScan:
     """
     Factory function to create Daily Deep Scan.

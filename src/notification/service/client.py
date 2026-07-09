@@ -292,7 +292,7 @@ class NotificationServiceClient:
                 priority = priority.value
 
             # Build message data
-            message_data = {
+            message_data: Dict[str, Any] = {
                 "message_type": str(notification_type),
                 "priority": str(priority),
                 "channels": channels or ["telegram", "email"],
@@ -582,7 +582,7 @@ class NotificationServiceClient:
             List of messages
         """
         try:
-            params = {}
+            params: Dict[str, Any] = {}
             if status:
                 params["status"] = status
             if priority:
