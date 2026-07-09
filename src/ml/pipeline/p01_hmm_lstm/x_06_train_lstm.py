@@ -172,7 +172,7 @@ class LSTMTrainer:
         else:
             return 0, [], []
 
-    def load_optimization_results(self, symbol: str, timeframe: str) -> Tuple[Dict | None, Dict | None]:
+    def load_optimization_results(self, symbol: str, timeframe: str) -> Tuple[Dict | None, Dict]:
         """
         Load optimization results for indicators and LSTM parameters.
 

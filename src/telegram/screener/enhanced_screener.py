@@ -247,7 +247,7 @@ class EnhancedScreener:
             last_updated=data_dict.get("last_updated"),
         )
 
-    def _collect_fundamentals_fallback(self, tickers: List[str]) -> Dict[str, Fundamentals]:
+    def _collect_fundamentals_fallback(self, tickers: List[str]) -> Dict[str, Any]:
         """Fallback method using direct Yahoo downloader when DataManager fails."""
         try:
             downloader = YahooDataDownloader()
@@ -533,7 +533,7 @@ class EnhancedScreener:
                 continue
 
         # Sort by composite score (descending) and limit results
-        results.sort(key=lambda x: x.composite_score, reverse=True)
+        results.sort(key=lambda x: x.composite_score or 0.0, reverse=True)
         _logger.info("Final results: %d stocks passed criteria", len(results))
         return results[: config.max_results]
 

@@ -14,6 +14,8 @@ import json
 import sys
 from pathlib import Path
 
+from typing import Any, Dict
+
 import backtrader as bt
 import pandas as pd
 
@@ -194,7 +196,7 @@ def compare_variants(strategy_config: dict, data_path: str) -> dict:
     """Compare different strategy variants."""
 
     variants = ["conservative", "balanced", "aggressive"]
-    results = {}
+    results: Dict[str, Any] = {}
 
     _logger.info("Comparing strategy variants...")
 

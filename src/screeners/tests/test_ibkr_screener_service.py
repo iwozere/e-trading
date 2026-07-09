@@ -51,7 +51,7 @@ class TestSignalFingerprint(unittest.TestCase):
 
     def _make_service(self) -> IBKRScreenerService:
         service = IBKRScreenerService(
-            strategy_class=_FakeStrategy,
+            strategy_class=_FakeStrategy,  # type: ignore[arg-type]  # lightweight test double
             strategy_config={},
             discovery_providers=[],
             downloader=_FakeDownloader(),  # type: ignore[arg-type]
@@ -93,7 +93,7 @@ class TestSignalDeduplication(unittest.IsolatedAsyncioTestCase):
 
     def _make_service(self, symbols: List[str]) -> IBKRScreenerService:
         service = IBKRScreenerService(
-            strategy_class=_FakeStrategy,
+            strategy_class=_FakeStrategy,  # type: ignore[arg-type]  # lightweight test double
             strategy_config={},
             discovery_providers=[_FakeDiscovery(symbols)],
             downloader=_FakeDownloader(),  # type: ignore[arg-type]
@@ -146,7 +146,7 @@ class TestResultsDir(unittest.TestCase):
     def test_results_dir_is_absolute(self):
         """results_dir must be an absolute path regardless of cwd."""
         service = IBKRScreenerService(
-            strategy_class=_FakeStrategy,
+            strategy_class=_FakeStrategy,  # type: ignore[arg-type]  # lightweight test double
             strategy_config={},
             discovery_providers=[],
             downloader=_FakeDownloader(),  # type: ignore[arg-type]
@@ -156,7 +156,7 @@ class TestResultsDir(unittest.TestCase):
     def test_results_dir_ends_with_expected_suffix(self):
         """results_dir must end with …/results/screeners/ibkr."""
         service = IBKRScreenerService(
-            strategy_class=_FakeStrategy,
+            strategy_class=_FakeStrategy,  # type: ignore[arg-type]  # lightweight test double
             strategy_config={},
             discovery_providers=[],
             downloader=_FakeDownloader(),  # type: ignore[arg-type]
@@ -171,7 +171,7 @@ class TestDownloaderInjection(unittest.TestCase):
         """When a downloader is passed it must be stored as-is."""
         custom_dl = _FakeDownloader()
         service = IBKRScreenerService(
-            strategy_class=_FakeStrategy,
+            strategy_class=_FakeStrategy,  # type: ignore[arg-type]  # lightweight test double
             strategy_config={},
             discovery_providers=[],
             downloader=custom_dl,  # type: ignore[arg-type]
@@ -183,7 +183,7 @@ class TestDownloaderInjection(unittest.TestCase):
         with patch("src.screeners.ibkr_screener_service.IBKRDownloader") as MockDL:
             MockDL.return_value = MagicMock()
             service = IBKRScreenerService(
-                strategy_class=_FakeStrategy,
+                strategy_class=_FakeStrategy,  # type: ignore[arg-type]  # lightweight test double
                 strategy_config={},
                 discovery_providers=[],
             )

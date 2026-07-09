@@ -164,7 +164,7 @@ def test_data_feed(data_source: str, symbol: str, interval: str, duration: int =
 
     except KeyboardInterrupt:
         print("\nTest interrupted by user")
-        if "data_feed" in locals():
+        if "data_feed" in locals() and data_feed is not None:
             data_feed.stop()
     except Exception as e:
         print(f"\nError during test: {str(e)}")
