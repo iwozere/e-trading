@@ -602,7 +602,7 @@ class FeatureSelector:
 
         return pca_df
 
-    def analyze_correlations(self, X: pd.DataFrame, threshold: float = 0.8) -> Dict[str, List[str]]:
+    def analyze_correlations(self, X: pd.DataFrame, threshold: float = 0.8) -> Dict[str, Any]:
         """Analyze feature correlations and identify multicollinearity."""
         # Remove non-numeric columns
         X_numeric = X.select_dtypes(include=[np.number])
@@ -652,10 +652,10 @@ class FeatureEngineeringPipeline:
         self.config = config or {}
 
         # Initialize components
-        self.technical_features = TechnicalIndicatorFeatures(config.get("technical", {}))
-        self.microstructure_features = MarketMicrostructureFeatures(config.get("microstructure", {}))
-        self.statistical_features = StatisticalFeatures(config.get("statistical", {}))
-        self.feature_selector = FeatureSelector(config.get("selection", {}))
+        self.technical_features = TechnicalIndicatorFeatures(self.config.get("technical", {}))
+        self.microstructure_features = MarketMicrostructureFeatures(self.config.get("microstructure", {}))
+        self.statistical_features = StatisticalFeatures(self.config.get("statistical", {}))
+        self.feature_selector = FeatureSelector(self.config.get("selection", {}))
 
         # Feature scalers
         self.scalers: dict[Any, Any] = {}

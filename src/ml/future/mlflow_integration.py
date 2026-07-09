@@ -77,8 +77,8 @@ class MLflowManager:
     def start_run(self, run_name: Optional[str] = None, tags: Optional[Dict[str, str]] = None) -> str:
         """Start a new MLflow run."""
         try:
-            mlflow.start_run(run_name=run_name)
-            run_id = mlflow.active_run().info.run_id
+            active_run = mlflow.start_run(run_name=run_name)
+            run_id = active_run.info.run_id
 
             # Add tags
             if tags:
@@ -161,13 +161,14 @@ class MLflowManager:
         try:
             # Create model if it doesn't exist
             try:
-                self.client.create_registered_model(model_name, description)
-            except:
+                self.client.create_registered_model(model_name, description=description)
+            except Exception:
                 pass  # Model already exists
 
             # Create new model version
+            current_run = mlflow.active_run()
             model_version = self.client.create_model_version(
-                name=model_name, source=model_uri, run_id=mlflow.active_run().info.run_id
+                name=model_name, source=model_uri, run_id=current_run.info.run_id if current_run else None
             )
 
             # Transition to specified stage
@@ -230,7 +231,7 @@ class MLflowManager:
     def list_models(self) -> List[Dict[str, Any]]:
         """List all registered models."""
         try:
-            models = self.client.list_registered_models()
+            models = self.client.search_registered_models()
             return [
                 {
                     "name": model.name,
@@ -525,7 +526,7 @@ class ExperimentManager:
                 raise ValueError(f"Experiment not found: {experiment_name}")
 
             # Search runs
-            runs = mlflow.search_runs(
+            runs: pd.DataFrame = mlflow.search_runs(  # type: ignore[assignment]  # default output_format is pandas
                 experiment_ids=[experiment.experiment_id],
                 order_by=[f"metrics.{metric_name} DESC"],
                 max_results=max_results,

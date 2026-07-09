@@ -4,6 +4,8 @@ import queue
 import threading
 from datetime import UTC, datetime, timezone
 
+from typing import Any
+
 import backtrader as bt
 import pandas as pd
 import requests
@@ -60,9 +62,9 @@ class BinanceEnhancedFeed(BaseLiveDataFeed):
         "1M": 2_592_000_000,
     }
 
-    def __init__(self):
-        super().__init__()
-        self.data_queue = queue.Queue(maxsize=10_000)  # avoid unbounded growth
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(symbol=self.p.symbol, interval=self.p.interval, lookback_bars=self.p.lookback)
+        self.data_queue: queue.Queue = queue.Queue(maxsize=10_000)  # avoid unbounded growth
         self._backfill_historical_data()
         self._start_websocket()
         self._state = self._ST_LIVE
@@ -187,19 +189,6 @@ class BinanceEnhancedFeed(BaseLiveDataFeed):
                 self.data_queue.put(data_point)
             else:
                 _logger.warning("Invalid WebSocket data point: %s", errors)
-
-    def _load(self):
-        if self._state == self._ST_LIVE and not self.data_queue.empty():
-            new_data = self.data_queue.get()
-            self.lines.datetime[0] = bt.date2num(new_data["datetime"])
-            self.lines.open[0] = new_data["open"]
-            self.lines.high[0] = new_data["high"]
-            self.lines.low[0] = new_data["low"]
-            self.lines.close[0] = new_data["close"]
-            self.lines.volume[0] = new_data["volume"]
-            return True
-        return False
-
 
 class SMACrossover(bt.Strategy):
     """

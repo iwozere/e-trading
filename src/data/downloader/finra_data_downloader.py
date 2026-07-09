@@ -781,7 +781,7 @@ class FinraDataDownloader(BaseDataDownloader):
 
                             # Check if Volume is valid (not NaN and > 0)
                             volume = row.get("Volume") if isinstance(row, pd.Series) else None
-                            if pd.notna(volume) and volume > 0:
+                            if volume is not None and pd.notna(volume) and volume > 0:
                                 volume_data.append(
                                     {
                                         "ticker": ticker,

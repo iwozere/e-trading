@@ -44,11 +44,11 @@ try:
 except ImportError:
     # Annotate as Any so Pyright does not flag usages below as "None not callable".
     # The actual guard is `if not ALPACA_AVAILABLE: raise ImportError(...)` in __init__.
-    StockHistoricalDataClient: Any = None
-    StockBarsRequest: Any = None
-    TimeFrame: Any = None
-    TimeFrameUnit: Any = None
-    TradingClient: Any = None
+    StockHistoricalDataClient: Any = None  # type: ignore[no-redef]
+    StockBarsRequest: Any = None  # type: ignore[no-redef]
+    TimeFrame: Any = None  # type: ignore[no-redef]
+    TimeFrameUnit: Any = None  # type: ignore[no-redef]
+    TradingClient: Any = None  # type: ignore[no-redef]
     ALPACA_AVAILABLE = False
     _logger.warning("alpaca-py not installed. Install with: pip install alpaca-py")
 

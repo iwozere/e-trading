@@ -20,7 +20,7 @@ import threading
 import time
 from abc import abstractmethod
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, ClassVar, Dict, Optional
 
 import backtrader as bt
 import pandas as pd
@@ -41,7 +41,8 @@ class BaseLiveDataFeed(bt.feed.DataBase):
     - Backtrader integration
     """
 
-    params = (
+    # ClassVar[Any]: backtrader metaclass consumes this tuple; subclasses replace it
+    params: ClassVar[Any] = (
         ("datetime", None),
         ("open", "open"),
         ("high", "high"),

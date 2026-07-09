@@ -1457,7 +1457,7 @@ class AlertEvaluator:
         Returns:
             Sanitized state dictionary
         """
-        sanitized = {}
+        sanitized: Dict[str, Any] = {}
 
         try:
             # Copy basic fields with type validation

@@ -422,7 +422,7 @@ class FundamentalScreener:
 
         # Sort by composite score (descending) and return top results
         valid_results = [r for r in screener_results if r.composite_score is not None]
-        valid_results.sort(key=lambda x: x.composite_score, reverse=True)
+        valid_results.sort(key=lambda x: x.composite_score or 0.0, reverse=True)
 
         return valid_results[: self.max_results]
 
@@ -448,8 +448,8 @@ class FundamentalScreener:
 
     def _calculate_composite_score(self, fundamentals: Fundamentals, screening_status: Dict[str, bool]) -> float:
         """Calculate composite score (0-10) based on screening criteria."""
-        total_score = 0
-        total_weight = 0
+        total_score = 0.0
+        total_weight = 0.0
 
         for criterion, config in self.screening_thresholds.items():
             weight = config["weight"]
@@ -494,7 +494,7 @@ class FundamentalScreener:
             terminal_value = free_cash_flow * (1 + growth_rate) / (discount_rate - terminal_growth_rate)
 
             # Calculate present value of future cash flows (5 years)
-            present_value = 0
+            present_value = 0.0
             for year in range(1, 6):
                 future_fcf = free_cash_flow * (1 + growth_rate) ** year
                 present_value += future_fcf / (1 + discount_rate) ** year

@@ -104,7 +104,7 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
         end_timestamp = int(end_date.timestamp())
 
         url = f"{self.base_url}/coins/{symbol}/market_chart/range"
-        params = {
+        params: Dict[str, Any] = {
             "vs_currency": vs_currency,
             "from": start_timestamp,
             "to": end_timestamp,
@@ -165,7 +165,7 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
         end_timestamp = int(end_date.timestamp())
 
         url = f"{self.base_url}/coins/{symbol}/market_chart/range"
-        params = {
+        params: Dict[str, Any] = {
             "vs_currency": "usd",
             "from": start_timestamp,
             "to": end_timestamp,
@@ -244,10 +244,10 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
             start_date = datetime.now() - pd.Timedelta(days=365)
         if end_date is None:
             end_date = datetime.now()
-        def download_func(symbol, interval, start_date, end_date):
+        def _default_download(symbol: str, interval: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
             return self.download_historical_data(symbol, interval, start_date, end_date, save_to_csv=False)
 
-        return super().download_multiple_symbols(symbols, download_func, interval, start_date, end_date)
+        return super().download_multiple_symbols(symbols, download_func or _default_download, interval, start_date, end_date)
 
     def get_provider_name(self) -> str:
         """Return the canonical provider name for this downloader."""
