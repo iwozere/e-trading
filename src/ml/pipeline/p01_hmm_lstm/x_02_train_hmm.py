@@ -24,7 +24,7 @@ import sys
 from datetime import datetime
 from itertools import product
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -115,7 +115,9 @@ class HMMTrainer:
         # Compute indicators
         df["rsi"] = talib.RSI(df["close"], timeperiod=rsi_period)
         df["atr"] = talib.ATR(df["high"], df["low"], df["close"], timeperiod=atr_period)
-        upper, middle, lower = talib.BBANDS(df["close"], timeperiod=bb_period, nbdevup=2, nbdevdn=2, matype=0)
+        upper, middle, lower = talib.BBANDS(
+            df["close"], timeperiod=bb_period, nbdevup=2, nbdevdn=2, matype=talib.MA_Type.SMA
+        )
         df["bb_upper"] = upper
         df["bb_middle"] = middle
         df["bb_lower"] = lower
@@ -194,7 +196,7 @@ class HMMTrainer:
         df["regime"] = df[state_col].map(mapping)
         return mapping, df
 
-    def plot_results(self, df: pd.DataFrame, file_name: str):
+    def plot_results(self, df: pd.DataFrame, file_name: str | Path):
         """
         Plot price with Bollinger Bands, RSI, and log return distribution.
 
@@ -293,7 +295,9 @@ class HMMTrainer:
         plt.savefig(file_name, dpi=300, bbox_inches="tight")
         plt.close()
 
-    def run_grid_search(self, df: pd.DataFrame, file_base: str) -> Tuple[pd.DataFrame, GaussianHMM, Tuple, List]:
+    def run_grid_search(
+        self, df: pd.DataFrame, file_base: str
+    ) -> Tuple[Optional[pd.DataFrame], Optional[GaussianHMM], Optional[Tuple], List]:
         """
         Run exhaustive grid search over all parameter combinations.
 
@@ -370,7 +374,9 @@ class HMMTrainer:
 
         return best_df, best_model, best_params, report_rows
 
-    def run_optuna_search(self, df: pd.DataFrame, file_base: str) -> Tuple[pd.DataFrame, GaussianHMM, Tuple, List]:
+    def run_optuna_search(
+        self, df: pd.DataFrame, file_base: str
+    ) -> Tuple[Optional[pd.DataFrame], Optional[GaussianHMM], Optional[Tuple], List]:
         """
         Run Optuna optimization to minimize BIC over parameter space.
 
@@ -381,7 +387,7 @@ class HMMTrainer:
         Returns:
             Tuple of (best_dataframe, best_model, best_params, report_rows)
         """
-        best_result = {"bic": np.inf}
+        best_result: Dict[str, Any] = {"bic": np.inf}
         report_rows = []
 
         def objective(trial):

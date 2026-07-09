@@ -132,7 +132,7 @@ class EmbeddingGenerator:
         # Initialize components
         self.model: Optional[CNN1D] = None
         self.scaler: Any = None
-        self.model_config = None
+        self.model_config: Dict[str, Any] = {}
 
     def run(self) -> Dict[str, Any]:
         """

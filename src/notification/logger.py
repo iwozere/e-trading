@@ -49,7 +49,7 @@ MAX_BYTES = 50 * 1024 * 1024  # 50MB (Reduced from 500MB for P2.2)
 BACKUP_COUNT = 10  # Keep 10 backup files (Reduced from 99 for P2.2)
 
 # Context variable to track the current logging context
-_logging_context = ContextVar("logging_context", default=None)
+_logging_context: ContextVar[str | None] = ContextVar("logging_context", default=None)
 
 import re
 
@@ -633,7 +633,7 @@ def set_logging_context(context_name: str):
     _apply_context_to_existing_logger("src.notification.async_notification_manager", context_name)
 
 
-def get_logging_context() -> str:
+def get_logging_context() -> str | None:
     """Get the current logging context"""
     return _logging_context.get()
 

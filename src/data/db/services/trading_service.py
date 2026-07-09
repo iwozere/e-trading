@@ -238,7 +238,7 @@ class TradingService(BaseDBService):
         """Close a trade."""
         if not fields:
             return False
-        self.repos.trades.close_trade(trade_id, **fields)
+        self.repos.trades.close_trade(int(trade_id), **fields)
         return True
 
     @with_uow
@@ -252,7 +252,7 @@ class TradingService(BaseDBService):
     @handle_db_error
     def get_pnl_summary(self, bot_id: str | None = None) -> Dict[str, Any]:
         """Get PnL summary, optionally filtered by bot."""
-        agg = self.repos.trades.pnl_summary(bot_id)
+        agg = self.repos.trades.pnl_summary(int(bot_id) if bot_id is not None else None)
         return {
             "net_pnl": float(agg.net_pnl or 0),
             "n_trades": int(agg.n_trades or 0),
@@ -272,7 +272,7 @@ class TradingService(BaseDBService):
     ) -> Dict[str, Any]:
         """Ensure an open position exists."""
         row = self.repos.positions.ensure_open(
-            bot_id=bot_id,
+            bot_id=int(bot_id),
             trade_type=trade_type,
             symbol=symbol,
             direction=direction,
@@ -295,7 +295,7 @@ class TradingService(BaseDBService):
     ) -> Dict[str, Any]:
         """Apply a fill to a position."""
         row = self.repos.positions.apply_fill(
-            position_id=position_id,
+            position_id=int(position_id),
             action=action,
             qty=qty,
             price=price,
@@ -327,7 +327,7 @@ class TradingService(BaseDBService):
         symbol: str | None = None,
     ) -> List[Dict[str, Any]]:
         """Get open positions, optionally filtered by bot and symbol."""
-        rows = self.repos.positions.open_positions(bot_id=bot_id, symbol=symbol)
+        rows = self.repos.positions.open_positions(bot_id=int(bot_id) if bot_id is not None else None, symbol=symbol)
         return [self._position_to_dict(p) for p in rows]
 
     @with_uow
@@ -341,7 +341,7 @@ class TradingService(BaseDBService):
     @handle_db_error
     def latest_metrics(self, bot_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         """Get latest metrics for a bot."""
-        rows = self.repos.metrics.latest_for_bot(bot_id, limit=limit)
+        rows = self.repos.metrics.latest_for_bot(int(bot_id), limit=limit)
         return [self._metric_to_dict(m) for m in rows]
 
     @with_uow

@@ -31,6 +31,8 @@ import pandas as pd
 
 from src.data.cache.fundamentals_cache import get_fundamentals_cache
 from src.data.cache.fundamentals_combiner import get_fundamentals_combiner
+from src.data.downloader.binance_data_downloader import BinanceDataDownloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.error_handling.exceptions import NetworkException, RateLimitException
 
 
@@ -413,6 +415,8 @@ class DataManager:
 
         # We explicitly use YahooDataDownloader for batching as it supports yf.download
         yahoo_dl = self.provider_selector._initialize_downloader("yahoo")
+        if not isinstance(yahoo_dl, YahooDataDownloader):
+            raise RuntimeError("Yahoo downloader not available")
 
         for (start_str, end_str), batch_symbols in ranges_to_symbols.items():
             b_start = datetime.strptime(start_str, "%Y-%m-%d").replace(tzinfo=UTC)
@@ -479,7 +483,7 @@ class DataManager:
         # Fetch from Binance
         _logger.info("Cache miss for %s %s (%s), fetching from Binance", symbol, timeframe, data_type)
         downloader = self.provider_selector._initialize_downloader("binance")
-        if not downloader:
+        if not isinstance(downloader, BinanceDataDownloader):
             raise RuntimeError("Binance downloader not available")
 
         # Download
@@ -515,7 +519,7 @@ class DataManager:
         # Fetch from Binance
         _logger.info("Cache miss for %s %s (%s), fetching from Binance", symbol, period, data_type)
         downloader = self.provider_selector._initialize_downloader("binance")
-        if not downloader:
+        if not isinstance(downloader, BinanceDataDownloader):
             raise RuntimeError("Binance downloader not available")
 
         # Download
@@ -551,7 +555,7 @@ class DataManager:
         # Fetch from Binance
         _logger.info("Cache miss for %s %s (%s), fetching from Binance", symbol, period, data_type)
         downloader = self.provider_selector._initialize_downloader("binance")
-        if not downloader:
+        if not isinstance(downloader, BinanceDataDownloader):
             raise RuntimeError("Binance downloader not available")
 
         # Download

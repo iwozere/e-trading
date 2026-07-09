@@ -59,7 +59,7 @@ class PerformanceDashboard:
 
     def get_real_time_metrics(self) -> Dict[str, Any]:
         """Get real-time performance metrics."""
-        metrics = {
+        metrics: Dict[str, Any] = {
             "timestamp": datetime.now(UTC).isoformat(),
             "query_performance": {},
             "database_health": {},
@@ -313,7 +313,7 @@ class PerformanceDashboard:
 
     def generate_report(self, hours: int = 24) -> Dict[str, Any]:
         """Generate performance report for the specified time period."""
-        report = {
+        report: Dict[str, Any] = {
             "period_hours": hours,
             "generated_at": datetime.now(UTC).isoformat(),
             "summary": {},

@@ -7,11 +7,13 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from typing import Any, Dict
+
 from src.ml.pipeline.p19_penny_intraday.models.intraday_signal import IntradaySignal
 
 
-def _sig(**kw) -> IntradaySignal:
-    base = dict(ticker="ILLR", ts=datetime(2026, 6, 24, 14, 30, tzinfo=UTC), price=4.46)
+def _sig(**kw: Any) -> IntradaySignal:
+    base: Dict[str, Any] = dict(ticker="ILLR", ts=datetime(2026, 6, 24, 14, 30, tzinfo=UTC), price=4.46)
     base.update(kw)
     return IntradaySignal(**base)
 

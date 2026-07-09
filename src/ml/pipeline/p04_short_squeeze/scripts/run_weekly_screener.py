@@ -179,6 +179,9 @@ class WeeklyUniverseLoader:
         try:
             _logger.info("Loading stock universe from FMP...")
 
+            if self.config_manager is None or self.fmp_downloader is None:
+                raise RuntimeError("setup() must be called before loading the universe")
+
             # Get universe configuration
             config = self.config_manager.load_config()
             universe_config = getattr(config.screener, "universe", None)
@@ -231,8 +234,14 @@ class WeeklyUniverseLoader:
                 strategy_breakdown = {"mid_cap": 500, "small_cap": 300, "known_candidates": len(universe) - 800}
             else:
                 # Get universe loader to categorize tickers by strategy
+                if self.config_manager is None or self.fmp_downloader is None:
+                    raise RuntimeError("setup() must be called before computing the strategy breakdown")
                 config = self.config_manager.load_config()
                 universe_config = getattr(config.screener, "universe", None)
+                if universe_config is None:
+                    from src.ml.pipeline.p04_short_squeeze.config.data_classes import UniverseConfig
+
+                    universe_config = UniverseConfig()
                 universe_loader = create_universe_loader(self.fmp_downloader, universe_config)
 
                 # Get strategy breakdown from universe loader
@@ -304,6 +313,8 @@ class WeeklyUniverseLoader:
             known_in_universe = [t for t in universe if t.upper() in [k.upper() for k in known_candidates]]
 
             # Estimate strategy breakdown (this is approximate since we don't track exact source)
+            if self.config_manager is None:
+                raise RuntimeError("setup() must be called first")
             config = self.config_manager.load_config()
             universe_config = getattr(config.screener, "universe", None)
 

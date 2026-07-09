@@ -84,7 +84,7 @@ class FMPDataDownloader(BaseDataDownloader):
             if fmp_interval == "1day":
                 # Daily data endpoint
                 url = f"{self.stable_url}/historical-price-full"
-                params = {"apikey": self.api_key, "from": start_str, "to": end_str, "symbol": symbol}
+                params: Dict[str, Any] = {"apikey": self.api_key, "from": start_str, "to": end_str, "symbol": symbol}
             else:
                 # Intraday data endpoint
                 url = f"{self.stable_url}/historical-chart/{fmp_interval}"

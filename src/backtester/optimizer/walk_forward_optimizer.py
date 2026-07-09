@@ -647,11 +647,11 @@ def save_single_strategy_result(
                 continue
 
         # Process analyzers
-        analyzers = {}
+        analyzers: Dict[str, Any] = {}
         for name, analyzer in result.get("analyzers", {}).items():
             try:
                 if isinstance(analyzer, dict):
-                    processed_analysis = {}
+                    processed_analysis: Dict[str, Any] = {}
                     for k, v in analyzer.items():
                         if isinstance(v, (int, float)):
                             processed_analysis[str(k)] = float(v)
@@ -767,11 +767,11 @@ def save_optimization_results(
                     continue
 
             # Process analyzers
-            analyzers = {}
+            analyzers: Dict[str, Any] = {}
             for name, analyzer in result.get("analyzers", {}).items():
                 try:
                     if isinstance(analyzer, dict):
-                        processed_analysis = {}
+                        processed_analysis: Dict[str, Any] = {}
                         for k, v in analyzer.items():
                             if isinstance(v, (int, float)):
                                 processed_analysis[str(k)] = float(v)

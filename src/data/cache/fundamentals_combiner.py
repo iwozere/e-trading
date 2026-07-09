@@ -194,7 +194,7 @@ class FundamentalsCombiner:
             # Fall back to general provider sequence
             return self.get_provider_sequence("ratios" if "ratio" in field_path.lower() else "profile")
 
-    def get_ttl_for_data_type(self, data_type: str) -> int:
+    def get_ttl_for_data_type(self, data_type: str) -> float:
         """
         Get TTL in days for a specific data type.
 
@@ -337,7 +337,7 @@ class FundamentalsCombiner:
         for field in all_fields:
             best_value = None
             best_provider = None
-            best_quality = -1
+            best_quality: float = -1
 
             for provider in providers:
                 if field in provider.data:
@@ -347,6 +347,7 @@ class FundamentalsCombiner:
                         quality_score = provider.quality_score
                         if quality_score > best_quality or (
                             quality_score == best_quality
+                            and best_provider is not None
                             and provider.priority < self.provider_priorities.get(best_provider, 999)
                         ):
                             best_value = value

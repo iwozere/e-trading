@@ -322,7 +322,7 @@ def validate_fundamentals_config(config_path: str | None = None) -> Tuple[bool, 
         # Default path relative to project root
         current_dir = Path(__file__).parent
         project_root = current_dir.parent.parent.parent
-        config_path = project_root / "config" / "data" / "fundamentals.json"
+        config_path = str(project_root / "config" / "data" / "fundamentals.json")
 
     validator = FundamentalsConfigValidator()
-    return validator.validate_config_file(str(config_path))
+    return validator.validate_config_file(config_path)

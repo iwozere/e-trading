@@ -243,7 +243,7 @@ class ConfigValidator:
         Returns:
             Schema dictionary describing all fields
         """
-        schema = {"channel": self.channel_name, "fields": {}}
+        schema: Dict[str, Any] = {"channel": self.channel_name, "fields": {}}
 
         for rule in self.rules:
             field_info: Dict[str, Any] = {

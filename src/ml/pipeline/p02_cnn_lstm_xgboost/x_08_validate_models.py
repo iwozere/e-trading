@@ -98,7 +98,7 @@ class ModelValidator:
 
     def _generate_report(self, predictions: dict) -> dict:
         """Generate validation report."""
-        report = {
+        report: Dict[str, Any] = {
             "pipeline_info": {"name": "CNN-LSTM-XGBoost Pipeline", "version": "2.0"},
             "models": {},
             "comparison": {},

@@ -1,5 +1,6 @@
 """Tests for P17 ScoringAgent."""
 
+from typing import Any, Dict
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -18,8 +19,8 @@ def _make_agent() -> ScoringAgent:
     return ScoringAgent(P17ScoringConfig(), ss_agent)
 
 
-def _make_candidate(**kwargs) -> Candidate:
-    defaults = dict(
+def _make_candidate(**kwargs: Any) -> Candidate:
+    defaults: Dict[str, Any] = dict(
         ticker="TEST",
         price=5.0,
         market_cap=100_000_000,

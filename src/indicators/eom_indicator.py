@@ -14,6 +14,7 @@ A positive EOM indicates that price is moving upward with relative ease,
 while a negative EOM indicates downward price movement with ease.
 """
 
+from typing import Any, ClassVar
 import backtrader as bt
 
 from src.notification.logger import setup_logger
@@ -35,13 +36,14 @@ class EOMIndicator(bt.Indicator):
         eom: Smoothed EOM value
     """
 
-    lines = ("eom",)
+    # ClassVar[Any]: backtrader metaclass turns this tuple into a Lines class
+    lines: ClassVar[Any] = ("eom",)
     params = (
         ("timeperiod", 14),
         ("scale", 100000000.0),
     )
 
-    def __init__(self):
+    def __init__(self, *args: Any, **kwargs: Any):
         """Initialize the EOM indicator"""
         # Validate parameters
         if self.p.timeperiod <= 0:

@@ -13,6 +13,7 @@ From these swing points, it calculates:
 - Nearest Support: The closest swing low below the current price
 """
 
+from typing import Any, ClassVar
 from collections import deque
 
 import backtrader as bt
@@ -37,13 +38,14 @@ class SupportResistanceIndicator(bt.Indicator):
         support: Nearest support level below current price (or NaN if none found)
     """
 
-    lines = ("resistance", "support")
+    # ClassVar[Any]: backtrader metaclass turns this tuple into a Lines class
+    lines: ClassVar[Any] = ("resistance", "support")
     params = (
         ("lookback_bars", 2),
         ("max_swings", 50),
     )
 
-    def __init__(self):
+    def __init__(self, *args: Any, **kwargs: Any):
         """Initialize the Support/Resistance indicator"""
         # Validate parameters
         if self.p.lookback_bars < 1:
@@ -55,12 +57,12 @@ class SupportResistanceIndicator(bt.Indicator):
             self.p.max_swings = 10
 
         # Storage for historical prices
-        self.highs = deque(maxlen=self.p.lookback_bars * 2 + 10)
-        self.lows = deque(maxlen=self.p.lookback_bars * 2 + 10)
+        self.highs: deque[float] = deque(maxlen=self.p.lookback_bars * 2 + 10)
+        self.lows: deque[float] = deque(maxlen=self.p.lookback_bars * 2 + 10)
 
         # Storage for detected swing points
-        self.swing_highs = deque(maxlen=self.p.max_swings)
-        self.swing_lows = deque(maxlen=self.p.max_swings)
+        self.swing_highs: deque[float] = deque(maxlen=self.p.max_swings)
+        self.swing_lows: deque[float] = deque(maxlen=self.p.max_swings)
 
         _logger.debug(
             "S/R indicator initialized with lookback_bars=%s, max_swings=%s", self.p.lookback_bars, self.p.max_swings
