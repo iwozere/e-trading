@@ -169,7 +169,7 @@ class P07RobustnessChecker:
         """Runs the full robustness suite and saves results."""
         _logger.info("Running full robustness suite for %s %s", self.ticker, self.timeframe)
 
-        results = {}
+        results: Dict[str, Any] = {}
 
         # 1. Walk Forward
         wfa = self.run_walk_forward_analysis(ohlcv, params)

@@ -34,7 +34,8 @@ def get_triple_barrier_labels(
     try:
         import talib
 
-        atr = talib.ATR(ohlcv["high"], ohlcv["low"], ohlcv["close"], timeperiod=atr_period)
+        # talib returns a bare ndarray; wrap so .values below works in both branches
+        atr = pd.Series(talib.ATR(ohlcv["high"], ohlcv["low"], ohlcv["close"], timeperiod=atr_period), index=ohlcv.index)
     except ImportError:
         high_low = ohlcv["high"] - ohlcv["low"]
         high_close = np.abs(ohlcv["high"] - ohlcv["close"].shift(1))

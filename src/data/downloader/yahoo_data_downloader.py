@@ -825,7 +825,7 @@ class YahooDataDownloader(BaseDataDownloader):
         results = {}
         for symbol in symbols:
             try:
-                results[symbol] = self.get_fundamentals(symbol)
+                results[symbol] = self.get_fundamentals(symbol) or self._create_default_fundamentals(symbol)
             except Exception:
                 _logger.exception("Fallback fundamental download failed for %s:", symbol)
                 results[symbol] = self._create_default_fundamentals(symbol)

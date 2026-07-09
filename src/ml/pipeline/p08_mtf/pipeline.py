@@ -38,6 +38,14 @@ class P08Pipeline:
         _logger.warning("P08Pipeline is deprecated. %s", _DEPRECATION_MSG)
         self._delegate = P07Pipeline(result_root=result_root, db_url=db_url, enable_mtf=True)
 
+    @property
+    def db_url(self) -> str:
+        return self._delegate.db_url
+
+    @property
+    def data_loader(self):
+        return self._delegate.data_loader
+
     def run_batch(self, ticker_files: List[Path], train_years: List[str] | None = None):
         return self._delegate.run_batch(ticker_files, train_years=train_years)
 

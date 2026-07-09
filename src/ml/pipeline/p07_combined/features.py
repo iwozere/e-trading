@@ -98,7 +98,8 @@ class P07FeatureEngine:
             a_low = df.get("anchor_low", df["low"])
 
             a_ema_period = config.get("anchor_ema_period", 20)
-            a_ema = talib.EMA(a_close, timeperiod=a_ema_period)
+            # talib returns a bare ndarray without .shift(); keep it a Series
+            a_ema = pd.Series(talib.EMA(a_close, timeperiod=a_ema_period), index=a_close.index)
             X["anchor_trend"] = np.log(a_ema / a_ema.shift(1))
 
             regime_thresh = config.get("regime_threshold", 0.0001)

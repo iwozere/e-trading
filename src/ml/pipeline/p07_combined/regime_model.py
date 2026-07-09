@@ -23,7 +23,7 @@ class P07RegimeModel:
     Uses macro features (VIX, BTC Market Cap) to identify Bull, Bear, and Sideways states.
     """
 
-    def __init__(self, n_components: int = 3, model_dir: Path = Path("src/ml/pipeline/p07_combined/models/regime")):
+    def __init__(self, n_components: int = 3, model_dir: Path = Path("src/ml/pipeline/p07_combined/model_artifacts")):
         self.n_components = n_components
         self.model_dir = model_dir
         self.model_dir.mkdir(parents=True, exist_ok=True)

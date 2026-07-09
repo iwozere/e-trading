@@ -201,7 +201,7 @@ class AlertEngine:
         try:
             # Service manages sessions internally via UoW pattern
             service = ShortSqueezeService()
-            return service.repo.alerts.check_cooldown(ticker, alert_level)
+            return service.repos.short_squeeze.alerts.check_cooldown(ticker, alert_level)
         except Exception as e:
             self._logger.error("Error checking cooldown for %s: %s", ticker, e)
             # Assume not in cooldown on error to avoid missing alerts
@@ -454,7 +454,7 @@ class AlertEngine:
             service = ShortSqueezeService()
 
             # Get recent alerts
-            recent_alerts = service.repo.alerts.get_recent_alerts(days)
+            recent_alerts = service.repos.short_squeeze.alerts.get_recent_alerts(days)
 
             # Count by level
             level_counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}

@@ -58,7 +58,8 @@ class P08FeatureEngine:
 
             # Anchor Trend & Regime
             a_ema_period = config.get("anchor_ema_period", 20)
-            a_ema = talib.EMA(a_close, timeperiod=a_ema_period)
+            # talib returns a bare ndarray without .shift(); keep it a Series
+            a_ema = pd.Series(talib.EMA(a_close, timeperiod=a_ema_period), index=a_close.index)
             X["anchor_trend"] = np.log(a_ema / a_ema.shift(1))
 
             # Anchor Regime (Categorical proxy: 1=Bull, 0=Neutral, -1=Bear)

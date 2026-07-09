@@ -27,7 +27,7 @@ import yaml
 project_root = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(project_root))
 
-from src.common import analyze_period_interval, get_ohlcv
+from src.common.common import analyze_period_interval, get_ohlcv
 from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 from src.notification.logger import setup_logger
 

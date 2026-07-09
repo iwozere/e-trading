@@ -119,7 +119,7 @@ class P08RobustnessChecker(P07RobustnessChecker):
         """Ported from P07: Runs full suite and saves results."""
         _logger.info("Running full P08 MTF robustness suite for %s %s", self.ticker, self.timeframe)
 
-        results = {}
+        results: Dict[str, Any] = {}
 
         # 1. Walk Forward
         wfa = self.run_walk_forward_analysis(ohlcv, params)
