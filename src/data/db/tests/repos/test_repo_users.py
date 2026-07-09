@@ -5,18 +5,24 @@ import time
 from sqlalchemy.orm import Session
 
 from src.data.db.repos.repo_users import UsersRepo, VerificationRepo
+from src.data.db.tests.repos.conftest import ensure_user_for_telegram
 
 
 def test_users_repo_telegram_flow(db_session: Session):
     r = UsersRepo(db_session)
 
     # ensure user by telegram id
-    u = r.ensure_user_for_telegram("1001", defaults_user={"email": "alice@example.com"})
+    u = ensure_user_for_telegram(r, "1001", defaults_user={"email": "alice@example.com"})
     assert u.id > 0
     assert u.email == "alice@example.com"
 
-    # profile update and fetch
-    r.update_telegram_profile("1001", verified=True, approved=False, language="en", is_admin=True)
+    # profile update and fetch (metadata merge, as UsersService.update_telegram_profile does)
+    ident = r.get_identity(provider="telegram", external_id="1001")
+    assert ident is not None
+    meta = dict(ident.identity_metadata or {})
+    meta.update({"verified": True, "approved": False, "language": "en", "is_admin": True})
+    ident.identity_metadata = meta
+    r.create_identity(ident)
     profile = r.get_telegram_profile("1001")
     assert profile is not None
     assert profile["user_id"] == u.id
@@ -36,7 +42,7 @@ def test_users_repo_telegram_flow(db_session: Session):
 
 def test_verification_repo_issue_and_count(db_session: Session):
     urepo = UsersRepo(db_session)
-    user = urepo.ensure_user_for_telegram("2002", defaults_user={"email": "bob@example.com"})
+    user = ensure_user_for_telegram(urepo, "2002", defaults_user={"email": "bob@example.com"})
 
     vrepo = VerificationRepo(db_session)
     now = int(time.time())

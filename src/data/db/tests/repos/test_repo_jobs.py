@@ -7,13 +7,14 @@ from sqlalchemy.orm import Session
 from src.data.db.models.model_jobs import JobType, RunStatus
 from src.data.db.repos.repo_jobs import JobsRepository
 from src.data.db.repos.repo_users import UsersRepo
+from src.data.db.tests.repos.conftest import ensure_user_for_telegram
 
 UTC = UTC
 
 
 def test_jobs_repo_basic_flow(db_session: Session):
     # need a user FK for schedules
-    u = UsersRepo(db_session).ensure_user_for_telegram("5005", defaults_user={"email": "sched@example.com"})
+    u = ensure_user_for_telegram(UsersRepo(db_session), "5005", defaults_user={"email": "sched@example.com"})
 
     repo = JobsRepository(db_session)
     now = datetime.now(UTC)

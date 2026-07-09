@@ -239,3 +239,25 @@ def db_session(engine: Engine) -> Generator[Session, None, None]:
                 trans.rollback()
         with contextlib.suppress(Exception):
             connection.close()
+
+
+def ensure_user_for_telegram(repo, telegram_user_id, defaults_user=None):
+    """Test helper mirroring UsersService.ensure_user_for_telegram at repo level.
+
+    The repo layer no longer exposes this convenience method; tests create the
+    user + telegram identity through the repo primitives instead.
+    """
+    from src.data.db.core.constants import PROVIDER_TG
+    from src.data.db.models.model_users import AuthIdentity, User
+
+    tid = str(telegram_user_id)
+    ident = repo.get_identity(provider=PROVIDER_TG, external_id=tid)
+    if ident:
+        user = repo.get_user_by_id(ident.user_id)
+        assert user is not None
+        return user
+    defaults = dict(defaults_user or {})
+    defaults.setdefault("role", "trader")
+    user = repo.create_user(User(**defaults))
+    repo.create_identity(AuthIdentity(user_id=user.id, provider=PROVIDER_TG, external_id=tid, identity_metadata={}))
+    return user

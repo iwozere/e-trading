@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from src.data.db.repos.repo_trading import BotsRepo, MetricsRepo, PositionsRepo
 from src.data.db.repos.repo_users import UsersRepo
+from src.data.db.tests.repos.conftest import ensure_user_for_telegram
 
 UTC = UTC
 
@@ -18,7 +19,7 @@ def test_bots_metrics_positions(db_session: Session):
     users = UsersRepo(db_session)
 
     # create a user for FK
-    user = users.ensure_user_for_telegram("bot-user-1", defaults_user={"email": "botuser@example.com"})
+    user = ensure_user_for_telegram(users, "bot-user-1", defaults_user={"email": "botuser@example.com"})
     assert user.id > 0
 
     # upsert bot (integer PK, include required fields and config)

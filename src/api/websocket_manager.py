@@ -244,37 +244,6 @@ class WebSocketManager:
         # Remove connection
         del self.connections[connection_id]
 
-    async def handle_message(self, connection_id: str, message: str):
-        """Handle incoming WebSocket message."""
-        if connection_id not in self.connections:
-            return
-
-        connection = self.connections[connection_id]
-
-        try:
-            data = json.loads(message)
-            message_type = data.get("type")
-
-            if message_type == "pong":
-                # Update last ping time
-                connection.last_ping = datetime.now(UTC)
-
-            elif message_type == "subscribe":
-                # Handle subscription requests
-                await self._handle_subscription(connection_id, data)
-
-            elif message_type == "unsubscribe":
-                # Handle unsubscription requests
-                await self._handle_unsubscription(connection_id, data)
-
-            else:
-                _logger.warning("Unknown message type from %s: %s", connection_id, message_type)
-
-        except json.JSONDecodeError:
-            _logger.exception("Invalid JSON from %s: %s", connection_id, message)
-        except Exception:
-            _logger.exception("Error handling message from %s", connection_id)
-
     async def _handle_subscription(self, connection_id: str, data: Dict[str, Any]):
         """Handle subscription requests."""
         subscription_type = data.get("subscription_type")
@@ -304,27 +273,6 @@ class WebSocketManager:
         elif subscription_type == "system":
             self.system_subscribers.discard(connection_id)
             _logger.debug("Connection %s unsubscribed from system events", connection_id)
-
-    async def broadcast_strategy_update(self, strategy_id: str, status_data: Dict[str, Any]):
-        """Broadcast strategy status update to subscribers."""
-        if strategy_id not in self.strategy_subscribers:
-            return
-
-        message = {
-            "type": "strategy_update",
-            "strategy_id": strategy_id,
-            "data": status_data,
-            "timestamp": datetime.now().isoformat(),
-        }
-
-        # Send to all subscribers
-        subscribers = list(self.strategy_subscribers[strategy_id])
-        for connection_id in subscribers:
-            if connection_id in self.connections:
-                success = await self.connections[connection_id].send_message(message)
-                if not success:
-                    # Remove failed connection
-                    await self.disconnect(connection_id)
 
     async def broadcast_system_update(self, system_data: Dict[str, Any]):
         """Broadcast system status update to subscribers."""

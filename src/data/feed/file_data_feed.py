@@ -432,8 +432,8 @@ class FileDataFeed(bt.feed.DataBase):
             # Generate realistic OHLC from close price
             volatility = abs(np.random.normal(0, 0.01))  # Intrabar volatility
 
-            high = close_price * (1 + volatility)
-            low = close_price * (1 - volatility)
+            high = float(close_price * (1 + volatility))
+            low = float(close_price * (1 - volatility))
 
             # Open is previous close (with some gap)
             if i == 0:
@@ -443,8 +443,8 @@ class FileDataFeed(bt.feed.DataBase):
                 open_price = prices[i - 1] * (1 + gap)
 
             # Ensure OHLC relationships are valid
-            high = max(high, open_price, close_price)
-            low = min(low, open_price, close_price)
+            high = max(high, float(open_price), float(close_price))
+            low = min(low, float(open_price), float(close_price))
 
             # Generate volume
             volume = np.random.randint(1000, 10000)

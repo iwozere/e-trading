@@ -6,13 +6,14 @@ from sqlalchemy.orm import Session
 
 from src.data.db.repos.repo_users import UsersRepo
 from src.data.db.repos.repo_webui import AuditRepo, SnapshotRepo, StrategyTemplateRepo, SystemConfigRepo
+from src.data.db.tests.repos.conftest import ensure_user_for_telegram
 
 UTC = UTC
 
 
 def test_webui_repos(db_session: Session):
     users = UsersRepo(db_session)
-    u = users.ensure_user_for_telegram("9090", defaults_user={"email": "web@example.com"})
+    u = ensure_user_for_telegram(users, "9090", defaults_user={"email": "web@example.com"})
 
     # audit log
     audits = AuditRepo(db_session)

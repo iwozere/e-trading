@@ -227,7 +227,7 @@ class StrategyHandler:
                 errors.append("'entry_logic' missing required 'name' field")
             else:
                 # Validate entry mixin name
-                entry_name = entry_logic.get("name")
+                entry_name = entry_logic.get("name") or ""
                 if not self._is_valid_mixin_name(entry_name):
                     warnings.append(f"Entry mixin '{entry_name}' may not be a valid mixin class")
 
@@ -246,7 +246,7 @@ class StrategyHandler:
                 errors.append("'exit_logic' missing required 'name' field")
             else:
                 # Validate exit mixin name
-                exit_name = exit_logic.get("name")
+                exit_name = exit_logic.get("name") or ""
                 if not self._is_valid_mixin_name(exit_name):
                     warnings.append(f"Exit mixin '{exit_name}' may not be a valid mixin class")
 

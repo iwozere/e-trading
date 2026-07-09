@@ -232,7 +232,7 @@ class UnifiedAnalyticsService:
                 }
             except Exception as e:
                 self._logger.exception("Failed to get notification data for dashboard:")
-                notification_data = {"error": str(e)}
+                notification_data = {"error": str(e)}  # type: ignore[dict-item]
 
             # Get trading analytics (future)
             trading_data = {"message": "Trading analytics not yet implemented"}

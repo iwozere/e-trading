@@ -8,7 +8,7 @@ Used by the job scheduler system for batch screening operations.
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -37,7 +37,7 @@ class ScreenerConfigLoader:
             config_path = Path(__file__).parent.parent.parent.parent / "config" / "schemas" / "screener_sets.yml"
 
         self.config_path = config_path
-        self._config = None
+        self._config: Optional[Dict[str, Any]] = None
 
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from YAML file."""
@@ -50,7 +50,7 @@ class ScreenerConfigLoader:
 
         try:
             with open(self.config_path, encoding="utf-8") as f:
-                self._config = yaml.safe_load(f)
+                self._config = yaml.safe_load(f) or {}
 
             _logger.debug("Loaded screener config from: %s", self.config_path)
             return self._config

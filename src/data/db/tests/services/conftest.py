@@ -23,6 +23,7 @@ pytest_plugins = ["src.data.db.tests.repos.conftest"]
 
 from src.data.db.repos.repo_jobs import JobsRepository
 from src.data.db.repos.repo_notification import NotificationRepository
+from src.data.db.repos.repo_kestrel import KestrelRepo
 from src.data.db.repos.repo_short_squeeze import ShortSqueezeRepo
 from src.data.db.repos.repo_system_health import SystemHealthRepository
 from src.data.db.repos.repo_telegram import (
@@ -100,6 +101,7 @@ def mock_database_service(db_session: Session) -> Mock:
         positions=TradingPositionsRepo(db_session),
         metrics=TradingMetricsRepo(db_session),
         short_squeeze=ShortSqueezeRepo(db_session),
+        kestrel=KestrelRepo(db_session),
     )
 
     # Mock the uow context manager to return the repos bundle
@@ -136,6 +138,7 @@ def repos_bundle(db_session: Session) -> ReposBundle:
         positions=TradingPositionsRepo(db_session),
         metrics=TradingMetricsRepo(db_session),
         short_squeeze=ShortSqueezeRepo(db_session),
+        kestrel=KestrelRepo(db_session),
     )
 
 

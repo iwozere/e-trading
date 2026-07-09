@@ -9,7 +9,6 @@ autoflake>=2.2.0
 types-croniter
 types-openpyxl
 types-psutil
-types-PyJWT
 types-reportlab
 types-requests
 types-tqdm 
