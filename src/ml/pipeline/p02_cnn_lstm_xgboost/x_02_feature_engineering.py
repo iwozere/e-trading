@@ -248,7 +248,7 @@ class FeatureEngineer:
         _logger.info("Outlier handling completed")
         return df
 
-    def normalize_data(self, df: pd.DataFrame, scaler=None) -> Tuple[pd.DataFrame, object]:
+    def normalize_data(self, df: pd.DataFrame, scaler: Any = None) -> Tuple[pd.DataFrame, Any]:
         """
         Normalize the data using the specified method.
 
@@ -318,13 +318,15 @@ class FeatureEngineer:
             X.append(features[i : i + time_steps])
             y.append(target[i + time_steps])
 
-        X = np.array(X)
-        y = np.array(y)
+        X_arr = np.array(X)
+        y_arr = np.array(y)
 
-        _logger.info("Sequence preparation completed. X shape: %s, y shape: %s", X.shape, y.shape)
-        return X, y
+        _logger.info("Sequence preparation completed. X shape: %s, y shape: %s", X_arr.shape, y_arr.shape)
+        return X_arr, y_arr
 
-    def split_data(self, X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def split_data(
+        self, X: np.ndarray, y: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Split data into train, validation, and test sets.
 
@@ -354,7 +356,7 @@ class FeatureEngineer:
 
         return X_train, X_val, X_test, y_train, y_val, y_test
 
-    def process_single_file(self, filepath: Path) -> Dict[str, any]:
+    def process_single_file(self, filepath: Path) -> Dict[str, Any]:
         """
         Process a single data file.
 
@@ -392,6 +394,25 @@ class FeatureEngineer:
             output_filename = f"processed_{filepath.stem}.npz"
             output_path = self.labeled_data_dir / output_filename
 
+            scaler_params: Any = (
+                {
+                    "scale_": scaler.scale_,
+                    "mean_": scaler.mean_,
+                    "var_": scaler.var_,
+                    "min_": scaler.min_,
+                    "data_min_": scaler.data_min_,
+                    "data_max_": scaler.data_max_,
+                    "data_range_": scaler.data_range_,
+                }
+                if hasattr(scaler, "mean_")
+                else {
+                    "scale_": scaler.scale_,
+                    "min_": scaler.min_,
+                    "data_min_": scaler.data_min_,
+                    "data_max_": scaler.data_max_,
+                    "data_range_": scaler.data_range_,
+                }
+            )
             np.savez_compressed(
                 output_path,
                 X_train=X_train,
@@ -401,23 +422,7 @@ class FeatureEngineer:
                 y_val=y_val,
                 y_test=y_test,
                 feature_names=df_normalized.columns.tolist(),
-                scaler_params={
-                    "scale_": scaler.scale_,
-                    "mean_": scaler.mean_,
-                    "var_": scaler.var_,
-                    "min_": scaler.min_,
-                    "data_min_": scaler.data_min_,
-                    "data_max_": scaler.data_max_,
-                    "data_range_": scaler.data_range_,
-                }
-                if hasattr(scaler, "scale_")
-                else {
-                    "scale_": scaler.scale_,
-                    "min_": scaler.min_,
-                    "data_min_": scaler.data_min_,
-                    "data_max_": scaler.data_max_,
-                    "data_range_": scaler.data_range_,
-                },
+                scaler_params=scaler_params,
             )
 
             # Save processed DataFrame

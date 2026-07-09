@@ -25,7 +25,7 @@ Some call sites reset_index locally or use ``coerce_ohlcv_timestamp_column`` whe
 import os
 import re
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, TypeGuard
 
 import pandas as pd
 
@@ -246,7 +246,7 @@ class DataManager:
                 _logger.info("Gap detected: INTERMEDIATE for %s (%s to %s)", symbol, gap_start_ts, gap_end_ts)
 
         # --- Step 2: If no gaps, return cache ---
-        if not missing_segments:
+        if not missing_segments and cached_data is not None:
             _logger.info("Cache hit for %s %s (no gaps): %d rows", symbol, timeframe, len(cached_data))
             return cached_data
 
@@ -833,7 +833,7 @@ class DataManager:
 
             # Initialize combiner and cache with configuration
             combiner = get_fundamentals_combiner()
-            fundamentals_cache = get_fundamentals_cache(self.cache.cache_dir, combiner)
+            fundamentals_cache = get_fundamentals_cache(str(self.cache.cache_dir), combiner)
 
             # 2. Cache validation with data-type specific TTL (or override)
             if not force_refresh:
@@ -1539,7 +1539,7 @@ class DataManager:
             return {"compatible": False, "reason": "Crypto symbols do not support fundamentals data"}
 
         # Enhanced provider-specific compatibility rules
-        provider_compatibility = {
+        provider_compatibility: Dict[str, Dict[str, Any]] = {
             "yahoo": {
                 "symbol_types": ["stock", "etf", "reit"],
                 "markets": ["US", "UK", "EU", "CANADA", "ASIA", "OCEANIA"],
@@ -1750,7 +1750,7 @@ class DataManager:
         provider_data = {}
 
         # Configuration for retry logic
-        retry_config = {
+        retry_config: Dict[str, Any] = {
             "max_retries": 3,
             "base_delay": 1.0,  # Base delay in seconds
             "max_delay": 30.0,  # Maximum delay in seconds
@@ -1937,7 +1937,7 @@ class DataManager:
         if hasattr(signal, "SIGALRM") and threading.current_thread() is threading.main_thread():
             try:
                 old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-                signal.alarm(int(timeout))
+                signal.alarm(int(timeout))  # type: ignore[attr-defined]  # hasattr-guarded
                 sigalrm_set = True
             except ValueError:
                 pass
@@ -1954,8 +1954,8 @@ class DataManager:
             # Clean up timeout handling
             if sigalrm_set:
                 try:
-                    signal.alarm(0)
-                    signal.signal(signal.SIGALRM, old_handler)
+                    signal.alarm(0)  # type: ignore[attr-defined]  # hasattr-guarded
+                    signal.signal(signal.SIGALRM, old_handler)  # type: ignore[attr-defined]  # hasattr-guarded
                 except ValueError:
                     pass
 
@@ -2141,7 +2141,7 @@ class DataManager:
             return {}
 
     @staticmethod
-    def _is_positive_fundamental_scalar(value: Any) -> bool:
+    def _is_positive_fundamental_scalar(value: Any) -> TypeGuard[float]:
         try:
             return value is not None and float(value) > 0
         except (TypeError, ValueError):

@@ -60,6 +60,7 @@ except ImportError:
 try:
     import openpyxl
     from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
 
     OPENPYXL_AVAILABLE = True
 except ImportError:
@@ -261,9 +262,9 @@ class AdvancedAnalytics:
         if not returns:
             return 0.0
 
-        returns = np.array(returns)
-        avg_return = np.mean(returns)
-        std_return = np.std(returns, ddof=1)
+        returns_arr = np.array(returns)
+        avg_return = np.mean(returns_arr)
+        std_return = np.std(returns_arr, ddof=1)
 
         # Annualize
         annualized_return = avg_return * 252
@@ -288,11 +289,11 @@ class AdvancedAnalytics:
         if not returns:
             return 0.0
 
-        returns = np.array(returns)
-        avg_return = np.mean(returns)
+        returns_arr = np.array(returns)
+        avg_return = np.mean(returns_arr)
 
         # Calculate downside deviation
-        downside_returns = returns[returns < self.risk_free_rate / 252]
+        downside_returns = returns_arr[returns_arr < self.risk_free_rate / 252]
         if len(downside_returns) == 0:
             return float("inf")
 
@@ -320,13 +321,12 @@ class AdvancedAnalytics:
         if not self.trades:
             return 0.0, 0.0
 
-        returns = [t.net_pnl for t in self.trades]
-        returns = np.array(returns)
+        returns_arr = np.array([t.net_pnl for t in self.trades])
 
-        var_95 = np.percentile(returns, 5)  # 95% VaR
-        cvar_95 = np.mean(returns[returns <= var_95])  # 95% CVaR
+        var_95 = np.percentile(returns_arr, 5)  # 95% VaR
+        cvar_95 = np.mean(returns_arr[returns_arr <= var_95])  # 95% CVaR
 
-        return var_95, cvar_95
+        return float(var_95), float(cvar_95)
 
     def _calculate_kelly_criterion(self) -> float:
         """Calculate Kelly Criterion"""
@@ -414,16 +414,16 @@ class AdvancedAnalytics:
             cumulative_return = np.sum(simulated_returns)
             simulation_results.append(cumulative_return)
 
-        simulation_results = np.array(simulation_results)
+        sim_arr = np.array(simulation_results)
 
         # Calculate statistics
-        mean_sim_return = np.mean(simulation_results)
-        std_sim_return = np.std(simulation_results)
-        var_95_sim = np.percentile(simulation_results, 5)
-        cvar_95_sim = np.mean(simulation_results[simulation_results <= var_95_sim])
+        mean_sim_return = np.mean(sim_arr)
+        std_sim_return = np.std(sim_arr)
+        var_95_sim = np.percentile(sim_arr, 5)
+        cvar_95_sim = np.mean(sim_arr[sim_arr <= var_95_sim])
 
         # Calculate probability of profit
-        prob_profit = np.mean(simulation_results > 0) * 100
+        prob_profit = np.mean(sim_arr > 0) * 100
 
         return {
             "mean_return": mean_sim_return,
@@ -486,7 +486,7 @@ class AdvancedAnalytics:
             return
 
         doc = SimpleDocTemplate(filepath, pagesize=A4)
-        story = []
+        story: List[Any] = []  # Flowables; reportlab import is optional
         styles = getSampleStyleSheet()
 
         # Title
@@ -553,7 +553,7 @@ class AdvancedAnalytics:
             ws.cell(row=1, column=col).fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
 
         # Data
-        data = [
+        data: List[List[Any]] = [
             ["Total Trades", self.metrics.total_trades, ">30", "✓" if self.metrics.total_trades > 30 else "✗"],
             ["Win Rate (%)", round(self.metrics.win_rate, 2), ">50", "✓" if self.metrics.win_rate > 50 else "✗"],
             [
@@ -613,7 +613,10 @@ class AdvancedAnalytics:
         # Auto-adjust column widths
         for column in ws.columns:
             max_length = 0
-            column_letter = column[0].column_letter
+            col_idx = column[0].column
+            if col_idx is None:
+                continue
+            column_letter = get_column_letter(col_idx)
             for cell in column:
                 try:
                     if len(str(cell.value)) > max_length:

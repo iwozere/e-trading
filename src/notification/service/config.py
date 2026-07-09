@@ -8,8 +8,8 @@ Handles environment variables, database settings, and service configuration.
 import os
 from typing import Any, Dict, List, Optional
 
-from pydantic import ConfigDict, Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 try:
     from config.donotshare.donotshare import SMTP_PASSWORD, SMTP_PORT, SMTP_SERVER, SMTP_USER, TELEGRAM_BOT_TOKEN
@@ -26,51 +26,56 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
+# NOTE: Environment variable names are derived from each class's
+# SettingsConfigDict(env_prefix=...) plus the field name (e.g. DB_URL,
+# SERVER_HOST). Pydantic v2 ignores the old Field(env=...) parameter,
+# so the previous per-field env names were never honored at runtime.
+
+
 class DatabaseConfig(BaseSettings):
     """Database configuration."""
 
     url: str = Field(
         default="postgresql://localhost/trading",  # Default PostgreSQL URL
-        env="DATABASE_URL",
         description="Database connection URL",
     )
-    pool_size: int = Field(default=10, env="DATABASE_POOL_SIZE", description="Database connection pool size")
+    pool_size: int = Field(default=10, description="Database connection pool size")
     max_overflow: int = Field(
-        default=20, env="DATABASE_MAX_OVERFLOW", description="Maximum database connection overflow"
+        default=20, description="Maximum database connection overflow"
     )
-    echo: bool = Field(default=False, env="DATABASE_ECHO", description="Enable SQLAlchemy query logging")
-    model_config = ConfigDict(env_prefix="DB_")
+    echo: bool = Field(default=False, description="Enable SQLAlchemy query logging")
+    model_config = SettingsConfigDict(env_prefix="DB_")
 
 
 class ServerConfig(BaseSettings):
     """Server configuration."""
 
-    host: str = Field(default="0.0.0.0", env="NOTIFICATION_HOST", description="Server host address")
-    port: int = Field(default=8080, env="NOTIFICATION_PORT", description="Server port")
-    workers: int = Field(default=4, env="NOTIFICATION_WORKERS", description="Number of worker processes")
-    reload: bool = Field(default=False, env="NOTIFICATION_RELOAD", description="Enable auto-reload for development")
-    log_level: str = Field(default="info", env="NOTIFICATION_LOG_LEVEL", description="Logging level")
-    model_config = ConfigDict(env_prefix="SERVER_")
+    host: str = Field(default="0.0.0.0", description="Server host address")
+    port: int = Field(default=8080, description="Server port")
+    workers: int = Field(default=4, description="Number of worker processes")
+    reload: bool = Field(default=False, description="Enable auto-reload for development")
+    log_level: str = Field(default="info", description="Logging level")
+    model_config = SettingsConfigDict(env_prefix="SERVER_")
 
 
 class ProcessingConfig(BaseSettings):
     """Message processing configuration."""
 
-    batch_size: int = Field(default=10, env="PROCESSING_BATCH_SIZE", description="Maximum messages per batch")
+    batch_size: int = Field(default=10, description="Maximum messages per batch")
     batch_timeout_seconds: int = Field(
-        default=30, env="PROCESSING_BATCH_TIMEOUT", description="Maximum time to wait for batch completion"
+        default=30, description="Maximum time to wait for batch completion"
     )
     max_workers: int = Field(
-        default=20, env="PROCESSING_MAX_WORKERS", description="Maximum number of concurrent workers"
+        default=20, description="Maximum number of concurrent workers"
     )
     cleanup_interval_hours: int = Field(
-        default=24, env="PROCESSING_CLEANUP_INTERVAL", description="Hours between cleanup operations"
+        default=24, description="Hours between cleanup operations"
     )
     retry_delay_minutes: int = Field(
-        default=5, env="PROCESSING_RETRY_DELAY", description="Minutes to wait before retrying failed messages"
+        default=5, description="Minutes to wait before retrying failed messages"
     )
-    max_retries: int = Field(default=3, env="PROCESSING_MAX_RETRIES", description="Maximum retry attempts per message")
-    model_config = ConfigDict(env_prefix="PROCESSING_")
+    max_retries: int = Field(default=3, description="Maximum retry attempts per message")
+    model_config = SettingsConfigDict(env_prefix="PROCESSING_")
 
 
 class RateLimitConfig(BaseSettings):
@@ -84,13 +89,12 @@ class RateLimitConfig(BaseSettings):
         },
         description="Default rate limits per channel",
     )
-    token_refill_rate: int = Field(default=60, env="RATE_LIMIT_REFILL_RATE", description="Tokens refilled per minute")
+    token_refill_rate: int = Field(default=60, description="Tokens refilled per minute")
     bypass_high_priority: bool = Field(
         default=True,
-        env="RATE_LIMIT_BYPASS_HIGH_PRIORITY",
         description="Allow high priority messages to bypass rate limits",
     )
-    model_config = ConfigDict(env_prefix="RATE_LIMIT_")
+    model_config = SettingsConfigDict(env_prefix="RATE_LIMIT_")
 
 
 class ChannelConfig(BaseSettings):
@@ -115,7 +119,7 @@ class ChannelConfig(BaseSettings):
         default_factory=lambda: {
             # SMTP configuration from environment variables
             "smtp_host": os.getenv("SMTP_SERVER", SMTP_SERVER),
-            "smtp_port": int(os.getenv("SMTP_PORT", SMTP_PORT)),
+            "smtp_port": int(os.getenv("SMTP_PORT", str(SMTP_PORT))),
             "smtp_username": os.getenv("SMTP_USER", SMTP_USER),
             "smtp_password": os.getenv("SMTP_PASSWORD", SMTP_PASSWORD),
             "from_email": os.getenv("SMTP_USER", SMTP_USER),
@@ -137,7 +141,7 @@ class ChannelConfig(BaseSettings):
         },
         description="SMS channel configuration",
     )
-    model_config = ConfigDict(env_prefix="CHANNEL_")
+    model_config = SettingsConfigDict(env_prefix="CHANNEL_")
 
 
 class NotificationServiceConfig(BaseSettings):
@@ -146,12 +150,11 @@ class NotificationServiceConfig(BaseSettings):
     # Service information
     service_name: str = Field(default="Notification Service", description="Service name")
     version: str = Field(default="1.0.0", description="Service version")
-    debug: bool = Field(default=False, env="DEBUG", description="Enable debug mode")
+    debug: bool = Field(default=False, description="Enable debug mode")
 
     # Channel ownership configuration
     enabled_channels: List[str] = Field(
         default_factory=lambda: ["email"],  # Telegram bot handles telegram
-        env="NOTIFICATION_ENABLED_CHANNELS",
         description="Channels enabled for this notification service instance (telegram handled by telegram bot)",
     )
 
@@ -164,15 +167,15 @@ class NotificationServiceConfig(BaseSettings):
 
     # Security
     api_key: Optional[str] = Field(
-        default=None, env="NOTIFICATION_API_KEY", description="API key for service authentication"
+        default=None, description="API key for service authentication"
     )
     allowed_origins: List[str] = Field(
-        default_factory=lambda: ["*"], env="NOTIFICATION_ALLOWED_ORIGINS", description="CORS allowed origins"
+        default_factory=lambda: ["*"], description="CORS allowed origins"
     )
 
     # Health check
     health_check_interval_seconds: int = Field(
-        default=60, env="HEALTH_CHECK_INTERVAL", description="Seconds between health checks"
+        default=60, description="Seconds between health checks"
     )
 
     @field_validator("database", mode="before")
@@ -215,7 +218,7 @@ class NotificationServiceConfig(BaseSettings):
             return ChannelConfig(**v)
         return v
 
-    model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=False)
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=False)
 
     def get_channel_config(self, channel_name: str) -> Optional[Dict[str, Any]]:
         """

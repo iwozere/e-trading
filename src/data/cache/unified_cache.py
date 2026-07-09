@@ -11,6 +11,7 @@ This module provides a simplified cache structure: symbol/timeframe/year/
 
 import gzip
 import json
+import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Any, Dict, List
@@ -443,6 +444,27 @@ class UnifiedCache:
                 return json.load(f)
         except Exception:
             return None
+
+    def clear_symbol_timeframe(self, symbol: str, timeframe: str, data_type: str = "ohlcv") -> None:
+        """Remove all cached data for a specific symbol/timeframe."""
+        cache_path = self._get_cache_path(symbol, timeframe, data_type)
+        if cache_path.exists():
+            shutil.rmtree(cache_path, ignore_errors=True)
+            _logger.info("Cleared cache for %s %s", symbol, timeframe)
+
+    def clear_symbol(self, symbol: str, data_type: str = "ohlcv") -> None:
+        """Remove all cached data for a symbol across all timeframes."""
+        symbol_path = self._get_type_dir(data_type) / symbol
+        if symbol_path.exists():
+            shutil.rmtree(symbol_path, ignore_errors=True)
+            _logger.info("Cleared cache for %s (all timeframes)", symbol)
+
+    def clear_all(self, data_type: str = "ohlcv") -> None:
+        """Remove all cached data of the given type."""
+        type_dir = self._get_type_dir(data_type)
+        if type_dir.exists():
+            shutil.rmtree(type_dir, ignore_errors=True)
+            _logger.info("Cleared all %s cache", data_type)
 
     def cleanup_old_data(self, max_age_days: int = 365) -> int:
         """Remove data older than specified days."""
