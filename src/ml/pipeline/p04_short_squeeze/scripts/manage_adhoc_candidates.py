@@ -77,6 +77,12 @@ class AdHocCandidateManager:
         self.adhoc_manager: AdHocManager | None = None
         self.config_manager: ConfigManager | None = None
 
+    def _require_manager(self) -> AdHocManager:
+        """Return the ad-hoc manager, failing fast if setup_managers() was not run."""
+        if self.adhoc_manager is None:
+            raise RuntimeError("setup_managers() must be called before using the CLI commands")
+        return self.adhoc_manager
+
     def setup_managers(self, config_path: str | None = None) -> bool:
         """
         Setup the ad-hoc manager and configuration.
@@ -130,7 +136,7 @@ class AdHocCandidateManager:
             if ttl_days:
                 print(f"TTL: {ttl_days} days")
 
-            success = self.adhoc_manager.add_candidate(ticker, reason, ttl_days)
+            success = self._require_manager().add_candidate(ticker, reason, ttl_days)
 
             if success:
                 print(f"✅ Successfully added ad-hoc candidate: {ticker}")
@@ -162,7 +168,7 @@ class AdHocCandidateManager:
 
             print(f"Removing ad-hoc candidate: {ticker}")
 
-            success = self.adhoc_manager.remove_candidate(ticker)
+            success = self._require_manager().remove_candidate(ticker)
 
             if success:
                 print(f"✅ Successfully removed ad-hoc candidate: {ticker}")
@@ -186,7 +192,7 @@ class AdHocCandidateManager:
             True if listing successful, False otherwise
         """
         try:
-            candidates = self.adhoc_manager.get_active_candidates()
+            candidates = self._require_manager().get_active_candidates()
 
             if not candidates:
                 print("No active ad-hoc candidates found.")
@@ -232,7 +238,7 @@ class AdHocCandidateManager:
         """
         try:
             ticker = ticker.upper().strip()
-            candidate = self.adhoc_manager.get_candidate(ticker)
+            candidate = self._require_manager().get_candidate(ticker)
 
             if not candidate:
                 print(f"❌ Ad-hoc candidate '{ticker}' not found")
@@ -277,7 +283,7 @@ class AdHocCandidateManager:
             ticker = ticker.upper().strip()
             print(f"Activating ad-hoc candidate: {ticker}")
 
-            success = self.adhoc_manager.activate_candidate(ticker)
+            success = self._require_manager().activate_candidate(ticker)
 
             if success:
                 print(f"✅ Successfully activated ad-hoc candidate: {ticker}")
@@ -304,7 +310,7 @@ class AdHocCandidateManager:
             ticker = ticker.upper().strip()
             print(f"Deactivating ad-hoc candidate: {ticker}")
 
-            success = self.adhoc_manager.deactivate_candidate(ticker)
+            success = self._require_manager().deactivate_candidate(ticker)
 
             if success:
                 print(f"✅ Successfully deactivated ad-hoc candidate: {ticker}")
@@ -327,7 +333,7 @@ class AdHocCandidateManager:
         try:
             print("Running ad-hoc candidate expiration process...")
 
-            expired_tickers = self.adhoc_manager.expire_candidates()
+            expired_tickers = self._require_manager().expire_candidates()
 
             if expired_tickers:
                 print(f"✅ Expired {len(expired_tickers)} candidates:")
@@ -362,7 +368,7 @@ class AdHocCandidateManager:
 
             print(f"Extending TTL for {ticker} by {additional_days} days...")
 
-            success = self.adhoc_manager.extend_ttl(ticker, additional_days)
+            success = self._require_manager().extend_ttl(ticker, additional_days)
 
             if success:
                 print(f"✅ Successfully extended TTL for {ticker}")
@@ -399,7 +405,7 @@ class AdHocCandidateManager:
 
                 # Validate required columns
                 required_columns = {"ticker", "reason"}
-                if not required_columns.issubset(reader.fieldnames):
+                if not reader.fieldnames or not required_columns.issubset(reader.fieldnames):
                     print(f"❌ CSV file must contain columns: {required_columns}")
                     print(f"Found columns: {reader.fieldnames}")
                     return False
@@ -413,7 +419,7 @@ class AdHocCandidateManager:
                         }
 
                         # Validate data
-                        is_valid, errors = self.adhoc_manager.validate_candidate_data(candidate_data)
+                        is_valid, errors = self._require_manager().validate_candidate_data(candidate_data)
                         if not is_valid:
                             print(f"⚠️ Row {row_num}: Validation errors: {errors}")
                             continue
@@ -431,7 +437,7 @@ class AdHocCandidateManager:
             print(f"Found {len(candidates_data)} valid candidates in CSV")
 
             # Perform bulk add
-            added_count, errors = self.adhoc_manager.bulk_add_candidates(candidates_data)
+            added_count, errors = self._require_manager().bulk_add_candidates(candidates_data)
 
             print("\n📊 Bulk Add Results:")
             print(f"✅ Successfully added: {added_count}")
@@ -458,7 +464,7 @@ class AdHocCandidateManager:
             True if statistics shown successfully, False otherwise
         """
         try:
-            stats = self.adhoc_manager.get_statistics()
+            stats = self._require_manager().get_statistics()
 
             print("\n📊 Ad-hoc Candidate Statistics")
             print("=" * 40)
@@ -472,8 +478,10 @@ class AdHocCandidateManager:
             # Show expiring candidates if any
             if stats["expiring_within_3_days"] > 0:
                 print("\n⚠️ Candidates Expiring Soon:")
-                expiring = self.adhoc_manager.get_expiring_candidates(3)
+                expiring = self._require_manager().get_expiring_candidates(3)
                 for candidate in expiring:
+                    if candidate.expires_at is None:
+                        continue
                     days_left = (candidate.expires_at - datetime.now()).days
                     print(f"  - {candidate.ticker}: {days_left} days left")
 

@@ -97,8 +97,8 @@ class MessageProcessor:
         self._worker_tasks: Set[asyncio.Task] = set()
         self._executor = ThreadPoolExecutor(max_workers=self.max_workers)
 
-        # Statistics
-        self._stats = {
+        # Statistics (mixed counters, timestamps, and nested reports)
+        self._stats: Dict[str, Any] = {
             "messages_processed": 0,
             "messages_delivered": 0,
             "messages_failed": 0,
@@ -540,7 +540,7 @@ class MessageProcessor:
             success, delivery_results, failed_message = await self.fallback_manager.attempt_delivery_with_fallback(
                 message_id=message.id,
                 channels=message.channels,
-                recipient=recipient,
+                recipient=recipient or "",
                 content=content,
                 priority=message.priority.value,
                 channel_instances=self._channel_instances,

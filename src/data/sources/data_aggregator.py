@@ -354,7 +354,7 @@ class DataAggregator:
         Returns:
             Dictionary with comparison results
         """
-        comparison = {
+        comparison: Dict[str, Any] = {
             "symbol": symbol,
             "interval": interval,
             "providers": providers,
@@ -415,7 +415,7 @@ class DataAggregator:
         Returns:
             Dictionary with consistency metrics
         """
-        metrics = {}
+        metrics: Dict[str, Any] = {}
 
         try:
             # Find common timestamps

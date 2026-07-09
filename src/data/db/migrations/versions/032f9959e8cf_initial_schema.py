@@ -856,12 +856,12 @@ def downgrade() -> None:
     op.create_index(
         op.f("idx_ss_snapshot_screener_score_desc"),
         "ss_snapshot",
-        [sa.literal_column("screener_score DESC"), sa.literal_column("run_date DESC")],
+        [sa.text("screener_score DESC"), sa.text("run_date DESC")],
         unique=False,
     )
     op.drop_index("idx_ss_snapshot_run_date_desc", table_name="ss_snapshot", postgresql_using="btree")
     op.create_index(
-        op.f("idx_ss_snapshot_run_date_desc"), "ss_snapshot", [sa.literal_column("run_date DESC")], unique=False
+        op.f("idx_ss_snapshot_run_date_desc"), "ss_snapshot", [sa.text("run_date DESC")], unique=False
     )
     op.alter_column(
         "ss_snapshot",
@@ -878,18 +878,18 @@ def downgrade() -> None:
     op.create_index(
         op.f("idx_ss_deep_metrics_squeeze_score_desc"),
         "ss_deep_metrics",
-        [sa.literal_column("squeeze_score DESC"), sa.literal_column("date DESC")],
+        [sa.text("squeeze_score DESC"), sa.text("date DESC")],
         unique=False,
     )
     op.drop_index("idx_ss_deep_metrics_date_desc", table_name="ss_deep_metrics", postgresql_using="btree")
     op.create_index(
-        op.f("idx_ss_deep_metrics_date_desc"), "ss_deep_metrics", [sa.literal_column("date DESC")], unique=False
+        op.f("idx_ss_deep_metrics_date_desc"), "ss_deep_metrics", [sa.text("date DESC")], unique=False
     )
     op.drop_index("idx_ss_deep_metrics_alert_level", table_name="ss_deep_metrics", postgresql_using="btree")
     op.create_index(
         op.f("idx_ss_deep_metrics_alert_level"),
         "ss_deep_metrics",
-        ["alert_level", sa.literal_column("date DESC")],
+        ["alert_level", sa.text("date DESC")],
         unique=False,
     )
     op.create_unique_constraint(
@@ -910,17 +910,17 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_ss_alerts_id"), table_name="ss_alerts")
     op.drop_index("idx_ss_alerts_timestamp_desc", table_name="ss_alerts", postgresql_using="btree")
     op.create_index(
-        op.f("idx_ss_alerts_timestamp_desc"), "ss_alerts", [sa.literal_column("timestamp DESC")], unique=False
+        op.f("idx_ss_alerts_timestamp_desc"), "ss_alerts", [sa.text("timestamp DESC")], unique=False
     )
     op.drop_index("idx_ss_alerts_sent_timestamp", table_name="ss_alerts", postgresql_using="btree")
     op.create_index(
-        op.f("idx_ss_alerts_sent_timestamp"), "ss_alerts", ["sent", sa.literal_column("timestamp DESC")], unique=False
+        op.f("idx_ss_alerts_sent_timestamp"), "ss_alerts", ["sent", sa.text("timestamp DESC")], unique=False
     )
     op.drop_index("idx_ss_alerts_alert_level_timestamp", table_name="ss_alerts", postgresql_using="btree")
     op.create_index(
         op.f("idx_ss_alerts_alert_level_timestamp"),
         "ss_alerts",
-        ["alert_level", sa.literal_column("timestamp DESC")],
+        ["alert_level", sa.text("timestamp DESC")],
         unique=False,
     )
     op.alter_column(
@@ -973,7 +973,7 @@ def downgrade() -> None:
     op.create_index(
         op.f("idx_system_health_unique"),
         "msg_system_health",
-        ["system", sa.literal_column("COALESCE(component, ''::character varying)")],
+        ["system", sa.text("COALESCE(component, ''::character varying)")],
         unique=True,
     )
     op.create_index(op.f("idx_system_health_system"), "msg_system_health", ["system"], unique=False)

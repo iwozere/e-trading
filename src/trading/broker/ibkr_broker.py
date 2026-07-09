@@ -77,7 +77,9 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
     - IBKR-specific margin calculation and requirements
     """
 
-    def __init__(self, host: str, port: int, client_id: int, cash: float = 10000.0, config: Dict[str, Any] | None = None):
+    def __init__(
+        self, host: str, port: int | None, client_id: int, cash: float = 10000.0, config: Dict[str, Any] | None = None
+    ):
         # Initialize configuration
         if config is None:
             config = {}
@@ -94,6 +96,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
         self.client_id = client_id
 
         # Set port based on trading mode if not explicitly provided
+        self.port: int
         if port is None:
             if self.trading_mode == TradingMode.PAPER:
                 self.port = 4002  # Default paper trading port (Gateway)
@@ -461,6 +464,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
         """Create IBKR order from our order format."""
         action = "BUY" if order.side == OrderSide.BUY else "SELL"
 
+        ibkr_order: IBOrder
         if order.order_type == OrderType.MARKET:
             ibkr_order = MarketOrder(action, order.quantity)
 
@@ -587,7 +591,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
 
                     # Get current market value
                     market_value = pos.position * pos.avgCost
-                    unrealized_pnl = pos.unrealizedPNL if hasattr(pos, "unrealizedPNL") else 0.0
+                    unrealized_pnl = getattr(pos, "unrealizedPNL", 0.0)
 
                     positions[symbol] = Position(
                         symbol=symbol,
@@ -669,7 +673,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                 }
             else:
                 # Return live account info
-                account_info = {
+                account_info: Dict[str, Any] = {
                     "account_type": "live",
                     "trading_mode": self.trading_mode.value,
                     "connection_info": {

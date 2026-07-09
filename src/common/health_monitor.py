@@ -241,7 +241,7 @@ class HealthMonitor:
                 # Get all system health records
                 health_records = SystemHealth.get_all_systems_status(uow.s)
 
-                summary = {
+                summary: Dict[str, Any] = {
                     "overall_status": "HEALTHY",
                     "timestamp": datetime.now(UTC).isoformat(),
                     "systems": {},

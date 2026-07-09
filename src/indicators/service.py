@@ -423,9 +423,9 @@ class BatchResult:
     """Result of a batch processing operation."""
 
     successful: Dict[str, IndicatorSet] = field(default_factory=dict)
-    failed: Dict[str, Exception] = field(default_factory=dict)
+    failed: Dict[str, BaseException] = field(default_factory=dict)
     partial: Dict[str, IndicatorSet] = field(default_factory=dict)
-    performance_metrics: PerformanceMetrics = None
+    performance_metrics: Optional[PerformanceMetrics] = None
     total_processed: int = 0
     success_rate: float = 0.0
 
@@ -455,7 +455,7 @@ class UnifiedIndicatorService:
             stacklevel=2,
         )
         # Initialize adapters with graceful handling of missing dependencies
-        self.adapters = {}
+        self.adapters: Dict[str, Any] = {}
 
         # Try to initialize ta-lib adapter
         try:
@@ -610,7 +610,7 @@ class UnifiedIndicatorService:
 
                     meta = INDICATOR_META[name]
                     if meta.kind == "tech":
-                        outmap = (
+                        outmap: Dict[str, str] = (
                             {"value": name} if meta.outputs == ["value"] else {o: f"{name}_{o}" for o in meta.outputs}
                         )
                         specs.append(IndicatorSpec(name=name, output=outmap if len(outmap) > 1 else outmap["value"]))
@@ -729,9 +729,12 @@ class UnifiedIndicatorService:
                         all_values.update({k: v.value for k, v in result_set.technical.items()})
                         all_values.update({k: v.value for k, v in result_set.fundamental.items()})
 
-                        recommendation = self.recommendation_engine.get_contextual_recommendation(
-                            name, indicator_value.value, all_values
-                        )
+                        if isinstance(indicator_value.value, dict):
+                            recommendation = None  # composite outputs have no single-value recommendation
+                        else:
+                            recommendation = self.recommendation_engine.get_recommendation(
+                                name, indicator_value.value, all_values
+                            )
 
                     indicator_result = IndicatorResult(
                         name=name,
@@ -749,7 +752,10 @@ class UnifiedIndicatorService:
                     # Get recommendation if requested
                     recommendation = None
                     if request.include_recommendations:
-                        recommendation = self.recommendation_engine.get_recommendation(name, indicator_value.value)
+                        if isinstance(indicator_value.value, dict):
+                            recommendation = None
+                        else:
+                            recommendation = self.recommendation_engine.get_recommendation(name, indicator_value.value)
 
                     indicator_result = IndicatorResult(
                         name=name,
@@ -828,7 +834,7 @@ class UnifiedIndicatorService:
                 for ticker, batch_result in zip(batch_tickers, batch_results):
                     result.total_processed += 1
 
-                    if isinstance(batch_result, Exception):
+                    if isinstance(batch_result, BaseException):
                         result.failed[ticker] = batch_result
                         _logger.error("Failed to process %s: %s", ticker, batch_result)
 
@@ -1064,7 +1070,7 @@ class UnifiedIndicatorService:
 
     async def health_check(self) -> Dict[str, Any]:
         """Perform comprehensive health check of the service."""
-        health_status = {
+        health_status: Dict[str, Any] = {
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
             "components": {},
