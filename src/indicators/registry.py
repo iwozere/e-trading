@@ -2,7 +2,7 @@
 # registry.py — catalog of indicators and provider priority
 # ---------------------------------------------------------------------------
 from dataclasses import dataclass
-from typing import Dict, List, Literal
+from typing import Any, Dict, List, Literal, Optional
 
 from src.indicators.constants import (
     DEFAULT_PARAMETERS,
@@ -20,9 +20,9 @@ class IndicatorMeta:
     inputs: List[str]  # tech: e.g. ["close"], fund: []
     outputs: List[str]  # canonical outputs (e.g. ["value"], or ["upper","middle","lower"])
     providers: List[str]  # priority order keys that match adapters dict
-    defaults: dict[str, object] = None  # canonical defaults (optional)
+    defaults: Optional[Dict[str, Any]] = None  # canonical defaults (optional)
     description: str = ""  # Human-readable description
-    legacy_names: List[str] = None  # Legacy indicator names for compatibility
+    legacy_names: Optional[List[str]] = None  # Legacy indicator names for compatibility
 
 
 # Build indicator metadata dynamically from constants

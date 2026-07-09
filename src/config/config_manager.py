@@ -14,7 +14,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Any, Dict, List
+from typing import Any, Dict, List, Optional, Union
 
 import yaml
 from watchdog.events import FileSystemEventHandler
@@ -67,7 +67,7 @@ class ConfigManager:
             environment: Environment to load (dev/staging/prod)
         """
         self.config_dir = Path(config_dir)
-        self.environment = environment or os.getenv("TRADING_ENV", "development")
+        self.environment: str = environment or os.getenv("TRADING_ENV", "development") or "development"
 
         # Initialize components
         self.registry = ConfigRegistry()
@@ -128,6 +128,7 @@ class ConfigManager:
             # Determine config type and validate
             config_type = self._detect_config_type(config)
 
+            validated_config: Union[TradingConfig, OptimizerConfig, DataConfig, ConfigSchema]
             if config_type == "trading":
                 validated_config = TradingConfig(**config)
             elif config_type == "optimizer":

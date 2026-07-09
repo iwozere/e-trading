@@ -344,7 +344,7 @@ class VolumeDetectorRunner:
 
             config = (
                 self.config_manager.get_volume_detector_config()
-                if hasattr(self.config_manager, "get_volume_detector_config")
+                if self.config_manager is not None and hasattr(self.config_manager, "get_volume_detector_config")
                 else None
             )
 
@@ -371,7 +371,7 @@ class VolumeDetectorRunner:
             results = volume_detector.screen_universe(universe, min_score)
 
             # Update progress tracker if enabled
-            if enable_progress:
+            if enable_progress and self.progress_tracker is not None:
                 for candidate, indicators in results:
                     self.progress_tracker.update(success=True, is_candidate=True)
                 # Update for any remaining tickers that weren't candidates
@@ -384,7 +384,7 @@ class VolumeDetectorRunner:
 
             # Calculate runtime metrics
             end_time = datetime.now()
-            duration = (end_time - self.start_time).total_seconds()
+            duration = (end_time - self.start_time).total_seconds() if self.start_time else 0.0
             stocks_per_sec = len(universe) / duration if duration > 0 else 0
 
             # Store results in database if not dry run

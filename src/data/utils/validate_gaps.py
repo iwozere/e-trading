@@ -86,7 +86,7 @@ def validate_cached_data(symbols: List[str], intervals: List[str], cache_dir: st
                 print(f"  📅 Found data for years: {sorted(available_years)}")
 
                 # Validate each year's data file individually
-                yearly_results: Dict[str, Any] = {}
+                yearly_results: Dict[int, Any] = {}
                 all_data_valid = True
                 total_rows = 0
                 all_gaps = []

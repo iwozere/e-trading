@@ -60,7 +60,7 @@ class PipelineRunner:
         self.interactive = interactive
 
         # Pipeline stages with their respective modules
-        self.stages = {
+        self.stages: Dict[int, Dict[str, Any]] = {
             1: {
                 "name": "Data Loading",
                 "module": "x_01_data_loader",
@@ -124,6 +124,8 @@ class PipelineRunner:
             raise FileNotFoundError(f"Module not found: {module_path}")
 
         spec = importlib.util.spec_from_file_location(module_name, module_path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Cannot load module spec for {module_path}")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 

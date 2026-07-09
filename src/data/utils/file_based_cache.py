@@ -247,12 +247,12 @@ class CacheMetadata:
     provider_last_update: str | None = None
 
     # Schema info
-    columns: List[str] = None
+    columns: Optional[List[str]] = None
     compression_enabled: bool = False
 
     # Timestamps
-    created_at: str = None
-    last_modified: str = None
+    created_at: Optional[str] = None
+    last_modified: Optional[str] = None
 
     def __post_init__(self):
         if self.created_at is None:
@@ -1225,7 +1225,7 @@ class FileBasedCache:
                                 continue
                         else:
                             # Overwrite mode or new file
-                            if self.compression_enabled:
+                            if self.compression_enabled and self.compressor is not None:
                                 # Use compression
                                 success = self.compressor.save_compressed_csv(year_df, data_path, "gzip")
                                 if success:

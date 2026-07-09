@@ -78,7 +78,7 @@ PARAMETER_ALIASES = {
 }
 
 # Default parameter values
-DEFAULT_PARAMETERS = {
+DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     "rsi": {"timeperiod": 14},
     "macd": {"fastperiod": 12, "slowperiod": 26, "signalperiod": 9},
     "bbands": {"timeperiod": 20, "nbdevup": 2, "nbdevdn": 2},

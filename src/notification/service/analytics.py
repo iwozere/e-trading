@@ -477,7 +477,7 @@ class NotificationAnalytics:
             with db_service.uow() as r:
                 channels = self._get_active_channels(r.notifications, cutoff_date)
 
-            channel_comparisons = {}
+            channel_comparisons: Dict[str, Dict[str, Any]] = {}
 
             # Process each channel
             for channel in channels:

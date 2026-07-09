@@ -311,6 +311,9 @@ class MessageQueue:
 
                     # Refresh message to get updated retry count
                     updated_message = r.notifications.messages.get_message(message.id)
+                    if updated_message is None:
+                        self._logger.warning("Message %s disappeared during retry dequeue", message.id)
+                        continue
                     queued_message = QueuedMessage.from_db_message(updated_message)
                     queued_messages.append(queued_message)
 

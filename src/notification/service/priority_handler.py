@@ -240,7 +240,7 @@ class PriorityMessageHandler:
                     queue_item = heapq.heappop(self._priority_queue)
 
                     # Check for SLA violation
-                    if queue_item.is_sla_violated:
+                    if queue_item.is_sla_violated and queue_item.sla_deadline is not None:
                         self._stats.sla_violations += 1
                         self._logger.warning(
                             "SLA violation for message %s (priority: %s, overdue: %.1fs)",
@@ -380,7 +380,7 @@ class PriorityMessageHandler:
 
         with self._lock:
             for item in self._priority_queue:
-                if item.is_sla_violated:
+                if item.is_sla_violated and item.sla_deadline is not None:
                     violations.append(
                         {
                             "message_id": item.message.id,
@@ -472,7 +472,7 @@ class PriorityMessageHandler:
                         earliest_deadline = item.sla_deadline
                         earliest_priority = item.message.priority
 
-            if earliest_deadline is not None:
+            if earliest_deadline is not None and earliest_priority is not None:
                 return datetime.fromtimestamp(earliest_deadline), earliest_priority
 
             return None
