@@ -100,3 +100,11 @@ module = [
     "src.ml.pipeline.p03_cnn_xgboost.tests.test_complete_pipeline",
 ]
 disable_error_code = ["import-not-found"]
+
+# Pyrefly (the VS Code extension some editors auto-enable) is not this
+# project's type checker — mypy (above) is authoritative. Pyrefly's pandas
+# stubs infer Series.items()/index labels as bare Hashable/float, producing
+# false positives that don't affect mypy or runtime. Silence diagnostics
+# entirely rather than maintaining a second, conflicting error surface.
+[tool.pyrefly]
+preset = "off"

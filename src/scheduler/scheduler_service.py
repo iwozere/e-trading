@@ -725,7 +725,7 @@ class SchedulerService:
     async def _execute_portfolio_job(
         self,
         schedule: ScheduleResponse,
-        run_record: ScheduleRunResponse,
+        _: ScheduleRunResponse,
     ) -> Dict[str, Any]:
         """
         Execute a portfolio.* job.
@@ -736,7 +736,8 @@ class SchedulerService:
 
         Args:
             schedule: Schedule object (with `target` and `task_params`).
-            run_record: ScheduleRun object (unused today, kept for parity).
+            _run_record: ScheduleRun object (unused today, kept for parity with
+                the uniform dispatch signature in `_execute_schedule`).
 
         Returns:
             Dictionary with execution results, stored as the run's result JSON.
@@ -759,14 +760,14 @@ class SchedulerService:
         raise ValueError(f"Unsupported portfolio target: {target!r}")
 
     async def _execute_screener_job(
-        self, schedule: ScheduleResponse, run_record: ScheduleRunResponse
+        self, schedule: ScheduleResponse, _: ScheduleRunResponse
     ) -> Dict[str, Any]:
         """
         Execute a screener job.
 
         Args:
             schedule: Schedule object
-            run_record: ScheduleRun object
+            _run_record: ScheduleRun object (unused, kept for uniform dispatch signature)
 
         Returns:
             Dictionary with execution results
@@ -777,13 +778,13 @@ class SchedulerService:
             "This job type will be supported in a future release."
         )
 
-    async def _execute_report_job(self, schedule: ScheduleResponse, run_record: ScheduleRunResponse) -> Dict[str, Any]:
+    async def _execute_report_job(self, schedule: ScheduleResponse, _: ScheduleRunResponse) -> Dict[str, Any]:
         """
         Execute a report job.
 
         Args:
             schedule: Schedule object
-            run_record: ScheduleRun object
+            _run_record: ScheduleRun object (unused, kept for uniform dispatch signature)
 
         Returns:
             Dictionary with execution results
@@ -795,7 +796,7 @@ class SchedulerService:
         )
 
     async def _execute_data_processing_job(
-        self, schedule: ScheduleResponse, run_record: ScheduleRunResponse
+        self, schedule: ScheduleResponse, _: ScheduleRunResponse
     ) -> Dict[str, Any]:
         """
         Execute data processing job via subprocess.
@@ -824,6 +825,20 @@ class SchedulerService:
             "src/screeners/",
             "src/strategy_pack/",
         ]
+
+        # Scripts whose argparse CLI declares a --user-id option. --user-id is only
+        # injected below for scripts listed here — other scripts (e.g. shared cache
+        # warmers like trf_downloader.py) don't accept it and would exit(2) with an
+        # argparse usage error if it were appended unconditionally.
+        _SCRIPTS_ACCEPTING_USER_ID = {
+            "src/ml/pipeline/p05_ai_selector/run_p05_scan.py",
+            "src/ml/pipeline/p06_emps2/run_emps2_scan.py",
+            "src/ml/pipeline/p10_emps3/run_emps3_scan.py",
+            "src/ml/pipeline/p17_penny_stocks/run_p17.py",
+            "src/ml/pipeline/p18_institutional_flow_tracker/run_p18_scan.py",
+            "src/ml/pipeline/p19_penny_intraday/run_p19.py",
+            "src/strategy_pack/run.py",
+        }
 
         # 1. Path traversal protection — script must resolve inside PROJECT_ROOT.
         resolved_root = Path(PROJECT_ROOT).resolve()
@@ -865,9 +880,10 @@ class SchedulerService:
 
             cmd = [python_executable, str(script_full_path)] + script_args
 
-            # Automatically inject user_id if present in the schedule
-            # This ensures scripts like EMPS2 pipeline receive the user context
-            if schedule.user_id:
+            # Automatically inject user_id if present in the schedule and the
+            # script's CLI actually accepts --user-id (see _SCRIPTS_ACCEPTING_USER_ID).
+            # This ensures scripts like EMPS2 pipeline receive the user context.
+            if schedule.user_id and script_rel in _SCRIPTS_ACCEPTING_USER_ID:
                 cmd.extend(["--user-id", str(schedule.user_id)])
 
             _logger.debug("Running command: %s", " ".join(cmd))
@@ -1103,7 +1119,7 @@ class SchedulerService:
                 # of NOTIFY events collapses into a single reload (cancel-and-reschedule).
                 loop = asyncio.get_running_loop()
 
-                def _on_scheduler_notify(*_args):
+                def _on_scheduler_notify(*_):
                     """Named NOTIFY callback: schedule a debounced reload on the event loop."""
                     loop.call_soon_threadsafe(loop.create_task, self._schedule_debounced_reload())
 
@@ -1376,7 +1392,7 @@ class SchedulerService:
                     volatility_ind[name] = value
                 else:
                     other_ind[name] = value
-            for _category, ind_dict in [
+            for _, ind_dict in [
                 ("Trend", trend_ind),
                 ("Momentum", momentum_ind),
                 ("Volatility", volatility_ind),

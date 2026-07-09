@@ -92,10 +92,19 @@ class UsersRepo:
         return [r for r in rows if r.get("verified") is True and r.get("approved") is not True]
 
     def get_admin_telegram_user_ids(self) -> List[str]:
+        """
+        Telegram chat IDs for users with the admin role (usr_users.role == 'admin').
+
+        Note: admins with no linked Telegram identity (e.g. local-only admin accounts)
+        cannot appear here since there's no chat ID to deliver to — they need a
+        different channel (email) to receive admin notifications.
+        """
         rows = self.s.execute(
-            select(AuthIdentity.external_id, AuthIdentity.identity_metadata).where(AuthIdentity.provider == PROVIDER_TG)
+            select(AuthIdentity.external_id)
+            .join(User, AuthIdentity.user_id == User.id)
+            .where(AuthIdentity.provider == PROVIDER_TG, User.role == "admin")
         ).all()
-        return [ext for ext, meta in rows if ext and (meta or {}).get("is_admin") is True]
+        return [ext for (ext,) in rows if ext]
 
     def get_user_by_id(self, user_id: int) -> User | None:
         """Get user by ID."""

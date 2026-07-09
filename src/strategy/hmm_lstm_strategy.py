@@ -17,7 +17,7 @@ import pickle
 import sys
 from collections import deque
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 
 import numpy as np
 import talib
