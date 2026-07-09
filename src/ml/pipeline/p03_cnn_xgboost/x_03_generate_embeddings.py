@@ -374,6 +374,9 @@ class EmbeddingGenerator:
 
         embeddings_list = []
 
+        if self.model is None:
+            raise RuntimeError("Model must be loaded before generating embeddings")
+
         with torch.no_grad():
             for (batch_sequences,) in dataloader:
                 # Forward pass

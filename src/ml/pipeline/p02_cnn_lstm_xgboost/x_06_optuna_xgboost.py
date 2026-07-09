@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import joblib
 import optuna
 import xgboost as xgb
 import yaml
@@ -159,7 +160,7 @@ class XGBoostOptimizer:
 
         # Save study results
         study_path = self.studies_dir / f"{study_name}.pkl"
-        study.export_data(study_path)
+        joblib.dump(study, study_path)
 
         # Save best parameters
         best_params_path = self.configs_dir / "best_xgboost_params.json"

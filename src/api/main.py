@@ -90,7 +90,7 @@ try:
     TRADING_SYSTEM_AVAILABLE = True
 except ImportError as e:
     _logger.warning("Trading system not available: %s", e)
-    StrategyManager = None
+    StrategyManager = None  # type: ignore[assignment,misc]
     TRADING_SYSTEM_AVAILABLE = False
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded

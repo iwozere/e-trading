@@ -104,7 +104,9 @@ def add_bollinger_band_width(df: pd.DataFrame, period: int) -> pd.DataFrame:
     Returns:
         pd.DataFrame: The DataFrame with a 'boll_width' column added.
     """
-    upper, middle, lower = talib.BBANDS(df["close"], timeperiod=period, nbdevup=2, nbdevdn=2, matype=0)
+    upper, middle, lower = talib.BBANDS(
+        df["close"], timeperiod=period, nbdevup=2, nbdevdn=2, matype=talib.MA_Type.SMA
+    )
     df["boll_width"] = upper - lower
     return df
 

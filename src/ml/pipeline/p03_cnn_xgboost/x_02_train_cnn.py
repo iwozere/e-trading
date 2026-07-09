@@ -228,7 +228,7 @@ class CNNTrainer:
             raise ValueError(f"No valid training data found in {data_file.name}")
 
         # Optimize hyperparameters if enabled
-        best_params = None
+        best_params: Dict[str, Any] = {}
         if self.cnn_config.get("optimize_hyperparameters", True):
             best_params = self._optimize_hyperparameters(X_train, y_train, model_id)
             self.cnn_config.update(best_params)

@@ -388,6 +388,7 @@ class EmailChannel(NotificationChannel):
                     continue
 
                 # Determine MIME type and create attachment
+                attachment: MIMEBase
                 if filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
                     attachment = MIMEImage(file_data)
                 elif filename.lower().endswith((".txt", ".log")):

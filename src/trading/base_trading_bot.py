@@ -55,7 +55,7 @@ def is_file_based_simulation_config(config: Dict[str, Any]) -> bool:
 
 def _sanitize_params(params: dict) -> dict:
     """Recursively redact values whose keys match known sensitive patterns."""
-    sanitized = {}
+    sanitized: Dict[str, Any] = {}
     for k, v in params.items():
         if any(s in k.lower() for s in _SENSITIVE_KEYS):
             sanitized[k] = "***REDACTED***"
@@ -215,6 +215,8 @@ class BaseTradingBot:
                 s = str(tg_raw).strip()
                 tg_id = int(s) if s.isdigit() else None
 
+            if self.notification_client is None:
+                return
             await self.notification_client.send_notification(
                 notification_type=notification_type,
                 title=title,
@@ -467,7 +469,10 @@ class BaseTradingBot:
                 continue
             try:
                 price = float(signal.get("price") or 0.0)
-                size = float(signal.get("size") if signal.get("size") is not None else signal.get("quantity") or 0.0)
+                raw_size = signal.get("size")
+                if raw_size is None:
+                    raw_size = signal.get("quantity") or 0.0
+                size = float(raw_size)
             except (TypeError, ValueError):
                 continue
             if side == "buy" and self.trading_pair not in self.active_positions:

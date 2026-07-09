@@ -15,7 +15,7 @@ Requirements addressed:
 import asyncio
 import gzip
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
@@ -82,11 +82,7 @@ class ArchivalStats:
     bytes_archived: int = 0
     bytes_freed: int = 0
     duration_seconds: float = 0.0
-    errors: List[str] = None
-
-    def __post_init__(self):
-        if self.errors is None:
-            self.errors = []
+    errors: List[str] = field(default_factory=list)
 
 
 class MessageArchivalService:

@@ -352,7 +352,7 @@ class XGBoostTrainer:
         final_model.fit(X_train, y_train)
 
         # Save checkpoint after training
-        final_iteration = final_model.n_estimators if hasattr(final_model, "n_estimators") else 100
+        final_iteration = getattr(final_model, "n_estimators", None) or 100
         self.save_checkpoint(final_model, target, final_iteration, train_metrics, val_metrics)
 
         # Final evaluation

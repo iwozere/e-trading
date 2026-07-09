@@ -205,7 +205,7 @@ class RateLimiter:
                         tokens=float(rate_limit.tokens),
                         max_tokens=rate_limit.max_tokens,
                         refill_rate=refill_rate_per_second,
-                        last_refill=rate_limit.last_refill.timestamp(),
+                        last_refill=rate_limit.last_refill.timestamp() if rate_limit.last_refill else time.time(),
                         config=config,
                     )
 

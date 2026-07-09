@@ -407,7 +407,7 @@ class PipelineRunner:
 
             return result
 
-    def run_stages(self, stage_numbers: List[int]) -> Dict[str, Any]:
+    def run_stages(self, stage_numbers: List[int]) -> Dict[int, Dict[str, Any]]:
         """Run multiple pipeline stages."""
         _logger.info("Running stages: %s", stage_numbers)
 
@@ -428,7 +428,7 @@ class PipelineRunner:
 
         return results
 
-    def run(self, start_stage: int = 1, end_stage: int = 8, skip_stages: Optional[List[int]] = None) -> Dict[int, Dict[str, Any]]:
+    def run(self, start_stage: int = 1, end_stage: int = 8, skip_stages: Optional[List[int]] = None) -> Dict[str, Any]:
         """
         Run the complete pipeline or a subset of stages.
 

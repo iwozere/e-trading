@@ -201,7 +201,7 @@ class LSTMTrainer:
         lstm_pattern = f"lstm_params_{symbol}_{timeframe}_*.json"
         lstm_files = list(self.results_dir.glob(lstm_pattern))
 
-        lstm_params = None
+        lstm_params: Dict[str, Any]
         if lstm_files:
             lstm_file = sorted(lstm_files)[-1]
             with open(lstm_file) as f:
@@ -678,7 +678,7 @@ class LSTMTrainer:
         model_package = {
             "model_state_dict": model.state_dict(),
             "model_architecture": {
-                "input_size": model.lstm.input_size,
+                "input_size": model.lstm.input_size,  # type: ignore[union-attr]  # nn.LSTM attribute
                 "hidden_size": model.hidden_size,
                 "num_layers": model.num_layers,
                 "n_regimes": model.n_regimes,

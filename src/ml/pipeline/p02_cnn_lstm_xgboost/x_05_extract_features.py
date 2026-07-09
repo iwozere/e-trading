@@ -85,7 +85,7 @@ class FeatureExtractor:
         _logger.info("Using device: %s", device)
         return device
 
-    def _load_data(self) -> Dict[str, np.ndarray]:
+    def _load_data(self) -> Dict[str, Any]:
         """Load processed data from labeled data directory."""
         _logger.info("Loading processed data...")
 

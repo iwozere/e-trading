@@ -134,9 +134,11 @@ def _filter_symbols_by_staleness(
         return symbols
 
     if stale_min_days is not None:
-        threshold_days = stale_min_days
-    else:
+        threshold_days = float(stale_min_days)
+    elif stale_fraction is not None:
         threshold_days = ttl_days * float(stale_fraction)
+    else:  # unreachable: both-None case returned above
+        return symbols
 
     combiner = get_fundamentals_combiner()
     cache = get_fundamentals_cache(cache_dir, combiner)

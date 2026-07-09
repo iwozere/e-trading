@@ -251,7 +251,7 @@ async def refresh_token(request: Request, refresh_data: RefreshTokenRequest):
 
         # Log token refresh
         webui_app_service.log_user_action(
-            user_id=user["id"],
+            user_id=int(user["id"] or 0),
             action="token_refresh",
             ip_address=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),

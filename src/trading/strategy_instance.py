@@ -206,7 +206,7 @@ class StrategyInstance:
 
     def get_status(self) -> Dict[str, Any]:
         """Get strategy instance status summary."""
-        uptime = 0
+        uptime = 0.0
         if self.start_time:
             uptime = (datetime.now(UTC) - self.start_time).total_seconds()
 

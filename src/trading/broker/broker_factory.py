@@ -175,13 +175,13 @@ def validate_broker_config(config: Dict[str, Any]) -> Dict[str, Any]:
 
     # Validate broker type
     supported_types = ["binance", "ibkr", "mock", "file_broker"]
-    broker_type = normalized_config.get("type", "").lower()
+    broker_type = str(normalized_config.get("type", "")).lower()
     if broker_type not in supported_types:
         raise BrokerConfigurationError(f"Unsupported broker type: {broker_type}. Supported: {supported_types}")
 
     # Validate trading mode
     supported_modes = ["paper", "live"]
-    trading_mode = normalized_config.get("trading_mode", "").lower()
+    trading_mode = str(normalized_config.get("trading_mode", "")).lower()
     if trading_mode not in supported_modes:
         raise BrokerConfigurationError(f"Unsupported trading mode: {trading_mode}. Supported: {supported_modes}")
 

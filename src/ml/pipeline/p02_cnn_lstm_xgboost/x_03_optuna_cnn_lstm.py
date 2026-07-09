@@ -19,7 +19,7 @@ import sys
 import warnings
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -213,7 +213,7 @@ class CNNLSTMOptimizer:
         _logger.info("Using device: %s", device)
         return device
 
-    def _load_data(self) -> Dict[str, np.ndarray]:
+    def _load_data(self) -> Dict[str, Any]:
         """Load processed data from labeled data directory."""
         _logger.info("Loading processed data...")
 
@@ -415,7 +415,7 @@ class CNNLSTMOptimizer:
             best_val_loss = min(val_losses)
 
             # Report intermediate values
-            trial.report(best_val_loss, epoch=len(val_losses))
+            trial.report(best_val_loss, step=len(val_losses))
 
             # Handle pruning based on the intermediate value
             if trial.should_prune():

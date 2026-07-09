@@ -264,7 +264,7 @@ class TelegramChannel(NotificationChannel):
                 _logger.debug("Processing attachment: filename=%s, type=%s", filename, type(attachment_data).__name__)
 
                 # Handle different attachment formats
-                actual_data = None
+                actual_data: Any = None
 
                 if isinstance(attachment_data, dict):
                     # Attachment stored as base64 in database

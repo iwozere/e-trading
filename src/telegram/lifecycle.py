@@ -7,7 +7,7 @@ every sub-module can reach the same live objects without circular imports.
 """
 
 import os
-from typing import Tuple
+from typing import Any, Tuple
 
 from src.indicators.service import IndicatorService
 from src.notification.logger import setup_logger
@@ -71,8 +71,8 @@ async def initialize_services() -> bool:
     Returns True when at least the TelegramService is available; False on
     critical failure.
     """
-    telegram_service_instance = None
-    indicator_service_instance = None
+    telegram_service_instance: Any = None
+    indicator_service_instance: Any = None
 
     try:
         _logger.info("Initialising service layer…")

@@ -253,7 +253,7 @@ class IndicatorOptimizer:
         """
         try:
             # Suggest indicator parameters - Start with just RSI and Bollinger Bands
-            params = {}
+            params: Dict[str, Any] = {}
 
             # RSI
             params["rsi_period"] = trial.suggest_int("rsi_period", 5, 50)

@@ -515,7 +515,10 @@ class AutomatedTrainingPipeline:
         )
 
         self.model_deployer = ModelDeployer(config.get("deployment", {}))
-        self.trainer = ModelTrainer(config.get("training"), self.mlflow_manager)
+        training_config = config.get("training")
+        if training_config is None:
+            raise ValueError("config['training'] (TrainingConfig) is required")
+        self.trainer = ModelTrainer(training_config, self.mlflow_manager)
         self.performance_monitor = PerformanceMonitor(config.get("monitoring", {}))
         self.drift_detector = DriftDetector(config.get("drift_detection", {}))
         self.ab_testing = ABTestingFramework(config.get("ab_testing", {}))

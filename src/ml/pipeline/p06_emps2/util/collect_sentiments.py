@@ -31,7 +31,6 @@ from tqdm import tqdm
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.ml.pipeline.p06_emps2.config import SentimentFilterConfig
 from src.ml.pipeline.shared.sentiment_filter import SentimentFilter, SentimentFilterConfig
 from src.notification.logger import setup_logger
 

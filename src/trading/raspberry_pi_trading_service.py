@@ -23,7 +23,7 @@ Service Installation:
 """
 
 import argparse
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 import asyncio
 import json
 import os
@@ -55,7 +55,7 @@ class RaspberryPiTradingService:
     ):
         """Initialize the service."""
         self.config_file = config_file or "config/enhanced_trading/raspberry_pi_multi_strategy.json"
-        self.config = None
+        self.config: Dict[str, Any] = {}
         self.strategy_manager = StrategyManager()
         self.is_running = False
         self.start_time: Optional[datetime] = None
@@ -171,7 +171,7 @@ class RaspberryPiTradingService:
 
     def get_service_status(self) -> dict:
         """Get comprehensive service status."""
-        uptime = 0
+        uptime = 0.0
         if self.start_time:
             uptime = (datetime.now(UTC) - self.start_time).total_seconds()
 
