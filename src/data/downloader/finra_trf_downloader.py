@@ -427,11 +427,14 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Download FINRA TRF and volume data")
-    parser.add_argument("--date", default="2025-11-27", type=str, help="Date in YYYY-MM-DD format (default: yesterday)")
-    parser.add_argument("--output-dir", default="results/emps2/2025-11-27", type=str, help="Output directory path")
+    parser.add_argument("--date", default=None, type=str, help="Date in YYYY-MM-DD format (default: yesterday)")
     parser.add_argument(
-        "--output-filename", type=str, default="trf.csv", help="Output filename (default: finra_trf.csv)"
+        "--output-dir",
+        default=None,
+        type=str,
+        help="Output directory path (default: results/finra_trf/<date>)",
     )
+    parser.add_argument("--output-filename", type=str, default="trf.csv", help="Output filename (default: trf.csv)")
     parser.add_argument("--no-yfinance", action="store_true", help="Skip fetching yfinance volume data")
 
     args = parser.parse_args()

@@ -91,7 +91,7 @@ condition = ".parsed_level != \"UNKNOWN\" || match(string!(.message), r'(?i)(err
 [transforms.exclude_cloudflare]
 type = "filter"
 inputs = ["errors_only"]
-condition = "!(match(string!(.source_name), r'cloudflared') && match(string!(.message), r'no recent network activity|failed to accept QUIC stream|failed to serve tunnel connection|accept stream listener'))"
+condition = "!(match(string!(.source_name), r'cloudflared') && match(string!(.message), r'no recent network activity|failed to accept QUIC stream|failed to serve tunnel connection|accept stream listener|datagram manager encountered a failure'))"
 
 # IB Gateway log4j shutdown race — always fires when the container stops cleanly
 # "it may be disabled" is a partial log4j informational fragment that leaks through UNKNOWN filter
