@@ -340,7 +340,7 @@ class ViralityCalculator:
         author_diversity = len(unique_authors) / len(posts)
 
         # Calculate potential reach based on follower counts
-        total_potential_reach = 0
+        total_potential_reach = 0.0
         for post in posts:
             # Estimate reach based on engagement and follower count
             follower_reach = post.author.followers_count * 0.1  # Assume 10% reach rate
@@ -610,8 +610,8 @@ class ViralityCalculator:
                 for post in posts:
                     topic_clean = topic[1:]  # Remove # or @ prefix
 
-                    if (topic.startswith("#") and topic_clean in post.hashtags) or (
-                        topic.startswith("@") and topic_clean in post.mentions
+                    if (topic.startswith("#") and topic_clean in (post.hashtags or [])) or (
+                        topic.startswith("@") and topic_clean in (post.mentions or [])
                     ):
                         if post.timestamp >= cutoff_time:
                             recent_mentions += 1

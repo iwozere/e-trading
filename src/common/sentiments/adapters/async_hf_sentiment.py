@@ -56,7 +56,7 @@ class AsyncHFSentiment(BaseSentimentAdapter):
         self.device = device  # -1 means CPU
         self.max_workers = max_workers
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
-        self._pipe = None
+        self._pipe: Any = None
         self._initialization_error: Optional[Exception] = None
 
         # Initialize pipeline in background to avoid blocking
@@ -69,12 +69,13 @@ class AsyncHFSentiment(BaseSentimentAdapter):
 
             # Run pipeline initialization in thread pool to avoid blocking
             loop = asyncio.get_event_loop()
-            self._pipe = await loop.run_in_executor(
-                self._executor,
-                lambda: pipeline(
-                    "sentiment-analysis", model=self.model_name, tokenizer=self.model_name, device=self.device
-                ),
-            )
+
+            def _build_pipe() -> Any:
+                # transformers' overloads mistype this call as returning None
+                kwargs: Dict[str, Any] = {"model": self.model_name, "tokenizer": self.model_name, "device": self.device}
+                return pipeline("sentiment-analysis", **kwargs)  # type: ignore[func-returns-value]
+
+            self._pipe = await loop.run_in_executor(self._executor, _build_pipe)
 
             _logger.info("HF pipeline loaded successfully")
             self._update_health_success(0.0)  # Mark as healthy after successful initialization

@@ -308,7 +308,7 @@ class PerformanceProfiler:
         Returns:
             List of bottlenecks sorted by average time
         """
-        bottlenecks = []
+        bottlenecks: List[Dict[str, Any]] = []
 
         with self._lock:
             for name, metrics in self._metrics.items():

@@ -16,7 +16,7 @@ import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 
@@ -71,7 +71,7 @@ class AsyncStocktwitsAdapter(BaseSentimentAdapter):
             }
             self._session = aiohttp.ClientSession(headers=headers)
 
-        last_exception = None
+        last_exception: Optional[Exception] = None
 
         for attempt in range(self.max_retries + 1):
             async with self.semaphore:

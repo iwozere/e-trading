@@ -440,7 +440,7 @@ class SentimentAggregator:
         self, sources: List[SourceSentiment], weights: Dict[str, float]
     ) -> Dict[str, Dict[str, float]]:
         """Create detailed breakdown of source contributions."""
-        breakdown = {}
+        breakdown: Dict[str, Dict[str, Any]] = {}
 
         for source in sources:
             breakdown[source.source_name] = {

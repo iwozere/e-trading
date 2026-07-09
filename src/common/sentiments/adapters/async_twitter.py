@@ -20,7 +20,7 @@ import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 
@@ -56,6 +56,9 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
         self._provided_session = session is not None
         self._session = session
         self.max_retries = max_retries
+        # 429-backoff state, read via getattr before first rate limiting
+        self._in_backoff = False
+        self._backoff_until = 0.0
         self._consecutive_failures = 0
         self._analyzer = HeuristicSentimentAnalyzer()
 
@@ -118,7 +121,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
         if not self._session:
             self._session = aiohttp.ClientSession()
 
-        last_exception = None
+        last_exception: Optional[Exception] = None
 
         for attempt in range(self.max_retries + 1):
             # Check rate limits before making request

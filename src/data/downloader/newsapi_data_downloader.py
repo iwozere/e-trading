@@ -74,7 +74,7 @@ class NewsAPIDataDownloader(BaseDataDownloader):
 
         try:
             url = f"{self.base_url}/everything"
-            params = {
+            params: Dict[str, Any] = {
                 "q": query,
                 "language": language,
                 "sortBy": sort_by,

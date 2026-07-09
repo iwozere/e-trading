@@ -19,7 +19,7 @@ import sys
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 
@@ -124,7 +124,7 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
         if not self._session:
             self._session = aiohttp.ClientSession()
 
-        last_exception = None
+        last_exception: Optional[Exception] = None
 
         for attempt in range(self.max_retries + 1):
             # Check rate limits before making request
