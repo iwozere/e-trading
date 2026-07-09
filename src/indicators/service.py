@@ -335,7 +335,7 @@ class BenchmarkRunner:
 
     async def benchmark_single_ticker(self, ticker: str, indicators: List[str], iterations: int = 10) -> Dict[str, Any]:
         """Benchmark single ticker calculation."""
-        results = {
+        results: Dict[str, Any] = {
             "ticker": ticker,
             "indicators": indicators,
             "iterations": iterations,
@@ -376,7 +376,7 @@ class BenchmarkRunner:
         if batch_sizes is None:
             batch_sizes = [1, 5, 10, 20]
 
-        results = {"tickers": tickers, "indicators": indicators, "batch_results": {}}
+        results: Dict[str, Any] = {"tickers": tickers, "indicators": indicators, "batch_results": {}}
 
         for batch_size in batch_sizes:
             try:
@@ -961,7 +961,7 @@ class UnifiedIndicatorService:
             batch_result = await self.get_batch_indicators_enhanced(request)
 
             # Convert to legacy format
-            results = {}
+            results: Dict[str, Any] = {}
             results.update(batch_result.successful)
 
             # Include partial results if available

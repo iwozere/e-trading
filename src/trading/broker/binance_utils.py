@@ -432,7 +432,7 @@ def create_binance_config_template(trading_mode: str = "paper") -> Dict[str, Any
     Returns:
         Binance configuration template
     """
-    base_config = {
+    base_config: Dict[str, Any] = {
         "type": "binance",
         "trading_mode": trading_mode,
         "name": f"binance_{trading_mode}_broker",

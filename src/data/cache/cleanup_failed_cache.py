@@ -82,7 +82,7 @@ def scan_cache_directory(cache_dir: str) -> Dict[str, Any]:
     if not cache_path.exists():
         return {"error": f"Cache directory does not exist: {cache_dir}"}
 
-    results = {
+    results: Dict[str, Any] = {
         "total_files": 0,
         "valid_files": 0,
         "invalid_files": 0,

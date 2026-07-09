@@ -137,7 +137,7 @@ class TAFeatureEngineer:
         """
         _logger.info("Processing %d labeled data files", len(labeled_files))
 
-        results = {"files_processed": 0, "total_features": 0, "failed_files": [], "file_results": []}
+        results: Dict[str, Any] = {"files_processed": 0, "total_features": 0, "failed_files": [], "file_results": []}
 
         for file_path in labeled_files:
             try:

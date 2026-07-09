@@ -144,7 +144,7 @@ class DataLoader:
         symbols = provider_config["symbols"]
         timeframes = provider_config["timeframes"]
 
-        results = {"total": len(symbols) * len(timeframes), "successful": [], "failed": [], "success": True}
+        results: Dict[str, Any] = {"total": len(symbols) * len(timeframes), "successful": [], "failed": [], "success": True}
 
         # Create download tasks
         tasks = []

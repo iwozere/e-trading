@@ -45,7 +45,7 @@ CHART_COLORS = {
 }
 
 # Chart configuration
-CHART_CONFIG = {
+CHART_CONFIG: Dict[str, Any] = {
     "figure_size": (18, 14),
     "dpi": 150,
     "grid_alpha": 0.3,

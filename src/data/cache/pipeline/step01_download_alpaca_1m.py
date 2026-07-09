@@ -75,7 +75,7 @@ class AlpacaPipelineDownloader:
         self.ohlcv_dir = self.cache_dir / "ohlcv"
 
         # Pipeline statistics
-        self.stats = {
+        self.stats: Dict[str, Any] = {
             "total_tickers": 0,
             "successful_tickers": [],
             "failed_tickers": [],

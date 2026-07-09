@@ -49,7 +49,7 @@ class ConfigMigrator:
         self.new_config_dir.mkdir(parents=True, exist_ok=True)
 
         # Migration statistics
-        self.migration_stats = {"total_files": 0, "migrated_files": 0, "failed_files": 0, "errors": []}
+        self.migration_stats: Dict[str, Any] = {"total_files": 0, "migrated_files": 0, "failed_files": 0, "errors": []}
 
     def discover_old_configs(self) -> Dict[str, List[Path]]:
         """
@@ -313,7 +313,7 @@ class ConfigMigrator:
 
     def _generate_migration_report(self, env_dir: Path):
         """Generate migration report"""
-        report = {
+        report: Dict[str, Any] = {
             "migration_summary": {
                 "timestamp": datetime.now().isoformat(),
                 "old_config_dir": str(self.old_config_dir),

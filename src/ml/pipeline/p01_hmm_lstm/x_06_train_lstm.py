@@ -1011,7 +1011,7 @@ class LSTMTrainer:
 
         _logger.info("Training LSTM models for %d available combinations", len(available_combinations))
 
-        results = {"total": len(available_combinations), "successful": [], "failed": []}
+        results: Dict[str, Any] = {"total": len(available_combinations), "successful": [], "failed": []}
 
         for symbol, timeframe in available_combinations:
             result = self.train_lstm(symbol, timeframe)

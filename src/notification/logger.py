@@ -31,7 +31,7 @@ from contextvars import ContextVar
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 from multiprocessing import Manager, Queue
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -143,7 +143,7 @@ def print_log(msg: str):
 # from src.notification.logger import setup_logger
 # _logger = setup_logger(__name__)
 ####################################################################
-LOG_CONFIG = {
+LOG_CONFIG: Dict[str, Any] = {
     "version": 1,
     "formatters": {
         "detailed": {

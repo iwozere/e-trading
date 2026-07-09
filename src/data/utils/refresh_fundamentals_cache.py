@@ -173,7 +173,7 @@ def refresh_symbol_fundamentals(
     dm: DataManager, symbol: str, data_types: List[str], force_refresh: bool = False
 ) -> Dict[str, Any]:
     """Refresh fundamentals for a specific symbol."""
-    results = {"symbol": symbol, "data_types": {}, "success": True, "errors": []}
+    results: Dict[str, Any] = {"symbol": symbol, "data_types": {}, "success": True, "errors": []}
 
     for data_type in data_types:
         try:
@@ -206,7 +206,7 @@ def refresh_symbol_fundamentals(
 
 def cleanup_expired_cache(cache_dir: str, data_types: List[str]) -> Dict[str, Any]:
     """Clean up expired cache data."""
-    cleanup_results = {"data_types": {}, "total_removed_files": 0, "total_removed_symbols": 0}
+    cleanup_results: Dict[str, Any] = {"data_types": {}, "total_removed_files": 0, "total_removed_symbols": 0}
 
     try:
         combiner = get_fundamentals_combiner()

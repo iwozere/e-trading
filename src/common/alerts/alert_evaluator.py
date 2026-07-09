@@ -1678,7 +1678,7 @@ class AlertEvaluator:
 
             _logger.info("Evaluating %d active alert(s) for user %s", len(active_jobs), user_id or "all")
 
-            results = {"total_evaluated": 0, "triggered": 0, "rearmed": 0, "errors": 0, "results": []}
+            results: Dict[str, Any] = {"total_evaluated": 0, "triggered": 0, "rearmed": 0, "errors": 0, "results": []}
 
             for job in active_jobs:
                 try:

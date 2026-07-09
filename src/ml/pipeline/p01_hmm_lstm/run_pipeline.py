@@ -31,7 +31,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import yaml
 
@@ -237,7 +237,7 @@ class PipelineRunner:
         skip_stages = skip_stages or []
         pipeline_start_time = time.time()
 
-        results = {
+        results: Dict[str, Any] = {
             "pipeline_start_time": datetime.now().isoformat(),
             "config": self.config,
             "stages_to_run": [s for s in self.stages.keys() if s not in skip_stages],

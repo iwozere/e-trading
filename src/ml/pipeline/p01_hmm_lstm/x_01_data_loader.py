@@ -14,6 +14,7 @@ Features:
 """
 
 import sys
+from typing import Any, Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
@@ -225,14 +226,14 @@ class DataLoader:
 
         _logger.info("Starting multi-provider data download")
 
-        results = {"total": 0, "successful": [], "failed": [], "overall_success": True, "providers": {}}
+        results: Dict[str, Any] = {"total": 0, "successful": [], "failed": [], "overall_success": True, "providers": {}}
 
         for provider, config in data_sources.items():
             _logger.info("Processing provider: %s", provider)
             symbols = config.get("symbols", [])
             timeframes = config.get("timeframes", [])
 
-            provider_results = {
+            provider_results: Dict[str, Any] = {
                 "total": len(symbols) * len(timeframes),
                 "successful": [],
                 "failed": [],
@@ -330,7 +331,7 @@ class DataLoader:
             len(tasks),
         )
 
-        results = {"successful": [], "failed": [], "total": len(tasks)}
+        results: Dict[str, Any] = {"successful": [], "failed": [], "total": len(tasks)}
 
         # Download in parallel
         with ThreadPoolExecutor(max_workers=max_workers) as executor:

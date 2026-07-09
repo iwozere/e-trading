@@ -483,7 +483,7 @@ def validate_cache_structure(cache_dir: str = DATA_CACHE_DIR) -> Dict[str, Any]:
     if not cache_path.exists():
         return {"error": f"Cache directory does not exist: {cache_dir}"}
 
-    results = {"directory_exists": True, "structure": {}, "files": {}, "total_size_mb": 0.0}
+    results: Dict[str, Any] = {"directory_exists": True, "structure": {}, "files": {}, "total_size_mb": 0.0}
 
     # Check directory structure
     for item in cache_path.iterdir():

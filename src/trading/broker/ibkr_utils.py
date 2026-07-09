@@ -541,7 +541,7 @@ def create_ibkr_config_template(trading_mode: str = "paper") -> Dict[str, Any]:
     Returns:
         IBKR configuration template
     """
-    base_config = {
+    base_config: Dict[str, Any] = {
         "type": "ibkr",
         "trading_mode": trading_mode,
         "name": f"ibkr_{trading_mode}_broker",

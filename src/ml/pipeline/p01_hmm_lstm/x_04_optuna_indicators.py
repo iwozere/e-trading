@@ -18,7 +18,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Any, Dict, Optional
 
 import numpy as np
 import optuna
@@ -403,7 +403,7 @@ class IndicatorOptimizer:
                 else:
                     return obj
 
-            results = {
+            results: Dict[str, Any] = {
                 "symbol": symbol,
                 "timeframe": timeframe,
                 "optimization_timestamp": timestamp,
@@ -475,7 +475,7 @@ class IndicatorOptimizer:
 
         _logger.info("Optimizing indicators for %d symbol-timeframe combinations", len(symbols))
 
-        results = {"total": len(symbols), "successful": [], "failed": []}
+        results: Dict[str, Any] = {"total": len(symbols), "successful": [], "failed": []}
 
         for i, (symbol, timeframe, provider) in enumerate(zip(symbols, timeframes, providers)):
             _logger.info("Processing %d/%d: %s %s (provider: %s)", i + 1, len(symbols), symbol, timeframe, provider)

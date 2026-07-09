@@ -245,7 +245,7 @@ class EmbeddingGenerator:
         """
         _logger.info("Generating embeddings for %d files", len(data_files))
 
-        results = {"files_processed": 0, "total_embeddings": 0, "failed_files": [], "file_results": []}
+        results: Dict[str, Any] = {"files_processed": 0, "total_embeddings": 0, "failed_files": [], "file_results": []}
 
         for file_path in data_files:
             try:

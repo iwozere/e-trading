@@ -26,7 +26,7 @@ import re  # Added for regex
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -1041,7 +1041,7 @@ class LSTMValidator:
 
             # Save results to JSON
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            results = {
+            results: Dict[str, Any] = {
                 "symbol": symbol,
                 "timeframe": timeframe,
                 "validation_timestamp": timestamp,
@@ -1125,7 +1125,7 @@ class LSTMValidator:
 
         _logger.info("Validating LSTM models for %d symbols x %d timeframes", len(symbols), len(timeframes))
 
-        results = {"total": len(symbols) * len(timeframes), "successful": [], "failed": []}
+        results: Dict[str, Any] = {"total": len(symbols) * len(timeframes), "successful": [], "failed": []}
 
         for symbol in symbols:
             for timeframe in timeframes:

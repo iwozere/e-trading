@@ -273,7 +273,7 @@ def fill_gaps_for_symbol_interval(
     Returns:
         Dictionary with gap filling results
     """
-    results = {"gaps_filled": 0, "gaps_failed": 0, "gaps_skipped": 0, "details": []}
+    results: Dict[str, Any] = {"gaps_filled": 0, "gaps_failed": 0, "gaps_skipped": 0, "details": []}
 
     symbol_interval_key = f"{symbol}_{interval}"
 
@@ -423,7 +423,7 @@ def fill_data_gaps(
     print(f"📊 Processing {len(all_combinations)} symbol/interval combinations")
     print()
 
-    results = {"total_processed": 0, "gaps_filled": 0, "gaps_failed": 0, "gaps_skipped": 0, "symbol_results": {}}
+    results: Dict[str, Any] = {"total_processed": 0, "gaps_filled": 0, "gaps_failed": 0, "gaps_skipped": 0, "symbol_results": {}}
 
     # Process each symbol/interval combination
     for combo in all_combinations:

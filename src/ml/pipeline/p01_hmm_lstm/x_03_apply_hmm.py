@@ -17,7 +17,7 @@ import pickle
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -659,7 +659,7 @@ class HMMApplicator:
 
         _logger.info("Applying HMM models for %d tasks across %d providers", total_tasks, len(data_sources))
 
-        results = {"total": total_tasks, "successful": [], "failed": []}
+        results: Dict[str, Any] = {"total": total_tasks, "successful": [], "failed": []}
 
         for symbol, timeframe, provider in all_tasks:
             result = self.apply_hmm_to_file_multi_provider(symbol, timeframe, provider)
@@ -684,7 +684,7 @@ class HMMApplicator:
         """
         _logger.info("Applying HMM models for %d symbols x %d timeframes", len(symbols), len(timeframes))
 
-        results = {"total": len(symbols) * len(timeframes), "successful": [], "failed": []}
+        results: Dict[str, Any] = {"total": len(symbols) * len(timeframes), "successful": [], "failed": []}
 
         for symbol in symbols:
             for timeframe in timeframes:

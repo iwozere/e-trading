@@ -799,7 +799,7 @@ class FileBasedCache:
         Returns:
             Dictionary with migration results
         """
-        migration_results = {"files_migrated": 0, "years_created": 0, "errors": 0, "details": []}
+        migration_results: Dict[str, Any] = {"files_migrated": 0, "years_created": 0, "errors": 0, "details": []}
 
         try:
             _logger.info("Starting cache data migration to year-split structure...")
@@ -1477,7 +1477,7 @@ class FileBasedCache:
         Returns:
             Dictionary with cache information
         """
-        info = {
+        info: Dict[str, Any] = {
             "provider": provider,
             "symbol": symbol,
             "interval": interval,

@@ -246,7 +246,7 @@ class MessageArchivalService:
         """
         try:
             # Create archive data structure
-            archive_data = {
+            archive_data: Dict[str, Any] = {
                 "id": message.id,
                 "message_type": message.message_type,
                 "priority": message.priority,
