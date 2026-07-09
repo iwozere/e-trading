@@ -14,7 +14,7 @@ import time
 import warnings
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import lightgbm as lgb
 import numpy as np
@@ -293,7 +293,7 @@ class DriftDetector:
 
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.reference_distribution = None
+        self.reference_distribution: Optional[Dict[str, Any]] = None
         self.drift_threshold = config.get("drift_threshold", 0.05)
 
     def set_reference_distribution(self, data: pd.DataFrame):
@@ -522,7 +522,7 @@ class AutomatedTrainingPipeline:
 
         # Training state
         self.is_training = False
-        self.last_training_time = None
+        self.last_training_time: Optional[datetime] = None
         self.training_scheduler = None
 
     def start_scheduled_training(self):

@@ -8,7 +8,7 @@ with API rate limits across different data providers.
 import logging
 import threading
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 _logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class RateLimiter:
         self._second_requests: list[Any] = []
         self._minute_requests: list[Any] = []
         self._consecutive_failures = 0
-        self._last_failure_time = None
+        self._last_failure_time: Optional[float] = None
 
         # Statistics
         self._total_requests = 0

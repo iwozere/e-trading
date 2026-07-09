@@ -19,7 +19,7 @@ Classes:
 
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import pandas as pd
 import requests
@@ -64,7 +64,7 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
         """
         self.base_url = "https://api.coingecko.com/api/v3"
         self.polling_interval = polling_interval
-        self.last_poll_time = None
+        self.last_poll_time: Optional[float] = None
         self.session = requests.Session()
 
         # Rate limiting: CoinGecko allows 50 calls per minute

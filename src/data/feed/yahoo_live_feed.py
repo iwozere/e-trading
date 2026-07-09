@@ -17,7 +17,7 @@ Classes:
 - YahooLiveDataFeed: Live data feed for Yahoo Finance
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import pandas as pd
 import yfinance as yf
@@ -50,7 +50,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
             **kwargs: Additional arguments passed to BaseLiveDataFeed
         """
         self.polling_interval = polling_interval
-        self.ticker = None
+        self.ticker: Optional[Any] = None
         self.last_poll_time = None
 
         # Convert interval to yfinance format

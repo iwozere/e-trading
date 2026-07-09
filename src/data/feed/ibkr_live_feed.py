@@ -16,7 +16,7 @@ Classes:
 - IBKRLiveDataFeed: Live data feed for Interactive Brokers
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import pandas as pd
 from ib_insync import *
@@ -60,7 +60,7 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
         self.ib = IB()
 
         # Contract and data subscription
-        self.contract = None
+        self.contract: Optional[Contract] = None
         self.data_subscription = None
 
         # Convert interval to IBKR format

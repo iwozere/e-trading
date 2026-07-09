@@ -47,6 +47,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import argparse
 import json
 import os
+from typing import Any
 
 import joblib
 import numpy as np
@@ -62,9 +63,9 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-# For optional import of pomegranate
-HiddenMarkovModel = None
-NormalDistribution = None
+# Placeholders for the optional pomegranate backend; rebound via `global` in main()
+HiddenMarkovModel: Any = None
+NormalDistribution: Any = None
 DEFAULT_FEATURES = ["log_return", "volatility"]
 
 # Parsed CLI arguments; assigned in main() and read by objective()

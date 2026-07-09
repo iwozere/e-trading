@@ -20,7 +20,7 @@ import threading
 import time
 from abc import abstractmethod
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 import backtrader as bt
 import pandas as pd
@@ -91,7 +91,7 @@ class BaseLiveDataFeed(bt.feed.DataBase):
             self.data_manager = data_manager
 
         # Data storage is now handled by the PandasData composition pattern
-        self.last_update = None
+        self.last_update: Optional[datetime] = None
         self.is_connected = False
         self.should_stop = False
 

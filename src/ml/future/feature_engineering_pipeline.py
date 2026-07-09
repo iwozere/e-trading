@@ -486,7 +486,7 @@ class FeatureSelector:
         self.config = config or {}
         self.selected_features: list[Any] = []
         self.feature_importance: dict[Any, Any] = {}
-        self.correlation_matrix = None
+        self.correlation_matrix: Optional[pd.DataFrame] = None
 
     def select_features(
         self, X: pd.DataFrame, y: pd.Series, method: str = "mutual_info", n_features: int = 50, threshold: float = 0.01

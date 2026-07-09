@@ -8,7 +8,7 @@ must implement, providing consistency and reducing code duplication.
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
 
@@ -57,9 +57,9 @@ class BaseDataSource(ABC):
 
         # Data source state
         self._is_connected = False
-        self._last_error = None
+        self._last_error: Optional[Exception] = None
         self._error_count = 0
-        self._last_successful_fetch = None
+        self._last_successful_fetch: Optional[datetime] = None
 
         _logger.info("Initialized %s data source", provider_name)
 

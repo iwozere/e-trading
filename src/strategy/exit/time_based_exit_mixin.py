@@ -5,7 +5,7 @@ This module implements an exit strategy based on time duration. The strategy exi
 after a specified number of bars or calendar days have elapsed since entry.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from src.notification.logger import setup_logger
 from src.strategy.exit.base_exit_mixin import BaseExitMixin
@@ -21,7 +21,7 @@ class TimeBasedExitMixin(BaseExitMixin):
     def __init__(self, params: Dict[str, Any] | None = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
-        self.entry_bar = None
+        self.entry_bar: Optional[int] = None
         self.entry_time = None
 
     def get_required_params(self) -> list:

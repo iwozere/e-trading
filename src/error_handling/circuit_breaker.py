@@ -16,7 +16,7 @@ Features:
 import time
 from functools import wraps
 from threading import Lock
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 from src.error_handling.exceptions import CircuitBreakerOpenException, NetworkException
 from src.model.error_handling import CircuitBreakerConfig, CircuitState
@@ -48,7 +48,7 @@ class CircuitBreaker:
 
         # State management
         self.state = CircuitState.CLOSED
-        self.last_failure_time = None
+        self.last_failure_time: Optional[float] = None
         self.last_state_change = time.time()
 
         # Failure tracking

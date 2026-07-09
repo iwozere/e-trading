@@ -13,7 +13,7 @@ It also supports dynamic volatility adaptation (ATR-of-ATR) where multipliers ad
 based on current volatility relative to its average.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from src.notification.logger import setup_logger
 from src.strategy.exit.base_exit_mixin import BaseExitMixin
@@ -31,7 +31,7 @@ class MultiLevelAtrExitMixin(BaseExitMixin):
         super().__init__(params)
         self.stop_price = -float("inf")
         self.highest_price = -float("inf")
-        self.entry_price = None
+        self.entry_price: Optional[float] = None
         self.be_activated = False
 
         # Ensure data feeds are always available (needed for should_exit logic)

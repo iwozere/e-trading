@@ -43,15 +43,15 @@ class StrategyInstance:
 
         # Core components
         self.broker = None
-        self.trading_bot = None
-        self.data_feed = None
-        self.cerebro = None
+        self.trading_bot: Optional[BaseTradingBot] = None
+        self.data_feed: Optional[Any] = None
+        self.cerebro: Optional[Any] = None
 
         # Status tracking
         self.status = "stopped"
-        self.start_time = None
+        self.start_time: Optional[datetime] = None
         self.error_count = 0
-        self.last_error = None
+        self.last_error: Optional[str] = None
         self.is_running = False
         self.should_stop = False
 

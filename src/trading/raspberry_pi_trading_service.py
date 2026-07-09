@@ -23,6 +23,7 @@ Service Installation:
 """
 
 import argparse
+from typing import Any, Optional
 import asyncio
 import json
 import os
@@ -57,8 +58,8 @@ class RaspberryPiTradingService:
         self.config = None
         self.strategy_manager = StrategyManager()
         self.is_running = False
-        self.start_time = None
-        self.system_monitor_task = None
+        self.start_time: Optional[datetime] = None
+        self.system_monitor_task: Optional[asyncio.Task[Any]] = None
         # DB-backed mode options
         self.use_db = use_db
         self.db_user_id = db_user_id

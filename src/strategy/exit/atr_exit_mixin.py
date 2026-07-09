@@ -28,7 +28,7 @@ Exit Reasons:
 """
 
 import math
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from src.notification.logger import setup_logger
 from src.strategy.exit.base_exit_mixin import BaseExitMixin
@@ -46,7 +46,7 @@ class ATRExitMixin(BaseExitMixin):
         """Initialize the mixin with parameters"""
         super().__init__(params)
         self.stop_loss = None
-        self.highest_price = None
+        self.highest_price: Optional[float] = None
         self.entry_atr = None  # Fixed ATR value at position entry
 
     def get_required_params(self) -> list:

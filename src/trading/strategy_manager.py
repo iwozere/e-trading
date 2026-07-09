@@ -104,7 +104,7 @@ class StrategyManager:
 
         self.is_running = False
         self.monitoring_task = None
-        self.db_poll_task = None
+        self.db_poll_task: Optional[asyncio.Task[Any]] = None
         self._db_poll_running = False
         self._db_poll_user_id = user_id
         self._db_poll_interval: int = 60

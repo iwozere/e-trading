@@ -19,7 +19,7 @@ import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 
@@ -63,7 +63,7 @@ class AsyncTrendsAdapter(BaseSentimentAdapter):
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         ]
-        self._analyzer = None  # Lazy load
+        self._analyzer: Optional[Any] = None  # Lazy load
 
     async def _get_session(self):
         if not self._session or self._session.closed:

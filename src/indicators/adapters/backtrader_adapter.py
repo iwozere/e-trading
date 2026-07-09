@@ -6,7 +6,7 @@ maintaining the line-based interface that existing strategies expect while
 leveraging the unified service's capabilities.
 """
 
-from typing import Any, Dict, List
+from typing import Any, ClassVar, Dict, List
 
 import backtrader as bt
 import pandas as pd
@@ -26,7 +26,11 @@ class BacktraderIndicatorWrapper(bt.Indicator):
     the line-based interface expected by Backtrader strategies.
     """
 
-    params = (
+    # Backtrader's metaclass turns `lines`/`params` tuples into generated classes,
+    # which mypy cannot see; ClassVar[Any] reflects their dynamic runtime type.
+    # The metaclass pops `lines` with () as default, so assigning () here is a no-op.
+    lines: ClassVar[Any] = ()
+    params: ClassVar[Any] = (
         ("backend", "bt"),  # Backend preference: bt, bt-talib, talib
         ("use_unified_service", False),  # Whether to use unified service (deprecated, defaults to False)
     )

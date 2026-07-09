@@ -6,7 +6,7 @@ indicator service when available, and fall back to direct calculations
 when the service is unavailable.
 """
 
-from typing import Any, Dict
+from typing import Any, ClassVar, Dict
 
 import pandas as pd
 
@@ -19,7 +19,7 @@ logger = setup_logger(__name__)
 class UnifiedRSIIndicator(BacktraderIndicatorWrapper):
     """RSI indicator using unified service with Backtrader fallback"""
 
-    lines = ("rsi",)
+    lines: ClassVar[Any] = ("rsi",)
     params = (
         ("period", 14),
         ("backend", "bt"),
@@ -92,7 +92,7 @@ class UnifiedRSIIndicator(BacktraderIndicatorWrapper):
 class UnifiedBollingerBandsIndicator(BacktraderIndicatorWrapper):
     """Bollinger Bands indicator using unified service with Backtrader fallback"""
 
-    lines = ("upper", "middle", "lower")
+    lines: ClassVar[Any] = ("upper", "middle", "lower")
     params = (
         ("period", 20),
         ("devfactor", 2.0),
@@ -160,7 +160,7 @@ class UnifiedBollingerBandsIndicator(BacktraderIndicatorWrapper):
 class UnifiedMACDIndicator(BacktraderIndicatorWrapper):
     """MACD indicator using unified service"""
 
-    lines = ("macd", "signal", "histogram")
+    lines: ClassVar[Any] = ("macd", "signal", "histogram")
     params = (
         ("fast_period", 12),
         ("slow_period", 26),
@@ -239,7 +239,7 @@ class UnifiedMACDIndicator(BacktraderIndicatorWrapper):
 class UnifiedATRIndicator(BacktraderIndicatorWrapper):
     """ATR indicator using unified service"""
 
-    lines = ("atr",)
+    lines: ClassVar[Any] = ("atr",)
     params = (
         ("period", 14),
         ("backend", "bt"),
@@ -297,7 +297,7 @@ class UnifiedATRIndicator(BacktraderIndicatorWrapper):
 class UnifiedSMAIndicator(BacktraderIndicatorWrapper):
     """Simple Moving Average indicator using unified service"""
 
-    lines = ("sma",)
+    lines: ClassVar[Any] = ("sma",)
     params = (
         ("period", 20),
         ("backend", "bt"),
@@ -347,7 +347,7 @@ class UnifiedSMAIndicator(BacktraderIndicatorWrapper):
 class UnifiedEMAIndicator(BacktraderIndicatorWrapper):
     """Exponential Moving Average indicator using unified service"""
 
-    lines = ("ema",)
+    lines: ClassVar[Any] = ("ema",)
     params = (
         ("period", 20),
         ("backend", "bt"),
@@ -404,7 +404,7 @@ class UnifiedEMAIndicator(BacktraderIndicatorWrapper):
 class UnifiedSuperTrendIndicator(BacktraderIndicatorWrapper):
     """SuperTrend indicator using unified service"""
 
-    lines = ("super_trend", "direction")
+    lines: ClassVar[Any] = ("super_trend", "direction")
     params = (
         ("length", 10),
         ("multiplier", 3.0),

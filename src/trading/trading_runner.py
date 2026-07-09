@@ -28,6 +28,7 @@ Examples:
 """
 
 import argparse
+from typing import Optional
 import asyncio
 import signal
 import sys
@@ -72,7 +73,7 @@ class TradingServiceRunner:
         self.db_poll_interval = db_poll_interval
         self.resume_mode = resume_mode
         self.is_running = False
-        self.start_time = None
+        self.start_time: Optional[datetime] = None
 
     async def start_service(self) -> bool:
         """

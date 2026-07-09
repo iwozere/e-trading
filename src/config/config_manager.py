@@ -19,6 +19,7 @@ from typing import Optional, Any, Dict, List
 import yaml
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
+from watchdog.observers.api import BaseObserver
 
 from src.config.registry import ConfigRegistry
 from src.config.templates import ConfigTemplates
@@ -77,7 +78,7 @@ class ConfigManager:
         self._config_files: Dict[str, str] = {}
 
         # Hot-reload support
-        self._observer = None
+        self._observer: Optional[BaseObserver] = None
         self._hot_reload_enabled = False
 
         # Ensure config directory exists

@@ -22,7 +22,7 @@ class P07XGBModel:
         if params:
             default_params.update(params)
         self.params = default_params
-        self.model = None
+        self.model: Optional[xgb.Booster] = None
 
     def _map_labels(self, y: pd.Series) -> pd.Series:
         """Map [-1, 0, 1] to [0, 1, 2]."""
@@ -45,6 +45,8 @@ class P07XGBModel:
         self.model = xgb.train(params, dtrain, num_boost_round=n_estimators)
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        if self.model is None:
+            raise RuntimeError("Model is not trained or loaded yet")
         dtest = xgb.DMatrix(X)
         return self.model.predict(dtest)
 
@@ -68,6 +70,8 @@ class P07XGBModel:
         return signals
 
     def save_model(self, path: str):
+        if self.model is None:
+            raise RuntimeError("Model is not trained or loaded yet")
         self.model.save_model(path)
 
     def load_model(self, path: str):

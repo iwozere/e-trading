@@ -11,7 +11,7 @@ import pickle
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -156,7 +156,7 @@ class CNNTrainer:
             dir_path.mkdir(parents=True, exist_ok=True)
 
         # Initialize components
-        self.model = None
+        self.model: Optional[CNN1D] = None
         self.scaler = StandardScaler()
         self.training_history: list[Any] = []
         self.optimization_results: list[Any] = []
@@ -595,6 +595,9 @@ class CNNTrainer:
             best_params: Best hyperparameters from optimization
         """
         _logger.info("Saving model and artifacts for %s", model_id)
+
+        if self.model is None:
+            raise RuntimeError("Model must be trained before saving artifacts")
 
         # Save model
         model_path = self.models_dir / f"{model_id}.pth"

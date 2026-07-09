@@ -15,7 +15,7 @@ sys.path.insert(0, str(project_root))
 
 import json
 import pickle
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -130,8 +130,8 @@ class EmbeddingGenerator:
         self.labeled_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize components
-        self.model = None
-        self.scaler = None
+        self.model: Optional[CNN1D] = None
+        self.scaler: Any = None
         self.model_config = None
 
     def run(self) -> Dict[str, Any]:

@@ -20,7 +20,7 @@ import asyncio
 import json
 import time
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import pandas as pd
 import websockets
@@ -72,9 +72,9 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
 
         # WebSocket connection
         self.ws = None
-        self.ws_url = None
+        self.ws_url: Optional[str] = None
         self.ws_task = None
-        self.loop = None
+        self.loop: Optional[asyncio.AbstractEventLoop] = None
 
         # Convert interval to Binance format
         self.binance_interval = self._convert_interval(interval)

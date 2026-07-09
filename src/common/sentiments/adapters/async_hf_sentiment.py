@@ -16,7 +16,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -57,7 +57,7 @@ class AsyncHFSentiment(BaseSentimentAdapter):
         self.max_workers = max_workers
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._pipe = None
-        self._initialization_error = None
+        self._initialization_error: Optional[Exception] = None
 
         # Initialize pipeline in background to avoid blocking
         self._init_task = asyncio.create_task(self._initialize_pipeline())

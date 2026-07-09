@@ -18,7 +18,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Union
 
 try:
     import numpy as np
@@ -191,7 +191,7 @@ class LazyDataLoader:
                 self.format = "csv"
 
         self._total_rows = None
-        self._columns = None
+        self._columns: Optional[List[str]] = None
 
     def __len__(self) -> int:
         """Get total number of rows."""
