@@ -73,7 +73,7 @@ def initialize_downloaders() -> Dict[str, Any]:
     Returns:
         Dictionary of initialized downloaders
     """
-    downloaders = {}
+    downloaders: Dict[str, Any] = {}
 
     # Initialize Binance downloader
     try:

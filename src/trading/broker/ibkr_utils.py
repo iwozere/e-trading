@@ -118,6 +118,7 @@ class IBKRContractManager:
             return self.contract_cache[cache_key]
 
         try:
+            contract: Contract
             if asset_class == "STK":
                 contract = self.create_stock_contract(
                     symbol, kwargs.get("exchange", "SMART"), kwargs.get("currency", "USD")

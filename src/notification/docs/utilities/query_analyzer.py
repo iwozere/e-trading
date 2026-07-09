@@ -117,6 +117,9 @@ class QueryPerformanceMonitor:
                 execution_time = time.time() - context._query_start_time
                 self._record_query_execution(statement, execution_time)
 
+        # Keep references so disable_monitoring can event.remove() them
+        self.receive_before_cursor_execute = receive_before_cursor_execute
+        self.receive_after_cursor_execute = receive_after_cursor_execute
         self.monitoring_enabled = True
         _logger.info("Query performance monitoring enabled")
 
@@ -295,7 +298,7 @@ def query_timer(operation_name: str):
         Dictionary to store timing results
     """
     start_time = time.time()
-    result = {"operation": operation_name}
+    result: Dict[str, Any] = {"operation": operation_name}
 
     try:
         yield result

@@ -50,16 +50,13 @@ def _fetch_av_news_sentiment(ticker: str, api_key: str) -> Dict[str, Any] | None
         Dict with mentions, avg_tone, pos_score, neg_score or None on failure.
     """
     try:
-        resp = requests.get(
-            _AV_URL,
-            params={
-                "function": "NEWS_SENTIMENT",
-                "tickers": ticker,
-                "limit": 50,
-                "apikey": api_key,
-            },
-            timeout=15,
-        )
+        av_params: Dict[str, Any] = {
+            "function": "NEWS_SENTIMENT",
+            "tickers": ticker,
+            "limit": 50,
+            "apikey": api_key,
+        }
+        resp = requests.get(_AV_URL, params=av_params, timeout=15)
         resp.raise_for_status()
         data = resp.json()
 

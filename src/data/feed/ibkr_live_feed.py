@@ -98,7 +98,7 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
         """
         try:
             # Try to create a stock contract first
-            contract = Stock(self.symbol, "SMART", "USD")
+            contract: Contract = Stock(self.symbol, "SMART", "USD")
 
             # Request contract details to validate
             self.ib.reqContractDetails(contract)

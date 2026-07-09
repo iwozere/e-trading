@@ -1026,7 +1026,7 @@ class EdgarDownloader(BaseDataDownloader):
         offset = 0
 
         while True:
-            params = {
+            params: Dict[str, Any] = {
                 "forms": forms,
                 "dateRange": "custom",
                 "startdt": start_dt,

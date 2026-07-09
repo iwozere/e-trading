@@ -19,6 +19,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Union
 
+import pandas as pd
+
 try:
     import redis
 
@@ -393,7 +395,7 @@ class AdvancedDataCache(DataCache):
             invalidation_strategies: List of invalidation strategies
             compression_enabled: Whether to enable compression
         """
-        super().__init__(cache_dir, max_size_gb, retention_days)
+        super().__init__(cache_dir, max_size_gb, retention_days=retention_days)
 
         # Initialize Redis cache if configured
         self.redis_cache = None
@@ -504,13 +506,14 @@ class AdvancedDataCache(DataCache):
 
     def put(
         self,
-        df: Any,
+        df: pd.DataFrame,
         provider: str,
         symbol: str,
         interval: str,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
         file_format: str = "parquet",
+        overwrite: bool = True,
     ) -> bool:
         """Put data in cache (both Redis and file)."""
         cache_key = self._make_cache_key(provider, symbol, interval, start_date, end_date)
@@ -529,7 +532,7 @@ class AdvancedDataCache(DataCache):
 
         # Store in file cache
         try:
-            success &= super().put(df, provider, symbol, interval, start_date, end_date, file_format)
+            success &= super().put(df, provider, symbol, interval, start_date, end_date, file_format, overwrite)
         except Exception:
             _logger.exception("File cache put failed:")
             success = False
@@ -560,8 +563,6 @@ class AdvancedDataCache(DataCache):
 
     def cleanup(self) -> None:
         """Clean up cache resources."""
-        super().cleanup()
-
         if self.redis_cache:
             try:
                 self.redis_cache.pool.disconnect()

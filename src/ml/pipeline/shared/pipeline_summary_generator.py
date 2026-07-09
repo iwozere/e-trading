@@ -2,6 +2,7 @@ import logging
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any, cast
 
 import pandas as pd
 
@@ -115,7 +116,7 @@ class PipelineSummaryGenerator:
                 ohlcv = self.dm.get_ohlcv(ticker, timeframe="1d", start_date=start_date, end_date=now)
                 if ohlcv is not None and not ohlcv.empty:
                     today_price = float(ohlcv["close"].iloc[-1])
-                    det_price = data["detection_price"]
+                    det_price = float(cast(Any, data["detection_price"]))
                     current_value = 1000 * (today_price / det_price)
 
                     summary_data.append(

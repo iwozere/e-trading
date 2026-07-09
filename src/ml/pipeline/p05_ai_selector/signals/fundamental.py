@@ -41,7 +41,7 @@ def score_fundamentals(
     debt_to_equity: float | None = _get("debt_to_equity")
     revenue_growth: float | None = _get("revenue_growth")
     dividend_yield: float | None = _get("dividend_yield")
-    sector: str | None = _get("sector") or "Unknown"
+    sector: str = str(_get("sector") or "Unknown")
 
     breakdown: Dict[str, object] = {
         "pe_ratio": pe_ratio,

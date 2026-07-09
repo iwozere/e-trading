@@ -218,7 +218,7 @@ class DataSourceFactory:
         Returns:
             Dictionary mapping provider names to quality reports
         """
-        quality_reports = {}
+        quality_reports: Dict[str, Any] = {}
 
         for provider_name, data_source in self._data_sources.items():
             try:

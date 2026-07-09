@@ -105,7 +105,7 @@ def _fetch_reddit(ticker: str, reddit_headers: Dict[str, str]) -> int:
     total = 0
     for sub in ("wallstreetbets", "stocks"):
         try:
-            params = {
+            params: Dict[str, Any] = {
                 "q": f"${ticker}",
                 "sort": "new",
                 "restrict_sr": "true",

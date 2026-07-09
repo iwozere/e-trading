@@ -92,7 +92,7 @@ class PerformanceDashboard:
         """Get system-level statistics."""
         from sqlalchemy import text
 
-        stats = {}
+        stats: Dict[str, Any] = {}
 
         try:
             # Message queue depth

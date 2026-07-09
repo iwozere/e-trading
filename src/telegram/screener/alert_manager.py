@@ -206,7 +206,7 @@ class AlertManager:
             if not alert or alert.get("user_id") != telegram_user_id:
                 return {"status": "error", "message": f"Alert #{alert_id} not found."}
 
-            updates = {}
+            updates: Dict[str, Any] = {}
             if new_price_str:
                 updates["price"] = float(new_price_str)
             if new_condition:

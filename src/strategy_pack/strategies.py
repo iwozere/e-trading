@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, cast
 
 import pandas as pd
 
@@ -91,7 +91,7 @@ def run_strategy_1(ctx: RunContext) -> List[PackSignal]:
     if not rows:
         return []
 
-    rows.sort(key=lambda r: r["score"], reverse=True)
+    rows.sort(key=lambda r: float(cast(Any, r["score"])), reverse=True)
     picked = rows[:top_k]
     weight = 1.0 / len(picked) if picked else 0.0
     targets = {r["symbol"]: weight for r in picked}

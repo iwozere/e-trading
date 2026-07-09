@@ -197,7 +197,7 @@ class LazyDataLoader:
         """Get total number of rows."""
         if self._total_rows is None:
             self._count_rows()
-        return self._total_rows
+        return self._total_rows or 0
 
     def _count_rows(self):
         """Count total rows in file."""
@@ -435,7 +435,7 @@ class MemoryOptimizer:
 
         return optimized_df
 
-    def get_memory_usage(self, df: pd.DataFrame) -> Dict[str, float]:
+    def get_memory_usage(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Get memory usage information for DataFrame."""
         memory_usage = df.memory_usage(deep=True)
         return {

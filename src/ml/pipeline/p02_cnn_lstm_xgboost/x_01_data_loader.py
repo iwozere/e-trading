@@ -147,8 +147,9 @@ class DataLoader:
 
             # Use the existing get_ohlcv function
             df = get_ohlcv(
-                symbol=symbol,
-                timeframe=timeframe,
+                ticker=symbol,
+                interval=timeframe,
+                period="max",
                 provider=provider_code,
                 start_date=start_date.strftime("%Y-%m-%d"),
                 end_date=end_date.strftime("%Y-%m-%d"),

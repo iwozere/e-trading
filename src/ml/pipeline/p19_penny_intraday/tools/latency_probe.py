@@ -19,6 +19,7 @@ Usage:
 """
 
 import os
+from typing import Any, Dict
 import sys
 import time
 from datetime import UTC, datetime, timedelta
@@ -109,9 +110,10 @@ def probe_finnhub(key: str) -> None:
 
     # 2) intraday candles (free or premium-gated?)
     now = int(time.time())
+    candle_params: Dict[str, Any] = {"symbol": "AAPL", "resolution": "5", "from": now - 3 * 86400, "to": now, "token": key}
     r = requests.get(
         "https://finnhub.io/api/v1/stock/candle",
-        params={"symbol": "AAPL", "resolution": "5", "from": now - 3 * 86400, "to": now, "token": key},
+        params=candle_params,
         timeout=10,
     )
     print(
@@ -135,7 +137,8 @@ def probe_polygon(key: str) -> None:
     for i, sym in enumerate(TICKERS[:8], 1):
         url = f"https://api.polygon.io/v2/aggs/ticker/{sym}/range/5/minute/{start}/{end}"
         try:
-            r = requests.get(url, params={"apiKey": key, "limit": 5, "sort": "desc"}, timeout=10)
+            news_params: Dict[str, Any] = {"apiKey": key, "limit": 5, "sort": "desc"}
+            r = requests.get(url, params=news_params, timeout=10)
         except Exception as e:
             print(f"  aggs {sym}: ERROR {e}")
             continue

@@ -15,7 +15,7 @@ FINRA credentials are optional — the agent degrades gracefully to yfinance-onl
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import pandas as pd
 
@@ -28,7 +28,7 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-_download_trf = None
+_download_trf: Any = None
 try:
     from src.ml.pipeline.shared.trf_downloader import download_trf as _download_trf
 

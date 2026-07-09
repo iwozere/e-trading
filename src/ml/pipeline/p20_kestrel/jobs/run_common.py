@@ -96,6 +96,7 @@ def setup_run_logging(run_date: date | None = None) -> Path:
     pipeline_logger.setLevel(logging.DEBUG)
 
     # Tee stdout and stderr so bare print() calls also land in pipeline.log
+    assert sys.__stdout__ is not None and sys.__stderr__ is not None
     sys.stdout = _TeeStream(sys.__stdout__, log_file)  # type: ignore[assignment]
     sys.stderr = _TeeStream(sys.__stderr__, log_file)  # type: ignore[assignment]
 

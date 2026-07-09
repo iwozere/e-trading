@@ -139,7 +139,7 @@ def populate_cache(
     cache = configure_unified_cache(cache_dir=cache_dir)
 
     # Initialize data downloaders
-    downloaders = {}
+    downloaders: Dict[str, Any] = {}
     try:
         downloaders["binance"] = BinanceDataDownloader()
         print("  ✅ Binance downloader initialized")

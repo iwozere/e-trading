@@ -371,7 +371,7 @@ class DataCache:
         total_size_gb = self.metadata["total_size_bytes"] / (1024**3)
 
         # Count by provider
-        providers = {}
+        providers: Dict[str, Dict[str, Any]] = {}
         for file_info in self.metadata["files"].values():
             provider = file_info["provider"]
             if provider not in providers:

@@ -428,7 +428,7 @@ class PipelineRunner:
 
         return results
 
-    def run(self, start_stage: int = 1, end_stage: int = 8, skip_stages: Optional[List[int]] = None) -> Dict[str, Any]:
+    def run(self, start_stage: int = 1, end_stage: int = 8, skip_stages: Optional[List[int]] = None) -> Dict[int, Dict[str, Any]]:
         """
         Run the complete pipeline or a subset of stages.
 

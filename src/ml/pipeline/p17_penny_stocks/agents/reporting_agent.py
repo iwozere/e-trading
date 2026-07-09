@@ -11,7 +11,7 @@ import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
 import pandas as pd
 
@@ -22,7 +22,7 @@ from src.ml.pipeline.p17_penny_stocks.config import P17ScoringConfig
 from src.ml.pipeline.p17_penny_stocks.models.candidate import Candidate
 from src.notification.logger import setup_logger
 
-_FearGreedDownloader = None
+_FearGreedDownloader: Any = None
 try:
     from src.data.downloader.fear_greed_downloader import (
         FearGreedDownloader as _FearGreedDownloader,  # type: ignore[assignment]

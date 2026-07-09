@@ -19,6 +19,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import json
 from datetime import datetime as dt
+from typing import Any, Dict
 
 import pandas as pd
 
@@ -242,11 +243,11 @@ def save_validation_results(
                     continue
 
             # Process analyzers
-            analyzers = {}
+            analyzers: Dict[str, Any] = {}
             for name, analyzer in result.get("analyzers", {}).items():
                 try:
                     if isinstance(analyzer, dict):
-                        processed_analysis = {}
+                        processed_analysis: Dict[str, Any] = {}
                         for k, v in analyzer.items():
                             if isinstance(v, (int, float)):
                                 processed_analysis[str(k)] = float(v)
