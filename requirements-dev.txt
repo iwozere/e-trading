@@ -17,3 +17,5 @@ pandas-stubs
 redis
 zstandard
 san
+onnxruntime
+onnxconverter-common

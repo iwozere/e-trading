@@ -124,9 +124,10 @@ class TestTaLibAdapter:
         assert not adapter.supports("unknown_indicator")
         assert not adapter.supports("fake_ta")
 
-    def test_rsi_computation(self, adapter, sample_ohlcv_df, sample_inputs):
+    @pytest.mark.asyncio
+    async def test_rsi_computation(self, adapter, sample_ohlcv_df, sample_inputs):
         """Test RSI calculation returns valid Series."""
-        result = adapter.compute("rsi", sample_ohlcv_df, sample_inputs, {"timeperiod": 14})
+        result = await adapter.compute("rsi", sample_ohlcv_df, sample_inputs, {"timeperiod": 14})
 
         assert "value" in result
         assert isinstance(result["value"], (pd.Series, np.ndarray))
@@ -143,9 +144,10 @@ class TestTaLibAdapter:
         assert np.all(valid_values >= 0)
         assert np.all(valid_values <= 100)
 
-    def test_ema_computation(self, adapter, sample_ohlcv_df, sample_inputs):
+    @pytest.mark.asyncio
+    async def test_ema_computation(self, adapter, sample_ohlcv_df, sample_inputs):
         """Test EMA calculation."""
-        result = adapter.compute("ema", sample_ohlcv_df, sample_inputs, {"timeperiod": 20})
+        result = await adapter.compute("ema", sample_ohlcv_df, sample_inputs, {"timeperiod": 20})
 
         assert "value" in result
         values = result["value"] if isinstance(result["value"], np.ndarray) else result["value"].values
@@ -159,9 +161,10 @@ class TestTaLibAdapter:
         assert np.min(valid_ema) >= np.min(close_values) * 0.9
         assert np.max(valid_ema) <= np.max(close_values) * 1.1
 
-    def test_macd_multi_output(self, adapter, sample_ohlcv_df, sample_inputs):
+    @pytest.mark.asyncio
+    async def test_macd_multi_output(self, adapter, sample_ohlcv_df, sample_inputs):
         """Test MACD returns multiple outputs correctly."""
-        result = adapter.compute(
+        result = await adapter.compute(
             "macd", sample_ohlcv_df, sample_inputs, {"fastperiod": 12, "slowperiod": 26, "signalperiod": 9}
         )
 
@@ -176,9 +179,10 @@ class TestTaLibAdapter:
 
         assert macd_len == signal_len == hist_len
 
-    def test_bbands_multi_output(self, adapter, sample_ohlcv_df, sample_inputs):
+    @pytest.mark.asyncio
+    async def test_bbands_multi_output(self, adapter, sample_ohlcv_df, sample_inputs):
         """Test Bollinger Bands returns upper, middle, lower."""
-        result = adapter.compute(
+        result = await adapter.compute(
             "bbands", sample_ohlcv_df, sample_inputs, {"timeperiod": 20, "nbdevup": 2, "nbdevdn": 2}
         )
 
@@ -196,9 +200,10 @@ class TestTaLibAdapter:
         assert np.all(upper[valid_mask] >= middle[valid_mask])
         assert np.all(middle[valid_mask] >= lower[valid_mask])
 
-    def test_stoch_multi_output(self, adapter, sample_ohlcv_df, sample_inputs):
+    @pytest.mark.asyncio
+    async def test_stoch_multi_output(self, adapter, sample_ohlcv_df, sample_inputs):
         """Test Stochastic returns K and D lines."""
-        result = adapter.compute(
+        result = await adapter.compute(
             "stoch", sample_ohlcv_df, sample_inputs, {"fastk_period": 14, "slowk_period": 3, "slowd_period": 3}
         )
 
@@ -215,9 +220,10 @@ class TestTaLibAdapter:
         assert np.all(valid_k >= 0) and np.all(valid_k <= 100)
         assert np.all(valid_d >= 0) and np.all(valid_d <= 100)
 
-    def test_atr_with_hlc(self, adapter, sample_ohlcv_df, sample_inputs):
+    @pytest.mark.asyncio
+    async def test_atr_with_hlc(self, adapter, sample_ohlcv_df, sample_inputs):
         """Test ATR uses high, low, close inputs."""
-        result = adapter.compute("atr", sample_ohlcv_df, sample_inputs, {"timeperiod": 14})
+        result = await adapter.compute("atr", sample_ohlcv_df, sample_inputs, {"timeperiod": 14})
 
         assert "value" in result
         values = result["value"] if isinstance(result["value"], np.ndarray) else result["value"].values
@@ -227,9 +233,10 @@ class TestTaLibAdapter:
         assert len(valid_values) > 0
         assert np.all(valid_values >= 0)
 
-    def test_obv_with_volume(self, adapter, sample_ohlcv_df, sample_inputs):
+    @pytest.mark.asyncio
+    async def test_obv_with_volume(self, adapter, sample_ohlcv_df, sample_inputs):
         """Test OBV uses close and volume."""
-        result = adapter.compute("obv", sample_ohlcv_df, sample_inputs, {})
+        result = await adapter.compute("obv", sample_ohlcv_df, sample_inputs, {})
 
         assert "value" in result
         # OBV should have mostly non-NaN values
@@ -255,9 +262,10 @@ class TestPandasTaAdapter:
         assert adapter.supports("bbands")
         assert adapter.supports("stoch")
 
-    def test_rsi_computation(self, adapter, sample_ohlcv_df, sample_inputs):
+    @pytest.mark.asyncio
+    async def test_rsi_computation(self, adapter, sample_ohlcv_df, sample_inputs):
         """Test RSI via pandas_ta."""
-        result = adapter.compute("rsi", sample_ohlcv_df, sample_inputs, {"length": 14})
+        result = await adapter.compute("rsi", sample_ohlcv_df, sample_inputs, {"length": 14})
 
         assert "value" in result
         assert isinstance(result["value"], pd.Series)
@@ -268,9 +276,10 @@ class TestPandasTaAdapter:
         assert valid_values.min() >= 0
         assert valid_values.max() <= 100
 
-    def test_bbands_multi_output(self, adapter, sample_ohlcv_df, sample_inputs):
+    @pytest.mark.asyncio
+    async def test_bbands_multi_output(self, adapter, sample_ohlcv_df, sample_inputs):
         """Test pandas_ta bbands returns multiple outputs."""
-        result = adapter.compute("bbands", sample_ohlcv_df, sample_inputs, {"length": 20})
+        result = await adapter.compute("bbands", sample_ohlcv_df, sample_inputs, {"length": 20})
 
         assert "upper" in result
         assert "middle" in result
@@ -281,9 +290,10 @@ class TestPandasTaAdapter:
         assert (result["upper"][valid_idx] >= result["middle"][valid_idx]).all()
         assert (result["middle"][valid_idx] >= result["lower"][valid_idx]).all()
 
-    def test_stoch_multi_output(self, adapter, sample_ohlcv_df, sample_inputs):
+    @pytest.mark.asyncio
+    async def test_stoch_multi_output(self, adapter, sample_ohlcv_df, sample_inputs):
         """Test pandas_ta stochastic."""
-        result = adapter.compute("stoch", sample_ohlcv_df, sample_inputs, {"k": 14, "d": 3})
+        result = await adapter.compute("stoch", sample_ohlcv_df, sample_inputs, {"k": 14, "d": 3})
 
         assert "k" in result
         assert "d" in result
@@ -327,33 +337,37 @@ class TestFundamentalsAdapter:
         assert not adapter.supports("rsi")
         assert not adapter.supports("macd")
 
-    def test_pe_computation(self, adapter, sample_ohlcv_df):
+    @pytest.mark.asyncio
+    async def test_pe_computation(self, adapter, sample_ohlcv_df):
         """Test P/E ratio retrieval."""
-        result = adapter.compute("pe", sample_ohlcv_df, {}, {"ticker": "AAPL", "provider": None})
+        result = await adapter.compute("pe", sample_ohlcv_df, {}, {"ticker": "AAPL", "provider": None})
 
         assert "value" in result
         assert isinstance(result["value"], pd.Series)
         assert len(result["value"]) == 1
         assert result["value"].iloc[0] == 15.5
 
-    def test_pb_computation(self, adapter, sample_ohlcv_df):
+    @pytest.mark.asyncio
+    async def test_pb_computation(self, adapter, sample_ohlcv_df):
         """Test P/B ratio retrieval."""
-        result = adapter.compute("pb", sample_ohlcv_df, {}, {"ticker": "AAPL", "provider": None})
+        result = await adapter.compute("pb", sample_ohlcv_df, {}, {"ticker": "AAPL", "provider": None})
 
         assert "value" in result
         assert result["value"].iloc[0] == 2.3
 
-    def test_roe_computation(self, adapter, sample_ohlcv_df):
+    @pytest.mark.asyncio
+    async def test_roe_computation(self, adapter, sample_ohlcv_df):
         """Test ROE retrieval."""
-        result = adapter.compute("roe", sample_ohlcv_df, {}, {"ticker": "AAPL", "provider": None})
+        result = await adapter.compute("roe", sample_ohlcv_df, {}, {"ticker": "AAPL", "provider": None})
 
         assert "value" in result
         assert result["value"].iloc[0] == 0.18
 
-    def test_all_fundamental_fields(self, adapter, sample_ohlcv_df, mock_fundamentals):
+    @pytest.mark.asyncio
+    async def test_all_fundamental_fields(self, adapter, sample_ohlcv_df, mock_fundamentals):
         """Test all fundamental fields map correctly."""
         for field_name, attr_name in adapter.FIELD_MAP.items():
-            result = adapter.compute(field_name, sample_ohlcv_df, {}, {"ticker": "AAPL", "provider": None})
+            result = await adapter.compute(field_name, sample_ohlcv_df, {}, {"ticker": "AAPL", "provider": None})
 
             expected = getattr(mock_fundamentals, attr_name)
             assert result["value"].iloc[0] == expected, f"Field {field_name} -> {attr_name} mismatch"
@@ -396,7 +410,8 @@ class TestAdapterConsistency:
 
 
 class TestEdgeCases:
-    def test_empty_dataframe(self):
+    @pytest.mark.asyncio
+    async def test_empty_dataframe(self):
         """Test adapters handle empty DataFrames gracefully."""
         adapter = TaLibAdapter()
         empty_df = pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
@@ -404,13 +419,14 @@ class TestEdgeCases:
 
         # Should not crash, but may return NaN
         try:
-            result = adapter.compute("rsi", empty_df, empty_inputs, {"timeperiod": 14})
+            result = await adapter.compute("rsi", empty_df, empty_inputs, {"timeperiod": 14})
             assert "value" in result
         except (ValueError, IndexError):
             # Acceptable to raise error on empty data
             pass
 
-    def test_insufficient_data(self, sample_ohlcv_df):
+    @pytest.mark.asyncio
+    async def test_insufficient_data(self, sample_ohlcv_df):
         """Test indicators with insufficient data return mostly NaN."""
         adapter = TaLibAdapter()
 
@@ -418,13 +434,14 @@ class TestEdgeCases:
         small_df = sample_ohlcv_df.head(5)
         small_inputs = {"close": small_df["close"], "high": small_df["high"], "low": small_df["low"]}
 
-        result = adapter.compute("rsi", small_df, small_inputs, {"timeperiod": 14})
+        result = await adapter.compute("rsi", small_df, small_inputs, {"timeperiod": 14})
         values = result["value"] if isinstance(result["value"], np.ndarray) else result["value"].values
 
         # Should be mostly or all NaN
         assert np.isnan(values).sum() >= 4
 
-    def test_missing_required_input(self, sample_ohlcv_df):
+    @pytest.mark.asyncio
+    async def test_missing_required_input(self, sample_ohlcv_df):
         """Test adapter handles missing required inputs."""
         adapter = TaLibAdapter()
 
@@ -432,7 +449,7 @@ class TestEdgeCases:
         incomplete_inputs = {"close": sample_ohlcv_df["close"], "low": sample_ohlcv_df["low"]}
 
         with pytest.raises(KeyError):
-            adapter.compute("atr", sample_ohlcv_df, incomplete_inputs, {"timeperiod": 14})
+            await adapter.compute("atr", sample_ohlcv_df, incomplete_inputs, {"timeperiod": 14})
 
 
 # ---------------------------------------------------------------------------
@@ -443,7 +460,8 @@ class TestEdgeCases:
 class TestAdapterIntegration:
     """Test adapters work together in a realistic scenario."""
 
-    def test_multiple_indicators(self, sample_ohlcv_df, sample_inputs):
+    @pytest.mark.asyncio
+    async def test_multiple_indicators(self, sample_ohlcv_df, sample_inputs):
         """Test computing multiple indicators on same data."""
         adapter = TaLibAdapter()
 
@@ -456,7 +474,7 @@ class TestAdapterIntegration:
 
         results = {}
         for name, params in indicators:
-            result = adapter.compute(name, sample_ohlcv_df, sample_inputs, params)
+            result = await adapter.compute(name, sample_ohlcv_df, sample_inputs, params)
             results[name] = result
 
         # All should succeed

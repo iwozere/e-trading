@@ -31,6 +31,9 @@ from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 
 
 class DummyDownloader(BaseDataDownloader):
+    def get_provider_name(self) -> str:
+        return "dummy"
+
     def get_fundamentals(self, symbol):
         return None
 

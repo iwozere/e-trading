@@ -58,7 +58,8 @@ class TestMigrationCompatibility:
             # If methods don't exist, that's expected for the new interface
             pass
 
-    def test_parameter_migration(self, sample_ohlcv):
+    @pytest.mark.asyncio
+    async def test_parameter_migration(self, sample_ohlcv):
         """Test that old parameter names are properly migrated."""
         service = IndicatorService()
 
@@ -72,13 +73,14 @@ class TestMigrationCompatibility:
         )
 
         try:
-            result = service.compute(sample_ohlcv, old_style_config)
+            result = await service.compute(sample_ohlcv, old_style_config)
             assert isinstance(result, pd.DataFrame)
         except (ValueError, KeyError):
             # If parameter migration isn't implemented, that's acceptable
             pass
 
-    def test_output_format_compatibility(self, sample_ohlcv):
+    @pytest.mark.asyncio
+    async def test_output_format_compatibility(self, sample_ohlcv):
         """Test that output formats are compatible with legacy expectations."""
         service = IndicatorService()
 
@@ -90,7 +92,7 @@ class TestMigrationCompatibility:
             ]
         )
 
-        result = service.compute(sample_ohlcv, config)
+        result = await service.compute(sample_ohlcv, config)
 
         # Should return DataFrame with expected column names
         assert isinstance(result, pd.DataFrame)
@@ -144,7 +146,8 @@ class TestMigrationCompatibility:
             # Configuration migration may not be fully implemented
             pass
 
-    def test_api_interface_migration(self, sample_ohlcv):
+    @pytest.mark.asyncio
+    async def test_api_interface_migration(self, sample_ohlcv):
         """Test that API interfaces work with migrated code."""
         service = IndicatorService()
 
@@ -156,13 +159,14 @@ class TestMigrationCompatibility:
         with patch("src.common.get_ohlcv", return_value=sample_ohlcv):
             import asyncio
 
-            result = asyncio.run(service.compute_for_ticker(request))
+            result = asyncio.run(await service.compute_for_ticker(request))
 
             assert result is not None
             assert result.ticker == "AAPL"
             assert len(result.technical) > 0
 
-    def test_batch_processing_migration(self, sample_ohlcv):
+    @pytest.mark.asyncio
+    async def test_batch_processing_migration(self, sample_ohlcv):
         """Test that batch processing works with migrated interfaces."""
         service = IndicatorService()
 
@@ -172,14 +176,15 @@ class TestMigrationCompatibility:
             import asyncio
 
             results = asyncio.run(
-                service.compute_batch(tickers=tickers, indicators=["rsi", "ema"], timeframe="1D", period="1M")
+                await service.compute_batch(tickers=tickers, indicators=["rsi", "ema"], timeframe="1D", period="1M")
             )
 
             assert len(results) == len(tickers)
             for ticker in tickers:
                 assert ticker in results
 
-    def test_error_message_migration(self, sample_ohlcv):
+    @pytest.mark.asyncio
+    async def test_error_message_migration(self, sample_ohlcv):
         """Test that error messages are informative for migration issues."""
         service = IndicatorService()
 
@@ -187,13 +192,14 @@ class TestMigrationCompatibility:
         config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="old_indicator_name", output="old")])
 
         try:
-            service.compute(sample_ohlcv, config)
+            await service.compute(sample_ohlcv, config)
         except Exception as e:
             # Error message should be helpful for migration
             error_msg = str(e).lower()
             assert any(word in error_msg for word in ["indicator", "not", "found", "supported"])
 
-    def test_performance_parity(self, sample_ohlcv):
+    @pytest.mark.asyncio
+    async def test_performance_parity(self, sample_ohlcv):
         """Test that migrated code maintains performance parity."""
         service = IndicatorService()
 
@@ -207,7 +213,7 @@ class TestMigrationCompatibility:
 
         # Measure computation time
         start_time = datetime.now()
-        result = service.compute(sample_ohlcv, config)
+        result = await service.compute(sample_ohlcv, config)
         end_time = datetime.now()
 
         computation_time = (end_time - start_time).total_seconds()
@@ -216,7 +222,8 @@ class TestMigrationCompatibility:
         assert computation_time < 1.0
         assert isinstance(result, pd.DataFrame)
 
-    def test_data_format_migration(self):
+    @pytest.mark.asyncio
+    async def test_data_format_migration(self):
         """Test that different data formats are handled correctly."""
         service = IndicatorService()
 
@@ -242,15 +249,15 @@ class TestMigrationCompatibility:
         config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="rsi", output="rsi")])
 
         for i, data in enumerate(data_formats):
-            with pytest.subTest(format=i):
-                try:
-                    result = service.compute(data, config)
-                    assert isinstance(result, pd.DataFrame)
-                except Exception:
-                    # Some formats may not be supported
-                    pass
+            try:
+                result = await service.compute(data, config)
+                assert isinstance(result, pd.DataFrame)
+            except Exception:
+                # Some formats may not be supported
+                pass
 
-    def test_column_name_migration(self):
+    @pytest.mark.asyncio
+    async def test_column_name_migration(self):
         """Test that different column naming conventions are handled."""
         service = IndicatorService()
 
@@ -269,13 +276,14 @@ class TestMigrationCompatibility:
         config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="rsi", output="rsi")])
 
         try:
-            result = service.compute(alt_column_data, config)
+            result = await service.compute(alt_column_data, config)
             assert isinstance(result, pd.DataFrame)
         except KeyError:
             # Column name normalization may not be implemented
             pass
 
-    def test_recommendation_format_migration(self, sample_ohlcv):
+    @pytest.mark.asyncio
+    async def test_recommendation_format_migration(self, sample_ohlcv):
         """Test that recommendation formats are compatible."""
         service = IndicatorService()
 
@@ -284,7 +292,7 @@ class TestMigrationCompatibility:
         with patch("src.common.get_ohlcv", return_value=sample_ohlcv):
             import asyncio
 
-            result = asyncio.run(service.compute_for_ticker(request))
+            result = asyncio.run(await service.compute_for_ticker(request))
 
             # Check recommendation format
             if result.technical and result.technical.get("rsi"):

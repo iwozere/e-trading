@@ -18,6 +18,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.data.db.models.model_trading import BotInstance
 from src.data.db.repos.repo_trading import BotsRepo, TradesRepo
 
 
@@ -39,7 +40,7 @@ class TestLiveBotDatabase:
             "extra_metadata": {"trading_pair": "BTCUSDT", "interval": "1h"},
         }
 
-        bot_instance = bots_repo.create(bot_data)
+        bot_instance = bots_repo.upsert_bot(bot_data)
         db_session.flush()
 
         # Verify bot instance was created
@@ -49,14 +50,14 @@ class TestLiveBotDatabase:
         print(f"✅ Trade Type: {bot_instance.type}")
 
         # Verify we can retrieve it
-        retrieved_bot = bots_repo.get_by_id(bot_id)
+        retrieved_bot = db_session.get(BotInstance, bot_id)
         assert retrieved_bot is not None
         assert retrieved_bot.type == "paper"
         print(f"✅ Bot instance created in database: {retrieved_bot.id}")
 
     def test_bot_id_naming(self, db_session):
         """Test that bot_id uses config filename correctly."""
-        bots_repo = TradingBotsRepo(db_session)
+        bots_repo = BotsRepo(db_session)
 
         config_file = "test_bot.json"
         bot_id = config_file  # Bot ID should match config filename
@@ -69,7 +70,7 @@ class TestLiveBotDatabase:
             "current_balance": 1000.0,
         }
 
-        bot = bots_repo.create(bot_data)
+        bot = bots_repo.upsert_bot(bot_data)
         db_session.flush()
 
         # Verify bot_id is the config filename
@@ -96,7 +97,7 @@ class TestLiveBotDatabase:
             "config_file": config_file,
             "status": "running",
         }
-        bots_repo.create(bot_data)
+        bots_repo.upsert_bot(bot_data)
         db_session.flush()
 
         # Create a test open trade
@@ -118,13 +119,12 @@ class TestLiveBotDatabase:
             "extra_metadata": {"test": True},
         }
 
-        trade = trades_repo.create(trade_data)
+        trade = trades_repo.add(trade_data)
         db_session.flush()
         print(f"✅ Created test open trade: {trade.id}")
 
         # Simulate restart - load open positions
-        all_trades = trades_repo.get_all()
-        open_trades = [t for t in all_trades if t.bot_id == bot_id and t.symbol == trading_pair and t.status == "open"]
+        open_trades = [t for t in trades_repo.open_trades(trading_pair) if t.bot_id == bot_id]
 
         assert len(open_trades) == 1
         print(f"✅ Found {len(open_trades)} open trade on restart")

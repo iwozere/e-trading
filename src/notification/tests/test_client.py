@@ -2,6 +2,7 @@
 Unit tests for the notification service client.
 """
 
+import asyncio
 from datetime import datetime
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -130,7 +131,7 @@ class TestNotificationServiceClient:
 
     def teardown_method(self):
         """Cleanup test client."""
-        self.client.close()
+        asyncio.run(self.client.close())
 
     @patch("requests.Session.post")
     def test_send_notification_success(self, mock_post):
@@ -301,7 +302,8 @@ class TestNotificationServiceClient:
         assert metadata["source"] == "trading_engine"
 
     @patch("requests.Session.post")
-    def test_send_notification_http_error(self, mock_post):
+    @pytest.mark.asyncio
+    async def test_send_notification_http_error(self, mock_post):
         """Test notification sending with HTTP error."""
         # Mock HTTP error
         import requests
@@ -310,7 +312,9 @@ class TestNotificationServiceClient:
 
         # Send notification should raise error
         with pytest.raises(NotificationServiceError) as exc_info:
-            self.client.send_notification(notification_type=NotificationType.INFO, title="Test", message="Test message")
+            await self.client.send_notification(
+                notification_type=NotificationType.INFO, title="Test", message="Test message"
+            )
 
         assert "Failed to send notification" in str(exc_info.value)
 
@@ -352,7 +356,8 @@ class TestNotificationServiceClient:
         # Verify request
         mock_get.assert_called_once_with("http://test-service:5003/api/notifications/health", timeout=10)
 
-    def test_circuit_breaker_integration(self):
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_integration(self):
         """Test circuit breaker integration."""
         # Create client with circuit breaker enabled
         client = NotificationServiceClient(service_url="http://test-service:5003", circuit_breaker_enabled=True)
@@ -363,9 +368,11 @@ class TestNotificationServiceClient:
 
             # Should raise unavailable error
             with pytest.raises(NotificationServiceUnavailableError):
-                client.send_notification(notification_type=NotificationType.INFO, title="Test", message="Test message")
+                await client.send_notification(
+                    notification_type=NotificationType.INFO, title="Test", message="Test message"
+                )
         finally:
-            client.close()
+            await client.close()
 
 
 class TestAsyncNotificationServiceClient:
@@ -377,9 +384,9 @@ class TestAsyncNotificationServiceClient:
             service_url="http://test-service:5003", timeout=10, circuit_breaker_enabled=False
         )
 
-    async def teardown_method(self):
+    def teardown_method(self):
         """Cleanup test client."""
-        await self.client.close_async()
+        asyncio.run(self.client.close_async())
 
     @pytest.mark.asyncio
     @patch("aiohttp.ClientSession.post")

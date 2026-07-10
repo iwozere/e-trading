@@ -19,7 +19,7 @@ Classes:
 from typing import Any, Dict, Optional
 
 import pandas as pd
-from ib_insync import *
+from ib_insync import IB, Contract, Forex, Stock
 
 from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 from src.notification.logger import setup_logger

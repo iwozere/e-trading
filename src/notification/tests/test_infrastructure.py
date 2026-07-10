@@ -48,11 +48,11 @@ async def test_database_connection():
                 "priority": MessagePriority.NORMAL.value,
             }
 
-            message = repo.messages.create_message(message_data)
+            message = r.notifications.create_message(message_data)
             print(f"✓ Message created with ID: {message.id}")
 
             # Test message retrieval
-            retrieved_message = repo.messages.get_message(message.id)
+            retrieved_message = r.notifications.get_message(message.id)
             if retrieved_message:
                 print(f"✓ Message retrieved: {retrieved_message.message_type}")
             else:

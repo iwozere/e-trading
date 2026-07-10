@@ -137,10 +137,6 @@ class WebUIAppService:
             _logger.exception("Error authenticating user %s:", username)
             return None
 
-        except Exception:
-            _logger.exception("Error authenticating user %s:", username)
-            return None
-
     # ---------- Audit Logging ----------
 
     def log_user_action(

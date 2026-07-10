@@ -119,3 +119,24 @@ for r, n in collections.Counter(x.get('rule') for x in d).most_common(10): print
   - Notable remaining buckets for next phases: reportPrivateImportUsage is 26× `matplotlib.pyplot` (Phase C, likely one idiom fix); reportMissingImports leftovers are 2× p07 onnx extras + dead test imports (`src.notification.async_notification_manager`, `src.risk.controller`, `src.data.data_feed_factory`) — Phase A material.
 
 Phase A starting counts: reportUndefinedVariable 38, reportUnusedCoroutine 13, reportMissingImports 7, small rules ~12.
+
+- 2026-07-10 — **Phase A complete: 1,242 → 1,132 errors, all Phase A rules at zero.**
+  Real bugs fixed in prod code:
+  - `delivery_tracker.py` scrambled annotation `asyncio.Optional[Task]` → `Optional[asyncio.Task]`.
+  - `binance_live_feed.py` + `webui_app_service.py`: unreachable duplicate `except Exception` blocks removed.
+  - `performance_optimization.py` `get_chunk()`: parquet path called `pq.read_table(row_groups=...)` — no such parameter, would TypeError at runtime; rewritten to row-range slice consistent with `iter_chunks()`. Dead expression removed.
+  - `extract_schema_as_md.py`: dead expression from abandoned approach removed.
+  - `ibkr_live_feed.py` + `check_ibkr_live_readonly.py`: `from ib_insync import *` → explicit imports.
+  - Installed `onnxruntime`, `onnxconverter-common` into `.venv` for p07 (recorded in requirements-dev).
+  Test suites:
+  - 13 un-awaited coroutine sites fixed by converting sync tests calling async APIs to `@pytest.mark.asyncio` across 4 indicator test files + `test_client.py`; also removed nonexistent `pytest.subTest` usage and fixed never-running `async def teardown_method`. Result: those 4 indicator files went 47 failed/7 passed → 18 failed/36 passed.
+  - Repaired fixable stale tests: `test_live_bot_database.py` (old repo API → `upsert_bot`/`add`/`open_trades`/`BotInstance`), `test_live_bot_config.py` (import path), `test_base_data_downloader.py` (missing abstract `get_provider_name`), `test_e2e_standalone.py` + `test_infrastructure.py` (half-migrated uow leftovers).
+  - Deleted 4 dead test files whose subjects no longer exist: `tests/test_screener_bot.py`, `tests/test_emailer.py`, `tests/test_email_attachments.py` (all import removed `async_notification_manager`), `tests/test_risk_controller.py` (`src/risk` removed). These broke default `pytest` collection (`testpaths = tests`).
+  mypy re-verified at 0 errors.
+
+### Suite-rot findings (needs its own work item, out of pyright scope)
+- `src/indicators/tests/`: remaining ~18 failures are structural — tests patch attributes that no longer exist on `IndicatorService` (`_ta_lib_adapter`, `_compute_indicator`), fixture param `fundamentals_getter` renamed, etc. Needs rewrite against current API.
+- `src/notification/tests/test_client.py`: 100% dead — every test errors at setup (`NotificationServiceClient` no longer takes `circuit_breaker_enabled`; `CircuitBreaker`/`NotificationRequest` APIs changed; sync tests mock `requests` but client is aiohttp). Needs full rewrite.
+- `src/notification/tests/test_delivery_tracker.py`: async tests unmarked → never ran under strict asyncio mode.
+
+Phase B starting counts: reportOptionalMemberAccess 162, reportOptionalSubscript 70, remaining total 1,132 in 182 files.

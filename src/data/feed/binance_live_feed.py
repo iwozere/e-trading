@@ -225,9 +225,6 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             except ImportError:
                 _logger.exception("Error loading historical data for %s: %s", self.symbol, e)
             return None
-        except Exception as e:
-            _logger.exception("Unexpected error loading historical data for %s: %s", self.symbol, e)
-            return None
 
     def _get_interval_minutes(self) -> int:
         """

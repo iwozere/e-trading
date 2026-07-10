@@ -1,4 +1,4 @@
-from ib_insync import *
+from ib_insync import IB, MarketOrder, Stock
 
 ib = IB()
 try:

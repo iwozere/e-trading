@@ -17,7 +17,7 @@ Examples:
 import json
 import sys
 
-from src.data.data_feed_factory import DataFeedFactory
+from src.data.feed.data_feed_factory import DataFeedFactory
 
 from src.notification.logger import setup_logger
 from src.trading.broker.broker_factory import get_broker

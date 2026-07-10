@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any, Dict
 from unittest.mock import patch
 
+from sqlalchemy import text
+
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -96,9 +98,6 @@ class EndToEndTestSuite:
         """Set up test environment."""
         print("Setting up test environment...")
 
-        # Initialize database
-        init_database(database_url=config.database.url, echo=False, pool_size=5, max_overflow=10)
-
         # Create tables using database service
         db_service = get_database_service()
         db_service.init_databases()
@@ -107,11 +106,12 @@ class EndToEndTestSuite:
         with db_service.uow() as r:
             # Delete test messages
             r.s.execute(
-                "DELETE FROM msg_delivery_status WHERE message_id IN "
-                "(SELECT id FROM msg_messages WHERE message_type LIKE 'e2e_test_%')"
+                text(
+                    "DELETE FROM msg_delivery_status WHERE message_id IN "
+                    "(SELECT id FROM msg_messages WHERE message_type LIKE 'e2e_test_%')"
+                )
             )
-            repo.session.execute("DELETE FROM msg_messages WHERE message_type LIKE 'e2e_test_%'")
-            repo.commit()
+            r.s.execute(text("DELETE FROM msg_messages WHERE message_type LIKE 'e2e_test_%'"))
 
         print("✓ Test environment setup complete")
 
@@ -127,11 +127,12 @@ class EndToEndTestSuite:
         db_service = get_database_service()
         with db_service.uow() as r:
             r.s.execute(
-                "DELETE FROM msg_delivery_status WHERE message_id IN "
-                "(SELECT id FROM msg_messages WHERE message_type LIKE 'e2e_test_%')"
+                text(
+                    "DELETE FROM msg_delivery_status WHERE message_id IN "
+                    "(SELECT id FROM msg_messages WHERE message_type LIKE 'e2e_test_%')"
+                )
             )
-            repo.session.execute("DELETE FROM msg_messages WHERE message_type LIKE 'e2e_test_%'")
-            repo.commit()
+            r.s.execute(text("DELETE FROM msg_messages WHERE message_type LIKE 'e2e_test_%'"))
 
         print("✓ Test environment cleanup complete")
 

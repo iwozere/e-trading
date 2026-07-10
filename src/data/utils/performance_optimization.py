@@ -236,13 +236,11 @@ class LazyDataLoader:
     def get_chunk(self, chunk_index: int) -> pd.DataFrame | None:
         """Get specific chunk by index."""
         if self.format == "parquet" and PARQUET_AVAILABLE:
-            # Calculate row range for chunk
+            # Slice by row range so chunk boundaries match iter_chunks()
+            # regardless of the file's row-group layout.
+            table = pq.read_table(self.file_path, memory_map=True)
             start_row = chunk_index * self.chunk_size
-            start_row + self.chunk_size
-
-            # Read specific rows
-            table = pq.read_table(self.file_path, row_groups=[chunk_index])
-            return table.to_pandas()
+            return table.slice(start_row, self.chunk_size).to_pandas()
         else:
             # For CSV, we need to skip rows
             skip_rows = chunk_index * self.chunk_size + 1  # +1 for header

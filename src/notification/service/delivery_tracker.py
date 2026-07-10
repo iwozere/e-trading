@@ -397,7 +397,7 @@ class DeliveryTracker:
         self._cleanup_interval_hours = 1
 
         # Background tasks
-        self._cleanup_task: asyncio.Optional[Task] = None
+        self._cleanup_task: Optional[asyncio.Task] = None
         self._running = False
 
     async def start_tracking(self, message: QueuedMessage) -> MessageDeliveryStatus:
