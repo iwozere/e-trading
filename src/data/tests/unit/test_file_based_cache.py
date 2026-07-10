@@ -196,6 +196,7 @@ class TestFileBasedCache(unittest.TestCase):
 
         # Get data (without date filtering to test basic functionality)
         retrieved_df = self.cache.get("binance", "BTCUSDT", "1h", format="csv")
+        assert retrieved_df is not None
 
         self.assertIsNotNone(retrieved_df)
         # The data might be split by years, so we need to check if it contains our data
@@ -315,6 +316,7 @@ class TestFileBasedCache(unittest.TestCase):
 
         # Get data in CSV format
         retrieved_df = self.cache.get("binance", "BTCUSDT", "1h", format="csv")
+        assert retrieved_df is not None
 
         self.assertIsNotNone(retrieved_df)
         # The data might be split by years, so we need to check if it contains our data

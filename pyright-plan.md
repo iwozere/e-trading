@@ -140,3 +140,17 @@ Phase A starting counts: reportUndefinedVariable 38, reportUnusedCoroutine 13, r
 - `src/notification/tests/test_delivery_tracker.py`: async tests unmarked → never ran under strict asyncio mode.
 
 Phase B starting counts: reportOptionalMemberAccess 162, reportOptionalSubscript 70, remaining total 1,132 in 182 files.
+
+- 2026-07-10 — **Phase B complete: 1,132 → 878 errors, all Optional rules at zero** (234 sites; the narrowing also cleared ~20 knock-on errors in other rules).
+  Prod fixes (24 sites, 10 files) — all genuine None-crash paths:
+  - FINRA downloaders: `yf.download()` result used without None guard.
+  - `api/main.py`: conditional-import fallback collapsed `StrategyManager | None` annotation to `None`; fixed with TYPE_CHECKING alias.
+  - `binance_live_feed._run_websocket_loop` / `file_data_feed._realtime_simulation_loop`: thread entry points now guard un-initialized loop/df.
+  - `notification_db_centric_bot`: `hasattr` on possibly-None processor.
+  - p04 scripts (4×): `"Usage:" in __doc__` didn't guard `__doc__ is None` (crashes under `python -OO`).
+  - `run_daily_deep_scan`: closure now binds a non-optional local tracker.
+  - p07 `data_loader`: None guard before `.empty`/`.to_csv`.
+  Tests (~210 sites, 35+ files): inserted `assert x is not None` immediately after Optional-returning calls (script-assisted + 20 manual sites: Optional model attrs like `result.sources`/`run.job_snapshot`, `spec.loader`, `tzinfo`). Strengthens the tests; runtime behavior unchanged (AssertionError replaces AttributeError/TypeError).
+  Verified: mypy 0; modified runnable suites byte-identical results vs pre-change baseline (stash comparison).
+
+Phase C starting counts: 878 errors in ~175 files — reportAttributeAccessIssue ~350, reportArgumentType ~260, reportCallIssue ~190, reportIndexIssue ~49, reportOperatorIssue ~37.

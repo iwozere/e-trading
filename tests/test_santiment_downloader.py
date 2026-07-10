@@ -67,6 +67,8 @@ class TestSantimentDownloader(unittest.TestCase):
     def test_missing_sanpy(self):
         async def run_test():
             result = await self.downloader.get_social_volume("BTC")
+            assert result is not None
+            assert result.raw_data is not None
             self.assertIn("error", result.raw_data)
             self.assertEqual(result.raw_data["error"], "sanpy not installed")
 

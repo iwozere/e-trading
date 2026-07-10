@@ -32,7 +32,7 @@ async def test_twitter(ticker="AAPL"):
         print(f"Request took {end - start:.2f} seconds")
         print(f"Fetched {len(messages)} messages")
         for m in messages:
-            print(f"- {m.get('body')[:100]}...")
+            print(f"- {(m.get('body') or '')[:100]}...")
 
         print("--- Fetching Summary ---")
         summary = await adapter.fetch_summary(ticker)

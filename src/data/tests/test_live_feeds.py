@@ -432,6 +432,7 @@ class TestDataFeedFactory(unittest.TestCase):
         with patch("binance.client.Client.get_historical_klines") as mock_klines:
             mock_klines.return_value = []
             feed = DataFeedFactory.create_data_feed(config)
+            assert feed is not None
 
             self.assertIsInstance(feed, BinanceLiveDataFeed)
             self.assertEqual(feed.symbol, "BTCUSDT")
@@ -443,6 +444,7 @@ class TestDataFeedFactory(unittest.TestCase):
         with patch("yfinance.download") as mock_download:
             mock_download.return_value = pd.DataFrame()
             feed = DataFeedFactory.create_data_feed(config)
+            assert feed is not None
 
             self.assertIsInstance(feed, YahooLiveDataFeed)
             self.assertEqual(feed.symbol, "AAPL")
@@ -486,6 +488,7 @@ class TestDataFeedFactory(unittest.TestCase):
             mock_req_historical.return_value = mock_bars
 
             feed = DataFeedFactory.create_data_feed(config)
+            assert feed is not None
 
             self.assertIsInstance(feed, IBKRLiveDataFeed)
             self.assertEqual(feed.symbol, "AAPL")
@@ -509,6 +512,7 @@ class TestDataFeedFactory(unittest.TestCase):
 
         with patch.object(CoinGeckoLiveDataFeed, "_load_historical_data", return_value=mock_df):
             feed = DataFeedFactory.create_data_feed(config)
+            assert feed is not None
 
             self.assertIsInstance(feed, CoinGeckoLiveDataFeed)
             self.assertEqual(feed.symbol, "bitcoin")

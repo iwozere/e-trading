@@ -132,6 +132,7 @@ async def test_multi_channel_success():
 
         for i, channel in enumerate(channels):
             attempt = await delivery_tracker.start_channel_attempt(message.id, channel)
+            assert attempt is not None
             await delivery_tracker.complete_channel_attempt(
                 attempt.attempt_id,
                 DeliveryStatus.DELIVERED,
@@ -141,6 +142,7 @@ async def test_multi_channel_success():
 
         # Check final status
         final_status = await delivery_tracker.get_delivery_status(message.id)
+        assert final_status is not None
         assert final_status.overall_status == DeliveryResult.SUCCESS
         assert len(final_status.get_successful_channels()) == 3
         assert len(final_status.get_failed_channels()) == 0
@@ -149,6 +151,7 @@ async def test_multi_channel_success():
         # Check response time calculations
         total_time = final_status.get_total_response_time_ms()
         avg_time = final_status.get_average_response_time_ms()
+        assert avg_time is not None
 
         assert total_time == sum(response_times)
         assert abs(avg_time - (sum(response_times) / len(response_times))) < 0.1
@@ -173,6 +176,7 @@ async def test_retry_mechanism():
 
         # First attempt - failure
         attempt1 = await delivery_tracker.start_channel_attempt(message.id, "telegram_channel")
+        assert attempt1 is not None
         assert attempt1.retry_count == 0
 
         await delivery_tracker.complete_channel_attempt(
@@ -181,6 +185,7 @@ async def test_retry_mechanism():
 
         # Second attempt - failure
         attempt2 = await delivery_tracker.start_channel_attempt(message.id, "telegram_channel")
+        assert attempt2 is not None
         assert attempt2.retry_count == 1
 
         await delivery_tracker.complete_channel_attempt(
@@ -189,6 +194,7 @@ async def test_retry_mechanism():
 
         # Third attempt - success
         attempt3 = await delivery_tracker.start_channel_attempt(message.id, "telegram_channel")
+        assert attempt3 is not None
         assert attempt3.retry_count == 2
 
         await delivery_tracker.complete_channel_attempt(
@@ -197,6 +203,7 @@ async def test_retry_mechanism():
 
         # Check final status
         final_status = await delivery_tracker.get_delivery_status(message.id)
+        assert final_status is not None
         assert final_status.overall_status == DeliveryResult.SUCCESS
 
         # Check attempt history
@@ -246,6 +253,7 @@ async def test_status_callbacks():
 
         # Start and complete delivery
         attempt = await delivery_tracker.start_channel_attempt(message.id, "telegram_channel")
+        assert attempt is not None
         await delivery_tracker.complete_channel_attempt(
             attempt.attempt_id, DeliveryStatus.DELIVERED, response_time_ms=100
         )
@@ -291,11 +299,13 @@ async def test_delivery_statistics():
             if outcome == "partial":
                 # Telegram succeeds, email fails
                 tg_attempt = await delivery_tracker.start_channel_attempt(msg_id, "telegram_channel")
+                assert tg_attempt is not None
                 await delivery_tracker.complete_channel_attempt(
                     tg_attempt.attempt_id, DeliveryStatus.DELIVERED, response_time_ms=200
                 )
 
                 email_attempt = await delivery_tracker.start_channel_attempt(msg_id, "email_channel")
+                assert email_attempt is not None
                 await delivery_tracker.complete_channel_attempt(
                     email_attempt.attempt_id, DeliveryStatus.FAILED, error_message="SMTP error"
                 )
@@ -303,6 +313,7 @@ async def test_delivery_statistics():
                 # Single channel outcome
                 for channel in channels:
                     attempt = await delivery_tracker.start_channel_attempt(msg_id, channel)
+                    assert attempt is not None
                     await delivery_tracker.complete_channel_attempt(
                         attempt.attempt_id, outcome, response_time_ms=response_time
                     )
@@ -352,6 +363,7 @@ async def test_delivery_history():
 
             # Complete delivery
             attempt = await delivery_tracker.start_channel_attempt(msg_id, "telegram_channel")
+            assert attempt is not None
             await delivery_tracker.complete_channel_attempt(
                 attempt.attempt_id, DeliveryStatus.DELIVERED, response_time_ms=100 + i * 50
             )
@@ -418,6 +430,7 @@ async def test_performance():
 
                 async def complete_delivery(msg_id, ch):
                     attempt = await delivery_tracker.start_channel_attempt(msg_id, ch)
+                    assert attempt is not None
                     await delivery_tracker.complete_channel_attempt(
                         attempt.attempt_id, DeliveryStatus.DELIVERED, response_time_ms=100
                     )
@@ -436,6 +449,7 @@ async def test_performance():
         success_count = 0
         for delivery_status in delivery_statuses:
             final_status = await delivery_tracker.get_delivery_status(delivery_status.message_id)
+            assert final_status is not None
             if final_status.overall_status == DeliveryResult.SUCCESS:
                 success_count += 1
 

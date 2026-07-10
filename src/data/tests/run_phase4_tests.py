@@ -89,6 +89,7 @@ def run_specific_test(test_path):
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("test_module", test_path)
+    assert spec is not None and spec.loader is not None
     test_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(test_module)
 

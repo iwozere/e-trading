@@ -276,6 +276,9 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
 
     def _run_websocket_loop(self):
         """Run the WebSocket event loop in a separate thread."""
+        if self.loop is None:
+            _logger.error("WebSocket loop thread started without an event loop")
+            return
         asyncio.set_event_loop(self.loop)
         self.loop.run_until_complete(self._websocket_handler())
 

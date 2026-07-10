@@ -222,6 +222,7 @@ class TestDailyDeepScan(unittest.TestCase):
             "api_calls_finnhub": 0,
         }
         transient_metrics = self.daily_deep_scan.calculate_transient_metrics("TEST", metrics_dict)
+        assert transient_metrics is not None
 
         # Assertions
         self.assertIsNotNone(transient_metrics)
@@ -262,6 +263,7 @@ class TestDailyDeepScan(unittest.TestCase):
             "api_calls_finnhub": 0,
         }
         transient_metrics = self.daily_deep_scan.calculate_transient_metrics("TEST", metrics_dict)
+        assert transient_metrics is not None
 
         # Assertions
         self.assertIsNotNone(transient_metrics)
@@ -304,6 +306,7 @@ class TestDailyDeepScan(unittest.TestCase):
             # Scan candidate
             metrics_dict = {"successful_scans": 0, "failed_scans": 0}
             scored_candidate = self.daily_deep_scan._scan_candidate(candidate, metrics_dict)
+            assert scored_candidate is not None
 
             # Assertions
             self.assertIsNotNone(scored_candidate)

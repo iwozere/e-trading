@@ -88,7 +88,7 @@ class P07DataLoader:
                 else:
                     # Fallback for other providers (historical)
                     df = loader.get_ohlcv("bitcoin", "1d", start, end)
-                if not df.empty:
+                if df is not None and not df.empty:
                     self.btc_mc_path.parent.mkdir(parents=True, exist_ok=True)
                     df.to_csv(self.btc_mc_path)
                     _logger.info("BTC Market Cap saved to %s", self.btc_mc_path)

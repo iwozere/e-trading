@@ -187,12 +187,15 @@ class TestServiceLayerMocks:
     def test_service_test_context_manager(self):
         """Test the ServiceTestContext context manager."""
         with ServiceTestContext() as ctx:
+            assert ctx.telegram_service_mock is not None
+            assert ctx.indicator_service_mock is not None
             # Setup test data
             ctx.setup_user("test_user", approved=True, verified=True)
             ctx.setup_indicators("AAPL", technical_indicators={"RSI": 65.5})
 
             # Test user setup
             status = ctx.telegram_service_mock.get_user_status("test_user")
+            assert status is not None
             assert status["approved"] is True
 
             # Test indicator setup

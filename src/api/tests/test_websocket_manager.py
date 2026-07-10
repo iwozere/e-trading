@@ -250,6 +250,7 @@ class TestConnectionManager:
 
         # Subscribe to channel
         connection1 = self.manager.get_connection(conn_id1)
+        assert connection1 is not None
         connection1.add_subscription("strategy_updates")
 
         message = {"type": "strategy_update", "data": {}}

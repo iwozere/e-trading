@@ -749,7 +749,7 @@ class FinraDataDownloader(BaseDataDownloader):
                     threads=False,  # Disable threading to avoid error propagation
                 )
 
-                if data.empty:
+                if data is None or data.empty:
                     _logger.debug("No data returned for batch %d", batch_num)
                     failed_tickers.extend(batch)
                     continue

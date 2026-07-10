@@ -167,6 +167,7 @@ class TestPhase4Integration(unittest.TestCase):
         end_date = datetime.now()
 
         # Step 1: Fetch data from source
+        assert self.mock_source is not None
         with self.performance_monitor.start_operation("data_fetch"):
             df = self.mock_source.fetch_historical_data(symbol, interval, start_date, end_date)
 
@@ -453,7 +454,7 @@ class TestPhase4Integration(unittest.TestCase):
                 symbol, interval, start_date=datetime(year, 1, 1), end_date=datetime(year, 1, 3)
             )
 
-            self.assertIsNotNone(retrieved_df)
+            assert retrieved_df is not None
             # The retrieved data will have timestamp as index, so we need to compare columns and data
             self.assertEqual(set(test_df.columns), set(retrieved_df.columns))
             self.assertEqual(len(test_df), len(retrieved_df))
@@ -529,9 +530,10 @@ class TestPhase4Integration(unittest.TestCase):
         for metrics in metrics_data:
             if metrics.operation_name == "test_operation":
                 test_operation_metrics = metrics
+                assert test_operation_metrics is not None
                 break
 
-        self.assertIsNotNone(test_operation_metrics)
+        assert test_operation_metrics is not None
         self.assertGreater(test_operation_metrics.duration_ms, 0)
 
         # Test performance summary

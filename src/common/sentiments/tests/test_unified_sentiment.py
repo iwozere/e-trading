@@ -52,6 +52,7 @@ class TestUnifiedSentiment(unittest.IsolatedAsyncioTestCase):
             # Verify results
             self.assertIn("AAPL", results)
             aapl = results["AAPL"]
+            assert aapl is not None
             self.assertIsNotNone(aapl)
 
             # Check mention aggregation (10 + 20 + 5 + 1 + 50 + 100 = 186)
@@ -106,6 +107,7 @@ class TestUnifiedSentiment(unittest.IsolatedAsyncioTestCase):
             results = await collect_sentiment_batch(["AAPL"], config=config)
 
             aapl = results["AAPL"]
+            assert aapl is not None
             self.assertIsNotNone(aapl)
             self.assertEqual(aapl.data_quality["huggingface"], "ok")
 

@@ -40,6 +40,8 @@ def test_fmp_initialization():
     try:
         os.environ["FMP_API_KEY"] = "env_test_key"
         downloader = FMPDataDownloader()
+        assert downloader is not None
+        assert downloader.api_key is not None
         print(f"✅ FMP downloader initialized with env API key: {downloader.api_key[:10]}...")
         assert downloader.api_key == "env_test_key"
         print("✅ Environment variable API key correctly loaded")
@@ -226,6 +228,7 @@ def test_fundamentals_retrieval_mock():
 
         try:
             fundamentals = downloader.get_fundamentals("AAPL")
+            assert fundamentals is not None
             print(f"✅ Fundamentals retrieved for {fundamentals.ticker}")
             print(f"   Company: {fundamentals.company_name}")
             print(f"   Price: ${fundamentals.current_price:.2f}")
@@ -280,6 +283,7 @@ def test_ohlcv_retrieval_mock():
         mock_get.return_value.raise_for_status.return_value = None
         try:
             df = downloader.get_ohlcv("AAPL", "1d", start_date, end_date)
+            assert df is not None
             print("✅ OHLCV data retrieved for AAPL")
             print(f"   Shape: {df.shape}")
             print(f"   Columns: {list(df.columns)}")

@@ -271,7 +271,8 @@ class TestBackwardCompatibility(unittest.TestCase):
         """Test that paper trading functionality is preserved."""
         # Test paper portfolio initialization
         if self.broker.paper_trading_enabled:
-            self.assertIsNotNone(self.broker.paper_portfolio)
+            assert self.broker.paper_portfolio is not None
+            assert self.broker.paper_trading_config is not None
             self.assertEqual(
                 self.broker.paper_portfolio.initial_balance, self.broker.paper_trading_config.initial_balance
             )

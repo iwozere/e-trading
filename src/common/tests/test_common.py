@@ -69,6 +69,8 @@ class TestCommonFundamentals(unittest.TestCase):
         """Test normalization with a single provider."""
         sources = {"yf": self.mock_yf_data}
         result = normalize_fundamentals(sources)
+        assert result is not None
+        assert result.sources is not None
 
         self.assertIsInstance(result, Fundamentals)
         self.assertEqual(result.ticker, "AAPL")
@@ -82,6 +84,8 @@ class TestCommonFundamentals(unittest.TestCase):
         """Test normalization with multiple providers, checking priority."""
         sources = {"av": self.mock_av_data, "fh": self.mock_fh_data, "yf": self.mock_yf_data}
         result = normalize_fundamentals(sources)
+        assert result is not None
+        assert result.sources is not None
 
         # Should use yf data first (highest priority)
         self.assertEqual(result.ticker, "AAPL")
@@ -98,6 +102,8 @@ class TestCommonFundamentals(unittest.TestCase):
 
         sources = {"yf": yf_data, "av": av_data}
         result = normalize_fundamentals(sources)
+        assert result is not None
+        assert result.sources is not None
 
         self.assertEqual(result.ticker, "AAPL")  # from yf
         self.assertEqual(result.company_name, "Apple Inc.")  # from av
@@ -128,6 +134,8 @@ class TestCommonFundamentals(unittest.TestCase):
         """Test normalization with Alpha Vantage specific field names."""
         sources = {"av": self.mock_av_data}
         result = normalize_fundamentals(sources)
+        assert result is not None
+        assert result.sources is not None
 
         self.assertEqual(result.ticker, "AAPL")
         self.assertEqual(result.company_name, "Apple Inc.")
@@ -140,6 +148,8 @@ class TestCommonFundamentals(unittest.TestCase):
         """Test normalization with Finnhub data."""
         sources = {"fh": self.mock_fh_data}
         result = normalize_fundamentals(sources)
+        assert result is not None
+        assert result.sources is not None
 
         self.assertEqual(result.ticker, "AAPL")
         self.assertEqual(result.current_price, 150.0)
@@ -225,6 +235,8 @@ class TestCommonFundamentals(unittest.TestCase):
         ]
 
         result = get_fundamentals(self.test_symbol)
+        assert result is not None
+        assert result.sources is not None
 
         self.assertIsInstance(result, Fundamentals)
         self.assertEqual(result.ticker, "AAPL")
@@ -259,6 +271,8 @@ class TestCommonFundamentals(unittest.TestCase):
         }
 
         result = normalize_fundamentals(sources)
+        assert result is not None
+        assert result.sources is not None
 
         # Should use yf data first
         self.assertEqual(result.ticker, "AAPL_YF")
@@ -331,6 +345,8 @@ class TestCommonFundamentals(unittest.TestCase):
         }
 
         result = normalize_fundamentals(sources)
+        assert result is not None
+        assert result.sources is not None
 
         # Test all fields are populated
         self.assertEqual(result.ticker, "AAPL")

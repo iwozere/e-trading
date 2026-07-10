@@ -452,6 +452,7 @@ class TestNotificationServiceIntegration:
 
         # 5. Update message to delivered
         final_message = service.update_message_status(message_id=message.id, status=MessageStatus.DELIVERED.value)
+        assert final_message is not None
 
         assert final_message.status == MessageStatus.DELIVERED.value
         assert final_message.processed_at is not None

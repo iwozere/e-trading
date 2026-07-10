@@ -71,7 +71,7 @@ class WeeklyUniverseLoader:
         parser = argparse.ArgumentParser(
             description="Load weekly stock universe for short squeeze detection",
             formatter_class=argparse.RawDescriptionHelpFormatter,
-            epilog=__doc__.split("Usage:")[1] if "Usage:" in __doc__ else "",
+            epilog=__doc__.split("Usage:")[1] if __doc__ and "Usage:" in __doc__ else "",
         )
 
         parser.add_argument(

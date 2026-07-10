@@ -61,6 +61,7 @@ class TestWeeklyScreener(unittest.TestCase):
 
         # Extract metrics
         metrics = self.weekly_screener._extract_structural_metrics("TEST", short_data, float_data, volume_data)
+        assert metrics is not None
 
         # Assertions
         self.assertIsNotNone(metrics)
@@ -281,6 +282,7 @@ class TestWeeklyScreener(unittest.TestCase):
 
         # Get average volume
         volume_data = self.weekly_screener._get_average_volume("TEST")
+        assert volume_data is not None
 
         # Assertions
         self.assertIsNotNone(volume_data)

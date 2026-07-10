@@ -109,6 +109,8 @@ async def test_email_channel():
         )
 
         formatted = channel.format_message(content)
+        assert formatted is not None
+        assert formatted.html is not None
         print("✓ Message formatting: HTML generated")
         print(f"  HTML preview: {formatted.html[:100]}...")
 

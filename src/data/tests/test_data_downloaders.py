@@ -159,6 +159,7 @@ class TestYahooDataDownloader(TestDataDownloaders):
         }
         self.mock_ticker_class.return_value = mock_ticker_instance
         fundamentals = self.downloader.get_fundamentals(self.test_symbol)
+        assert fundamentals is not None
         self.assert_valid_fundamentals(fundamentals)
         self.assertEqual(fundamentals.company_name, "Apple Inc.")
         self.assertEqual(fundamentals.current_price, 150.0)
@@ -213,6 +214,7 @@ class TestAlphaVantageDataDownloader(TestDataDownloaders):
         }
         mock_get.return_value = mock_response
         df = self.downloader.get_ohlcv(self.test_symbol, self.interval, self.start_date, self.end_date)
+        assert df is not None
         # Ensure columns after renaming
         for col in ["open", "high", "low", "close", "volume", "timestamp"]:
             self.assertIn(col, df.columns)
@@ -263,6 +265,7 @@ class TestAlphaVantageDataDownloader(TestDataDownloaders):
         mock_get.return_value = mock_response
 
         fundamentals = self.downloader.get_fundamentals(self.test_symbol)
+        assert fundamentals is not None
 
         self.assert_valid_fundamentals(fundamentals)
         self.assertEqual(fundamentals.data_source, "Alpha Vantage")
@@ -348,6 +351,7 @@ class TestFinnhubDataDownloader(TestDataDownloaders):
         mock_get.return_value = mock_response
 
         fundamentals = self.downloader.get_fundamentals(self.test_symbol)
+        assert fundamentals is not None
 
         self.assert_valid_fundamentals(fundamentals)
         self.assertEqual(fundamentals.data_source, "Finnhub")
@@ -407,6 +411,7 @@ class TestPolygonDataDownloader(TestDataDownloaders):
         mock_get.return_value = mock_response
 
         fundamentals = self.downloader.get_fundamentals(self.test_symbol)
+        assert fundamentals is not None
 
         self.assert_valid_fundamentals(fundamentals)
         self.assertEqual(fundamentals.data_source, "Polygon.io")
@@ -467,6 +472,7 @@ class TestTwelveDataDataDownloader(TestDataDownloaders):
         mock_get.return_value = mock_response
 
         fundamentals = self.downloader.get_fundamentals(self.test_symbol)
+        assert fundamentals is not None
 
         self.assert_valid_fundamentals(fundamentals)
         self.assertEqual(fundamentals.data_source, "Twelve Data")
@@ -551,6 +557,7 @@ class TestFMPDataDownloader(TestDataDownloaders):
         mock_get.return_value = mock_response
 
         df = self.downloader.get_ohlcv(self.test_symbol, self.interval, self.start_date, self.end_date)
+        assert df is not None
 
         # FMP downloader returns timestamp as index, so we need to check differently
         self.assertIsInstance(df, pd.DataFrame)
@@ -589,6 +596,7 @@ class TestFMPDataDownloader(TestDataDownloaders):
         mock_get.return_value = mock_response
 
         fundamentals = self.downloader.get_fundamentals(self.test_symbol)
+        assert fundamentals is not None
 
         self.assertIsInstance(fundamentals, dict)
         self.assertIn("symbol", fundamentals)
@@ -652,6 +660,7 @@ class TestTiingoDataDownloader(TestDataDownloaders):
         mock_get.return_value = mock_response
 
         df = self.downloader.get_ohlcv(self.test_symbol, self.interval, self.start_date, self.end_date)
+        assert df is not None
 
         # Tiingo downloader returns timestamp as index, so we need to check differently
         self.assertIsInstance(df, pd.DataFrame)
@@ -686,6 +695,7 @@ class TestTiingoDataDownloader(TestDataDownloaders):
         mock_get.return_value = mock_response
 
         fundamentals = self.downloader.get_fundamentals(self.test_symbol)
+        assert fundamentals is not None
 
         self.assertIsInstance(fundamentals, dict)
         self.assertIn("symbol", fundamentals)

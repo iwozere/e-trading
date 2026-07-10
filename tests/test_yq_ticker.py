@@ -23,6 +23,7 @@ def test_yq_ticker():
     try:
         # Download data
         df = yf.download("YQ", period="2y", interval="1d")
+        assert df is not None
         print(f"Downloaded data shape: {df.shape}")
         print(f"Columns: {df.columns.tolist()}")
         print("First few rows:")

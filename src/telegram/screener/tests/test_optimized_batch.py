@@ -38,6 +38,7 @@ def test_individual_vs_batch_vs_optimized():
     for ticker in test_tickers:
         try:
             fundamentals = downloader.get_fundamentals(ticker)
+            assert fundamentals is not None
             individual_fundamentals[ticker] = fundamentals
             print(f"  ✅ {ticker}: {fundamentals.company_name}")
         except Exception as e:

@@ -127,7 +127,7 @@ class MessagePoller:
         try:
             # Process each message using the database-centric method
             for message in messages:
-                if hasattr(self.processor, "process_database_message"):
+                if self.processor is not None and hasattr(self.processor, "process_database_message"):
                     result = await self.processor.process_database_message(message)
                     self._logger.debug("Processed message %s: success=%s", message.id, result.success)
                 else:

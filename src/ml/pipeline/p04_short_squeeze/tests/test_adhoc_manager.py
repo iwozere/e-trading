@@ -173,6 +173,7 @@ class TestAdHocManager(unittest.TestCase):
 
             # Execute
             result = self.adhoc_manager.get_candidate("TSLA")
+            assert result is not None
 
             # Verify
             self.assertIsNotNone(result)

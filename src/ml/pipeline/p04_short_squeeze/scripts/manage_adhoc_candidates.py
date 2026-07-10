@@ -536,7 +536,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Manage ad-hoc candidates for short squeeze detection",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__.split("Usage:")[1] if "Usage:" in __doc__ else "",
+        epilog=__doc__.split("Usage:")[1] if __doc__ and "Usage:" in __doc__ else "",
     )
 
     parser.add_argument("--config", "-c", type=str, help="Path to configuration file")

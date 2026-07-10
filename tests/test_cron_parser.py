@@ -59,8 +59,10 @@ class TestCronParser:
         timezone_str = "America/New_York"
 
         result = CronParser.parse_cron(expression, timezone=timezone_str)
+        assert result is not None
 
         assert isinstance(result, CronExpression)
+        assert result.next_run.tzinfo is not None
         assert result.next_run.tzinfo.zone == timezone_str
 
     def test_parse_cron_invalid_field_count(self):
@@ -151,7 +153,9 @@ class TestCronParser:
         timezone_str = "America/New_York"
 
         next_run = CronParser.calculate_next_run(expression, from_time=base_time, timezone=timezone_str)
+        assert next_run is not None
 
+        assert next_run.tzinfo is not None
         assert next_run.tzinfo.zone == timezone_str
 
     def test_calculate_next_run_invalid_expression(self):
@@ -258,10 +262,14 @@ class TestCronParser:
 
         for tz_str in timezones:
             result = CronParser.parse_cron(expression, timezone=tz_str)
+            assert result is not None
+            assert result.next_run.tzinfo is not None
             assert result.next_run.tzinfo.zone == tz_str
 
             # Calculate next run with timezone
             next_run = CronParser.calculate_next_run(expression, timezone=tz_str)
+            assert next_run is not None
+            assert next_run.tzinfo is not None
             assert next_run.tzinfo.zone == tz_str
 
     def test_edge_cases(self):
@@ -322,9 +330,11 @@ class TestCronParser:
         base_time = tz.localize(base_time)
 
         next_run = CronParser.calculate_next_run(expression, from_time=base_time, timezone="America/New_York")
+        assert next_run is not None
 
         # Should handle DST transition gracefully
         assert isinstance(next_run, datetime)
+        assert next_run.tzinfo is not None
         assert next_run.tzinfo.zone == "America/New_York"
 
     def test_concurrent_parsing(self):

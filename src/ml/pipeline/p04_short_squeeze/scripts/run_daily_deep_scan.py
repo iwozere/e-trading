@@ -132,7 +132,7 @@ class DailyDeepScanRunner:
         parser = argparse.ArgumentParser(
             description="Run daily deep scan for short squeeze detection",
             formatter_class=argparse.RawDescriptionHelpFormatter,
-            epilog=__doc__.split("Usage:")[1] if "Usage:" in __doc__ else "",
+            epilog=__doc__.split("Usage:")[1] if __doc__ and "Usage:" in __doc__ else "",
         )
 
         parser.add_argument(
@@ -399,7 +399,9 @@ class DailyDeepScanRunner:
 
             # Setup progress tracking if enabled
             if enable_progress and candidates:
-                self.progress_tracker = ProgressTracker(len(candidates))
+                # Bind locally so the closure sees a non-optional tracker.
+                progress_tracker = ProgressTracker(len(candidates))
+                self.progress_tracker = progress_tracker
 
                 # Monkey patch the scan method to update progress
                 original_scan = deep_scan._scan_candidate
@@ -407,10 +409,10 @@ class DailyDeepScanRunner:
                 def progress_scan_candidate(candidate, metrics, sentiment_features=None):
                     try:
                         result = original_scan(candidate, metrics, sentiment_features)
-                        self.progress_tracker.update(success=result is not None)
+                        progress_tracker.update(success=result is not None)
                         return result
                     except Exception:
-                        self.progress_tracker.update(success=False)
+                        progress_tracker.update(success=False)
                         raise
 
                 deep_scan._scan_candidate = progress_scan_candidate  # type: ignore[method-assign]

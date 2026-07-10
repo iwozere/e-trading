@@ -21,7 +21,10 @@ import re
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
+
+if TYPE_CHECKING:
+    from src.trading.strategy_manager import StrategyManager as _StrategyManagerT
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -116,7 +119,7 @@ from src.api.telegram_routes import router as telegram_router
 from src.data.db.models.model_users import User
 
 # Global strategy manager and service instances
-strategy_manager: StrategyManager | None = None
+strategy_manager: "_StrategyManagerT | None" = None
 strategy_service: StrategyManagementService | None = None
 monitoring_service: SystemMonitoringService | None = None
 api_heartbeat_manager: Any = None

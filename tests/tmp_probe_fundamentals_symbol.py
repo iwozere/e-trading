@@ -40,6 +40,7 @@ def _summarize_fundamentals(obj: Any) -> Dict[str, Any]:
         return {"repr": repr(obj)[:200]}
 
     profile = d.get("profile") if isinstance(d.get("profile"), dict) else {}
+    assert profile is not None
     return {
         "market_cap": d.get("market_cap"),
         "avg_volume": d.get("avg_volume"),

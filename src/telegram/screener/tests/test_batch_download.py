@@ -106,6 +106,7 @@ def test_batch_fundamentals_download():
     for ticker in test_tickers:
         try:
             fundamentals = downloader.get_fundamentals(ticker)
+            assert fundamentals is not None
             individual_results[ticker] = fundamentals
             print(f"  ✅ {ticker}: {fundamentals.company_name}")
         except Exception as e:

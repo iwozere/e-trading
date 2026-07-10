@@ -161,6 +161,7 @@ async def test_auto_disable_enable():
 
         # Get initial status
         status = monitor.get_channel_status("auto_test_channel")
+        assert status is not None
         assert status.is_enabled == True
         assert status.auto_disabled == False
         print("✓ Channel initially enabled")
@@ -187,6 +188,7 @@ async def test_auto_disable_enable():
 
         # Check if channel was auto-disabled
         status = monitor.get_channel_status("auto_test_channel")
+        assert status is not None
         assert status.is_enabled == False
         assert status.auto_disabled == True
         print("✓ Channel auto-disabled after consecutive failures")
@@ -215,6 +217,7 @@ async def test_auto_disable_enable():
 
         # Check if channel was auto-enabled
         status = monitor.get_channel_status("auto_test_channel")
+        assert status is not None
         assert status.is_enabled == True
         assert status.auto_disabled == False
         print("✓ Channel auto-enabled after recovery")
@@ -241,6 +244,7 @@ async def test_manual_disable_enable():
 
         # Check initial state
         status = monitor.get_channel_status("manual_test_channel")
+        assert status is not None
         assert status.is_enabled == True
         print("✓ Channel initially enabled")
 
@@ -249,6 +253,7 @@ async def test_manual_disable_enable():
         assert result == True
 
         status = monitor.get_channel_status("manual_test_channel")
+        assert status is not None
         assert status.is_enabled == False
         assert status.auto_disabled == False  # Manual, not auto
         print("✓ Channel manually disabled")
@@ -258,6 +263,7 @@ async def test_manual_disable_enable():
         assert result == True
 
         status = monitor.get_channel_status("manual_test_channel")
+        assert status is not None
         assert status.is_enabled == True
         assert status.auto_disabled == False
         print("✓ Channel manually enabled")
@@ -568,6 +574,7 @@ async def test_channel_management():
         assert result == True
 
         status = monitor.get_channel_status("channel1")
+        assert status is not None
         assert status.failure_count == 0
         assert status.consecutive_failures == 0
         assert status.uptime_percentage == 100.0

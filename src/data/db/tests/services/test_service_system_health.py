@@ -324,4 +324,5 @@ class TestSystemHealthServiceIntegration:
 
         # Get specific channel
         slack_health = service.get_notification_channel_health("slack")
+        assert slack_health is not None
         assert slack_health["status"] == SystemHealthStatus.DOWN.value

@@ -13,6 +13,7 @@ def download_btc_mc():
 
     # Fetch data
     df = yf.download(ticker, start=start_date, end=end_date)
+    assert df is not None
 
     if df.empty:
         print("Failed to download data.")
@@ -21,6 +22,7 @@ def download_btc_mc():
     # We use Close as 'btc_mc' for the regime model
     # Log-returns of Price are almost identical to Log-returns of Market Cap
     df_mc = pd.DataFrame(index=df.index)
+    assert df_mc is not None
     df_mc["timestamp"] = df.index
     df_mc["btc_mc"] = df["Close"]
 

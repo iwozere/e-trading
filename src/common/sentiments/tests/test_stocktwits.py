@@ -16,7 +16,7 @@ async def test_stocktwits(ticker="AAPL"):
         messages = await adapter.fetch_messages(ticker, limit=5)
         print(f"Fetched {len(messages)} messages")
         for m in messages:
-            print(f"- {m.get('body')[:100]}...")
+            print(f"- {(m.get('body') or '')[:100]}...")
 
         summary = await adapter.fetch_summary(ticker)
         print(f"Summary: {summary}")

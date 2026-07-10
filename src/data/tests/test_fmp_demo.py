@@ -128,6 +128,7 @@ def demo_fundamentals_retrieval():
 
             try:
                 fundamentals = downloader.get_fundamentals(symbol)
+                assert fundamentals is not None
                 print(f"✅ {fundamentals.company_name}")
                 print(f"   Price: ${fundamentals.current_price:.2f}")
                 print(f"   Market Cap: ${fundamentals.market_cap:,.0f}")

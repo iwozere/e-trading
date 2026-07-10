@@ -138,7 +138,7 @@ class VolumeDetectorRunner:
         parser = argparse.ArgumentParser(
             description="Run volume detector for short squeeze detection",
             formatter_class=argparse.RawDescriptionHelpFormatter,
-            epilog=__doc__.split("Usage:")[1] if "Usage:" in __doc__ else "",
+            epilog=__doc__.split("Usage:")[1] if __doc__ and "Usage:" in __doc__ else "",
         )
 
         parser.add_argument(

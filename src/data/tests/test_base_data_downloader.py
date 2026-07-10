@@ -134,6 +134,7 @@ def test_yahoo_data_downloader_integration(monkeypatch):
         start_date = datetime(2023, 1, 1)
         end_date = datetime(2023, 1, 7)
         df = ydd.get_ohlcv("AAPL", "1d", start_date, end_date)
+        assert df is not None
         assert not df.empty
     finally:
         shutil.rmtree(temp_dir)

@@ -152,6 +152,7 @@ class TestJobsServiceSchedules:
         # Update cron
         update_data = ScheduleUpdate(cron="0 10 * * *")
         updated = service.update_schedule(schedule_id=schedule.id, update_data=update_data)
+        assert updated is not None
 
         assert updated.cron == "0 10 * * *"
         # Next run time should be recalculated (different from original)
@@ -197,8 +198,9 @@ class TestJobsServiceSchedules:
         # BUG: service creates job_id with string format (line 142 in jobs_service.py)
         # but ScheduleRunCreate expects Optional[int]
         run = service.trigger_schedule(schedule_id=schedule.id)
-
         assert run is not None
+        assert run.job_snapshot is not None
+
         assert run.job_type == JobType.SCREENER.value
         assert run.status == RunStatus.PENDING.value
         assert "manual" in str(run.job_id)
@@ -417,6 +419,7 @@ class TestJobsServiceRuns:
 
         # Verify it's cancelled
         cancelled = service.get_run(run_id=run.id)
+        assert cancelled is not None
         assert cancelled.status == RunStatus.CANCELLED.value
 
     def test_cancel_running_run_fails(self, mock_database_service, db_session):
@@ -527,8 +530,9 @@ class TestJobsServiceScreener:
         run = service.create_screener_run(
             user_id=1, screener_set="sp500", filter_criteria={"volume": "> 1000000"}, top_n=10
         )
-
         assert run is not None
+        assert run.job_snapshot is not None
+
         assert run.job_type == JobType.SCREENER.value
         assert "sp500" in str(run.job_id)
         assert run.job_snapshot["screener_set"] == "sp500"
@@ -546,8 +550,9 @@ class TestJobsServiceScreener:
         run = service.create_screener_run(
             user_id=1, tickers=["AAPL", "MSFT", "GOOGL"], filter_criteria={"price": "> 100"}
         )
-
         assert run is not None
+        assert run.job_snapshot is not None
+
         assert run.job_snapshot["tickers"] == ["AAPL", "MSFT", "GOOGL"]
 
     def test_create_screener_run_no_input_fails(self, mock_database_service):
@@ -573,8 +578,9 @@ class TestJobsServiceReport:
         run = service.create_report_run(
             user_id=1, report_type="weekly_summary", parameters={"start_date": "2025-01-01", "end_date": "2025-01-07"}
         )
-
         assert run is not None
+        assert run.job_snapshot is not None
+
         assert run.job_type == JobType.REPORT.value
         assert "weekly_summary" in str(run.job_id)
         assert run.job_snapshot["report_type"] == "weekly_summary"

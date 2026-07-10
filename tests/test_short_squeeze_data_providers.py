@@ -49,6 +49,7 @@ class TestFMPShortSqueezeExtensions(unittest.TestCase):
 
         # Test the method
         result = self.downloader.get_short_interest_data("AAPL")
+        assert result is not None
 
         # Assertions
         self.assertIsNotNone(result)
@@ -97,6 +98,7 @@ class TestFMPShortSqueezeExtensions(unittest.TestCase):
 
         # Test the method
         result = self.downloader.get_float_shares_data("AAPL")
+        assert result is not None
 
         # Assertions
         self.assertIsNotNone(result)
@@ -225,6 +227,7 @@ class TestFinnhubShortSqueezeExtensions(unittest.TestCase):
 
         # Test the method
         result = self.downloader.get_sentiment_data("AAPL")
+        assert result is not None
 
         # Assertions
         self.assertIsNotNone(result)
@@ -251,6 +254,7 @@ class TestFinnhubShortSqueezeExtensions(unittest.TestCase):
 
         # Test the method
         result = self.downloader.get_options_data("AAPL")
+        assert result is not None
 
         # Assertions
         self.assertIsNotNone(result)
@@ -273,6 +277,7 @@ class TestFinnhubShortSqueezeExtensions(unittest.TestCase):
 
         # Test the method
         result = self.downloader.get_borrow_rates_data("AAPL")
+        assert result is not None
 
         # Assertions
         self.assertIsNotNone(result)
@@ -321,6 +326,7 @@ class TestFinnhubShortSqueezeExtensions(unittest.TestCase):
 
         # Test the method
         result = self.downloader.aggregate_24h_sentiment("AAPL")
+        assert result is not None
 
         # Assertions
         self.assertIsNotNone(result)
@@ -397,6 +403,7 @@ class TestDataProviderIntegration(unittest.TestCase):
             mock_fmp_get.return_value = mock_fmp_response
 
             fmp_data = self.fmp_downloader.get_short_interest_data("AAPL")
+            assert fmp_data is not None
             self.assertIsNotNone(fmp_data)
             self.assertEqual(fmp_data["symbol"], "AAPL")
 
@@ -414,6 +421,7 @@ class TestDataProviderIntegration(unittest.TestCase):
             mock_finnhub_get.return_value = mock_finnhub_response
 
             finnhub_data = self.finnhub_downloader.get_sentiment_data("AAPL")
+            assert finnhub_data is not None
             self.assertIsNotNone(finnhub_data)
             self.assertEqual(finnhub_data["symbol"], "AAPL")
 

@@ -253,6 +253,7 @@ class TestAlertEngine(unittest.TestCase):
             )
 
             alert = self.alert_engine._evaluate_candidate_alert(scored_candidate)
+            assert alert is not None
 
             self.assertIsNotNone(alert)
             self.assertEqual(alert.ticker, "TSLA")

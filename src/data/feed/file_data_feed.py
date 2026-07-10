@@ -289,6 +289,9 @@ class FileDataFeed(bt.feed.DataBase):
 
     def _realtime_simulation_loop(self):
         """Main loop for real-time simulation."""
+        if self.df is None:
+            _logger.error("Real-time simulation started without loaded data")
+            return
         while not self.should_stop and self.current_index < len(self.df):
             try:
                 # Get next row
