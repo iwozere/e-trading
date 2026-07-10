@@ -65,7 +65,12 @@ def _compute_signals_for_ticker(
     rows: List[Dict[str, Any]] = []
 
     def _signal(signal_type: str, value: float | None) -> None:
-        if value is None or (isinstance(value, float) and np.isnan(value)):
+        if value is None:
+            return
+        # Coerce numpy scalars to builtin float: psycopg2 binds float
+        # subclasses via repr(), and numpy 2.x scalar repr is not a SQL literal.
+        value = float(value)
+        if np.isnan(value):
             return
         rows.append({"ticker": ticker, "date": as_of_date, "signal_type": signal_type, "value": round(value, 6)})
 

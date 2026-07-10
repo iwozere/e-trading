@@ -12,6 +12,25 @@ from config.donotshare.donotshare import DB_URL as CONFIG_DB_URL
 from config.donotshare.donotshare import SQL_ECHO as CONFIG_SQL_ECHO
 from src.data.db.core.base import Base
 
+# --- psycopg2 numpy scalar adapters -------------------------------------------
+# psycopg2 binds float/int subclasses via repr(); numpy 2.x changed scalar reprs
+# to e.g. "np.float64(1.5)", which Postgres parses as a call into a non-existent
+# "np" schema (InvalidSchemaName). Bind numpy scalars as their Python natives.
+try:
+    import numpy as _np
+    from psycopg2.extensions import adapt as _pg_adapt
+    from psycopg2.extensions import register_adapter as _pg_register_adapter
+
+    def _adapt_numpy_scalar(value: Any) -> Any:
+        """Adapt a numpy scalar by delegating to the adapter of its Python native."""
+        return _pg_adapt(value.item())
+
+    for _np_scalar_type in (_np.bool_, _np.int16, _np.int32, _np.int64, _np.float32, _np.float64):
+        _pg_register_adapter(_np_scalar_type, _adapt_numpy_scalar)
+except ImportError:
+    # numpy or psycopg2 not installed (e.g. SQLite-only environment) — nothing to adapt.
+    pass
+
 # --- Config ------------------------------------------------------------------
 
 # Use PostgreSQL by default, fallback to SQLite if needed
