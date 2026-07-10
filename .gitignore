@@ -67,6 +67,7 @@ logs/
 !config/*/*.yaml
 !config/*/*.json
 !config/*/*/*.json
+!pyrightconfig.json
 !config/*/*/*/*.json
 
 !src/web_ui/frontend/*.json

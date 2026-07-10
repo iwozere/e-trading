@@ -11,4 +11,9 @@ types-openpyxl
 types-psutil
 types-reportlab
 types-requests
-types-tqdm 
+types-tqdm
+# Type stubs / optional runtime deps needed for pyright analysis (see pyright-plan.md)
+pandas-stubs
+redis
+zstandard
+san
