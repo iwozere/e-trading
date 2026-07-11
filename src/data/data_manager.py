@@ -25,7 +25,7 @@ Some call sites reset_index locally or use ``coerce_ohlcv_timestamp_column`` whe
 import os
 import re
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, List, TypeGuard
+from typing import Any, Dict, List, TypeGuard, cast
 
 import pandas as pd
 
@@ -243,6 +243,7 @@ class DataManager:
             diffs = cached_data.index.to_series().diff().dropna()
             large_gaps = diffs[diffs > (bar_duration * tolerance_factor)]
             for gap_end_ts, duration in large_gaps.items():
+                gap_end_ts = cast(pd.Timestamp, gap_end_ts)
                 gap_start_ts = gap_end_ts - duration + bar_duration
                 missing_segments.append((gap_start_ts.to_pydatetime(), gap_end_ts.to_pydatetime() - bar_duration))
                 _logger.info("Gap detected: INTERMEDIATE for %s (%s to %s)", symbol, gap_start_ts, gap_end_ts)
@@ -391,6 +392,7 @@ class DataManager:
             diffs = cached_df.index.to_series().diff().dropna()
             large_gaps = diffs[diffs > (bar_duration * tolerance_factor)]
             for gap_end_ts, duration in large_gaps.items():
+                gap_end_ts = cast(pd.Timestamp, gap_end_ts)
                 gap_start_ts = gap_end_ts - duration + bar_duration
                 # Groups these for later batch download
                 missing_ranges.setdefault(sym, []).append(
@@ -1940,7 +1942,7 @@ class DataManager:
         sigalrm_set = False
         if hasattr(signal, "SIGALRM") and threading.current_thread() is threading.main_thread():
             try:
-                old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+                old_handler = signal.signal(signal.SIGALRM, timeout_handler)  # pyright: ignore[reportAttributeAccessIssue]  # hasattr-guarded
                 signal.alarm(int(timeout))  # type: ignore[attr-defined]  # hasattr-guarded
                 sigalrm_set = True
             except ValueError:
@@ -1989,8 +1991,9 @@ class DataManager:
             Delay in seconds
         """
         # Try to extract retry-after header if available
-        if hasattr(exception, "retry_after") and exception.retry_after is not None:
-            return float(exception.retry_after)
+        retry_after = getattr(exception, "retry_after", None)
+        if retry_after is not None:
+            return float(retry_after)
 
         # Default rate limit backoff (longer than normal exponential backoff)
         base_delay = 60.0  # 1 minute base delay for rate limits

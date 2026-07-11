@@ -8,6 +8,7 @@ P&L accounting.
 
 import logging
 
+import numpy as np
 import pandas as pd
 
 from .pricing import bs_put_price, skew_adjusted_sigma
@@ -80,13 +81,16 @@ def simulate_barbell(
     rows = []
     skipped = 0
 
+    # Extract float arrays once at the boundary (also avoids per-row Scalar typing)
+    close_arr = df["close"].to_numpy(dtype=float)
+    sigma_arr = df[sigma_col].to_numpy(dtype=float) if sigma_col in df.columns else None
+    r_arr = df[r_col].to_numpy(dtype=float) if r_col in df.columns else None
+
     for idx in purchase_indices:
         purchase_date = trading_days[idx]
-        S = float(df["close"].iat[idx])
-        vix_val = (
-            float(df[sigma_col].iat[idx]) if sigma_col in df.columns and not pd.isna(df[sigma_col].iat[idx]) else 20.0
-        )
-        r = float(df[r_col].iat[idx]) if r_col in df.columns and not pd.isna(df[r_col].iat[idx]) else 0.04
+        S = float(close_arr[idx])
+        vix_val = float(sigma_arr[idx]) if sigma_arr is not None and not np.isnan(sigma_arr[idx]) else 20.0
+        r = float(r_arr[idx]) if r_arr is not None and not np.isnan(r_arr[idx]) else 0.04
 
         K = moneyness * S
         sigma = skew_adjusted_sigma(vix_val, otm_pct, skew_slope)
@@ -112,7 +116,7 @@ def simulate_barbell(
 
         # Find expiry trading day: first trading day >= purchase_date + T_days
         expiry_calendar = purchase_date + pd.Timedelta(days=T_days)
-        expiry_pos = trading_days.searchsorted(expiry_calendar)
+        expiry_pos = int(trading_days.searchsorted(expiry_calendar))
         if expiry_pos >= len(trading_days):
             expiry_pos = len(trading_days) - 1
         expiry_date = trading_days[expiry_pos]

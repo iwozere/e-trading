@@ -85,6 +85,10 @@ class BaseTradingBot:
     Subclasses should only override methods if custom logic is needed.
     """
 
+    # Declared but not assigned: subclasses attach a live strategy instance.
+    # Runtime access stays hasattr-guarded.
+    strategy: Any
+
     def __init__(
         self,
         config: Dict[str, Any],

@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Optional, Any, Dict, List
 
 # Third party
+import numpy as np
 import pandas as pd
 
 # Local application
@@ -31,6 +32,7 @@ from src.indicators.models import (
     TickerIndicatorsRequest,
 )
 from src.indicators.registry import INDICATOR_META, get_canonical_name, get_indicator_meta
+from src.indicators.types import IndicatorName, Period, TickerSymbol, TimeFrame
 from src.indicators.utils import coerce_ohlcv, resample_df, validate_indicator_config
 from src.notification.logger import setup_logger
 
@@ -348,7 +350,12 @@ class BenchmarkRunner:
             try:
                 start_time = time.time()
 
-                request = IndicatorCalculationRequest(ticker=ticker, indicators=indicators, timeframe="1d", period="1y")
+                request = IndicatorCalculationRequest(
+                    ticker=TickerSymbol(ticker),
+                    indicators=[IndicatorName(i) for i in indicators],
+                    timeframe=TimeFrame("1d"),
+                    period=Period("1y"),
+                )
 
                 await self.unified_service.get_indicators(request)
 
@@ -385,7 +392,11 @@ class BenchmarkRunner:
                 # Configure batch processing
                 batch_config = BatchProcessingConfig(max_concurrent=batch_size, batch_size=batch_size)
 
-                request = BatchIndicatorRequest(tickers=tickers, indicators=indicators, max_concurrent=batch_size)
+                request = BatchIndicatorRequest(
+                    tickers=[TickerSymbol(t) for t in tickers],
+                    indicators=[IndicatorName(i) for i in indicators],
+                    max_concurrent=batch_size,
+                )
 
                 batch_result = await self.unified_service.get_batch_indicators_enhanced(request, batch_config)
 
@@ -656,10 +667,14 @@ class UnifiedIndicatorService:
                         try:
                             v = df_all[c].iloc[-1] if len(df_all) else None
 
-                            # Validate result value
-                            if v is not None and (pd.isna(v) or not pd.isfinite(v)):
+                            # Validate result value (np.isfinite: pandas has no isfinite)
+                            if v is not None and (pd.isna(v) or not np.isfinite(v)):
                                 _logger.warning("Invalid result for %s.%s: %s", req.ticker, c, v)
                                 v = None
+
+                            if v is None:
+                                # IndicatorValue.value does not accept None; skip invalid results
+                                continue
 
                             target = tech if INDICATOR_META[name].kind == "tech" else fund
                             target[c] = IndicatorValue(name=c, value=v, source="unified_service")
@@ -905,7 +920,7 @@ class UnifiedIndicatorService:
                 try:
                     # Create individual request
                     task_request = IndicatorCalculationRequest(
-                        ticker=ticker,
+                        ticker=TickerSymbol(ticker),
                         indicators=request.indicators,
                         timeframe=request.timeframe,
                         period=request.period,

@@ -658,48 +658,37 @@ class FileBasedCache:
         if df.empty:
             return {}
 
-        # Handle both timestamp column and datetime index
+        # Normalize both supported layouts (timestamp column / datetime index) to a
+        # DatetimeIndex so filtering and year-splitting share one code path.
         if "timestamp" in df.columns:
-            # Use timestamp column
-            timestamps = df["timestamp"]
+            ts_index = pd.DatetimeIndex(df["timestamp"])
         elif isinstance(df.index, pd.DatetimeIndex):
-            # Use datetime index
-            timestamps = df.index
+            ts_index = df.index
         else:
             _logger.warning("DataFrame has neither timestamp column nor DatetimeIndex, cannot split by years")
             return {datetime.now().year: df}
 
-        # Filter by date range if specified
+        # Filter by date range if specified; keep ts_index aligned with the filtered frame
         filtered_df = df.copy()
         if start_date:
-            filtered_df = filtered_df[timestamps >= start_date]
+            keep = ts_index >= pd.Timestamp(start_date)
+            filtered_df = filtered_df[keep]
+            ts_index = ts_index[keep]
         if end_date:
-            filtered_df = filtered_df[timestamps <= end_date]
+            keep = ts_index <= pd.Timestamp(end_date)
+            filtered_df = filtered_df[keep]
+            ts_index = ts_index[keep]
 
         if filtered_df.empty:
             return {}
 
         # Split by years
         years_data = {}
-        # Handle both Series (with .dt accessor) and DatetimeIndex (direct .year access)
-        if hasattr(timestamps, "dt"):
-            # Series with .dt accessor
-            years = timestamps.dt.year.unique()
-            for year in years:
-                year_mask = timestamps.dt.year == year
-                year_df = filtered_df[year_mask].copy()
-                if not year_df.empty:
-                    years_data[year] = year_df
-                    _logger.debug("Split data for year %s: %d rows", year, len(year_df))
-        else:
-            # DatetimeIndex with direct .year access
-            years = timestamps.year.unique()
-            for year in years:
-                year_mask = timestamps.year == year
-                year_df = filtered_df[year_mask].copy()
-                if not year_df.empty:
-                    years_data[year] = year_df
-                    _logger.debug("Split data for year %s: %d rows", year, len(year_df))
+        for year in ts_index.year.unique():
+            year_df = filtered_df[ts_index.year == year].copy()
+            if not year_df.empty:
+                years_data[int(year)] = year_df
+                _logger.debug("Split data for year %s: %d rows", year, len(year_df))
 
         return years_data
 
@@ -854,7 +843,7 @@ class FileBasedCache:
                                     continue
 
                                 # Check if this file contains data from multiple years
-                                years_in_data = df.index.year.unique()
+                                years_in_data = [int(y) for y in pd.DatetimeIndex(df.index).year.unique()]
                                 if len(years_in_data) > 1:
                                     _logger.info(
                                         "Found multi-year data in %s/%s/%s/%s: %s",
@@ -923,7 +912,7 @@ class FileBasedCache:
             # Split data by years
             years_data = {}
             for year in years_in_data:
-                year_mask = df.index.year == year
+                year_mask = pd.DatetimeIndex(df.index).year == year
                 year_df = df[year_mask].copy()
 
                 if not year_df.empty:
@@ -1114,9 +1103,9 @@ class FileBasedCache:
                                 pass
 
                     if start_date and isinstance(df.index, pd.DatetimeIndex):
-                        df = df[df.index >= start_date]
+                        df = df[df.index >= pd.Timestamp(start_date)]
                     if end_date and isinstance(df.index, pd.DatetimeIndex):
-                        df = df[df.index <= end_date]
+                        df = df[df.index <= pd.Timestamp(end_date)]
 
                 self.metrics.hits += 1
                 response_time = (time.time() - start_time) * 1000

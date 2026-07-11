@@ -445,7 +445,8 @@ class DailyDeepScanRunner:
                     )
                     # You can pass config options here (or None to use defaults)
                     try:
-                        sentiment_cfg = config.sentiment._asdict() if hasattr(config, "sentiment") else None
+                        sentiment_obj = getattr(config, "sentiment", None)
+                        sentiment_cfg = sentiment_obj._asdict() if sentiment_obj is not None else None
                     except Exception:
                         sentiment_cfg = None
 
@@ -487,18 +488,11 @@ class DailyDeepScanRunner:
                                 feats.get("sentiment_score_24h") if isinstance(feats, dict) else None
                             )
 
-                            if hasattr(c, "transient_metrics") and c.transient_metrics is not None:
-                                setattr(
-                                    c.transient_metrics,
-                                    "sentiment_24h",
-                                    float(sent_norm) if sent_norm is not None else 0.5,
-                                )
-                                setattr(
-                                    c.transient_metrics,
-                                    "sentiment_score_raw",
-                                    float(sent_score) if sent_score is not None else 0.0,
-                                )
-                                setattr(c.transient_metrics, "sentiment_payload", sent_raw)
+                            tm = getattr(c, "transient_metrics", None)
+                            if tm is not None:
+                                setattr(tm, "sentiment_24h", float(sent_norm) if sent_norm is not None else 0.5)
+                                setattr(tm, "sentiment_score_raw", float(sent_score) if sent_score is not None else 0.0)
+                                setattr(tm, "sentiment_payload", sent_raw)
                             else:
                                 # fallback: attach to candidate
                                 setattr(c, "_sentiment", feats)

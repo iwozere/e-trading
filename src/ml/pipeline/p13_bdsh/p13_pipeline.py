@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, Optional, List
+from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 
@@ -40,8 +40,9 @@ class P13Pipeline:
 
         # 2. Preprocessing
         clean_data = preprocess_data(raw_data, self.tickers, self.vix_symbol)
-        # Extract VIX Close for Z-score calculation
-        vix_series = clean_data[self.vix_symbol]["close"]
+        # Extract VIX Close for Z-score calculation (level-0 + column selection
+        # on MultiIndex columns always yields a Series)
+        vix_series = cast(pd.Series, clean_data[self.vix_symbol]["close"])
 
         # 3. Process each ticker
         all_states = self.load_state()
@@ -52,8 +53,9 @@ class P13Pipeline:
                 continue
 
             logger.info(f"Processing ticker: {ticker}")
-            # ticker_df contains open, high, low, close
-            ticker_df = clean_data[ticker]
+            # ticker_df contains open, high, low, close (level-0 selection on
+            # MultiIndex columns always yields a DataFrame)
+            ticker_df = cast(pd.DataFrame, clean_data[ticker])
 
             # Step-by-step processing
             # 3.1 Z-Score
@@ -63,7 +65,7 @@ class P13Pipeline:
             results = self.engine.run_backtest(ticker_df, z_score)
 
             # 3.3 Metrics
-            metrics = self.engine.calculate_metrics(results)
+            metrics: Dict[str, Any] = dict(self.engine.calculate_metrics(results))
             metrics["Ticker"] = ticker
             self.results_summary.append(metrics)
 

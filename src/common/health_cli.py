@@ -6,6 +6,7 @@ This tool provides command-line access to the health monitoring system.
 """
 
 import asyncio
+import functools
 import json
 import sys
 from pathlib import Path
@@ -21,6 +22,16 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
+def async_command(f):
+    """Decorator to run async commands. Must be applied before @cli.command()."""
+
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        return asyncio.run(f(*args, **kwargs))
+
+    return wrapper
+
+
 @click.group()
 def cli():
     """Health monitoring CLI tool."""
@@ -30,6 +41,7 @@ def cli():
 @cli.command()
 @click.option("--system", help="Check specific system only")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
+@async_command
 async def check(system, json_output):
     """Check system health."""
     try:
@@ -102,6 +114,7 @@ async def check(system, json_output):
 
 @cli.command()
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
+@async_command
 async def summary(json_output):
     """Get health summary from database."""
     try:
@@ -149,6 +162,7 @@ async def summary(json_output):
 
 @cli.command()
 @click.option("--interval", default=60, help="Check interval in seconds")
+@async_command
 async def monitor(interval):
     """Start continuous health monitoring."""
     health_monitor = None
@@ -169,6 +183,7 @@ async def monitor(interval):
 
 
 @cli.command()
+@async_command
 async def migrate():
     """Run the database migration from channel health to system health."""
     try:
@@ -186,6 +201,7 @@ async def migrate():
 
 
 @cli.command()
+@async_command
 async def rollback():
     """Rollback the database migration."""
     try:
@@ -201,23 +217,6 @@ async def rollback():
     except Exception as e:
         click.echo(f"Rollback failed: {e}", err=True)
         sys.exit(1)
-
-
-def async_command(f):
-    """Decorator to run async commands."""
-
-    def wrapper(*args, **kwargs):
-        return asyncio.run(f(*args, **kwargs))
-
-    return wrapper
-
-
-# Apply async decorator to async commands
-check = async_command(check)
-summary = async_command(summary)
-monitor = async_command(monitor)
-migrate = async_command(migrate)
-rollback = async_command(rollback)
 
 
 if __name__ == "__main__":

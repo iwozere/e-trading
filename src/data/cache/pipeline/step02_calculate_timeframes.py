@@ -52,8 +52,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import argparse
 import json
 import time
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Set
+from datetime import date, datetime, timedelta
+from typing import Any, Dict, Hashable, List, Set, cast
 
 import pandas as pd
 
@@ -191,7 +191,8 @@ class TimeframeCalculator:
             Filtered DataFrame
         """
         # Filter to trading hours
-        mask = (df.index.hour >= self.TRADING_START_HOUR) & (df.index.hour < self.TRADING_END_HOUR)
+        idx = pd.DatetimeIndex(df.index)
+        mask = (idx.hour >= self.TRADING_START_HOUR) & (idx.hour < self.TRADING_END_HOUR)
         return df[mask]
 
     def calculate_timeframe_bars(self, df_1m: pd.DataFrame, timeframe: str) -> pd.DataFrame:
@@ -233,20 +234,20 @@ class TimeframeCalculator:
         # Group by date (considering 4 AM start)
         # Shift timestamps by 4 hours so that 4 AM becomes midnight for grouping
         df_shifted = df_1m.copy()
-        df_shifted.index = df_shifted.index - timedelta(hours=4)
+        df_shifted.index = pd.DatetimeIndex(df_shifted.index) - timedelta(hours=4)
 
         # Group by date
-        daily_groups = df_shifted.groupby(df_shifted.index.date)
+        daily_groups = df_shifted.groupby(pd.DatetimeIndex(df_shifted.index).date)
 
         daily_bars = []
 
-        for date, group in daily_groups:
+        for group_date, group in daily_groups:
             if len(group) == 0:
                 continue
 
-            # Calculate OHLCV for the day
+            # Calculate OHLCV for the day (group keys are datetime.date objects)
             bar = {
-                "timestamp": pd.Timestamp(date) + timedelta(hours=4),  # 4 AM of the trading day
+                "timestamp": pd.Timestamp(cast(date, group_date)) + timedelta(hours=4),  # 4 AM of the trading day
                 "open": group["open"].iloc[0],
                 "high": group["high"].max(),
                 "low": group["low"].min(),
@@ -286,7 +287,7 @@ class TimeframeCalculator:
         freq = f"{minutes}min"  # min = minutes in pandas (T is deprecated)
 
         # Use custom aggregation with intelligence
-        agg_dict = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+        agg_dict: Dict[Hashable, str] = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
 
         # Resample and aggregate
         resampled = df_1m.resample(freq, label="left", closed="left").agg(agg_dict)
@@ -375,7 +376,7 @@ class TimeframeCalculator:
 
             # Group data by year
             yearly_data = {}
-            for year, year_group in df.groupby(df.index.year):
+            for year, year_group in df.groupby(pd.DatetimeIndex(df.index).year):
                 yearly_data[year] = year_group
 
             # Save each year separately

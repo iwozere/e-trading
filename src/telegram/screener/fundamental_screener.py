@@ -21,6 +21,7 @@ import yfinance as yf
 
 from src.indicators.models import TickerIndicatorsRequest
 from src.indicators.service import IndicatorService
+from src.indicators.types import IndicatorName, Period, TickerSymbol, TimeFrame
 from src.model.telegram_bot import DCFResult, Fundamentals, ScreenerReport, ScreenerResult
 from src.notification.logger import setup_logger
 from src.util.tickers_list import (
@@ -124,7 +125,10 @@ class FundamentalScreener:
                 fundamentals = None
                 try:
                     request = TickerIndicatorsRequest(
-                        ticker=ticker, timeframe="1d", period="1y", indicators=fundamental_indicators
+                        ticker=TickerSymbol(ticker),
+                        timeframe=TimeFrame("1d"),
+                        period=Period("1y"),
+                        indicators=[IndicatorName(i) for i in fundamental_indicators],
                     )
 
                     result_set = await self.indicator_service.compute_for_ticker(request)
@@ -164,7 +168,12 @@ class FundamentalScreener:
     async def _get_fundamentals_from_service(self, ticker: str, indicators: List[str]) -> Fundamentals | None:
         """Get fundamental data using IndicatorService."""
         try:
-            request = TickerIndicatorsRequest(ticker=ticker, timeframe="1d", period="1y", indicators=indicators)
+            request = TickerIndicatorsRequest(
+                ticker=TickerSymbol(ticker),
+                timeframe=TimeFrame("1d"),
+                period=Period("1y"),
+                indicators=[IndicatorName(i) for i in indicators],
+            )
 
             result_set = await self.indicator_service.compute_for_ticker(request)
             return self._convert_indicator_result_to_fundamentals(ticker, result_set)

@@ -273,7 +273,7 @@ def _validate_master(df: pd.DataFrame, start: str, end: str) -> None:
         return
 
     bday_index = pd.bdate_range(start, end)
-    missing = bday_index.difference(df.index)
+    missing = bday_index.difference(pd.DatetimeIndex(df.index))
     if len(missing) == 0:
         _logger.info("Master validation: no missing business days")
         return

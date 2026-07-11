@@ -33,7 +33,8 @@ class SantimentDataDownloader(BaseDataDownloader):
         # Configure API key
         self.api_key = self._get_config_value("SANTIMENT_API_KEY", "SANTIMENT_API_KEY")
         if self.api_key:
-            san.ApiConfig.api_key = self.api_key
+            # sanpy exposes ApiConfig/get dynamically; not visible to pyright
+            san.ApiConfig.api_key = self.api_key  # pyright: ignore[reportAttributeAccessIssue]
         else:
             _logger.warning("SANTIMENT_API_KEY not found. Some functionality may be limited.")
 
@@ -59,7 +60,9 @@ class SantimentDataDownloader(BaseDataDownloader):
             # For now, simplistic mapping
             slug = self._symbol_to_slug(symbol)
 
-            df = san.get("ohlcv", slug=slug, from_date=start_date, to_date=end_date, interval=interval)
+            df = san.get(  # pyright: ignore[reportAttributeAccessIssue]
+                "ohlcv", slug=slug, from_date=start_date, to_date=end_date, interval=interval
+            )
 
             if df.empty:
                 return pd.DataFrame()
@@ -110,7 +113,7 @@ class SantimentDataDownloader(BaseDataDownloader):
             loop = asyncio.get_event_loop()
             df = await loop.run_in_executor(
                 None,
-                lambda: san.get(
+                lambda: san.get(  # pyright: ignore[reportAttributeAccessIssue]
                     "social_volume_total", slug=slug, from_date=start_date, to_date=end_date, interval="1d"
                 ),
             )
@@ -167,8 +170,12 @@ class SantimentDataDownloader(BaseDataDownloader):
 
             # Helper to fetch multiple metrics
             def fetch_metrics():
-                pos = san.get("sentiment_positive_total", slug=slug, from_date=start_date, to_date=end_date)
-                neg = san.get("sentiment_negative_total", slug=slug, from_date=start_date, to_date=end_date)
+                pos = san.get(  # pyright: ignore[reportAttributeAccessIssue]
+                    "sentiment_positive_total", slug=slug, from_date=start_date, to_date=end_date
+                )
+                neg = san.get(  # pyright: ignore[reportAttributeAccessIssue]
+                    "sentiment_negative_total", slug=slug, from_date=start_date, to_date=end_date
+                )
                 return pos, neg
 
             pos_df, neg_df = await loop.run_in_executor(None, fetch_metrics)

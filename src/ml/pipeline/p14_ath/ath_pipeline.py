@@ -5,7 +5,7 @@ Implements sequential ATH and Drawdown analysis logic.
 """
 
 from datetime import date, datetime, timedelta
-from typing import List, Tuple
+from typing import List, Tuple, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -173,6 +173,8 @@ class ATHPipeline:
         drawdown_min_date = None
 
         for bar_dt, price in prices.items():
+            # OHLCV data is indexed by DatetimeIndex
+            bar_dt = cast(pd.Timestamp, bar_dt)
             if price > global_ath_price:
                 # We found a NEW High that breaks the previous ATH
                 # Record result for previous window ONLY if we found a drawdown on a DIFFERENT day

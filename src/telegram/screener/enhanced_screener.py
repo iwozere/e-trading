@@ -21,6 +21,7 @@ import yfinance as yf
 # Use optimized batch fundamentals download for maximum performance
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.indicators.models import TickerIndicatorsRequest
+from src.indicators.types import IndicatorName, Period, ProviderName, TickerSymbol, TimeFrame
 from src.indicators.service import IndicatorService, UnifiedIndicatorService
 from src.model.telegram_bot import DCFResult, Fundamentals, ScreenerReport, ScreenerResult, Technicals
 from src.notification.logger import setup_logger
@@ -286,7 +287,11 @@ class EnhancedScreener:
 
                 # Create request for IndicatorService
                 request = TickerIndicatorsRequest(
-                    ticker=ticker, timeframe=interval, period=period, provider=provider, indicators=indicators
+                    ticker=TickerSymbol(ticker),
+                    timeframe=TimeFrame(interval),
+                    period=Period(period),
+                    provider=ProviderName(provider) if provider else None,
+                    indicators=[IndicatorName(i) for i in indicators],
                 )
 
                 # Get indicators from service with error handling
@@ -522,6 +527,8 @@ class EnhancedScreener:
                         composite_score=composite_score,
                         dcf_valuation=self._calculate_dcf_valuation(fundamentals_data.get(ticker)),
                         recommendation=self._get_recommendation(composite_score),
+                        fundamental_score=fundamental_score,
+                        technical_score=technical_score,
                     )
 
                     results.append(result)
@@ -926,19 +933,11 @@ class EnhancedScreener:
             message += f"({rec_str})"
 
             # Add fundamental score if available
-            if (
-                config.screener_type in ["fundamental", "hybrid"]
-                and hasattr(result, "fundamental_score")
-                and result.fundamental_score > 0
-            ):
+            if config.screener_type in ["fundamental", "hybrid"] and result.fundamental_score > 0:
                 message += f"\n   📊 Fundamental: {result.fundamental_score:.1f}/10"
 
             # Add technical score if available
-            if (
-                config.screener_type in ["technical", "hybrid"]
-                and hasattr(result, "technical_score")
-                and result.technical_score > 0
-            ):
+            if config.screener_type in ["technical", "hybrid"] and result.technical_score > 0:
                 message += f"\n   📈 Technical: {result.technical_score:.1f}/10"
 
             # Add DCF valuation if available

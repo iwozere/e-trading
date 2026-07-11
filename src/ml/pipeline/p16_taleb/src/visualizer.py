@@ -79,7 +79,8 @@ def _add_crisis_lines(fig: go.Figure, row: int = 1, col: int = 1) -> None:
             line_dash="dot",
             line_color="rgba(255,100,100,0.5)",
             line_width=1,
-            row=row,
+            # plotly's hints declare row/col as str, but ints are documented and valid
+            row=row,  # pyright: ignore[reportArgumentType]
             col=col,  # type: ignore[call-arg]
         )
         fig.add_annotation(
@@ -157,7 +158,8 @@ def chart_sp500_drawdown(df: pd.DataFrame) -> go.Figure:
         line_dash="dash",
         line_color="#e74c3c",
         line_width=1,
-        row=1,
+        # plotly's hints declare row/col as str, but ints are documented and valid
+        row=1,  # pyright: ignore[reportArgumentType]
         col=1,  # type: ignore[call-arg]
         secondary_y=True,
     )
@@ -613,8 +615,8 @@ def chart_pareto(opt_df: pd.DataFrame) -> go.Figure:
     Returns:
         go.Figure with Pareto frontier highlighted in gold.
     """
-    x = opt_df["win_rate_pct"].values
-    y = opt_df["net_roi_pct"].values
+    x = opt_df["win_rate_pct"].to_numpy(dtype=float)
+    y = opt_df["net_roi_pct"].to_numpy(dtype=float)
     labels = opt_df.apply(lambda r: f"{r['strike_otm_pct']:.0f}% OTM, {r['T_days']:.0f}d", axis=1)
 
     # Identify Pareto-efficient points (maximise both axes)

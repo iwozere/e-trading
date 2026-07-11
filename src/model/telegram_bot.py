@@ -133,6 +133,8 @@ class ScreenerResult:
     recommendation: str | None = None  # "BUY", "HOLD", "SELL"
     reasoning: str | None = None
     error: str | None = None
+    fundamental_score: float = 0.0
+    technical_score: float = 0.0
 
 
 @dataclass
