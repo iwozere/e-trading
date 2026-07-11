@@ -52,10 +52,8 @@ class P07DataLoader:
         df = pd.read_csv(filepath, parse_dates=["timestamp"])
         df.set_index("timestamp", inplace=True)
         # Ensure UTC if not present
-        if df.index.tz is None:
-            df.index = df.index.tz_localize("UTC")
-        else:
-            df.index = df.index.tz_convert("UTC")
+        idx = pd.DatetimeIndex(df.index)
+        df.index = idx.tz_localize("UTC") if idx.tz is None else idx.tz_convert("UTC")
         return df.sort_index()
 
     def load_vix(self) -> pd.DataFrame:
@@ -67,9 +65,10 @@ class P07DataLoader:
         df = pd.read_csv(self.vix_path, parse_dates=["date"])
         df.rename(columns={"date": "timestamp"}, inplace=True)
         df.set_index("timestamp", inplace=True)
-        if df.index.tz is None:
-            df.index = df.index.tz_localize("UTC")
-        return df[["vix"]].sort_index()
+        idx = pd.DatetimeIndex(df.index)
+        if idx.tz is None:
+            df.index = idx.tz_localize("UTC")
+        return df.loc[:, ["vix"]].sort_index()
 
     def load_btc_marketcap(self) -> pd.DataFrame:
         """Load BTC Market Cap data, downloading it if necessary."""
@@ -83,8 +82,9 @@ class P07DataLoader:
                 start = datetime.now() - timedelta(days=364)
                 end = datetime.now()
                 # Check for specialized market cap method (merged coingecko)
-                if hasattr(loader, "get_market_cap"):
-                    df = loader.get_market_cap("bitcoin", start, end)
+                get_market_cap = getattr(loader, "get_market_cap", None)
+                if get_market_cap is not None:
+                    df = get_market_cap("bitcoin", start, end)
                 else:
                     # Fallback for other providers (historical)
                     df = loader.get_ohlcv("bitcoin", "1d", start, end)
@@ -100,9 +100,10 @@ class P07DataLoader:
         df = pd.read_csv(self.btc_mc_path, parse_dates=["timestamp"])
         df.rename(columns={"close": "btc_mc"}, inplace=True)
         df.set_index("timestamp", inplace=True)
-        if df.index.tz is None:
-            df.index = df.index.tz_localize("UTC")
-        return df[["btc_mc"]].sort_index()
+        idx = pd.DatetimeIndex(df.index)
+        if idx.tz is None:
+            df.index = idx.tz_localize("UTC")
+        return df.loc[:, ["btc_mc"]].sort_index()
 
     def get_merged_dataset(self, filepath: Path) -> pd.DataFrame:
         """

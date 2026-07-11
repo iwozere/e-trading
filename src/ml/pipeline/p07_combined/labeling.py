@@ -34,17 +34,26 @@ def get_triple_barrier_labels(
     try:
         import talib
 
-        # talib returns a bare ndarray; wrap so .values below works in both branches
-        atr = pd.Series(talib.ATR(ohlcv["high"], ohlcv["low"], ohlcv["close"], timeperiod=atr_period), index=ohlcv.index)
+        # talib requires float64 ndarrays; wrap the result so both branches yield a Series
+        atr = pd.Series(
+            talib.ATR(
+                ohlcv["high"].to_numpy(dtype=float),
+                ohlcv["low"].to_numpy(dtype=float),
+                ohlcv["close"].to_numpy(dtype=float),
+                timeperiod=atr_period,
+            ),
+            index=ohlcv.index,
+        )
     except ImportError:
         high_low = ohlcv["high"] - ohlcv["low"]
-        high_close = np.abs(ohlcv["high"] - ohlcv["close"].shift(1))
-        low_close = np.abs(ohlcv["low"] - ohlcv["close"].shift(1))
+        # np.abs on a Series returns a Series at runtime; keep the type explicit
+        high_close = pd.Series(np.abs(ohlcv["high"] - ohlcv["close"].shift(1)), index=ohlcv.index)
+        low_close = pd.Series(np.abs(ohlcv["low"] - ohlcv["close"].shift(1)), index=ohlcv.index)
         tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
         atr = tr.rolling(window=atr_period).mean()
 
-    prices = ohlcv["close"].values
-    atr_values = atr.values
+    prices = ohlcv["close"].to_numpy(dtype=float)
+    atr_values = np.asarray(atr, dtype=float)
     labels_arr = np.zeros(len(prices))
 
     # 2. Optimized iteration

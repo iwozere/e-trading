@@ -58,11 +58,11 @@ class P07RegimeModel:
             return np.array([]).reshape(0, 2)
 
         if fit:
-            return self.scaler.fit_transform(features)
+            return np.asarray(self.scaler.fit_transform(features))
         else:
             try:
-                return self.scaler.transform(features)
-            except:
+                return np.asarray(self.scaler.transform(features))
+            except Exception:
                 # Fallback if scaler not fitted (e.g. training failed)
                 _logger.warning("Scaler not fitted. Returning zeros.")
                 return np.zeros((len(features), features.shape[1]))

@@ -21,7 +21,7 @@ Classes:
 import math
 import random
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from src.notification.logger import setup_logger
 from src.trading.broker.base_broker import (
@@ -33,6 +33,9 @@ from src.trading.broker.base_broker import (
     Portfolio,
     Position,
 )
+
+if TYPE_CHECKING:
+    from src.trading.broker.base_broker import ExecutionMetrics, PaperTradingConfig
 
 _logger = setup_logger(__name__)
 
@@ -49,6 +52,24 @@ class PaperTradingMixin:
     - Position and portfolio management with analytics
     - Trade history tracking and performance analysis
     """
+
+    if TYPE_CHECKING:
+        # Mixin contract: these attributes and methods are provided by the host
+        # broker class (BaseBroker). Runtime access stays hasattr-guarded.
+        paper_trading_enabled: bool
+        paper_trading_config: "PaperTradingConfig"
+        execution_metrics: "List[ExecutionMetrics]"
+        total_executions: int
+        execution_quality_stats: Dict[ExecutionQuality, int]
+
+        async def simulate_execution_latency(self) -> None: ...
+        def calculate_slippage(self, order: Order, market_price: float) -> float: ...
+        async def validate_order(self, order: Order) -> Tuple[bool, str]: ...
+        def record_execution_metrics(
+            self, order: Order, executed_price: float, executed_quantity: float, latency_ms: int
+        ) -> "ExecutionMetrics | None": ...
+        async def notify_position_event(self, event_type: str, position_data: Dict[str, Any]) -> None: ...
+        def get_execution_quality_report(self) -> Dict[str, Any]: ...
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

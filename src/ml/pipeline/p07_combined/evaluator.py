@@ -67,7 +67,9 @@ class P07Evaluator:
         return max(1, bars)
 
     @classmethod
-    def run_evaluation(cls, ohlcv: pd.DataFrame, params: Dict[str, Any], timeframe: str = "15m") -> Dict[str, Any]:
+    def run_evaluation(
+        cls, ohlcv: "pd.DataFrame | list[pd.DataFrame]", params: Dict[str, Any], timeframe: str = "15m"
+    ) -> Dict[str, Any]:
         """
         Full pipeline: Features -> Train -> Predict -> Backtest.
 
@@ -125,7 +127,7 @@ class P07Evaluator:
 
         vbt_freq = timeframe if timeframe != "d" else "1D"
 
-        def _backtest(X: pd.DataFrame, ohlcv_seg: pd.DataFrame) -> vbt.Portfolio:
+        def _backtest(X: pd.DataFrame, ohlcv_seg: pd.DataFrame) -> Tuple[vbt.Portfolio, pd.Series]:
             sigs = model.predict_signal(X, thresholds=thresholds)
             prices = ohlcv_seg.loc[X.index, "close"]
             return vbt.Portfolio.from_signals(
@@ -161,7 +163,7 @@ class P07Evaluator:
     def evaluate_model(
         cls,
         model: P07XGBModel,
-        ohlcv: pd.DataFrame,
+        ohlcv: "pd.DataFrame | list[pd.DataFrame]",
         params: Dict[str, Any],
         timeframe: str = "15m",
         init_cash: float = 100.0,

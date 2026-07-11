@@ -24,7 +24,7 @@ class P07RobustnessChecker:
         self.res_dir.mkdir(parents=True, exist_ok=True)
 
     def run_walk_forward_analysis(
-        self, ohlcv: pd.DataFrame, params: Dict[str, Any], n_windows: int = 5
+        self, ohlcv: "pd.DataFrame | list[pd.DataFrame]", params: Dict[str, Any], n_windows: int = 5
     ) -> Dict[str, Any]:
         """
         Performs an Anchored Walk-Forward Analysis.
@@ -32,10 +32,17 @@ class P07RobustnessChecker:
         """
         _logger.info("Starting Walk-Forward Analysis with %d windows...", n_windows)
 
-        # Prepare all data first
+        # Prepare all data first (prepare_data is segment-aware)
         X_all, y_all = P07Evaluator.prepare_data(ohlcv, params)
         if len(X_all) < 500:
             return {"error": "Insufficient data for WFA"}
+
+        # Resolve to a single sorted DataFrame for OOS index lookups
+        if isinstance(ohlcv, list):
+            ohlcv_full = pd.concat(ohlcv).sort_index()
+            ohlcv_full = ohlcv_full.loc[~ohlcv_full.index.duplicated(keep="last")]
+        else:
+            ohlcv_full = ohlcv
 
         # Calculate window sizes
         total_len = len(X_all)
@@ -69,7 +76,7 @@ class P07RobustnessChecker:
             signals = model.predict_signal(X_test, thresholds=thresholds)
 
             # Backtest OOS segment
-            ohlcv_test = ohlcv.loc[X_test.index]
+            ohlcv_test = ohlcv_full.loc[X_test.index]
             pf = vbt.Portfolio.from_signals(
                 ohlcv_test["close"],
                 signals == 1,
@@ -80,7 +87,15 @@ class P07RobustnessChecker:
                 direction="both",
             )
 
-            oos_results.append({"window": i + 1, "sharpe": pf.sharpe_ratio(), "return": pf.total_return(), "pf": pf})
+            oos_results.append(
+                {
+                    # vectorbt attaches metric accessors dynamically; not visible to pyright
+                    "sharpe": pf.sharpe_ratio(),  # pyright: ignore[reportAttributeAccessIssue]
+                    "return": pf.total_return(),
+                    "window": i + 1,
+                    "pf": pf,
+                }
+            )
 
         # Combine OOS result series for overall WFA equity
         equity_curves = [res["pf"].value() for res in oos_results]
@@ -133,7 +148,9 @@ class P07RobustnessChecker:
             "positivity_rate": np.mean(np.array(shuffled_final_values) > 1.0),
         }
 
-    def run_parameter_sensitivity(self, ohlcv: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def run_parameter_sensitivity(
+        self, ohlcv: "pd.DataFrame | list[pd.DataFrame]", params: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Checks performance sensitivity by perturbing key parameters.
         """
@@ -165,7 +182,9 @@ class P07RobustnessChecker:
 
         return {"sensitivity_results": results}
 
-    def run_all_checks(self, ohlcv: pd.DataFrame, params: Dict[str, Any], backtest_res: Dict[str, Any]):
+    def run_all_checks(
+        self, ohlcv: "pd.DataFrame | list[pd.DataFrame]", params: Dict[str, Any], backtest_res: Dict[str, Any]
+    ):
         """Runs the full robustness suite and saves results."""
         _logger.info("Running full robustness suite for %s %s", self.ticker, self.timeframe)
 

@@ -6,6 +6,9 @@ import pandas as pd
 from src.ml.pipeline.p07_combined.features import P07FeatureEngine
 from src.notification.logger import setup_logger
 
+# backtrader generates PandasData's constructor params via metaclass, opaque to type checkers
+_PandasData: Any = bt.feeds.PandasData
+
 
 class P07Strategy(bt.Strategy):
     """
@@ -56,7 +59,7 @@ def run_backtrader_test(df: pd.DataFrame, model: Any, feature_config: Dict):
     cerebro = bt.Cerebro()
 
     # Add data
-    data = bt.feeds.PandasData(dataname=df)
+    data = _PandasData(dataname=df)
     cerebro.adddata(data)
 
     # Add strategy

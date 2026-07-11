@@ -187,22 +187,22 @@ class VolumeSqueezeDetector:
             if df is None or df.empty or len(df) < 14:
                 return None
 
-            volumes = df["volume"].values
+            volumes = df["volume"].to_numpy(dtype=float)
 
             # Calculate metrics
-            avg_volume_14d = np.mean(volumes[-14:])  # Last 14 days
-            current_volume = volumes[-1]  # Most recent day
+            avg_volume_14d = float(np.mean(volumes[-14:]))  # Last 14 days
+            current_volume = float(volumes[-1])  # Most recent day
 
             # Volume spike ratio
             volume_spike_ratio = current_volume / max(avg_volume_14d, 1)
 
             # 7-day volume trend (recent vs older)
-            recent_7d = np.mean(volumes[-7:])
-            older_7d = np.mean(volumes[-14:-7])
+            recent_7d = float(np.mean(volumes[-7:]))
+            older_7d = float(np.mean(volumes[-14:-7]))
             volume_trend_7d = recent_7d / max(older_7d, 1)
 
             # Volume consistency (lower std dev = more consistent)
-            volume_std = np.std(volumes[-14:])
+            volume_std = float(np.std(volumes[-14:]))
             volume_consistency = 1.0 / (1.0 + volume_std / max(avg_volume_14d, 1))
 
             return VolumeMetrics(
@@ -236,16 +236,16 @@ class VolumeSqueezeDetector:
             if df is None or df.empty or len(df) < 7:
                 return None
 
-            closes = df["close"].values
+            closes = df["close"].to_numpy(dtype=float)
 
             # Price changes
-            price_change_1d = (closes[-1] - closes[-2]) / closes[-2] if len(closes) >= 2 else 0
-            price_change_3d = (closes[-1] - closes[-4]) / closes[-4] if len(closes) >= 4 else 0
-            price_change_7d = (closes[-1] - closes[-8]) / closes[-8] if len(closes) >= 8 else 0
+            price_change_1d = float((closes[-1] - closes[-2]) / closes[-2]) if len(closes) >= 2 else 0.0
+            price_change_3d = float((closes[-1] - closes[-4]) / closes[-4]) if len(closes) >= 4 else 0.0
+            price_change_7d = float((closes[-1] - closes[-8]) / closes[-8]) if len(closes) >= 8 else 0.0
 
             # Price volatility (standard deviation of returns)
             returns = np.diff(closes) / closes[:-1]
-            price_volatility = np.std(returns) if len(returns) > 0 else 0
+            price_volatility = float(np.std(returns)) if len(returns) > 0 else 0.0
 
             # Momentum score (weighted combination of price changes)
             momentum_score = price_change_1d * 0.5 + price_change_3d * 0.3 + price_change_7d * 0.2

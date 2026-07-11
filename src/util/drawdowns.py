@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
+from typing import cast
 
 import matplotlib.pyplot as plt
+import pandas as pd
 import yfinance as yf
 
 
@@ -46,6 +48,8 @@ def analyze_drawdowns(ticker, years=5, threshold=0.10):
         current_event = None
 
         for date, dd in drawdowns.items():
+            # yfinance history() is indexed by DatetimeIndex
+            date = cast(pd.Timestamp, date)
             if dd <= -threshold and not in_drawdown:
                 # Start of new drawdown event
                 in_drawdown = True
@@ -222,6 +226,8 @@ def analyze_intraday_swings(ticker, years=5, swing_threshold=0.05):
         swing_events = []
 
         for date, swing in significant_swings.items():
+            # yfinance history() is indexed by DatetimeIndex
+            date = cast(pd.Timestamp, date)
             swing_event = {
                 "date": date,
                 "high_price": high_prices[date],

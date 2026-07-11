@@ -117,15 +117,19 @@ def run_bt_simulation(ticker: str, timeframe: str, df_full: pd.DataFrame, model:
     # 3. Add Data
     # Feed all columns to BT
     class P08PandasData(bt.feeds.PandasData):
-        lines = tuple(X_sim.columns.tolist())
-        params = tuple([(col, -1) for col in X_sim.columns])
+        # ClassVar[Any]: backtrader metaclass consumes these tuples at class creation
+        lines: Any = tuple(X_sim.columns.tolist())
+        params: Any = tuple([(col, -1) for col in X_sim.columns])
+
+    # backtrader generates feed constructor params via metaclass, opaque to type checkers
+    _feed_cls: Any = P08PandasData
 
     # Note: We need to set the index mapping correctly for all custom lines
     custom_params = {}
     for i, col in enumerate(X_sim.columns):
         custom_params[col] = i + 5  # standard OHLCV are first 5
 
-    data_feed = P08PandasData(dataname=df_bt, **custom_params)
+    data_feed = _feed_cls(dataname=df_bt, **custom_params)
     cerebro.adddata(data_feed)
 
     # 4. Add Strategy
@@ -143,7 +147,8 @@ def run_bt_simulation(ticker: str, timeframe: str, df_full: pd.DataFrame, model:
     values: list[Any] = []
 
     class ValueObserver(bt.Observer):
-        lines = ("value",)
+        # ClassVar[Any]: backtrader metaclass consumes this tuple at class creation
+        lines: Any = ("value",)
 
         def next(self):
             self.lines.value[0] = self._owner.broker.getvalue()

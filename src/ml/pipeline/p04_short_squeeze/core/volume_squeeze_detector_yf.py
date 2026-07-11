@@ -154,7 +154,7 @@ class VolumeSqueezeDetectorYF:
                 _logger.warning("Missing required columns for %s", ticker)
                 return None
 
-            return df[required_cols]
+            return df.loc[:, required_cols]
 
         except Exception as e:
             _logger.warning("Failed to get OHLCV data for %s: %s", ticker, e)
@@ -181,7 +181,7 @@ class VolumeSqueezeDetectorYF:
                 return None
 
             # Calculate metrics
-            volumes = df["volume"].values
+            volumes = df["volume"].to_numpy(dtype=float)
             current_volume = float(volumes[-1])
             avg_volume_14d = float(np.mean(volumes[-14:]))
 
@@ -191,12 +191,12 @@ class VolumeSqueezeDetectorYF:
             volume_spike_ratio = current_volume / avg_volume_14d
 
             # 7-day volume trend
-            recent_avg = np.mean(volumes[-7:])
-            older_avg = np.mean(volumes[-14:-7])
+            recent_avg = float(np.mean(volumes[-7:]))
+            older_avg = float(np.mean(volumes[-14:-7]))
             volume_trend_7d = (recent_avg - older_avg) / older_avg if older_avg > 0 else 0
 
             # Volume consistency (lower coefficient of variation = more consistent)
-            volume_std = np.std(volumes[-14:])
+            volume_std = float(np.std(volumes[-14:]))
             volume_consistency = 1 - min(volume_std / avg_volume_14d, 1.0) if avg_volume_14d > 0 else 0
 
             return VolumeMetrics(
@@ -230,12 +230,12 @@ class VolumeSqueezeDetectorYF:
             if df is None or len(df) < 7:
                 return None
 
-            closes = df["close"].values
+            closes = df["close"].to_numpy(dtype=float)
 
             # Price changes
-            price_change_1d = (closes[-1] - closes[-2]) / closes[-2] if len(closes) >= 2 else 0
-            price_change_3d = (closes[-1] - closes[-4]) / closes[-4] if len(closes) >= 4 else 0
-            price_change_7d = (closes[-1] - closes[-8]) / closes[-8] if len(closes) >= 8 else 0
+            price_change_1d = float((closes[-1] - closes[-2]) / closes[-2]) if len(closes) >= 2 else 0.0
+            price_change_3d = float((closes[-1] - closes[-4]) / closes[-4]) if len(closes) >= 4 else 0.0
+            price_change_7d = float((closes[-1] - closes[-8]) / closes[-8]) if len(closes) >= 8 else 0.0
 
             # Volatility (14-day standard deviation of returns)
             if len(closes) >= 14:

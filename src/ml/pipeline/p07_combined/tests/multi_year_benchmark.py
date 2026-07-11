@@ -64,7 +64,7 @@ def run_benchmark():
 
     for year in range(2020, 2026):
         year_str = str(year)
-        year_data = full_df_with_y[full_df_with_y.index.year == year]
+        year_data = full_df_with_y[pd.DatetimeIndex(full_df_with_y.index).year == year]
         if year_data.empty:
             continue
 

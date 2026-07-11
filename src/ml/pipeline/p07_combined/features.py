@@ -44,7 +44,8 @@ class P07FeatureEngine:
             X["vix"] = 0.0
 
         if "btc_mc" in df.columns:
-            mc_ret = np.log(df["btc_mc"] / df["btc_mc"].shift(1))
+            # np.log on a Series returns a Series at runtime; keep the type explicit
+            mc_ret = pd.Series(np.log(df["btc_mc"] / df["btc_mc"].shift(1)), index=df.index)
             X["btc_mc_log_ret"] = mc_ret.fillna(0)
         else:
             X["btc_mc_log_ret"] = 0.0
@@ -55,17 +56,24 @@ class P07FeatureEngine:
             X["global_regime"] = 0
 
         # 3. Technical Indicators (Stationary versions)
-        X["rsi"] = talib.RSI(close, timeperiod=config.get("rsi_period", 14))
+        # talib requires float64 ndarrays; coerce at the boundary
+        close_arr = close.to_numpy(dtype=float)
+        X["rsi"] = talib.RSI(close_arr, timeperiod=config.get("rsi_period", 14))
 
         upper, middle, lower = talib.BBANDS(
-            close,
+            close_arr,
             timeperiod=config.get("bb_period", 20),
             nbdevup=config.get("bb_std", 2.0),
             nbdevdn=config.get("bb_std", 2.0),
         )
         X["bb_pos"] = (close - lower) / (upper - lower + 1e-8)
 
-        atr = talib.ATR(df["high"], df["low"], close, timeperiod=config.get("atr_period", 14))
+        atr = talib.ATR(
+            df["high"].to_numpy(dtype=float),
+            df["low"].to_numpy(dtype=float),
+            close_arr,
+            timeperiod=config.get("atr_period", 14),
+        )
         X["atr_rel"] = atr / close
 
         # 4. Volume features
@@ -94,12 +102,14 @@ class P07FeatureEngine:
         """
         if "anchor_close" in df.columns:
             a_close = df["anchor_close"]
-            a_high = df.get("anchor_high", df["high"])
-            a_low = df.get("anchor_low", df["low"])
+            a_high = df["anchor_high"] if "anchor_high" in df.columns else df["high"]
+            a_low = df["anchor_low"] if "anchor_low" in df.columns else df["low"]
 
             a_ema_period = config.get("anchor_ema_period", 20)
+            # talib requires float64 ndarrays; coerce at the boundary
+            a_close_arr = a_close.to_numpy(dtype=float)
             # talib returns a bare ndarray without .shift(); keep it a Series
-            a_ema = pd.Series(talib.EMA(a_close, timeperiod=a_ema_period), index=a_close.index)
+            a_ema = pd.Series(talib.EMA(a_close_arr, timeperiod=a_ema_period), index=a_close.index)
             X["anchor_trend"] = np.log(a_ema / a_ema.shift(1))
 
             regime_thresh = config.get("regime_threshold", 0.0001)
@@ -110,12 +120,17 @@ class P07FeatureEngine:
             close = df["close"]
             X["mtf_divergence"] = (close - a_ema) / (a_ema + 1e-8)
 
-            X["anchor_rsi"] = talib.RSI(a_close, timeperiod=config.get("anchor_rsi_period", 14))
+            X["anchor_rsi"] = talib.RSI(a_close_arr, timeperiod=config.get("anchor_rsi_period", 14))
 
-            a_atr = talib.ATR(a_high, a_low, a_close, timeperiod=config.get("anchor_atr_period", 14))
+            a_atr = talib.ATR(
+                a_high.to_numpy(dtype=float),
+                a_low.to_numpy(dtype=float),
+                a_close_arr,
+                timeperiod=config.get("anchor_atr_period", 14),
+            )
             X["anchor_atr_rel"] = a_atr / (a_close + 1e-8)
 
-            a_upper, a_middle, a_lower = talib.BBANDS(a_close, timeperiod=config.get("anchor_bb_period", 20))
+            a_upper, a_middle, a_lower = talib.BBANDS(a_close_arr, timeperiod=config.get("anchor_bb_period", 20))
             X["anchor_bb_pos"] = (a_close - a_lower) / (a_upper - a_lower + 1e-8)
 
             a_vol = df["anchor_volume"]

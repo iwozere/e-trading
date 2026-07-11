@@ -35,7 +35,7 @@ class P07PiClient:
     def predict(self, feature_vector: np.ndarray) -> int:
         """Run ONNX inference."""
         inputs = {self.session.get_inputs()[0].name: feature_vector}
-        probs = self.session.run(None, inputs)[0]
+        probs = np.asarray(self.session.run(None, inputs)[0])
         # probs: [Sell, Hold, Buy]
         return int(np.argmax(probs) - 1)  # -1, 0, 1
 

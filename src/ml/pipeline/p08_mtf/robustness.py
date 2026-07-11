@@ -81,7 +81,15 @@ class P08RobustnessChecker(P07RobustnessChecker):
                 direction="both",
             )
 
-            oos_results.append({"window": i + 1, "sharpe": pf.sharpe_ratio(), "return": pf.total_return(), "pf": pf})
+            oos_results.append(
+                {
+                    # vectorbt attaches metric accessors dynamically; not visible to pyright
+                    "sharpe": pf.sharpe_ratio(),  # pyright: ignore[reportAttributeAccessIssue]
+                    "return": pf.total_return(),
+                    "window": i + 1,
+                    "pf": pf,
+                }
+            )
 
         combined_equity = pd.concat([res["pf"].value() for res in oos_results]).sort_index()
         avg_oos_sharpe = np.mean([res["sharpe"] for res in oos_results if not np.isnan(res["sharpe"])])
