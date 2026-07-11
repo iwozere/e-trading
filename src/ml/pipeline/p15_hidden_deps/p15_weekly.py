@@ -68,8 +68,11 @@ def _run_job(name: str, fn: Callable[[], Dict[str, Any] | None]) -> Dict[str, An
     """
     t0 = time.monotonic()
     try:
-        extra = fn() or {}
+        extra = fn()
         elapsed = round(time.monotonic() - t0, 1)
+        if extra is None:
+            _logger.warning("%-28s FAIL %.1fs (job reported no result)", name, elapsed)
+            return {"success": False, "elapsed_s": elapsed}
         _logger.info("%-28s OK   %.1fs", name, elapsed)
         return {"success": True, "elapsed_s": elapsed, **extra}
     except Exception:

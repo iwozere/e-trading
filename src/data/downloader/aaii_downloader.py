@@ -36,6 +36,7 @@ Classes:
 import json
 import sys
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Union
 
@@ -56,7 +57,7 @@ except ImportError:
     DATA_CACHE_DIR = "c:/data-cache"
 
 _AAII_URL = "https://www.aaii.com/files/surveys/sentiment.xls"
-_SHEET_NAME = "Sentiment Survey"
+_SHEET_NAME = "SENTIMENT"  # AAII renamed the sheet from "Sentiment Survey" at some point
 _SKIP_ROWS = 3
 # Columns A–G (Date through Bull-Bear Spread) and K–M (S&P 500 High/Low/Close).
 # Excludes H–J: life-of-survey constants (Average, +St. Dev., -St. Dev.).
@@ -117,7 +118,11 @@ class AaiiDownloader(BaseDataDownloader):
         self._session = requests.Session()
         self._session.headers.update(
             {
-                "User-Agent": "Mozilla/5.0 (compatible; e-trading-research; akossyrev@gmail.com)",
+                # AAII's server 403s any non-browser User-Agent (verified: the
+                # descriptive UA below gets rejected regardless of Accept/Referer;
+                # only the UA string itself matters).
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
             }
         )
 
@@ -259,7 +264,7 @@ class AaiiDownloader(BaseDataDownloader):
         """
         try:
             df: pd.DataFrame = pd.read_excel(  # type: ignore[call-overload]
-                raw_bytes,
+                BytesIO(raw_bytes),
                 sheet_name=_SHEET_NAME,
                 skiprows=_SKIP_ROWS,
                 usecols=_USE_COLS,
