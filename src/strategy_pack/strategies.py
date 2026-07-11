@@ -139,8 +139,9 @@ def run_strategy_2(ctx: RunContext) -> List[PackSignal]:
         if use_fast and sma_f is not None:
             uptrend = uptrend & (c > sma_f)
 
-        prev_up = uptrend.iloc[-2]
-        curr_up = uptrend.iloc[-1]
+        # bool() strips numpy.bool_ — pydantic's JSON serializer rejects numpy scalars.
+        prev_up = bool(uptrend.iloc[-2])
+        curr_up = bool(uptrend.iloc[-1])
         cross_up = curr_up and not prev_up
         cross_down = (not curr_up) and prev_up
 
@@ -196,8 +197,9 @@ def run_strategy_3(ctx: RunContext) -> List[PackSignal]:
             continue
         sma = c.rolling(w_sma).mean()
         uptrend = c > sma
-        prev_up = uptrend.iloc[-2]
-        curr_up = uptrend.iloc[-1]
+        # bool() strips numpy.bool_ — pydantic's JSON serializer rejects numpy scalars.
+        prev_up = bool(uptrend.iloc[-2])
+        curr_up = bool(uptrend.iloc[-1])
         cross_up = curr_up and not prev_up
         cross_down = (not curr_up) and prev_up
 

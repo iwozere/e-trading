@@ -13,6 +13,20 @@ def utc_now_iso() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _json_fallback(value: Any) -> Any:
+    """
+    Serialize values pydantic's JSON mode rejects (e.g. numpy scalars).
+
+    numpy scalars expose .item() returning the native Python equivalent;
+    anything else degrades to str() so one bad metadata value cannot fail
+    the whole strategy run.
+    """
+    item = getattr(value, "item", None)
+    if callable(item):
+        return item()
+    return str(value)
+
+
 def make_idempotency_key(strategy_id: str, symbol: str, bar_close_ts: str, signal: str, variant: str = "") -> str:
     raw = f"{strategy_id}|{variant}|{symbol}|{bar_close_ts}|{signal}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:40]
@@ -47,4 +61,4 @@ class PackSignal(BaseModel):
         return self
 
     def to_jsonl_dict(self) -> Dict[str, Any]:
-        return self.model_dump(mode="json")
+        return self.model_dump(mode="json", fallback=_json_fallback)
