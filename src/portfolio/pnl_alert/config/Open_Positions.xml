@@ -1,30 +1,25 @@
 <FlexQueryResponse queryName="Open Positions" type="AF">
 <FlexStatements count="2">
-<FlexStatement accountId="U4594031" fromDate="2026-07-06" toDate="2026-07-06" period="LastBusinessDay" whenGenerated="2026-07-07 06:36:04">
+<FlexStatement accountId="U4594031" fromDate="2026-07-10" toDate="2026-07-10" period="LastBusinessDay" whenGenerated="2026-07-11 05:34:45">
 <OpenPositions>
-<OpenPosition symbol="AI" reportDate="2026-07-06" position="250" markPrice="9.28" positionValue="2320" openPrice="12.7550088" costBasisPrice="12.7550088" costBasisMoney="3188.7522" fifoPnlUnrealized="-868.7522" />
-<OpenPosition symbol="ALT" reportDate="2026-07-06" position="300" markPrice="3.08" positionValue="924" openPrice="2.806669667" costBasisPrice="2.806669667" costBasisMoney="842.0009" fifoPnlUnrealized="81.9991" />
-<OpenPosition symbol="BINI" reportDate="2026-07-06" position="0.0002" markPrice="0.07" positionValue="0" openPrice="1414175" costBasisPrice="1414175" costBasisMoney="282.835" fifoPnlUnrealized="-282.835" />
-<OpenPosition symbol="CRSP" reportDate="2026-07-06" position="170" markPrice="61.89" positionValue="10521.3" openPrice="52.706775265" costBasisPrice="52.706775265" costBasisMoney="8960.151795" fifoPnlUnrealized="1561.148205" />
-<OpenPosition symbol="ESTC" reportDate="2026-07-06" position="110" markPrice="58.54" positionValue="6439.4" openPrice="79.004565455" costBasisPrice="79.004565455" costBasisMoney="8690.5022" fifoPnlUnrealized="-2251.1022" />
-<OpenPosition symbol="IOVA" reportDate="2026-07-06" position="250" markPrice="4.19" positionValue="1047.5" openPrice="2.205022" costBasisPrice="2.205022" costBasisMoney="551.2555" fifoPnlUnrealized="496.2445" />
-<OpenPosition symbol="KRMN" reportDate="2026-07-06" position="50" markPrice="53.36" positionValue="2668" openPrice="45.620003" costBasisPrice="45.620003" costBasisMoney="2281.00015" fifoPnlUnrealized="386.99985" />
-<OpenPosition symbol="MELI" reportDate="2026-07-06" position="7" markPrice="1805.68" positionValue="12639.76" openPrice="1686.820004857" costBasisPrice="1686.820004857" costBasisMoney="11807.740034" fifoPnlUnrealized="832.019966" />
-<OpenPosition symbol="NVDA" reportDate="2026-07-06" position="20" markPrice="195.55" positionValue="3911" openPrice="179.19" costBasisPrice="179.19" costBasisMoney="3583.8" fifoPnlUnrealized="327.2" />
-<OpenPosition symbol="ORCL" reportDate="2026-07-06" position="160" markPrice="143.76" positionValue="23001.6" openPrice="186.651756381" costBasisPrice="186.651756381" costBasisMoney="29864.281021" fifoPnlUnrealized="-6862.681021" />
-<OpenPosition symbol="PINS" reportDate="2026-07-06" position="200" markPrice="22.25" positionValue="4450" openPrice="24.99751175" costBasisPrice="24.99751175" costBasisMoney="4999.50235" fifoPnlUnrealized="-549.50235" />
-<OpenPosition symbol="PLTR" reportDate="2026-07-06" position="10" markPrice="132.54" positionValue="1325.4" openPrice="116.240003" costBasisPrice="116.240003" costBasisMoney="1162.40003" fifoPnlUnrealized="162.99997" />
-<OpenPosition symbol="RGNX" reportDate="2026-07-06" position="80" markPrice="14.83" positionValue="1186.4" openPrice="5.900003" costBasisPrice="5.900003" costBasisMoney="472.00024" fifoPnlUnrealized="714.39976" />
-<OpenPosition symbol="RPD" reportDate="2026-07-06" position="250" markPrice="10.5" positionValue="2625" openPrice="11.0340088" costBasisPrice="11.0340088" costBasisMoney="2758.5022" fifoPnlUnrealized="-133.5022" />
-<OpenPosition symbol="SANA" reportDate="2026-07-06" position="250" markPrice="3.97" positionValue="992.5" openPrice="2.964003" costBasisPrice="2.964003" costBasisMoney="741.00075" fifoPnlUnrealized="251.49925" />
-<OpenPosition symbol="VT" reportDate="2026-07-06" position="1216" markPrice="157.81" positionValue="191896.96" openPrice="113.718751658" costBasisPrice="113.718751658" costBasisMoney="138282.002016" fifoPnlUnrealized="53614.957984" />
-<OpenPosition symbol="VUSD" reportDate="2026-07-06" position="48" markPrice="142.695" positionValue="6849.36" openPrice="124.925" costBasisPrice="124.925" costBasisMoney="5996.4" fifoPnlUnrealized="852.96" />
-<OpenPosition symbol="YQ" reportDate="2026-07-06" position="50" markPrice="2.49" positionValue="124.5" openPrice="22.1" costBasisPrice="22.1" costBasisMoney="1105" fifoPnlUnrealized="-980.5" />
+<OpenPosition symbol="AI" reportDate="2026-07-10" position="450" markPrice="8.95" positionValue="4027.5" openPrice="10.975006222" costBasisPrice="10.975006222" costBasisMoney="4938.7528" fifoPnlUnrealized="-911.2528" />
+<OpenPosition symbol="BINI" reportDate="2026-07-10" position="0.0002" markPrice="0.071" positionValue="0" openPrice="1414175" costBasisPrice="1414175" costBasisMoney="282.835" fifoPnlUnrealized="-282.835" />
+<OpenPosition symbol="CRSP" reportDate="2026-07-10" position="70" markPrice="53.35" positionValue="3734.5" openPrice="49.619594843" costBasisPrice="49.619594843" costBasisMoney="3473.371639" fifoPnlUnrealized="261.128361" />
+<OpenPosition symbol="ESTC" reportDate="2026-07-10" position="110" markPrice="60.24" positionValue="6626.4" openPrice="79.004565455" costBasisPrice="79.004565455" costBasisMoney="8690.5022" fifoPnlUnrealized="-2064.1022" />
+<OpenPosition symbol="GOLD" reportDate="2026-07-10" position="500" markPrice="4.102" positionValue="2051" openPrice="4.11" costBasisPrice="4.11" costBasisMoney="2055" fifoPnlUnrealized="-4" />
+<OpenPosition symbol="KRMN" reportDate="2026-07-10" position="50" markPrice="50.01" positionValue="2500.5" openPrice="45.620003" costBasisPrice="45.620003" costBasisMoney="2281.00015" fifoPnlUnrealized="219.49985" />
+<OpenPosition symbol="MELI" reportDate="2026-07-10" position="7" markPrice="1852.22" positionValue="12965.54" openPrice="1686.820004857" costBasisPrice="1686.820004857" costBasisMoney="11807.740034" fifoPnlUnrealized="1157.799966" />
+<OpenPosition symbol="NVDA" reportDate="2026-07-10" position="20" markPrice="210.96" positionValue="4219.2" openPrice="179.19" costBasisPrice="179.19" costBasisMoney="3583.8" fifoPnlUnrealized="635.4" />
+<OpenPosition symbol="ORCL" reportDate="2026-07-10" position="180" markPrice="140.64" positionValue="25315.2" openPrice="181.273783783" costBasisPrice="181.273783783" costBasisMoney="32629.281081" fifoPnlUnrealized="-7314.081081" />
+<OpenPosition symbol="PINS" reportDate="2026-07-10" position="200" markPrice="22.52" positionValue="4504" openPrice="24.99751175" costBasisPrice="24.99751175" costBasisMoney="4999.50235" fifoPnlUnrealized="-495.50235" />
+<OpenPosition symbol="PLTR" reportDate="2026-07-10" position="10" markPrice="126.79" positionValue="1267.9" openPrice="116.240003" costBasisPrice="116.240003" costBasisMoney="1162.40003" fifoPnlUnrealized="105.49997" />
+<OpenPosition symbol="VT" reportDate="2026-07-10" position="1216" markPrice="157.63" positionValue="191678.08" openPrice="113.718751658" costBasisPrice="113.718751658" costBasisMoney="138282.002016" fifoPnlUnrealized="53396.077984" />
+<OpenPosition symbol="VUSD" reportDate="2026-07-10" position="48" markPrice="143.1675" positionValue="6872.04" openPrice="124.925" costBasisPrice="124.925" costBasisMoney="5996.4" fifoPnlUnrealized="875.64" />
 </OpenPositions>
 </FlexStatement>
-<FlexStatement accountId="U13144347" fromDate="2026-07-06" toDate="2026-07-06" period="LastBusinessDay" whenGenerated="2026-07-07 06:36:04">
+<FlexStatement accountId="U13144347" fromDate="2026-07-10" toDate="2026-07-10" period="LastBusinessDay" whenGenerated="2026-07-11 05:34:45">
 <OpenPositions>
-<OpenPosition symbol="VT" reportDate="2026-07-06" position="74" markPrice="157.81" positionValue="11677.94" openPrice="93.975441649" costBasisPrice="93.975441649" costBasisMoney="6954.182682" fifoPnlUnrealized="4723.757318" />
+<OpenPosition symbol="VT" reportDate="2026-07-10" position="74" markPrice="157.63" positionValue="11664.62" openPrice="93.975441649" costBasisPrice="93.975441649" costBasisMoney="6954.182682" fifoPnlUnrealized="4710.437318" />
 </OpenPositions>
 </FlexStatement>
 </FlexStatements>
