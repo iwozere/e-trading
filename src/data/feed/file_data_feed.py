@@ -23,7 +23,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, ClassVar, Dict
 
 import backtrader as bt
 import pandas as pd
@@ -43,9 +43,10 @@ class FileDataFeed(bt.feed.DataBase):
     Supports both static backtesting and simulated real-time mode for testing.
     """
 
-    lines = ("open", "high", "low", "close", "volume", "openinterest")
+    # ClassVar[Any]: backtrader metaclass consumes these tuples at class creation
+    lines: ClassVar[Any] = ("open", "high", "low", "close", "volume", "openinterest")
 
-    params = (
+    params: ClassVar[Any] = (
         ("dataname", None),  # Path to CSV file
         ("symbol", None),  # Symbol name for logging
         ("datetime_col", "datetime"),  # Name of datetime column

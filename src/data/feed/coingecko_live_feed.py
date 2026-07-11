@@ -168,8 +168,9 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
 
             # Convert to DataFrame
             df = pd.DataFrame(prices, columns=["timestamp", "close"])
+            # Look volumes up by the raw millisecond keys the API uses
+            df["volume"] = [volumes.get(int(price_point[0]), 0) for price_point in prices]
             df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-            df["volume"] = df["timestamp"].map(lambda ts: volumes.get(int(ts.timestamp() * 1000), 0))
 
             # Resample to requested interval
             rule = self._get_resample_rule()

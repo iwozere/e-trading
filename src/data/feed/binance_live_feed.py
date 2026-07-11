@@ -284,6 +284,9 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
 
     async def _websocket_handler(self):
         """Handle WebSocket connection and messages."""
+        if self.ws_url is None:
+            _logger.error("WebSocket handler started without a stream URL for %s", self.symbol)
+            return
         try:
             async with websockets.connect(
                 self.ws_url, ping_interval=20, ping_timeout=10, close_timeout=10
@@ -371,7 +374,9 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
         status = super().get_status()
         status.update(
             {
-                "ws_connected": self.ws is not None and self.ws.sock is not None and self.ws.sock.connected,
+                # websockets' ClientConnection has no public socket attribute; rely on
+                # the connection state tracked by the handler.
+                "ws_connected": self.is_connected and self.ws is not None,
                 "ws_url": self.ws_url,
                 "binance_interval": self.binance_interval,
                 "testnet": self.testnet,

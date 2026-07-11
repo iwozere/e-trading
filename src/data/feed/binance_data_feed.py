@@ -2,9 +2,9 @@ import asyncio
 import json
 import queue
 import threading
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 
-from typing import Any
+from typing import Any, ClassVar
 
 import backtrader as bt
 import pandas as pd
@@ -30,14 +30,18 @@ Classes:
 
 _logger = setup_logger(__name__)
 
+# backtrader indicators take their arguments via metaclass, opaque to type checkers
+_SMA: Any = bt.indicators.MovingAverageSimple
+
 
 class BinanceEnhancedFeed(BaseLiveDataFeed):
     """
     Backtrader data feed for Binance supporting historical and real-time data via REST API and WebSocket.
     """
 
-    lines = ("open", "high", "low", "close", "volume", "openinterest")
-    params = (
+    # ClassVar[Any]: backtrader metaclass consumes these tuples at class creation
+    lines: ClassVar[Any] = ("open", "high", "low", "close", "volume", "openinterest")
+    params: ClassVar[Any] = (
         ("symbol", "BTCUSDT"),
         ("interval", "1m"),
         ("lookback", 1000),
@@ -113,7 +117,7 @@ class BinanceEnhancedFeed(BaseLiveDataFeed):
 
             for k in klines:
                 data_point = {
-                    "datetime": timezone.utcfromtimestamp(k[0] / 1000),
+                    "datetime": datetime.fromtimestamp(k[0] / 1000, UTC),
                     "open": float(k[1]),
                     "high": float(k[2]),
                     "low": float(k[3]),
@@ -171,7 +175,7 @@ class BinanceEnhancedFeed(BaseLiveDataFeed):
         if msg["e"] == "kline" and msg["k"]["x"]:
             k = msg["k"]
             data_point = {
-                "datetime": timezone.utcfromtimestamp(k["t"] / 1000),
+                "datetime": datetime.fromtimestamp(k["t"] / 1000, UTC),
                 "open": float(k["o"]),
                 "high": float(k["h"]),
                 "low": float(k["l"]),
@@ -195,10 +199,10 @@ class SMACrossover(bt.Strategy):
     Example Backtrader strategy implementing a simple moving average crossover.
     """
 
-    params = (("sma_period", 50),)
+    params: ClassVar[Any] = (("sma_period", 50),)
 
     def __init__(self):
-        self.sma = bt.indicators.SMA(self.data.close, period=self.params.sma_period)
+        self.sma = _SMA(self.data.close, period=self.params.sma_period)
         self.order = None
 
     def next(self):
@@ -215,9 +219,9 @@ class SMACrossover(bt.Strategy):
     def notify_order(self, order):
         if order.status in [order.Completed]:
             if order.isbuy():
-                print(f"BUY EXECUTED at {order.executed.price}")
+                _logger.info("BUY EXECUTED at %s", order.executed.price)
             elif order.issell():
-                print(f"SELL EXECUTED at {order.executed.price}")
+                _logger.info("SELL EXECUTED at %s", order.executed.price)
             self.order = None
 
 

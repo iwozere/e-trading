@@ -29,6 +29,10 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
+# backtrader generates PandasData's constructor parameters via its params metaclass,
+# which is opaque to static type checkers.
+_PandasData: Any = bt.feeds.PandasData
+
 
 class BaseLiveDataFeed(bt.feed.DataBase):
     """
@@ -123,7 +127,7 @@ class BaseLiveDataFeed(bt.feed.DataBase):
                 pandas_kwargs[key] = value
 
         # Create PandasData instance with the prepared data
-        self.pandas_data = bt.feeds.PandasData(
+        self.pandas_data = _PandasData(
             dataname=df_copy,
             datetime=0,  # 0 indicates datetime is in column 0 (timestamp)
             open=1,  # open is now column 1
@@ -152,7 +156,7 @@ class BaseLiveDataFeed(bt.feed.DataBase):
         return getattr(pandas_data, name)
 
     @property
-    def df(self):
+    def df(self) -> Optional[pd.DataFrame]:
         """Get the DataFrame for backward compatibility with tests."""
         return self.pandas_data.p.dataname
 
@@ -312,7 +316,7 @@ class BaseLiveDataFeed(bt.feed.DataBase):
                 # Add new data to DataFrame
                 if self.df is None:
                     # Create new pandas_data with the new data
-                    self.pandas_data = bt.feeds.PandasData(
+                    self.pandas_data = _PandasData(
                         dataname=new_data,
                         datetime=0,
                         open=1,
@@ -328,7 +332,7 @@ class BaseLiveDataFeed(bt.feed.DataBase):
                     # Concatenate new data with existing data
                     combined_data = pd.concat([self.df, new_data])
                     # Update the pandas_data with combined data
-                    self.pandas_data = bt.feeds.PandasData(
+                    self.pandas_data = _PandasData(
                         dataname=combined_data,
                         datetime=0,
                         open=1,
@@ -342,11 +346,15 @@ class BaseLiveDataFeed(bt.feed.DataBase):
                     self.p = self.pandas_data.p
 
                 # Update Backtrader lines
-                latest = self.df.iloc[-1]
+                df = self.df
+                if df is None:
+                    _logger.warning("DataFrame unavailable after update for %s", self.symbol)
+                    return
+                latest = df.iloc[-1]
                 try:
                     # Ensure lines are properly initialized before accessing
                     if hasattr(self.lines, "datetime") and len(self.lines.datetime) > 0:
-                        self.lines.datetime[0] = bt.date2num(self.df.index[-1])
+                        self.lines.datetime[0] = bt.date2num(df.index[-1])
                         self.lines.open[0] = latest["open"]
                         self.lines.high[0] = latest["high"]
                         self.lines.low[0] = latest["low"]
@@ -363,11 +371,11 @@ class BaseLiveDataFeed(bt.feed.DataBase):
                 # Call callback if provided
                 if self.on_new_bar:
                     try:
-                        self.on_new_bar(self.symbol, self.df.index[-1], latest.to_dict())
+                        self.on_new_bar(self.symbol, df.index[-1], latest.to_dict())
                     except Exception:
                         _logger.exception("Error in on_new_bar callback: %s")
 
-                _logger.debug("Updated %s with new bar at %s", self.symbol, self.df.index[-1])
+                _logger.debug("Updated %s with new bar at %s", self.symbol, df.index[-1])
 
         except Exception:
             _logger.exception("Error processing new data for %s: %s")
