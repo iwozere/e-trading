@@ -7,6 +7,7 @@ It recreates the calculation using the same parameters as the optimizer.
 
 import json
 from datetime import datetime
+from typing import Any
 
 import numpy as np
 
@@ -17,7 +18,7 @@ def load_json_data(filename):
         return json.load(f)
 
 
-def calculate_sharpe_ratio_manual(trades, initial_capital=1000.0, risk_free_rate=0.01):
+def calculate_sharpe_ratio_manual(trades, initial_capital=1000.0, risk_free_rate=0.01) -> Any:
     """
     Calculate Sharpe ratio manually to verify the calculation
 

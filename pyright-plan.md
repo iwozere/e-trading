@@ -154,3 +154,22 @@ Phase B starting counts: reportOptionalMemberAccess 162, reportOptionalSubscript
   Verified: mypy 0; modified runnable suites byte-identical results vs pre-change baseline (stash comparison).
 
 Phase C starting counts: 878 errors in ~175 files — reportAttributeAccessIssue ~350, reportArgumentType ~260, reportCallIssue ~190, reportIndexIssue ~49, reportOperatorIssue ~37.
+
+- 2026-07-11 — **Phase C complete: 878 → 493 errors; production code at 0 pyright errors** (remaining 493 are all in test files). Batches: C1 feeds+ticker_chart (a8848f8), C2 p04/p07/p08+mixin+drawdowns (37f03d9), C3 services/cache/screeners/CLIs (1fb351d), C4 prod long tail (a4e45d7).
+  Real bugs found by the cleanup:
+  - `binance_data_feed`: `timezone.utcfromtimestamp` (no such method) crashed backfill + websocket paths.
+  - `binance_live_feed.get_status`: `ws.sock` doesn't exist on new websockets API.
+  - `health_cli`: async_command applied after @cli.command() — every CLI command returned an un-awaited coroutine and did nothing.
+  - `indicators/service.py`: `pd.isfinite` doesn't exist; None fed to IndicatorValue (pydantic rejects).
+  - `ScreenerResult.fundamental_score/technical_score`: computed but never attached — message lines + 2 test files were dead code; fields added and populated.
+  - `file_based_cache._split_data_by_years`: mask/frame misalignment (ValueError with date filter in DatetimeIndex branch).
+  - P07 walk-forward crashed on list-of-segments input (`ohlcv.loc` on a list); now mirrors P08's concat.
+  - `run_short_data`: `sort_values(na_last=True)` — parameter doesn't exist (TypeError).
+  - `ta_lib_adapter`: unknown string implementation fell through to `fn(...)` → 'str' not callable.
+  - `validate_timestamps`: DatetimeIndex input silently skipped tz validation.
+  Established idioms: `.to_numpy(dtype=float)` at pandas→numpy/talib boundaries; `pd.DatetimeIndex(df.index)` normalization; `cast(pd.Timestamp, k)` at `.items()` loops; Any-aliases for backtrader metaclass ctors; TYPE_CHECKING mixin contracts (paper_trading_mixin); NewType wraps for indicator requests; `Field(default=None, ...)` not positional; per-line `# pyright: ignore[rule]` only for true third-party gaps (vectorbt dynamic metrics, sanpy, plotly row/col ints, platform signals).
+  mypy verified 0 after every batch.
+
+Phase D starting counts: 493 errors in 77 files, 100% test code — reportAttributeAccessIssue 201, reportArgumentType 133, reportCallIssue 114, reportIndexIssue 41.
+
+- 2026-07-11 — **Phase D batch D1: 493 → 362 errors** (tests/ root cluster). Deleted 3 dead suites that test removed/renamed APIs: `test_client.py` (sync `requests`-based client + CircuitBreaker `can_execute`/`record_failure` — real client is async/aiohttp), `test_new_config_system.py` (flat `TradingBotConfig(broker_type=…)` — model is now nested), `test_bot_manager.py` (procedural `start_bot`/`running_bots` module API that exists nowhere). Mechanical fixes: `test_hmm_lstm_backtest.py` (typed `convert_numpy -> Any`; dropped `test_parameter_optimization_disabled` — 4-arg call to a 2-arg method testing a removed disabled-returns-{} contract), `test_sharpe_calculation.py` (`calculate_sharpe_ratio_manual -> Any`, its float-sentinel/dict return broke `result[...]` indexing), `test_scheduler_main_application.py` (`notification_client` → `notification_db_service` rename; `cast` for intentional None config; removed 2 assertions on the deleted `config.notification` section; deleted `TestSignalHandling` — tested the old single-arg `create_task` signal impl, now `setup_signal_handlers(loop, application)`). Suite-rot still latent (not pyright errors): scheduler notification-timeout validation test + `test_main` single-arg `setup_signal_handlers` assertion. mypy 0.

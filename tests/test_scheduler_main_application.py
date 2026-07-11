@@ -9,9 +9,9 @@ Tests the complete main application functionality including:
 
 import asyncio
 import os
-import signal
 import sys
 from pathlib import Path
+from typing import cast
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -21,7 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.scheduler.config import SchedulerServiceConfig
-from src.scheduler.main import SchedulerApplication, main, setup_signal_handlers
+from src.scheduler.main import SchedulerApplication, main
 
 
 @pytest.fixture
@@ -40,10 +40,10 @@ def test_config():
 @pytest.fixture
 def mock_dependencies():
     """Create mock dependencies for testing."""
-    mocks = {"scheduler_service": Mock(), "notification_client": Mock()}
+    mocks = {"scheduler_service": Mock(), "notification_db_service": Mock()}
 
     # Setup async methods
-    mocks["notification_client"].close = AsyncMock()
+    mocks["notification_db_service"].close = AsyncMock()
     mocks["scheduler_service"].start = AsyncMock()
     mocks["scheduler_service"].stop = AsyncMock()
     mocks["scheduler_service"].reload_schedules = AsyncMock(return_value=5)
@@ -67,14 +67,14 @@ class TestSchedulerApplicationInitialization:
         assert app.indicator_service is None
         assert app.jobs_service is None
         assert app.alert_evaluator is None
-        assert app.notification_client is None
+        assert app.notification_db_service is None
         assert app.schema_validator is None
         assert not app._shutdown_event.is_set()
 
     def test_application_creation_with_invalid_config(self):
         """Test application creation with invalid configuration."""
         # Test with None config should raise AttributeError when accessing config attributes
-        app = SchedulerApplication(None)
+        app = SchedulerApplication(cast(SchedulerServiceConfig, None))
         with pytest.raises(AttributeError):
             # This should fail when trying to access config.alert.schema_dir
             asyncio.run(app.initialize_services())
@@ -91,7 +91,7 @@ class TestSchedulerApplicationInitialization:
         assert app.schema_validator is not None
         assert app.data_manager is not None
         assert app.indicator_service is not None
-        assert app.notification_client is not None
+        assert app.notification_db_service is not None
         assert app.jobs_service is not None
         assert app.alert_evaluator is not None
         assert app.scheduler_service is not None
@@ -164,14 +164,14 @@ class TestSchedulerApplicationLifecycle:
 
         # Setup services
         app.scheduler_service = mock_dependencies["scheduler_service"]
-        app.notification_client = mock_dependencies["notification_client"]
+        app.notification_db_service = mock_dependencies["notification_db_service"]
 
         # Stop application
         await app.stop()
 
         # Verify shutdown sequence
         mock_dependencies["scheduler_service"].stop.assert_called_once()
-        mock_dependencies["notification_client"].close.assert_called_once()
+        mock_dependencies["notification_db_service"].close.assert_called_once()
         assert app._shutdown_event.is_set()
 
     @pytest.mark.asyncio
@@ -181,9 +181,9 @@ class TestSchedulerApplicationLifecycle:
 
         # Setup services with stop failures
         app.scheduler_service = mock_dependencies["scheduler_service"]
-        app.notification_client = mock_dependencies["notification_client"]
+        app.notification_db_service = mock_dependencies["notification_db_service"]
         mock_dependencies["scheduler_service"].stop.side_effect = Exception("Stop failed")
-        mock_dependencies["notification_client"].close.side_effect = Exception("Close failed")
+        mock_dependencies["notification_db_service"].close.side_effect = Exception("Close failed")
 
         # Should handle errors gracefully
         with pytest.raises(Exception, match="Stop failed"):
@@ -195,13 +195,13 @@ class TestSchedulerApplicationLifecycle:
         app = SchedulerApplication(test_config)
 
         # Only initialize notification client
-        app.notification_client = Mock()
-        app.notification_client.close = AsyncMock()
+        app.notification_db_service = Mock()
+        app.notification_db_service.close = AsyncMock()
 
         # Should handle partial initialization gracefully
         await app.stop()
 
-        app.notification_client.close.assert_called_once()
+        app.notification_db_service.close.assert_called_once()
         assert app._shutdown_event.is_set()
 
     @pytest.mark.asyncio
@@ -319,8 +319,6 @@ class TestConfigurationLoading:
             assert config.database.url == "postgresql://test:test@testhost:5432/testdb"
             assert config.scheduler.max_workers == 8
             assert config.scheduler.job_timeout == 600
-            assert config.notification.service_url == "http://test-notification:9000"
-            assert config.notification.timeout == 45
             assert config.service.environment == "staging"
             assert config.service.log_level == "DEBUG"
 
@@ -369,50 +367,6 @@ class TestConfigurationLoading:
 
         # Verify database URL masking
         assert "@" not in config_dict["database"]["url"] or "local" in config_dict["database"]["url"]
-
-
-class TestSignalHandling:
-    """Test signal handling for graceful shutdown."""
-
-    def test_setup_signal_handlers(self, test_config):
-        """Test signal handler setup."""
-        app = SchedulerApplication(test_config)
-
-        # Mock signal.signal to verify calls
-        with patch("signal.signal") as mock_signal:
-            setup_signal_handlers(app)
-
-            # Verify signal handlers were registered
-            assert mock_signal.call_count >= 2  # At least SIGINT and SIGTERM
-
-            # Check for SIGINT and SIGTERM
-            call_args = [call[0] for call in mock_signal.call_args_list]
-            assert (signal.SIGINT, mock_signal.call_args_list[0][0][1]) in [(args[0], args[1]) for args in call_args]
-            assert (signal.SIGTERM, mock_signal.call_args_list[1][0][1]) in [(args[0], args[1]) for args in call_args]
-
-    def test_signal_handler_execution(self, test_config):
-        """Test signal handler execution."""
-        app = SchedulerApplication(test_config)
-
-        # Mock asyncio.create_task to verify shutdown is called
-        with (
-            patch("asyncio.create_task") as mock_create_task,
-            patch.object(app, "stop", new_callable=AsyncMock) as mock_stop,
-        ):
-            # Setup signal handlers
-            setup_signal_handlers(app)
-
-            # Simulate signal reception
-            # Get the signal handler function
-            with patch("signal.signal") as mock_signal:
-                setup_signal_handlers(app)
-                signal_handler = mock_signal.call_args_list[0][0][1]
-
-                # Call signal handler
-                signal_handler(signal.SIGINT, None)
-
-                # Verify shutdown task was created
-                mock_create_task.assert_called_once()
 
 
 class TestMainFunction:
@@ -532,7 +486,7 @@ class TestIntegrationScenarios:
             # Mock initialization to set up services
             async def mock_initialize():
                 app.scheduler_service = mock_scheduler
-                app.notification_client = mock_notification
+                app.notification_db_service = mock_notification
 
             mock_init.side_effect = mock_initialize
 

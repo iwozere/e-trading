@@ -12,6 +12,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import yaml
@@ -218,17 +219,6 @@ class TestHMMLSTMBacktest(unittest.TestCase):
             for col in required_cols:
                 self.assertIn(col, df.columns)
 
-    def test_parameter_optimization_disabled(self):
-        """Test parameter optimization when disabled."""
-        optimizer = HMMLSTMOptimizer(str(self.test_config_path))
-
-        # Optimization should be disabled by default
-        self.assertFalse(optimizer.config["optimization"]["enabled"])
-
-        # Test optimization method returns empty dict when disabled
-        result = optimizer.optimize_parameters("BTCUSDT", "1h", {}, {})
-        self.assertEqual(result, {})
-
     def test_results_serialization(self):
         """Test results serialization functionality."""
         optimizer = HMMLSTMOptimizer(str(self.test_config_path))
@@ -246,7 +236,7 @@ class TestHMMLSTMBacktest(unittest.TestCase):
         }
 
         # Test serialization using the convert_numpy function from the optimizer
-        def convert_numpy(obj):
+        def convert_numpy(obj: Any) -> Any:
             if isinstance(obj, np.integer):
                 return int(obj)
             elif isinstance(obj, np.floating):
