@@ -93,9 +93,15 @@ def get_six_tickers():
 
 
 # Download S&P 500 ticker list
+# Wikipedia rejects the default urllib User-Agent that pd.read_html(url) sends with a 403
+_WIKIPEDIA_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; e-trading-bot/1.0)"}
+
+
 def get_sp500_tickers_wikipedia():
     url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-    tables = pd.read_html(url)
+    response = requests.get(url, headers=_WIKIPEDIA_HEADERS)
+    response.raise_for_status()
+    tables = pd.read_html(io.StringIO(response.text))
     tickers = tables[0]["Symbol"].tolist()
     tickers = [t.replace(".", "-") for t in tickers]  # Convert for yfinance
     return tickers
@@ -108,7 +114,9 @@ def get_sp_midcap_wikipedia():
     """
     url = "https://en.wikipedia.org/wiki/List_of_S%26P_400_companies"
 
-    tables = pd.read_html(url)
+    response = requests.get(url, headers=_WIKIPEDIA_HEADERS)
+    response.raise_for_status()
+    tables = pd.read_html(io.StringIO(response.text))
     tickers = tables[0]["Symbol"].tolist()
     tickers = [t.replace(".", "-") for t in tickers]  # Convert for yfinance
     return tickers

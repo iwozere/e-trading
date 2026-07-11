@@ -11,6 +11,7 @@ This module provides a simplified cache structure: symbol/timeframe/year/
 
 import gzip
 import json
+import os
 import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -314,9 +315,20 @@ class UnifiedCache:
             return None
 
     def _save_compressed_csv(self, df: pd.DataFrame, filepath: Path):
-        """Save DataFrame as compressed CSV."""
-        with gzip.open(filepath, "wt", encoding="utf-8") as f:
-            df.to_csv(f, index=True, lineterminator="\n")
+        """
+        Save DataFrame as compressed CSV.
+
+        Writes to a temporary file first and atomically renames it into place,
+        so concurrent readers never observe a partially-written (truncated or
+        corrupt) gzip file.
+        """
+        tmp_path = filepath.with_suffix(filepath.suffix + f".tmp{os.getpid()}")
+        try:
+            with gzip.open(tmp_path, "wt", encoding="utf-8") as f:
+                df.to_csv(f, index=True, lineterminator="\n")
+            os.replace(tmp_path, filepath)
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
     def _load_year_data(
         self, symbol: str, timeframe: str, year: int, data_type: str = "ohlcv"
