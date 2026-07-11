@@ -74,7 +74,7 @@ class BacktraderIndicatorWrapper(bt.Indicator):
         """Map unified service results to Backtrader lines"""
         raise NotImplementedError("Subclasses must implement _map_unified_results")
 
-    def _build_dataframe(self) -> pd.DataFrame:
+    def _build_dataframe(self) -> pd.DataFrame | None:
         """Build a pandas DataFrame from Backtrader data for unified service"""
         current_len = len(self.data)
 

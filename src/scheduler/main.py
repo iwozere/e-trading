@@ -198,7 +198,7 @@ def setup_signal_handlers(loop: asyncio.AbstractEventLoop, application: Schedule
     signal.signal(signal.SIGTERM, signal_handler)
 
     if hasattr(signal, "SIGHUP"):
-        signal.signal(signal.SIGHUP, signal_handler)
+        signal.signal(signal.SIGHUP, signal_handler)  # pyright: ignore[reportAttributeAccessIssue]  # hasattr-guarded
 
 
 async def main() -> None:

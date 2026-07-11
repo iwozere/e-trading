@@ -492,7 +492,7 @@ class MessageQueue:
             Sanitized content dictionary
         """
 
-        def sanitize_value(value):
+        def sanitize_value(value: Any) -> Any:
             """Recursively sanitize values."""
             if isinstance(value, str):
                 # Basic HTML/script tag removal

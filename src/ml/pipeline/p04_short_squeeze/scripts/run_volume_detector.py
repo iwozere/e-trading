@@ -342,11 +342,12 @@ class VolumeDetectorRunner:
             _logger.info("Starting volume detection run for date: %s", analysis_date)
             _logger.info("Analyzing %d stocks for volume patterns", len(universe))
 
-            config = (
-                self.config_manager.get_volume_detector_config()
-                if self.config_manager is not None and hasattr(self.config_manager, "get_volume_detector_config")
+            get_vd_config = (
+                getattr(self.config_manager, "get_volume_detector_config", None)
+                if self.config_manager is not None
                 else None
             )
+            config = get_vd_config() if get_vd_config is not None else None
 
             # Override parameters if specified
             if min_volume_spike and config:

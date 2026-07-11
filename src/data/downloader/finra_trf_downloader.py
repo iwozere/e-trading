@@ -128,14 +128,15 @@ class FinraTRFDownloader:
             response.raise_for_status()
 
             token_data = response.json()
-            self._access_token = token_data["access_token"]
+            access_token: str = token_data["access_token"]
+            self._access_token = access_token
 
             # Cache token for 30 minutes (or use expires_in from response)
             expires_in = int(token_data.get("expires_in", 1800))  # Default 30 minutes
             self._token_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in - 60)
 
             _logger.info("Successfully obtained access token (expires in %s seconds)", expires_in)
-            return self._access_token
+            return access_token
 
         except requests.RequestException as e:
             _logger.error("Failed to obtain access token: %s", str(e))

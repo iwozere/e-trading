@@ -8,7 +8,7 @@ across all data sources in the system.
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Hashable
 
 import pandas as pd
 
@@ -362,7 +362,13 @@ class DataHandler:
         df_resampled = df.set_index("timestamp").copy()
 
         # Define resampling rules
-        resampling_rules = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+        resampling_rules: Dict[Hashable, str] = {
+            "open": "first",
+            "high": "max",
+            "low": "min",
+            "close": "last",
+            "volume": "sum",
+        }
 
         try:
             # Resample data

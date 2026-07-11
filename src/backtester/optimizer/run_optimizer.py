@@ -559,11 +559,12 @@ def perform_statistical_validation(promising_results: dict, unpromising_results:
         return None
 
     try:
-        t_stat, p_value = stats.ttest_ind(promising_medians, unpromising_medians)
+        # scipy's TtestResult iterates as (statistic, pvalue)
+        t_stat, p_value = (float(v) for v in tuple(stats.ttest_ind(promising_medians, unpromising_medians)))
 
         return {
-            "t_statistic": float(t_stat),
-            "p_value": float(p_value),
+            "t_statistic": t_stat,
+            "p_value": p_value,
             "is_significant": p_value < 0.05,
             "promising_mean": float(np.mean(promising_medians)),
             "unpromising_mean": float(np.mean(unpromising_medians)),

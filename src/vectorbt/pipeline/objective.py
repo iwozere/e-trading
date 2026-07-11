@@ -125,7 +125,8 @@ class Objective:
 
             # 4. Custom Liquidation Proxy (Senior Architect Requirement)
             # Discard if Max Drawdown > 60% (conservative threshold)
-            max_dd = pf.max_drawdown().max()  # Max across all assets/columns
+            # vectorbt attaches metric accessors dynamically; not visible to pyright
+            max_dd = pf.max_drawdown().max()  # pyright: ignore[reportAttributeAccessIssue]  # Max across all assets/columns
             all_max_dd.append(max_dd)
             if max_dd > 0.6:
                 split_scores.append(-1.0)  # Penalty for this split
@@ -133,8 +134,8 @@ class Objective:
 
             # 5. Production-grade Scoring per split
             # Score = CAGR * Calmar * WinRate / (Leverage^2)
-            cagr = pf.annualized_return().mean()
-            calmar = pf.calmar_ratio().mean()
+            cagr = pf.annualized_return().mean()  # pyright: ignore[reportAttributeAccessIssue]
+            calmar = pf.calmar_ratio().mean()  # pyright: ignore[reportAttributeAccessIssue]
             win_rate = pf.trades.win_rate().mean()
             all_trades_count += pf.trades.count().sum()
 

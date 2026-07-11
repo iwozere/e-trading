@@ -252,7 +252,7 @@ class FundamentalsCache:
             # Get TTL from combiner configuration if available
             if self.combiner:
                 max_age_days = self.combiner.get_ttl_for_data_type(data_type)
-            else:
+            if max_age_days is None:
                 max_age_days = self.default_ttl_days
 
         age = datetime.now() - timestamp

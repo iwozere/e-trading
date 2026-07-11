@@ -231,7 +231,8 @@ class RedisCache:
                     self.metrics.misses += 1
                 return None
 
-            result = self._deserialize(data)
+            # redis returns bytes unless decode_responses is enabled
+            result = self._deserialize(data if isinstance(data, bytes) else str(data).encode())
 
             with self._lock:
                 self.metrics.hits += 1

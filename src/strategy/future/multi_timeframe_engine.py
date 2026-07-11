@@ -136,10 +136,10 @@ class MultiTimeframeStrategy(BaseStrategy):
         atr_period = params.get("atr_period", 14)
         multiplier = params.get("multiplier", 3.0)
 
-        # Calculate ATR
+        # Calculate ATR (np.abs on a Series returns a Series at runtime)
         high_low = data["high"] - data["low"]
-        high_close = np.abs(data["high"] - data["close"].shift())
-        low_close = np.abs(data["low"] - data["close"].shift())
+        high_close = pd.Series(np.abs(data["high"] - data["close"].shift()), index=data.index)
+        low_close = pd.Series(np.abs(data["low"] - data["close"].shift()), index=data.index)
 
         ranges = pd.concat([high_low, high_close, low_close], axis=1)
         true_range = ranges.max(axis=1)
@@ -279,10 +279,10 @@ class MultiTimeframeStrategy(BaseStrategy):
         atr_period = params.get("atr_period", 14)
         breakout_multiplier = params.get("breakout_multiplier", 1.5)
 
-        # Calculate ATR
+        # Calculate ATR (np.abs on a Series returns a Series at runtime)
         high_low = data["high"] - data["low"]
-        high_close = np.abs(data["high"] - data["close"].shift())
-        low_close = np.abs(data["low"] - data["close"].shift())
+        high_close = pd.Series(np.abs(data["high"] - data["close"].shift()), index=data.index)
+        low_close = pd.Series(np.abs(data["low"] - data["close"].shift()), index=data.index)
 
         ranges = pd.concat([high_low, high_close, low_close], axis=1)
         true_range = ranges.max(axis=1)

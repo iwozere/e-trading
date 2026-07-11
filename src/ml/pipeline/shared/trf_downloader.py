@@ -125,8 +125,8 @@ def get_trf_correction_factor(ticker: str, dt: datetime) -> float:
         row = df[df["ticker"] == ticker.upper()]
         if row.empty:
             return 1.0
-        total_vol = row["total_volume"].values[0]  # type: ignore[union-attr]
-        short_vol = row["short_volume"].values[0]  # type: ignore[union-attr]
+        total_vol = float(row["total_volume"].iloc[0])
+        short_vol = float(row["short_volume"].iloc[0])
         if total_vol > 0 and short_vol < total_vol:
             factor = total_vol / (total_vol - short_vol)
             _logger.debug(

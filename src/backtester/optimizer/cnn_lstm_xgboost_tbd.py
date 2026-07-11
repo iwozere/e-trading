@@ -257,6 +257,9 @@ def main():
     # Data preparation
     X, y, scaler = prepare_data(df, Config.time_steps)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+    # sklearn's stubs type the split results as lists; keep them ndarrays
+    X_train, X_test = np.asarray(X_train), np.asarray(X_test)
+    y_train, y_test = np.asarray(y_train), np.asarray(y_test)
     # CNN-LSTM optimization
     study_cnn = optuna.create_study(
         direction="minimize", study_name="cnn_lstm_opt", storage=Config.storage_name, load_if_exists=True

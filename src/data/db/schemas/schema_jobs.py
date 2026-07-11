@@ -50,10 +50,10 @@ class ScheduleCreate(BaseModel):
 class ScheduleUpdate(BaseModel):
     """Pydantic model for updating a schedule."""
 
-    name: str | None = Field(None, min_length=1, max_length=255)
-    target: str | None = Field(None, min_length=1, max_length=255)
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    target: str | None = Field(default=None, min_length=1, max_length=255)
     task_params: Dict[str, Any] | None = None
-    cron: str | None = Field(None, min_length=1, max_length=100)
+    cron: str | None = Field(default=None, min_length=1, max_length=100)
     enabled: bool | None = None
 
 
@@ -161,10 +161,10 @@ class ReportRequest(BaseModel):
 class ScreenerRequest(BaseModel):
     """Pydantic model for screener execution requests."""
 
-    screener_set: str | None = Field(None, min_length=1, max_length=100)
-    tickers: List[str] | None = Field(None, min_length=1)
+    screener_set: str | None = Field(default=None, min_length=1, max_length=100)
+    tickers: List[str] | None = Field(default=None, min_length=1)
     filter_criteria: Dict[str, Any] = Field(default_factory=dict)
-    top_n: int | None = Field(None, ge=1, le=1000)
+    top_n: int | None = Field(default=None, ge=1, le=1000)
     scheduled_for: dt | None = None
 
     @field_validator("tickers")

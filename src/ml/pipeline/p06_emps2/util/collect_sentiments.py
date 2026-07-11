@@ -21,6 +21,7 @@ Work independently of the main pipeline
 
 import sys
 from datetime import UTC, datetime, timedelta
+from datetime import date as date_type
 from pathlib import Path
 from typing import Set
 
@@ -37,7 +38,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
-def get_phase2_tickers_from_date(date: datetime) -> Set[str]:
+def get_phase2_tickers_from_date(date: "datetime | date_type") -> Set[str]:
     """
     Get unique tickers from a specific date's Phase 2 alerts.
 

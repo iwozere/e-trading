@@ -115,7 +115,7 @@ def validate_ohlcv_data(
 
 
 def validate_timestamps(
-    timestamps: pd.Series,
+    timestamps: Union[pd.Series, pd.DatetimeIndex],
     check_order: bool = True,
     check_gaps: bool = True,
     max_gap_hours: int = 24,
@@ -136,22 +136,25 @@ def validate_timestamps(
     """
     errors = []
 
+    # Normalize DatetimeIndex to a Series so the .dt accessor path works for both
+    ts = pd.Series(timestamps) if isinstance(timestamps, pd.DatetimeIndex) else timestamps
+
     # Check if timestamps are datetime objects
-    if not pd.api.types.is_datetime64_any_dtype(timestamps):
+    if not pd.api.types.is_datetime64_any_dtype(ts):
         errors.append("Timestamps must be datetime objects")
         return errors
 
     # Check for None/NaT values
-    if timestamps.isna().any():
+    if ts.isna().any():
         errors.append("Timestamps contain None/NaT values")
 
-    # Check timezone awareness - handle both Series and DatetimeIndex
+    # Check timezone awareness
     try:
         if timezone_aware:
-            if not timestamps.dt.tz:
+            if not ts.dt.tz:
                 errors.append("Timestamps must be timezone-aware")
         else:
-            if timestamps.dt.tz:
+            if ts.dt.tz:
                 errors.append("Timestamps must be timezone-naive")
     except AttributeError:
         # If .dt accessor is not available, assume timezone-naive
@@ -159,13 +162,13 @@ def validate_timestamps(
             errors.append("Timestamps must be timezone-aware")
 
     # Check order
-    if check_order and len(timestamps) > 1:
-        if not timestamps.is_monotonic_increasing:
+    if check_order and len(ts) > 1:
+        if not ts.is_monotonic_increasing:
             errors.append("Timestamps are not in ascending order")
 
     # Check for gaps
-    if check_gaps and len(timestamps) > 1:
-        gaps = timestamps.diff().dropna()
+    if check_gaps and len(ts) > 1:
+        gaps = ts.diff().dropna()
         large_gaps = gaps[gaps > timedelta(hours=max_gap_hours)]
         if len(large_gaps) > 0:
             # For daily data, allow weekend gaps (48+ hours)
@@ -408,13 +411,13 @@ def _determine_smart_gap_tolerance(
     # Determine asset type
     is_crypto = _is_crypto_symbol(symbol)
 
-    # Calculate typical gaps
-    gaps = timestamps.diff().dropna()
+    # Calculate typical gaps (normalize DatetimeIndex to a Series first)
+    gaps = pd.Series(timestamps).diff().dropna()
     if len(gaps) == 0:
         return 24
 
     # Convert to hours
-    gap_hours = gaps / pd.Timedelta(hours=1)
+    gap_hours = gaps.dt.total_seconds() / 3600
 
     # Find the most common gap (mode)
     try:

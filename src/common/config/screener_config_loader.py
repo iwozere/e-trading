@@ -50,10 +50,11 @@ class ScreenerConfigLoader:
 
         try:
             with open(self.config_path, encoding="utf-8") as f:
-                self._config = yaml.safe_load(f) or {}
+                config: Dict[str, Any] = yaml.safe_load(f) or {}
+            self._config = config
 
             _logger.debug("Loaded screener config from: %s", self.config_path)
-            return self._config
+            return config
 
         except yaml.YAMLError as e:
             _logger.error("Invalid YAML in screener config: %s", e)

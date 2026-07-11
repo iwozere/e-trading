@@ -286,7 +286,7 @@ class ShortDataCollector:
 
             # Sort by short interest percentage (descending)
             if "short_interest_pct" in df.columns:
-                df = df.sort_values("short_interest_pct", ascending=False, na_last=True)
+                df = df.sort_values("short_interest_pct", ascending=False, na_position="last")
 
             df.to_csv(filepath, index=False)
             _logger.info("Saved %d records to %s", len(records), filepath)

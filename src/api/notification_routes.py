@@ -41,10 +41,10 @@ class NotificationCreate(BaseModel):
     priority: str = Field(default="normal", description="Message priority (low, normal, high, urgent)")
     channels: List[str] = Field(..., description="Delivery channels (telegram, email, sms)")
     recipient_id: str = Field(..., description="Recipient user ID")
-    template_name: str | None = Field(None, description="Template name for structured messages")
+    template_name: str | None = Field(default=None, description="Template name for structured messages")
     content: Dict[str, Any] = Field(..., description="Message content and variables")
     metadata: Dict[str, Any] | None = Field(default_factory=dict, description="Additional metadata")
-    scheduled_for: datetime | None = Field(None, description="Schedule delivery for specific time")
+    scheduled_for: datetime | None = Field(default=None, description="Schedule delivery for specific time")
 
 
 class NotificationResponse(BaseModel):

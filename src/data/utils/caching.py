@@ -10,7 +10,7 @@ import logging
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Literal, Union
 
 import pandas as pd
 
@@ -35,7 +35,7 @@ class DataCache:
         self,
         cache_dir: Union[str, Path] = DATA_CACHE_DIR,
         max_size_gb: float = 10.0,
-        compression: str = "snappy",
+        compression: Literal["snappy", "gzip", "brotli", "lz4", "zstd"] = "snappy",
         partition_by: List[str] | None = None,
         retention_days: int = 365,
         cleanup_interval_hours: int = 24,
@@ -53,7 +53,7 @@ class DataCache:
         """
         self.cache_dir = Path(cache_dir)
         self.max_size_gb = max_size_gb
-        self.compression = compression
+        self.compression: Literal["snappy", "gzip", "brotli", "lz4", "zstd"] = compression
         self.partition_by = partition_by or ["provider", "symbol", "interval"]
         self.retention_days = retention_days
         self.cleanup_interval_hours = cleanup_interval_hours

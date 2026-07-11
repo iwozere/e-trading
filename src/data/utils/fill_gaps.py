@@ -370,7 +370,10 @@ def fill_gaps_for_symbol_interval(
 
 
 def fill_data_gaps(
-    symbols: List[str], intervals: List[str], cache_dir: str = DATA_CACHE_DIR, max_gap_hours: float = 24.0
+    symbols: List[str] | None,
+    intervals: List[str] | None,
+    cache_dir: str = DATA_CACHE_DIR,
+    max_gap_hours: float = 24.0,
 ) -> Dict[str, Any]:
     """
     Fill gaps in cached data using alternative providers.

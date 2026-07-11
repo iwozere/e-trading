@@ -17,7 +17,7 @@ import sys
 import time
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Union, cast
 
 import pandas as pd
 import requests
@@ -351,8 +351,8 @@ class FinraDataDownloader(BaseDataDownloader):
                 _logger.warning("No FINRA data found for symbol %s", symbol)
                 return None
 
-            # Return the most recent record for the symbol
-            record = symbol_data.iloc[0].to_dict()
+            # Return the most recent record for the symbol (keys are column names)
+            record = cast(Dict[str, Any], symbol_data.iloc[0].to_dict())
 
             _logger.debug("Found FINRA data for %s: %s shares short", symbol, record.get("ShortVolume", "N/A"))
             return record
@@ -568,14 +568,15 @@ class FinraDataDownloader(BaseDataDownloader):
                 _logger.error("Failed to decode JSON response from FINRA Auth API. Raw response: %s", response.text)
                 raise requests.RequestException(f"Invalid JSON from Auth API: {str(e)}") from e
 
-            self._access_token = token_data["access_token"]
+            access_token: str = token_data["access_token"]
+            self._access_token = access_token
 
             # Cache token for 30 minutes (or use expires_in from response)
             expires_in = int(token_data.get("expires_in", 1800))  # Default 30 minutes
             self._token_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in - 60)
 
             _logger.info("Successfully obtained access token (expires in %s seconds)", expires_in)
-            return self._access_token
+            return access_token
 
         except requests.RequestException as e:
             _logger.error("Failed to obtain access token: %s", str(e))

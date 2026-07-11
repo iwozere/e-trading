@@ -6,6 +6,7 @@ Includes ScreenerSnapshot, DeepScanMetrics, SqueezeAlert, and AdHocCandidateMode
 """
 
 from datetime import date, datetime
+from datetime import date as DateType
 from enum import StrEnum
 
 from sqlalchemy import (
@@ -107,7 +108,8 @@ class DeepScanMetrics(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     ticker: Mapped[str] = mapped_column(String(10), index=True)
-    date: Mapped[date] = mapped_column(Date, index=True)
+    # DateType alias: the column name "date" shadows datetime.date in this scope
+    date: Mapped[DateType] = mapped_column(Date, index=True)
     volume_spike: Mapped[float | None] = mapped_column(Numeric(6, 2))
     call_put_ratio: Mapped[float | None] = mapped_column(Numeric(6, 2))
     sentiment_24h: Mapped[float | None] = mapped_column(Numeric(4, 3))

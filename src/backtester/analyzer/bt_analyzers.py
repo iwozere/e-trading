@@ -16,6 +16,7 @@ import math
 
 import backtrader as bt
 import numpy as np
+from backtrader.dataseries import TimeFrame
 
 
 class CalmarRatio(bt.Analyzer):
@@ -24,7 +25,7 @@ class CalmarRatio(bt.Analyzer):
     Uses CAGR and DrawDown analyzers to compute the metric.
     """
 
-    params = (("riskfreerate", 0.0), ("timeframe", bt.TimeFrame.Years))
+    params = (("riskfreerate", 0.0), ("timeframe", TimeFrame.Years))
 
     def __init__(self):
         self.cagr_analyzer = CAGR()
@@ -54,7 +55,7 @@ class CAGR(bt.Analyzer):
     Analyzer to calculate the Compound Annual Growth Rate (CAGR) of the strategy's equity curve.
     """
 
-    params = (("timeframe", bt.TimeFrame.Years),)
+    params = (("timeframe", TimeFrame.Years),)
 
     def start(self):
         super().start()
@@ -83,7 +84,7 @@ class SortinoRatio(bt.Analyzer):
     Analyzer to calculate the Sortino Ratio, a risk-adjusted return metric that penalizes only downside volatility.
     """
 
-    params = (("riskfreerate", 0.0), ("timeframe", bt.TimeFrame.Days))
+    params = (("riskfreerate", 0.0), ("timeframe", TimeFrame.Days))
 
     def start(self):
         self.returns = []

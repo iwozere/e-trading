@@ -302,7 +302,7 @@ class ParallelProcessor:
             future_to_chunk = {executor.submit(process_func, chunk, **kwargs): i for i, chunk in enumerate(chunks)}
 
             # Collect results
-            results = [None] * len(chunks)
+            results: list[pd.DataFrame | None] = [None] * len(chunks)
             for future in as_completed(future_to_chunk):
                 chunk_index = future_to_chunk[future]
                 try:

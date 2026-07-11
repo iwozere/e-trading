@@ -444,11 +444,14 @@ class BaseBroker(ABC):
         """Build a ``backtrader.position.Position`` from paper state."""
         import backtrader as bt
 
+        # bt's inferred hints say size is int, but Position accepts floats at runtime
+        position_cls: Any = bt.position.Position
+
         symbol = getattr(data, "_name", "UNKNOWN") if data else "UNKNOWN"
         if self.paper_trading_enabled and self.paper_portfolio and symbol in self.paper_portfolio.positions:
             pos = self.paper_portfolio.positions[symbol]
-            return bt.position.Position(size=pos.quantity, price=pos.average_price)
-        return bt.position.Position(size=0, price=0.0)
+            return position_cls(size=pos.quantity, price=pos.average_price)
+        return position_cls(size=0, price=0.0)
 
     def is_paper_trading(self) -> bool:
         """Check if this is a paper trading broker."""

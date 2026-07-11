@@ -23,7 +23,7 @@ structurally impossible for pipelines to diverge on leakage-safety.
 
 from __future__ import annotations
 
-from typing import Tuple, Type, Union
+from typing import Tuple, Type, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -40,6 +40,13 @@ _SCALER_MAP: dict[str, Type[TransformerMixin]] = {
     "minmax": MinMaxScaler,
     "robust": RobustScaler,
 }
+
+_SplitResult = Tuple[
+    Union[pd.DataFrame, np.ndarray],
+    Union[pd.DataFrame, np.ndarray],
+    Union[pd.Series, np.ndarray],
+    Union[pd.Series, np.ndarray],
+]
 
 
 def split_timeseries(
@@ -65,11 +72,18 @@ def split_timeseries(
     Returns:
         ``(X_train, X_val, y_train, y_val)`` — all with the same dtype as inputs.
     """
-    X_train, X_val, y_train, y_val = train_test_split(
-        X,
-        y,
-        test_size=test_size,
-        shuffle=False,  # preserve temporal order — must never be True for time-series
+    # sklearn's stubs type the split results as plain lists; the runtime values
+    # keep the input types (DataFrame/ndarray slices)
+    X_train, X_val, y_train, y_val = cast(
+        _SplitResult,
+        tuple(
+            train_test_split(
+                X,
+                y,
+                test_size=test_size,
+                shuffle=False,  # preserve temporal order — must never be True for time-series
+            )
+        ),
     )
     _logger.debug(
         "split_timeseries: train=%d rows, val=%d rows (test_size=%.2f)",

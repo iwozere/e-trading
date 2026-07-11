@@ -12,10 +12,8 @@ def coerce_ohlcv(df: pd.DataFrame, input_map=None) -> pd.DataFrame:
     if not isinstance(out.index, pd.DatetimeIndex):
         raise ValueError("Index must be DatetimeIndex")
     out = out[~out.index.duplicated(keep="last")].sort_index()
-    if out.index.tz is None:
-        out.index = out.index.tz_localize("UTC")
-    else:
-        out.index = out.index.tz_convert("UTC")
+    idx = pd.DatetimeIndex(out.index)
+    out.index = idx.tz_localize("UTC") if idx.tz is None else idx.tz_convert("UTC")
     mapping = input_map or {}
     for k, v in mapping.items():
         if v in out.columns:

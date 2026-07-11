@@ -81,8 +81,12 @@ class MockBroker(BaseBroker):
 
     async def place_order(self, order) -> str:
         """Place an order and return order ID."""
+        from uuid import uuid4
+
         from src.trading.broker.base_broker import OrderStatus
 
+        if not order.order_id:
+            order.order_id = str(uuid4())
         order.status = OrderStatus.FILLED
         order.filled_quantity = order.quantity
         order.average_price = order.price or 100.0  # Default price for market orders

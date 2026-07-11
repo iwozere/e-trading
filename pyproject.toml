@@ -47,6 +47,8 @@ line-ending = "auto"
 # The pydantic plugin teaches mypy about Field() defaults and validators;
 # without it every model instantiation reports false "missing named argument".
 plugins = ["pydantic.mypy"]
+disable_error_code = ["annotation-unchecked"]
+
 
 # Third-party packages that ship no type information and have no stub package
 # available on PyPI. Packages with real stubs (types-psutil, types-tqdm,

@@ -10,7 +10,10 @@ import pickle
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import TYPE_CHECKING, Any, Dict
+
+if TYPE_CHECKING:
+    from redis.connection import ConnectionPool as _ConnectionPoolT  # type: ignore[import-not-found]
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -80,7 +83,7 @@ class RedisCache:
         self.key_prefix = key_prefix
         self.serialization = serialization
         self._metrics = get_cache_metrics()
-        self._pool: ConnectionPool | None = None
+        self._pool: "_ConnectionPoolT | None" = None
         self._client: Any = None
         self._available = False
         self._last_connection_attempt: float = 0.0

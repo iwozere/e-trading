@@ -281,8 +281,10 @@ class TaLibAdapter(BaseAdapter):
             return {"value": _ensure_series(v, df.index)}
 
         # Handle custom implementations
-        if isinstance(fn, str) and fn.startswith("_calculate_"):
-            return getattr(self, fn)(src, df.index, p)
+        if isinstance(fn, str):
+            if fn.startswith("_calculate_"):
+                return getattr(self, fn)(src, df.index, p)
+            raise ValueError(f"Unknown string indicator implementation: {fn}")
 
         # default single-series (close)
         v = fn(src["close"].values.astype(float), **p)
@@ -345,7 +347,7 @@ class TaLibAdapter(BaseAdapter):
 
         # Calculate ATR
         atr = talib.ATR(
-            high.values.astype(float), low.values.astype(float), close.values.astype(float), timeperiod=length
+            high.to_numpy(dtype=float), low.to_numpy(dtype=float), close.to_numpy(dtype=float), timeperiod=length
         )
         atr_series = pd.Series(atr, index=index)
 

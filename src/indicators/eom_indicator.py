@@ -21,6 +21,9 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
+# backtrader indicators take their arguments via metaclass, opaque to type checkers
+_SMA: Any = bt.indicators.MovingAverageSimple
+
 
 class EOMIndicator(bt.Indicator):
     """
@@ -79,7 +82,7 @@ class EOMIndicator(bt.Indicator):
         raw_eom = distance_moved / box_ratio
 
         # Smooth with SMA
-        self.lines.eom = bt.indicators.SMA(raw_eom, period=self.p.timeperiod)
+        self.lines.eom = _SMA(raw_eom, period=self.p.timeperiod)
 
         _logger.debug("EOM indicator initialized with timeperiod=%s, scale=%s", self.p.timeperiod, self.p.scale)
 

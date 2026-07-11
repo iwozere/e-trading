@@ -26,7 +26,7 @@ import math
 import os
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Awaitable, Callable, Dict, List, Union
+from typing import Any, Awaitable, Callable, Dict, List, Union, cast
 
 from src.notification.logger import setup_logger
 
@@ -671,6 +671,8 @@ async def collect_sentiment_batch(
                                 loop = asyncio.get_running_loop()
                                 prev_avg = await loop.run_in_executor(None, history_lookup, tk)
 
+                            # both branches above resolve any awaitable to a plain value
+                            prev_avg = cast("float | None", prev_avg)
                             if prev_avg and prev_avg > 0:
                                 mentions_growth = total_mentions / prev_avg
                         except Exception as e:

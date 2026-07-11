@@ -30,6 +30,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import backtrader as bt
+from backtrader.dataseries import TimeFrame
 
 from src.backtester.analyzer.bt_analyzers import (
     CAGR,
@@ -192,7 +193,7 @@ class CustomOptimizer:
             cerebro.addanalyzer(ProfitFactor, _name="profit_factor")
             cerebro.addanalyzer(WinRate, _name="winrate")
             cerebro.addanalyzer(CalmarRatio, _name="calmar", riskfreerate=self.risk_free_rate)
-            cerebro.addanalyzer(CAGR, _name="cagr", timeframe=bt.TimeFrame.Years)
+            cerebro.addanalyzer(CAGR, _name="cagr", timeframe=TimeFrame.Years)
             cerebro.addanalyzer(SortinoRatio, _name="sortino", riskfreerate=self.risk_free_rate)
             cerebro.addanalyzer(ConsecutiveWinsLosses, _name="consecutivewinslosses")
             cerebro.addanalyzer(PortfolioVolatility, _name="portfoliovolatility")

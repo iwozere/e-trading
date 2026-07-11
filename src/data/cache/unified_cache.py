@@ -169,12 +169,13 @@ class UnifiedCache:
             cache_path.mkdir(parents=True, exist_ok=True)
 
             # Split data by year and save each year separately
-            years_in_data = df.index.year.unique()
+            idx_years = pd.DatetimeIndex(df.index).year
+            years_in_data = idx_years.unique()
             saved_files = []
 
             for year in years_in_data:
                 # Filter data for this year
-                year_data = df[df.index.year == year]
+                year_data = df[idx_years == year]
 
                 if not year_data.empty:
                     data_file = self._get_data_file_path(symbol, timeframe, year, data_type)

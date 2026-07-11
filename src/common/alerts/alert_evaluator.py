@@ -14,7 +14,7 @@ import json
 import math
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, cast
 
 import pandas as pd
 
@@ -1682,11 +1682,11 @@ class AlertEvaluator:
 
             for job in active_jobs:
                 try:
-                    # Create a mock job run for evaluation
+                    # Create a mock job run for evaluation (duck-types ScheduleRunResponse)
                     job_run = type("JobRun", (), {"schedule": job, "id": f"eval_{job.id}_{utcnow().timestamp()}"})()
 
                     # Evaluate the alert
-                    result = await self.evaluate_alert(job_run)
+                    result = await self.evaluate_alert(cast("ScheduleRunResponse", job_run))
 
                     results["total_evaluated"] += 1
                     if result.triggered:

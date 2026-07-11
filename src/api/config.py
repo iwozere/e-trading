@@ -36,4 +36,6 @@ class APISettings(BaseSettings):
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
 
-settings = APISettings()
+# jwt_secret_key is supplied via the environment (BaseSettings); the app
+# intentionally refuses to start without it.
+settings = APISettings()  # pyright: ignore[reportCallIssue]

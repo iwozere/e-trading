@@ -338,9 +338,10 @@ class AdvancedStrategyFramework:
 
                 import numpy as np
 
+                # np.abs on a Series returns a Series at runtime; keep the type explicit
                 high_low = self.data["high"] - self.data["low"]
-                high_close = np.abs(self.data["high"] - self.data["close"].shift())
-                low_close = np.abs(self.data["low"] - self.data["close"].shift())
+                high_close = pd.Series(np.abs(self.data["high"] - self.data["close"].shift()), index=self.data.index)
+                low_close = pd.Series(np.abs(self.data["low"] - self.data["close"].shift()), index=self.data.index)
 
                 ranges = pd.concat([high_low, high_close, low_close], axis=1)
                 true_range = ranges.max(axis=1)
@@ -510,9 +511,10 @@ class AdvancedStrategyFramework:
 
                 import numpy as np
 
+                # np.abs on a Series returns a Series at runtime; keep the type explicit
                 high_low = self.data["high"] - self.data["low"]
-                high_close = np.abs(self.data["high"] - self.data["close"].shift())
-                low_close = np.abs(self.data["low"] - self.data["close"].shift())
+                high_close = pd.Series(np.abs(self.data["high"] - self.data["close"].shift()), index=self.data.index)
+                low_close = pd.Series(np.abs(self.data["low"] - self.data["close"].shift()), index=self.data.index)
 
                 ranges = pd.concat([high_low, high_close, low_close], axis=1)
                 true_range = ranges.max(axis=1)

@@ -230,9 +230,10 @@ class SystemMonitoringService:
         try:
             temperatures: dict[Any, Any] = {}
 
-            # Try to get temperature sensors
-            if hasattr(psutil, "sensors_temperatures"):
-                temp_sensors = psutil.sensors_temperatures()
+            # Try to get temperature sensors (platform-dependent psutil API)
+            sensors_temperatures = getattr(psutil, "sensors_temperatures", None)
+            if sensors_temperatures is not None:
+                temp_sensors = sensors_temperatures()
 
                 for sensor_name, sensor_list in temp_sensors.items():
                     temperatures[sensor_name] = []

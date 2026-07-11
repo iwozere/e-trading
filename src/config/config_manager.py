@@ -41,9 +41,10 @@ class ConfigFileHandler(FileSystemEventHandler):
         self.config_manager = config_manager
 
     def on_modified(self, event):
-        if not event.is_directory and event.src_path.endswith((".json", ".yaml", ".yml")):
-            _logger.info("Configuration file modified: %s", event.src_path)
-            self.config_manager.reload_config(event.src_path)
+        src_path = os.fsdecode(event.src_path)
+        if not event.is_directory and src_path.endswith((".json", ".yaml", ".yml")):
+            _logger.info("Configuration file modified: %s", src_path)
+            self.config_manager.reload_config(src_path)
 
 
 class ConfigManager:
@@ -214,9 +215,9 @@ class ConfigManager:
         """Save a configuration to file"""
         if not filename:
             if hasattr(config, "bot_id"):
-                filename = "%s.json" % config.bot_id
+                filename = f"{config.bot_id}.json"
             else:
-                filename = "config_%s.json" % datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"config_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
         config_path = self.config_dir / self.environment / filename
 

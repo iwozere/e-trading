@@ -16,7 +16,7 @@ import argparse
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 import pandas as pd
 
@@ -207,7 +207,7 @@ def analyze_data_gaps(df: pd.DataFrame, interval: str) -> List[Dict[str, Any]]:
 
     # Calculate gaps
     gaps = df.index.to_series().diff().dropna()
-    gap_hours = gaps / pd.Timedelta(hours=1)
+    gap_hours = gaps.dt.total_seconds() / 3600
 
     # Find large gaps (more than expected interval)
     expected_interval_minutes = parse_interval_to_minutes(interval)
@@ -219,6 +219,8 @@ def analyze_data_gaps(df: pd.DataFrame, interval: str) -> List[Dict[str, Any]]:
 
     gap_details = []
     for gap_start, gap_duration in large_gaps.items():
+        # gaps derive from a DatetimeIndex, so keys are Timestamps
+        gap_start = cast(pd.Timestamp, gap_start)
         gap_details.append({"start": gap_start.isoformat(), "duration_hours": gap_duration / pd.Timedelta(hours=1)})
 
     return gap_details

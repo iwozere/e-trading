@@ -259,10 +259,11 @@ class BotDetector:
             profile_score += 0.1
             reasons.append("Very short or empty bio")
 
-        # Check bio content for bot patterns
-        if hasattr(profile, "bio") and profile.bio:
+        # Check bio content for bot patterns (bio is an optional profile attribute)
+        bio = getattr(profile, "bio", "")
+        if bio:
             for pattern in self.bot_bio_regex:
-                if pattern.search(profile.bio):
+                if pattern.search(bio):
                     profile_score += 0.15
                     reasons.append("Suspicious bio content")
                     break

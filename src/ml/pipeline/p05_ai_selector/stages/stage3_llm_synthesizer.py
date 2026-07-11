@@ -4,7 +4,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -222,7 +222,7 @@ class Stage3LLMSynthesizer:
         response = client.messages.create(
             model=self._model,
             max_tokens=LLM_MAX_TOKENS,
-            tools=[_TOOL_SCHEMA],
+            tools=cast(Any, [_TOOL_SCHEMA]),
             tool_choice={"type": "tool", "name": "submit_picks"},
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": json.dumps(packets, indent=2)}],

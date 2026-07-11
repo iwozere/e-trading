@@ -240,9 +240,10 @@ class BaseDataSource(ABC):
         _logger.error("%s: %s", message, error)
 
         # Log additional context for debugging
-        if hasattr(error, "response"):
-            _logger.error("Response status: %s", getattr(error.response, "status_code", "N/A"))
-            _logger.error("Response text: %s", getattr(error.response, "text", "N/A"))
+        response = getattr(error, "response", None)
+        if response is not None:
+            _logger.error("Response status: %s", getattr(response, "status_code", "N/A"))
+            _logger.error("Response text: %s", getattr(response, "text", "N/A"))
 
     def get_connection_status(self) -> Dict[str, Any]:
         """

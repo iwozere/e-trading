@@ -124,8 +124,9 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
 
             # Group by day/hour depending on interval
             df = pd.DataFrame(prices, columns=["timestamp", "close"])
+            # Look volumes up by the raw millisecond keys the API uses
+            df["volume"] = [volumes.get(int(price_point[0]), 0) for price_point in prices]
             df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-            df["volume"] = df["timestamp"].map(lambda ts: volumes.get(int(ts.timestamp() * 1000), 0))
 
             # Resample to requested interval
             if interval.endswith("d"):
