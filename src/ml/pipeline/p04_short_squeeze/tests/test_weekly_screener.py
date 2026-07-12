@@ -335,10 +335,11 @@ class TestWeeklyScreener(unittest.TestCase):
             "valid_short_interest": 0,
             "valid_float_data": 0,
         }
-        candidate = self.weekly_screener._screen_ticker("TEST", metrics)
+        candidate = self.weekly_screener._screen_ticker_individual("TEST", metrics)
 
         # Assertions
         self.assertIsNotNone(candidate)
+        assert candidate is not None
         self.assertEqual(candidate.ticker, "TEST")
         self.assertGreater(candidate.screener_score, 0)
         self.assertEqual(metrics["successful_fetches"], 1)
@@ -357,7 +358,7 @@ class TestWeeklyScreener(unittest.TestCase):
             "valid_short_interest": 0,
             "valid_float_data": 0,
         }
-        candidate = self.weekly_screener._screen_ticker("TEST", metrics)
+        candidate = self.weekly_screener._screen_ticker_individual("TEST", metrics)
 
         # Should return None
         self.assertIsNone(candidate)

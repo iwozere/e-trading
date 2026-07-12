@@ -126,9 +126,7 @@ class TestAsyncDiscordAdapter:
     @pytest.mark.asyncio
     async def test_initialization_with_token(self):
         """Test adapter initialization with bot token."""
-        adapter = AsyncDiscordAdapter(
-            bot_token="test_token", guild_ids=["guild1", "guild2"], channel_keywords=["trading", "stocks"]
-        )
+        adapter = AsyncDiscordAdapter(bot_token="test_token", guild_ids=["guild1", "guild2"])
 
         try:
             assert adapter.bot_token == "test_token"
@@ -590,7 +588,7 @@ class TestAsyncDiscordAdapter:
             {"id": "4", "name": "memes", "type": 0},  # Should not match
         ]
 
-        adapter = AsyncDiscordAdapter(bot_token="test", guild_ids=["guild1"], channel_keywords=["trading", "crypto"])
+        adapter = AsyncDiscordAdapter(bot_token="test", guild_ids=["guild1"])
 
         try:
             with patch.object(adapter, "_get_with_retry", new_callable=AsyncMock) as mock_get:

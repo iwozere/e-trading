@@ -27,7 +27,7 @@ def download_btc_mc():
     df_mc["btc_mc"] = df["Close"]
 
     # Fix timestamp format to match what data_loader.py expects (no timezone)
-    df_mc["timestamp"] = df_mc.index.tz_localize(None)
+    df_mc["timestamp"] = pd.DatetimeIndex(df_mc.index).tz_localize(None)
 
     output_path = Path("data/btc_mc/btc_mc.csv")
     output_path.parent.mkdir(parents=True, exist_ok=True)

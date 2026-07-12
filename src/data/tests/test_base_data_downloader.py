@@ -115,7 +115,7 @@ def test_binance_data_downloader_integration(monkeypatch):
             # Note: save_data method removed - caching is now handled by DataManager
             return df
 
-        bdd.get_ohlcv = fake_download
+        setattr(bdd, "get_ohlcv", fake_download)
         symbols = ["BTCUSDT", "ETHUSDT"]
         # Note: download_multiple_symbols method removed - batch operations now handled by DataManager
         # Test individual downloads instead

@@ -8,6 +8,7 @@ Verifies configuration validation, message formatting, and health monitoring.
 
 import asyncio
 import sys
+from typing import Any, cast
 from pathlib import Path
 
 # Add project root to path
@@ -163,7 +164,7 @@ async def test_sms_channel():
 
         # Test message splitting
         long_message = "A" * 500  # Long SMS message
-        parts = channel._split_sms_message(long_message)
+        parts = cast(Any, channel)._split_sms_message(long_message)
         print(f"✓ SMS splitting: {len(parts)} parts")
 
         # Test rate limit

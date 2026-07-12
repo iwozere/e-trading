@@ -103,6 +103,7 @@ class TestBinanceLiveFeed(TestLiveFeeds):
 
         # Check that historical data was loaded
         self.assertIsInstance(feed.df, pd.DataFrame)
+        assert feed.df is not None
         self.assertGreater(len(feed.df), 0)
         self.assert_valid_ohlcv_data(feed.df)
 
@@ -181,6 +182,7 @@ class TestYahooLiveFeed(TestLiveFeeds):
 
         # Check that historical data was loaded
         self.assertIsInstance(feed.df, pd.DataFrame)
+        assert feed.df is not None
         self.assertGreater(len(feed.df), 0)
         self.assert_valid_ohlcv_data(feed.df)
 
@@ -348,6 +350,7 @@ class TestCoinGeckoLiveFeed(TestLiveFeeds):
 
         # Check that historical data was loaded
         self.assertIsInstance(feed.df, pd.DataFrame)
+        assert feed.df is not None
         self.assertGreater(len(feed.df), 0)
         self.assert_valid_ohlcv_data(feed.df)
 

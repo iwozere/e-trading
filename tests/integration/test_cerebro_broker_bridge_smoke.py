@@ -6,6 +6,8 @@ Closes the plan gap: automated end-to-end Cerebro attach using ``get_broker``.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 import pytest
 
@@ -18,6 +20,10 @@ pytestmark = pytest.mark.skipif(not BACKTRADER_AVAILABLE, reason="backtrader not
 
 def test_get_broker_mock_wrap_and_cerebro_run():
     import backtrader as bt
+
+    # backtrader's metaclass consumes ctor kwargs; alias to Any so
+    # PandasData(dataname=...) type-checks.
+    _PandasData: Any = bt.feeds.PandasData
 
     df = pd.DataFrame(
         {
@@ -41,7 +47,7 @@ def test_get_broker_mock_wrap_and_cerebro_run():
     assert isinstance(bridge, bt.broker.BrokerBase)
 
     cerebro = bt.Cerebro()
-    cerebro.adddata(bt.feeds.PandasData(dataname=df))
+    cerebro.adddata(_PandasData(dataname=df))
     cerebro.setbroker(bridge)
 
     class EmptyStrategy(bt.Strategy):

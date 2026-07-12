@@ -19,6 +19,10 @@ from typing import Any, Dict
 
 import backtrader as bt
 
+# backtrader ships no type stubs; alias to Any so class-attribute access
+# (e.g. bt.TimeFrame.Days) type-checks.
+_bt: Any = bt
+
 # Add project root to path
 project_root = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(project_root))
@@ -206,7 +210,7 @@ class BacktesterTestFramework:
                 self.cerebro.addanalyzer(
                     bt.analyzers.SharpeRatio,
                     _name="sharpe",
-                    timeframe=bt.TimeFrame.Days if sharpe_params.get("timeframe") == "annual" else bt.TimeFrame.Days,
+                    timeframe=_bt.TimeFrame.Days,
                     riskfreerate=sharpe_params.get("riskfreerate", 0.0),
                 )
 

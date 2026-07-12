@@ -8,6 +8,7 @@ This test validates the enhanced symbol classification functionality.
 import sys
 import unittest
 from pathlib import Path
+from typing import cast
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[3]
@@ -161,7 +162,7 @@ class TestEnhancedSymbolClassification(unittest.TestCase):
     def test_error_handling(self):
         """Test error handling in symbol classification."""
         # Test with None input
-        result = self.provider_selector.classify_symbol_for_fundamentals(None)
+        result = self.provider_selector.classify_symbol_for_fundamentals(cast(str, None))
         self.assertEqual(result["symbol_type"], "unknown")
         self.assertEqual(result["fundamentals_support"], "none")
 

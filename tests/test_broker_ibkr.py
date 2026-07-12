@@ -9,7 +9,7 @@ from src.trading.broker.ibkr_broker import IBKRBroker
 def broker():
     with patch("src.trading.ibkr_broker.IB") as MockIB:
         mock_ib = MockIB.return_value
-        yield IBKRBroker()
+        yield IBKRBroker(host="127.0.0.1", port=7497, client_id=1)
 
 
 @patch("src.trading.ibkr_broker.IB")

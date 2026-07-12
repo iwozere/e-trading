@@ -88,7 +88,7 @@ def test_yq_ticker():
         import talib
 
         try:
-            rsi = talib.RSI(close, timeperiod=14)
+            rsi = talib.RSI(np.asarray(close, dtype=float), timeperiod=14)
             print(f"RSI calculation successful, length: {len(rsi)}")
             print(f"RSI values (last 5): {rsi[-5:]}")
         except Exception as e:

@@ -1,5 +1,6 @@
 import os
 import sys
+from typing import Any, cast
 
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -93,7 +94,7 @@ def test_is_valid_period_interval(downloader_class, period, interval):
     ],
 )
 @pytest.mark.network
-def test_get_ohlcv_smoke(downloader_class, symbol, interval, api_env):
+def test_get_ohlcv_smoke(downloader_class: Any, symbol, interval, api_env):
     # Use a bigger date range in the past for YahooDataDownloader
     if downloader_class is YahooDataDownloader:
         start_date = datetime(2023, 1, 1)
@@ -113,12 +114,12 @@ def test_get_ohlcv_smoke(downloader_class, symbol, interval, api_env):
         api_key = api_key_map.get(api_env)
         if not api_key:
             pytest.skip(f"API key for {downloader_class.__name__} not found in donotshare.py ({api_env})")
-        instance = downloader_class(api_key=api_key)
+        instance = cast(Any, downloader_class)(api_key=api_key)
     else:
-        instance = downloader_class()
+        instance = cast(Any, downloader_class)()
     # CoinGecko uses download_historical_data
     if downloader_class is CoinGeckoDataDownloader:
-        df = instance.download_historical_data(symbol, interval, start_date, end_date, save_to_csv=False)
+        df = cast(Any, instance).download_historical_data(symbol, interval, start_date, end_date, save_to_csv=False)
     else:
         df = instance.get_ohlcv(symbol, interval, start_date, end_date)
     assert isinstance(df, pd.DataFrame)

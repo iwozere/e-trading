@@ -1,6 +1,7 @@
 """Tests for P17 CatalystAgent (daily 8-K index cache + legacy EDGAR fallback)."""
 
 import sys
+from typing import Any, cast
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -209,18 +210,17 @@ def test_cache_unrelated_cik_not_scored(tmp_path):
 
 def test_legacy_fallback_used_when_no_index(tmp_path):
     agent = _legacy_agent(tmp_path)
-    agent._edgar.get_recent_filings.return_value = [
+    cast(Any, agent._edgar).get_recent_filings.return_value = [
         {"form": "8-K", "items": "8.01", "primaryDocDescription": "FDA approval", "filingDate": "2026-06-24"},
     ]
     c = _candidate()
     agent.run([c])
-    from typing import Any, cast
     cast(Any, agent._edgar).get_recent_filings.assert_called()  # fallback path exercised
 
 
 def test_unresolved_cik_skipped(tmp_path):
     agent, _ = _cache_agent(tmp_path)
-    agent._edgar.load_company_tickers.return_value = {}  # no CIK for TEST
+    cast(Any, agent._edgar).load_company_tickers.return_value = {}  # no CIK for TEST
     c = _candidate()
     agent.run([c])
     assert c.catalyst_score == 0.0
