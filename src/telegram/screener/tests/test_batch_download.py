@@ -4,6 +4,7 @@ Test script for YFinance batch download functionality.
 This script demonstrates how to use batch operations for better performance.
 """
 
+import asyncio
 import sys
 import time
 from datetime import datetime, timedelta
@@ -191,7 +192,7 @@ def test_enhanced_screener_batch():
         print("\n🔄 Running Enhanced Screener...")
         start_time = time.time()
 
-        report = enhanced_screener.run_enhanced_screener(screener_config)
+        report = asyncio.run(enhanced_screener.run_enhanced_screener(screener_config))
 
         total_time = time.time() - start_time
         print(f"Enhanced screener completed in {total_time:.2f} seconds")

@@ -135,6 +135,26 @@ class InstitutionalFlowPipeline:
                         run_date,
                     )
 
+            filing_window_open = run_date < _quarter_end_date(year, quarter) + timedelta(days=_FILING_WINDOW_DAYS)
+            if consensus_df.empty and filing_window_open:
+                prior_year, prior_quarter = _prev_quarter(year, quarter)
+                prior_consensus_df = self._load_cached_consensus(prior_year, prior_quarter)
+                if not prior_consensus_df.empty:
+                    _logger.warning(
+                        "Consensus cache is empty for %d Q%d — its 45-day filing window is still open "
+                        "(closes %s), so few/no institutions have filed yet. Falling back to %d Q%d "
+                        "consensus (%d tickers) until %d Q%d fills in.",
+                        year,
+                        quarter,
+                        _quarter_end_date(year, quarter) + timedelta(days=_FILING_WINDOW_DAYS),
+                        prior_year,
+                        prior_quarter,
+                        len(prior_consensus_df),
+                        year,
+                        quarter,
+                    )
+                    consensus_df = prior_consensus_df
+
             if consensus_df.empty:
                 _logger.warning(
                     "Consensus cache is empty for %d Q%d — the daily pipeline cannot produce "
@@ -552,6 +572,17 @@ def _prev_quarter(year: int, quarter: int) -> tuple:
     if quarter == 1:
         return (year - 1, 4)
     return (year, quarter - 1)
+
+
+def _quarter_end_date(year: int, quarter: int) -> date:
+    """Return the calendar date on which the given quarter ends."""
+    end_month = quarter * 3
+    if end_month == 12:
+        return date(year, 12, 31)
+    return date(year, end_month + 1, 1) - timedelta(days=1)
+
+
+_FILING_WINDOW_DAYS = 45
 
 
 def _build_top_tickers(scored_df: pd.DataFrame, top_n: int) -> List[Dict[str, Any]]:

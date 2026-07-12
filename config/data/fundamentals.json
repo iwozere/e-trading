@@ -47,7 +47,7 @@
     ]
   },
   "refresh_intervals": {
-    "profiles": "14d",
+    "profile": "14d",
     "ratios": "14d",
     "statements": "90d",
     "calendar": "7d",

@@ -22,9 +22,13 @@ hits=$(docker logs --since "${WINDOW}" "${PAPER_CONTAINER}" 2>&1 \
     | grep -E -c "Address already in use|Fatal server error" || true)
 
 if [ "${hits}" -ge "${THRESHOLD}" ]; then
+    # Deliberately avoid the word "error" in the benign branch below — Vector's
+    # log-monitoring filter (docs/monitoring-setup.md) matches any journald line
+    # containing "error", so a routine "0 errors, no action" line on every 5-min
+    # run was tripping a Telegram alert every ~30 min (dedup window) for nothing.
     echo "ibgw-paper-watchdog: ${hits} stuck-bind/Xvfb errors in last ${WINDOW} on ${PAPER_CONTAINER} — restarting container"
     docker restart "${PAPER_CONTAINER}"
     echo "ibgw-paper-watchdog: restart issued"
-else
-    echo "ibgw-paper-watchdog: ${hits} stuck-bind errors in last ${WINDOW} on ${PAPER_CONTAINER} — below threshold (${THRESHOLD}), no action"
 fi
+# No output on the healthy path (hits < threshold) — nothing to report, and any
+# stdout here matching Vector's error-keyword filter would page as a false alert.

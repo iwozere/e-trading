@@ -4,6 +4,7 @@ Test script for optimized YFinance batch download functionality.
 This script demonstrates the difference between individual, regular batch, and optimized batch operations.
 """
 
+import asyncio
 import sys
 import time
 from pathlib import Path
@@ -221,7 +222,7 @@ def test_enhanced_screener_optimized():
         print("\n🔄 Running Enhanced Screener with Optimized Batch Operations...")
         start_time = time.time()
 
-        report = enhanced_screener.run_enhanced_screener(screener_config)
+        report = asyncio.run(enhanced_screener.run_enhanced_screener(screener_config))
 
         total_time = time.time() - start_time
         print(f"Enhanced screener completed in {total_time:.2f} seconds")

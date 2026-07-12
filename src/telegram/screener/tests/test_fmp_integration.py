@@ -4,6 +4,7 @@ Test script for FMP Integration with Enhanced Screener.
 This script tests the FMP-based screening functionality.
 """
 
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -144,7 +145,7 @@ def test_fmp_integration():
 
     try:
         # Run enhanced screener with FMP config
-        report = enhanced_screener.run_enhanced_screener(config)
+        report = asyncio.run(enhanced_screener.run_enhanced_screener(config))
 
         if report.error:
             print(f"⚠️  Enhanced screener with FMP returned error: {report.error}")
