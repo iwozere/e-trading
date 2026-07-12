@@ -1,0 +1,6 @@
+[Unit]
+Description=Restart ib-gateway-paper (PAPER only) if stuck in socat/Xvfb bind-retry loop
+
+[Service]
+Type=oneshot
+ExecStart=/opt/apps/e-trading/bin/install-ibkr/ibgw_paper_watchdog.sh

@@ -23,7 +23,6 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 SERVICES_TO_MONITOR = [
-    "ibgateway-docker.service",
     "notification-bot.service",
     "scheduler.service",
     "telegram-bot.service",

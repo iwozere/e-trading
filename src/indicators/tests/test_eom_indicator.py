@@ -7,6 +7,7 @@ Tests the calculation, edge cases, and parameter validation of the EOM indicator
 import sys
 import unittest
 from pathlib import Path
+from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -18,6 +19,10 @@ from src.indicators.eom_indicator import EOM, EOMIndicator
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
+# Backtrader's metaclass consumes feed constructor kwargs, so the checker sees
+# PandasData.__init__(self); alias to Any so dataname=... type-checks.
+_PandasData: Any = bt.feeds.PandasData
 
 
 class TestEOMIndicator(unittest.TestCase):
@@ -37,7 +42,7 @@ class TestEOMIndicator(unittest.TestCase):
         self.cerebro.addstrategy(TestStrategy)
 
         # Create test data
-        data = bt.feeds.PandasData(dataname=self._create_test_data())
+        data = _PandasData(dataname=self._create_test_data())
         self.cerebro.adddata(data)
 
         try:
@@ -54,7 +59,7 @@ class TestEOMIndicator(unittest.TestCase):
                 self.eom = EOM(self.data)
 
         self.cerebro.addstrategy(TestStrategy)
-        data = bt.feeds.PandasData(dataname=self._create_test_data())
+        data = _PandasData(dataname=self._create_test_data())
         self.cerebro.adddata(data)
 
         try:
@@ -84,7 +89,7 @@ class TestEOMIndicator(unittest.TestCase):
                     )
 
         self.cerebro.addstrategy(TestStrategy)
-        data = bt.feeds.PandasData(dataname=self._create_test_data())
+        data = _PandasData(dataname=self._create_test_data())
         self.cerebro.adddata(data)
 
         self.cerebro.run()
@@ -113,7 +118,7 @@ class TestEOMIndicator(unittest.TestCase):
         self.cerebro.addstrategy(TestStrategy)
 
         # Create strongly bullish data
-        data = bt.feeds.PandasData(dataname=self._create_bullish_test_data())
+        data = _PandasData(dataname=self._create_bullish_test_data())
         self.cerebro.adddata(data)
 
         self.cerebro.run()
@@ -141,7 +146,7 @@ class TestEOMIndicator(unittest.TestCase):
         self.cerebro.addstrategy(TestStrategy)
 
         # Create strongly bearish data
-        data = bt.feeds.PandasData(dataname=self._create_bearish_test_data())
+        data = _PandasData(dataname=self._create_bearish_test_data())
         self.cerebro.adddata(data)
 
         self.cerebro.run()
@@ -167,7 +172,7 @@ class TestEOMIndicator(unittest.TestCase):
         self.cerebro.addstrategy(TestStrategy)
 
         # Create data with zero volume
-        data = bt.feeds.PandasData(dataname=self._create_zero_volume_data())
+        data = _PandasData(dataname=self._create_zero_volume_data())
         self.cerebro.adddata(data)
 
         try:
@@ -190,7 +195,7 @@ class TestEOMIndicator(unittest.TestCase):
         self.cerebro.addstrategy(TestStrategy)
 
         # Create data with equal high/low
-        data = bt.feeds.PandasData(dataname=self._create_flat_price_data())
+        data = _PandasData(dataname=self._create_flat_price_data())
         self.cerebro.adddata(data)
 
         try:
@@ -216,7 +221,7 @@ class TestEOMIndicator(unittest.TestCase):
                     results_custom.append(self.eom_custom[0])
 
         self.cerebro.addstrategy(TestStrategy)
-        data = bt.feeds.PandasData(dataname=self._create_test_data())
+        data = _PandasData(dataname=self._create_test_data())
         self.cerebro.adddata(data)
 
         self.cerebro.run()

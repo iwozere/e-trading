@@ -26,6 +26,7 @@ from src.indicators.config_manager import UnifiedConfigManager
 from src.indicators.models import (
     CompositeRecommendation,
     IndicatorBatchConfig,
+    IndicatorCategory,
     IndicatorResult,
     IndicatorResultSet,
     IndicatorSet,
@@ -34,6 +35,7 @@ from src.indicators.models import (
     TickerIndicatorsRequest,
 )
 from src.indicators.service import ConfigurationError, DataError, IndicatorService
+from src.indicators.types import IndicatorName, Period, TickerSymbol, TimeFrame
 
 # ---------------------------------------------------------------------------
 # Test Fixtures
@@ -211,7 +213,11 @@ class TestIndicatorService:
     async def test_compute_for_ticker_async(self, indicator_service):
         """Test async ticker computation."""
         request = TickerIndicatorsRequest(
-            ticker="AAPL", timeframe="1D", period="1M", indicators=["rsi", "ema"], include_recommendations=False
+            ticker=TickerSymbol("AAPL"),
+            timeframe=TimeFrame("1D"),
+            period=Period("1M"),
+            indicators=[IndicatorName("rsi"), IndicatorName("ema")],
+            include_recommendations=False,
         )
 
         with patch("src.common.get_ohlcv") as mock_get_ohlcv:
@@ -262,7 +268,12 @@ class TestIndicatorService:
 
     def test_error_handling_data_retrieval_failure(self, indicator_service):
         """Test error handling when data retrieval fails."""
-        request = TickerIndicatorsRequest(ticker="INVALID", timeframe="1D", period="1M", indicators=["rsi"])
+        request = TickerIndicatorsRequest(
+            ticker=TickerSymbol("INVALID"),
+            timeframe=TimeFrame("1D"),
+            period=Period("1M"),
+            indicators=[IndicatorName("rsi")],
+        )
 
         with patch("src.common.get_ohlcv", side_effect=Exception("Data not found")):
             with pytest.raises(DataError):
@@ -418,17 +429,19 @@ class TestRecommendationEngine:
         # Create mock indicator set
         indicator_set = IndicatorSet(
             ticker="AAPL",
-            technical={
-                "rsi": IndicatorResult(name="rsi", value=25.0, timestamp=datetime.now()),
-                "macd": IndicatorResult(name="macd", value=0.5, timestamp=datetime.now()),
+            technical_indicators={
+                "rsi": IndicatorResult(name="rsi", value=25.0, category=IndicatorCategory.TECHNICAL, source="test"),
+                "macd": IndicatorResult(name="macd", value=0.5, category=IndicatorCategory.TECHNICAL, source="test"),
             },
-            fundamental={"pe": IndicatorResult(name="pe", value=15.0, timestamp=datetime.now())},
+            fundamental_indicators={
+                "pe": IndicatorResult(name="pe", value=15.0, category=IndicatorCategory.FUNDAMENTAL, source="test")
+            },
         )
 
         composite_rec = recommendation_engine.get_composite_recommendation(indicator_set)
 
         assert isinstance(composite_rec, CompositeRecommendation)
-        assert composite_rec.overall_recommendation is not None
+        assert composite_rec.recommendation is not None
         assert 0 <= composite_rec.confidence <= 1
         assert len(composite_rec.contributing_indicators) > 0
 
@@ -497,10 +510,10 @@ class TestErrorHandling:
     def test_timeout_handling(self, indicator_service):
         """Test timeout handling for long-running operations."""
         request = TickerIndicatorsRequest(
-            ticker="AAPL",
-            timeframe="1D",
-            period="10Y",  # Large dataset
-            indicators=["rsi", "ema", "macd", "bbands"],
+            ticker=TickerSymbol("AAPL"),
+            timeframe=TimeFrame("1D"),
+            period=Period("10Y"),  # Large dataset
+            indicators=[IndicatorName(i) for i in ["rsi", "ema", "macd", "bbands"]],
         )
 
         with patch("src.common.get_ohlcv", side_effect=lambda *args, **kwargs: asyncio.sleep(10)):
@@ -531,7 +544,9 @@ class TestServiceIntegration:
         config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="rsi", output="rsi")])
 
         # Test with recommendations enabled
-        request = TickerIndicatorsRequest(ticker="TEST", indicators=["rsi"], include_recommendations=True)
+        request = TickerIndicatorsRequest(
+            ticker=TickerSymbol("TEST"), indicators=[IndicatorName("rsi")], include_recommendations=True
+        )
 
         with patch("src.common.get_ohlcv", return_value=sample_ohlcv_data):
             result = asyncio.run(indicator_service.compute_for_ticker(request))
@@ -541,7 +556,7 @@ class TestServiceIntegration:
             if result.technical:
                 for indicator_result in result.technical.values():
                     if hasattr(indicator_result, "recommendation"):
-                        assert indicator_result.recommendation is not None
+                        assert getattr(indicator_result, "recommendation", None) is not None
 
     def test_adapter_coordination(self, indicator_service, sample_ohlcv_data):
         """Test service coordinates multiple adapters correctly."""

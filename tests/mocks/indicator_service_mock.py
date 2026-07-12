@@ -7,7 +7,7 @@ responses and error simulation for comprehensive testing.
 
 import asyncio
 import time
-from typing import Any, Dict
+from typing import Any, Callable, Dict, Union
 from unittest.mock import Mock
 
 from src.indicators.models import IndicatorBatchConfig, IndicatorResultSet, IndicatorValue, TickerIndicatorsRequest
@@ -29,9 +29,9 @@ class IndicatorServiceMock:
         self.adapters = {"ta-lib": Mock(), "pandas-ta": Mock(), "fundamentals": Mock()}
 
         # Configuration for mock behavior
-        self.should_raise_errors = {}
-        self.custom_responses = {}
-        self.response_delays = {}
+        self.should_raise_errors: Dict[str, Union[BaseException, Callable[[], BaseException]]] = {}
+        self.custom_responses: Dict[str, Any] = {}
+        self.response_delays: Dict[str, float] = {}
 
         # Default indicator values for different tickers
         self.default_indicators = {
@@ -139,7 +139,7 @@ class IndicatorServiceMock:
                 fundamental_indicators[indicator_name] = ticker_data["fundamental"][indicator_name]
             else:
                 # Create a default indicator value for unknown indicators
-                default_value = IndicatorValue(name=indicator_name, value=None)
+                default_value = IndicatorValue(name=indicator_name, value=0.0)
                 if indicator_name.upper() in ["RSI", "MACD", "SMA", "EMA", "BOLLINGERBANDS"]:
                     technical_indicators[indicator_name] = default_value
                 else:
@@ -151,7 +151,7 @@ class IndicatorServiceMock:
 
         return self._get_custom_response("compute_for_ticker", result)
 
-    async def compute(self, df, config: IndicatorBatchConfig, fund_params: Dict[str, Any] = None) -> Any:
+    async def compute(self, df, config: IndicatorBatchConfig, fund_params: Dict[str, Any] | None = None) -> Any:
         """
         Compute indicators in batch mode with mock data.
 
@@ -262,7 +262,10 @@ class IndicatorServiceMock:
         return False
 
     def add_ticker_data(
-        self, ticker: str, technical: Dict[str, IndicatorValue] = None, fundamental: Dict[str, IndicatorValue] = None
+        self,
+        ticker: str,
+        technical: Dict[str, IndicatorValue] | None = None,
+        fundamental: Dict[str, IndicatorValue] | None = None,
     ):
         """Add mock data for a specific ticker."""
         self.default_indicators[ticker.upper()] = {"technical": technical or {}, "fundamental": fundamental or {}}
@@ -308,7 +311,7 @@ class AsyncMockIndicatorService:
             fundamental={"PE": IndicatorValue(name="PE", value=25.4)},
         )
 
-    async def mock_compute(self, df, config: IndicatorBatchConfig, fund_params: Dict[str, Any] = None):
+    async def mock_compute(self, df, config: IndicatorBatchConfig, fund_params: Dict[str, Any] | None = None):
         """Simple mock implementation for compute."""
         import pandas as pd
 

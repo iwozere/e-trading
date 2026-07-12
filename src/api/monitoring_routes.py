@@ -28,7 +28,6 @@ _telegram_health = TelegramHealthService()
 _notification_health = NotificationHealthService()
 
 _DISPLAY_NAMES = {
-    "ibgateway-docker.service": "IB Gateway",
     "notification-bot.service": "Notification Bot",
     "scheduler.service": "Scheduler",
     "telegram-bot.service": "Telegram Bot",
@@ -37,14 +36,16 @@ _DISPLAY_NAMES = {
     "trading-api.service": "API",
 }
 
-# The IB Gateway runs as Docker containers (ibgw-paper / ibgw-live) started by a
-# oneshot systemd unit that exits after `docker compose up -d`. As a result
-# `systemctl is-active ibgateway-docker.service` reports "inactive" even while
-# the gateway is up. We therefore detect the gateways by probing their API
-# ports directly, which reflects whether they are actually reachable.
+# The IB Gateway runs as Docker containers (ib-gateway-paper / ib-gateway-live),
+# each with its own `restart: always` compose file under ~/ibkr/ on the host.
+# There is no systemd wrapper unit (no ibgateway-docker.service exists), so we
+# detect the gateways by probing their API ports directly, which reflects
+# whether they are actually reachable.
 _IB_GATEWAY_HOST = "127.0.0.1"
-# (display name, API port). Paper auto-starts on boot; Live is manual-only and
-# is expected to be inactive unless deliberately started.
+# (display name, API port). Both currently run continuously (restart: always
+# in their respective compose files) — neither is expected to be inactive.
+# READ_ONLY_API=yes on live is the order-placement safety net, not a
+# manual-start gate.
 _IB_GATEWAYS: List[Tuple[str, int]] = [
     ("IB Gateway (Paper)", 4002),
     ("IB Gateway (Live)", 4001),
@@ -72,8 +73,8 @@ async def get_services_status(current_user: User = Depends(get_current_user)) ->
         monitor = ServiceMonitor(admin_user_id=current_user.id)
         services: List[Dict[str, Any]] = []
 
-        # IB Gateway runs in Docker; probe its API ports instead of the
-        # (oneshot, always-inactive) systemd unit so the live state is accurate.
+        # IB Gateway runs in Docker with no systemd wrapper unit; probe its
+        # API ports directly instead.
         for display_name, port in _IB_GATEWAYS:
             up = _port_open(_IB_GATEWAY_HOST, port)
             services.append(
@@ -86,9 +87,6 @@ async def get_services_status(current_user: User = Depends(get_current_user)) ->
             )
 
         for svc in SERVICES_TO_MONITOR:
-            # The Docker gateway unit is reported above via port probing.
-            if svc == "ibgateway-docker.service":
-                continue
             is_active, raw_status = monitor.check_service_status(svc)
             if raw_status == "error":
                 status = "unknown"
@@ -145,6 +143,7 @@ async def get_pipelines_status(_current_user: User = Depends(get_current_user)) 
     Matches ScheduleRun records to Schedule records via job_snapshot['schedule_id']
     or job_snapshot['schedule_name'], falling back to job_id substring matching.
     """
+    del _current_user  # auth gate only, value unused
     try:
         db_service = get_database_service()
         with db_service.uow() as uow:

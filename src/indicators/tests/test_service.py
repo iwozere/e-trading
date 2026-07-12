@@ -33,6 +33,8 @@ try:
 except Exception:
     pandas_ta = None
 
+from src.indicators.types import IndicatorName, Period, TickerSymbol, TimeFrame
+
 IndicatorSpec = models.IndicatorSpec
 IndicatorBatchConfig = models.IndicatorBatchConfig
 IndicatorResultSet = models.IndicatorResultSet
@@ -67,7 +69,7 @@ def test_compute_from_dataframe_with_real_adapters():
         ],
     )
     df = _sample_df()
-    out = svc.compute(df, cfg, fund_params=None)
+    out = asyncio.run(svc.compute(df, cfg, fund_params=None))
     # presence
     assert set(["rsi_value", "ema_10"]).issubset(out.columns)
     # MACD returns multiple outputs; service may suffix columns; check partial match
@@ -90,10 +92,10 @@ def test_compute_for_ticker_with_real_stack():
     # - adapters must be importable and functional
     svc = service.IndicatorService()
     req = TickerIndicatorsRequest(
-        ticker="AAPL",
-        timeframe="1D",
-        period="3M",
-        indicators=["rsi", "ema", "macd"],
+        ticker=TickerSymbol("AAPL"),
+        timeframe=TimeFrame("1D"),
+        period=Period("3M"),
+        indicators=[IndicatorName(i) for i in ["rsi", "ema", "macd"]],
         include_recommendations=False,
     )
     res = asyncio.get_event_loop().run_until_complete(svc.compute_for_ticker(req))

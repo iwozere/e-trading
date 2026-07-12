@@ -174,10 +174,7 @@ class TestAdapterIntegration:
         mock_fundamentals.return_on_equity = 0.22
         mock_fundamentals.debt_to_equity = 0.45
 
-        def mock_getter(ticker, provider=None):
-            return mock_fundamentals
-
-        adapter = FundamentalsAdapter(fundamentals_getter=mock_getter)
+        adapter = FundamentalsAdapter(fundamentals_data=mock_fundamentals)
 
         # Test multiple fundamental indicators
         fundamental_indicators = ["pe", "forward_pe", "pb", "roe", "de_ratio"]
@@ -225,12 +222,12 @@ class TestAdapterIntegration:
         adapter = TaLibAdapter()
 
         # Mock a computation failure
-        original_compute = adapter._compute_indicator
+        original_compute = adapter._compute_sync
 
         def failing_compute(*args, **kwargs):
             raise Exception("Computation failed")
 
-        with patch.object(adapter, "_compute_indicator", side_effect=failing_compute):
+        with patch.object(adapter, "_compute_sync", side_effect=failing_compute):
             # Should handle the failure gracefully
             try:
                 result = await adapter.compute("rsi", realistic_market_data, input_series, {"timeperiod": 14})

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run ibgw-paper-watchdog every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=ibgw-paper-watchdog.service
+
+[Install]
+WantedBy=timers.target

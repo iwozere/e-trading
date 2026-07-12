@@ -2,6 +2,7 @@
 # tests/test_adapters.py
 # Comprehensive test suite for all indicator adapters
 # ---------------------------------------------------------------------------
+import asyncio
 import sys
 from pathlib import Path
 
@@ -314,8 +315,8 @@ class TestPandasTaAdapter:
 
 class TestFundamentalsAdapter:
     @pytest.fixture
-    def adapter(self, fundamentals_getter):
-        return FundamentalsAdapter(fundamentals_getter=fundamentals_getter)
+    def adapter(self, mock_fundamentals):
+        return FundamentalsAdapter(fundamentals_data=mock_fundamentals)
 
     def test_supports_fundamental_metrics(self, adapter):
         """Test support for fundamental indicators."""
@@ -386,8 +387,8 @@ class TestAdapterConsistency:
         ta_lib = TaLibAdapter()
         pandas_ta = PandasTaAdapter()
 
-        ta_result = ta_lib.compute("rsi", sample_ohlcv_df, sample_inputs, {"timeperiod": 14})
-        pta_result = pandas_ta.compute("rsi", sample_ohlcv_df, sample_inputs, {"length": 14})
+        ta_result = asyncio.run(ta_lib.compute("rsi", sample_ohlcv_df, sample_inputs, {"timeperiod": 14}))
+        pta_result = asyncio.run(pandas_ta.compute("rsi", sample_ohlcv_df, sample_inputs, {"length": 14}))
 
         # Convert to Series if needed
         ta_values = (
@@ -400,7 +401,7 @@ class TestAdapterConsistency:
         # Compare non-NaN values (allow small differences due to implementation)
         valid_idx = ~(ta_values.isna() | pta_values.isna())
         if valid_idx.sum() > 0:
-            diff = (ta_values[valid_idx] - pta_values[valid_idx]).abs()
+            diff = np.abs(ta_values[valid_idx] - pta_values[valid_idx])
             assert diff.max() < 5.0, "RSI values differ significantly between adapters"
 
 

@@ -7,6 +7,7 @@ Tests swing detection, support/resistance calculation, and edge cases.
 import sys
 import unittest
 from pathlib import Path
+from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -21,6 +22,10 @@ from src.indicators.support_resistance_indicator import SupportResistance, Suppo
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
+# Backtrader's metaclass consumes feed constructor kwargs, so the checker sees
+# PandasData.__init__(self); alias to Any so dataname=... type-checks.
+_PandasData: Any = bt.feeds.PandasData
 
 
 class TestSupportResistanceIndicator(unittest.TestCase):
@@ -38,7 +43,7 @@ class TestSupportResistanceIndicator(unittest.TestCase):
                 self.sr = SupportResistanceIndicator(self.data, lookback_bars=2)
 
         self.cerebro.addstrategy(TestStrategy)
-        data = bt.feeds.PandasData(dataname=self._create_test_data())
+        data = _PandasData(dataname=self._create_test_data())
         self.cerebro.adddata(data)
 
         try:
@@ -55,7 +60,7 @@ class TestSupportResistanceIndicator(unittest.TestCase):
                 self.sr = SupportResistance(self.data)
 
         self.cerebro.addstrategy(TestStrategy)
-        data = bt.feeds.PandasData(dataname=self._create_test_data())
+        data = _PandasData(dataname=self._create_test_data())
         self.cerebro.adddata(data)
 
         try:
@@ -84,7 +89,7 @@ class TestSupportResistanceIndicator(unittest.TestCase):
                     )
 
         self.cerebro.addstrategy(TestStrategy)
-        data = bt.feeds.PandasData(dataname=self._create_swing_data())
+        data = _PandasData(dataname=self._create_swing_data())
         self.cerebro.adddata(data)
 
         self.cerebro.run()
@@ -120,7 +125,7 @@ class TestSupportResistanceIndicator(unittest.TestCase):
                     )
 
         self.cerebro.addstrategy(TestStrategy)
-        data = bt.feeds.PandasData(dataname=self._create_swing_data())
+        data = _PandasData(dataname=self._create_swing_data())
         self.cerebro.adddata(data)
 
         self.cerebro.run()
@@ -151,7 +156,7 @@ class TestSupportResistanceIndicator(unittest.TestCase):
                     results.append({"support": support, "close": close, "valid": np.isnan(support) or support < close})
 
         self.cerebro.addstrategy(TestStrategy)
-        data = bt.feeds.PandasData(dataname=self._create_swing_data())
+        data = _PandasData(dataname=self._create_swing_data())
         self.cerebro.adddata(data)
 
         self.cerebro.run()
@@ -183,7 +188,7 @@ class TestSupportResistanceIndicator(unittest.TestCase):
                     results_3bar.append(self.sr_3.lines.resistance[0])
 
         self.cerebro.addstrategy(TestStrategy)
-        data = bt.feeds.PandasData(dataname=self._create_swing_data())
+        data = _PandasData(dataname=self._create_swing_data())
         self.cerebro.adddata(data)
 
         self.cerebro.run()
@@ -211,7 +216,7 @@ class TestSupportResistanceIndicator(unittest.TestCase):
                         resistances.append(r)
 
         self.cerebro.addstrategy(TestStrategy)
-        data = bt.feeds.PandasData(dataname=self._create_uptrend_data())
+        data = _PandasData(dataname=self._create_uptrend_data())
         self.cerebro.adddata(data)
 
         self.cerebro.run()
@@ -240,7 +245,7 @@ class TestSupportResistanceIndicator(unittest.TestCase):
                         supports.append(s)
 
         self.cerebro.addstrategy(TestStrategy)
-        data = bt.feeds.PandasData(dataname=self._create_downtrend_data())
+        data = _PandasData(dataname=self._create_downtrend_data())
         self.cerebro.adddata(data)
 
         self.cerebro.run()
@@ -266,7 +271,7 @@ class TestSupportResistanceIndicator(unittest.TestCase):
                 _ = self.sr.lines.support[0]
 
         self.cerebro.addstrategy(TestStrategy)
-        data = bt.feeds.PandasData(dataname=self._create_flat_data())
+        data = _PandasData(dataname=self._create_flat_data())
         self.cerebro.adddata(data)
 
         try:

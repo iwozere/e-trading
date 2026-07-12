@@ -8,10 +8,11 @@ from src.api import monitoring_routes
 
 
 def test_services_status_reports_ib_gateway_via_port(authenticated_client_viewer):
-    """IB Gateway status comes from a port probe, not the oneshot systemd unit."""
+    """IB Gateway status comes from a port probe; there is no systemd wrapper unit."""
     client = authenticated_client_viewer
 
     def fake_port_open(host, port, timeout=1.0):
+        del host, timeout  # signature must match _port_open; only port matters here
         # Paper (4002) is up; Live (4001) is not started.
         return port == 4002
 
@@ -37,5 +38,5 @@ def test_services_status_reports_ib_gateway_via_port(authenticated_client_viewer
 
     assert statuses["IB Gateway (Paper)"] == "active"
     assert statuses["IB Gateway (Live)"] == "inactive"
-    # The (always-inactive) Docker systemd unit must not be listed separately.
+    # No systemd wrapper unit exists for the Docker gateways; nothing should reference it.
     assert all(s["name"] != "ibgateway-docker.service" for s in data["services"])

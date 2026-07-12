@@ -45,10 +45,10 @@ class TestErrorHandlingAndFallbacks:
         config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="rsi", output="rsi")])
 
         # Mock primary adapter failure
-        with patch.object(service._ta_lib_adapter, "compute", side_effect=Exception("TA-Lib failed")):
+        with patch.object(service.adapters["ta-lib"], "compute", side_effect=Exception("TA-Lib failed")):
             # Should attempt fallback to pandas_ta
-            with patch.object(service._pandas_ta_adapter, "supports", return_value=True):
-                with patch.object(service._pandas_ta_adapter, "compute") as mock_compute:
+            with patch.object(service.adapters["pandas-ta"], "supports", return_value=True):
+                with patch.object(service.adapters["pandas-ta"], "compute") as mock_compute:
                     mock_compute.return_value = {"value": pd.Series([50.0] * 5)}
 
                     result = await service.compute(sample_data, config)
@@ -65,8 +65,8 @@ class TestErrorHandlingAndFallbacks:
         config = IndicatorBatchConfig(indicators=[IndicatorSpec(name="rsi", output="rsi")])
 
         # Mock all adapters to fail
-        with patch.object(service._ta_lib_adapter, "compute", side_effect=Exception("TA-Lib failed")):
-            with patch.object(service._pandas_ta_adapter, "compute", side_effect=Exception("pandas_ta failed")):
+        with patch.object(service.adapters["ta-lib"], "compute", side_effect=Exception("TA-Lib failed")):
+            with patch.object(service.adapters["pandas-ta"], "compute", side_effect=Exception("pandas_ta failed")):
                 with pytest.raises(IndicatorServiceError):
                     await service.compute(sample_data, config)
 
@@ -210,11 +210,11 @@ class TestErrorHandlingAndFallbacks:
             time.sleep(2)  # Simulate slow computation
             return {"value": pd.Series([50.0] * 5)}
 
-        with patch.object(service._ta_lib_adapter, "compute", side_effect=slow_compute):
+        with patch.object(service.adapters["ta-lib"], "compute", side_effect=slow_compute):
             # Should handle timeout appropriately
             start_time = datetime.now()
             try:
-                result = await service.compute(sample_data, config, timeout=1.0)
+                result = await service.compute(sample_data, config)
                 # If completed, should be within reasonable time
                 end_time = datetime.now()
                 assert (end_time - start_time).total_seconds() < 3.0
@@ -278,7 +278,7 @@ class TestErrorHandlingAndFallbacks:
             ]
         )
 
-        with patch.object(service._ta_lib_adapter, "compute", side_effect=random_failure):
+        with patch.object(service.adapters["ta-lib"], "compute", side_effect=random_failure):
             # Should handle partial failures gracefully
             try:
                 result = await service.compute(sample_data, config)
@@ -303,8 +303,8 @@ class TestErrorHandlingAndFallbacks:
             failure_count += 1
             raise Exception(f"Failure #{failure_count}")
 
-        with patch.object(service._ta_lib_adapter, "compute", side_effect=counting_failure):
-            with patch.object(service._pandas_ta_adapter, "compute", side_effect=counting_failure):
+        with patch.object(service.adapters["ta-lib"], "compute", side_effect=counting_failure):
+            with patch.object(service.adapters["pandas-ta"], "compute", side_effect=counting_failure):
                 # Multiple attempts should eventually trigger circuit breaker
                 for i in range(3):
                     with pytest.raises(IndicatorServiceError):

@@ -8,6 +8,7 @@ and tests configuration changes and interface updates.
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pandas as pd
@@ -17,8 +18,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.indicators.indicator_factory import IndicatorFactory
-from src.indicators.models import IndicatorBatchConfig, IndicatorSpec, TickerIndicatorsRequest
+from src.indicators.models import (
+    BatchIndicatorRequest,
+    IndicatorBatchConfig,
+    IndicatorSpec,
+    TickerIndicatorsRequest,
+)
 from src.indicators.service import IndicatorService
+from src.indicators.types import IndicatorName, Period, TickerSymbol, TimeFrame
 
 
 class TestMigrationCompatibility:
@@ -114,11 +121,16 @@ class TestMigrationCompatibility:
         try:
             from src.indicators.adapters.backtrader_wrappers import UnifiedBollingerBandsIndicator, UnifiedRSIIndicator
 
+            # Backtrader's metaclass consumes ctor args; alias to Any so
+            # positional construction type-checks.
+            _RSI: Any = UnifiedRSIIndicator
+            _BBands: Any = UnifiedBollingerBandsIndicator
+
             # Should be able to create indicators
-            rsi_indicator = UnifiedRSIIndicator(mock_data, period=14)
+            rsi_indicator = _RSI(mock_data, period=14)
             assert rsi_indicator is not None
 
-            bb_indicator = UnifiedBollingerBandsIndicator(mock_data, period=20)
+            bb_indicator = _BBands(mock_data, period=20)
             assert bb_indicator is not None
 
         except ImportError:
@@ -140,7 +152,7 @@ class TestMigrationCompatibility:
         # Service should handle old configuration gracefully
         try:
             # This would typically be loaded from config file
-            config_manager = service._config_manager
+            config_manager = service.config_manager
             assert config_manager is not None
         except Exception:
             # Configuration migration may not be fully implemented
@@ -153,13 +165,15 @@ class TestMigrationCompatibility:
 
         # Test new-style API calls
         request = TickerIndicatorsRequest(
-            ticker="AAPL", timeframe="1D", period="1M", indicators=["rsi", "ema", "macd"], include_recommendations=True
+            ticker=TickerSymbol("AAPL"),
+            timeframe=TimeFrame("1D"),
+            period=Period("1M"),
+            indicators=[IndicatorName(i) for i in ["rsi", "ema", "macd"]],
+            include_recommendations=True,
         )
 
         with patch("src.common.get_ohlcv", return_value=sample_ohlcv):
-            import asyncio
-
-            result = asyncio.run(await service.compute_for_ticker(request))
+            result = await service.compute_for_ticker(request)
 
             assert result is not None
             assert result.ticker == "AAPL"
@@ -173,11 +187,13 @@ class TestMigrationCompatibility:
         tickers = ["AAPL", "GOOGL", "MSFT"]
 
         with patch("src.common.get_ohlcv", return_value=sample_ohlcv):
-            import asyncio
-
-            results = asyncio.run(
-                await service.compute_batch(tickers=tickers, indicators=["rsi", "ema"], timeframe="1D", period="1M")
+            request = BatchIndicatorRequest(
+                tickers=[TickerSymbol(t) for t in tickers],
+                indicators=[IndicatorName(i) for i in ["rsi", "ema"]],
+                timeframe=TimeFrame("1D"),
+                period=Period("1M"),
             )
+            results = await service.get_batch_indicators(request)
 
             assert len(results) == len(tickers)
             for ticker in tickers:
@@ -287,18 +303,18 @@ class TestMigrationCompatibility:
         """Test that recommendation formats are compatible."""
         service = IndicatorService()
 
-        request = TickerIndicatorsRequest(ticker="AAPL", indicators=["rsi"], include_recommendations=True)
+        request = TickerIndicatorsRequest(
+            ticker=TickerSymbol("AAPL"), indicators=[IndicatorName("rsi")], include_recommendations=True
+        )
 
         with patch("src.common.get_ohlcv", return_value=sample_ohlcv):
-            import asyncio
-
-            result = asyncio.run(await service.compute_for_ticker(request))
+            result = await service.compute_for_ticker(request)
 
             # Check recommendation format
             if result.technical and result.technical.get("rsi"):
                 rsi_result = result.technical["rsi"]
                 if hasattr(rsi_result, "recommendation"):
-                    rec = rsi_result.recommendation
+                    rec = getattr(rsi_result, "recommendation", None)
                     assert hasattr(rec, "type")
                     assert hasattr(rec, "confidence")
 
@@ -324,12 +340,12 @@ class TestMigrationCompatibility:
         old_config = {"rsi_period": 14, "macd_fast": 12, "macd_slow": 26, "bb_period": 20, "bb_std": 2}
 
         # Service should handle old configuration format
-        config_manager = service._config_manager
+        config_manager = service.config_manager
         assert config_manager is not None
 
         # Should be able to get parameters even with old format
         try:
-            rsi_params = config_manager.get_indicator_parameters("rsi")
+            rsi_params = config_manager.get_parameters("rsi")
             assert isinstance(rsi_params, dict)
         except Exception:
             # Configuration migration may not be fully implemented

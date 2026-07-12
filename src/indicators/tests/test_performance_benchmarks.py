@@ -21,8 +21,14 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.indicators.models import IndicatorBatchConfig, IndicatorSpec, TickerIndicatorsRequest
+from src.indicators.models import (
+    BatchIndicatorRequest,
+    IndicatorBatchConfig,
+    IndicatorSpec,
+    TickerIndicatorsRequest,
+)
 from src.indicators.service import IndicatorService
+from src.indicators.types import IndicatorName, Period, TickerSymbol, TimeFrame
 
 
 class TestPerformanceBenchmarks:
@@ -269,9 +275,13 @@ class TestPerformanceBenchmarks:
                 tickers = [f"TICKER_{i}" for i in range(ticker_count)]
 
                 start_time = time.perf_counter()
-                results = await service.compute_batch(
-                    tickers=tickers, indicators=["rsi", "ema", "macd"], timeframe="1D", period="1Y"
+                batch_request = BatchIndicatorRequest(
+                    tickers=[TickerSymbol(t) for t in tickers],
+                    indicators=[IndicatorName(i) for i in ["rsi", "ema", "macd"]],
+                    timeframe=TimeFrame("1D"),
+                    period=Period("1Y"),
                 )
+                results = await service.get_batch_indicators(batch_request)
                 end_time = time.perf_counter()
 
                 execution_time = end_time - start_time
@@ -305,7 +315,7 @@ class TestPerformanceBenchmarks:
         )
 
         def compute_indicators():
-            return service.compute(medium_dataset, config)
+            return asyncio.run(service.compute(medium_dataset, config))
 
         # Test with different concurrency levels
         concurrency_levels = [1, 2, 4, 8]
@@ -390,7 +400,9 @@ class TestPerformanceBenchmarks:
         service = IndicatorService()
 
         request = TickerIndicatorsRequest(
-            ticker="AAPL", indicators=["rsi", "ema", "macd", "bbands"], include_recommendations=True
+            ticker=TickerSymbol("AAPL"),
+            indicators=[IndicatorName(i) for i in ["rsi", "ema", "macd", "bbands"]],
+            include_recommendations=True,
         )
 
         with patch("src.common.get_ohlcv", return_value=medium_dataset):
@@ -428,7 +440,7 @@ class TestPerformanceBenchmarks:
 
         start_time = time.perf_counter()
         for indicator in indicators:
-            params = config_manager.get_indicator_parameters(indicator)
+            params = config_manager.get_parameters(indicator)
             assert isinstance(params, dict)
         retrieval_time = time.perf_counter() - start_time
 

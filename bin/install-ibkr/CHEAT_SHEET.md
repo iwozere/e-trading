@@ -1,47 +1,47 @@
-Perfect — here’s the **extended cheat sheet** with **live gateway manual controls** included.
-
----
-
 # 📑 IBKR Gateway on Raspberry Pi – Cheat Sheet
 
 ## 🖥 System Overview
 
 * **Software:** **Interactive Brokers Gateway** (not TWS)
-* **Host:** Raspberry Pi 5 (Ubuntu Server)
-* **Paper Service:** `ibgw-paper` (port **4002**, auto-start on boot)
-* **Live Service:** `ibgw-live` (port **4001**, manual start only)
-* **Compose File:** `~/ibkr/docker-compose.yml`
-* **Systemd Unit:** `ibgateway-docker.service` (starts paper only)
+* **Host:** Raspberry Pi (raspberrypi)
+* **Paper container:** `ib-gateway-paper` — `~/ibkr/ibgateway-paper/docker-compose.yml`, `network_mode: host`, `restart: always`
+* **Live container:** `ib-gateway-live` — `~/ibkr/ibgateway-live/docker-compose.yml`, bridge networking with explicit port mapping, `restart: always`
+* **No systemd wrapper unit exists.** There is no `ibgateway-docker.service` — auto-start-on-boot comes purely from each container's own `restart: always` policy plus the Docker daemon (`docker.service`) starting on boot. Use `docker`/`docker compose` commands directly, not `systemctl`.
+* **Both gateways currently run continuously** (both have `restart: always`). Live's `READ_ONLY_API=yes` blocks order placement as the safety net — there is no "live is off by default" behavior in the current config.
+
+> [!WARNING]
+> An earlier, now-abandoned setup at the top-level `~/ibkr/docker-compose.yml` defined a container named `ibgw-paper` (pinned image `ghcr.io/gnzsnz/ib-gateway:10.40.1a`, also `network_mode: host`). That compose file was removed when the project moved to the per-container layout above, but the container itself was never torn down and can still be running. Because it shares host networking with `ib-gateway-paper`, **the two fight over the same host ports** and this is the likely root cause of the "Address already in use" stuck-restart incidents. Check for it and remove if still present:
+> ```bash
+> docker ps -a --filter name=ibgw-paper
+> docker stop ibgw-paper && docker rm ibgw-paper
+> ```
 
 ---
 
 ## 🔌 Port Reference
 
-| Trading Mode      | **IB Gateway (Docker)** | **TWS (Standard)** |
-| ----------------- | ----------------------- | ------------------ |
-| **Paper Trading** | **4002**                | 7497               |
-| **Live Trading**  | **4001**                | 7496               |
+| Trading Mode | IBGateway internal bind | Host/LAN-reachable port | TWS (Standard) |
+| --- | --- | --- | --- |
+| **Paper** (`ib-gateway-paper`) | `127.0.0.1:4002` (loopback only) | **4004** — via `socat`, offset +2 to avoid colliding with IBGateway's own loopback bind in the shared host netns | 7497 |
+| **Live** (`ib-gateway-live`) | container `4001` | **4001** — direct bridge port-publish, no offset needed (isolated netns, no collision) | 7496 |
 
-> [!NOTE]
-> This project defaults to IB Gateway ports (**4001/4002**) to match the Raspberry Pi Docker deployment. If you switch to using TWS on your local machine, remember to update the ports.
+> [!IMPORTANT]
+> Paper uses `network_mode: host`, so IBGateway's loopback-only API bind (`127.0.0.1:4002`) is *not* reachable from other machines — only from the pi itself. The image's `socat` proxy re-exposes it on `0.0.0.0:4004`. **Any client connecting from a different machine must use port 4004 for paper, not 4002.** Bots running directly on the pi can still use 4002 via loopback. `src/trading/broker/check_ibkr_conn.py` already documents this bridge; `broker_factory.py`'s `IBKR_PAPER_PORT` default (`4002`) is only correct for same-host connections — confirm where your trading bots actually run.
+>
+> Live has no such offset — it's mapped normally (`4001:4001`) since it isn't host-networked.
 
-### 📄 Live vs Paper Configuration
+### VNC
 
-| Feature               | **Live Gateway** (`ibgateway-live`) | **Paper Gateway** (`ibgateway-paper`) |
-| --------------------- | ----------------------------------- | ------------------------------------- |
-| **API Port**          | **4001**                            | **4002**                              |
-| **VNC Port**          | **5901**                            | **5902**                              |
-| **Trading Mode**      | `live`                              | `paper`                               |
-| **API Access**        | **Read-Only** (`yes`)               | **Trade/Read/Write** (`no`)           |
-| **Docker Image**      | `gnzsnz/ib-gateway:stable`          | `ghcr.io/gnzsnz/ib-gateway:stable`    |
-| **Settings Volume**   | `./config` -> `/persistent`         | `./config` -> `/persistent`           |
-| **Environment File**  | `.env`                              | `.env`                                |
+| Gateway | Host VNC port |
+| --- | --- |
+| Live | **5901** → container `5900` (explicit `ports:` mapping) |
+| Paper | Not published as a mapped port — `network_mode: host` means the container's own VNC listener (default `5900`) is directly on the host if enabled. Not independently confirmed; check `ss -tuln \| grep 5900` on the host if you need VNC into paper. |
 
 ---
 
 ## 🔑 Credentials (`.env`)
 
-Both gateways use a `.env` file in their respective folders for credentials. 
+Each gateway has its own `.env` in its own directory (`~/ibkr/ibgateway-paper/.env`, `~/ibkr/ibgateway-live/.env`):
 
 ```env
 TWS_USERID=your_username
@@ -50,7 +50,7 @@ VNC_SERVER_PASSWORD=your_vnc_password
 ```
 
 > [!IMPORTANT]
-> The `jts.ini` configuration in `config/` is pre-configured for the respective trading modes and API access levels. Ensure `TrustedAddr` includes your local subnet (e.g., `10.0.0.13`) to allow remote connections.
+> Settings persist under each directory's `config/` (mounted to `/home/ibgateway/Jts/persistent`). Ensure `TrustedAddr` in `jts.ini` includes your LAN subnet to allow remote connections.
 
 ---
 
@@ -59,22 +59,28 @@ VNC_SERVER_PASSWORD=your_vnc_password
 ### ✅ Check Status
 
 ```bash
-sudo systemctl status ibgateway-docker --no-pager -l
-docker compose -f ~/ibkr/docker-compose.yml ps
+docker ps --filter name=ib-gateway-paper --filter name=ib-gateway-live
 ```
 
-### 🔄 Restart Paper Gateway
+### 🔄 Restart
 
 ```bash
-sudo systemctl restart ibgateway-docker
+# Paper
+docker restart ib-gateway-paper
+# or, from its compose project directory:
+cd ~/ibkr/ibgateway-paper && docker compose restart
+
+# Live
+docker restart ib-gateway-live
+# or:
+cd ~/ibkr/ibgateway-live && docker compose restart
 ```
 
 ### 📜 View Logs
 
 ```bash
-docker compose -f ~/ibkr/docker-compose.yml logs -f ibgw-paper
-# For live:
-docker compose -f ~/ibkr/docker-compose.yml logs -f ibgw-live
+docker logs -f ib-gateway-paper
+docker logs -f ib-gateway-live
 ```
 
 Look for:
@@ -90,8 +96,7 @@ IBC: Login has completed
 ### From Pi
 
 ```bash
-ss -tuln | grep -E '4001|4002'
-# Expect both ports LISTEN if live is started manually
+ss -tuln | grep -E '4001|4002|4004'
 ```
 
 ### From Windows / Bot
@@ -99,12 +104,12 @@ ss -tuln | grep -E '4001|4002'
 ```python
 from ib_insync import IB
 
-# Paper
+# Paper — port 4004 if connecting remotely, 4002 if running on the pi itself
 ib_paper = IB()
-ib_paper.connect('10.0.0.4', 4002, clientId=101)
+ib_paper.connect('10.0.0.4', 4004, clientId=101)
 print("Paper connected:", ib_paper.isConnected())
 
-# Live (if started)
+# Live
 ib_live = IB()
 ib_live.connect('10.0.0.4', 4001, clientId=201)
 print("Live connected:", ib_live.isConnected())
@@ -114,7 +119,7 @@ Use **unique `clientId` per bot/process**.
 
 ---
 
-## � Connectivity Diagnostics
+## 🔎 Connectivity Diagnostics
 
 Several scripts are available in `src/trading/broker/` to troubleshoot connection issues:
 
@@ -122,7 +127,7 @@ Several scripts are available in `src/trading/broker/` to troubleshoot connectio
 ```bash
 python src/trading/broker/check_ibkr_conn.py
 ```
-*   Checks if ports **4001** (Live) and **4002** (Paper) are open on the Pi.
+*   Checks ports **4001** (Live), **4002** (Paper loopback), and **4004** (Paper socat bridge).
 *   Attempts an `ib_insync` handshake to verify API availability.
 *   Provides specific recommendations if the connection fails.
 
@@ -143,27 +148,62 @@ python src/trading/broker/check_ibkr_live_readonly.py
 
 ---
 
-## �🛠 Maintenance
+## 🛠 Maintenance
 
-### Stop Paper Gateway
+### Stop
 
 ```bash
-sudo systemctl stop ibgateway-docker
+docker stop ib-gateway-paper
+docker stop ib-gateway-live
 ```
-
-### Manual Start/Stop (Compose)
-
-| Action | Paper                             | Live                             |
-| ------ | --------------------------------- | -------------------------------- |
-| Start  | `docker compose up -d ibgw-paper` | `docker compose up -d ibgw-live` |
-| Stop   | `docker compose stop ibgw-paper`  | `docker compose stop ibgw-live`  |
 
 ### Edit Credentials
 
 ```bash
-nano ~/ibkr/.env
-# Update PAPER_USER / PAPER_PASS / LIVE_USER / LIVE_PASS
-docker compose up -d
+nano ~/ibkr/ibgateway-paper/.env   # or ~/ibkr/ibgateway-live/.env
+cd ~/ibkr/ibgateway-paper && docker compose up -d   # recreate with new .env
+```
+
+---
+
+## 🩹 Watchdog (auto-restart on stuck bind loop) — PAPER only
+
+IBC restarts the Gateway process in-place periodically (e.g. nightly). If a second
+process is squatting on the same host port (see the abandoned `ibgw-paper` warning
+above) — or occasionally even without one, if `socat` doesn't release the port in
+time — the new `socat` fork loops forever logging `Address already in use`
+(sometimes preceded by an Xvfb `Fatal server error:`). This wedges the paper API
+until the container is restarted — it does not self-heal.
+
+`ibgw_paper_watchdog.sh` checks recent logs of the `ib-gateway-paper` container for
+that signature and, if it fires repeatedly within a short window, runs
+`docker restart ib-gateway-paper` directly — scoped to that one container only, so it
+never touches the live gateway. Runs every 5 minutes via `ibgw-paper-watchdog.timer`,
+so an outage is bounded to ~5-10 minutes instead of persisting for hours.
+
+Treat this as a safety net, not the fix — removing the abandoned `ibgw-paper`
+container (above) addresses the actual root cause; the watchdog just bounds the
+damage if the stuck-bind loop recurs for any other reason.
+
+There is no live-side watchdog: `ib-gateway-live` isn't host-networked, so it isn't
+exposed to this port-collision failure mode.
+
+### Deploy
+
+```bash
+sudo cp ibgw_paper_watchdog.sh /opt/apps/e-trading/bin/install-ibkr/ibgw_paper_watchdog.sh
+sudo chmod +x /opt/apps/e-trading/bin/install-ibkr/ibgw_paper_watchdog.sh
+sudo cp ibgw-paper-watchdog.service ibgw-paper-watchdog.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now ibgw-paper-watchdog.timer
+```
+
+### Verify
+
+```bash
+sudo systemctl list-timers ibgw-paper-watchdog.timer
+sudo systemctl start ibgw-paper-watchdog.service   # run once immediately, check output
+journalctl -u ibgw-paper-watchdog.service -n 20 --no-pager
 ```
 
 ---
@@ -175,34 +215,29 @@ docker compose up -d
 
   ```bash
   sudo ufw allow from 10.0.0.0/24 to any port 4001 proto tcp
-  sudo ufw allow from 10.0.0.0/24 to any port 4002 proto tcp
+  sudo ufw allow from 10.0.0.0/24 to any port 4004 proto tcp
   ```
 
-* **Keep live gateway off by default** to avoid accidental orders.
-  Only start it when you intend to trade live.
+* **Live runs continuously** (`restart: always`) with `READ_ONLY_API=yes` as the
+  order-placement safety net. If you intended live to be started only on demand,
+  that's a config change needed in `~/ibkr/ibgateway-live/docker-compose.yml`
+  (`restart: always` → e.g. `restart: "no"`), not the current behavior.
 
-* **Persistent Session (optional):**
-
-  ```yaml
-  volumes:
-    - ./jts:/home/ibgateway/Jts
-  ```
-
-  Saves tokens and reduces 2FA prompts across restarts.
+* **Persistent Session:** already configured — `./config` is mounted to
+  `/home/ibgateway/Jts/persistent` in both compose files, preserving tokens and
+  reducing 2FA prompts across restarts.
 
 ---
 
 ## 🧾 Quick Commands Table
 
-| Action                | Command                                                                                                         |               |         |
-| --------------------- | --------------------------------------------------------------------------------------------------------------- | ------------- | ------- |
-| Status (all)          | `docker compose -f ~/ibkr/docker-compose.yml ps`                                                                |               |         |
-| Restart paper gateway | `sudo systemctl restart ibgateway-docker`                                                                       |               |         |
-| Start live gateway    | `docker compose up -d ibgw-live`                                                                                |               |         |
-| Stop live gateway     | `docker compose stop ibgw-live`                                                                                 |               |         |
-| Follow logs (paper)   | `docker compose logs -f ibgw-paper`                                                                             |               |         |
-| Follow logs (live)    | `docker compose logs -f ibgw-live`                                                                              |               |         |
-| Verify ports open     | \`ss -tuln                                                                                                      | grep -E '4001 | 4002'\` |
-| Test connection (Py)  | `IB().connect('10.0.0.4', 4002, clientId=101)` (paper)<br>`IB().connect('10.0.0.4', 4001, clientId=201)` (live) |               |         |
-
----
+| Action | Command |
+| --- | --- |
+| Status (both) | `docker ps --filter name=ib-gateway-paper --filter name=ib-gateway-live` |
+| Restart paper | `docker restart ib-gateway-paper` |
+| Restart live | `docker restart ib-gateway-live` |
+| Stop live | `docker stop ib-gateway-live` |
+| Follow logs (paper) | `docker logs -f ib-gateway-paper` |
+| Follow logs (live) | `docker logs -f ib-gateway-live` |
+| Verify ports open | `ss -tuln \| grep -E '4001\|4002\|4004'` |
+| Test connection (Py) | `IB().connect('10.0.0.4', 4004, clientId=101)` (paper, remote)<br>`IB().connect('10.0.0.4', 4001, clientId=201)` (live) |

@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Tuple
 import pytest
 
 from src.indicators.models import IndicatorResultSet, IndicatorValue, TickerIndicatorsRequest
+from src.indicators.types import IndicatorName, Period, ProviderName, TickerSymbol, TimeFrame
 from src.telegram.command_parser import ParsedCommand
 from src.telegram.screener.business_logic import TelegramBusinessLogic
 from tests.mocks.indicator_service_mock import IndicatorServiceMock
@@ -106,7 +107,11 @@ def sample_parsed_command() -> ParsedCommand:
 def sample_indicator_request() -> TickerIndicatorsRequest:
     """Provide a sample TickerIndicatorsRequest for testing."""
     return TickerIndicatorsRequest(
-        ticker="AAPL", indicators=["RSI", "MACD", "SMA"], timeframe="1d", period="1y", provider="yahoo"
+        ticker=TickerSymbol("AAPL"),
+        indicators=[IndicatorName(i) for i in ["RSI", "MACD", "SMA"]],
+        timeframe=TimeFrame("1d"),
+        period=Period("1y"),
+        provider=ProviderName("yahoo"),
     )
 
 
@@ -131,7 +136,7 @@ def sample_indicator_result() -> IndicatorResultSet:
 
 
 def setup_user_in_mock(
-    telegram_service_mock: TelegramServiceMock, telegram_user_id: str, user_data: Dict[str, Any] = None
+    telegram_service_mock: TelegramServiceMock, telegram_user_id: str, user_data: Dict[str, Any] | None = None
 ) -> Dict[str, Any]:
     """
     Set up a user in the telegram service mock.
@@ -164,8 +169,8 @@ def setup_user_in_mock(
 def setup_indicator_data_in_mock(
     indicator_service_mock: IndicatorServiceMock,
     ticker: str,
-    technical_indicators: Dict[str, float] = None,
-    fundamental_indicators: Dict[str, float] = None,
+    technical_indicators: Dict[str, float] | None = None,
+    fundamental_indicators: Dict[str, float] | None = None,
 ):
     """
     Set up indicator data in the indicator service mock.
@@ -325,9 +330,9 @@ class ServiceTestContext:
     """
 
     def __init__(self):
-        self.telegram_service_mock = None
-        self.indicator_service_mock = None
-        self.business_logic = None
+        self.telegram_service_mock: TelegramServiceMock | None = None
+        self.indicator_service_mock: IndicatorServiceMock | None = None
+        self.business_logic: TelegramBusinessLogic | None = None
 
     def __enter__(self):
         self.telegram_service_mock = TelegramServiceMock()
@@ -345,10 +350,12 @@ class ServiceTestContext:
 
     def setup_user(self, telegram_user_id: str, **user_data):
         """Set up a user in the context."""
+        assert self.telegram_service_mock is not None, "ServiceTestContext must be entered before use"
         return setup_user_in_mock(self.telegram_service_mock, telegram_user_id, user_data)
 
     def setup_indicators(self, ticker: str, **indicators):
         """Set up indicator data in the context."""
+        assert self.indicator_service_mock is not None, "ServiceTestContext must be entered before use"
         return setup_indicator_data_in_mock(self.indicator_service_mock, ticker, **indicators)
 
     def create_command(self, command: str, telegram_user_id: str = "test_user", **args):
