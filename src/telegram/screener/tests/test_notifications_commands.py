@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from src.model.telegram_bot import ParsedCommand
 from src.telegram.screener.notifications import (
     process_admin_command,
     process_alerts_command,
@@ -218,7 +219,11 @@ def test_process_unknown_command(mocker):
     # Should send error with help text
     import asyncio
 
-    asyncio.run(process_unknown_command(message, telegram_user_id, notification_manager, help_text))
+    asyncio.run(
+        process_unknown_command(
+            message, telegram_user_id, ParsedCommand(command="unknown", raw_args=[]), notification_manager, help_text
+        )
+    )
     notification_manager.send_notification.assert_called_once()
     args, kwargs = notification_manager.send_notification.call_args
     assert kwargs["notification_type"] == "ERROR"
@@ -338,7 +343,9 @@ async def test_process_report_command_basic(mocker, args, result, expected_calls
     notification_manager.send_notification = AsyncMock()
     with patch("src.telegram.screener.notifications.handle_command") as mock_handle_command:
         mock_handle_command.return_value = result
-        await process_report_command(message, telegram_user_id, args, notification_manager)
+        await process_report_command(
+            message, telegram_user_id, ParsedCommand(command="report", raw_args=args), notification_manager
+        )
     # Check calls
     calls = notification_manager.send_notification.await_args_list
     assert len(calls) == len(expected_calls)
@@ -395,7 +402,9 @@ async def test_process_report_command_with_params(mocker, provider, period, inte
     notification_manager.send_notification = AsyncMock()
     with patch("src.telegram.screener.notifications.handle_command") as mock_handle_command:
         mock_handle_command.return_value = result
-        await process_report_command(message, telegram_user_id, args, notification_manager)
+        await process_report_command(
+            message, telegram_user_id, ParsedCommand(command="report", raw_args=args), notification_manager
+        )
     calls = notification_manager.send_notification.await_args_list
     assert len(calls) == len(expected_calls)
     for call, expected in zip(calls, expected_calls):

@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from src.data.db.models.model_notification import MessagePriority
 from src.notification.logger import setup_logger
@@ -232,7 +232,7 @@ class BatchProcessor:
         # Batch ID counter
         self._batch_counter = 0
 
-    def set_batch_processor_callback(self, callback: Callable[[MessageBatch], None]):
+    def set_batch_processor_callback(self, callback: Callable[[MessageBatch], Awaitable[None]]):
         """
         Set callback function for processing completed batches.
 

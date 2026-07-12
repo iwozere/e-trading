@@ -19,8 +19,11 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
+from typing import cast
+
 from src.common.alerts.alert_evaluator import AlertEvaluator
 from src.data.db.services.jobs_service import JobsService
+from src.data.db.services.notification_service import NotificationService
 from src.notification.service.client import MessagePriority, MessageType, NotificationServiceClient
 from src.scheduler.scheduler_service import SchedulerService
 
@@ -57,7 +60,7 @@ def scheduler_service_with_notification(mock_jobs_service, mock_alert_evaluator,
     return SchedulerService(
         jobs_service=mock_jobs_service,
         alert_evaluator=mock_alert_evaluator,
-        notification_client=mock_notification_client,
+        notification_db_service=mock_notification_client,
         database_url="sqlite:///:memory:",
         max_workers=2,
     )
@@ -369,7 +372,7 @@ class TestNotificationServiceIntegration:
         scheduler = SchedulerService(
             jobs_service=mock_jobs_service,
             alert_evaluator=mock_alert_evaluator,
-            notification_client=None,
+            notification_db_service=cast(NotificationService, None),
             database_url="sqlite:///:memory:",
         )
 

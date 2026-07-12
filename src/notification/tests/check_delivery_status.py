@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from src.data.db.models.model_notification import DeliveryStatus, Message
+from src.data.db.models.model_notification import Message, MessageDeliveryStatus
 from src.data.db.services.database_service import get_database_service
 
 
@@ -22,7 +22,7 @@ def check_delivery():
         print(f"Status: {msg.status}")
 
         # Get delivery statuses
-        deliveries = r.s.query(DeliveryStatus).filter(DeliveryStatus.message_id == msg.id).all()
+        deliveries = r.s.query(MessageDeliveryStatus).filter(MessageDeliveryStatus.message_id == msg.id).all()
         if not deliveries:
             print("No delivery attempts found in msg_delivery_status.")
         else:
