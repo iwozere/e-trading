@@ -32,8 +32,11 @@ if __name__ == "__main__":
     screener = SixStockScreener()
     df = screener.screen_stocks(tickers)
     _logger.info("Selected %d stocks", len(df))
-    df.to_csv("six_selected_stocks.csv", index=False)
-    _logger.info("Results saved to six_selected_stocks.csv")
+    results_dir = PROJECT_ROOT / "results" / "screeners" / "six"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    output_path = results_dir / "six_selected_stocks.csv"
+    df.to_csv(output_path, index=False)
+    _logger.info("Results saved to %s", output_path)
     print(
         f"__SCHEDULER_RESULT__: {json.dumps({'result_count': len(df), 'tickers': list(df['Ticker'].head(10)) if not df.empty else []})}"
     )
