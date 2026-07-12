@@ -252,7 +252,7 @@ class TestJobsServiceRuns:
 
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=12345,  # Must be int, not string
+            job_id=str(12345),
             scheduled_for=datetime.now(UTC),
             job_snapshot={"test": "data"},
         )
@@ -272,7 +272,7 @@ class TestJobsServiceRuns:
         # Create a run
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=123,  # Must be int
+            job_id=str(123),
             scheduled_for=datetime.now(UTC),
             job_snapshot={"test": "data"},
         )
@@ -292,7 +292,7 @@ class TestJobsServiceRuns:
         for i in range(3):
             run_data = ScheduleRunCreate(
                 job_type=JobType.SCREENER,
-                job_id=100 + i,  # Must be int
+                job_id=str(100 + i),
                 scheduled_for=datetime.now(UTC),
                 job_snapshot={"test": i},
             )
@@ -309,7 +309,7 @@ class TestJobsServiceRuns:
         # Create a run
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=123,  # Must be int
+            job_id=str(123),
             scheduled_for=datetime.now(UTC),
             job_snapshot={"test": "data"},
         )
@@ -330,7 +330,7 @@ class TestJobsServiceRuns:
         # Create a pending run - must set status explicitly since service doesn't
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=200,  # Must be int
+            job_id=str(200),
             scheduled_for=datetime.now(UTC),
             job_snapshot={"test": "data"},
         )
@@ -356,7 +356,7 @@ class TestJobsServiceRuns:
         # Create and claim a run
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=201,  # Must be int
+            job_id=str(201),
             scheduled_for=datetime.now(UTC),
             job_snapshot={"test": "data"},
         )
@@ -377,7 +377,7 @@ class TestJobsServiceRuns:
         for i in range(3):
             run_data = ScheduleRunCreate(
                 job_type=JobType.SCREENER,
-                job_id=300 + i,  # Must be int
+                job_id=str(300 + i),
                 scheduled_for=datetime.now(UTC),
                 job_snapshot={"test": i},
             )
@@ -401,7 +401,7 @@ class TestJobsServiceRuns:
         # Create a pending run
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=400,  # Must be int
+            job_id=str(400),
             scheduled_for=datetime.now(UTC),
             job_snapshot={"test": "data"},
         )
@@ -429,7 +429,7 @@ class TestJobsServiceRuns:
         # Create and claim a run
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=401,  # Must be int
+            job_id=str(401),
             scheduled_for=datetime.now(UTC),
             job_snapshot={"test": "data"},
         )
@@ -598,7 +598,7 @@ class TestJobsServiceStatistics:
         for status in [RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.PENDING]:
             run_data = ScheduleRunCreate(
                 job_type=JobType.SCREENER,
-                job_id=500,  # Must be int
+                job_id=str(500),
                 scheduled_for=datetime.now(UTC),
                 job_snapshot={"status": status.value},
             )
@@ -624,7 +624,7 @@ class TestJobsServiceStatistics:
         old_time = datetime.now(UTC) - timedelta(days=100)
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=600,  # Must be int
+            job_id=str(600),
             scheduled_for=old_time,
             job_snapshot={"test": "old"},
         )

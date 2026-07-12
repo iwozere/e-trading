@@ -129,13 +129,14 @@ def demo_fundamentals_retrieval():
             try:
                 fundamentals = downloader.get_fundamentals(symbol)
                 assert fundamentals is not None
-                print(f"✅ {fundamentals.company_name}")
-                print(f"   Price: ${fundamentals.current_price:.2f}")
-                print(f"   Market Cap: ${fundamentals.market_cap:,.0f}")
-                print(f"   PE Ratio: {fundamentals.pe_ratio:.1f}")
-                print(f"   ROE: {fundamentals.return_on_equity:.1%}")
-                print(f"   Sector: {fundamentals.sector}")
-                print(f"   Data Source: {fundamentals.data_source}")
+                profile = fundamentals["profile"]
+                ratios = fundamentals["ratios"]
+                print(f"✅ {profile.get('companyName')}")
+                print(f"   Price: ${profile.get('price', 0):.2f}")
+                print(f"   Market Cap: ${profile.get('mktCap', 0):,.0f}")
+                print(f"   PE Ratio: {ratios.get('peRatio', 0):.1f}")
+                print(f"   ROE: {ratios.get('returnOnEquity', 0):.1%}")
+                print(f"   Sector: {profile.get('sector')}")
 
             except Exception as e:
                 print(f"❌ Error getting fundamentals for {symbol}: {e}")

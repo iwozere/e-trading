@@ -31,7 +31,7 @@ def test_fmp_initialization():
         downloader = FMPDataDownloader(api_key=api_key)
         print(f"✅ FMP downloader initialized with API key: {api_key[:10]}...")
         assert downloader.api_key == api_key
-        assert downloader.base_url == "https://financialmodelingprep.com/api/v3"
+        assert downloader.stable_url == "https://financialmodelingprep.com/stable"
         print("✅ Base URL and API key correctly set")
     except Exception as e:
         print(f"❌ Error initializing with API key: {e}")
@@ -56,40 +56,6 @@ def test_fmp_initialization():
         print("❌ Should have raised error for missing API key")
     except ValueError as e:
         print(f"✅ Correctly raised error for missing API key: {e}")
-
-
-def test_screener_criteria_validation():
-    """Test screener criteria validation."""
-    print("\n🔍 Testing Screener Criteria Validation")
-    print("=" * 50)
-
-    api_key = "test_api_key"
-    downloader = FMPDataDownloader(api_key=api_key)
-
-    # Test valid criteria
-    valid_criteria = {
-        "marketCapMoreThan": 1000000000,
-        "peRatioLessThan": 15,
-        "priceToBookRatioLessThan": 1.5,
-        "debtToEquityLessThan": 0.5,
-        "returnOnEquityMoreThan": 0.12,
-        "limit": 50,
-    }
-
-    try:
-        downloader._validate_screener_criteria(valid_criteria)
-        print("✅ Valid criteria validation passed")
-    except Exception as e:
-        print(f"❌ Valid criteria validation failed: {e}")
-
-    # Test invalid criteria
-    invalid_criteria = {"marketCapMoreThan": 1000000000, "invalidCriterion": "value", "anotherInvalid": 123}
-
-    try:
-        downloader._validate_screener_criteria(invalid_criteria)
-        print("✅ Invalid criteria validation handled gracefully")
-    except Exception as e:
-        print(f"❌ Invalid criteria validation failed: {e}")
 
 
 def test_stock_screener_mock():
@@ -229,14 +195,15 @@ def test_fundamentals_retrieval_mock():
         try:
             fundamentals = downloader.get_fundamentals("AAPL")
             assert fundamentals is not None
-            print(f"✅ Fundamentals retrieved for {fundamentals.ticker}")
-            print(f"   Company: {fundamentals.company_name}")
-            print(f"   Price: ${fundamentals.current_price:.2f}")
-            print(f"   Market Cap: ${fundamentals.market_cap:,.0f}")
-            print(f"   PE Ratio: {fundamentals.pe_ratio:.1f}")
-            print(f"   ROE: {fundamentals.return_on_equity:.1%}")
-            print(f"   Sector: {fundamentals.sector}")
-            print(f"   Data Source: {fundamentals.data_source}")
+            profile = fundamentals["profile"]
+            ratios = fundamentals["ratios"]
+            print(f"✅ Fundamentals retrieved for {fundamentals['symbol']}")
+            print(f"   Company: {profile.get('companyName')}")
+            print(f"   Price: ${profile.get('price', 0):.2f}")
+            print(f"   Market Cap: ${profile.get('mktCap', 0):,.0f}")
+            print(f"   PE Ratio: {ratios.get('peRatio', 0):.1f}")
+            print(f"   ROE: {ratios.get('returnOnEquity', 0):.1%}")
+            print(f"   Sector: {profile.get('sector')}")
 
         except Exception as e:
             print(f"❌ Fundamentals retrieval test failed: {e}")
@@ -364,9 +331,6 @@ if __name__ == "__main__":
 
     # Test initialization
     test_fmp_initialization()
-
-    # Test screener criteria validation
-    test_screener_criteria_validation()
 
     # Test stock screener (mocked)
     test_stock_screener_mock()
