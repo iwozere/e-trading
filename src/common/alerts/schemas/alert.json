@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Alert Configuration Schema",
+  "description": "Schema for validating alert task parameters",
+  "type": "object",
+  "required": ["ticker", "timeframe", "rule"],
+  "properties": {
+    "ticker": { "type": "string" },
+    "timeframe": { "type": "string" },
+    "rule": {
+      "type": "object",
+      "description": "Alert rule definition representing an AST. Supported keys: and, or, not, plugin, gt, lt, crosses_above, etc"
+    },
+    "rearm": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "value": { "type": "number" },
+        "bars": { "type": "integer" },
+        "side": { "type": "string" }
+      }
+    },
+    "options": { "type": "object" },
+    "notify": { "type": "object" }
+  }
+}

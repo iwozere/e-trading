@@ -62,7 +62,7 @@ def test_create_notification_endpoint_structure(authenticated_client_trader):
     uow.notifications.messages.create_message.return_value = _mock_created_message(123)
 
     with _patch_get_db(uow):
-        response = client.post("/api/notifications/", json=notification_data)
+        response = client.post("/api/notifications", json=notification_data)
 
     assert response.status_code == 200
     data = response.json()

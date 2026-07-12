@@ -697,7 +697,7 @@ async def send_trade_notification(trade_data: TradeNotificationRequest, current_
 # Notification management endpoints (parameterized routes must come last)
 
 
-@router.post("/", response_model=Dict[str, Any])
+@router.post("", response_model=Dict[str, Any])
 async def create_notification(notification: NotificationCreate, current_user: User = Depends(get_current_user)):
     """
     Create and enqueue a new notification message.
@@ -765,7 +765,7 @@ async def create_notification(notification: NotificationCreate, current_user: Us
         raise HTTPException(status_code=500, detail="Failed to create notification")
 
 
-@router.get("/", response_model=List[NotificationResponse])
+@router.get("", response_model=List[NotificationResponse])
 async def list_notifications(
     status: str | None = None,
     priority: str | None = None,

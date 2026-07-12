@@ -1,0 +1,118 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Schedule Configuration Schema",
+  "description": "Schema for validating schedule task parameters",
+  "type": "object",
+  "required": ["action"],
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["data_sync", "cleanup", "backup", "report", "maintenance"],
+      "description": "Type of scheduled action to perform"
+    },
+    "parameters": {
+      "type": "object",
+      "description": "Action-specific parameters",
+      "properties": {
+        "symbols": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z0-9]+$"
+          },
+          "description": "List of trading symbols to process"
+        },
+        "timeframes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
+          },
+          "description": "List of timeframes to process"
+        },
+        "days_back": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "description": "Number of days to look back for data operations"
+        },
+        "cleanup_older_than": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Clean up data older than N days"
+        },
+        "backup_path": {
+          "type": "string",
+          "description": "Path for backup operations"
+        },
+        "report_type": {
+          "type": "string",
+          "enum": ["daily", "weekly", "monthly", "performance"],
+          "description": "Type of report to generate"
+        },
+        "recipients": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "email"
+          },
+          "description": "Email recipients for reports"
+        }
+      }
+    },
+    "options": {
+      "type": "object",
+      "description": "Additional schedule options",
+      "properties": {
+        "timeout": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 3600,
+          "description": "Maximum execution time in seconds"
+        },
+        "retry_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Number of retries on failure"
+        },
+        "retry_delay": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300,
+          "description": "Delay between retries in seconds"
+        },
+        "parallel": {
+          "type": "boolean",
+          "description": "Allow parallel execution of this schedule"
+        },
+        "skip_if_running": {
+          "type": "boolean",
+          "description": "Skip execution if previous run is still active"
+        }
+      }
+    },
+    "notify": {
+      "type": "object",
+      "description": "Notification configuration for schedule completion",
+      "properties": {
+        "on_success": {
+          "type": "boolean",
+          "description": "Send notification on successful completion"
+        },
+        "on_failure": {
+          "type": "boolean",
+          "description": "Send notification on failure"
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["telegram", "email", "webhook"]
+          },
+          "description": "Notification channels to use"
+        }
+      }
+    }
+  }
+}

@@ -73,6 +73,8 @@ logs/
 !src/web_ui/frontend/*.json
 !src/web_ui/frontend/dist
 
+!src/common/alerts/schemas/*.json
+
 *.pt
 *.pth
 *.pkl
