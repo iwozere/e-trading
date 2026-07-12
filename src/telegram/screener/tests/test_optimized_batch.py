@@ -242,8 +242,8 @@ def test_enhanced_screener_optimized():
                     print(f"      Fundamental: {result.fundamental_score:.1f}/10")
                     print(f"      Technical: {result.technical_score:.1f}/10")
                     print(f"      Recommendation: {result.recommendation}")
-                    if result.current_price:
-                        print(f"      Price: ${result.current_price:.2f}")
+                    if result.fundamentals and result.fundamentals.current_price:
+                        print(f"      Price: ${result.fundamentals.current_price:.2f}")
                     print()
 
             # Display formatted report

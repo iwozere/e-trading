@@ -46,7 +46,7 @@ def test_batch_ohlcv_download():
         try:
             df = downloader.get_ohlcv(ticker, "1d", start_date, end_date)
             individual_results[ticker] = df
-            print(f"  ✅ {ticker}: {len(df)} rows")
+            print(f"  ✅ {ticker}: {len(df) if df is not None else 0} rows")
         except Exception as e:
             print(f"  ❌ {ticker}: Error - {e}")
 
@@ -212,8 +212,8 @@ def test_enhanced_screener_batch():
                     print(f"      Fundamental: {result.fundamental_score:.1f}/10")
                     print(f"      Technical: {result.technical_score:.1f}/10")
                     print(f"      Recommendation: {result.recommendation}")
-                    if result.current_price:
-                        print(f"      Price: ${result.current_price:.2f}")
+                    if result.fundamentals and result.fundamentals.current_price:
+                        print(f"      Price: ${result.fundamentals.current_price:.2f}")
                     print()
 
             # Display formatted report
