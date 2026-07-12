@@ -1,13 +1,14 @@
 import sys
 import unittest
 from pathlib import Path
+from typing import Dict, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.common.sentiments.collect_sentiment_async import collect_sentiment_batch
+from src.common.sentiments.collect_sentiment_async import SentimentFeatures, collect_sentiment_batch
 
 
 class TestUnifiedSentiment(unittest.IsolatedAsyncioTestCase):
@@ -47,7 +48,10 @@ class TestUnifiedSentiment(unittest.IsolatedAsyncioTestCase):
             manager.close_all = AsyncMock()
 
             # Call collection
-            results = await collect_sentiment_batch(["AAPL"], config=config)
+            results = cast(
+                Dict[str, "SentimentFeatures | None"],
+                await collect_sentiment_batch(["AAPL"], config=config),
+            )
 
             # Verify results
             self.assertIn("AAPL", results)
@@ -104,7 +108,10 @@ class TestUnifiedSentiment(unittest.IsolatedAsyncioTestCase):
                 {"label": "NEGATIVE", "score": 0.8},
             ]
 
-            results = await collect_sentiment_batch(["AAPL"], config=config)
+            results = cast(
+                Dict[str, "SentimentFeatures | None"],
+                await collect_sentiment_batch(["AAPL"], config=config),
+            )
 
             aapl = results["AAPL"]
             assert aapl is not None

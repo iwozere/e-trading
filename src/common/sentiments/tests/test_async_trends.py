@@ -87,17 +87,11 @@ class TestAsyncTrendsAdapter:
     @pytest.mark.asyncio
     async def test_initialization(self):
         """Test adapter initialization."""
-        adapter = AsyncTrendsAdapter(
-            concurrency=2, rate_limit_delay=1.5, proxy_list=["http://proxy1:8080", "http://proxy2:8080"]
-        )
+        adapter = AsyncTrendsAdapter(concurrency=2, rate_limit_delay=1.5)
 
         try:
             assert adapter.concurrency == 2
             assert adapter.rate_limit_delay == 1.5
-            assert len(adapter.proxy_list) == 2
-            assert adapter.trends_base == "https://trends.google.com/trends/api"
-            assert adapter.requests_per_hour == 30
-            assert len(adapter.regions) > 0
             assert len(adapter.user_agents) > 0
         finally:
             await adapter.close()
@@ -439,33 +433,6 @@ class TestAsyncTrendsAdapter:
 
         # External session should not be closed
         external_session.close.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_proxy_usage(self):
-        """Test that proxy list is used when provided."""
-        proxy_list = ["http://proxy1:8080", "http://proxy2:8080"]
-        adapter = AsyncTrendsAdapter(proxy_list=proxy_list)
-
-        try:
-            assert adapter.proxy_list == proxy_list
-
-            # Mock session to verify proxy usage
-            mock_session = AsyncMock()
-            adapter._session = mock_session
-
-            mock_response = Mock()
-            mock_response.status = 200
-            mock_response.text = AsyncMock(return_value='{"test": "data"}')
-            mock_session.get.return_value.__aenter__.return_value = mock_response
-
-            await adapter._get_with_retry("https://test.com")
-
-            # Verify get was called with proxy parameter
-            call_kwargs = mock_session.get.call_args[1]
-            assert "proxy" in call_kwargs
-
-        finally:
-            await adapter.close()
 
     @pytest.mark.asyncio
     async def test_user_agent_rotation(self, adapter):

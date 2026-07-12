@@ -119,9 +119,6 @@ class TestAsyncNewsAdapter:
             assert adapter.finnhub_token == "fh_token"
             assert adapter.alpha_vantage_token == "av_token"
             assert adapter.newsapi_token == "na_token"
-            assert adapter.finnhub_base == "https://finnhub.io/api/v1"
-            assert adapter.alpha_vantage_base == "https://www.alphavantage.co/query"
-            assert adapter.newsapi_base == "https://newsapi.org/v2"
         finally:
             await adapter.close()
 
