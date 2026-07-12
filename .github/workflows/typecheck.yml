@@ -1,0 +1,49 @@
+name: Type Check
+
+# Static type-check gate: mypy + pyright must both stay at 0 errors.
+# Enforcement point for the pyright/mypy cleanup (see scripts/typecheck.py).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: typecheck-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      # TA-Lib ships a C library that its Python wheel links against; without it
+      # `import talib` fails and pyright reports reportMissingImports across the
+      # indicator stack. Install the C library before the pip step.
+      - name: Install TA-Lib C library
+        run: |
+          curl -sSL https://github.com/ta-lib/ta-lib/releases/download/v0.6.4/ta-lib_0.6.4_amd64.deb -o ta-lib.deb
+          sudo dpkg -i ta-lib.deb
+
+      # Torch as a CPU-only wheel keeps the install light; the full CUDA build is
+      # unnecessary for static analysis.
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements-dev.txt
+
+      - name: Run type-check gate (mypy + pyright)
+        run: python scripts/typecheck.py

@@ -56,7 +56,6 @@ disable_error_code = ["annotation-unchecked"]
 # installed as dev dependencies instead of being ignored here.
 [[tool.mypy.overrides]]
 module = [
-    "pandas.*",
     "yfinance.*",
     "psycopg2.*",
     "apscheduler.*",
@@ -79,7 +78,6 @@ module = [
     "seaborn",
     "scipy.*",
     "websocket",
-    "anthropic",
     "onnxmltools",
     "onnxmltools.*",
     "onnxconverter_common.*",
@@ -88,6 +86,21 @@ module = [
     "redis",
     "zstandard",
 ]
+ignore_missing_imports = true
+
+# pandas (via pandas-stubs) and anthropic ship type information that mypy follows
+# only when the package is actually installed. pyright *requires* pandas-stubs to
+# reach zero errors, so any environment shared with pyright has it installed —
+# and mypy then type-checks pandas usage (hundreds of errors) or crashes inside
+# anthropic's client. `follow_imports = skip` forces mypy to treat these as
+# untyped (Any) regardless of installation, so mypy=0 is reproducible in the same
+# environment as pyright. (ignore_missing_imports keeps the absent case quiet too.)
+[[tool.mypy.overrides]]
+module = [
+    "pandas.*",
+    "anthropic.*",
+]
+follow_imports = "skip"
 ignore_missing_imports = true
 
 # ml pipeline runner scripts import sibling x_NN modules by bare name at runtime

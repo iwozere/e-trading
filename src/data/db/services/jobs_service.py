@@ -133,7 +133,7 @@ class JobsService(BaseDBService):
     @with_uow
     @handle_db_error
     def trigger_schedule(self, schedule_id: int) -> ScheduleRunResponse | None:
-        """Manually trigger a schedule to create a run."""
+        """Manually trigger a schedule: create a PENDING run and wake the scheduler to execute it now."""
         schedule = self.repos.jobs.get_schedule(schedule_id)
         if not schedule:
             return None
@@ -141,7 +141,6 @@ class JobsService(BaseDBService):
         if not schedule.enabled:
             raise ValueError("Cannot trigger disabled schedule")
 
-        # Create a run for immediate execution
         run_data = ScheduleRunCreate(
             job_type=JobType(schedule.job_type),
             job_id=str(schedule_id),
@@ -155,7 +154,15 @@ class JobsService(BaseDBService):
             },
         )
 
-        return self.create_run(schedule.user_id, run_data)
+        run = self.create_run(schedule.user_id, run_data)
+        run = self.update_run(run.id, ScheduleRunUpdate(status=RunStatus.PENDING)) or run
+
+        # Wake the running SchedulerService process — trigger_schedule() runs in the
+        # API process, which has no in-memory handle on the scheduler, so the only
+        # way to hand off execution is via a DB NOTIFY the scheduler is listening for.
+        self.repos.jobs.notify_manual_trigger(run.id, schedule_id)
+
+        return run
 
     @with_uow
     @handle_db_error

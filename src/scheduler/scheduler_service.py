@@ -595,13 +595,11 @@ class SchedulerService:
 
     async def _execute_job(self, schedule_id: int) -> None:
         """
-        Execute a scheduled job.
+        Execute a cron-triggered scheduled job.
 
-        This method:
-        - Creates a ScheduleRun record
-        - Executes the job based on its type
-        - Updates the run record with results
-        - Handles errors and timeouts
+        Creates its own ScheduleRun record, then delegates to `_run_schedule`
+        for the actual execution/completion. See `_execute_manual_run` for the
+        "Run Now" counterpart, which reuses a pre-created run record instead.
 
         Args:
             schedule_id: ID of the schedule to execute
@@ -624,59 +622,7 @@ class SchedulerService:
 
             _logger.info("Executing job for schedule %s (ID: %d, Run: %d)", schedule.name, schedule.id, run_record.id)
 
-            # Build the job coroutine for this job type
-            if schedule.job_type == JobType.ALERT.value:
-                target = (schedule.target or "").strip()
-                if target.startswith("portfolio."):
-                    job_coro = self._execute_portfolio_job(schedule, run_record)
-                else:
-                    job_coro = self._execute_alert_job(schedule, run_record)
-            elif schedule.job_type == JobType.SCREENER.value:
-                job_coro = self._execute_screener_job(schedule, run_record)
-            elif schedule.job_type == JobType.REPORT.value:
-                job_coro = self._execute_report_job(schedule, run_record)
-            elif schedule.job_type in (JobType.DATA_PROCESSING.value, JobType.SCRIPT.value):
-                job_coro = self._execute_data_processing_job(schedule, run_record)
-            else:
-                raise ValueError(f"Unsupported job type: {schedule.job_type}")
-
-            # P2-SCHED-3: apply execution timeout so a hung job cannot block the
-            # event loop indefinitely.  For DATA_PROCESSING / SCRIPT jobs the
-            # per-job inner timeout lives in task_params["timeout_seconds"]; the
-            # outer limit must be at least that value plus a grace period so the
-            # inner timeout can fire cleanly before the outer one cuts in.
-            effective_timeout = self.job_timeout_seconds
-            if schedule.job_type in (JobType.DATA_PROCESSING.value, JobType.SCRIPT.value):
-                inner = (schedule.task_params or {}).get("timeout_seconds")
-                if isinstance(inner, (int, float)) and inner > 0:
-                    effective_timeout = max(effective_timeout, int(inner) + 60)
-
-            try:
-                result = await asyncio.wait_for(job_coro, timeout=effective_timeout)
-            except TimeoutError:
-                timeout_msg = (
-                    f"Job timed out after {effective_timeout}s (schedule: {schedule.name!r}, type: {schedule.job_type})"
-                )
-                _logger.error(timeout_msg)
-                if run_record:
-                    await self._complete_run_record(run_record, RunStatus.FAILED, None, timeout_msg)
-                return
-
-            # A script that exited nonzero is a failed run, even though the
-            # executor itself ran to completion.
-            if is_failed_job_result(result):
-                error_msg = (
-                    f"Script exited with code {result.get('exit_code')}; "
-                    f"stderr tail: {(result.get('stderr_preview') or '')[-500:]}"
-                )
-                await self._complete_run_record(run_record, RunStatus.FAILED, result, error_msg)
-                _logger.error("Job for schedule %s (ID: %d) failed: %s", schedule.name, schedule.id, error_msg)
-            else:
-                await self._complete_run_record(run_record, RunStatus.COMPLETED, result)
-                _logger.info("Successfully completed job for schedule %s (ID: %d)", schedule.name, schedule.id)
-
-            # Update schedule's next run time
-            await asyncio.to_thread(lambda: self.jobs_service.update_schedule_next_run(schedule_id))
+            await self._run_schedule(schedule, run_record)
 
         except Exception as e:
             error_msg = f"Job execution failed: {str(e)}"
@@ -686,6 +632,129 @@ class SchedulerService:
             # Update run record with failure
             if run_record:
                 await self._complete_run_record(run_record, RunStatus.FAILED, None, error_msg)
+
+    async def _execute_manual_run(self, schedule_id: int, run_id: int) -> None:
+        """
+        Execute a manually-triggered job ("Run Now" in the web UI).
+
+        `JobsService.trigger_schedule()` (running in the API process) creates a
+        PENDING run record and fires a `scheduler_manual_trigger` NOTIFY, since
+        it has no in-memory handle on this process's scheduler. This method is
+        invoked from `_listen_for_db_changes()` in response to that NOTIFY —
+        it reuses the pre-created run record rather than creating a new one,
+        so the "Run Now" click and the run row it produced are the same run.
+
+        Args:
+            schedule_id: ID of the schedule to execute
+            run_id: ID of the PENDING run record created by trigger_schedule()
+        """
+        run_record = None
+
+        try:
+            schedule = await asyncio.to_thread(lambda: self.jobs_service.get_schedule(schedule_id))
+            if not schedule:
+                _logger.error("Schedule %d not found for manual execution (run %d)", schedule_id, run_id)
+                return
+
+            if not schedule.enabled:
+                _logger.warning("Schedule %d is disabled, skipping manual execution (run %d)", schedule_id, run_id)
+                return
+
+            run_record = await asyncio.to_thread(lambda: self.jobs_service.get_run(run_id))
+            if not run_record or run_record.status != RunStatus.PENDING.value:
+                _logger.warning(
+                    "Manual run %d for schedule %d is not pending (status=%s); skipping",
+                    run_id,
+                    schedule_id,
+                    run_record.status if run_record else None,
+                )
+                return
+
+            from src.data.db.models.model_jobs import ScheduleRunUpdate
+
+            updated = await asyncio.to_thread(
+                lambda: self.jobs_service.update_run(
+                    run_id, ScheduleRunUpdate(status=RunStatus.RUNNING, started_at=datetime.now(UTC))
+                )
+            )
+            run_record = updated or run_record
+
+            _logger.info(
+                "Executing manually-triggered job for schedule %s (ID: %d, Run: %d)",
+                schedule.name,
+                schedule.id,
+                run_record.id,
+            )
+
+            await self._run_schedule(schedule, run_record)
+
+        except Exception as e:
+            error_msg = f"Manual job execution failed: {str(e)}"
+            _logger.error("Error executing manual run %d for schedule %d: %s", run_id, schedule_id, error_msg)
+            _logger.debug("Manual job execution error traceback: %s", traceback.format_exc())
+            if run_record:
+                await self._complete_run_record(run_record, RunStatus.FAILED, None, error_msg)
+
+    async def _run_schedule(self, schedule: ScheduleResponse, run_record: ScheduleRunResponse) -> None:
+        """
+        Run the job coroutine for `schedule` against an already-RUNNING `run_record`,
+        apply the execution timeout, and complete the run record with the outcome.
+
+        Shared by both cron-triggered (`_execute_job`) and manually-triggered
+        (`_execute_manual_run`) execution paths.
+        """
+        # Build the job coroutine for this job type
+        if schedule.job_type == JobType.ALERT.value:
+            target = (schedule.target or "").strip()
+            if target.startswith("portfolio."):
+                job_coro = self._execute_portfolio_job(schedule, run_record)
+            else:
+                job_coro = self._execute_alert_job(schedule, run_record)
+        elif schedule.job_type == JobType.SCREENER.value:
+            job_coro = self._execute_screener_job(schedule, run_record)
+        elif schedule.job_type == JobType.REPORT.value:
+            job_coro = self._execute_report_job(schedule, run_record)
+        elif schedule.job_type in (JobType.DATA_PROCESSING.value, JobType.SCRIPT.value):
+            job_coro = self._execute_data_processing_job(schedule, run_record)
+        else:
+            raise ValueError(f"Unsupported job type: {schedule.job_type}")
+
+        # P2-SCHED-3: apply execution timeout so a hung job cannot block the
+        # event loop indefinitely.  For DATA_PROCESSING / SCRIPT jobs the
+        # per-job inner timeout lives in task_params["timeout_seconds"]; the
+        # outer limit must be at least that value plus a grace period so the
+        # inner timeout can fire cleanly before the outer one cuts in.
+        effective_timeout = self.job_timeout_seconds
+        if schedule.job_type in (JobType.DATA_PROCESSING.value, JobType.SCRIPT.value):
+            inner = (schedule.task_params or {}).get("timeout_seconds")
+            if isinstance(inner, (int, float)) and inner > 0:
+                effective_timeout = max(effective_timeout, int(inner) + 60)
+
+        try:
+            result = await asyncio.wait_for(job_coro, timeout=effective_timeout)
+        except TimeoutError:
+            timeout_msg = (
+                f"Job timed out after {effective_timeout}s (schedule: {schedule.name!r}, type: {schedule.job_type})"
+            )
+            _logger.error(timeout_msg)
+            await self._complete_run_record(run_record, RunStatus.FAILED, None, timeout_msg)
+            return
+
+        # A script that exited nonzero is a failed run, even though the
+        # executor itself ran to completion.
+        if is_failed_job_result(result):
+            error_msg = (
+                f"Script exited with code {result.get('exit_code')}; "
+                f"stderr tail: {(result.get('stderr_preview') or '')[-500:]}"
+            )
+            await self._complete_run_record(run_record, RunStatus.FAILED, result, error_msg)
+            _logger.error("Job for schedule %s (ID: %d) failed: %s", schedule.name, schedule.id, error_msg)
+        else:
+            await self._complete_run_record(run_record, RunStatus.COMPLETED, result)
+            _logger.info("Successfully completed job for schedule %s (ID: %d)", schedule.name, schedule.id)
+
+        # Update schedule's next run time
+        await asyncio.to_thread(lambda: self.jobs_service.update_schedule_next_run(schedule.id))
 
     async def _execute_alert_job(self, schedule: ScheduleResponse, run_record: ScheduleRunResponse) -> Dict[str, Any]:
         """
@@ -1095,7 +1164,7 @@ class SchedulerService:
 
     async def _listen_for_db_changes(self) -> None:
         """
-        Listen for database notifications and reload schedules.
+        Listen for database notifications: schedule reloads and manual "Run Now" triggers.
         """
         _logger.info("Starting database listener for scheduler updates...")
 
@@ -1123,9 +1192,30 @@ class SchedulerService:
                     """Named NOTIFY callback: schedule a debounced reload on the event loop."""
                     loop.call_soon_threadsafe(loop.create_task, self._schedule_debounced_reload())
 
-                await conn.add_listener("scheduler_updates", _on_scheduler_notify)
+                def _on_manual_trigger_notify(*args):
+                    """
+                    NOTIFY callback for a manual "Run Now" trigger.
 
-                _logger.info("Listening for 'scheduler_updates' notifications")
+                    asyncpg invokes listener callbacks positionally as
+                    (connection, pid, channel, payload) — only the payload matters here.
+
+                    Unlike schedule reloads, this must not be debounced — each payload
+                    names a specific pre-created run record that needs executing exactly once.
+                    """
+                    payload = args[-1]
+                    try:
+                        data = json.loads(payload)
+                        run_id = int(data["run_id"])
+                        schedule_id = int(data["schedule_id"])
+                    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                        _logger.error("Malformed scheduler_manual_trigger payload: %r", payload)
+                        return
+                    loop.call_soon_threadsafe(loop.create_task, self._execute_manual_run(schedule_id, run_id))
+
+                await conn.add_listener("scheduler_updates", _on_scheduler_notify)
+                await conn.add_listener("scheduler_manual_trigger", _on_manual_trigger_notify)
+
+                _logger.info("Listening for 'scheduler_updates' and 'scheduler_manual_trigger' notifications")
                 retry_count = 0
 
                 # Keep connection alive

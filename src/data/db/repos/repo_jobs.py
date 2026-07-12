@@ -5,10 +5,11 @@ Repository layer for job scheduling and execution operations.
 Provides data access methods for schedules and runs tables.
 """
 
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List
 
-from sqlalchemy import and_, asc, delete, desc, func, or_, select
+from sqlalchemy import and_, asc, delete, desc, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -296,6 +297,17 @@ class JobsRepository:
 
         stmt = stmt.offset(offset).limit(limit)
         return list(self.session.execute(stmt).scalars())
+
+    def notify_manual_trigger(self, run_id: int, schedule_id: int) -> None:
+        """
+        Wake the running SchedulerService to execute a manually-triggered run now.
+
+        Postgres defers NOTIFY delivery until the enclosing transaction commits,
+        so this only reaches the scheduler once the caller's UoW commits
+        successfully — a rolled-back trigger_schedule() never fires it.
+        """
+        payload = json.dumps({"run_id": run_id, "schedule_id": schedule_id})
+        self.session.execute(text("SELECT pg_notify('scheduler_manual_trigger', :payload)"), {"payload": payload})
 
     def update_run(self, run_id: int, update_data: Dict[str, Any]) -> ScheduleRun | None:
         """

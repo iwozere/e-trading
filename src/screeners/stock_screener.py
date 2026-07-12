@@ -98,20 +98,25 @@ class StockScreener:
                 _logger.exception("Error screening ticker %s", ticker)
         return pd.DataFrame(results)
 
+    # yfinance has used different row labels for the same cash-flow line items across versions.
+    _OCF_LABELS = ("Operating Cash Flow", "Total Cash From Operating Activities")
+    _CAPEX_LABELS = ("Capital Expenditure", "Capital Expenditures")
+
     @staticmethod
     def get_fcf_growth(ticker: str) -> dict[str, Any] | None:
         try:
             t = yf.Ticker(ticker)
             cf = t.cashflow
-            if (
-                cf.empty
-                or "Total Cash From Operating Activities" not in cf.index
-                or "Capital Expenditures" not in cf.index
-            ):
+            if cf.empty:
                 return None
 
-            ocf = cf.loc["Total Cash From Operating Activities"]
-            capex = cf.loc["Capital Expenditures"]
+            ocf_label = next((label for label in StockScreener._OCF_LABELS if label in cf.index), None)
+            capex_label = next((label for label in StockScreener._CAPEX_LABELS if label in cf.index), None)
+            if ocf_label is None or capex_label is None:
+                return None
+
+            ocf = cf.loc[ocf_label]
+            capex = cf.loc[capex_label]
             fcf = ocf + capex
 
             ocf = ocf.dropna().astype('float')[::-1]

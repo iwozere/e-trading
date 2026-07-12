@@ -5,6 +5,11 @@ black>=23.0.0
 flake8>=6.0.0
 mypy>=1.5.0
 autoflake>=2.2.0
+# Pyright pinned exactly: the type-check gate (scripts/typecheck.py + CI) must run
+# a reproducible pyright across machines. The `pyright` PyPI package (pyright-python)
+# bundles this exact node pyright build, so `python -m pyright` == CI == local.
+# Do not rely on `npx pyright`, which floats to latest and drifts the error count.
+pyright==1.1.411
 # Type stubs for mypy
 types-croniter
 types-openpyxl
