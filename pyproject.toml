@@ -83,22 +83,27 @@ module = [
     "onnxconverter_common.*",
     "onnxruntime",
     "pomegranate.*",
-    "redis",
     "zstandard",
 ]
 ignore_missing_imports = true
 
-# pandas (via pandas-stubs) and anthropic ship type information that mypy follows
-# only when the package is actually installed. pyright *requires* pandas-stubs to
-# reach zero errors, so any environment shared with pyright has it installed —
-# and mypy then type-checks pandas usage (hundreds of errors) or crashes inside
-# anthropic's client. `follow_imports = skip` forces mypy to treat these as
-# untyped (Any) regardless of installation, so mypy=0 is reproducible in the same
-# environment as pyright. (ignore_missing_imports keeps the absent case quiet too.)
+# These packages ship type information (py.typed or a stub package like
+# pandas-stubs) that mypy follows *only when the package is actually installed*.
+# pyright requires pandas-stubs to reach zero errors, so any environment shared
+# with pyright has these installed — and mypy then type-checks against them,
+# producing hundreds of pandas-usage errors, crashing inside anthropic's client,
+# or flagging the intentional `import redis / except ImportError: redis = None`
+# optional-dependency fallback. `follow_imports = skip` (with
+# follow_imports_for_stubs, so it applies to .pyi stub packages too) forces mypy
+# to treat these as untyped (Any) whether or not they are installed. This makes
+# mypy=0 reproducible in the *same* environment as pyright=0 — closing the
+# split-brain the cleanup deliberately left for last.
 [[tool.mypy.overrides]]
 module = [
     "pandas.*",
     "anthropic.*",
+    "redis",
+    "redis.*",
 ]
 follow_imports = "skip"
 follow_imports_for_stubs = true

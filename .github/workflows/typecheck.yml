@@ -1,7 +1,9 @@
 name: Type Check
 
 # Static type-check gate: mypy + pyright must both stay at 0 errors.
-# Enforcement point for the pyright/mypy cleanup (see scripts/typecheck.py).
+# This reproduces the project's canonical dev environment (a Python 3.13 .venv
+# with the full runtime deps + pandas-stubs) in which both checkers are clean.
+# See scripts/typecheck.py and the [tool.mypy] config in pyproject.toml.
 
 on:
   push:
@@ -29,7 +31,7 @@ jobs:
             requirements.txt
             requirements-dev.txt
 
-      # TA-Lib ships a C library that its Python wheel links against; without it
+      # TA-Lib ships a C library its Python wheel links against; without it
       # `import talib` fails and pyright reports reportMissingImports across the
       # indicator stack. Install the C library before the pip step.
       - name: Install TA-Lib C library
@@ -37,13 +39,18 @@ jobs:
           curl -sSL https://github.com/ta-lib/ta-lib/releases/download/v0.6.4/ta-lib_0.6.4_amd64.deb -o ta-lib.deb
           sudo dpkg -i ta-lib.deb
 
-      # Torch as a CPU-only wheel keeps the install light; the full CUDA build is
-      # unnecessary for static analysis.
-      - name: Install Python dependencies
+      # pyrightconfig.json points at `.venv`, and the mypy=0 / pyright=0 results
+      # were verified in exactly such a venv. Recreate it here so both checkers
+      # analyse the same interpreter and installed packages as local dev.
+      - name: Create .venv and install dependencies
         run: |
+          python -m venv .venv
+          . .venv/bin/activate
           python -m pip install --upgrade pip
+          # CPU-only torch keeps the install light; the CUDA build is unnecessary
+          # for static analysis.
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements-dev.txt
 
       - name: Run type-check gate (mypy + pyright)
-        run: python scripts/typecheck.py
+        run: .venv/bin/python scripts/typecheck.py

@@ -3,7 +3,10 @@ pytest>=7.4.0
 pytest-asyncio>=0.21.0
 black>=23.0.0
 flake8>=6.0.0
-mypy>=1.5.0
+# mypy pinned exactly: the mypy=0 gate (with the pandas/anthropic/redis
+# follow_imports=skip config in pyproject.toml) is verified against this build.
+# A newer mypy tightens inference and reopens the count; bump deliberately.
+mypy==1.16.1
 autoflake>=2.2.0
 # Pyright pinned exactly: the type-check gate (scripts/typecheck.py + CI) must run
 # a reproducible pyright across machines. The `pyright` PyPI package (pyright-python)
@@ -17,8 +20,12 @@ types-psutil
 types-reportlab
 types-requests
 types-tqdm
-# Type stubs / optional runtime deps needed for pyright analysis (see pyright-plan.md)
+# pandas-stubs is what pyright needs to reach zero errors. mypy tolerates it
+# via the follow_imports=skip override in pyproject.toml, so both checkers now
+# run cleanly in this one environment (no split-brain).
 pandas-stubs
+# Optional runtime deps imported by active code (redis/zstandard caching, san
+# data, onnx model export). Present so pyright resolves the imports.
 redis
 zstandard
 san
