@@ -7,6 +7,8 @@ Includes BotInstance, Trade, Position, and PerformanceMetric models.
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, Numeric, String, Text, event, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -26,8 +28,8 @@ class BotInstance(Base):
     started_at: Mapped[DateTime | None] = mapped_column(DateTime)
     last_heartbeat: Mapped[DateTime | None] = mapped_column(DateTime)
     error_count: Mapped[int | None] = mapped_column(Integer)
-    current_balance: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
-    total_pnl: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
+    current_balance: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    total_pnl: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
     extra_metadata: Mapped[dict | None] = mapped_column(JsonType())
     created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), default=func.now())
     updated_at: Mapped[DateTime | None] = mapped_column(DateTime)
@@ -62,16 +64,16 @@ class Trade(Base):
     buy_order_closed: Mapped[DateTime | None] = mapped_column(DateTime)
     sell_order_created: Mapped[DateTime | None] = mapped_column(DateTime)
     sell_order_closed: Mapped[DateTime | None] = mapped_column(DateTime)
-    entry_price: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
-    exit_price: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
-    entry_value: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
-    exit_value: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
-    size: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
+    entry_price: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    exit_price: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    entry_value: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    exit_value: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    size: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
     direction: Mapped[str] = mapped_column(String(10))
-    commission: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
-    gross_pnl: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
-    net_pnl: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
-    pnl_percentage: Mapped[Numeric | None] = mapped_column(Numeric(10, 4))
+    commission: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    gross_pnl: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    net_pnl: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    pnl_percentage: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
     exit_reason: Mapped[str | None] = mapped_column(String(100))
     status: Mapped[str] = mapped_column(String(20))
     extra_metadata: Mapped[dict | None] = mapped_column(JsonType())
@@ -108,9 +110,9 @@ class Position(Base):
     direction: Mapped[str] = mapped_column(String(10))
     opened_at: Mapped[DateTime | None] = mapped_column(DateTime)
     closed_at: Mapped[DateTime | None] = mapped_column(DateTime)
-    qty_open: Mapped[Numeric] = mapped_column(Numeric(20, 8), default=0)
-    avg_price: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
-    realized_pnl: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), default=0)
+    qty_open: Mapped[Decimal] = mapped_column(Numeric(20, 8), default=0)
+    avg_price: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    realized_pnl: Mapped[Decimal | None] = mapped_column(Numeric(20, 8), default=0)
     status: Mapped[str] = mapped_column(String(12))
     extra_metadata: Mapped[dict | None] = mapped_column(JsonType())
 

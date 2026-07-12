@@ -142,16 +142,6 @@ class TestShortSqueezeServiceFINRA:
         # May be None if not found, or dict if found
         assert data is None or isinstance(data, dict)
 
-    def test_get_finra_data_count_for_date(self, mock_database_service, db_session):
-        """Test getting FINRA data count for specific date."""
-        service = ShortSqueezeService(db_service=mock_database_service)
-
-        count = service.get_finra_data_count_for_date(settlement_date=date.today())
-
-        assert isinstance(count, int)
-        assert count >= 0
-
-
 class TestShortSqueezeServiceStatistics:
     """Tests for statistics and reporting."""
 

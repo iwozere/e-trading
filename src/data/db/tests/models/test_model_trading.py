@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from sqlalchemy.exc import IntegrityError
 
 from src.data.db.models.model_trading import BotInstance, Position, Trade
@@ -13,7 +15,6 @@ def test_botinstance_requires_config(db_session):
 
     bot = BotInstance()
     bot.user_id = u.id
-    bot.type = "paper"
     bot.status = "running"
     # missing config -> event listener should raise IntegrityError on flush/commit
 
@@ -36,7 +37,6 @@ def test_trade_position_relationships(db_session):
 
     bot = BotInstance()
     bot.user_id = u.id
-    bot.type = "paper"
     bot.status = "running"
     bot.config = {"strategy": "x"}
     db_session.add(bot)
@@ -47,7 +47,7 @@ def test_trade_position_relationships(db_session):
     pos.trade_type = "paper"
     pos.symbol = "ABC"
     pos.direction = "long"
-    pos.qty_open = 1
+    pos.qty_open = Decimal("1")
     pos.status = "open"
     db_session.add(pos)
     db_session.flush()

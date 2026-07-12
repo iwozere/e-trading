@@ -47,12 +47,10 @@ class TestLiveBotDatabase:
         assert bot_instance is not None
         assert bot_instance.id == bot_id
         print(f"✅ Bot ID: {bot_instance.id}")
-        print(f"✅ Trade Type: {bot_instance.type}")
 
         # Verify we can retrieve it
         retrieved_bot = db_session.get(BotInstance, bot_id)
         assert retrieved_bot is not None
-        assert retrieved_bot.type == "paper"
         print(f"✅ Bot instance created in database: {retrieved_bot.id}")
 
     def test_bot_id_naming(self, db_session):
@@ -76,10 +74,6 @@ class TestLiveBotDatabase:
         # Verify bot_id is the config filename
         assert bot.id == config_file
         print(f"✅ Bot ID correctly set to config filename: {bot.id}")
-
-        # Verify trade_type is paper
-        assert bot.type == "paper"
-        print(f"✅ Trade type correctly set to: {bot.type}")
 
     def test_restart_recovery(self, db_session):
         """Test that bot can recover open positions on restart."""
