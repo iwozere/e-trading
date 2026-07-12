@@ -9,6 +9,7 @@ import sys
 import unittest
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 import pytz
 
@@ -211,11 +212,11 @@ class TestCronParser(unittest.TestCase):
         """Test edge cases and boundary conditions."""
         # Test with None values
         with self.assertRaises(ValueError):
-            CronParser.parse_cron(None)
+            CronParser.parse_cron(cast(str, None))
 
         # Test with non-string input
         with self.assertRaises(ValueError):
-            CronParser.parse_cron(123)
+            CronParser.parse_cron(cast(str, 123))
 
         # Test whitespace handling
         result = CronParser.parse_cron("  0 12 * * *  ")

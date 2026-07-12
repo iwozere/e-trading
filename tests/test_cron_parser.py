@@ -11,6 +11,7 @@ Tests the CronParser service functionality including:
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import pytest
 import pytz
@@ -63,7 +64,7 @@ class TestCronParser:
 
         assert isinstance(result, CronExpression)
         assert result.next_run.tzinfo is not None
-        assert result.next_run.tzinfo.zone == timezone_str
+        assert getattr(result.next_run.tzinfo, "zone", None) == timezone_str
 
     def test_parse_cron_invalid_field_count(self):
         """Test parsing cron expressions with invalid field count."""
@@ -81,7 +82,7 @@ class TestCronParser:
             CronParser.parse_cron("")
 
         with pytest.raises(ValueError, match="must be a non-empty string"):
-            CronParser.parse_cron(None)
+            CronParser.parse_cron(cast(str, None))
 
     def test_parse_cron_invalid_expression(self):
         """Test parsing invalid cron expressions."""
@@ -156,7 +157,7 @@ class TestCronParser:
         assert next_run is not None
 
         assert next_run.tzinfo is not None
-        assert next_run.tzinfo.zone == timezone_str
+        assert getattr(next_run.tzinfo, "zone", None) == timezone_str
 
     def test_calculate_next_run_invalid_expression(self):
         """Test calculating next run time with invalid expression."""
@@ -264,13 +265,13 @@ class TestCronParser:
             result = CronParser.parse_cron(expression, timezone=tz_str)
             assert result is not None
             assert result.next_run.tzinfo is not None
-            assert result.next_run.tzinfo.zone == tz_str
+            assert getattr(result.next_run.tzinfo, "zone", None) == tz_str
 
             # Calculate next run with timezone
             next_run = CronParser.calculate_next_run(expression, timezone=tz_str)
             assert next_run is not None
             assert next_run.tzinfo is not None
-            assert next_run.tzinfo.zone == tz_str
+            assert getattr(next_run.tzinfo, "zone", None) == tz_str
 
     def test_edge_cases(self):
         """Test edge cases and boundary conditions."""
@@ -335,7 +336,7 @@ class TestCronParser:
         # Should handle DST transition gracefully
         assert isinstance(next_run, datetime)
         assert next_run.tzinfo is not None
-        assert next_run.tzinfo.zone == "America/New_York"
+        assert getattr(next_run.tzinfo, "zone", None) == "America/New_York"
 
     def test_concurrent_parsing(self):
         """Test thread safety of cron parsing operations."""
