@@ -71,6 +71,8 @@ class TestTransientMetricsEnhanced:
             TransientMetrics(
                 volume_spike=1.0,
                 sentiment_24h=0.0,
+                call_put_ratio=None,
+                borrow_fee_pct=None,
                 virality_index=1.5,  # Invalid: > 1.0
             )
 
@@ -80,6 +82,8 @@ class TestTransientMetricsEnhanced:
             TransientMetrics(
                 volume_spike=1.0,
                 sentiment_24h=0.0,
+                call_put_ratio=None,
+                borrow_fee_pct=None,
                 bot_pct=-0.1,  # Invalid: < 0
             )
 
@@ -89,6 +93,8 @@ class TestTransientMetricsEnhanced:
             TransientMetrics(
                 volume_spike=1.0,
                 sentiment_24h=0.0,
+                call_put_ratio=None,
+                borrow_fee_pct=None,
                 mentions_24h=-10,  # Invalid: negative
             )
 
@@ -98,6 +104,8 @@ class TestTransientMetricsEnhanced:
             TransientMetrics(
                 volume_spike=1.0,
                 sentiment_24h=0.0,
+                call_put_ratio=None,
+                borrow_fee_pct=None,
                 mentions_growth_7d=-1.5,  # Invalid: < -1
             )
 

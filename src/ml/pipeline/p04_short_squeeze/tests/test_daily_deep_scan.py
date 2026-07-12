@@ -86,6 +86,7 @@ class TestDailyDeepScan(unittest.TestCase):
 
         # Assertions
         self.assertIsNotNone(volume_spike)
+        assert volume_spike is not None
         self.assertAlmostEqual(volume_spike, 5.0, places=1)  # 500k / 100k = 5.0
 
     def test_calculate_volume_spike_ratio_insufficient_data(self):
@@ -282,9 +283,19 @@ class TestDailyDeepScan(unittest.TestCase):
             borrow_fee_pct=7.0,  # 7% borrow fee
         )
 
+        structural_metrics = StructuralMetrics(
+            short_interest_pct=0.2,
+            days_to_cover=10.0,
+            float_shares=50_000_000,
+            avg_volume_14d=500_000,
+            market_cap=1_000_000_000,
+        )
+
         # Calculate preliminary score
         screener_score = 0.7
-        squeeze_score = self.daily_deep_scan._calculate_preliminary_squeeze_score(screener_score, transient_metrics)
+        squeeze_score = self.daily_deep_scan._calculate_preliminary_squeeze_score(
+            screener_score, transient_metrics, structural_metrics
+        )
 
         # Assertions
         self.assertGreaterEqual(squeeze_score, 0.0)

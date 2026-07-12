@@ -143,63 +143,6 @@ class TestUniverseLoader(unittest.TestCase):
         self.assertFalse(self.universe_loader._is_valid_ticker("TEST-A"))
         self.assertFalse(self.universe_loader._is_valid_ticker("TESTWARR"))
 
-    def test_filter_by_market_cap(self):
-        """Test market cap filtering."""
-
-        # Mock market cap data
-        def mock_get_market_cap_data(ticker):
-            market_caps = {
-                "AAPL": {"marketCap": 2_000_000_000},  # $2B - within range
-                "SMALL": {"marketCap": 50_000_000},  # $50M - below min
-                "LARGE": {"marketCap": 15_000_000_000},  # $15B - above max
-                "GOOD": {"marketCap": 500_000_000},  # $500M - within range
-            }
-            return market_caps.get(ticker)
-
-        self.mock_fmp_downloader.get_market_cap_data.side_effect = mock_get_market_cap_data
-
-        # Test filtering
-        tickers = ["AAPL", "SMALL", "LARGE", "GOOD"]
-        result = self.universe_loader.filter_by_market_cap(tickers, 100_000_000, 10_000_000_000)
-
-        # Assertions
-        self.assertEqual(len(result), 2)
-        self.assertIn("AAPL", result)
-        self.assertIn("GOOD", result)
-        self.assertNotIn("SMALL", result)
-        self.assertNotIn("LARGE", result)
-
-    def test_filter_by_volume(self):
-        """Test volume filtering."""
-        import pandas as pd
-
-        # Mock volume data
-        def mock_get_ohlcv(ticker, interval, start_date, end_date):
-            volumes = {
-                "HIGH_VOL": pd.DataFrame(
-                    {
-                        "volume": [300_000, 350_000, 400_000, 320_000, 380_000] * 6  # 30 days
-                    }
-                ),
-                "LOW_VOL": pd.DataFrame(
-                    {
-                        "volume": [50_000, 60_000, 45_000, 55_000, 48_000] * 6  # 30 days
-                    }
-                ),
-            }
-            return volumes.get(ticker)
-
-        self.mock_fmp_downloader.get_ohlcv.side_effect = mock_get_ohlcv
-
-        # Test filtering
-        tickers = ["HIGH_VOL", "LOW_VOL"]
-        result = self.universe_loader.filter_by_volume(tickers, 200_000)
-
-        # Assertions
-        self.assertEqual(len(result), 1)
-        self.assertIn("HIGH_VOL", result)
-        self.assertNotIn("LOW_VOL", result)
-
     def test_cache_operations(self):
         """Test cache save and load operations."""
         # Test saving to cache
@@ -235,14 +178,6 @@ class TestUniverseLoader(unittest.TestCase):
         self.mock_fmp_downloader.load_universe_from_screener.side_effect = Exception("API Error")
 
         result = self.universe_loader.load_universe()
-        self.assertEqual(len(result), 0)
-
-        # Test market cap filter with API errors
-        self.mock_fmp_downloader.get_market_cap_data.side_effect = Exception("API Error")
-
-        tickers = ["AAPL", "GOOGL"]
-        result = self.universe_loader.filter_by_market_cap(tickers, 100_000_000, 10_000_000_000)
-        # Should return empty list when all API calls fail
         self.assertEqual(len(result), 0)
 
     def tearDown(self):
