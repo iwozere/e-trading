@@ -345,7 +345,7 @@ class TestAggregatedSentiment(unittest.TestCase):
 
     def test_aggregated_sentiment_creation(self):
         """Test AggregatedSentiment object creation."""
-        breakdown = {"engagement": 0.8, "velocity": 0.6}
+        breakdown = {"stocktwits": {"engagement": 0.8, "velocity": 0.6}}
         weighted_sources = {"stocktwits": 0.6, "reddit": 0.4}
         confidence_interval = (0.4, 0.8)
         top_contributors = [("user1", 0.9), ("user2", 0.7)]

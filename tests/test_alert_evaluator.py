@@ -600,7 +600,7 @@ class TestAlertEvaluator:
 
         assert isinstance(result, AlertEvaluationResult)
         assert result.triggered is False
-        assert "Failed to parse alert configuration" in result.error
+        assert result.error is not None and "Failed to parse alert configuration" in result.error
 
     def test_parse_alert_config_valid(self, alert_evaluator):
         """Test parsing valid alert configuration."""

@@ -427,6 +427,7 @@ class TestEnhancedFileBasedCache(unittest.TestCase):
         # Verify data was stored
         retrieved_df = self.cache.get("test_provider", "TEST", "1h", format="csv")
         self.assertIsNotNone(retrieved_df)
+        assert retrieved_df is not None
         self.assertEqual(len(retrieved_df), len(self.test_df))
 
     def test_put_with_append_mode(self):
@@ -453,6 +454,7 @@ class TestEnhancedFileBasedCache(unittest.TestCase):
         # Verify combined data
         retrieved_df = self.cache.get("test_provider", "TEST", "1h", format="csv")
         self.assertIsNotNone(retrieved_df)
+        assert retrieved_df is not None
         self.assertEqual(len(retrieved_df), len(self.test_df) + len(new_data))
 
     def test_csv_format_validation(self):

@@ -8,6 +8,7 @@ import os
 import tempfile
 import unittest
 from datetime import datetime
+from typing import List, cast
 from unittest.mock import Mock
 
 import numpy as np
@@ -47,7 +48,7 @@ class TestStrategyComposer(unittest.TestCase):
             metadata={},
         )
 
-        self.strategies = [self.mock_strategy1, self.mock_strategy2]
+        self.strategies = cast(List[BaseStrategy], [self.mock_strategy1, self.mock_strategy2])
 
     def test_signal_aggregation(self):
         """Test that composer aggregates signals correctly."""
@@ -94,7 +95,7 @@ class TestStrategyComposer(unittest.TestCase):
         failing_strategy.weight = 1.0
         failing_strategy.generate_signal.side_effect = Exception("Strategy failed")
 
-        strategies = [self.mock_strategy1, failing_strategy]
+        strategies = cast(List[BaseStrategy], [self.mock_strategy1, failing_strategy])
         composer = StrategyComposer(strategies)
 
         # Should not raise exception

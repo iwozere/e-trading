@@ -9,6 +9,7 @@ import sys
 import unittest
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 from unittest.mock import Mock, patch
 
 # Add project root to path
@@ -34,7 +35,7 @@ class TestEnhancedFundamentals(unittest.TestCase):
 
         # Test invalid symbols
         self.assertEqual(self.data_manager._normalize_symbol(""), "")
-        self.assertEqual(self.data_manager._normalize_symbol(None), "")
+        self.assertEqual(self.data_manager._normalize_symbol(cast(str, None)), "")
         self.assertEqual(self.data_manager._normalize_symbol("INVALID@SYMBOL"), "")
 
     def test_normalize_fundamentals_data(self):
@@ -66,7 +67,7 @@ class TestEnhancedFundamentals(unittest.TestCase):
 
         # Test empty data
         self.assertFalse(self.data_manager._validate_combined_fundamentals({}))
-        self.assertFalse(self.data_manager._validate_combined_fundamentals(None))
+        self.assertFalse(self.data_manager._validate_combined_fundamentals(cast(dict, None)))
 
     @patch("src.data.data_manager.get_fundamentals_cache")
     @patch("src.data.data_manager.get_fundamentals_combiner")

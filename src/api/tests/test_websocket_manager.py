@@ -179,6 +179,7 @@ class TestConnectionManager:
     def test_get_connection_by_id(self):
         """Test getting connection by ID."""
         conn_id = asyncio.run(self.manager.connect(self.mock_websocket1, "user_123"))
+        assert conn_id is not None
 
         connection = self.manager.get_connection(conn_id)
 
@@ -247,6 +248,8 @@ class TestConnectionManager:
         """Test broadcasting message to channel subscribers."""
         conn_id1 = await self.manager.connect(self.mock_websocket1, "user_123")
         conn_id2 = await self.manager.connect(self.mock_websocket2, "user_456")
+        assert conn_id1 is not None
+        assert conn_id2 is not None
 
         # Subscribe to channel
         connection1 = self.manager.get_connection(conn_id1)

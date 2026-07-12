@@ -38,7 +38,7 @@ class MockSchedule:
         enabled: bool = True,
         user_id: int = 1,
         target: str = "test",
-        task_params: Dict[str, Any] = None,
+        task_params: Dict[str, Any] | None = None,
     ):
         self.id = schedule_id
         self.name = name
@@ -68,7 +68,7 @@ class MockScheduleRun:
         self.finished_at = None
         self.result = None
         self.error = None
-        self.job_snapshot = {}
+        self.job_snapshot: dict = {}
 
 
 @pytest.fixture
@@ -118,6 +118,7 @@ def scheduler_service(mock_jobs_service, mock_alert_evaluator):
     return SchedulerService(
         jobs_service=mock_jobs_service,
         alert_evaluator=mock_alert_evaluator,
+        notification_db_service=Mock(),
         database_url="sqlite:///:memory:",
         max_workers=2,
     )

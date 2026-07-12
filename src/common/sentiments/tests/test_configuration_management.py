@@ -13,6 +13,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from typing import Any, Dict, cast
 from unittest.mock import patch
 
 # Add project root to path for imports
@@ -178,7 +179,7 @@ class TestConfigurationManagement(unittest.TestCase):
     def test_validate_config_invalid_type(self):
         """Test configuration validation with invalid type."""
         with self.assertRaises(ValueError) as context:
-            validate_config("not a dict")
+            validate_config(cast(Dict[str, Any], "not a dict"))
 
         self.assertIn("must be a dictionary", str(context.exception))
 

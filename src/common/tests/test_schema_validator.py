@@ -248,6 +248,7 @@ class TestAlertSchemaValidator(unittest.TestCase):
         # Load alert schema
         alert_schema = self.validator.load_schema("alert")
         self.assertIsNotNone(alert_schema)
+        assert alert_schema is not None
         self.assertIsInstance(alert_schema, dict)
         self.assertIn("properties", alert_schema)
 

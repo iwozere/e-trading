@@ -296,6 +296,7 @@ class TestFinnhubShortSqueezeExtensions(unittest.TestCase):
 
         # Assertions
         self.assertIsNotNone(result)
+        assert result is not None
         self.assertAlmostEqual(result, 2.25)
 
     def test_calculate_call_put_ratio_zero_puts(self):

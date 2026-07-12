@@ -451,6 +451,7 @@ class TestErrorMonitoring(unittest.TestCase):
         # Check if alert was triggered
         self.assertTrue(self.alert_called)
         self.assertIsNotNone(self.alert_data)
+        assert self.alert_data is not None
         self.assertIn("message", self.alert_data)
         self.assertIn("error_event", self.alert_data)
 

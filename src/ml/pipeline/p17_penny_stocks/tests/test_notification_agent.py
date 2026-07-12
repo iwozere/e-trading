@@ -18,7 +18,7 @@ def _cand(ticker, tier, score, **kw) -> Candidate:
     return Candidate(ticker=ticker, tier=tier, final_score=score, price=4.0, **kw)
 
 
-def _agent(user_id="123", **cfg_kw) -> NotificationAgent:
+def _agent(user_id: str | None = "123", **cfg_kw) -> NotificationAgent:
     cfg_kw.setdefault("enabled", True)
     cfg_kw.setdefault("email_enabled", True)
     return NotificationAgent(P17AlertConfig(**cfg_kw), DATE, user_id)
@@ -46,7 +46,7 @@ def test_skips_when_no_tier_ab():
 # ── Queue path (services injected) ──────────────────────────────────────────
 
 
-def _inject_services(monkeypatch, email="me@example.com"):
+def _inject_services(monkeypatch, email: str | None = "me@example.com"):
     created = {}
     users_mod = types.ModuleType("src.data.db.services.users_service")
     notif_mod = types.ModuleType("src.data.db.services.notification_service")
