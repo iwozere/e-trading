@@ -172,6 +172,7 @@ class TestPhase4Integration(unittest.TestCase):
             df = self.mock_source.fetch_historical_data(symbol, interval, start_date, end_date)
 
         self.assertIsNotNone(df)
+        assert df is not None
         self.assertGreater(len(df), 0)
 
         # Step 2: Validate data
@@ -193,6 +194,7 @@ class TestPhase4Integration(unittest.TestCase):
         cached_df = self.cache.get(symbol, interval, start_date=start_date, end_date=end_date)
 
         self.assertIsNotNone(cached_df)
+        assert cached_df is not None
         pd.testing.assert_frame_equal(df, cached_df, check_freq=False)
 
         # Step 6: Check cache statistics
@@ -233,6 +235,7 @@ class TestPhase4Integration(unittest.TestCase):
         )
 
         self.assertIsNotNone(aggregated_df)
+        assert aggregated_df is not None
         self.assertGreater(len(aggregated_df), 0)
 
         # Test data comparison

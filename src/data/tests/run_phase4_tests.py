@@ -25,7 +25,7 @@ def run_unit_tests():
     # Discover and run unit tests
     loader = unittest.TestLoader()
     start_dir = Path(__file__).parent / "unit"
-    suite = loader.discover(start_dir, pattern="test_*.py")
+    suite = loader.discover(str(start_dir), pattern="test_*.py")
 
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
@@ -46,7 +46,7 @@ def run_integration_tests():
     # Discover and run integration tests
     loader = unittest.TestLoader()
     start_dir = Path(__file__).parent / "integration"
-    suite = loader.discover(start_dir, pattern="test_*.py")
+    suite = loader.discover(str(start_dir), pattern="test_*.py")
 
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
@@ -67,7 +67,7 @@ def run_performance_tests():
     # Discover and run performance tests
     loader = unittest.TestLoader()
     start_dir = Path(__file__).parent / "performance"
-    suite = loader.discover(start_dir, pattern="test_*.py")
+    suite = loader.discover(str(start_dir), pattern="test_*.py")
 
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
@@ -186,11 +186,11 @@ def generate_test_report(unit_result, integration_result, performance_result):
         print(f"  ✗ File-based cache system: Import error - {e}")
 
     # Check if Redis dependency is removed
-    try:
-        from src.data import RedisCache  # noqa: F401
+    import importlib
 
+    if hasattr(importlib.import_module("src.data"), "RedisCache"):
         print("  ✗ Redis dependency: Still present (should be removed)")
-    except ImportError:
+    else:
         print("  ✓ Redis dependency: Successfully removed")
 
     # Test enhanced CSV cache functionality
