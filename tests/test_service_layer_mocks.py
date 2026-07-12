@@ -12,6 +12,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 import pytest
 
+from src.indicators.types import IndicatorName, TickerSymbol
 from tests.fixtures.service_fixtures import (
     ServiceTestContext,
     create_parsed_command,
@@ -67,7 +68,9 @@ class TestServiceLayerMocks:
         # Create request
         from src.indicators.models import TickerIndicatorsRequest
 
-        request = TickerIndicatorsRequest(ticker="AAPL", indicators=["RSI", "MACD", "PE"])
+        request = TickerIndicatorsRequest(
+            ticker=TickerSymbol("AAPL"), indicators=[IndicatorName(i) for i in ["RSI", "MACD", "PE"]]
+        )
 
         # Test computation
         result = await indicator_service_mock.compute_for_ticker(request)
@@ -88,7 +91,7 @@ class TestServiceLayerMocks:
 
         from src.indicators.models import TickerIndicatorsRequest
 
-        request = TickerIndicatorsRequest(ticker="INVALID", indicators=["RSI"])
+        request = TickerIndicatorsRequest(ticker=TickerSymbol("INVALID"), indicators=[IndicatorName("RSI")])
 
         # Test error is raised
         with pytest.raises(ValueError, match="Invalid ticker"):

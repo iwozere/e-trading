@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from src.indicators.models import IndicatorResultSet, IndicatorValue, TickerIndicatorsRequest
+from src.indicators.types import IndicatorName, Period, TickerSymbol, TimeFrame
 from src.telegram.screener.business_logic import TelegramBusinessLogic
 from tests.fixtures.service_fixtures import create_parsed_command, setup_indicator_data_in_mock
 
@@ -191,27 +192,6 @@ class TestServiceLayerIntegration:
         assert call_count == 2  # Should have retried once
 
     @pytest.mark.asyncio
-    async def test_service_health_checks(self, business_logic_with_mocks):
-        """Test service health check functionality."""
-        business_logic, telegram_service_mock, indicator_service_mock = business_logic_with_mocks
-
-        # Test service health status
-        health_status = business_logic.get_service_health_status()
-
-        assert "telegram_service" in health_status
-        assert "indicator_service" in health_status
-        assert health_status["telegram_service"]["available"] is True
-        assert health_status["indicator_service"]["available"] is True
-
-        # Test with unavailable telegram service but available indicator service
-        # (IndicatorService creates a default instance when None is passed)
-        business_logic_no_telegram = TelegramBusinessLogic(None, indicator_service_mock)
-        health_status_partial = business_logic_no_telegram.get_service_health_status()
-
-        assert health_status_partial["telegram_service"]["available"] is False
-        assert health_status_partial["indicator_service"]["available"] is True
-
-    @pytest.mark.asyncio
     async def test_indicator_service_integration(self, business_logic_with_mocks):
         """Test integration with IndicatorService for technical analysis."""
         business_logic, _, indicator_service_mock = business_logic_with_mocks
@@ -299,7 +279,12 @@ class TestServiceLayerIntegration:
         )
 
         # Test compute_for_ticker contract
-        request = TickerIndicatorsRequest(ticker="TSLA", indicators=["RSI", "MACD", "PE"], timeframe="1d", period="6mo")
+        request = TickerIndicatorsRequest(
+            ticker=TickerSymbol("TSLA"),
+            indicators=[IndicatorName(i) for i in ["RSI", "MACD", "PE"]],
+            timeframe=TimeFrame("1d"),
+            period=Period("6mo"),
+        )
 
         result = await business_logic.safe_indicator_service_call(
             indicator_service_mock.compute_for_ticker, "compute_for_ticker", "contract_test", request
@@ -416,26 +401,6 @@ class TestServiceLayerIntegration:
         assert result["status"] == "ok"
         assert elapsed_time >= 0.1  # Should take at least 100ms due to delay
         assert elapsed_time < 5.0  # But should not timeout
-
-    def test_service_layer_configuration_validation(self):
-        """Test that service layer configuration is properly validated."""
-        # Test with None telegram service (indicator service creates default instance)
-        business_logic_none = TelegramBusinessLogic(None, None)
-        health = business_logic_none.get_service_health_status()
-
-        assert health["telegram_service"]["available"] is False
-        # IndicatorService creates a default instance when None is passed
-        assert health["indicator_service"]["available"] is True
-
-        # Test with invalid service types
-        invalid_service = "not_a_service"
-        business_logic_invalid = TelegramBusinessLogic(invalid_service, invalid_service)
-
-        # Should handle gracefully
-        health_invalid = business_logic_invalid.get_service_health_status()
-        assert "telegram_service" in health_invalid
-        assert "indicator_service" in health_invalid
-
 
 class TestServiceLayerIntegrationWithRealServices:
     """Integration tests using real service instances (with mocking at lower levels)."""

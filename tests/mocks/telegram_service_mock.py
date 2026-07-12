@@ -7,7 +7,7 @@ with configurable responses and behavior tracking.
 
 import json
 import time
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Union
 
 from src.notification.logger import setup_logger
 
@@ -34,9 +34,9 @@ class TelegramServiceMock:
         self.verification_codes = {}
 
         # Configuration for mock behavior
-        self.should_raise_errors = {}
-        self.custom_responses = {}
-        self.rate_limits = {}
+        self.should_raise_errors: Dict[str, Union[BaseException, Callable[[], BaseException]]] = {}
+        self.custom_responses: Dict[str, Any] = {}
+        self.rate_limits: Dict[str, Any] = {}
 
         # Default user data
         self.default_user = {
@@ -195,7 +195,7 @@ class TelegramServiceMock:
             self.verification_codes[telegram_user_id] = []
         self.verification_codes[telegram_user_id].append(sent_time)
 
-    def count_codes_last_hour(self, telegram_user_id: str, now_unix: int = None) -> int:
+    def count_codes_last_hour(self, telegram_user_id: str, now_unix: int | None = None) -> int:
         """Count verification codes sent in the last hour."""
         self._log_call("count_codes_last_hour", telegram_user_id, now_unix)
         self._check_error_config("count_codes_last_hour")
@@ -304,7 +304,7 @@ class TelegramServiceMock:
         return self._get_custom_response("delete_alert", False)
 
     def list_active_alerts(
-        self, telegram_user_id: str = None, *, limit: int = 100, offset: int = 0, older_first: bool = False
+        self, telegram_user_id: str | None = None, *, limit: int = 100, offset: int = 0, older_first: bool = False
     ):
         """List active alerts."""
         self._log_call("list_active_alerts", telegram_user_id, limit=limit, offset=offset, older_first=older_first)

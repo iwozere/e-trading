@@ -15,6 +15,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from src.indicators.types import IndicatorName, TickerSymbol
 from src.telegram.command_parser import ParsedCommand
 from src.telegram.screener.business_logic import TelegramBusinessLogic
 from tests.fixtures.service_fixtures import create_parsed_command, setup_indicator_data_in_mock, simulate_database_error
@@ -482,7 +483,7 @@ class TestTelegramBusinessLogic:
 
         from src.indicators.models import TickerIndicatorsRequest
 
-        request = TickerIndicatorsRequest(ticker="AAPL", indicators=["RSI"])
+        request = TickerIndicatorsRequest(ticker=TickerSymbol("AAPL"), indicators=[IndicatorName("RSI")])
 
         result = await business_logic.safe_indicator_service_call(
             indicator_service_mock.compute_for_ticker, "compute_for_ticker", "test_context", request
@@ -507,7 +508,9 @@ class TestTelegramBusinessLogic:
             # Return success result
             from src.indicators.models import IndicatorResultSet, IndicatorValue
 
-            return IndicatorResultSet(ticker="AAPL", technical={"RSI": IndicatorValue("RSI", 65.5)}, fundamental={})
+            return IndicatorResultSet(
+                ticker="AAPL", technical={"RSI": IndicatorValue(name="RSI", value=65.5)}, fundamental={}
+            )
 
         # Replace the mock method with our side effect
         original_method = indicator_service_mock.compute_for_ticker
@@ -515,7 +518,7 @@ class TestTelegramBusinessLogic:
 
         from src.indicators.models import TickerIndicatorsRequest
 
-        request = TickerIndicatorsRequest(ticker="AAPL", indicators=["RSI"])
+        request = TickerIndicatorsRequest(ticker=TickerSymbol("AAPL"), indicators=[IndicatorName("RSI")])
 
         result = await business_logic.safe_indicator_service_call(
             indicator_service_mock.compute_for_ticker, "compute_for_ticker", "test_context", request
@@ -540,7 +543,7 @@ class TestTelegramBusinessLogic:
 
         from src.indicators.models import TickerIndicatorsRequest
 
-        request = TickerIndicatorsRequest(ticker="INVALID", indicators=["RSI"])
+        request = TickerIndicatorsRequest(ticker=TickerSymbol("INVALID"), indicators=[IndicatorName("RSI")])
 
         result = await business_logic.safe_indicator_service_call(
             indicator_service_mock.compute_for_ticker, "compute_for_ticker", "test_context", request
