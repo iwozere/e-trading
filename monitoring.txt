@@ -1,11 +1,3 @@
-[Monitoring/scheduler.service] [systemd/scheduler.service] 2026-07-12 21:21:05,494 - [PID 536854] - ERROR - Error screening ticker ADBE
+[Monitoring/scheduler.service] [systemd/scheduler.service] 2026-07-13 22:05:00,075 - [PID 759048] - ERROR - Job timed out after 300s (schedule: 'p20_in
 
-[systemd/scheduler.service] 2026-07-12 21:21:05,494 - [PID 536854] - ERROR - Error screening ticker ADBE
----
-[12.07.2026 19:00] alkotrader: [Monitoring/scheduler.service] [systemd/scheduler.service] 2026-07-12 19:00:00,950 - [PID 500944] - WARNING - HTTP API failed, attempting direct databa
-
-[systemd/scheduler.service] 2026-07-12 19:00:00,950 - [PID 500944] - WARNING - HTTP API failed, attempting direct database fallback: HTTP 405: {"detail":"Method Not Allowed"}
----
-[12.07.2026 20:57] alkotrader: [Monitoring/scheduler.service] [systemd/scheduler.service] 2026-07-12 20:57:34,729 - [PID 530908] - WARNING - Alert schema directory does not exist: sr
-
-[systemd/scheduler.service] 2026-07-12 20:57:34,729 - [PID 530908] - WARNING - Alert schema directory does not exist: src/common/alerts/schemas
+[systemd/scheduler.service] 2026-07-13 22:05:00,075 - [PID 759048] - ERROR - Job timed out after 300s (schedule: 'p20_ingest_eod', type: script)

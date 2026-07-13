@@ -36,6 +36,8 @@ _logger = setup_logger(__name__)
 _JOB_NAME = "ingest_eod"
 _OHLCV_LOOKBACK_DAYS = 730  # 2 years
 _EOD_COMPUTE_WORKERS = 4  # parallel TALib compute threads (matches Pi 4 core count)
+_UPSERT_CHUNK_SIZE = 200  # persist progress every N tickers so a scheduler
+# timeout mid-run doesn't discard everything computed so far
 
 
 def _compute_signals_for_ticker(
@@ -166,8 +168,10 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
     Ingest EOD data for all active universe tickers into k20_signals.
 
     Phase 1 — batch OHLCV download  (single yf.download call, fast)
-    Phase 2 — parallel signal compute (ThreadPoolExecutor, _EOD_COMPUTE_WORKERS)
-    Phase 3 — bulk DB upsert          (single call, fast)
+    Phase 2 — parallel signal compute (ThreadPoolExecutor, _EOD_COMPUTE_WORKERS),
+              upserting k20_signals in chunks as tickers complete (rather than
+              once at the end) so a run killed by the scheduler timeout still
+              leaves k20_signals reflecting everything computed up to that point.
 
     Args:
         as_of_date: Date to ingest. Defaults to yesterday.
@@ -186,9 +190,19 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
     end_dt = datetime.combine(target_date, datetime.min.time())
     start_dt = end_dt - timedelta(days=_OHLCV_LOOKBACK_DAYS)
 
-    all_signal_rows: List[Dict[str, Any]] = []
     tickers_ok = 0
     tickers_failed = 0
+    upserted = 0
+    buffer: List[Dict[str, Any]] = []
+
+    def _flush() -> None:
+        nonlocal upserted
+        if not buffer:
+            return
+        count = upsert_signals(buffer)
+        upserted += count
+        _logger.info("Upserted %d signal rows (%d total so far)", count, upserted)
+        buffer.clear()
 
     try:
         # ── Phase 1: batch OHLCV download ────────────────────────────────
@@ -214,15 +228,17 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
             _EOD_COMPUTE_WORKERS,
         )
         with ThreadPoolExecutor(max_workers=_EOD_COMPUTE_WORKERS) as pool:
-            for _ticker, rows, ok in pool.map(worker, tickers):
+            for i, (_ticker, rows, ok) in enumerate(pool.map(worker, tickers)):
                 if ok:
-                    all_signal_rows.extend(rows)
+                    buffer.extend(rows)
                     tickers_ok += 1
                 else:
                     tickers_failed += 1
+                if (i + 1) % _UPSERT_CHUNK_SIZE == 0:
+                    _flush()
 
-        # ── Phase 3: bulk DB upsert ───────────────────────────────────────
-        upserted = upsert_signals(all_signal_rows)
+        # ── Phase 3: final flush ──────────────────────────────────────────
+        _flush()
         _logger.info(
             "EOD ingest done: %d tickers ok, %d failed, %d signals upserted",
             tickers_ok,

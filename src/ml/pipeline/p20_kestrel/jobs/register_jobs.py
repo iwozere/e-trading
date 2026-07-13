@@ -46,7 +46,19 @@ _JOB_SPECS: List[Dict[str, Any]] = [
     {"name": "p20_sentiment_aggregate", "cron": "0 7 * * 1-5", "script": "run_sentiment_aggregate.py", "enabled": True},
     {"name": "p20_digest_send", "cron": "30 6 * * 1-5", "script": "run_digest_send.py", "enabled": True},
     # EOD ingest
-    {"name": "p20_ingest_eod", "cron": "0 20 * * 1-5", "script": "run_ingest_eod.py", "enabled": True},
+    {
+        "name": "p20_ingest_eod",
+        "cron": "0 20 * * 1-5",
+        "script": "run_ingest_eod.py",
+        "enabled": True,
+        # ~3000 universe tickers x 2yr OHLCV + TALib compute on a Raspberry Pi.
+        # No override here meant the outer scheduler timeout (job_timeout_seconds,
+        # 300s default) capped every run, well before the inner subprocess timeout
+        # ever got a chance to apply. Chunked upserts in eod_ingest.py now mean a
+        # timeout no longer discards completed work, but the timeout itself still
+        # needs enough headroom for the run to actually finish.
+        "task_params": {"timeout_seconds": 3600},
+    },
     {"name": "p20_ingest_filings", "cron": "30 20 * * 1-5", "script": "run_ingest_filings.py", "enabled": True},
     {"name": "p20_calendar_sync", "cron": "45 20 * * 1-5", "script": "run_catalyst_sync.py", "enabled": True},
     # Screening
