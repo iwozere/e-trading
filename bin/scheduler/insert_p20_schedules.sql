@@ -519,7 +519,10 @@ VALUES (
 -- (2) Alias builder: rebuilds company alias table (k20_aliases) for GDELT matching
 --     using legal-name normalization + async fundamentals.
 -- Result fields: success, universe.tickers_upserted, aliases.aliases_written
--- Timeout: 60 min (3000+ tickers × async fundamentals fetch).
+-- Timeout: 180 min (3000+ tickers × single-threaded fundamentals fetch;
+-- 60 min proved too tight in practice — see universe_loader.py chunked upserts,
+-- which now persist progress incrementally so a timeout no longer discards
+-- completed work, but the timeout itself still needs enough headroom to finish).
 INSERT INTO job_schedules (user_id, name, job_type, target, task_params, cron, enabled, created_at, updated_at)
 VALUES (
     2,
@@ -529,7 +532,7 @@ VALUES (
     '{
         "script_path": "src/ml/pipeline/p20_kestrel/jobs/run_weekly_maintenance.py",
         "script_args": [],
-        "timeout_seconds": 3600
+        "timeout_seconds": 10800
     }'::jsonb,
     '0 5 * * 1',
     true,

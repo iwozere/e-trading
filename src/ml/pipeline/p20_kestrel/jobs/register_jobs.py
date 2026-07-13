@@ -71,7 +71,11 @@ _JOB_SPECS: List[Dict[str, Any]] = [
         "cron": "0 5 * * 1",
         "script": "run_weekly_maintenance.py",
         "enabled": True,
-        "task_params": {"timeout_seconds": 3600},
+        # 3000+ tickers, single-threaded fundamentals fetch: 60min was too tight
+        # and got hit in practice. Chunked upserts in universe_loader.py now mean
+        # a timeout no longer discards completed work, but the timeout itself
+        # still needs enough headroom for the fetch to actually finish.
+        "task_params": {"timeout_seconds": 10800},
     },
     {"name": "p20_trends_watchlist", "cron": "0 3 * * 1-5", "script": "run_trends_watchlist.py", "enabled": True},
     {"name": "p20_weekly_report", "cron": "0 17 * * 0", "script": "run_weekly_report.py", "enabled": True},

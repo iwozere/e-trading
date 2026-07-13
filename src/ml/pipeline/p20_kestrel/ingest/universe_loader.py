@@ -12,7 +12,7 @@ import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterator, List, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -120,9 +120,11 @@ def _fetch_fundamentals_for_ticker(ticker: str) -> Any | None:
 _RETRY_COOLDOWN_SECONDS = 300  # 5-minute global wait before the retry pass
 
 
-def _fetch_all_fundamentals(tickers: List[str]) -> List[Any | None]:
+def _fetch_all_fundamentals(tickers: List[str]) -> Iterator[Tuple[str, Any | None]]:
     """
-    Fetch fundamentals for all tickers in two passes.
+    Fetch fundamentals for all tickers in two passes, yielding results as they
+    complete so the caller can persist progress incrementally (a run killed by
+    the scheduler timeout mid-fetch still keeps everything upserted so far).
 
     Pass 1 (parallel):
         Run with _FUNDAMENTALS_WORKERS threads.  On a 429, data_manager
@@ -130,34 +132,40 @@ def _fetch_all_fundamentals(tickers: List[str]) -> List[Any | None]:
 
     Pass 2 (single-threaded, after a global cooldown):
         Re-attempt every ticker that returned None.  By the time we reach
-        this pass the IP block from Yahoo has typically expired.
+        this pass the IP block from Yahoo has typically expired.  A ticker
+        that failed in pass 1 is yielded twice — once as None, once with the
+        pass-2 result if recovered; the caller's upsert is last-write-wins.
 
-    Returns results in the same order as `tickers`.
+    Yields:
+        (ticker, fundamentals) pairs, fundamentals may be None on failure.
     """
     import time
 
     total = len(tickers)
 
     # ── Pass 1 ────────────────────────────────────────────────────────────
-    results: List[Any | None] = [None] * total
+    failed: List[str] = []
+    ok_count = 0
     with ThreadPoolExecutor(max_workers=_FUNDAMENTALS_WORKERS) as pool:
-        for i, fund in enumerate(pool.map(_fetch_fundamentals_for_ticker, tickers)):
-            results[i] = fund
+        for i, (ticker, fund) in enumerate(zip(tickers, pool.map(_fetch_fundamentals_for_ticker, tickers))):
+            if fund is None:
+                failed.append(ticker)
+            else:
+                ok_count += 1
+            yield ticker, fund
             done = i + 1
             if done % _PROGRESS_LOG_EVERY == 0 or done == total:
                 _logger.info("Pass 1 progress: %d/%d tickers", done, total)
 
-    failed_indices = [i for i, r in enumerate(results) if r is None]
-    ok_count = total - len(failed_indices)
     _logger.info(
         "Pass 1 complete: %d/%d succeeded, %d to retry",
         ok_count,
         total,
-        len(failed_indices),
+        len(failed),
     )
 
-    if not failed_indices:
-        return results
+    if not failed:
+        return
 
     # ── Cooldown ──────────────────────────────────────────────────────────
     _logger.info(
@@ -167,29 +175,35 @@ def _fetch_all_fundamentals(tickers: List[str]) -> List[Any | None]:
     time.sleep(_RETRY_COOLDOWN_SECONDS)
 
     # ── Pass 2 (single-threaded) ──────────────────────────────────────────
-    _logger.info("Pass 2: retrying %d failed tickers (single-threaded)", len(failed_indices))
+    _logger.info("Pass 2: retrying %d failed tickers (single-threaded)", len(failed))
     recovered = 0
-    for idx in failed_indices:
-        ticker = tickers[idx]
+    for ticker in failed:
         result = _fetch_fundamentals_for_ticker(ticker)
-        results[idx] = result
         if result is not None:
             recovered += 1
             _logger.debug("Pass 2 recovered: %s", ticker)
         else:
             _logger.warning("Pass 2 still failed: %s", ticker)
+        yield ticker, result
 
     _logger.info(
         "Pass 2 complete: recovered %d/%d previously-failed tickers",
         recovered,
-        len(failed_indices),
+        len(failed),
     )
-    return results
+
+
+_UPSERT_CHUNK_SIZE = 200  # persist progress every N tickers so a scheduler
+# timeout mid-fetch doesn't discard everything already fetched
 
 
 def run() -> Dict[str, Any]:
     """
     Refresh k20_universe from the Nasdaq CSV and fundamentals.
+
+    Universe rows are upserted in chunks as fundamentals come in (rather than
+    once at the end) so a run killed by the scheduler timeout still leaves
+    k20_universe reflecting everything fetched up to that point.
 
     Returns:
         Summary dict with tickers_upserted and tickers_delisted counts.
@@ -212,17 +226,28 @@ def run() -> Dict[str, Any]:
             _logger.info("Mcap filter (<$%.0f): removed %d tickers", UNIVERSE_MIN_MCAP_USD, below_floor.sum())
             df = df[~below_floor].reset_index(drop=True)  # type: ignore[union-attr]
 
+    rows_by_ticker: Dict[str, Any] = {str(row["ticker"]): row for _, row in df.iterrows()}
     tickers_list = df["ticker"].tolist()
     _logger.info(
         "Fetching fundamentals for %d tickers (%d worker threads)",
         len(tickers_list),
         _FUNDAMENTALS_WORKERS,
     )
-    all_funds = _fetch_all_fundamentals(tickers_list)
 
-    rows: List[Dict[str, Any]] = []
-    for (_, row), fund in zip(df.iterrows(), all_funds):
-        ticker = str(row["ticker"])
+    upserted = 0
+    buffer: List[Dict[str, Any]] = []
+
+    def _flush() -> None:
+        nonlocal upserted
+        if not buffer:
+            return
+        count = upsert_universe_rows(buffer)
+        upserted += count
+        _logger.info("Upserted %d universe rows (%d total so far)", count, upserted)
+        buffer.clear()
+
+    for ticker, fund in _fetch_all_fundamentals(tickers_list):
+        row = rows_by_ticker[ticker]
         mcap = _parse_mcap(row.get("mcap_raw", ""))
 
         universe_row: Dict[str, Any] = {
@@ -245,10 +270,11 @@ def run() -> Dict[str, Any]:
                 }
             )
 
-        rows.append(universe_row)
+        buffer.append(universe_row)
+        if len(buffer) >= _UPSERT_CHUNK_SIZE:
+            _flush()
 
-    upserted = upsert_universe_rows(rows)
-    _logger.info("Upserted %d universe rows", upserted)
+    _flush()
 
     existing = set(get_active_tickers())
     to_delist = list(existing - csv_tickers)
