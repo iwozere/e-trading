@@ -49,6 +49,10 @@ data/
 !config/data/
 !src/data/
 !src/data/db/
+# Source packages that happen to be named "data/" — these are code, not data,
+# and must be tracked (otherwise CI checks out a tree missing these modules).
+!src/vectorbt/data/
+!src/ml/pipeline/p04_short_squeeze/data/
 results/
 temp/
 

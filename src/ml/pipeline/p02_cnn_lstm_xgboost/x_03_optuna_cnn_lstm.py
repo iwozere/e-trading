@@ -21,9 +21,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-import matplotlib.pyplot as plt
 import numpy as np
 import optuna
+import optuna.visualization
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -487,27 +487,24 @@ class CNNLSTMOptimizer:
     def _create_optimization_plots(self, study: optuna.Study, timestamp: str):
         """Create optimization visualization plots."""
         try:
+            # Interactive, scalable plotly figures written as standalone HTML.
             # Optimization history
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+            history_fig = optuna.visualization.plot_optimization_history(study)
+            history_fig.update_layout(title="Optimization History")
+            history_path = self.studies_dir / f"cnn_lstm_optimization_{timestamp}.html"
+            history_fig.write_html(str(history_path))
 
-            # Plot optimization history
-            optuna.visualization.matplotlib.plot_optimization_history(study, ax=ax1)
-            ax1.set_title("Optimization History")
-
-            # Plot parameter importance
-            optuna.visualization.matplotlib.plot_param_importances(study, ax=ax2)
-            ax2.set_title("Parameter Importance")
-
-            plt.tight_layout()
-            plot_path = self.studies_dir / f"cnn_lstm_optimization_{timestamp}.png"
-            plt.savefig(plot_path, dpi=300, bbox_inches="tight")
-            plt.close()
+            # Parameter importance
+            importance_fig = optuna.visualization.plot_param_importances(study)
+            importance_fig.update_layout(title="Parameter Importance")
+            importance_path = self.studies_dir / f"cnn_lstm_param_importance_{timestamp}.html"
+            importance_fig.write_html(str(importance_path))
 
             # Parameter relationships
-            fig = optuna.visualization.matplotlib.plot_parallel_coordinate(study)
-            fig.update_layout(title="Parameter Relationships")
+            parallel_fig = optuna.visualization.plot_parallel_coordinate(study)
+            parallel_fig.update_layout(title="Parameter Relationships")
             parallel_path = self.studies_dir / f"cnn_lstm_parallel_{timestamp}.html"
-            fig.write_html(str(parallel_path))
+            parallel_fig.write_html(str(parallel_path))
 
             _logger.info("Optimization plots saved to %s", self.studies_dir)
 

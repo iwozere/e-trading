@@ -25,9 +25,14 @@ types-tqdm
 # run cleanly in this one environment (no split-brain).
 pandas-stubs
 # Optional runtime deps imported by active code (redis/zstandard caching, san
-# data, onnx model export). Present so pyright resolves the imports.
+# data, onnx model export, slowapi rate limiting). Present so the checkers
+# resolve the imports in the type-check environment, which installs only this
+# file (not requirements-webui.txt / requirements-full.txt). bcrypt is a real
+# runtime dep and lives in requirements.txt (pulled in via -r above).
 redis
 zstandard
 san
 onnxruntime
 onnxconverter-common
+onnxmltools
+slowapi

@@ -738,8 +738,8 @@ class ModelValidator:
                 plt.plot(fpr, tpr, label=f"{target} (AUC = {roc_auc:.3f})")
 
         plt.plot([0, 1], [0, 1], "k--", label="Random")
-        plt.xlim([0.0, 1.0])
-        plt.ylim([0.0, 1.05])
+        plt.xlim(0.0, 1.0)
+        plt.ylim(0.0, 1.05)
         plt.xlabel("False Positive Rate")
         plt.ylabel("True Positive Rate")
         plt.title("ROC Curves")
