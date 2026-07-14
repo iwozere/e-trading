@@ -653,23 +653,21 @@ class DeliveryStatusRepository:
             query = query.filter(MessageDeliveryStatus.channel == channel)
 
         # Group by channel and calculate rates
-        from sqlalchemy import func
+        from sqlalchemy import case, func
 
         channel_stats = (
             self.session.query(
                 MessageDeliveryStatus.channel,
                 func.count(MessageDeliveryStatus.id).label("total_attempts"),
                 func.sum(
-                    func.case([(MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value, 1)], else_=0)
+                    case((MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value, 1), else_=0)
                 ).label("successful_attempts"),
                 func.avg(
-                    func.case(
-                        [
-                            (
-                                MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value,
-                                MessageDeliveryStatus.response_time_ms,
-                            )
-                        ],
+                    case(
+                        (
+                            MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value,
+                            MessageDeliveryStatus.response_time_ms,
+                        ),
                         else_=None,
                     )
                 ).label("avg_response_time"),
@@ -756,7 +754,7 @@ class DeliveryStatusRepository:
         Returns:
             List of time series data points
         """
-        from sqlalchemy import func
+        from sqlalchemy import case, func
 
         # Determine date truncation based on granularity
         if granularity == "hourly":
@@ -773,16 +771,14 @@ class DeliveryStatusRepository:
                 date_trunc.label("time_period"),
                 func.count(MessageDeliveryStatus.id).label("total_attempts"),
                 func.sum(
-                    func.case([(MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value, 1)], else_=0)
+                    case((MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value, 1), else_=0)
                 ).label("successful_attempts"),
                 func.avg(
-                    func.case(
-                        [
-                            (
-                                MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value,
-                                MessageDeliveryStatus.response_time_ms,
-                            )
-                        ],
+                    case(
+                        (
+                            MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value,
+                            MessageDeliveryStatus.response_time_ms,
+                        ),
                         else_=None,
                     )
                 ).label("avg_response_time"),

@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from typing import cast as typing_cast
 
-from sqlalchemy import Index, and_, asc, cast, desc, func, inspect, or_, text
+from sqlalchemy import Index, and_, asc, case, cast, desc, func, inspect, or_, text
 from sqlalchemy.dialects.postgresql import ARRAY, TEXT, insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -749,16 +749,14 @@ class OptimizedDeliveryStatusRepository:
                 MessageDeliveryStatus.channel,
                 func.count(MessageDeliveryStatus.id).label("total_attempts"),
                 func.sum(
-                    func.case([(MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value, 1)], else_=0)
+                    case((MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value, 1), else_=0)
                 ).label("successful_deliveries"),
                 func.avg(
-                    func.case(
-                        [
-                            (
-                                MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value,
-                                MessageDeliveryStatus.response_time_ms,
-                            )
-                        ],
+                    case(
+                        (
+                            MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value,
+                            MessageDeliveryStatus.response_time_ms,
+                        ),
                         else_=None,
                     )
                 ).label("avg_response_time"),
@@ -797,6 +795,187 @@ class OptimizedDeliveryStatusRepository:
             }
 
         return results
+
+    def get_channel_delivery_rates(
+        self, cutoff_date: datetime, channel: Optional[str] = None
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Get delivery rates grouped by channel.
+
+        Args:
+            cutoff_date: Only include deliveries after this date
+            channel: Filter by specific channel
+
+        Returns:
+            Dictionary with channel delivery rates
+        """
+        query = (
+            self.session.query(
+                MessageDeliveryStatus.channel,
+                func.count(MessageDeliveryStatus.id).label("total_attempts"),
+                func.sum(
+                    case((MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value, 1), else_=0)
+                ).label("successful_attempts"),
+                func.avg(
+                    case(
+                        (
+                            MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value,
+                            MessageDeliveryStatus.response_time_ms,
+                        ),
+                        else_=None,
+                    )
+                ).label("avg_response_time"),
+            )
+            .filter(MessageDeliveryStatus.created_at >= cutoff_date)
+            .group_by(MessageDeliveryStatus.channel)
+        )
+
+        if channel:
+            query = query.filter(MessageDeliveryStatus.channel == channel)
+
+        results = {}
+        for row in query.all():
+            success_rate = row.successful_attempts / row.total_attempts if row.total_attempts > 0 else 0.0
+
+            results[row.channel] = {
+                "total_attempts": row.total_attempts,
+                "successful_attempts": row.successful_attempts,
+                "failed_attempts": row.total_attempts - row.successful_attempts,
+                "success_rate": success_rate,
+                "avg_response_time_ms": float(row.avg_response_time) if row.avg_response_time else None,
+            }
+
+        return results
+
+    def get_user_delivery_rates(self, user_id: str, cutoff_date: datetime) -> Dict[str, Any]:
+        """
+        Get delivery rates for a specific user.
+
+        Args:
+            user_id: User ID to analyze
+            cutoff_date: Only include deliveries after this date
+
+        Returns:
+            Dictionary with user delivery statistics
+        """
+        # This would require joining with messages table to get user_id
+        # For now, return placeholder implementation
+        return {
+            "user_id": user_id,
+            "total_messages": 0,
+            "successful_deliveries": 0,
+            "failed_deliveries": 0,
+            "success_rate": 0.0,
+            "avg_response_time_ms": None,
+        }
+
+    def get_response_time_data(self, cutoff_date: datetime, channel: Optional[str] = None) -> List[int]:
+        """
+        Get response time data for analysis.
+
+        Args:
+            cutoff_date: Only include deliveries after this date
+            channel: Filter by specific channel
+
+        Returns:
+            List of response times in milliseconds
+        """
+        query = self.session.query(MessageDeliveryStatus.response_time_ms).filter(
+            and_(
+                MessageDeliveryStatus.created_at >= cutoff_date,
+                MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value,
+                MessageDeliveryStatus.response_time_ms.isnot(None),
+            )
+        )
+
+        if channel:
+            query = query.filter(MessageDeliveryStatus.channel == channel)
+
+        return [row.response_time_ms for row in query.all()]
+
+    def get_time_series_data(
+        self, cutoff_date: datetime, granularity: str = "daily", channel: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get time series data for trend analysis.
+
+        Args:
+            cutoff_date: Only include deliveries after this date
+            granularity: Time granularity (hourly, daily, weekly, monthly)
+            channel: Filter by specific channel
+
+        Returns:
+            List of time series data points
+        """
+        # Determine date truncation based on granularity
+        if granularity == "hourly":
+            date_trunc = func.date_trunc("hour", MessageDeliveryStatus.created_at)
+        elif granularity == "daily":
+            date_trunc = func.date_trunc("day", MessageDeliveryStatus.created_at)
+        elif granularity == "weekly":
+            date_trunc = func.date_trunc("week", MessageDeliveryStatus.created_at)
+        else:  # monthly
+            date_trunc = func.date_trunc("month", MessageDeliveryStatus.created_at)
+
+        query = (
+            self.session.query(
+                date_trunc.label("time_period"),
+                func.count(MessageDeliveryStatus.id).label("total_attempts"),
+                func.sum(
+                    case((MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value, 1), else_=0)
+                ).label("successful_attempts"),
+                func.avg(
+                    case(
+                        (
+                            MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value,
+                            MessageDeliveryStatus.response_time_ms,
+                        ),
+                        else_=None,
+                    )
+                ).label("avg_response_time"),
+            )
+            .filter(MessageDeliveryStatus.created_at >= cutoff_date)
+            .group_by(date_trunc)
+            .order_by(date_trunc)
+        )
+
+        if channel:
+            query = query.filter(MessageDeliveryStatus.channel == channel)
+
+        results = []
+        for row in query.all():
+            success_rate = row.successful_attempts / row.total_attempts if row.total_attempts > 0 else 0.0
+
+            results.append(
+                {
+                    "timestamp": row.time_period.isoformat(),
+                    "total_attempts": row.total_attempts,
+                    "successful_attempts": row.successful_attempts,
+                    "success_rate": success_rate,
+                    "avg_response_time_ms": float(row.avg_response_time) if row.avg_response_time else None,
+                }
+            )
+
+        return results
+
+    def get_active_channels(self, cutoff_date: datetime) -> List[str]:
+        """
+        Get list of active channels.
+
+        Args:
+            cutoff_date: Only include channels active after this date
+
+        Returns:
+            List of channel names
+        """
+        channels = (
+            self.session.query(MessageDeliveryStatus.channel)
+            .filter(MessageDeliveryStatus.created_at >= cutoff_date)
+            .distinct()
+            .all()
+        )
+
+        return [row.channel for row in channels]
 
     def get_delivery_statistics(
         self,

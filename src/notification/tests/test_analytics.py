@@ -10,6 +10,8 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -27,6 +29,7 @@ from src.notification.service.analytics import (
 _logger = setup_logger(__name__)
 
 
+@pytest.mark.asyncio
 async def test_delivery_rates():
     """Test delivery rate calculations."""
     print("\nTesting Delivery Rate Calculations...")
@@ -64,6 +67,7 @@ async def test_delivery_rates():
         return False
 
 
+@pytest.mark.asyncio
 async def test_response_time_analysis():
     """Test response time analysis."""
     print("\nTesting Response Time Analysis...")
@@ -106,6 +110,7 @@ async def test_response_time_analysis():
         return False
 
 
+@pytest.mark.asyncio
 async def test_aggregated_statistics():
     """Test time-based statistics aggregation."""
     print("\nTesting Aggregated Statistics...")
@@ -147,6 +152,7 @@ async def test_aggregated_statistics():
         return False
 
 
+@pytest.mark.asyncio
 async def test_trend_analysis():
     """Test performance trend analysis."""
     print("\nTesting Trend Analysis...")
@@ -191,6 +197,7 @@ async def test_trend_analysis():
         return False
 
 
+@pytest.mark.asyncio
 async def test_channel_performance_comparison():
     """Test channel performance comparison."""
     print("\nTesting Channel Performance Comparison...")
@@ -235,6 +242,7 @@ async def test_channel_performance_comparison():
         return False
 
 
+@pytest.mark.asyncio
 async def test_data_structures():
     """Test analytics data structures."""
     print("\nTesting Analytics Data Structures...")
@@ -313,6 +321,7 @@ async def test_data_structures():
         return False
 
 
+@pytest.mark.asyncio
 async def test_global_analytics_instance():
     """Test global analytics instance."""
     print("\nTesting Global Analytics Instance...")
@@ -343,6 +352,7 @@ async def test_global_analytics_instance():
         return False
 
 
+@pytest.mark.asyncio
 async def test_error_handling():
     """Test error handling in analytics."""
     print("\nTesting Error Handling...")
