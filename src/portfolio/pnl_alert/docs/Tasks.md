@@ -12,7 +12,8 @@
 - [x] Notifier (combined Telegram + Email message) (`notifier.py`)
 - [x] Orchestrator `runner.run_once` + CLI (`runner.py`, `cli.py`, `__main__.py`)
 - [x] Scheduler integration: dispatch branch + `seed_schedule.py`
-- [x] Unit tests (evaluator, aggregator, notifier format, watchlist loader)
+- [x] Daily Open_Positions.xml refresh from IBKR Flex Web Service (`flex_downloader.py`)
+- [x] Unit tests (evaluator, aggregator, notifier format, watchlist loader, flex downloader)
 
 ### PLANNED ENHANCEMENTS
 - [ ] Optional `quantity` field for watchlist entries (today defaults to 1)

@@ -7,6 +7,8 @@ price. Holdings are pulled live from IBKR and merged with a YAML watchlist of
 manually tracked positions.
 
 ## Features
+- Refreshes `Open_Positions.xml` daily from IBKR's Flex Web Service before
+  each run (`flex_downloader.py`), so the XML export is never stale
 - Pulls live positions (average cost) from IBKR via `IBKRBroker`
 - Merges a user-editable YAML watchlist for positions held outside IBKR
 - Fetches latest daily close via the shared `DataManager.get_ohlcv`
@@ -49,11 +51,17 @@ python -m src.scheduler.cli reload
 
 ## Configuration
 - YAML files under `src/portfolio/pnl_alert/config/`
-- Environment variables reused (no new vars introduced):
+- Environment variables reused:
   - `IBKR_HOST`, `IBKR_PORT`, `IBKR_CLIENT_ID`
   - `TELEGRAM_BOT_TOKEN`
   - `SMTP_SERVER`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`
   - `NOTIFICATION_SERVICE_URL` (falls back to `http://localhost:5003`)
+- Environment variables added for `flex_downloader.py`:
+  - `IBKR_FLEX_TOKEN` - Flex Web Service token (Client Portal > Performance
+    & Reports > Flex Queries)
+  - `IBKR_FLEX_QUERY_ID` - Query id of the "Open Positions" Flex Query.
+  - If either is unset, the download step is skipped (logged at INFO) and
+    the run falls back to whatever `Open_Positions.xml` is already on disk.
 
 ## Watchlist symbol gotchas
 

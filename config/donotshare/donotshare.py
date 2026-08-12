@@ -62,6 +62,11 @@ IBKR_CLIENT_ID = os.getenv("IBKR_CLIENT_ID")
 IBKR_PAPER_PORT = os.getenv("IBKR_PAPER_PORT")
 IBKR_PAPER_CLIENT_ID = os.getenv("IBKR_PAPER_CLIENT_ID")
 
+# Flex Web Service (Client Portal > Performance & Reports > Flex Queries) —
+# used to download the daily "Open Positions" report for the portfolio PnL alert.
+IBKR_FLEX_TOKEN = os.getenv("IBKR_FLEX_TOKEN")
+IBKR_FLEX_QUERY_ID = os.getenv("IBKR_FLEX_QUERY_ID")
+
 
 ALPHA_VANTAGE_API_KEY=os.getenv("ALPHA_VANTAGE_API_KEY")
 FINNHUB_API_KEY=os.getenv("FINNHUB_API_KEY")

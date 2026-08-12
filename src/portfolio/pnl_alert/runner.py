@@ -5,12 +5,16 @@ Orchestrates the pipeline: load watchlist, pull IBKR positions, fetch current
 prices, evaluate PnL, and dispatch one combined notification.
 """
 
+import asyncio
+import logging
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Dict, List
 
 from src.notification.logger import setup_logger
 from src.portfolio.pnl_alert.config import PnLAlertConfig
+from src.portfolio.pnl_alert.flex_downloader import download_open_positions_xml
 from src.portfolio.pnl_alert.ibkr_xml_loader import load_ibkr_xml
 from src.portfolio.pnl_alert.notifier import send_alert
 from src.portfolio.pnl_alert.pnl_evaluator import AlertRow, evaluate
@@ -79,11 +83,22 @@ async def _build_ibkr_broker() -> Any | None:
         return None
 
     broker = IBKRBroker(host=IBKR_HOST, port=port, client_id=client_id)
+    # ib_insync logs its own ERROR line straight to the "ib_insync.client" logger
+    # on a failed connection (e.g. "Make sure API port on TWS/IBG is open"),
+    # independent of our own logging below. We already treat this as a
+    # best-effort, non-fatal condition, so drop that logger to CRITICAL for
+    # the duration of the attempt to avoid a duplicate, unactionable ERROR
+    # reaching the journal / monitoring pipeline.
+    ib_client_logger = logging.getLogger("ib_insync.client")
+    prev_level = ib_client_logger.level
+    ib_client_logger.setLevel(logging.CRITICAL)
     try:
         connected = await broker.connect()
     except Exception:
         _logger.exception("IBKR connect() raised; skipping IBKR positions")
         return None
+    finally:
+        ib_client_logger.setLevel(prev_level)
 
     if not connected:
         _logger.warning("IBKR connect() returned False; skipping IBKR positions")
@@ -140,6 +155,14 @@ async def run_once(
     xml_positions: List[RawIbkrPosition] = []
     if cfg.ibkr_xml_path:
         try:
+            # Best-effort refresh via the Flex Web Service so the XML read below
+            # reflects today's positions. On failure this falls back to whatever
+            # file is already on disk (same tolerance as an unreachable live IBKR).
+            await asyncio.to_thread(download_open_positions_xml, Path(cfg.ibkr_xml_path).parent)
+        except Exception:
+            _logger.exception("Flex Query download failed; using last cached Open Positions XML")
+
+        try:
             xml_positions = load_ibkr_xml(cfg.ibkr_xml_path)
         except Exception as exc:
             _logger.exception("IBKR XML load failed: %s", cfg.ibkr_xml_path)
@@ -180,9 +203,7 @@ async def run_once(
     symbols = [h.symbol for h in holdings]
     # fetch_latest_closes is synchronous (blocking network I/O); offload to
     # a thread pool so the scheduler's event loop is not blocked.
-    import asyncio as _asyncio
-
-    prices = await _asyncio.to_thread(fetch_latest_closes, symbols, data_manager)
+    prices = await asyncio.to_thread(fetch_latest_closes, symbols, data_manager)
     summary.priced_count = len(prices)
 
     if not prices:

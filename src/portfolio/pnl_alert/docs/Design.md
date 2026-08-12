@@ -11,8 +11,11 @@ tracked positions in a YAML watchlist are merged into one unified view.
 ```
 APScheduler  ->  runner.run_once(cfg)
                      |
+                     +--> flex_downloader (refresh Open_Positions.xml)
+                     |
                      +--> position_aggregator
                      |       |
+                     |       +--> ibkr_xml_loader (Flex Query XML export)
                      |       +--> IBKRBroker.get_positions / ib.positions()
                      |       +--> watchlist_loader (YAML)
                      |
@@ -26,6 +29,14 @@ APScheduler  ->  runner.run_once(cfg)
 ### Component Design
 - **config.py** - `PnLAlertConfig` dataclass + `load_config(path)` YAML loader.
 - **watchlist_loader.py** - validates schema, returns `list[WatchlistEntry]`.
+- **flex_downloader.py** - calls IBKR's Flex Web Service (SendRequest /
+  GetStatement) to refresh `Open_Positions.xml` at the start of every run.
+  Writes both a fixed filename and a `Open_Positions-YYYY-MM-DD.xml`
+  date-stamped copy. Best-effort: any failure (missing credentials, network
+  error, IBKR error response) is logged and swallowed so the run falls back
+  to whatever XML is already on disk.
+- **ibkr_xml_loader.py** - parses the Flex Query "Open Positions" XML export
+  (refreshed daily by `flex_downloader.py`) into `RawIbkrPosition` objects.
 - **position_aggregator.py** - calls IBKR, filters to STK, merges with watchlist
   (IBKR wins on conflicts). Produces `list[Holding]`.
 - **price_fetcher.py** - wraps `DataManager.get_ohlcv`, returns
@@ -70,6 +81,15 @@ threshold. No "first-crossing" tracking.
 ### IBKR connection is best-effort
 If IBKR is unreachable the pipeline proceeds with the watchlist alone and logs
 a WARNING. This keeps the daily digest useful even when TWS is offline.
+
+### Flex Query download runs inline, not as a separate scheduled job
+`flex_downloader.download_open_positions_xml` is called at the top of
+`runner.run_once`, right before `ibkr_xml_loader` reads the file, rather than
+via its own cron entry (unlike, e.g., P20's VIX ingestion). This guarantees
+the XML is always fresh relative to the alert that consumes it, with no risk
+of the download and the alert schedules drifting out of sync. The download
+itself is best-effort — failures fall back to the last file already on disk,
+mirroring the "IBKR connection is best-effort" decision above.
 
 ### Pure evaluator
 `pnl_evaluator.evaluate` has no I/O and is trivially unit-testable.

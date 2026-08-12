@@ -9,6 +9,7 @@ Already satisfied by the root `requirements.txt`:
 - `apscheduler`, `croniter` - scheduler integration
 - `aiogram`, `aiosmtplib` - Telegram / email notification channels
 - `aiohttp` - `NotificationServiceClient` transport
+- `requests` - `flex_downloader.py` calls to IBKR's Flex Web Service
 
 ## External Module Dependencies
 - `src.trading.broker.ibkr_broker` - live positions + average cost
@@ -24,6 +25,10 @@ Already satisfied by the root `requirements.txt`:
 - IBKR TWS or Gateway reachable at `IBKR_HOST:IBKR_PORT` with the configured
   `IBKR_CLIENT_ID`. Live positions and average cost come from
   `IB.positions()`.
+- IBKR Flex Web Service (`IBKR_FLEX_TOKEN` + `IBKR_FLEX_QUERY_ID`) for the
+  daily "Open Positions" XML export. Independent of the TWS/Gateway
+  connection above — reachable over plain HTTPS, no running IBKR session
+  required.
 - Market data providers used by `DataManager` (Yahoo / Polygon / Alpaca / etc.)
   for the latest daily close.
 - Telegram Bot API (`TELEGRAM_BOT_TOKEN`) and SMTP server (`SMTP_*` env vars)
@@ -32,10 +37,16 @@ Already satisfied by the root `requirements.txt`:
   `job_schedules` table is reused).
 
 ## Security Requirements
-- No new secrets introduced. All credentials are reused from
-  `config.donotshare.donotshare` (IBKR, Telegram, SMTP).
+- Most credentials are reused from `config.donotshare.donotshare` (IBKR,
+  Telegram, SMTP). Two new secrets were added for the Flex Web Service:
+  `IBKR_FLEX_TOKEN` and `IBKR_FLEX_QUERY_ID`, following the same
+  env-var-only convention (never committed).
 - Watchlist YAML is stored in the repo config folder and is considered
   non-sensitive (symbol + average price only).
+- `Open_Positions.xml` / `Open_Positions-YYYY-MM-DD.xml` contain real
+  brokerage holdings and cost basis. They live under
+  `src/portfolio/pnl_alert/config/` and are excluded from version control via
+  `.gitignore` (`Open_Positions.xml`, `Open_Positions-*.xml`).
 
 ## Performance Requirements
 - Runs once a day, processing a short list (tens) of tickers. No throughput

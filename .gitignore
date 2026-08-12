@@ -38,6 +38,11 @@ wheels/
 .env
 .env.local
 
+# Real IBKR brokerage exports (holdings + cost basis) — downloaded daily by
+# src/portfolio/pnl_alert/flex_downloader.py, never commit these.
+src/portfolio/pnl_alert/config/Open_Positions.xml
+src/portfolio/pnl_alert/config/Open_Positions-*.xml
+
 # Testing
 .coverage
 htmlcov/
