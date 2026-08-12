@@ -7,9 +7,8 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from src.api.config import settings
-from src.data.db.models.model_users import User
-from src.data.db.services.database_service import get_database_service
 from src.data.db.services.notification_service import NotificationService
+from src.data.db.services.telegram_service import telegram_service
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -59,12 +58,13 @@ async def receive_log_alert(request: Request) -> dict:
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
-    db_service = get_database_service()
-    with db_service.uow() as uow:
-        admin_ids = [str(u.id) for u in uow.s.query(User).filter(User.role == "admin").all()]
+    # Only admins with a linked Telegram identity can receive this — channels is
+    # hardcoded to ["telegram"] below, and a role='admin' row with no Telegram
+    # identity (e.g. a local-only admin account) has nowhere to deliver to.
+    admin_ids = telegram_service.get_admin_user_ids()
 
     if not admin_ids:
-        _logger.warning("No admin users found — log alert not delivered: %s", alert.source)
+        _logger.warning("No Telegram-linked admin users found — log alert not delivered: %s", alert.source)
         return {"ok": True, "warning": "no admin users found"}
 
     # Build a subject that shows the source and the first meaningful part of the error line.
