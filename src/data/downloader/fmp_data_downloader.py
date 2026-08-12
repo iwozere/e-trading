@@ -100,7 +100,10 @@ class FMPDataDownloader(BaseDataDownloader):
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
             if response.status_code == 402:
-                _logger.warning("FMP OHLCV for %s %s requires a paid subscription (402)", symbol, interval)
+                # Permanent, known limitation of the free tier (not transient) — the
+                # provider fallback chain already treats this as "try the next
+                # provider", so it doesn't warrant WARNING-level attention.
+                _logger.info("FMP OHLCV for %s %s requires a paid subscription (402)", symbol, interval)
                 return None
             if response.status_code == 404:
                 _logger.warning("FMP OHLCV for %s %s not found (404) — ticker may be delisted", symbol, interval)

@@ -178,7 +178,10 @@ async def send_alert(
     if client is None:
         from src.notification.service.client import NotificationServiceClient
 
-        client = NotificationServiceClient()
+        # POST /api/notifications requires a user JWT (Depends(get_current_user)),
+        # which a scheduled backend job never has — HTTP mode would 401 on every
+        # call and silently fall back to this same DB path anyway, just noisier.
+        client = NotificationServiceClient(service_url="database://")
 
     ok = await client.send_notification(
         notification_type="portfolio_pnl_alert",

@@ -147,8 +147,12 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
 
             # Detect known non-error API messages (premium tier, rate limit) and
             # return None so the caller's fallback chain can try the next provider.
+            # INFO, not WARNING: the "Information" (premium tier) case is a
+            # permanent, known limitation already handled by the fallback chain.
+            # The "Note" (rate limit) case is transient but still non-actionable
+            # here — the fallback chain retries the next provider either way.
             if "Information" in data or "Note" in data:
-                _logger.warning(
+                _logger.info(
                     "Alpha Vantage unavailable for %s (premium/rate-limit): %s",
                     symbol,
                     data.get("Information") or data.get("Note"),

@@ -177,7 +177,10 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
 
             from src.notification.service.client import NotificationServiceClient
 
-            client = NotificationServiceClient()
+            # POST /api/notifications requires a user JWT (Depends(get_current_user)),
+            # which a scheduled backend job never has — HTTP mode would 401 on every
+            # call and silently fall back to this same DB path anyway, just noisier.
+            client = NotificationServiceClient(service_url="database://")
             asyncio.run(
                 client.send_to_admins(
                     title=f"Kestrel Daily Digest — {target_date}",
