@@ -23,6 +23,7 @@ import pandas as pd
 from src.common.technicals import calculate_technicals_talib
 from src.data.data_manager import DataManager
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+from src.data.downloader.vix_downloader import VIXDataDownloader
 
 _kestrel = _KestrelService()
 finish_job_run = _kestrel.finish_job_run
@@ -38,6 +39,46 @@ _OHLCV_LOOKBACK_DAYS = 730  # 2 years
 _EOD_COMPUTE_WORKERS = 4  # parallel TALib compute threads (matches Pi 4 core count)
 _UPSERT_CHUNK_SIZE = 200  # persist progress every N tickers so a scheduler
 # timeout mid-run doesn't discard everything computed so far
+_VIX_FILE = PROJECT_ROOT / "data" / "vix" / "vix.csv"
+
+_vix_downloader = VIXDataDownloader()
+
+
+def _ingest_vix_signal(target_date: date) -> List[Dict[str, Any]]:
+    """
+    Refresh the local VIX cache and build a "close" signal row for target_date.
+
+    VIX is a CBOE index, not a Nasdaq-listed equity, so it never appears in
+    the stock universe (k20_universe) and is never picked up by the regular
+    per-ticker OHLCV loop below — it needs its own ingestion step.
+
+    Args:
+        target_date: The date to attach the signal to.
+
+    Returns:
+        A single-row list with the VIX close signal, or an empty list if the
+        download failed or no data is available on or before target_date.
+    """
+    try:
+        _vix_downloader.update_vix(vix_file=_VIX_FILE)
+    except Exception:
+        _logger.exception("Failed to refresh VIX data")
+        return []
+
+    try:
+        vix_data = pd.read_csv(_VIX_FILE, parse_dates=["date"])
+    except (FileNotFoundError, OSError):
+        _logger.warning("VIX file not found after update: %s", _VIX_FILE)
+        return []
+
+    vix_data = vix_data.sort_values("date")
+    vix_data = vix_data[vix_data["date"].dt.date <= target_date]
+    if vix_data.empty:
+        _logger.warning("No VIX data on or before %s", target_date)
+        return []
+
+    value = float(vix_data["vix"].iloc[-1])
+    return [{"ticker": "VIX", "date": target_date, "signal_type": "close", "value": round(value, 6)}]
 
 
 def _compute_signals_for_ticker(
@@ -205,6 +246,9 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
         buffer.clear()
 
     try:
+        # ── Phase 0: VIX signal (index, not part of the stock universe) ───
+        buffer.extend(_ingest_vix_signal(target_date))
+
         # ── Phase 1: batch OHLCV download ────────────────────────────────
         try:
             ohlcv_batch = dm.get_ohlcv_batch(tickers, "1d", start_date=start_dt, end_date=end_dt)

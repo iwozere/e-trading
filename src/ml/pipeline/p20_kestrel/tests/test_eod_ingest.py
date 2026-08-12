@@ -73,6 +73,7 @@ def upsert_calls(monkeypatch):
     monkeypatch.setattr(eod_ingest, "start_job_run", lambda *a, **k: None)
     monkeypatch.setattr(eod_ingest, "finish_job_run", lambda *a, **k: None)
     monkeypatch.setattr(eod_ingest, "DataManager", _FakeDataManager)
+    monkeypatch.setattr(eod_ingest, "_ingest_vix_signal", lambda target_date: [])
     return calls
 
 
@@ -116,3 +117,61 @@ def test_run_crash_mid_compute_keeps_earlier_chunks_persisted(monkeypatch, upser
     # The first full chunk (AAA, BBB) was flushed before the crash on DDD.
     assert len(upsert_calls) == 1
     assert [row["ticker"] for row in upsert_calls[0]] == ["AAA", "BBB"]
+
+
+class _FakeVixDownloader:
+    """Stand-in for VIXDataDownloader — records the path it was asked to refresh."""
+
+    def __init__(self, raise_on_update: bool = False):
+        self.raise_on_update = raise_on_update
+        self.updated_file = None
+
+    def update_vix(self, vix_file=None):
+        if self.raise_on_update:
+            raise RuntimeError("simulated Yahoo outage")
+        self.updated_file = vix_file
+
+
+def test_ingest_vix_signal_returns_latest_close_on_or_before_target(monkeypatch, tmp_path):
+    vix_file = tmp_path / "vix.csv"
+    vix_file.write_text("date,vix,regime\n2026-07-06,14.0,calm\n2026-07-07,15.5,calm\n2026-07-09,20.0,normal\n")
+
+    monkeypatch.setattr(eod_ingest, "_VIX_FILE", vix_file)
+    monkeypatch.setattr(eod_ingest, "_vix_downloader", _FakeVixDownloader())
+
+    rows = eod_ingest._ingest_vix_signal(date(2026, 7, 8))
+
+    assert rows == [{"ticker": "VIX", "date": date(2026, 7, 8), "signal_type": "close", "value": 15.5}]
+
+
+def test_ingest_vix_signal_empty_when_download_fails(monkeypatch, tmp_path):
+    vix_file = tmp_path / "vix.csv"
+    monkeypatch.setattr(eod_ingest, "_VIX_FILE", vix_file)
+    monkeypatch.setattr(eod_ingest, "_vix_downloader", _FakeVixDownloader(raise_on_update=True))
+
+    assert eod_ingest._ingest_vix_signal(date(2026, 7, 8)) == []
+
+
+def test_ingest_vix_signal_empty_when_no_data_before_target(monkeypatch, tmp_path):
+    vix_file = tmp_path / "vix.csv"
+    vix_file.write_text("date,vix,regime\n2026-07-09,20.0,normal\n")
+
+    monkeypatch.setattr(eod_ingest, "_VIX_FILE", vix_file)
+    monkeypatch.setattr(eod_ingest, "_vix_downloader", _FakeVixDownloader())
+
+    assert eod_ingest._ingest_vix_signal(date(2026, 7, 8)) == []
+
+
+def test_run_includes_vix_signal(monkeypatch, upsert_calls):
+    """run() upserts the VIX close row alongside per-ticker signals."""
+    monkeypatch.setattr(eod_ingest, "get_active_tickers", lambda: [])
+    monkeypatch.setattr(
+        eod_ingest,
+        "_ingest_vix_signal",
+        lambda target_date: [{"ticker": "VIX", "date": target_date, "signal_type": "close", "value": 16.2}],
+    )
+
+    result = eod_ingest.run(as_of_date=date(2026, 7, 8))
+
+    assert result == {"tickers_ok": 0, "tickers_failed": 0, "signals_upserted": 1}
+    assert upsert_calls == [[{"ticker": "VIX", "date": date(2026, 7, 8), "signal_type": "close", "value": 16.2}]]
