@@ -340,6 +340,49 @@ class TestFallbackManager:
         # Message should be removed from retry queue
         assert len(fallback_manager._retry_queue) == 0
 
+    @pytest.mark.asyncio
+    async def test_retry_queue_reaches_dead_letter_without_resurrecting(self, fallback_manager, sample_message_content):
+        """
+        Regression: a message that keeps failing must actually reach the dead
+        letter queue once it hits _max_retry_attempts, not get silently
+        resurrected in _retry_queue with a reset retry_count.
+
+        Previously, attempt_delivery_with_fallback() unconditionally re-added a
+        *new* FailedMessage (retry_count defaulting to 0) to _retry_queue on
+        every failure — including when called from process_retry_queue()'s own
+        retry loop. That fresh insert raced with (and could outlive)
+        process_retry_queue()'s own correctly-tracked dead-letter decision, so
+        a permanently undeliverable message never actually stopped retrying.
+        """
+        always_failing = MockChannel("telegram", {})
+
+        async def _fail(recipient, content, message_id=None, priority="NORMAL"):
+            return DeliveryResult(success=False, status=DeliveryStatus.FAILED, error_message="still down")
+
+        always_failing.send_message = _fail  # type: ignore[method-assign]
+        channel_instances = {"telegram": always_failing}
+
+        # Seed a message one retry away from the cap.
+        failed_msg = FailedMessage(
+            message_id=42,
+            original_channels=["telegram"],
+            content=sample_message_content,
+            recipient="test_user",
+            priority="NORMAL",
+            failure_reason=MessageFailureReason.DELIVERY_FAILED,
+            failure_details="Test failure",
+            failed_at=datetime.now(UTC) - timedelta(hours=1),
+            retry_count=fallback_manager._max_retry_attempts - 1,
+        )
+        fallback_manager._retry_queue[42] = failed_msg
+
+        results = await fallback_manager.process_retry_queue(channel_instances)
+
+        assert results["failed"] == 1
+        assert results["requeued"] == 0
+        assert 42 not in fallback_manager._retry_queue
+        assert 42 in fallback_manager._dead_letter_queue
+
     def test_dead_letter_queue_management(self, fallback_manager, sample_message_content):
         """Test dead letter queue management."""
         # Add some messages to dead letter queue

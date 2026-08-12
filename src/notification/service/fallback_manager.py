@@ -219,6 +219,8 @@ class FallbackManager:
         content: MessageContent,
         priority: str = "NORMAL",
         channel_instances: Optional[Dict[str, NotificationChannel]] = None,
+        *,
+        queue_on_failure: bool = True,
     ) -> Tuple[bool, List[DeliveryResult], Optional[FailedMessage]]:
         """
         Attempt message delivery with automatic fallback.
@@ -230,6 +232,14 @@ class FallbackManager:
             content: Message content
             priority: Message priority
             channel_instances: Dictionary of channel instances
+            queue_on_failure: Whether to add a failed, retryable message to the
+                in-memory retry queue (or dead letter queue) here. Callers that
+                already own their own retry/dead-letter bookkeeping — the retry
+                loop and the manual dead-letter reprocessor — must pass False,
+                otherwise this method's own fresh `FailedMessage` (retry_count
+                always 0) races with the caller's tracked `retry_count` and
+                overwrites it in `_retry_queue`, so a message never actually
+                reaches the dead letter queue and retries forever.
 
         Returns:
             Tuple of (success, delivery_results, failed_message_if_any)
@@ -338,10 +348,11 @@ class FallbackManager:
         )
 
         # Add to retry queue if retryable
-        if self._is_retryable_failure(delivery_results):
-            await self._add_to_retry_queue(failed_msg)
-        else:
-            await self._add_to_dead_letter_queue(failed_msg)
+        if queue_on_failure:
+            if self._is_retryable_failure(delivery_results):
+                await self._add_to_retry_queue(failed_msg)
+            else:
+                await self._add_to_dead_letter_queue(failed_msg)
 
         return False, delivery_results, failed_msg
 
@@ -610,7 +621,11 @@ class FallbackManager:
                 failed_msg.retry_count += 1
                 failed_msg.last_retry_at = current_time
 
-                # Attempt delivery with fallback
+                # Attempt delivery with fallback. queue_on_failure=False: this loop
+                # owns retry/dead-letter bookkeeping via failed_msg.retry_count below —
+                # letting attempt_delivery_with_fallback also queue on failure would
+                # re-add the message with a fresh (reset) retry_count and it would
+                # never actually reach the dead letter queue.
                 success, delivery_results, new_failed_msg = await self.attempt_delivery_with_fallback(
                     failed_msg.message_id,
                     failed_msg.original_channels,
@@ -618,6 +633,7 @@ class FallbackManager:
                     failed_msg.content,
                     failed_msg.priority,
                     channel_instances,
+                    queue_on_failure=False,
                 )
 
                 results["processed"] += 1
@@ -675,7 +691,11 @@ class FallbackManager:
             if force_channels:
                 failed_msg.attempted_channels.clear()
 
-            # Attempt delivery
+            # Attempt delivery. queue_on_failure=False: this message is being
+            # reprocessed from the dead letter queue and stays there on failure
+            # (see the `else` branch below) — letting attempt_delivery_with_fallback
+            # also queue it would silently resurrect it into the retry queue with
+            # a fresh retry_count, undermining the dead letter queue.
             success, delivery_results, new_failed_msg = await self.attempt_delivery_with_fallback(
                 failed_msg.message_id,
                 channels_to_use,
@@ -683,6 +703,7 @@ class FallbackManager:
                 failed_msg.content,
                 failed_msg.priority,
                 channel_instances,
+                queue_on_failure=False,
             )
 
             self._stats["manual_reprocessing"] += 1
