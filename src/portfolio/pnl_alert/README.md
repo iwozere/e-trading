@@ -3,14 +3,17 @@
 ## Overview
 Sends one combined Telegram + Email notification once per weekday listing every
 ticker whose current market price is at least +10% above the user's average buy
-price. Holdings are pulled live from IBKR and merged with a YAML watchlist of
-manually tracked positions.
+price. Holdings come from IBKR alone: the daily Flex Query XML export,
+optionally topped up with same-day live broker positions.
 
 ## Features
 - Refreshes `Open_Positions.xml` daily from IBKR's Flex Web Service before
   each run (`flex_downloader.py`), so the XML export is never stale
-- Pulls live positions (average cost) from IBKR via `IBKRBroker`
-- Merges a user-editable YAML watchlist for positions held outside IBKR
+- Pulls live positions (average cost) from IBKR via `IBKRBroker`, merged on
+  top of the XML export (live wins on same symbol)
+- Disambiguates IBKR tickers that collide across exchanges (e.g. `GOLD` on
+  LSE vs NYSE) using the Flex Query `listingExchange` column — see
+  "IBKR symbol collisions" below
 - Fetches latest daily close via the shared `DataManager.get_ohlcv`
 - Sends a single digest message sorted by PnL% descending
 - Runs on the existing APScheduler service - a single row in the
@@ -19,8 +22,8 @@ manually tracked positions.
 
 ## Quick Start
 
-1. Edit `src/portfolio/pnl_alert/config/watchlist.yaml` and add your
-   manually tracked positions (symbol + average buy price).
+1. Set `IBKR_FLEX_TOKEN` / `IBKR_FLEX_QUERY_ID` (see "Configuration" below)
+   so `flex_downloader.py` can pull your "Open Positions" Flex Query.
 2. Edit `src/portfolio/pnl_alert/config/pnl_alert.yaml` if you want to change
    the threshold, channels, or cron.
 3. Run once manually to validate the setup:
@@ -63,20 +66,43 @@ python -m src.scheduler.cli reload
   - If either is unset, the download step is skipped (logged at INFO) and
     the run falls back to whatever `Open_Positions.xml` is already on disk.
 
-## Watchlist symbol gotchas
+## Symbol pricing gotchas
 
 Prices are fetched via the shared `DataManager`, which routes requests to
 the providers configured in `config/data/provider_rules.yaml` (Yahoo is the
 primary for daily stock data).
 
-- **US-listed equities** use the bare ticker, e.g. `NVDA`, `AAPL`, `SRPT`.
-- **Non-US listings** need the Yahoo exchange suffix, e.g. `VUSD.L` for the
-  London-listed Vanguard S&P 500 ETF, `SAP.DE` for XETRA. Putting `VUSD`
-  alone will yield 404s on US providers and the symbol will be silently
-  excluded from the alert (logged as a WARNING).
-- If a symbol is mis-typed or halted the pipeline simply skips it and
-  continues with the rest of the watchlist. Check the run logs for
+- **US-listed equities** resolve on the bare IBKR ticker, e.g. `NVDA`, `AAPL`.
+- **Non-US listings** need a Yahoo exchange suffix, e.g. `VUSD.L` for the
+  London-listed Vanguard S&P 500 ETF. `ibkr_xml_loader.py` derives this
+  automatically from the Flex Query `listingExchange` column — see "IBKR
+  symbol collisions" below. Without that column enabled, non-US symbols will
+  404 on US providers and be silently excluded from the alert (WARNING).
+- If a symbol is halted or otherwise unpriceable the pipeline simply skips it
+  and continues with the rest of the holdings. Check the run logs for
   `No current price for N symbols (excluded from alert): [...]`.
+
+## IBKR symbol collisions (e.g. `GOLD`)
+
+IBKR tickers are not globally unique. `GOLD` is both a London-listed gold
+ETC (`listingExchange="LSEETF"`, price ~$4) and Barrick Gold Corp on NYSE
+(price ~$40) — a bare `GOLD` handed to the data provider silently resolves
+to whichever one *it* considers canonical, which can produce a false PnL
+alert instead of a missing-price warning.
+
+`ibkr_xml_loader.py` resolves this using the position's `listingExchange`
+Flex Query column (see `_resolve_provider_symbol` and the module docstring
+for the full precedence: manual override map, then listing-exchange suffix,
+then bare symbol + WARNING for anything unrecognized). This requires the
+**"Listing Exchange"** (and ideally **"Currency"**) columns to be enabled on
+the "Open Positions" Flex Query template:
+
+IBKR Client Portal → Performance & Reports → Flex Queries → edit the "Open
+Positions" query → Open Positions section → check "Listing Exchange" and
+"Currency" → Save.
+
+Without that column, `listingExchange` is empty for every position and the
+loader falls back to the bare symbol (previous behavior).
 
 ## Related Documentation
 - [Specification](docs/alert-specification.md) - Full functional spec

@@ -4,7 +4,7 @@
 Already satisfied by the root `requirements.txt`:
 
 - `ib_insync >= 0.9.86` - IBKR client
-- `pyyaml` - watchlist + config YAML parsing
+- `pyyaml` - config YAML parsing
 - `pandas` - price DataFrame handling (via `DataManager`)
 - `apscheduler`, `croniter` - scheduler integration
 - `aiogram`, `aiosmtplib` - Telegram / email notification channels
@@ -41,8 +41,6 @@ Already satisfied by the root `requirements.txt`:
   Telegram, SMTP). Two new secrets were added for the Flex Web Service:
   `IBKR_FLEX_TOKEN` and `IBKR_FLEX_QUERY_ID`, following the same
   env-var-only convention (never committed).
-- Watchlist YAML is stored in the repo config folder and is considered
-  non-sensitive (symbol + average price only).
 - `Open_Positions.xml` / `Open_Positions-YYYY-MM-DD.xml` contain real
   brokerage holdings and cost basis. They live under
   `src/portfolio/pnl_alert/config/` and are excluded from version control via

@@ -2,8 +2,8 @@
 
 ## Purpose
 Give the user a daily digest of every holding currently above a configurable
-profit threshold (default +10%). Live positions from IBKR and manually
-tracked positions in a YAML watchlist are merged into one unified view.
+profit threshold (default +10%). Holdings come from IBKR alone: the daily
+Flex Query XML export, optionally topped up with same-day live positions.
 
 ## Architecture
 
@@ -17,7 +17,6 @@ APScheduler  ->  runner.run_once(cfg)
                      |       |
                      |       +--> ibkr_xml_loader (Flex Query XML export)
                      |       +--> IBKRBroker.get_positions / ib.positions()
-                     |       +--> watchlist_loader (YAML)
                      |
                      +--> price_fetcher  (DataManager.get_ohlcv, last close)
                      |
@@ -28,7 +27,6 @@ APScheduler  ->  runner.run_once(cfg)
 
 ### Component Design
 - **config.py** - `PnLAlertConfig` dataclass + `load_config(path)` YAML loader.
-- **watchlist_loader.py** - validates schema, returns `list[WatchlistEntry]`.
 - **flex_downloader.py** - calls IBKR's Flex Web Service (SendRequest /
   GetStatement) to refresh `Open_Positions.xml` at the start of every run.
   Writes both a fixed filename and a `Open_Positions-YYYY-MM-DD.xml`
@@ -37,8 +35,8 @@ APScheduler  ->  runner.run_once(cfg)
   to whatever XML is already on disk.
 - **ibkr_xml_loader.py** - parses the Flex Query "Open Positions" XML export
   (refreshed daily by `flex_downloader.py`) into `RawIbkrPosition` objects.
-- **position_aggregator.py** - calls IBKR, filters to STK, merges with watchlist
-  (IBKR wins on conflicts). Produces `list[Holding]`.
+- **position_aggregator.py** - takes the merged XML + live IBKR positions,
+  filters to STK. Produces `list[Holding]`.
 - **price_fetcher.py** - wraps `DataManager.get_ohlcv`, returns
   `dict[str, float]` keyed by symbol, resilient to per-symbol failures.
 - **pnl_evaluator.py** - pure function:
@@ -54,8 +52,8 @@ APScheduler  ->  runner.run_once(cfg)
   `job_schedules`.
 
 ## Data Flow
-- Input: IBKR positions (symbol, quantity, avg_price), YAML watchlist
-  (symbol, avg_price, optional notes), current-close dict (symbol -> price).
+- Input: IBKR positions (symbol, quantity, avg_price) from the XML export and
+  optionally the live broker, current-close dict (symbol -> price).
 - Output: a single notification message + a small `RunSummary` dict
   (stored by the scheduler as run-result JSON).
 
@@ -79,8 +77,19 @@ Per user's explicit choice: notify every day for every symbol currently above
 threshold. No "first-crossing" tracking.
 
 ### IBKR connection is best-effort
-If IBKR is unreachable the pipeline proceeds with the watchlist alone and logs
-a WARNING. This keeps the daily digest useful even when TWS is offline.
+If the live IBKR broker is unreachable the pipeline proceeds with whatever the
+Flex Query XML export already has on disk and logs a WARNING. This keeps the
+daily digest useful even when TWS is offline.
+
+### No second holdings source (watchlist removed 2026-08-13)
+A YAML watchlist for manually tracked / outside-IBKR positions existed
+originally to cover positions the Flex Query wouldn't see. In practice 8 of
+its 12 entries just duplicated IBKR XML positions (pure noise - IBKR always
+won on conflict anyway), and the other 4 turned out to be closed/stale
+positions nobody was removing. Rather than keep a second, driftable source of
+truth, it was removed outright: IBKR (XML + live) is now the only source.
+`Holding.source` is still a field (always `"ibkr"` today) so a second source
+could be reintroduced later without changing the evaluator/notifier.
 
 ### Flex Query download runs inline, not as a separate scheduled job
 `flex_downloader.download_open_positions_xml` is called at the top of
@@ -94,6 +103,20 @@ mirroring the "IBKR connection is best-effort" decision above.
 ### Pure evaluator
 `pnl_evaluator.evaluate` has no I/O and is trivially unit-testable.
 
+### Listing-exchange based symbol disambiguation
+IBKR tickers collide across exchanges (`GOLD` = LSE gold ETC *and* NYSE
+Barrick Gold Corp). Resolving purely by symbol risks a silently wrong price
+from the data provider and a false PnL alert. `ibkr_xml_loader.py` reads the
+`listingExchange` Flex Query attribute (when the "Listing Exchange" column is
+enabled on the report template) and appends the matching provider suffix
+(`LSEETF`/`LSE` → `.L`, etc.) via `_LISTING_EXCHANGE_SUFFIX_MAP`. A small
+`_IBKR_SYMBOL_MAP` remains for verified one-off overrides that take priority
+over the automatic resolution (e.g. `VUSD` → `VUSD.L`). Any non-US exchange
+not yet in the map is logged as a WARNING rather than guessed — a missing
+price is a safer failure mode than a mispriced one. If the Flex Query
+template doesn't have the column enabled, `listingExchange` is empty and
+resolution falls back to the bare symbol.
+
 ## Integration Patterns
 - Scheduler integration is a single branch inside the existing `ALERT`
   handler: if `schedule.target.startswith("portfolio.")`, dispatch to this
@@ -103,9 +126,9 @@ mirroring the "IBKR connection is best-effort" decision above.
   same Telegram and SMTP plumbing the rest of the app uses.
 
 ## Error Handling
-- Missing watchlist file or invalid YAML: log CRITICAL + optionally send a
-  CRITICAL notification so the user sees the failure. Run exits non-zero.
-- IBKR unreachable: WARNING, run continues with watchlist only.
+- Flex Query XML unreadable/missing: logged, added to `RunSummary.errors`;
+  run continues with whatever live IBKR positions are available (may be zero).
+- Live IBKR unreachable: WARNING, run continues with the XML export alone.
 - Per-symbol price failure: WARNING, symbol excluded, run continues.
 - All prices fail: ERROR, run emits a critical notification saying "price
   fetch failed" and exits non-zero.

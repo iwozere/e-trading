@@ -1,8 +1,9 @@
 """
 Portfolio PnL alert runner.
 
-Orchestrates the pipeline: load watchlist, pull IBKR positions, fetch current
-prices, evaluate PnL, and dispatch one combined notification.
+Orchestrates the pipeline: pull IBKR positions (Flex Query XML export merged
+with any live broker positions), fetch current prices, evaluate PnL, and
+dispatch one combined notification.
 """
 
 import asyncio
@@ -24,7 +25,6 @@ from src.portfolio.pnl_alert.position_aggregator import (
     merge_holdings,
 )
 from src.portfolio.pnl_alert.price_fetcher import fetch_latest_closes
-from src.portfolio.pnl_alert.watchlist_loader import WatchlistEntry, load_watchlist
 
 _logger = setup_logger(__name__)
 
@@ -36,26 +36,22 @@ class RunSummary:
 
     Attributes:
         ran_at: UTC timestamp when the run started.
-        watchlist_count: Number of parsed watchlist entries.
         ibkr_count: Number of raw IBKR positions used (after STK filter).
         holdings_count: Total merged holdings.
         priced_count: Holdings for which a current price was obtained.
         alert_row_count: Rows above threshold (included in the notification).
         notification_sent: Whether the notifier reported success.
         dry_run: True if delivery was skipped.
-        conflicts: Symbols present in both IBKR and watchlist (IBKR won).
         errors: Non-fatal errors collected during the run.
     """
 
     ran_at: str
-    watchlist_count: int = 0
     ibkr_count: int = 0
     holdings_count: int = 0
     priced_count: int = 0
     alert_row_count: int = 0
     notification_sent: bool = False
     dry_run: bool = False
-    conflicts: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
 
 
@@ -135,22 +131,6 @@ async def run_once(
 
     summary = RunSummary(ran_at=ran_at.isoformat(), dry_run=dry_run)
 
-    # --- watchlist (optional) ---
-    watchlist: List[WatchlistEntry] = []
-    if cfg.watchlist_path:
-        try:
-            watchlist = load_watchlist(cfg.watchlist_path)
-        except FileNotFoundError:
-            _logger.exception("Watchlist not found: %s", cfg.watchlist_path)
-            summary.errors.append(f"watchlist_not_found:{cfg.watchlist_path}")
-            return summary
-        except Exception as exc:
-            _logger.exception("Watchlist failed to load")
-            summary.errors.append(f"watchlist_invalid:{exc}")
-            return summary
-
-    summary.watchlist_count = len(watchlist)
-
     # --- IBKR XML positions (optional) ---
     xml_positions: List[RawIbkrPosition] = []
     if cfg.ibkr_xml_path:
@@ -185,16 +165,15 @@ async def run_once(
             except Exception:
                 _logger.exception("IBKR disconnect() raised")
 
-    # Merge: live IBKR overrides XML on the same symbol; both win over watchlist.
+    # Merge: live IBKR overrides XML on the same symbol.
     combined: dict[str, RawIbkrPosition] = {p.symbol: p for p in xml_positions}
     for p in live_ibkr:
         combined[p.symbol] = p
 
-    holdings, conflicts = merge_holdings(list(combined.values()), watchlist, stk_only=cfg.ibkr_stk_only)
+    holdings = merge_holdings(list(combined.values()), stk_only=cfg.ibkr_stk_only)
 
     summary.ibkr_count = sum(1 for h in holdings if h.source == "ibkr")
     summary.holdings_count = len(holdings)
-    summary.conflicts = conflicts
 
     if not holdings:
         _logger.info("No holdings to evaluate; exiting early")

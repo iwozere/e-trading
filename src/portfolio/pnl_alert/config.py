@@ -28,8 +28,6 @@ class PnLAlertConfig:
             0.10 means +10%.
         channels: Notification channels (subset of "telegram", "email").
         cron: Cron expression (UTC) for the daily scheduled run.
-        watchlist_path: Path, relative to project root, of the user watchlist.
-            Set to an empty string to skip watchlist loading entirely.
         ibkr_xml_path: Path (or glob pattern) to an IBKR Flex Query Open
             Positions XML export.  When a glob such as
             ``config/Open_Positions-*.xml`` is given, the
@@ -43,7 +41,6 @@ class PnLAlertConfig:
     threshold_pct: float = 0.10
     channels: List[str] = field(default_factory=lambda: ["telegram", "email"])
     cron: str = "30 21 * * 1-5"
-    watchlist_path: str = "src/portfolio/pnl_alert/config/watchlist.yaml"
     ibkr_xml_path: str = ""
     include_ibkr: bool = True
     ibkr_stk_only: bool = True
@@ -103,7 +100,6 @@ def load_config(path: str | None = None) -> PnLAlertConfig:
         threshold_pct=float(raw.get("threshold_pct", 0.10)),
         channels=list(raw.get("channels", ["telegram", "email"])),
         cron=str(raw.get("cron", "30 21 * * 1-5")),
-        watchlist_path=str(raw.get("watchlist_path", "src/portfolio/pnl_alert/config/watchlist.yaml")),
         ibkr_xml_path=str(raw.get("ibkr_xml_path", "")),
         include_ibkr=bool(raw.get("include_ibkr", True)),
         ibkr_stk_only=bool(raw.get("ibkr_stk_only", True)),

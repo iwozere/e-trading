@@ -2,14 +2,16 @@
 
 Owner: portfolio monitoring
 Status: Implemented
-Last updated: 2026-04-20
+Last updated: 2026-08-13
 
 ## 1. Purpose
 
-Send the user a single daily notification that lists every ticker whose current price is at least **+10%** above the user's average buy price. The alert combines two sources of holdings:
+Send the user a single daily notification that lists every ticker whose current price is at least **+10%** above the user's average buy price. Holdings come from a single source of truth: IBKR.
 
-1. Live positions pulled from IBKR (via the existing `IBKRBroker`).
-2. A user-maintained YAML watchlist of symbols + manually entered average buy prices (for positions held outside IBKR, or paper-tracked entries).
+1. The daily Flex Query "Open Positions" XML export (downloaded automatically by `flex_downloader.py` at the start of every run).
+2. Optionally, same-day live positions from the connected `IBKRBroker`, merged on top of the XML on matching symbol (live wins - it reflects same-day fills the XML export, generated at prior-day close, wouldn't yet have).
+
+> **2026-08-13 change**: a YAML watchlist for manually tracked / outside-IBKR positions previously existed as a second input source. It was removed - IBKR (XML + live) is now the sole source. See §8 for the rationale.
 
 The digest is sent to Telegram and Email in one combined message, sorted from highest PnL% to lowest.
 
@@ -17,32 +19,22 @@ The digest is sent to Telegram and Email in one combined message, sorted from hi
 
 ### 2.1 Inputs
 
-- **IBKR positions** - fetched via `IBKRBroker.get_positions()` in [src/trading/broker/ibkr_broker.py](../../../trading/broker/ibkr_broker.py). Each `Position` already exposes `average_price = pos.avgCost` (IBKR's own average cost). Only equity positions (`sec_type == "STK"`) are considered.
-- **Watchlist YAML** - a user-editable file at `src/portfolio/pnl_alert/config/watchlist.yaml` with the following schema:
-  ```yaml
-  entries:
-    - symbol: NVDA
-      avg_price: 120.00
-    - symbol: AAPL
-      avg_price: 150.00
-      notes: "optional free-text"
-  ```
-  All entries are assumed to be US equities quoted in USD. Validation rejects: missing `symbol`, non-positive `avg_price`, duplicate symbols within the file.
+- **IBKR Flex Query XML export** - `Open_Positions.xml`, refreshed daily via the Flex Web Service (`flex_downloader.py`) and parsed by `ibkr_xml_loader.py`. Positions across multiple `<FlexStatement>` accounts are merged per symbol with a weighted-average cost basis. Symbols are disambiguated against same-named tickers on other exchanges (e.g. `GOLD` on LSE vs NYSE) using the `listingExchange` Flex Query column - see the module docstring in `ibkr_xml_loader.py` for the full resolution order.
+- **Live IBKR positions** (optional) - fetched via `IBKRBroker.get_positions()` / `ib.positions()` in [src/trading/broker/ibkr_broker.py](../../../trading/broker/ibkr_broker.py). Each position exposes `average_price = pos.avgCost` (IBKR's own average cost). Only equity positions (`sec_type == "STK"`) are considered when `ibkr_stk_only: true`.
 - **Pipeline config YAML** - `src/portfolio/pnl_alert/config/pnl_alert.yaml`:
   ```yaml
   threshold_pct: 0.10
   channels: [telegram, email]
   cron: "30 21 * * 1-5"
-  watchlist_path: src/portfolio/pnl_alert/config/watchlist.yaml
+  ibkr_xml_path: src/portfolio/pnl_alert/config/Open_Positions.xml
   include_ibkr: true
   ibkr_stk_only: true
   ```
 
-### 2.2 Merging rule (IBKR + Watchlist)
+### 2.2 Merging rule (XML + live IBKR)
 
-- If a symbol exists in both sources, **IBKR wins** (the broker's `avgCost` reflects actual fills). A WARNING is logged naming the symbol and both prices.
-- The final set of holdings is `IBKR STK positions UNION (watchlist entries whose symbol is not in IBKR)`.
-- Each holding carries a `source` field (`"ibkr"` or `"watchlist"`) used only for logging and the eventual message footer.
+- Positions are keyed by symbol. Live broker positions overwrite XML positions on the same symbol (same-day fills the XML export wouldn't yet reflect); otherwise both contribute to the merged set.
+- Every holding carries a `source` field, always `"ibkr"` today. It's kept as a field (rather than removed) so the notifier's per-source breakdown doesn't need a special case if a second source is reintroduced later.
 
 ### 2.3 Price fetch
 
@@ -54,7 +46,7 @@ The digest is sent to Telegram and Email in one combined message, sorted from hi
 
 For each holding with a valid current price:
 
-- `pnl_abs = (current_price - avg_price) * quantity` (for watchlist entries without quantity, `quantity = 1` so `pnl_abs` degenerates to the per-share delta and the `pnl_pct` is what matters)
+- `pnl_abs = (current_price - avg_price) * quantity`
 - `pnl_pct = (current_price - avg_price) / avg_price`
 - Include in the alert iff `pnl_pct >= threshold_pct`.
 - Sort the included rows by `pnl_pct` descending. Ties broken by `pnl_abs` descending, then symbol alphabetically.
@@ -78,7 +70,7 @@ Portfolio PnL Alert - 2026-04-20
 2. AAPL   avg $150.00   now $180.15   PnL +$301.50  (+20.10%)
 3. MSFT   avg $310.00   now $352.70   PnL +$42.70   (+13.77%)
 
-Sources: ibkr=2, watchlist=1
+Sources: ibkr=3
 ```
 
 - Columns: rank, ticker, average buy price, current price, absolute PnL (USD), percent PnL.
@@ -104,8 +96,8 @@ Sources: ibkr=2, watchlist=1
 ## 3. Non-functional requirements
 
 - **Idempotency**: seeding the schedule is idempotent by the existing `unique(user_id, name)` constraint on `job_schedules`.
-- **Observability**: every run logs (a) number of IBKR positions, (b) number of watchlist entries, (c) number of price fetch failures, (d) number of symbols crossing the threshold, (e) notification delivery status per channel.
-- **Failure isolation**: IBKR unreachable -> proceed with watchlist only; individual symbol errors never fail the digest; notification-channel failure in one channel does not prevent the other from firing.
+- **Observability**: every run logs (a) number of IBKR positions, (b) number of price fetch failures, (c) number of symbols crossing the threshold, (d) notification delivery status per channel.
+- **Failure isolation**: individual symbol errors never fail the digest; notification-channel failure in one channel does not prevent the other from firing; a stale/undownloadable Flex Query XML falls back to whatever export is already on disk.
 - **No new dependencies**: reuses `ib_insync`, `yfinance`, `aiogram`, `aiosmtplib`, `apscheduler` already in `requirements.txt`.
 
 ## 4. Module layout
@@ -114,8 +106,9 @@ Sources: ibkr=2, watchlist=1
 src/portfolio/pnl_alert/
   __init__.py
   config.py                 # PnLAlertConfig + load_config()
-  watchlist_loader.py       # YAML -> list[WatchlistEntry]
-  position_aggregator.py    # merge IBKR positions + watchlist -> list[Holding]
+  flex_downloader.py        # IBKR Flex Web Service -> Open_Positions.xml
+  ibkr_xml_loader.py         # Open_Positions.xml -> list[RawIbkrPosition] (+ exchange disambiguation)
+  position_aggregator.py    # raw IBKR positions -> list[Holding]
   price_fetcher.py          # DataManager-backed latest-close fetch
   pnl_evaluator.py          # pure function: evaluate(holdings, prices, threshold)
   notifier.py               # format message + dispatch via NotificationServiceClient
@@ -124,14 +117,15 @@ src/portfolio/pnl_alert/
   seed_schedule.py          # one-shot inserter for the job_schedules row
   config/
     pnl_alert.yaml
-    watchlist.yaml
+    Open_Positions.xml      # refreshed daily by flex_downloader.py
   docs/
     alert-specification.md  (this file)
   tests/
     test_pnl_evaluator.py
     test_position_aggregator.py
     test_notifier_format.py
-    test_watchlist_loader.py
+    test_ibkr_xml_loader.py
+    test_flex_downloader.py
 ```
 
 ## 5. End-to-end flow
@@ -139,10 +133,11 @@ src/portfolio/pnl_alert/
 ```mermaid
 flowchart LR
     Sched[APScheduler daily cron] --> Run[runner.run_once]
-    Run --> IBKR[IBKRBroker.get_positions STK only]
-    Run --> WL[watchlist_loader]
-    IBKR --> Agg[position_aggregator]
-    WL --> Agg
+    Run --> FlexDL[flex_downloader refresh XML]
+    FlexDL --> XmlLoad[ibkr_xml_loader]
+    Run --> Live[IBKRBroker.get_positions STK only]
+    XmlLoad --> Agg[position_aggregator]
+    Live --> Agg
     Agg --> Px[price_fetcher latest 1d close]
     Px --> Eval[pnl_evaluator filter gte 10pct sort desc]
     Eval -->|rows gt 0| Notif[notifier]
@@ -154,10 +149,10 @@ flowchart LR
 ## 6. Edge cases
 
 - **Non-equity IBKR positions** (options/FX/crypto): filtered out at the aggregation step. Logged at DEBUG with counts.
-- **Symbol in both IBKR and watchlist with conflicting avg price**: IBKR wins; WARNING logged naming both prices and the delta.
+- **Symbol collision across exchanges** (e.g. `GOLD` = LSE gold ETC vs NYSE Barrick Gold): resolved via `listingExchange` in `ibkr_xml_loader.py`; unrecognized non-US exchanges are logged as a WARNING and left unresolved rather than silently mispriced.
 - **Stale/halted ticker with no recent close**: treated as "price fetch failure"; excluded with a WARNING.
-- **Negative or zero `avg_price`** in the watchlist: fails YAML validation at load time; run aborts with a CRITICAL notification.
-- **Quantity unknown for watchlist entries**: default to `1`. `pnl_abs` for watchlist-only entries is therefore "per-share" and should be interpreted via `pnl_pct` primarily. (Optional future enhancement: allow `quantity` in the YAML schema.)
+- **Flex Query download failure**: best-effort; falls back to whatever `Open_Positions.xml` is already on disk, matching the "IBKR unreachable" tolerance below.
+- **Live IBKR unreachable**: WARNING, run continues with the XML export alone.
 - **FX / non-USD accounts**: out of scope. All holdings are assumed USD.
 - **Partial channel failure**: if Telegram succeeds and Email fails (or vice versa), the run is marked SUCCESS with WARNING; delivery status is recorded via the notification service.
 
@@ -174,7 +169,8 @@ Any of the above can be layered on later without changing the core schema or sch
 
 ## 8. Open questions
 
-- None at the time of writing. All prior design questions (channels, scheduling mechanism, watchlist source, dedup behavior) were resolved with the user before drafting this spec.
+- None at the time of writing.
+- **Resolved 2026-08-13**: the YAML watchlist (manually tracked / outside-IBKR positions) was removed. At the time, all but 4 of its 12 entries duplicated positions already present in the IBKR XML; the remaining 4 (`IOVA`, `RPD`, `RGNX`, `MELI`) were confirmed closed/stale and intentionally dropped rather than migrated. If a genuine outside-IBKR holding needs tracking again in the future, reintroducing a second source is straightforward (`Holding.source` already supports more than `"ibkr"`), but it is not implemented today.
 
 ## 9. References
 

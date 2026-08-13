@@ -13,10 +13,6 @@ channels:
 # Default: 21:30 UTC on weekdays (~ US cash close).
 cron: "30 21 * * 1-5"
 
-# Path (relative to project root) to the user-editable watchlist YAML.
-# Set to an empty string ("") to skip watchlist loading when ibkr_xml_path is used instead.
-watchlist_path: src/portfolio/pnl_alert/config/watchlist.yaml
-
 # Path to an IBKR Flex Query "Open Positions" XML export.
 # Supports glob patterns — the lexicographically-last match is used,
 # so ISO-date filenames (Open_Positions-YYYY-MM-DD.xml) resolve to the newest file.
@@ -30,8 +26,8 @@ ibkr_xml_path: src/portfolio/pnl_alert/config/Open_Positions.xml
 # User ID whose email address and Telegram chat ID will receive the alert.
 recipient_id: 2
 
-# Whether to connect to IBKR and merge live positions into the alert.
-# Set to false if you only want to monitor the YAML watchlist.
+# Whether to connect to the live IBKR broker to merge in same-day positions
+# on top of the Flex Query XML export. Set to false to rely on the XML alone.
 include_ibkr: true
 
 # Restrict IBKR positions to stock (STK) sec-types only. Options / FX

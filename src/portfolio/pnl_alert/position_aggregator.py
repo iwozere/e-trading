@@ -1,21 +1,19 @@
 """
 Position aggregator.
 
-Merges live IBKR positions with the user's YAML watchlist into a single list
-of holdings used by the PnL evaluator.
+Turns raw IBKR positions (Flex Query XML export merged with live broker
+positions) into the unified holdings list used by the PnL evaluator.
 """
 
 from dataclasses import dataclass
-from typing import Any, Iterable, List, Tuple
+from typing import Any, Iterable, List
 
 from src.notification.logger import setup_logger
-from src.portfolio.pnl_alert.watchlist_loader import WatchlistEntry
 
 _logger = setup_logger(__name__)
 
 
 SOURCE_IBKR = "ibkr"
-SOURCE_WATCHLIST = "watchlist"
 
 
 @dataclass(frozen=True)
@@ -26,8 +24,10 @@ class Holding:
     Attributes:
         symbol: Ticker symbol, always uppercase.
         avg_price: Average buy price in USD (> 0).
-        quantity: Position size. Defaults to 1 for watchlist-only entries.
-        source: Either "ibkr" or "watchlist".
+        quantity: Position size.
+        source: Always `SOURCE_IBKR` currently; kept as a field so the
+            notifier's per-source breakdown doesn't need a special case if a
+            second source is reintroduced later.
     """
 
     symbol: str
@@ -110,25 +110,22 @@ def fetch_raw_ibkr_positions(broker: Any) -> List[RawIbkrPosition]:
 
 def merge_holdings(
     ibkr_positions: Iterable[RawIbkrPosition],
-    watchlist: Iterable[WatchlistEntry],
     stk_only: bool = True,
-) -> Tuple[List[Holding], List[str]]:
+) -> List[Holding]:
     """
-    Merge IBKR positions and the watchlist into a unified list of holdings.
+    Turn raw IBKR positions into the unified holdings list.
 
     Rules:
         - Non-STK IBKR positions are dropped when `stk_only=True`.
         - IBKR positions with quantity <= 0 or avg_price <= 0 are dropped.
-        - If a symbol exists in both sources, the IBKR entry wins and a
-          warning is appended to `conflicts`.
 
     Args:
-        ibkr_positions: Raw IBKR positions (from `fetch_raw_ibkr_positions`).
-        watchlist: Parsed watchlist entries.
+        ibkr_positions: Raw IBKR positions (XML export merged with any live
+            broker positions by the caller; see `runner.run_once`).
         stk_only: If True, filter out non-stock IBKR positions.
 
     Returns:
-        Tuple of `(holdings, conflict_symbols)`.
+        Sorted list of `Holding`.
     """
     holdings_by_symbol: dict[str, Holding] = {}
     skipped_non_stk: List[str] = []
@@ -161,57 +158,6 @@ def merge_holdings(
             skipped_non_stk,
         )
 
-    conflicts: List[str] = []
-    for entry in watchlist:
-        symbol = entry.symbol.upper()
-        if symbol in holdings_by_symbol:
-            ibkr = holdings_by_symbol[symbol]
-            _logger.warning(
-                "Symbol %s present in both IBKR (avg=%.4f) and watchlist (avg=%.4f); IBKR wins",
-                symbol,
-                ibkr.avg_price,
-                entry.avg_price,
-            )
-            conflicts.append(symbol)
-            continue
-
-        holdings_by_symbol[symbol] = Holding(
-            symbol=symbol,
-            avg_price=entry.avg_price,
-            quantity=1.0,
-            source=SOURCE_WATCHLIST,
-        )
-
     holdings = sorted(holdings_by_symbol.values(), key=lambda h: h.symbol)
-    _logger.info(
-        "Aggregated %d holdings (ibkr=%d, watchlist=%d, conflicts=%d)",
-        len(holdings),
-        sum(1 for h in holdings if h.source == SOURCE_IBKR),
-        sum(1 for h in holdings if h.source == SOURCE_WATCHLIST),
-        len(conflicts),
-    )
-    return holdings, conflicts
-
-
-async def aggregate_holdings(
-    broker: Any | None,
-    watchlist: Iterable[WatchlistEntry],
-    stk_only: bool = True,
-) -> Tuple[List[Holding], List[str]]:
-    """
-    High-level helper: pull IBKR positions (best-effort) and merge with the watchlist.
-
-    Args:
-        broker: Connected `IBKRBroker`, or None to skip IBKR entirely.
-        watchlist: Parsed watchlist entries.
-        stk_only: If True, filter non-STK IBKR positions.
-
-    Returns:
-        Tuple of `(holdings, conflict_symbols)`.
-    """
-    if broker is None:
-        _logger.info("IBKR disabled; using watchlist only")
-        return merge_holdings([], watchlist, stk_only=stk_only)
-
-    ibkr_positions = fetch_raw_ibkr_positions(broker)
-    return merge_holdings(ibkr_positions, watchlist, stk_only=stk_only)
+    _logger.info("Aggregated %d holdings from IBKR", len(holdings))
+    return holdings

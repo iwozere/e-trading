@@ -23,10 +23,10 @@ class AlertRow:
         symbol: Ticker symbol.
         avg_price: Average buy price used for PnL calculation.
         current_price: Latest close price used.
-        quantity: Position size (1 for watchlist-only entries).
+        quantity: Position size.
         pnl_abs: Absolute PnL in USD = `(current - avg) * quantity`.
         pnl_pct: Fractional PnL = `(current - avg) / avg`. 0.10 means +10%.
-        source: "ibkr" or "watchlist".
+        source: Always "ibkr" currently (see `position_aggregator.Holding`).
     """
 
     symbol: str
