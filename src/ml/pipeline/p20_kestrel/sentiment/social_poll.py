@@ -160,8 +160,8 @@ def _get_reddit_headers() -> Dict[str, str] | None:
         if not token:
             return None
         return {"Authorization": f"bearer {token}", "User-Agent": user_agent}
-    except Exception:
-        _logger.warning("Reddit app-only auth failed; skipping Reddit poll")
+    except Exception as e:
+        _logger.warning("Reddit app-only auth failed; skipping Reddit poll: %s", e)
         return None
 
 
