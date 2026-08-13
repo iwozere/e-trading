@@ -15,6 +15,7 @@ Nasdaq CSV     ─→  universe_loader    ─→  k20_universe
 OHLCV feeds    ─→  eod_ingest         ─→  k20_signals
 EDGAR filings  ─→  filings_ingest     ─→  k20_signals / llm_queue.json
 Catalyst feeds ─→  calendar_sync      ─→  k20_catalysts
+FMP + Finnhub  ─→  revisions_ingest   ─→  k20_signals (revisions_score, gap 10.1)
 
 GDELT GKG      ─→  gdelt_processor    ─→  k20_sentiment_daily
 StockTwits     ─→  social_poll        ─→  k20_sentiment_daily
@@ -56,6 +57,31 @@ k20_*          ─→  weekly_report      ─→  Notification push
 **Scoring (§4.2.1 interim mode)**
 - When `REVISIONS_FEED_AVAILABLE=False`: `score = round(partial_score × 100 / 70)`
 - Interim score denominator is 70 pts (insider 20 + BS 15 + tech 15 + buyback 10 + short 5 + attention 5)
+
+**Revisions feed ingest (gap 10.1, §4.2.1)** — `ingest/revisions_ingest.py`
+- Populates `revisions_score` (0-30 pts, matching the full-mode formula's
+  `30 × revisions` weight) plus its three raw component signals in
+  `k20_signals`, for watchlist ∪ positions tickers, daily before the Sleeve A
+  screen (20:50 UTC weekdays, `p20_screen_turnaround` runs at 21:00).
+- Blends three sources so the score is useful immediately instead of needing
+  a cold start: Finnhub recommendation-trend momentum (immediate — Finnhub
+  returns several months of history in one call), FMP `grades` net
+  upgrades/downgrades over trailing 60d (immediate — dated history in one
+  call), and FMP `analyst-estimates` (`period=annual` — the only tier
+  available on the account's plan; `period=quarter` is 402) forward-EPS
+  60-day delta (warms up over ~60-90 days of the job's own daily snapshots —
+  the literal "forward-EPS revisions up 60d" signal §4.2 names).
+- **Shadow mode**: `REVISIONS_FEED_AVAILABLE` stays `False` after this job
+  ships. It writes signals with zero effect on live scoring
+  (`sleeve_a.py`'s `_score_interim` only reads `revisions_score` when the
+  flag is `True`) until the values have been reviewed for a few weeks. Per
+  §4.2.1, flipping the flag should show both scores side by side in the
+  weekly report for a two-week calibration overlap — verify `weekly_report.py`
+  has that hook before flipping.
+- Component weights (`REVISIONS_*` constants in `config.py`) are a
+  first-cut heuristic, deliberately isolated so they can be recalibrated
+  without re-pulling data — the three raw signals are stored individually,
+  not just the blended total.
 
 **LLM Budget (§8)**
 - Monthly cap from `LLM_MONTHLY_BUDGET_USD` config

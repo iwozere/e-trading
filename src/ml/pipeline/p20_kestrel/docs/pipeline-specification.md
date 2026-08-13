@@ -357,7 +357,7 @@ Fallback input path: a watched YAML file (`positions.yml`) ingested by `risk_che
 
 | # | Gap | Priority | Note |
 |---|---|---|---|
-| 10.1 | Earnings estimate revisions / forward consensus | CRITICAL | Sleeve A runs in interim renormalized mode (§4.2.1) until wired; candidates tagged `revisions:n/a` |
+| 10.1 | Earnings estimate revisions / forward consensus | CRITICAL | **Sourced 2026-08-13**: `ingest/revisions_ingest.py` blends Finnhub `recommendation` trend momentum + FMP `grades` net upgrades/downgrades (both immediate) with FMP `analyst-estimates` (period=annual) forward-EPS 60d delta (warms up over ~60-90d). Shipped in shadow mode — `REVISIONS_FEED_AVAILABLE` stays false until the values are reviewed; Sleeve A still runs interim renormalized (§4.2.1), candidates still tagged `revisions:n/a`, until the flag flips. |
 | 10.2 | Event calendars (earnings dates, PDUFA, spin-offs, index changes) | CRITICAL | Finnhub earnings calendar free; PDUFA scrapes + weekly manual verify |
 | 10.3 | NYSE/AMEX universe extension | CRITICAL | Nasdaq-only halves Sleeve A/B opportunity set |
 | 10.4 | Official FINRA short interest (bi-monthly) | HIGH | TRF ≠ outstanding SI |

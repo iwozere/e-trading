@@ -25,6 +25,7 @@ P20 Kestrel is a three-sleeve trading intelligence pipeline that screens, scores
 | 20:00 | Mon–Fri       | EOD ingest                    |
 | 20:30 | Mon–Fri       | Filings ingest                |
 | 20:45 | Mon–Fri       | Catalyst sync                 |
+| 20:50 | Mon–Fri       | Revisions feed ingest (gap 10.1, shadow mode) |
 | 21:00 | Mon–Fri       | Sleeve A screen               |
 | 21:15 | Mon–Fri       | Sleeve B screen (B1/B2/B3)   |
 | 21:30 | Mon–Fri       | Sleeve C RS rank              |
@@ -140,7 +141,8 @@ p20_kestrel/
 │   ├── universe_loader.py # Weekly Nasdaq screener + fundamentals
 │   ├── eod_ingest.py      # Daily OHLCV + technicals
 │   ├── filings_ingest.py  # Form 4, 8-K, 13D/G
-│   └── calendar_sync.py   # Catalyst T-10/T-3 alerts
+│   ├── calendar_sync.py   # Catalyst T-10/T-3 alerts
+│   └── revisions_ingest.py # Sleeve A revisions_score (gap 10.1, shadow mode)
 ├── sentiment/
 │   ├── alias_builder.py   # Company alias table (GDELT matching)
 │   ├── gdelt_processor.py # GKG z-score pipeline
@@ -167,8 +169,8 @@ p20_kestrel/
 │   ├── data_health.py     # 07:00 freshness guard
 │   └── weekly_report.py   # Sunday 18:00 performance report
 └── jobs/
-    ├── register_jobs.py   # One-time job schedule registration (19 jobs)
-    └── run_*.py           # Scheduler entry points (19 scheduled + 1 manual backfill)
+    ├── register_jobs.py   # One-time job schedule registration (21 jobs)
+    └── run_*.py           # Scheduler entry points (21 scheduled + 1 manual backfill)
 ```
 
 ## Integration

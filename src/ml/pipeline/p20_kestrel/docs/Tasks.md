@@ -33,9 +33,9 @@
 - [x] `reporting/daily_digest.py` — 07:30 digest builder + sender
 - [x] `reporting/data_health.py` — 07:00 freshness guard
 - [x] `reporting/weekly_report.py` — Sunday performance report
-- [x] `jobs/register_jobs.py` — One-time job schedule registration (19 jobs)
-- [x] 20 `run_*.py` scheduler entry scripts (19 scheduled + 1 manual backfill)
-- [x] Test suite (12 test files, ~90 tests)
+- [x] `jobs/register_jobs.py` — One-time job schedule registration (21 jobs)
+- [x] 22 `run_*.py` scheduler entry scripts (21 scheduled + 1 manual backfill)
+- [x] Test suite (16 test files, ~130 tests)
 - [x] Module documentation (README, Requirements, Design, Tasks)
 - [x] Sleeve B2 (spin-offs) — `screen_b2()` in sleeve_b.py; `get_past_spinoffs()` repo; B2 in run()
 - [x] `llm/risk_diff.py` — wired: `run_llm_risk_diff.py` entry point + registered in jobs (Sunday 18:00 UTC)
@@ -45,6 +45,12 @@
 - [x] Deploy runbook — added to README.md
 - [x] Telegram bot hook example for /pos — added to README.md
 - [x] Integration tests (2 test files: morning chain + /pos roundtrip)
+- [x] Revisions feed ingest (gap 10.1, §4.2.1) — `ingest/revisions_ingest.py`
+      populates `revisions_score` from FMP `analyst-estimates`/`grades` +
+      Finnhub `recommendation` trends, registered as `p20_revisions_ingest`
+      (20:50 UTC weekdays). Ships in **shadow mode**: writes signals but
+      `REVISIONS_FEED_AVAILABLE` stays `False` (zero scoring impact) until
+      reviewed.
 
 ### 🔄 IN PROGRESS
 
@@ -52,7 +58,13 @@
 
 ### 🚀 PLANNED ENHANCEMENTS
 
-- [ ] Revisions feed integration — enables full §4.2 scoring (set `REVISIONS_FEED_AVAILABLE=True`)
+- [ ] Revisions feed flag flip — after reviewing shadow-mode `revisions_score`
+      output for a few weeks, set `REVISIONS_FEED_AVAILABLE=True` in
+      `config.py`. Verify `weekly_report.py` shows the §4.2.1 two-week
+      dual-score calibration overlap before flipping.
+- [ ] Recalibrate `REVISIONS_*` component weights in `config.py` once real
+      shadow-mode data is available — current weights are a first-cut
+      heuristic, not backtested.
 - [ ] Sleeve A: EV/EBITDA relative valuation scoring when data available
 - [ ] Performance attribution — realized P&L by sleeve in weekly report
 - [ ] Backtester integration — validate sleeve screens against historical data
@@ -93,6 +105,7 @@ See [Code-Review-2026-07-03.md](Code-Review-2026-07-03.md) for full details.
 - [x] Integration test: full morning chain with mock DB — `test_integration_morning_chain.py`
 - [x] Integration test: /pos add → confirm_add → risk_checker roundtrip — `test_integration_pos_roundtrip.py`
 - [x] Sleeve B: Index inclusion event screening (S&P/Nasdaq adds/removes) — Scraped via Wikipedia inside `p15_daily.py`, cached as CSV, and screened in `sleeve_b.py`
+- [x] Unit tests for revisions_ingest.py (EPS-row selection, grades window, Finnhub momentum, score blending, shadow-mode run()) — `test_revisions_ingest.py`
 - [ ] Performance test: universe_loader with 3000+ tickers (requires live data or large fixture)
 
 ## Documentation Updates

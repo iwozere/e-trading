@@ -6,7 +6,7 @@
 - `pandas` >= 2.0 — Data processing
 - `sqlalchemy` >= 2.0 — Database ORM
 - `pytrends` >= 4.9 — Google Trends API
-- `requests` >= 2.31 — HTTP calls (StockTwits, Reddit, ApeWisdom)
+- `requests` >= 2.31 — HTTP calls (StockTwits, Reddit, ApeWisdom, FMP, Finnhub)
 - `praw` >= 7.7 — Reddit OAuth (optional, falls back to requests)
 - `pyyaml` >= 6.0 — YAML position file fallback (optional)
 
@@ -31,13 +31,23 @@
 - **Google Trends** — pytrends with 30–60s jitter per batch
 - **EDGAR** — GKG files, Form 4, 8-K, 13D/G, 10-K/Q via EdgarDownloader
 - **Nasdaq** — Tickers CSV at path configured by `NASDAQ_TICKERS_CSV`
+- **FMP** (`/stable/analyst-estimates`, `/stable/grades`) and **Finnhub**
+  (`/stock/recommendation`) — Sleeve A revisions feed ingest (gap 10.1).
+  `period=quarter` on FMP's analyst-estimates and Finnhub's `eps-estimate`/
+  `revenue-estimate` are not available on the account's current plan tier
+  (402/403) — only `period=annual` and the endpoints above are used.
 
 ## Environment Variables
 
 - `SCHEDULER_SYSTEM_USER_ID` — user_id for job_schedules rows (default: 1)
 - `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USERNAME`, `REDDIT_PASSWORD`
 - `TRENDS_ANCHOR_TERM` — baseline term for Google Trends normalization (default: "stock market")
-- `REVISIONS_FEED_AVAILABLE` — bool (default: False); enables §4.2 revisions scoring
+- `FMP_API_KEY`, `FINNHUB_API_KEY` — required by `revisions_ingest.py`; job is
+  skipped (logged) if either is unset
+
+Note: `REVISIONS_FEED_AVAILABLE` is **not** an environment variable — it's a
+plain `bool` constant in `config.py` (default `False`), flipped by editing
+the file, not via env var.
 
 ## System Requirements
 

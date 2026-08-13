@@ -61,6 +61,11 @@ _JOB_SPECS: List[Dict[str, Any]] = [
     },
     {"name": "p20_ingest_filings", "cron": "30 20 * * 1-5", "script": "run_ingest_filings.py", "enabled": True},
     {"name": "p20_calendar_sync", "cron": "45 20 * * 1-5", "script": "run_catalyst_sync.py", "enabled": True},
+    # Gap 10.1: Sleeve A revisions feed (shadow mode — writes k20_signals,
+    # REVISIONS_FEED_AVAILABLE stays False in config.py until reviewed).
+    # Must run before p20_screen_turnaround so revisions_score is fresh when
+    # sleeve_a.py eventually reads it.
+    {"name": "p20_revisions_ingest", "cron": "50 20 * * 1-5", "script": "run_revisions_ingest.py", "enabled": True},
     # Screening
     {"name": "p20_screen_turnaround", "cron": "0 21 * * 1-5", "script": "run_screen_turnaround.py", "enabled": True},
     {"name": "p20_screen_spinoffs", "cron": "15 21 * * 1-5", "script": "run_screen_spinoffs.py", "enabled": True},
