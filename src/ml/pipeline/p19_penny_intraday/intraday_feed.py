@@ -103,11 +103,26 @@ class IBKRIntradayFeed:
             from ib_insync import Stock  # type: ignore[import-not-found]
 
         subs = {}
+        failures: List[str] = []
+        first_failure: Exception | None = None
         for sym in tickers:
             try:
                 subs[sym] = from_ib.reqMktData(Stock(sym, "SMART", "USD"), "", False, False)
-            except Exception:
-                _logger.debug("reqMktData failed for %s", sym)
+            except Exception as e:
+                failures.append(sym)
+                if first_failure is None:
+                    first_failure = e
+
+        if failures:
+            _logger.warning(
+                "reqMktData failed for %d/%d tickers (%s); first failure (%s): %s: %s",
+                len(failures),
+                len(tickers),
+                ", ".join(failures[:10]) + ("..." if len(failures) > 10 else ""),
+                failures[0],
+                type(first_failure).__name__,
+                first_failure,
+            )
 
         # Adaptive settle: poll until most tickers have a price or the budget runs out.
         waited = 0.0

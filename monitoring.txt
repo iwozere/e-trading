@@ -1,3 +1,3 @@
-[Monitoring/scheduler.service] [systemd/scheduler.service] 2026-07-13 22:05:00,075 - [PID 759048] - ERROR - Job timed out after 300s (schedule: 'p20_in
+[Monitoring/scheduler.service] [systemd/scheduler.service] 2026-08-13 15:00:00,247 - [PID 4003615] - WARNING - Script stderr: 2026-08-13 15:00:00,207 -
 
-[systemd/scheduler.service] 2026-07-13 22:05:00,075 - [PID 759048] - ERROR - Job timed out after 300s (schedule: 'p20_ingest_eod', type: script)
+[systemd/scheduler.service] 2026-08-13 15:00:00,247 - [PID 4003615] - WARNING - Script stderr: 2026-08-13 15:00:00,207 - [PID 55593] - WARNING - No watchlist at results/p19_penny_intraday/2026-08-13/watchlist.json — run build-watchlist first
