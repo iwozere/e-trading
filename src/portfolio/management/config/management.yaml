@@ -1,0 +1,38 @@
+# Portfolio Management — earnings-triggered stop-loss reminder configuration.
+
+# How many days ahead to look for earnings dates on held tickers.
+earnings_window_days: 21
+
+# Half-width (minutes) of the match window around each T-1day/T-1hour
+# trigger moment. Must be >= half the polling cadence below so no trigger
+# moment is skipped between two consecutive runs.
+trigger_window_minutes: 15
+
+# Channels to notify (any subset of: telegram, email).
+channels:
+  - telegram
+  - email
+
+# Cron expression for the polling schedule (UTC). Every 15 min, ~12:00-22:00
+# UTC, weekdays — brackets both T-1day and T-1hour of 08:30/09:30/15:00/16:00
+# ET (BMO/AMC market-open/close anchors) across DST.
+cron: "*/15 12-22 * * 1-5"
+
+# Path to an IBKR Flex Query "Open Positions" XML export — same file
+# pnl_alert refreshes and reads; holdings are reused from there, not
+# re-fetched here. See src/portfolio/pnl_alert/config/pnl_alert.yaml.
+ibkr_xml_path: src/portfolio/pnl_alert/config/Open_Positions.xml
+
+# Restrict holdings to stock (STK) sec-types only.
+ibkr_stk_only: true
+
+# Live Gateway connection for the open-orders check (never paper — real
+# stops only exist on the live account). Leave host/port/client_id unset to
+# fall back to IBKR_HOST / IBKR_PORT / IBKR_LIVE_STOP_GUARD_CLIENT_ID from
+# config/donotshare/donotshare.py.
+# ibkr_live_host: ""
+# ibkr_live_port: 4001
+# ibkr_live_client_id: 21
+
+# User ID whose email address and Telegram chat ID will receive the reminder.
+recipient_id: 2

@@ -67,6 +67,11 @@ IBKR_PAPER_CLIENT_ID = os.getenv("IBKR_PAPER_CLIENT_ID")
 IBKR_FLEX_TOKEN = os.getenv("IBKR_FLEX_TOKEN")
 IBKR_FLEX_QUERY_ID = os.getenv("IBKR_FLEX_QUERY_ID")
 
+# Dedicated clientId for src.portfolio.management's read-only live-Gateway
+# open-orders check — distinct from IBKR_CLIENT_ID so it can never collide
+# with a live trading bot session using that id concurrently.
+IBKR_LIVE_STOP_GUARD_CLIENT_ID = os.getenv("IBKR_LIVE_STOP_GUARD_CLIENT_ID")
+
 
 ALPHA_VANTAGE_API_KEY=os.getenv("ALPHA_VANTAGE_API_KEY")
 FINNHUB_API_KEY=os.getenv("FINNHUB_API_KEY")
