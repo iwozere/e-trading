@@ -14,7 +14,7 @@ from typing import List, cast
 import pandas as pd
 from ib_insync import IB, Contract, Forex, Stock
 
-from config.donotshare.donotshare import DATA_CACHE_DIR, IBKR_CLIENT_ID, IBKR_HOST, IBKR_PORT
+from config.donotshare.donotshare import DATA_CACHE_DIR, IBKR_HOST, IBKR_PAPER_CLIENT_ID, IBKR_PAPER_PORT
 from src.data.downloader.base_data_downloader import BaseDataDownloader
 from src.notification.logger import setup_logger
 
@@ -44,14 +44,21 @@ class IBKRDownloader(BaseDataDownloader):
             _logger.info("Created cache directory: %s", self.cache_dir)
 
     def _ensure_connected(self):
-        """Ensure connection to IBKR TWS/Gateway."""
+        """Ensure connection to the paper IBKR Gateway (delayed data, no live-mode risk)."""
         if self.ib is None or not self.ib.isConnected():
             try:
                 self.ib = IB()
-                # Use a specific clientId offset to avoid conflicts with main brokers
-                self.ib.connect(IBKR_HOST or "127.0.0.1", int(IBKR_PORT or 7497), clientId=int(IBKR_CLIENT_ID or 1) + 50)
+                # Deliberately the paper env vars, not the generic IBKR_PORT/IBKR_CLIENT_ID
+                # (those are live-mode; see broker_factory.py / pnl_alert/runner.py for the
+                # same paper-vs-generic distinction). +50 offset avoids clientId conflicts
+                # with the main paper broker connection.
+                self.ib.connect(
+                    IBKR_HOST or "127.0.0.1",
+                    int(IBKR_PAPER_PORT or 4002),
+                    clientId=int(IBKR_PAPER_CLIENT_ID or 1) + 50,
+                )
                 self.ib.reqMarketDataType(self.market_data_type)
-                _logger.info("Connected to IBKR for downloading (Delayed Data Mode)")
+                _logger.info("Connected to IBKR paper Gateway for downloading (Delayed Data Mode)")
             except Exception as e:
                 _logger.error("Failed to connect to IBKR: %s", e)
                 raise
