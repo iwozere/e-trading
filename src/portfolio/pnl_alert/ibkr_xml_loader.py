@@ -6,6 +6,22 @@ RawIbkrPosition objects compatible with the position aggregator.
 
 Positions from multiple accounts are merged by symbol using a weighted
 average cost basis derived from ``costBasisMoney`` and ``position``.
+
+Symbol disambiguation
+----------------------
+IBKR tickers are not globally unique — e.g. ``GOLD`` is both a London-listed
+gold ETC (``listingExchange="LSEETF"``, price ~$4) and Barrick Gold Corp on
+NYSE (price ~$40). Left unresolved, a bare ``GOLD`` handed to the data
+provider (Yahoo/Tiingo/FMP) resolves to whichever instrument that provider
+considers canonical for the symbol — not necessarily the one IBKR meant —
+producing a silently wrong price and a false PnL alert.
+
+Resolution requires the "Listing Exchange" column to be enabled on the
+"Open Positions" Flex Query template (IBKR Client Portal > Performance &
+Reports > Flex Queries > edit > Open Positions section > check "Listing
+Exchange" and "Currency"). Without it, ``listingExchange`` is empty for
+every position and this module falls back to the bare symbol — the same
+behavior as before this was added.
 """
 
 import xml.etree.ElementTree as ET
@@ -17,11 +33,88 @@ from src.portfolio.pnl_alert.position_aggregator import RawIbkrPosition
 
 _logger = setup_logger(__name__)
 
-# IBKR reports non-US ETFs without the exchange suffix that data providers
-# (Tiingo, FMP, Yahoo) require. Map IBKR ticker → provider ticker here.
+# Verified one-off overrides: IBKR ticker -> provider ticker. Takes priority
+# over the automatic listing-exchange resolution below. Use this when the
+# listing-exchange suffix alone is not enough to pick the right instrument.
 _IBKR_SYMBOL_MAP: dict[str, str] = {
     "VUSD": "VUSD.L",  # Vanguard FTSE All-World UCITS ETF (LSE, USD share class)
 }
+
+# IBKR `listingExchange` codes (as reported in the Flex Query XML) mapped to
+# the exchange suffix Yahoo/Tiingo/FMP expect. Extend this as new non-US
+# positions show up in the account.
+_LISTING_EXCHANGE_SUFFIX_MAP: dict[str, str] = {
+    "LSE": ".L",  # London Stock Exchange, main market
+    "LSEETF": ".L",  # London Stock Exchange, ETF/ETC segment
+    "LSEIOB1": ".L",  # London Stock Exchange, International Order Book
+}
+
+# IBKR listing exchanges known to need no suffix at all. Anything seen that is
+# neither in this set nor in `_LISTING_EXCHANGE_SUFFIX_MAP` is logged as a
+# WARNING and left unresolved rather than silently guessed — better to drop a
+# price than to price against the wrong instrument.
+_US_LISTING_EXCHANGES: frozenset[str] = frozenset(
+    {
+        "NYSE",
+        "NASDAQ",
+        "ARCA",
+        "BATS",
+        "AMEX",
+        "IEX",
+        "EDGX",
+        "EDGA",
+        "PSX",
+        "BEX",
+        "PINK",  # OTC Markets "Pink" tier (US OTC, e.g. micro-cap ADRs/penny stocks)
+        "OTCBB",
+        "OTCQB",
+        "OTCQX",
+        "GREY",
+    }
+)
+
+
+def _resolve_provider_symbol(symbol: str, listing_exchange: str) -> str:
+    """
+    Translate an IBKR symbol into the ticker the data providers expect.
+
+    Resolution order:
+        1. `_IBKR_SYMBOL_MAP` - verified one-off overrides.
+        2. `_LISTING_EXCHANGE_SUFFIX_MAP` - automatic suffix derived from the
+           position's `listingExchange` (requires that Flex Query column to
+           be enabled; see the module docstring).
+        3. Unchanged - either a recognized US listing, or a non-US listing
+           this map doesn't know about yet (logged as a WARNING).
+
+    Args:
+        symbol: Upper-cased IBKR symbol.
+        listing_exchange: Upper-cased `listingExchange` attribute, or `""` if
+            the XML export doesn't carry that column.
+
+    Returns:
+        The symbol to use for price lookups.
+    """
+    if symbol in _IBKR_SYMBOL_MAP:
+        return _IBKR_SYMBOL_MAP[symbol]
+
+    if not listing_exchange or listing_exchange in _US_LISTING_EXCHANGES:
+        return symbol
+
+    suffix = _LISTING_EXCHANGE_SUFFIX_MAP.get(listing_exchange)
+    if suffix is None:
+        _logger.warning(
+            "Symbol %s has an unrecognized non-US listing exchange %s; using "
+            "bare symbol for price lookup. This may collide with a same-named "
+            "US ticker (e.g. GOLD/LSEETF vs GOLD/NYSE) - add a mapping to "
+            "_LISTING_EXCHANGE_SUFFIX_MAP or _IBKR_SYMBOL_MAP in ibkr_xml_loader.py.",
+            symbol,
+            listing_exchange,
+        )
+        return symbol
+
+    resolved = f"{symbol}{suffix}"
+    _logger.info("Resolved %s (listingExchange=%s) -> %s", symbol, listing_exchange, resolved)
+    return resolved
 
 
 def resolve_xml_path(path_or_glob: str) -> Path:
@@ -103,7 +196,8 @@ def load_ibkr_xml(path: str) -> List[RawIbkrPosition]:
         symbol_raw = pos_el.get("symbol", "").strip().upper()
         if not symbol_raw:
             continue
-        symbol_raw = _IBKR_SYMBOL_MAP.get(symbol_raw, symbol_raw)
+        listing_exchange = pos_el.get("listingExchange", "").strip().upper()
+        symbol_raw = _resolve_provider_symbol(symbol_raw, listing_exchange)
 
         try:
             quantity = float(pos_el.get("position", "0"))

@@ -217,3 +217,132 @@ def test_all_positions_return_rawibkrposition_type(tmp_path: Path) -> None:
 
     for pos in load_ibkr_xml(str(xml_file)):
         assert isinstance(pos, RawIbkrPosition)
+
+
+# ---------------------------------------------------------------------------
+# load_ibkr_xml — listing-exchange symbol disambiguation
+# ---------------------------------------------------------------------------
+
+
+def test_lse_listing_exchange_gets_suffix(tmp_path: Path) -> None:
+    """A LSE-listed 'GOLD' must not collide with NYSE-listed Barrick Gold."""
+    xml = textwrap.dedent("""\
+        <FlexQueryResponse queryName="Open Positions" type="AF">
+        <FlexStatements count="1">
+        <FlexStatement accountId="U123">
+        <OpenPositions>
+        <OpenPosition symbol="GOLD" listingExchange="LSEETF" position="500"
+            markPrice="4.386" costBasisPrice="4.11" costBasisMoney="2055" />
+        </OpenPositions>
+        </FlexStatement>
+        </FlexStatements>
+        </FlexQueryResponse>
+    """)
+    xml_file = tmp_path / "positions.xml"
+    xml_file.write_text(xml)
+
+    positions = {p.symbol: p for p in load_ibkr_xml(str(xml_file))}
+    assert "GOLD.L" in positions
+    assert "GOLD" not in positions
+    assert positions["GOLD.L"].avg_price == pytest.approx(4.11)
+
+
+def test_us_listing_exchange_no_suffix(tmp_path: Path) -> None:
+    xml = textwrap.dedent("""\
+        <FlexQueryResponse queryName="Open Positions" type="AF">
+        <FlexStatements count="1">
+        <FlexStatement accountId="U123">
+        <OpenPositions>
+        <OpenPosition symbol="GOLD" listingExchange="NYSE" position="10"
+            markPrice="40.00" costBasisPrice="38.00" costBasisMoney="380" />
+        </OpenPositions>
+        </FlexStatement>
+        </FlexStatements>
+        </FlexQueryResponse>
+    """)
+    xml_file = tmp_path / "positions.xml"
+    xml_file.write_text(xml)
+
+    positions = {p.symbol: p for p in load_ibkr_xml(str(xml_file))}
+    assert "GOLD" in positions
+    assert "GOLD.L" not in positions
+
+
+def test_missing_listing_exchange_column_falls_back_to_bare_symbol(tmp_path: Path) -> None:
+    """Old-format exports (no 'Listing Exchange' column) behave as before."""
+    xml_file = tmp_path / "positions.xml"
+    xml_file.write_text(_SINGLE_ACCOUNT_XML)
+
+    positions = {p.symbol: p for p in load_ibkr_xml(str(xml_file))}
+    assert "NVDA" in positions
+
+
+def test_unmapped_non_us_exchange_warns_and_keeps_bare_symbol(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    xml = textwrap.dedent("""\
+        <FlexQueryResponse queryName="Open Positions" type="AF">
+        <FlexStatements count="1">
+        <FlexStatement accountId="U123">
+        <OpenPositions>
+        <OpenPosition symbol="XYZ" listingExchange="ASX" position="10"
+            markPrice="5.00" costBasisPrice="4.00" costBasisMoney="40" />
+        </OpenPositions>
+        </FlexStatement>
+        </FlexStatements>
+        </FlexQueryResponse>
+    """)
+    xml_file = tmp_path / "positions.xml"
+    xml_file.write_text(xml)
+
+    with caplog.at_level("WARNING"):
+        positions = {p.symbol: p for p in load_ibkr_xml(str(xml_file))}
+
+    assert "XYZ" in positions
+    assert any("unrecognized non-US listing exchange" in msg for msg in caplog.messages)
+
+
+def test_pink_otc_listing_exchange_no_suffix(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """OTC Markets 'Pink' is a US market, not a foreign one - no suffix, no warning."""
+    xml = textwrap.dedent("""\
+        <FlexQueryResponse queryName="Open Positions" type="AF">
+        <FlexStatements count="1">
+        <FlexStatement accountId="U123">
+        <OpenPositions>
+        <OpenPosition symbol="BINI" listingExchange="PINK" position="0.0002"
+            markPrice="0.071" costBasisPrice="1414175" costBasisMoney="282.835" />
+        </OpenPositions>
+        </FlexStatement>
+        </FlexStatements>
+        </FlexQueryResponse>
+    """)
+    xml_file = tmp_path / "positions.xml"
+    xml_file.write_text(xml)
+
+    with caplog.at_level("WARNING"):
+        positions = {p.symbol: p for p in load_ibkr_xml(str(xml_file))}
+
+    assert "BINI" in positions
+    assert "BINI.L" not in positions
+    assert not any("unrecognized non-US listing exchange" in msg for msg in caplog.messages)
+
+
+def test_manual_map_overrides_listing_exchange(tmp_path: Path) -> None:
+    """VUSD's verified override wins even if listingExchange is also present."""
+    xml = textwrap.dedent("""\
+        <FlexQueryResponse queryName="Open Positions" type="AF">
+        <FlexStatements count="1">
+        <FlexStatement accountId="U123">
+        <OpenPositions>
+        <OpenPosition symbol="VUSD" listingExchange="LSEETF" position="48"
+            markPrice="143.1675" costBasisPrice="140.00" costBasisMoney="6720" />
+        </OpenPositions>
+        </FlexStatement>
+        </FlexStatements>
+        </FlexQueryResponse>
+    """)
+    xml_file = tmp_path / "positions.xml"
+    xml_file.write_text(xml)
+
+    positions = {p.symbol: p for p in load_ibkr_xml(str(xml_file))}
+    assert "VUSD.L" in positions
