@@ -51,11 +51,9 @@ class ShortSqueezeAgent:
     def __init__(
         self,
         config: P17ShortSqueezeConfig,
-        results_dir: Path,
         target_date: str,
     ) -> None:
         self.config = config
-        self.results_dir = results_dir
         self.target_date = target_date
 
     def run(
@@ -152,17 +150,14 @@ class ShortSqueezeAgent:
         _logger.info("FINRA short-vol ratio: enriched %d/%d candidates", enriched_n, len(candidates))
 
     def _load_finra_data(self) -> pd.DataFrame | None:
-        """Download or load cached FINRA TRF data for target_date."""
-        cache_file = self.results_dir / "finra_trf_cache.parquet"
+        """
+        Load FINRA TRF data for target_date via the shared project-wide cache.
 
-        if cache_file.exists():
-            try:
-                df = pd.read_parquet(cache_file)
-                _logger.debug("FINRA TRF loaded from cache: %d rows", len(df))
-                return df
-            except Exception:
-                _logger.warning("FINRA TRF cache unreadable")
-
+        `download_trf()` (src.ml.pipeline.shared.trf_downloader) already caches
+        to `DATA_CACHE_DIR/trf/{date}.csv.gz` with its own freshness check —
+        no separate local cache is kept here, so there's exactly one copy of
+        this data on disk regardless of how many pipelines read it.
+        """
         try:
             target_dt = datetime.strptime(self.target_date, "%Y-%m-%d")
             # Use previous trading day if target is weekend
@@ -176,8 +171,7 @@ class ShortSqueezeAgent:
                 return None
 
             df = pd.read_csv(trf_file, low_memory=False)
-            df.to_parquet(cache_file, index=False)
-            _logger.info("FINRA TRF downloaded: %d rows", len(df))
+            _logger.info("FINRA TRF loaded: %d rows", len(df))
             return df
         except Exception:
             _logger.exception("FINRA TRF download failed")

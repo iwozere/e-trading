@@ -102,7 +102,6 @@ class P17Pipeline:
         self._technical_agent = TechnicalAgent(cfg.technical_config)
         self._ss_agent = ShortSqueezeAgent(
             cfg.short_squeeze_config,
-            self._results_dir,
             self.target_date,
         )
         self._dilution_agent = DilutionAgent(
