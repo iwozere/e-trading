@@ -297,7 +297,14 @@ class DataManager:
                         )
                         break
                     else:
-                        _logger.warning("Provider %s returned empty data for gap %s-%s", provider, seg_start, seg_end)
+                        _logger.warning(
+                            "Provider %s returned empty data for %s %s gap %s-%s",
+                            provider,
+                            symbol,
+                            timeframe,
+                            seg_start,
+                            seg_end,
+                        )
                 except Exception as e:
                     _logger.warning("Provider %s failed for gap %s-%s: %s", provider, seg_start, seg_end, e)
                     continue
