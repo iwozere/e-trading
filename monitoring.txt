@@ -1,1 +1,0 @@
-sudo journalctl -u scheduler.service --since "today" | grep -i "reqMktData failed"

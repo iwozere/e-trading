@@ -102,26 +102,41 @@ class IBKRIntradayFeed:
         except ImportError:
             from ib_insync import Stock  # type: ignore[import-not-found]
 
+        # reqMktData() keys its subscription table by contract hash, and a Contract
+        # only hashes once it carries a conId — so bare Stock(sym, "SMART", "USD")
+        # objects must be qualified (conId populated) before they're usable here.
+        contracts = {sym: Stock(sym, "SMART", "USD") for sym in tickers}
+        try:
+            from_ib.qualifyContracts(*contracts.values())
+        except Exception as e:
+            _logger.warning("qualifyContracts failed for %d tickers: %s: %s", len(contracts), type(e).__name__, e)
+
         subs = {}
         failures: List[str] = []
         first_failure: Exception | None = None
-        for sym in tickers:
+        for sym, contract in contracts.items():
+            if not contract.conId:
+                failures.append(sym)
+                continue
             try:
-                subs[sym] = from_ib.reqMktData(Stock(sym, "SMART", "USD"), "", False, False)
+                subs[sym] = from_ib.reqMktData(contract, "", False, False)
             except Exception as e:
                 failures.append(sym)
                 if first_failure is None:
                     first_failure = e
 
         if failures:
+            detail = (
+                f"; first failure ({failures[0]}): {type(first_failure).__name__}: {first_failure}"
+                if first_failure is not None
+                else " (unqualified — no conId; IBKR couldn't resolve the contract)"
+            )
             _logger.warning(
-                "reqMktData failed for %d/%d tickers (%s); first failure (%s): %s: %s",
+                "reqMktData failed for %d/%d tickers (%s)%s",
                 len(failures),
                 len(tickers),
                 ", ".join(failures[:10]) + ("..." if len(failures) > 10 else ""),
-                failures[0],
-                type(first_failure).__name__,
-                first_failure,
+                detail,
             )
 
         # Adaptive settle: poll until most tickers have a price or the budget runs out.
