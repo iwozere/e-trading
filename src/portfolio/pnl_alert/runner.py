@@ -59,21 +59,29 @@ async def _build_ibkr_broker() -> Any | None:
     """
     Build and connect an `IBKRBroker` instance using environment-sourced
     credentials. Returns `None` on failure.
+
+    Deliberately reads `IBKR_PAPER_PORT` / `IBKR_PAPER_CLIENT_ID`, not the
+    generic `IBKR_PORT` / `IBKR_CLIENT_ID` — this pipeline is meant to
+    connect to the paper-trading IB Gateway (loopback port 4002 in this
+    project's Docker Gateway setup; see bin/install-ibkr/CHEAT_SHEET.md).
+    The generic vars are live-mode and used elsewhere (e.g. broker_factory.py);
+    passing IBKR_PORT here used to silently override `IBKRBroker`'s own
+    correct paper/live port default (4002 paper / 4001 live).
     """
     try:
-        from config.donotshare.donotshare import IBKR_CLIENT_ID, IBKR_HOST, IBKR_PORT
+        from config.donotshare.donotshare import IBKR_HOST, IBKR_PAPER_CLIENT_ID, IBKR_PAPER_PORT
         from src.trading.broker.ibkr_broker import IBKRBroker
     except ImportError:
         _logger.exception("Could not import IBKR broker dependencies")
         return None
 
-    if not IBKR_HOST or not IBKR_PORT:
-        _logger.warning("IBKR_HOST / IBKR_PORT not configured; skipping IBKR positions")
+    if not IBKR_HOST or not IBKR_PAPER_PORT:
+        _logger.warning("IBKR_HOST / IBKR_PAPER_PORT not configured; skipping IBKR positions")
         return None
 
     try:
-        port = int(IBKR_PORT)
-        client_id = int(IBKR_CLIENT_ID or 1)
+        port = int(IBKR_PAPER_PORT)
+        client_id = int(IBKR_PAPER_CLIENT_ID or 1)
     except ValueError:
         _logger.exception("IBKR env vars are not numeric; skipping IBKR positions")
         return None

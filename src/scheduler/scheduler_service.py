@@ -800,8 +800,9 @@ class SchedulerService:
         Execute a portfolio.* job.
 
         Dispatches schedules whose `target` starts with `"portfolio."` to the
-        matching Python handler. Today only `"portfolio.pnl_alert"` is
-        supported (see `src.portfolio.pnl_alert.runner.run_once`).
+        matching Python handler: `"portfolio.pnl_alert"`
+        (`src.portfolio.pnl_alert.runner.run_once`) or `"portfolio.management"`
+        (`src.portfolio.management.runner.run_once`).
 
         Args:
             schedule: Schedule object (with `target` and `task_params`).
@@ -824,6 +825,20 @@ class SchedulerService:
             return {
                 "target": target,
                 "summary": summary_to_dict(summary),
+            }
+
+        if target == "portfolio.management":
+            from src.portfolio.management.config import DEFAULT_CONFIG_PATH as MGMT_DEFAULT_CONFIG_PATH
+            from src.portfolio.management.config import load_config as load_management_config
+            from src.portfolio.management.runner import run_once as run_management_once
+            from src.portfolio.management.runner import summary_to_dict as management_summary_to_dict
+
+            config_path = task_params.get("config_path", MGMT_DEFAULT_CONFIG_PATH)
+            mgmt_cfg = load_management_config(config_path)
+            mgmt_summary = await run_management_once(mgmt_cfg)
+            return {
+                "target": target,
+                "summary": management_summary_to_dict(mgmt_summary),
             }
 
         raise ValueError(f"Unsupported portfolio target: {target!r}")

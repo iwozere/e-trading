@@ -6,17 +6,14 @@ Verifies:
    whose close was fully committed *before* it opened (1-bar shift + merge_asof).
 2. P07Pipeline(enable_mtf=True) uses get_mtf_dataset() instead of get_merged_dataset().
 3. build_features(enable_mtf=True) adds anchor columns; enable_mtf=False does not.
-4. P08Pipeline emits DeprecationWarning and delegates run_batch() to P07Pipeline.
 """
 
 import sys
-import warnings
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
-import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -210,50 +207,3 @@ class TestBuildFeaturesEnableMtf:
         assert "anchor_rsi" in X.columns
         # Not all zeros — real computation happened
         assert not (X["anchor_trend"] == 0.0).all()
-
-
-# ---------------------------------------------------------------------------
-# 4. P08Pipeline deprecation shim
-# ---------------------------------------------------------------------------
-
-
-class TestP08PipelineDeprecationShim:
-    def test_p08_pipeline_emits_deprecation_warning(self):
-        with pytest.warns(DeprecationWarning, match="P08Pipeline is deprecated"):
-            with patch("src.ml.pipeline.p08_mtf.pipeline.P07Pipeline"):
-                from src.ml.pipeline.p08_mtf.pipeline import P08Pipeline
-
-                P08Pipeline()
-
-    def test_p08_pipeline_run_batch_delegates_to_p07(self):
-        mock_delegate = MagicMock()
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            with patch("src.ml.pipeline.p08_mtf.pipeline.P07Pipeline", return_value=mock_delegate):
-                from src.ml.pipeline.p08_mtf.pipeline import P08Pipeline
-
-                p = P08Pipeline()
-                fake_files = [Path("BTC_15m_20230101_20231231.csv")]
-                p.run_batch(fake_files, train_years=["2023"])
-
-        mock_delegate.run_batch.assert_called_once_with(fake_files, train_years=["2023"])
-
-    def test_p08_pipeline_delegates_with_enable_mtf_true(self):
-        """P07Pipeline must always be constructed with enable_mtf=True."""
-        captured_kwargs = {}
-
-        def fake_p07(**kwargs):
-            captured_kwargs.update(kwargs)
-            return MagicMock()
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            with patch("src.ml.pipeline.p08_mtf.pipeline.P07Pipeline", side_effect=fake_p07):
-                from src.ml.pipeline.p08_mtf.pipeline import P08Pipeline
-
-                P08Pipeline()
-
-        assert captured_kwargs.get("enable_mtf") is True, (
-            "P08Pipeline shim must construct P07Pipeline with enable_mtf=True"
-        )
