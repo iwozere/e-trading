@@ -129,6 +129,8 @@ Safe to invoke from APScheduler or Docker with no TTY.
 - [x] Write unit tests for mixin factories and `StrategyConfigBuilder` — ✅ 33 tests, `src/strategy/tests/test_mixin_factories.py`
 - [x] Write unit tests for all 9 entry mixins (signal generation contract) — ✅ 58 tests, `src/strategy/tests/test_entry_mixins.py`
 - [x] Add configuration validation (Pydantic schema for mixin params) — ✅ `src/strategy/strategy_config_schema.py` + 17 tests
+  (standalone, not wired into the live config path — `src/trading/services/bot_config_validator.py`
+  is what actually validates configs in the API/telegram/trading-bot flow)
 - [x] Add integration tests: full buy→hold→sell cycle via mixin pair — ✅ `src/strategy/tests/test_strategy_integration.py`, RSIOrBBEntryMixin + FixedRatioExitMixin through real Cerebro with TALib indicators, 8 tests
 
 **Status**: ✅ COMPLETE. `src/strategy/Tasks.md` at 35/56 (63%); 142 new tests added across this phase, all pass.
