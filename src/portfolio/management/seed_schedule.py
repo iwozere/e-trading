@@ -8,7 +8,7 @@ cron / target / task_params are updated to match the current YAML config.
 Usage::
 
     python -m src.portfolio.management.seed_schedule \\
-        [--config src/portfolio/management/config/management.yaml] \\
+        [--config src/portfolio/management/config_data/management.yaml] \\
         [--user-id 1] \\
         [--name portfolio_stop_loss_reminder] \\
         [--disabled]

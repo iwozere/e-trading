@@ -31,7 +31,7 @@ earnings-driven price gap.
    without this, manually-placed stops are invisible to the API and every
    held ticker will be wrongly reported as uncovered. See
    `docs/Requirements.md` "External Services".
-3. Edit `src/portfolio/management/config/management.yaml` if you want to
+3. Edit `src/portfolio/management/config_data/management.yaml` if you want to
    change the lookahead window, trigger tolerance, or channels.
 4. Run once manually to validate the setup:
 
@@ -62,7 +62,7 @@ python -m src.scheduler.cli reload
 - `src.data.db.services.jobs_service` — inserting / updating the schedule row
 
 ## Configuration
-- YAML: `src/portfolio/management/config/management.yaml`
+- YAML: `src/portfolio/management/config_data/management.yaml`
 - Environment variables reused: `IBKR_HOST`, `IBKR_PORT` (the **live**
   Gateway vars — see `docs/brainstorm.md` "Live account only" for why this
   is deliberately not `IBKR_PAPER_PORT`), `TELEGRAM_BOT_TOKEN`, `SMTP_*`,

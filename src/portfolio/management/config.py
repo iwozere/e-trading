@@ -16,7 +16,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
-DEFAULT_CONFIG_PATH = "src/portfolio/management/config/management.yaml"
+DEFAULT_CONFIG_PATH = "src/portfolio/management/config_data/management.yaml"
 
 # IBKR working-order types treated as "protective" coverage for a long
 # position (a resting SELL order of one of these types).
