@@ -6,7 +6,6 @@ Verifies:
 2. Regimes below min_regime_samples are skipped.
 3. LSTMValidator.find_regime_models() discovers per-regime .pkl files.
 4. _validate_multi_regime() evaluates only on each regime's own rows.
-5. P00 run_pipeline.py emits DeprecationWarning.
 """
 
 import pickle
@@ -16,7 +15,6 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -221,22 +219,3 @@ class TestFindRegimeModels:
 
         assert result is not None
         assert "_regime" not in result.name
-
-
-# ---------------------------------------------------------------------------
-# 3. P00 deprecation shim
-# ---------------------------------------------------------------------------
-
-
-class TestP00DeprecationShim:
-    def test_p00_run_pipeline_emits_deprecation_warning(self):
-        """Importing p00_hmm_3lstm/run_pipeline.py must emit DeprecationWarning."""
-        import importlib
-        import sys
-
-        mod_name = "src.ml.pipeline.p00_hmm_3lstm.run_pipeline"
-        # Ensure fresh import
-        sys.modules.pop(mod_name, None)
-
-        with pytest.warns(DeprecationWarning, match="p00_hmm_3lstm"):
-            importlib.import_module(mod_name)

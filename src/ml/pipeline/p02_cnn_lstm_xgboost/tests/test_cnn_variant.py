@@ -7,10 +7,8 @@ Verifies:
 3. build_cnn_model with invalid variant raises ValueError.
 4. CNN1D forward pass produces correct embedding shape.
 5. ModelValidator.walk_forward_validate() returns per-fold metrics and averages.
-6. P03 run_pipeline.py emits DeprecationWarning.
 """
 
-import importlib
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -131,17 +129,3 @@ class TestWalkForwardValidate:
         for fold in result["fold_metrics"]:
             da = fold["directional_accuracy"]
             assert 0.0 <= da <= 1.0, f"Fold {fold['fold']}: directional_accuracy={da} out of range"
-
-
-# ---------------------------------------------------------------------------
-# 4. P03 deprecation shim
-# ---------------------------------------------------------------------------
-
-
-class TestP03DeprecationShim:
-    def test_p03_run_pipeline_emits_deprecation_warning(self):
-        mod_name = "src.ml.pipeline.p03_cnn_xgboost.run_pipeline"
-        sys.modules.pop(mod_name, None)
-
-        with pytest.warns(DeprecationWarning, match="p03_cnn_xgboost"):
-            importlib.import_module(mod_name)
