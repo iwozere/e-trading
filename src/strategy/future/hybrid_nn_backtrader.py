@@ -9,7 +9,7 @@ A Backtrader-compatible strategy that uses a pretrained CNN+LSTM+Bahdanau Attent
 
 Usage Example:
 --------------
-from src.strategy.hybrid_nn_backtrader import HybridNNBacktraderStrategy
+from src.strategy.future.hybrid_nn_backtrader import HybridNNBacktraderStrategy
 import backtrader as bt
 
 cerebro = bt.Cerebro()

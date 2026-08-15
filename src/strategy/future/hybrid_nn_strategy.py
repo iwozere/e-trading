@@ -17,7 +17,7 @@ Workflow:
 
 Usage Example:
 --------------
-from src.strategy.hybrid_nn_strategy import HybridNNStrategy
+from src.strategy.future.hybrid_nn_strategy import HybridNNStrategy
 
 strategy = HybridNNStrategy(
     cnn_lstm_path='cnn_lstm_attention.pt',

@@ -80,10 +80,17 @@ def mock_fundamentals():
         debt_to_equity = 0.6
         current_ratio = 2.1
         quick_ratio = 1.5
+        operating_margin = 0.32
+        profit_margin = 0.21
+        revenue_growth = 0.09
+        net_income_growth = 0.07
+        free_cash_flow = 12000000000
         dividend_yield = 0.025
         payout_ratio = 0.45
+        beta = 1.1
         market_cap = 50000000000
         enterprise_value = 55000000000
+        enterprise_value_to_ebitda = 18.4
 
     return MockFundamentals()
 
@@ -320,17 +327,17 @@ class TestFundamentalsAdapter:
 
     def test_supports_fundamental_metrics(self, adapter):
         """Test support for fundamental indicators."""
-        assert adapter.supports("pe")
+        assert adapter.supports("pe_ratio")
         assert adapter.supports("forward_pe")
-        assert adapter.supports("pb")
-        assert adapter.supports("ps")
-        assert adapter.supports("peg")
+        assert adapter.supports("pb_ratio")
+        assert adapter.supports("ps_ratio")
+        assert adapter.supports("peg_ratio")
         assert adapter.supports("roe")
         assert adapter.supports("roa")
-        assert adapter.supports("de_ratio")
+        assert adapter.supports("debt_to_equity")
         assert adapter.supports("current_ratio")
         assert adapter.supports("quick_ratio")
-        assert adapter.supports("div_yield")
+        assert adapter.supports("dividend_yield")
         assert adapter.supports("payout_ratio")
 
     def test_does_not_support_technical(self, adapter):
@@ -341,17 +348,18 @@ class TestFundamentalsAdapter:
     @pytest.mark.asyncio
     async def test_pe_computation(self, adapter, sample_ohlcv_df):
         """Test P/E ratio retrieval."""
-        result = await adapter.compute("pe", sample_ohlcv_df, {}, {"ticker": "AAPL", "provider": None})
+        result = await adapter.compute("pe_ratio", sample_ohlcv_df, {}, {"ticker": "AAPL", "provider": None})
 
         assert "value" in result
         assert isinstance(result["value"], pd.Series)
-        assert len(result["value"]) == 1
+        # Broadcast across the full OHLCV index, same contract as pb/roe below.
+        assert len(result["value"]) == len(sample_ohlcv_df)
         assert result["value"].iloc[0] == 15.5
 
     @pytest.mark.asyncio
     async def test_pb_computation(self, adapter, sample_ohlcv_df):
         """Test P/B ratio retrieval."""
-        result = await adapter.compute("pb", sample_ohlcv_df, {}, {"ticker": "AAPL", "provider": None})
+        result = await adapter.compute("pb_ratio", sample_ohlcv_df, {}, {"ticker": "AAPL", "provider": None})
 
         assert "value" in result
         assert result["value"].iloc[0] == 2.3

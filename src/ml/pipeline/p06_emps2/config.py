@@ -105,8 +105,8 @@ class RollingMemoryConfig:
     phase2_min_sentiment: float = 0.5  # Sentiment starts rising
     phase2_min_virality: float = 1.5  # Going viral
 
-    # Phase 2 quality gates (data-driven, see docs/TIMING_ANALYSIS.md 2026-05-20)
-    max_phase2_lag_days: int = 7  # Suppress if >7 days since first_seen (stale signal)
+    # Phase 2 quality gates (data-driven, see docs/TIMING_ANALYSIS.md 2026-05-20, re-measured 2026-08-14)
+    max_phase2_lag_days: int = 10  # Suppress if >10 days since first_seen (stale signal)
     max_pre_alert_drift_pct: float = 5.0  # Suppress if price already up >5% since first detection
 
     # Alert settings

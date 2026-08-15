@@ -36,6 +36,47 @@ Expected outcome after these three changes: **3–10 candidates per run** on nor
 
 ---
 
+### 🔴 PHASE 2 ALERT INVESTIGATION (2026-08-14/15)
+
+Stage 3 (`AccumulationAnalyzer`) and Phase 1 (`07_phase1_watchlist.csv`) work — the pipeline was
+producing daily candidates. Phase 2 (`08_phase2_alerts.csv`) did not: **1 alert in ~10 weeks**
+of production runs (2026-06-02 → 2026-08-13).
+
+**Root cause:** the deprecated `EMPS3Pipeline` shim (since it started delegating wholesale to
+`EMPS2Pipeline(analyzer_type='accumulation')`, commit `931a9c5`, 2026-06-13) was silently reusing
+`p06_emps2`'s shared `RollingMemoryConfig` for Phase 2 detection — no accumulation-mode-specific
+override existed. That config's `max_phase2_lag_days=7` is mechanically incompatible with
+`phase1_min_appearances=5` inside a 14-day lookback: a ticker typically doesn't rack up its 5th
+appearance (and become Phase-1-eligible) until 8-14 days after `first_seen`, so it usually blows
+past the 7-day lag cap before it's even eligible. Confirmed by ablation replay against production
+data. Same root cause independently found and fixed for p06_emps2 — see
+`p06_emps2/docs/TIMING_ANALYSIS.md` 2026-08-14 re-measurement.
+
+- [x] **Decouple p10's Phase 2 config from p06's** — `emps3_pipeline.py` now builds its own
+  `RollingMemoryConfig` via `_p10_rolling_memory_config()` instead of inheriting whatever
+  `EMPS2PipelineConfig.create_default()` uses.
+- [x] **Fix the mechanical lag-cap bug**: `max_phase2_lag_days` `7` → `10` (mirrors the p06 fix;
+  same structural cause, independent of universe/quality differences).
+- [x] **Grid-swept `vol_zscore` / `vol_acceleration` / `drift` for a p10-specific quality
+  improvement** — no combination tested beat the p06-inherited defaults (`vol_zscore=3.0`,
+  `vol_acceleration=1.3`, `drift=5.0`) on 10d forward returns; every looser variant traded more
+  volume for a worse (more negative) mean return. Left at defaults; **not resolved**, see below.
+
+**Still open — structural mismatch, not a tuning problem:** even after the lag fix, p10's Phase 2
+quality is weak (10d: 60% win / **−1.8%** mean; 20d: 50% win / **−6.0%** mean, n=10-11 — small,
+noisy sample, mostly clustered on one date). p06's PREMIUM/HIGH price-drift heuristic is inverted
+for p10 (PREMIUM alerts underperformed HIGH in the same test set) — a pullback during a genuine
+momentum accumulation (p06's thesis) reads as "institutional buying on weakness", but a pullback
+during a low-volatility squeeze (p10's thesis) more plausibly reads as "the squeeze is failing".
+p10's Phase 2 gate (`vol_zscore≥3.0`) also confirms a breakout **after** it has already spiked,
+which contradicts the "catch it before the spike" precursor premise Stage 3 is built around.
+Fixing this needs a genuinely different Phase 2 definition for p10, not a retuned copy of p06's —
+see the dormant `EMPS3RollingMemoryScanner`/Phase 1.5 (trend-based: ATR contracting + vol z-score
+rising, no single-day spike) below as the likely starting point, plus the wiring/output-contract
+and test-coverage work needed to bring it back live.
+
+---
+
 ### 🟡 SIGNAL QUALITY IMPROVEMENTS (after bugs and thresholds are fixed)
 
 - [ ] **Intraday range compression** — Compute price compression from 1h bar ranges (std of recent 20 intraday ranges) rather than the single daily H-L bar. The coiled spring effect is intraday; the daily bar is too coarse. Adds ~2h implementation.
@@ -61,8 +102,16 @@ Expected outcome after these three changes: **3–10 candidates per run** on nor
 
 ## Known Issues
 
-- **[RESOLVED]** ~~Pipeline has never produced a legitimate signal~~ — NaN guard, threshold recalibration, and all critical bugs fixed. Next run expected to produce 3–10 candidates. First live run pending.
-- **Phase 1.5 rolling memory is functionally dead** — has never had inputs because Stage 3 never passed any candidates pre-fix. Will activate automatically on the next run that produces valid Stage 3 output.
+- **[RESOLVED]** ~~Pipeline has never produced a legitimate signal~~ — NaN guard, threshold recalibration, and all critical bugs fixed. Confirmed producing daily Stage 3 / Phase 1 candidates in production.
+- **[UPDATED 2026-08-15]** `EMPS3RollingMemoryScanner` / Phase 1.5 (`rolling_memory.py`) is dead
+  code, not merely dormant — it stopped being reachable once `EMPS3Pipeline` became a shim
+  delegating wholesale to `EMPS2Pipeline` (commit `931a9c5`, 2026-06-13). Nothing in the live
+  call path imports it; Stage 3 output alone won't revive it. See "🔴 PHASE 2 ALERT
+  INVESTIGATION" above — reviving it (with test coverage and an output-contract fix) is the
+  leading candidate for a real p10-specific Phase 2 signal.
+- **Phase 2 alerts fire at a p06-inherited quality ceiling (~break-even), not a good one** — see
+  "🔴 PHASE 2 ALERT INVESTIGATION" above. The 2026-08-15 lag-cap fix restores mechanical
+  reachability but does not fix signal quality.
 
 ## Testing Requirements
 

@@ -376,7 +376,10 @@
 - ✅ Mixin unit tests (1 task) — updated 2026-06-13
 - ✅ BaseStrategy unit tests (1 task) — updated 2026-06-13
 - ✅ Entry mixin signal-generation tests (1 task) — 58 tests, all 9 mixins — updated 2026-06-13
-- ✅ Configuration validation schema (1 task) — Pydantic v2, `strategy_config_schema.py` — updated 2026-06-13
+- ✅ Configuration validation schema (1 task) — Pydantic v2, `strategy_config_schema.py`, 17 tests — updated 2026-06-13.
+  **Not wired into the live config path** — `src/trading/services/bot_config_validator.py`
+  (`BotConfigValidator`) is the validator actually used by the API/telegram/trading-bot config
+  flow; this module is a standalone, tested-but-unused alternative — noted 2026-08-14
 - ✅ Integration test: buy→hold→sell cycle (1 task) — real Cerebro + TALib, 8 tests — updated 2026-06-13
 
 ### Pending Tasks: 21/56 (37%)

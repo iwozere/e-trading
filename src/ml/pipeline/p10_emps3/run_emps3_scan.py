@@ -15,7 +15,7 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.ml.pipeline.p10_emps3.config import EMPS3PipelineConfig
+from src.ml.pipeline.p06_emps2.config import EMPS2PipelineConfig
 from src.ml.pipeline.p10_emps3.emps3_pipeline import EMPS3Pipeline
 from src.ml.pipeline.shared.pipeline_summary_generator import PipelineSummaryGenerator
 from src.notification.logger import setup_logger
@@ -49,7 +49,17 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
 
-    config = EMPS3PipelineConfig.create_default()
+    # EMPS3Pipeline is a deprecated shim delegating to EMPS2Pipeline(analyzer_type="accumulation"),
+    # so it now takes EMPS2PipelineConfig rather than EMPS3PipelineConfig (see emps3_pipeline.py).
+    # EMPS2FilterConfig's base defaults differ from p10's tuned values, so they're overridden here
+    # to keep scan behavior unchanged; the accumulation-specific fields (max_price_impact,
+    # max_atr_ratio, max_distance_from_resistance/sma20, ohlcv_chunk_size) already match.
+    config = EMPS2PipelineConfig.create_default()
+    config.analyzer_type = "accumulation"
+    config.filter_config.min_price = 1.0
+    config.filter_config.min_vol_zscore = 1.5
+    config.filter_config.min_vol_rv_ratio = 1.5
+    config.filter_config.lookback_days = 10
     if args.user_id:
         config.user_id = args.user_id
     force_refresh = args.force_refresh

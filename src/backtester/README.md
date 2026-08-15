@@ -24,8 +24,7 @@ Results from the two engines **should not be compared directly** (different fill
 
 ### plotter/
 Tools for visualizing backtest results and strategy indicators.
-- **run_plotter.py**: Main script for generating plots from backtest results.
-- **base_plotter.py**: Base class for plotter implementations.
+- **run_plotter.py**: Main script for generating plots from backtest results (`ResultPlotter`).
 - **description.txt**: Design notes and requirements for indicator plotting, layout, and trade visualization.
 - **indicators/**: Individual indicator plotters:
   - `bollinger_bands_plotter.py`, `ichimoku_plotter.py`, `rsi_plotter.py`, `supertrend_plotter.py`, `volume_plotter.py`, `base_indicator_plotter.py`

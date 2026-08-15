@@ -65,7 +65,11 @@ def test_compute_from_dataframe_with_real_adapters():
         indicators=[
             IndicatorSpec(name="rsi", output="rsi_value"),
             IndicatorSpec(name="ema", output="ema_10", params={"length": 10}),
-            IndicatorSpec(name="macd", output="macd_hist"),
+            # Multi-output indicator: `compute()` only honors a "value"-keyed
+            # result for a scalar `output` string, and MACD's adapter result
+            # is keyed by sub-output name (macd/signal/hist), not "value" —
+            # needs an explicit {sub_output: column_name} map.
+            IndicatorSpec(name="macd", output={"macd": "macd_line", "signal": "macd_signal", "hist": "macd_hist"}),
         ],
     )
     df = _sample_df()
