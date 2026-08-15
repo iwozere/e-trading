@@ -295,8 +295,12 @@ class TestAdapterIntegration:
             else:
                 valid_count = values.notna().sum()
 
-            # Should have reasonable number of valid values
-            expected_valid = max(0, size - 14)  # RSI needs 14 periods
+            # Should have reasonable number of valid values. Base this on the
+            # actual row count, not the requested `size` — `realistic_market_data`
+            # only has 252 rows, so `.head(500)` (size > available rows)
+            # silently caps at 252, and expected_valid must track that or it
+            # overshoots for the last data_sizes entry.
+            expected_valid = max(0, len(test_data) - 14)  # RSI needs 14 periods
             assert valid_count >= expected_valid * 0.8  # Allow some tolerance
 
     @pytest.mark.asyncio

@@ -6,6 +6,7 @@ performance and scalability, and measures memory usage and concurrent request ha
 """
 
 import asyncio
+import inspect
 import os
 import sys
 import time
@@ -27,6 +28,7 @@ from src.indicators.models import (
     IndicatorSpec,
     TickerIndicatorsRequest,
 )
+from src.indicators.registry import INDICATOR_META
 from src.indicators.service import IndicatorService
 from src.indicators.types import IndicatorName, Period, TickerSymbol, TimeFrame
 
@@ -91,15 +93,17 @@ class TestPerformanceBenchmarks:
             index=dates,
         )
 
-    def measure_execution_time(self, func, *args, **kwargs):
-        """Measure execution time of a function."""
+    async def measure_execution_time(self, func, *args, **kwargs):
+        """Measure execution time of a function (awaits the result if `func` is async)."""
         start_time = time.perf_counter()
         result = func(*args, **kwargs)
+        if inspect.iscoroutine(result):
+            result = await result
         end_time = time.perf_counter()
         return result, end_time - start_time
 
-    def measure_memory_usage(self, func, *args, **kwargs):
-        """Measure memory usage during function execution."""
+    async def measure_memory_usage(self, func, *args, **kwargs):
+        """Measure memory usage during function execution (awaits the result if `func` is async)."""
         process = psutil.Process(os.getpid())
 
         # Get initial memory usage
@@ -107,6 +111,8 @@ class TestPerformanceBenchmarks:
 
         # Execute function
         result = func(*args, **kwargs)
+        if inspect.iscoroutine(result):
+            result = await result
 
         # Get peak memory usage
         peak_memory = process.memory_info().rss / 1024 / 1024  # MB
@@ -114,7 +120,8 @@ class TestPerformanceBenchmarks:
 
         return result, memory_delta
 
-    def test_single_indicator_performance(self, medium_dataset):
+    @pytest.mark.asyncio
+    async def test_single_indicator_performance(self, medium_dataset):
         """Benchmark single indicator computation performance."""
         service = IndicatorService()
 
@@ -132,11 +139,18 @@ class TestPerformanceBenchmarks:
         performance_results = {}
 
         for indicator_name, params in indicators_to_test:
-            config = IndicatorBatchConfig(
-                indicators=[IndicatorSpec(name=indicator_name, output=indicator_name, params=params)]
+            # Multi-output indicators (macd/bbands/stoch/...) need an explicit
+            # {sub_output: column_name} map — a plain string `output` only
+            # captures a "value"-keyed result, which multi-output adapters
+            # never produce (same outmap construction compute_for_ticker does
+            # internally). See INDICATOR_META[name].outputs.
+            outputs = INDICATOR_META[indicator_name].outputs
+            output = (
+                indicator_name if outputs == ["value"] else {o: f"{indicator_name}_{o}" for o in outputs}
             )
+            config = IndicatorBatchConfig(indicators=[IndicatorSpec(name=indicator_name, output=output, params=params)])
 
-            result, execution_time = self.measure_execution_time(service.compute, medium_dataset, config)
+            result, execution_time = await self.measure_execution_time(service.compute, medium_dataset, config)
 
             performance_results[indicator_name] = {
                 "execution_time": execution_time,
@@ -154,7 +168,8 @@ class TestPerformanceBenchmarks:
         for indicator, metrics in performance_results.items():
             print(f"{indicator:10s}: {metrics['execution_time']:.3f}s ({metrics['throughput']:.0f} points/s)")
 
-    def test_multiple_indicators_performance(self, medium_dataset):
+    @pytest.mark.asyncio
+    async def test_multiple_indicators_performance(self, medium_dataset):
         """Benchmark multiple indicators computed together."""
         service = IndicatorService()
 
@@ -172,7 +187,7 @@ class TestPerformanceBenchmarks:
         for i, indicators in enumerate(indicator_sets):
             config = IndicatorBatchConfig(indicators=[IndicatorSpec(name=ind, output=ind) for ind in indicators])
 
-            result, execution_time = self.measure_execution_time(service.compute, medium_dataset, config)
+            result, execution_time = await self.measure_execution_time(service.compute, medium_dataset, config)
 
             performance_results[f"{len(indicators)}_indicators"] = {
                 "execution_time": execution_time,
@@ -191,7 +206,8 @@ class TestPerformanceBenchmarks:
                 f"{test_name:15s}: {metrics['execution_time']:.3f}s ({metrics['throughput_per_indicator']:.3f}s per indicator)"
             )
 
-    def test_dataset_size_scaling(self, small_dataset, medium_dataset, large_dataset):
+    @pytest.mark.asyncio
+    async def test_dataset_size_scaling(self, small_dataset, medium_dataset, large_dataset):
         """Test performance scaling with dataset size."""
         service = IndicatorService()
 
@@ -208,7 +224,7 @@ class TestPerformanceBenchmarks:
         scaling_results = {}
 
         for dataset_name, dataset in datasets:
-            result, execution_time = self.measure_execution_time(service.compute, dataset, config)
+            result, execution_time = await self.measure_execution_time(service.compute, dataset, config)
 
             scaling_results[dataset_name] = {
                 "execution_time": execution_time,
@@ -226,7 +242,8 @@ class TestPerformanceBenchmarks:
                 f"{dataset_name:8s}: {metrics['data_points']:4d} points, {metrics['execution_time']:.3f}s ({metrics['throughput']:.0f} points/s)"
             )
 
-    def test_memory_usage_scaling(self, small_dataset, medium_dataset, large_dataset):
+    @pytest.mark.asyncio
+    async def test_memory_usage_scaling(self, small_dataset, medium_dataset, large_dataset):
         """Test memory usage with different dataset sizes."""
         service = IndicatorService()
 
@@ -244,7 +261,7 @@ class TestPerformanceBenchmarks:
         memory_results = {}
 
         for dataset_name, dataset in datasets:
-            result, memory_delta = self.measure_memory_usage(service.compute, dataset, config)
+            result, memory_delta = await self.measure_memory_usage(service.compute, dataset, config)
 
             memory_results[dataset_name] = {
                 "memory_delta": memory_delta,
@@ -268,11 +285,13 @@ class TestPerformanceBenchmarks:
 
         ticker_counts = [1, 5, 10, 20]
 
-        with patch("src.common.get_ohlcv", return_value=medium_dataset):
+        with patch("src.indicators.service.get_ohlcv", return_value=medium_dataset):
             batch_results = {}
 
             for ticker_count in ticker_counts:
-                tickers = [f"TICKER_{i}" for i in range(ticker_count)]
+                # No underscores — BatchIndicatorRequest.validate_tickers rejects
+                # anything that isn't alnum (after stripping "." and "-").
+                tickers = [f"TICK{i}" for i in range(ticker_count)]
 
                 start_time = time.perf_counter()
                 batch_request = BatchIndicatorRequest(
@@ -346,7 +365,8 @@ class TestPerformanceBenchmarks:
                 f"Concurrency {concurrency:2d}: {execution_time:.3f}s total ({execution_time / concurrency:.3f}s per request)"
             )
 
-    def test_adapter_performance_comparison(self, medium_dataset):
+    @pytest.mark.asyncio
+    async def test_adapter_performance_comparison(self, medium_dataset):
         """Compare performance between different adapters."""
         from src.indicators.adapters.pandas_ta_adapter import PandasTaAdapter
         from src.indicators.adapters.ta_lib_adapter import TaLibAdapter
@@ -376,7 +396,7 @@ class TestPerformanceBenchmarks:
                 if adapter.supports(indicator_name):
                     params = ta_params if "TA-Lib" in adapter_name else pta_params
 
-                    result, execution_time = self.measure_execution_time(
+                    result, execution_time = await self.measure_execution_time(
                         adapter.compute, indicator_name, medium_dataset, inputs, params
                     )
 
@@ -395,7 +415,8 @@ class TestPerformanceBenchmarks:
                         f"  {adapter_name:12s}: {metrics['execution_time']:.3f}s ({metrics['throughput']:.0f} points/s)"
                     )
 
-    def test_recommendation_engine_performance(self, medium_dataset):
+    @pytest.mark.asyncio
+    async def test_recommendation_engine_performance(self, medium_dataset):
         """Test recommendation engine performance."""
         service = IndicatorService()
 
@@ -405,16 +426,14 @@ class TestPerformanceBenchmarks:
             include_recommendations=True,
         )
 
-        with patch("src.common.get_ohlcv", return_value=medium_dataset):
+        with patch("src.indicators.service.get_ohlcv", return_value=medium_dataset):
             # Test with recommendations
-            result_with_rec, time_with_rec = self.measure_execution_time(
-                lambda: asyncio.run(service.compute_for_ticker(request))
-            )
+            result_with_rec, time_with_rec = await self.measure_execution_time(service.compute_for_ticker, request)
 
             # Test without recommendations
             request.include_recommendations = False
-            result_without_rec, time_without_rec = self.measure_execution_time(
-                lambda: asyncio.run(service.compute_for_ticker(request))
+            result_without_rec, time_without_rec = await self.measure_execution_time(
+                service.compute_for_ticker, request
             )
 
             # Recommendations should not add significant overhead

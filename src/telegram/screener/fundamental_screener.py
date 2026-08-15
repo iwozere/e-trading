@@ -98,14 +98,16 @@ class FundamentalScreener:
 
         _logger.info("Starting fundamental data collection for %d tickers using IndicatorService", total_tickers)
 
-        # Define fundamental indicators we need (using registry names)
+        # Define fundamental indicators we need (canonical registry names —
+        # must match keys in src.indicators.models.FUNDAMENTAL_INDICATORS /
+        # src.indicators.adapters.fundamentals_adapter.FundamentalsAdapter.FIELD_MAP)
         fundamental_indicators = [
-            "pe",
-            "pb",
-            "ps",
+            "pe_ratio",
+            "pb_ratio",
+            "ps_ratio",
             "roe",
             "roa",
-            "de_ratio",
+            "debt_to_equity",
             "current_ratio",
             "quick_ratio",
             "dividend_yield",
@@ -192,17 +194,17 @@ class FundamentalScreener:
                 value = indicator_value.value
 
                 # Map indicator names to Fundamentals fields
-                if name == "pe":
+                if name == "pe_ratio":
                     fundamental_values["pe_ratio"] = value
-                elif name == "pb":
+                elif name == "pb_ratio":
                     fundamental_values["price_to_book"] = value
-                elif name == "ps":
+                elif name == "ps_ratio":
                     fundamental_values["price_to_sales"] = value
                 elif name == "roe":
                     fundamental_values["return_on_equity"] = value
                 elif name == "roa":
                     fundamental_values["return_on_assets"] = value
-                elif name == "de_ratio":
+                elif name == "debt_to_equity":
                     fundamental_values["debt_to_equity"] = value
                 elif name == "current_ratio":
                     fundamental_values["current_ratio"] = value

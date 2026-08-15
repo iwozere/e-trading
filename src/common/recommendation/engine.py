@@ -68,6 +68,38 @@ class RecommendationEngine:
             "WILLIAMS_R": self._get_williams_r_recommendation,
             "ROC": self._get_roc_recommendation,
             "ATR": self._get_atr_recommendation,
+            # Canonical registry names (src.indicators.models.TECHNICAL_INDICATORS)
+            # — this is what IndicatorService.compute_for_ticker() actually
+            # passes to get_recommendation() (service.py ~L750/773): lowercase,
+            # and suffixed with the sub-output for multi-output indicators
+            # (e.g. "macd_hist", "bbands_upper", "stoch_k"). Without these,
+            # every real request silently fell through to the generic
+            # "No specific rules for {indicator}" HOLD/0.5 case below —
+            # confirmed the dead path via a live call, 2026-08-15.
+            "rsi": self._get_rsi_recommendation,
+            "macd": self._get_macd_recommendation,
+            "macd_macd": self._get_macd_recommendation,
+            "macd_signal": self._get_macd_recommendation,
+            "macd_hist": self._get_macd_recommendation,
+            "bbands": self._get_bollinger_bands_recommendation,
+            "bbands_upper": self._get_bollinger_bands_recommendation,
+            "bbands_middle": self._get_bollinger_bands_recommendation,
+            "bbands_lower": self._get_bollinger_bands_recommendation,
+            "sma": self._get_sma_recommendation_wrapper,
+            "ema": self._get_sma_recommendation_wrapper,
+            "adx": self._get_adx_recommendation,
+            "plus_di": self._get_di_recommendation,
+            "minus_di": self._get_di_recommendation,
+            "stoch": self._get_stochastic_recommendation,
+            "stoch_k": self._get_stochastic_recommendation,
+            "stoch_d": self._get_stochastic_recommendation,
+            "obv": self._get_obv_recommendation,
+            "adr": self._get_adr_recommendation,
+            "cci": self._get_cci_recommendation_wrapper,
+            "mfi": self._get_mfi_recommendation_wrapper,
+            "williams_r": self._get_williams_r_recommendation,
+            "roc": self._get_roc_recommendation,
+            "atr": self._get_atr_recommendation,
         }
 
         self.fundamental_functions = {
@@ -88,6 +120,25 @@ class RecommendationEngine:
             "FREE_CASH_FLOW": self.fundamental_rules.get_fcf_recommendation,
             "DIVIDEND_YIELD": self.fundamental_rules.get_dividend_yield_recommendation,
             "PAYOUT_RATIO": self.fundamental_rules.get_payout_ratio_recommendation,
+            # Canonical registry names (src.indicators.models.FUNDAMENTAL_INDICATORS)
+            # — see comment on _recommendation_methods above; same dead-path bug.
+            "pe_ratio": self.fundamental_rules.get_pe_recommendation,
+            "forward_pe": self.fundamental_rules.get_pe_recommendation,
+            "pb_ratio": self.fundamental_rules.get_pb_recommendation,
+            "ps_ratio": self.fundamental_rules.get_ps_recommendation,
+            "peg_ratio": self.fundamental_rules.get_peg_recommendation,
+            "roe": self.fundamental_rules.get_roe_recommendation,
+            "roa": self.fundamental_rules.get_roa_recommendation,
+            "debt_to_equity": self.fundamental_rules.get_debt_equity_recommendation,
+            "current_ratio": self.fundamental_rules.get_current_ratio_recommendation,
+            "quick_ratio": self.fundamental_rules.get_quick_ratio_recommendation,
+            "operating_margin": self.fundamental_rules.get_margin_recommendation,
+            "profit_margin": self.fundamental_rules.get_margin_recommendation,
+            "revenue_growth": self.fundamental_rules.get_growth_recommendation,
+            "net_income_growth": self.fundamental_rules.get_growth_recommendation,
+            "free_cash_flow": self.fundamental_rules.get_fcf_recommendation,
+            "dividend_yield": self.fundamental_rules.get_dividend_yield_recommendation,
+            "payout_ratio": self.fundamental_rules.get_payout_ratio_recommendation,
         }
 
     def get_recommendation(self, indicator: str, value: float, context: Optional[Dict] = None) -> Recommendation:

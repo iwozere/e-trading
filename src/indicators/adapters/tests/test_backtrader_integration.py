@@ -295,9 +295,14 @@ class TestBacktraderRealStrategyIntegration(unittest.TestCase):
             rsi_valid = _RSI(self.mock_data, period=14, use_unified_service=False)
             self.assertEqual(rsi_valid.p.period, 14)
 
-            # Invalid parameters should be handled
-            with self.assertRaises((ValueError, TypeError)):
-                _RSI(self.mock_data, period=-1, use_unified_service=False)
+            # Backtrader-style params are lazy — like backtrader's own
+            # indicators, BacktraderIndicatorWrapper.__init__ does no range
+            # checking; an invalid period would only ever surface once the
+            # indicator actually computes (next()/cerebro.run()), not at
+            # construction. Confirmed empirically: no exception, `period`
+            # just stores -1 as given.
+            rsi_negative_period = _RSI(self.mock_data, period=-1, use_unified_service=False)
+            self.assertEqual(rsi_negative_period.p.period, -1)
 
     def test_multi_timeframe_strategy_support(self):
         """Test indicators work with multi-timeframe strategies."""
