@@ -9,11 +9,19 @@ Answers:
   2. How much has the price already moved by the time the alert fires?
   3. How does the stock perform after the alert (5d / 10d / 20d)?
 
+Works against any pipeline that writes ``08_phase2_alerts.csv`` (p06_emps2, and p10_emps3
+since it delegates to EMPS2Pipeline). Point --results-base at the results folder to analyze
+(e.g. R:\\results\\p06_emps2 for production data) and --price-file at that pipeline's
+Stage 3 output filename holding a ticker/last_price lookup.
+
 Usage:
     python -m src.ml.pipeline.p06_emps2.util.analyze_alert_timing
     python -m src.ml.pipeline.p06_emps2.util.analyze_alert_timing --no-forward
+    python -m src.ml.pipeline.p06_emps2.util.analyze_alert_timing \
+        --results-base "R:\\results\\p10_emps3" --price-file 08_absorption_diagnostics.csv
 """
 
+import argparse
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -27,13 +35,41 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-RESULTS_BASE = PROJECT_ROOT / "results" / "p06_emps2"
-_SEARCH_ROOTS = [RESULTS_BASE, RESULTS_BASE / "p06_emps2"]
+_DEFAULT_RESULTS_BASE = PROJECT_ROOT / "results" / "p06_emps2"
+_DEFAULT_PRICE_FILE = "05_volatility_filtered.csv"
 
 
-def _find_all_phase2_alert_files() -> list[Path]:
+def parse_args() -> argparse.Namespace:
+    """Parse CLI arguments for the timing analysis run."""
+    parser = argparse.ArgumentParser(description="Alert timing analysis for EMPS Phase 2 alerts.")
+    parser.add_argument(
+        "--results-base",
+        type=Path,
+        default=_DEFAULT_RESULTS_BASE,
+        help=f"Base directory containing dated result folders (default: {_DEFAULT_RESULTS_BASE}).",
+    )
+    parser.add_argument(
+        "--price-file",
+        type=str,
+        default=_DEFAULT_PRICE_FILE,
+        help=(
+            "Filename (within each dated folder) holding a ticker/last_price lookup "
+            f"(default: {_DEFAULT_PRICE_FILE}; use 08_absorption_diagnostics.csv for p10_emps3)."
+        ),
+    )
+    parser.add_argument(
+        "--no-forward", action="store_true", help="Skip fetching post-alert forward returns via yfinance."
+    )
+    return parser.parse_args()
+
+
+def _search_roots(results_base: Path) -> list[Path]:
+    return [results_base, results_base / results_base.name]
+
+
+def _find_all_phase2_alert_files(search_roots: list[Path]) -> list[Path]:
     files: list[Path] = []
-    for root in _SEARCH_ROOTS:
+    for root in search_roots:
         files.extend(root.glob("*/08_phase2_alerts.csv"))
     return sorted(set(files))
 
@@ -45,10 +81,10 @@ def _parse_folder_date(path: Path) -> date | None:
         return None
 
 
-def _price_on_date(ticker: str, date_str: str) -> float | None:
-    """Return closing price for ticker from the volatility filter CSV on the given date."""
-    for root in _SEARCH_ROOTS:
-        vol_file = root / date_str / "05_volatility_filtered.csv"
+def _price_on_date(ticker: str, date_str: str, search_roots: list[Path], price_file: str) -> float | None:
+    """Return closing price for ticker from the Stage 3 output CSV on the given date."""
+    for root in search_roots:
+        vol_file = root / date_str / price_file
         if vol_file.exists():
             try:
                 df = pd.read_csv(vol_file)
@@ -61,7 +97,7 @@ def _price_on_date(ticker: str, date_str: str) -> float | None:
     return None
 
 
-def load_first_phase2_alerts() -> pd.DataFrame:
+def load_first_phase2_alerts(search_roots: list[Path]) -> pd.DataFrame:
     """
     Load all Phase 2 alert CSV files and keep only the FIRST alert per ticker
     (its initial Phase 2 debut).
@@ -69,7 +105,7 @@ def load_first_phase2_alerts() -> pd.DataFrame:
     Returns:
         DataFrame with one row per unique ticker (earliest alert_date).
     """
-    files = _find_all_phase2_alert_files()
+    files = _find_all_phase2_alert_files(search_roots)
     _logger.info("Found %d Phase 2 alert files", len(files))
 
     records = []
@@ -98,12 +134,12 @@ def load_first_phase2_alerts() -> pd.DataFrame:
     return first_alerts
 
 
-def compute_timing_metrics(alerts_df: pd.DataFrame) -> pd.DataFrame:
+def compute_timing_metrics(alerts_df: pd.DataFrame, search_roots: list[Path], price_file: str) -> pd.DataFrame:
     """
     For each first Phase 2 alert compute:
       - lag_days:            calendar days from first_seen to alert_date
       - price_at_first_seen: price on the day the ticker entered the rolling window
-      - price_at_alert:      price from 05_volatility_filtered.csv on the alert_date
+      - price_at_alert:      price from the Stage 3 output CSV on the alert_date
       - pre_alert_gain_pct:  % gain that occurred BEFORE the alert fired
 
     Note: ``latest_last_price`` stored in the Phase 2 CSV is the price from the
@@ -112,6 +148,8 @@ def compute_timing_metrics(alerts_df: pd.DataFrame) -> pd.DataFrame:
 
     Args:
         alerts_df: DataFrame from load_first_phase2_alerts()
+        search_roots: Candidate directories to look for dated result folders in.
+        price_file: Filename (within each dated folder) holding the ticker/last_price lookup.
 
     Returns:
         DataFrame with per-ticker timing metrics.
@@ -122,11 +160,11 @@ def compute_timing_metrics(alerts_df: pd.DataFrame) -> pd.DataFrame:
         ticker = str(row["ticker"])
         first_seen: date = row["first_seen"]
         alert_date: date = row["alert_date"]
-        # Look up price on the actual alert day from the volatility filter CSV
-        price_at_alert: float | None = _price_on_date(ticker, str(alert_date))
+        # Look up price on the actual alert day from the Stage 3 output CSV
+        price_at_alert: float | None = _price_on_date(ticker, str(alert_date), search_roots, price_file)
 
         lag_days: int = (alert_date - first_seen).days
-        price_at_first_seen = _price_on_date(ticker, str(first_seen))
+        price_at_first_seen = _price_on_date(ticker, str(first_seen), search_roots, price_file)
 
         pre_alert_gain_pct: float | None = None
         if price_at_first_seen and price_at_alert and price_at_first_seen > 0:
@@ -285,23 +323,26 @@ def print_summary(metrics_df: pd.DataFrame) -> None:
 
 def main() -> None:
     """Entry point: run timing analysis and save results."""
-    _logger.info("Starting EMPS2 Alert Timing Analysis")
+    args = parse_args()
+    results_base: Path = args.results_base
+    search_roots = _search_roots(results_base)
 
-    alerts_df = load_first_phase2_alerts()
+    _logger.info("Starting Alert Timing Analysis (results_base=%s, price_file=%s)", results_base, args.price_file)
+
+    alerts_df = load_first_phase2_alerts(search_roots)
     if alerts_df.empty:
         _logger.error("No Phase 2 alerts found – nothing to analyse")
         return
 
-    metrics_df = compute_timing_metrics(alerts_df)
+    metrics_df = compute_timing_metrics(alerts_df, search_roots, args.price_file)
 
-    fetch_forward = "--no-forward" not in sys.argv
-    if fetch_forward:
+    if not args.no_forward:
         _logger.info("Fetching post-alert forward returns (pass --no-forward to skip)...")
         metrics_df = fetch_post_alert_returns(metrics_df)
     else:
         _logger.info("Skipping post-alert return fetch (--no-forward)")
 
-    output_path = RESULTS_BASE / "timing_analysis.csv"
+    output_path = results_base / "timing_analysis.csv"
     metrics_df.to_csv(output_path, index=False)
     _logger.info("Saved timing analysis → %s", output_path)
 

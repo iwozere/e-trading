@@ -416,4 +416,63 @@ Compare against the **2026-05-20 baseline** numbers in this document:
 
 ---
 
-*Created: 2026-05-20 | Last updated: 2026-05-21 (improved exit strategy, Impr-3)*
+## Re-measurement — 2026-08-14
+
+Ran `analyze_alert_timing.py` (now generalized with `--results-base`/`--price-file` to point at
+production `R:\results\...` directly) against ~3 months of live post-gate data
+(2026-05-20 → 2026-08-13).
+
+**Finding: the three gates over-tightened.** Actual output collapsed to **5 alerts in ~12 weeks
+(~1.8/month)** — an order of magnitude under the ~6-8/month target and far below the "30-40% of
+previous alerts survive" estimate made when the gates were designed (actual survival: 5/251 ≈ 2%).
+
+**Root cause, isolated by ablation** (toggling one gate at a time against the same replayed data):
+
+| Config | Alerts (12 wks) |
+|---|---|
+| Current (lag≤7, drift≤5%, accel≥1.3) | 5 |
+| Drift cap removed only | 7 |
+| Vol-accel gate removed only | 13 |
+| **Lag cap removed only** | **71** |
+| All three removed (≈pre-2026-05-20) | 246 |
+
+`max_phase2_lag_days = 7` is the dominant bottleneck — 14× more restrictive than the other two
+gates combined. Root cause: with `phase1_min_appearances=5` inside a 14-day lookback, a ticker
+typically doesn't rack up its 5th appearance (and thus enter Phase 1) until 8-14 days after
+`first_seen` — so by the time it's eligible for Phase 1, it has usually already blown past the
+7-day lag cap for Phase 2. The two conditions were fighting each other structurally.
+
+**Sweeping the lag cap** to find the value that hits the original target volume:
+
+| `max_phase2_lag_days` | Alerts/month |
+|---|---|
+| 7 (previous) | 1.8 |
+| 9 | 4.6 |
+| **10** | **7.1** ← matches 6-8/month target |
+| 12 | 15.0 |
+| 14 (= lookback, effectively uncapped) | 25.3 |
+
+**Quality check on the `lag=10` counterfactual set** (real forward returns, n=12-13, small sample):
+
+| Holding period | Win rate | Mean return |
+|---|---|---|
+| 5 days | 77% | +5.0% |
+| 10 days | 67% | +10.1% |
+| 20 days | 64% | +11.6% |
+
+Materially better than both the pre-improvement baseline (47% / −0.2% @ 10d) and the original
+target (>55% / >+1.5% @ 10d). Small sample — re-measure again after another ~3 months.
+
+**Action taken:** `max_phase2_lag_days` raised from `7` → `10` in `config.py` (`RollingMemoryConfig`).
+
+**Note — does not extend to p10_emps3:** the same `lag=10` counterfactual replayed against
+`p10_emps3` production data recovers alert *volume* (~5.5/month) but not *quality* (10d: 60% win /
+**−1.8%** mean; 20d: 50% win / **−6.0%** mean, n=10-11). p10_emps3 delegates to this same
+`RollingMemoryConfig` with no accumulation-mode-specific overrides, but its "coiled spring"
+precursor thesis is about catching stocks *before* a volume spike, while this Phase 2 definition
+is *triggered by* one (`vol_zscore≥3`, `vol_acceleration≥1.3`) — a lag-cap tweak alone can't
+reconcile that mismatch. See `p10_emps3/docs/Tasks.md` for the follow-up.
+
+---
+
+*Created: 2026-05-20 | Last updated: 2026-08-14 (re-measurement, lag cap 7→10)*

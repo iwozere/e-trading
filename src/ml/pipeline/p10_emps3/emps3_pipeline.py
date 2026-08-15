@@ -12,7 +12,7 @@ import warnings
 
 import pandas as pd
 
-from src.ml.pipeline.p06_emps2.config import EMPS2PipelineConfig
+from src.ml.pipeline.p06_emps2.config import EMPS2PipelineConfig, RollingMemoryConfig
 from src.ml.pipeline.p06_emps2.emps2_pipeline import EMPS2Pipeline
 from src.notification.logger import setup_logger
 
@@ -26,19 +26,41 @@ _DEPRECATION_MSG = (
 )
 
 
+def _p10_rolling_memory_config() -> RollingMemoryConfig:
+    """
+    Phase 2 gate config for p10_emps3, decoupled from p06_emps2's RollingMemoryConfig.
+
+    Was silently sharing p06_emps2's defaults (see docs/TIMING_ANALYSIS.md 2026-08-14
+    re-measurement). `max_phase2_lag_days` inherits p06's fix — with
+    `phase1_min_appearances=5` inside a 14-day lookback, a ticker typically doesn't
+    qualify for Phase 1 until 8-14 days after first_seen, so a 7-day lag cap made
+    Phase 2 almost unreachable for both pipelines (mechanical bug, not a quality issue).
+
+    The remaining gates (vol_zscore/vol_acceleration/drift) are left at p06's defaults
+    on purpose: a grid-sweep across p10's own production history (2026-06-02 ->
+    2026-08-13) found no combination that beat these defaults on 10d forward returns —
+    every looser variant traded volume for a worse (more negative) mean return. p10's
+    "coiled spring" thesis is fundamentally about catching a breakout *before* it
+    spikes, while this gate confirms one *after* it spikes (vol_zscore >= 3.0); no
+    amount of threshold tuning closes that gap. See p10_emps3/docs/Tasks.md.
+    """
+    return RollingMemoryConfig(max_phase2_lag_days=10)
+
+
 class EMPS3Pipeline:
     """
     Deprecated shim — delegates to EMPS2Pipeline(analyzer_type='accumulation').
     """
 
-    def __init__(self, config=None, target_date: str | None = None):
+    def __init__(self, config: EMPS2PipelineConfig | None = None, target_date: str | None = None):
         warnings.warn(_DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
         _logger.warning("EMPS3Pipeline is deprecated. %s", _DEPRECATION_MSG)
 
         from pathlib import Path
 
-        emps2_config = EMPS2PipelineConfig.create_default()
+        emps2_config = config if config is not None else EMPS2PipelineConfig.create_default()
         emps2_config.analyzer_type = "accumulation"
+        emps2_config.rolling_memory_config = _p10_rolling_memory_config()
 
         self._delegate = EMPS2Pipeline(
             emps2_config,
