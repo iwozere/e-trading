@@ -23,7 +23,9 @@ Environment="TELEGRAM_API_PORT=5004"
 EnvironmentFile=/opt/apps/e-trading/config/donotshare/.env
 
 # Command to execute
-ExecStart=/usr/bin/python3 -m src.telegram.telegram_bot
+# NOTE: must be the project venv's interpreter, not system python3 --
+# the latter has no installed dependencies (e.g. aiogram) and crash-loops.
+ExecStart=/opt/apps/e-trading/.venv/bin/python -m src.telegram.telegram_bot
 
 # Restart policy
 Restart=always
