@@ -221,7 +221,10 @@ class WatchlistBuilder:
         succeeds from the P17 source alone.
         """
         feed = self.cfg.feed_config
-        try:  # prefer maintained ib_async (Py3.13-safe)
+        from src.common.asyncio_compat import ensure_event_loop
+
+        ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
+        try:  # prefer maintained ib_async
             from ib_async import IB, ScannerSubscription, TagValue  # type: ignore[import-not-found]
         except ImportError:
             try:

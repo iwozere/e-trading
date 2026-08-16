@@ -8,6 +8,7 @@ dotenv>=0.9.9
 Flask >=3.1.1
 jsonschema >=4.19.0
 hmmlearn >=0.3.3
+ib_async>=2.1.0  # maintained ib_insync successor (preferred); ib_insync kept below as fallback
 ib_insync >=0.9.86
 joblib>=1.5.1
 lightgbm >=4.6.0

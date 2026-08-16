@@ -28,24 +28,48 @@ import time
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Tuple
 
-from ib_insync import (
-    IB,
-    AccountValue,
-    Contract,
-    Forex,
-    Future,
-    LimitOrder,
-    MarketOrder,
-    Option,
-    PortfolioItem,
-    Stock,
-    StopLimitOrder,
-    StopOrder,
-    Ticker,
-    Trade,
-)
-from ib_insync import Order as IBOrder
-from ib_insync import Position as IBPosition
+from src.common.asyncio_compat import ensure_event_loop
+
+ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
+
+try:  # prefer maintained ib_async
+    from ib_async import (  # type: ignore[import-not-found]
+        IB,
+        AccountValue,
+        Contract,
+        Forex,
+        Future,
+        LimitOrder,
+        MarketOrder,
+        Option,
+        PortfolioItem,
+        Stock,
+        StopLimitOrder,
+        StopOrder,
+        Ticker,
+        Trade,
+    )
+    from ib_async import Order as IBOrder  # type: ignore[import-not-found]
+    from ib_async import Position as IBPosition  # type: ignore[import-not-found]
+except ImportError:
+    from ib_insync import (
+        IB,
+        AccountValue,
+        Contract,
+        Forex,
+        Future,
+        LimitOrder,
+        MarketOrder,
+        Option,
+        PortfolioItem,
+        Stock,
+        StopLimitOrder,
+        StopOrder,
+        Ticker,
+        Trade,
+    )
+    from ib_insync import Order as IBOrder
+    from ib_insync import Position as IBPosition
 
 from src.notification.logger import setup_logger
 from src.trading.broker.base_broker import (
@@ -77,9 +101,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
     - IBKR-specific margin calculation and requirements
     """
 
-    def __init__(
-        self, host: str, port: int | None, client_id: int, cash: float = 10000.0, config: Dict[str, Any] | None = None
-    ):
+    def __init__(self, host: str, port: int | None, client_id: int, config: Dict[str, Any] | None = None):
         # Initialize configuration
         if config is None:
             config = {}

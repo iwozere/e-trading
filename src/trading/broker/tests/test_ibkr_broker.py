@@ -87,7 +87,7 @@ class TestIBKRBroker:
     def paper_broker(self, paper_config, mock_ib_client):
         """Paper trading broker fixture."""
         with patch("src.trading.broker.ibkr_broker.IB", return_value=mock_ib_client):
-            broker = IBKRBroker(host="127.0.0.1", port=7497, client_id=1, cash=25000.0, config=paper_config)
+            broker = IBKRBroker(host="127.0.0.1", port=7497, client_id=1, config=paper_config)
             broker._load_account_info = AsyncMock()
             broker._start_market_data_updates = AsyncMock()
             return broker
@@ -96,7 +96,7 @@ class TestIBKRBroker:
     def live_broker(self, live_config, mock_ib_client):
         """Live trading broker fixture."""
         with patch("src.trading.broker.ibkr_broker.IB", return_value=mock_ib_client):
-            broker = IBKRBroker(host="127.0.0.1", port=4001, client_id=1, cash=50000.0, config=live_config)
+            broker = IBKRBroker(host="127.0.0.1", port=4001, client_id=1, config=live_config)
             broker._load_account_info = AsyncMock()
             return broker
 
@@ -460,7 +460,7 @@ class TestIBKRIntegration:
             mock_ib.reqMktData.return_value = Mock()
             mock_ib_class.return_value = mock_ib
 
-            broker = IBKRBroker(host="127.0.0.1", port=7497, client_id=1, cash=25000.0, config=config)
+            broker = IBKRBroker(host="127.0.0.1", port=7497, client_id=1, config=config)
 
             # Connect
             await broker.connect()

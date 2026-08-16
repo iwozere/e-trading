@@ -28,6 +28,10 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
+from src.common.asyncio_compat import ensure_event_loop
+
+ensure_event_loop()  # Py3.14: must run before any import ib_async/ib_insync below
+
 from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 
 # Import all live feeds
@@ -248,9 +252,9 @@ class TestIBKRLiveFeed(TestLiveFeeds):
         self.client_id = 1
 
     @patch("ibapi.client.EClient.connect")
-    @patch("ib_insync.ib.IB.reqHistoricalData")
-    @patch("ib_insync.ib.IB.reqContractDetails")
-    @patch("ib_insync.ib.IB.connect")
+    @patch("src.data.feed.ibkr_live_feed.IB.reqHistoricalData")
+    @patch("src.data.feed.ibkr_live_feed.IB.reqContractDetails")
+    @patch("src.data.feed.ibkr_live_feed.IB.connect")
     def test_connection(self, mock_ib_connect, mock_req_contract, mock_req_historical, mock_connect):
         """Test IBKR connection."""
         # Mock connection
@@ -292,9 +296,9 @@ class TestIBKRLiveFeed(TestLiveFeeds):
         mock_connect.assert_called_once_with(self.host, self.port, self.client_id)
 
     @patch("ibapi.client.EClient.connect")
-    @patch("ib_insync.ib.IB.reqHistoricalData")
-    @patch("ib_insync.ib.IB.reqContractDetails")
-    @patch("ib_insync.ib.IB.connect")
+    @patch("src.data.feed.ibkr_live_feed.IB.reqHistoricalData")
+    @patch("src.data.feed.ibkr_live_feed.IB.reqContractDetails")
+    @patch("src.data.feed.ibkr_live_feed.IB.connect")
     def test_get_status(self, mock_ib_connect, mock_req_contract, mock_req_historical, mock_connect):
         """Test status retrieval."""
         mock_connect.return_value = None
@@ -465,9 +469,9 @@ class TestDataFeedFactory(unittest.TestCase):
 
         with (
             patch("ibapi.client.EClient.connect"),
-            patch("ib_insync.ib.IB.reqContractDetails") as mock_req_contract,
-            patch("ib_insync.ib.IB.reqHistoricalData") as mock_req_historical,
-            patch("ib_insync.ib.IB.sleep"),
+            patch("src.data.feed.ibkr_live_feed.IB.reqContractDetails") as mock_req_contract,
+            patch("src.data.feed.ibkr_live_feed.IB.reqHistoricalData") as mock_req_historical,
+            patch("src.data.feed.ibkr_live_feed.IB.sleep"),
         ):
             # Mock the contract details response
             mock_req_contract.return_value = True

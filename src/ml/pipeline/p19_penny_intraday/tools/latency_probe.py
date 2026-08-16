@@ -180,6 +180,9 @@ def probe_ibkr() -> None:
     host = os.getenv("IBKR_HOST", "127.0.0.1")
     port = int(os.getenv("IBKR_PAPER_PORT", "4002"))
     client_id = 19  # unique to p19; avoid clashing with running bots
+    from src.common.asyncio_compat import ensure_event_loop
+
+    ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
     try:
         from ib_async import IB, Stock  # type: ignore[import-not-found]
     except ImportError:

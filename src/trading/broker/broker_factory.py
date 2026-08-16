@@ -302,7 +302,6 @@ def get_broker(config: Dict[str, Any]):
                 host=credentials["host"],
                 port=credentials["port"],
                 client_id=credentials["client_id"],
-                cash=broker_config.get("cash", 25000.0),
                 config=broker_config,
             )
 

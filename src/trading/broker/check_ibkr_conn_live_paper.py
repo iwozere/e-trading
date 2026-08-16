@@ -1,6 +1,13 @@
 import logging
 
-from ib_insync import IB, Stock
+from src.common.asyncio_compat import ensure_event_loop
+
+ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
+
+try:  # prefer maintained ib_async
+    from ib_async import IB, Stock  # type: ignore[import-not-found]
+except ImportError:
+    from ib_insync import IB, Stock
 
 # Setup basic logging to see connection details
 logging.basicConfig(level=logging.INFO)

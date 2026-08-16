@@ -43,6 +43,9 @@ class IBKROpenOrdersFeed:
         even if called wrong — it only ever looks.
         """
         try:
+            from src.common.asyncio_compat import ensure_event_loop
+
+            ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
             try:
                 from ib_async import IB  # type: ignore[import-not-found]
             except ImportError:

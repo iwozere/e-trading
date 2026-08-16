@@ -5,6 +5,15 @@ This document outlines all current tasks, future enhancements, and maintenance a
 
 ## Current Tasks
 
+### Recently Completed
+
+#### Python 3.14 asyncio compatibility shim
+**Status**: Completed ✅
+
+**Description**: Added `asyncio_compat.py` (`ensure_event_loop()`), called before every `ib_async`/`ib_insync` import site. Python 3.14 removed asyncio's implicit "create a loop if none exists" fallback, and `ib_insync`'s `eventkit` dependency calls `asyncio.get_event_loop()` at import time — crashing the scheduler, trading bot, and web UI simultaneously once the Pi's system Python moved to 3.14. Paired with completing the existing partial migration to the maintained `ib_async` fork (added to `requirements.txt`; the codebase already preferred it in 4 files but it was never actually installed, so it always fell through to broken `ib_insync`).
+
+**Tests**: `tests/test_asyncio_compat.py`
+
 ### High Priority
 
 #### TASK-001: Complete Unified Indicator Service Integration

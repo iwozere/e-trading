@@ -26,7 +26,14 @@ Functions:
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Tuple
 
-from ib_insync import Contract, Forex, Future, Option, Stock
+from src.common.asyncio_compat import ensure_event_loop
+
+ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
+
+try:  # prefer maintained ib_async
+    from ib_async import Contract, Forex, Future, Option, Stock  # type: ignore[import-not-found]
+except ImportError:
+    from ib_insync import Contract, Forex, Future, Option, Stock
 
 from src.notification.logger import setup_logger
 

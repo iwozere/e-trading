@@ -12,7 +12,15 @@ from datetime import datetime, timedelta
 from typing import List, cast
 
 import pandas as pd
-from ib_insync import IB, Contract, Forex, Stock
+
+from src.common.asyncio_compat import ensure_event_loop
+
+ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
+
+try:  # prefer maintained ib_async
+    from ib_async import IB, Contract, Forex, Stock  # type: ignore[import-not-found]
+except ImportError:
+    from ib_insync import IB, Contract, Forex, Stock
 
 from config.donotshare.donotshare import DATA_CACHE_DIR, IBKR_HOST, IBKR_PAPER_CLIENT_ID, IBKR_PAPER_PORT
 from src.data.downloader.base_data_downloader import BaseDataDownloader
