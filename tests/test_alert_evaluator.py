@@ -84,7 +84,7 @@ class TestAlertEvaluator:
     @pytest.fixture
     def sample_market_data(self):
         """Create sample market data DataFrame."""
-        dates = pd.date_range(start="2023-01-01", periods=100, freq="1H")
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="1h")
         np.random.seed(42)  # For reproducible tests
 
         # Generate realistic OHLCV data
@@ -114,7 +114,7 @@ class TestAlertEvaluator:
     @pytest.fixture
     def sample_indicators(self):
         """Create sample indicators dictionary."""
-        dates = pd.date_range(start="2023-01-01", periods=100, freq="1H")
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="1h")
         return {
             "SMA_20": pd.Series([100 + i * 0.1 for i in range(100)], index=dates),
             "RSI": pd.Series([50 + np.random.normal(0, 10) for _ in range(100)], index=dates),
@@ -136,6 +136,7 @@ class TestAlertEvaluator:
         mock_run = Mock()
         mock_run.schedule = mock_schedule
         mock_run.id = 456
+        mock_run.job_id = "123"  # str(schedule_id), matching mock_schedule.id and JobsService.trigger_schedule()
 
         return mock_run
 

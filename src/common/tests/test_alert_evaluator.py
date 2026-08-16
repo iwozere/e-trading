@@ -62,7 +62,7 @@ class TestAlertEvaluator:
     @pytest.fixture
     def sample_market_data(self):
         """Create sample market data for testing."""
-        dates = pd.date_range(start="2023-01-01", periods=100, freq="1H", tz="UTC")
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="1h", tz="UTC")
         data = {
             "open": [100 + i * 0.1 for i in range(100)],
             "high": [101 + i * 0.1 for i in range(100)],
@@ -213,7 +213,7 @@ class TestAlertEvaluator:
     def test_evaluate_comparison_crosses_above(self, alert_evaluator):
         """Test crosses above comparison evaluation."""
         # Create data where price crosses above threshold
-        dates = pd.date_range(start="2023-01-01", periods=3, freq="1H", tz="UTC")
+        dates = pd.date_range(start="2023-01-01", periods=3, freq="1h", tz="UTC")
         data = pd.DataFrame(
             {
                 "close": [99, 100, 101],  # Crosses above 100
@@ -438,7 +438,7 @@ class TestAlertEvaluator:
 
     def test_validate_market_data_missing_columns(self, alert_evaluator):
         """Test market data validation with missing columns."""
-        dates = pd.date_range(start="2023-01-01", periods=100, freq="1H", tz="UTC")
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="1h", tz="UTC")
         data = pd.DataFrame(
             {
                 "close": [100 + i * 0.1 for i in range(100)],
@@ -454,7 +454,7 @@ class TestAlertEvaluator:
 
     def test_validate_market_data_insufficient_data(self, alert_evaluator):
         """Test market data validation with insufficient data."""
-        dates = pd.date_range(start="2023-01-01", periods=5, freq="1H", tz="UTC")
+        dates = pd.date_range(start="2023-01-01", periods=5, freq="1h", tz="UTC")
         data = pd.DataFrame(
             {"open": [100] * 5, "high": [101] * 5, "low": [99] * 5, "close": [100.5] * 5, "volume": [1000] * 5},
             index=dates,
@@ -467,7 +467,7 @@ class TestAlertEvaluator:
 
     def test_validate_market_data_zero_prices(self, alert_evaluator):
         """Test market data validation with zero prices."""
-        dates = pd.date_range(start="2023-01-01", periods=100, freq="1H", tz="UTC")
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="1h", tz="UTC")
         data = pd.DataFrame(
             {
                 "open": [100] * 100,

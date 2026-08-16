@@ -133,7 +133,7 @@ class PolygonDataDownloader(BaseDataDownloader):
             if interval == "5m":
                 df = (
                     df.set_index("timestamp")
-                    .resample("5T")
+                    .resample("5min")  # pandas 3.0 dropped the deprecated "T" alias
                     .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
                     .dropna()
                     .reset_index()
@@ -141,7 +141,7 @@ class PolygonDataDownloader(BaseDataDownloader):
             elif interval == "15m":
                 df = (
                     df.set_index("timestamp")
-                    .resample("15T")
+                    .resample("15min")  # pandas 3.0 dropped the deprecated "T" alias
                     .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
                     .dropna()
                     .reset_index()
