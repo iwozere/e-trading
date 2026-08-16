@@ -6,7 +6,9 @@ flake8>=6.0.0
 # mypy pinned exactly: the mypy=0 gate (with the pandas/anthropic/redis
 # follow_imports=skip config in pyproject.toml) is verified against this build.
 # A newer mypy tightens inference and reopens the count; bump deliberately.
-mypy==1.16.1
+# Bumped 1.16.1 -> 2.3.1 on chore/upgrade-all-dependencies; re-verify the 0-error
+# gate after this bump (2.x tightens inference vs 1.x, expect newly reopened errors).
+mypy==2.3.1
 autoflake>=2.2.0
 # Pyright pinned exactly: the type-check gate (scripts/typecheck.py + CI) must run
 # a reproducible pyright across machines. The `pyright` PyPI package (pyright-python)
