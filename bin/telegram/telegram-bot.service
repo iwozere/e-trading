@@ -18,6 +18,13 @@ WorkingDirectory=/opt/apps/e-trading
 Environment="PYTHONPATH=/opt/apps/e-trading"
 Environment="PYTHONUNBUFFERED=1"
 Environment="TELEGRAM_API_PORT=5004"
+# This venv runs Python 3.14 (newer than the project's tested 3.13 baseline).
+# numba's on-disk JIT cache locator is broken under 3.14 for pandas_ta_classic's
+# @njit(cache=True) functions ("no locator available for file"), crashing at
+# import time. Disabling JIT caching sidesteps it -- indicators run as plain
+# Python instead of compiled, slower but correct. Remove once the venv is
+# rebuilt against Python 3.13 to match the rest of the project.
+Environment="NUMBA_DISABLE_JIT=1"
 
 # Optional: Load environment from file (contains TELEGRAM_BOT_TOKEN)
 EnvironmentFile=/opt/apps/e-trading/config/donotshare/.env
