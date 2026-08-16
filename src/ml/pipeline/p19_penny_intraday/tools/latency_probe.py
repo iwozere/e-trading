@@ -19,7 +19,7 @@ Usage:
 """
 
 import os
-from typing import Any, Dict
+from typing import TYPE_CHECKING, Any, Dict
 import sys
 import time
 from datetime import UTC, datetime, timedelta
@@ -183,14 +183,18 @@ def probe_ibkr() -> None:
     from src.common.asyncio_compat import ensure_event_loop
 
     ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
-    try:
-        from ib_async import IB, Stock  # type: ignore[import-not-found]
-    except ImportError:
-        try:
-            from ib_insync import IB, Stock  # type: ignore[import-not-found]
-        except Exception:
-            print("  ib_async/ib_insync not installed — skipped")
-            return
+    if TYPE_CHECKING:
+        # Type-check against ib_insync's types -- see ibkr_utils.py for why.
+        from ib_insync import IB, Stock
+    else:
+        try:  # prefer maintained ib_async
+            from ib_async import IB, Stock  # type: ignore[import-not-found]
+        except ImportError:
+            try:
+                from ib_insync import IB, Stock  # type: ignore[import-not-found]
+            except Exception:
+                print("  ib_async/ib_insync not installed — skipped")
+                return
 
     ib = IB()
     try:

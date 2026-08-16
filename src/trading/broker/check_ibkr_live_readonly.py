@@ -1,11 +1,16 @@
+from typing import TYPE_CHECKING
+
 from src.common.asyncio_compat import ensure_event_loop
 
-ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
-
-try:  # prefer maintained ib_async
-    from ib_async import IB, MarketOrder, Stock  # type: ignore[import-not-found]
-except ImportError:
+if TYPE_CHECKING:
+    # Type-check against ib_insync's types -- see ibkr_utils.py for why.
     from ib_insync import IB, MarketOrder, Stock
+else:
+    ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
+    try:  # prefer maintained ib_async
+        from ib_async import IB, MarketOrder, Stock  # type: ignore[import-not-found]
+    except ImportError:
+        from ib_insync import IB, MarketOrder, Stock
 
 ib = IB()
 try:

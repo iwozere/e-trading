@@ -19,7 +19,7 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from src.ml.pipeline.p19_penny_intraday.config import P19Config
 from src.ml.pipeline.p19_penny_intraday.models.watchlist_entry import WatchlistEntry
@@ -224,14 +224,18 @@ class WatchlistBuilder:
         from src.common.asyncio_compat import ensure_event_loop
 
         ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
-        try:  # prefer maintained ib_async
-            from ib_async import IB, ScannerSubscription, TagValue  # type: ignore[import-not-found]
-        except ImportError:
-            try:
-                from ib_insync import IB, ScannerSubscription, TagValue  # type: ignore[import-not-found]
-            except Exception:
-                _logger.warning("ib_async/ib_insync unavailable — gappers source skipped")
-                return []
+        if TYPE_CHECKING:
+            # Type-check against ib_insync's types -- see ibkr_utils.py for why.
+            from ib_insync import IB, ScannerSubscription, TagValue
+        else:
+            try:  # prefer maintained ib_async
+                from ib_async import IB, ScannerSubscription, TagValue  # type: ignore[import-not-found]
+            except ImportError:
+                try:
+                    from ib_insync import IB, ScannerSubscription, TagValue  # type: ignore[import-not-found]
+                except Exception:
+                    _logger.warning("ib_async/ib_insync unavailable — gappers source skipped")
+                    return []
 
         ib = IB()
         try:

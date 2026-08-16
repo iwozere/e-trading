@@ -26,32 +26,12 @@ import asyncio
 import threading
 import time
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from src.common.asyncio_compat import ensure_event_loop
 
-ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
-
-try:  # prefer maintained ib_async
-    from ib_async import (  # type: ignore[import-not-found]
-        IB,
-        AccountValue,
-        Contract,
-        Forex,
-        Future,
-        LimitOrder,
-        MarketOrder,
-        Option,
-        PortfolioItem,
-        Stock,
-        StopLimitOrder,
-        StopOrder,
-        Ticker,
-        Trade,
-    )
-    from ib_async import Order as IBOrder  # type: ignore[import-not-found]
-    from ib_async import Position as IBPosition  # type: ignore[import-not-found]
-except ImportError:
+if TYPE_CHECKING:
+    # Type-check against ib_insync's types -- see ibkr_utils.py for why.
     from ib_insync import (
         IB,
         AccountValue,
@@ -70,6 +50,46 @@ except ImportError:
     )
     from ib_insync import Order as IBOrder
     from ib_insync import Position as IBPosition
+else:
+    ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
+    try:  # prefer maintained ib_async
+        from ib_async import (  # type: ignore[import-not-found]
+            IB,
+            AccountValue,
+            Contract,
+            Forex,
+            Future,
+            LimitOrder,
+            MarketOrder,
+            Option,
+            PortfolioItem,
+            Stock,
+            StopLimitOrder,
+            StopOrder,
+            Ticker,
+            Trade,
+        )
+        from ib_async import Order as IBOrder  # type: ignore[import-not-found]
+        from ib_async import Position as IBPosition  # type: ignore[import-not-found]
+    except ImportError:
+        from ib_insync import (
+            IB,
+            AccountValue,
+            Contract,
+            Forex,
+            Future,
+            LimitOrder,
+            MarketOrder,
+            Option,
+            PortfolioItem,
+            Stock,
+            StopLimitOrder,
+            StopOrder,
+            Ticker,
+            Trade,
+        )
+        from ib_insync import Order as IBOrder
+        from ib_insync import Position as IBPosition
 
 from src.notification.logger import setup_logger
 from src.trading.broker.base_broker import (

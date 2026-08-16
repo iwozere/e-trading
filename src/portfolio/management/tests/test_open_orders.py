@@ -35,7 +35,7 @@ class FakeIB:
 
 def test_protective_order_qty_sums_matching_sell_stops():
     feed = IBKROpenOrdersFeed(host="h", port=4001, client_id=21)
-    feed._ib = FakeIB(
+    feed._ib = FakeIB(  # type: ignore[assignment]  # duck-typed test double, not a real ib_insync.IB
         [
             _trade("AAA", "SELL", "STP", 100),
             _trade("AAA", "SELL", "TRAIL", 50, remaining=30),  # partially filled -> use remaining
@@ -50,7 +50,7 @@ def test_protective_order_qty_sums_matching_sell_stops():
 
 def test_protective_order_qty_ignores_buy_side_and_non_protective_types():
     feed = IBKROpenOrdersFeed(host="h", port=4001, client_id=21)
-    feed._ib = FakeIB(
+    feed._ib = FakeIB(  # type: ignore[assignment]  # duck-typed test double, not a real ib_insync.IB
         [
             _trade("AAA", "BUY", "STP", 100),  # wrong side, e.g. protecting a short
             _trade("AAA", "SELL", "LMT", 100),  # not a protective type
@@ -67,7 +67,9 @@ def test_protective_order_qty_no_connection_returns_empty():
 
 def test_protective_order_qty_skips_malformed_trade():
     feed = IBKROpenOrdersFeed(host="h", port=4001, client_id=21)
-    feed._ib = FakeIB([SimpleNamespace(contract=None, order=None, orderStatus=None), _trade("AAA", "SELL", "STP", 10)])
+    feed._ib = FakeIB(  # type: ignore[assignment]  # duck-typed test double, not a real ib_insync.IB
+        [SimpleNamespace(contract=None, order=None, orderStatus=None), _trade("AAA", "SELL", "STP", 10)]
+    )
 
     assert feed.protective_order_qty(["AAA"]) == {"AAA": 10.0}
 
@@ -78,7 +80,7 @@ def test_fetch_protective_qty_disconnects_even_on_failure():
     class BrokenFeed(IBKROpenOrdersFeed):
         def connect(self, attempts=2, backoff_seconds=3.0):
             del attempts, backoff_seconds
-            self._ib = fake_ib
+            self._ib = fake_ib  # type: ignore[assignment]  # duck-typed test double, not a real ib_insync.IB
             return True
 
         def protective_order_qty(self, symbols):

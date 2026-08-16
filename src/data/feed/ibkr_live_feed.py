@@ -16,18 +16,21 @@ Classes:
 - IBKRLiveDataFeed: Live data feed for Interactive Brokers
 """
 
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import pandas as pd
 
 from src.common.asyncio_compat import ensure_event_loop
 
-ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
-
-try:  # prefer maintained ib_async
-    from ib_async import IB, Contract, Forex, Stock  # type: ignore[import-not-found]
-except ImportError:
+if TYPE_CHECKING:
+    # Type-check against ib_insync's types -- see ibkr_utils.py for why.
     from ib_insync import IB, Contract, Forex, Stock
+else:
+    ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
+    try:  # prefer maintained ib_async
+        from ib_async import IB, Contract, Forex, Stock  # type: ignore[import-not-found]
+    except ImportError:
+        from ib_insync import IB, Contract, Forex, Stock
 
 from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 from src.notification.logger import setup_logger

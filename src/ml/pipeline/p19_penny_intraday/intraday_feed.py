@@ -13,10 +13,16 @@ unreachable, so the loop degrades instead of crashing.
 """
 
 import math
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from src.ml.pipeline.p19_penny_intraday.config import P19FeedConfig
 from src.notification.logger import setup_logger
+
+if TYPE_CHECKING:
+    # Annotation-only; type-check against ib_insync's types -- see
+    # src/trading/broker/ibkr_utils.py for why. The real (runtime-selected)
+    # import happens in connect() below.
+    from ib_insync import IB
 
 _logger = setup_logger(__name__)
 
@@ -35,7 +41,7 @@ class IBKRIntradayFeed:
 
     def __init__(self, feed_config: P19FeedConfig) -> None:
         self.cfg = feed_config
-        self._ib = None
+        self._ib: "IB | None" = None
 
     def connect(self, attempts: int = 2, backoff_seconds: float = 3.0) -> bool:
         """
@@ -49,10 +55,14 @@ class IBKRIntradayFeed:
             from src.common.asyncio_compat import ensure_event_loop
 
             ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
-            try:
-                from ib_async import IB  # type: ignore[import-not-found]
-            except ImportError:
-                from ib_insync import IB  # type: ignore[import-not-found]
+            if TYPE_CHECKING:
+                # Type-check against ib_insync's types -- see ibkr_utils.py for why.
+                from ib_insync import IB
+            else:
+                try:  # prefer maintained ib_async
+                    from ib_async import IB  # type: ignore[import-not-found]
+                except ImportError:
+                    from ib_insync import IB  # type: ignore[import-not-found]
         except Exception:
             _logger.warning("ib_async/ib_insync unavailable — intraday feed disabled")
             return False
@@ -100,10 +110,14 @@ class IBKRIntradayFeed:
         if self._ib is None:
             return {}
         from_ib = self._ib
-        try:
-            from ib_async import Stock  # type: ignore[import-not-found]
-        except ImportError:
-            from ib_insync import Stock  # type: ignore[import-not-found]
+        if TYPE_CHECKING:
+            # Type-check against ib_insync's types -- see ibkr_utils.py for why.
+            from ib_insync import Stock
+        else:
+            try:  # prefer maintained ib_async
+                from ib_async import Stock  # type: ignore[import-not-found]
+            except ImportError:
+                from ib_insync import Stock  # type: ignore[import-not-found]
 
         # reqMktData() keys its subscription table by contract hash, and a Contract
         # only hashes once it carries a conId — so bare Stock(sym, "SMART", "USD")
@@ -164,7 +178,8 @@ class IBKRIntradayFeed:
                 "volume": _num(getattr(t, "volume", None)),
             }
             try:
-                from_ib.cancelMktData(t.contract)
+                if t.contract is not None:
+                    from_ib.cancelMktData(t.contract)
             except Exception:
                 pass
         return out

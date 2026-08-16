@@ -24,16 +24,24 @@ Functions:
 """
 
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from src.common.asyncio_compat import ensure_event_loop
 
-ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
-
-try:  # prefer maintained ib_async
-    from ib_async import Contract, Forex, Future, Option, Stock  # type: ignore[import-not-found]
-except ImportError:
+if TYPE_CHECKING:
+    # Type-check against ib_insync's types. ib_async is a structurally
+    # compatible drop-in fork (same class/method surface), so this stays
+    # accurate for the ib_async runtime path too -- and keeps mypy/pyright
+    # from treating the two try/except branches below as distinct,
+    # incompatible types (they'd otherwise report every downstream use as a
+    # type mismatch between ib_async.X and ib_insync.X).
     from ib_insync import Contract, Forex, Future, Option, Stock
+else:
+    ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
+    try:  # prefer maintained ib_async
+        from ib_async import Contract, Forex, Future, Option, Stock  # type: ignore[import-not-found]
+    except ImportError:
+        from ib_insync import Contract, Forex, Future, Option, Stock
 
 from src.notification.logger import setup_logger
 

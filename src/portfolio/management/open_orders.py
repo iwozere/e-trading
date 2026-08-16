@@ -18,10 +18,16 @@ and every manually-set stop would be (wrongly) reported as missing.
 """
 
 from collections import defaultdict
-from typing import Dict, Iterable
+from typing import TYPE_CHECKING, Dict, Iterable
 
 from src.notification.logger import setup_logger
 from src.portfolio.management.config import PROTECTIVE_ORDER_TYPES
+
+if TYPE_CHECKING:
+    # Annotation-only; type-check against ib_insync's types -- see
+    # ibkr_utils.py for why. The real (runtime-selected) import happens
+    # in connect() below.
+    from ib_insync import IB
 
 _logger = setup_logger(__name__)
 
@@ -33,7 +39,7 @@ class IBKROpenOrdersFeed:
         self.host = host
         self.port = port
         self.client_id = client_id
-        self._ib = None
+        self._ib: "IB | None" = None
 
     def connect(self, attempts: int = 2, backoff_seconds: float = 3.0) -> bool:
         """
@@ -46,10 +52,14 @@ class IBKROpenOrdersFeed:
             from src.common.asyncio_compat import ensure_event_loop
 
             ensure_event_loop()  # Py3.14: must run before import ib_async/ib_insync
-            try:
-                from ib_async import IB  # type: ignore[import-not-found]
-            except ImportError:
-                from ib_insync import IB  # type: ignore[import-not-found]
+            if TYPE_CHECKING:
+                # Type-check against ib_insync's types -- see ibkr_utils.py for why.
+                from ib_insync import IB
+            else:
+                try:  # prefer maintained ib_async
+                    from ib_async import IB  # type: ignore[import-not-found]
+                except ImportError:
+                    from ib_insync import IB  # type: ignore[import-not-found]
         except Exception:
             _logger.warning("ib_async/ib_insync unavailable — open-orders feed disabled")
             return False
