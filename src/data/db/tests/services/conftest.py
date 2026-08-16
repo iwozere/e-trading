@@ -18,8 +18,21 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[5]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-# Import repository test fixtures to reuse database setup
-pytest_plugins = ["src.data.db.tests.repos.conftest"]
+# Import repository test fixtures to reuse database setup. `pytest_plugins`
+# is only legal in the rootdir's conftest.py as of pytest 8+ (this repo has
+# no rootdir conftest.py, so that mechanism isn't available here); explicit
+# imports register these as fixtures in this module instead. Named
+# individually (not `import *`) because pytest.fixture names starting with
+# "_" are private-by-convention and a wildcard import silently skips them,
+# which would break the engine -> _test_db_url -> _db_admin_engine chain
+# and drop the autouse _apply_migrations fixture.
+from src.data.db.tests.repos.conftest import (  # noqa: F401
+    _apply_migrations,
+    _db_admin_engine,
+    _test_db_url,
+    db_session,
+    engine,
+)
 
 from src.data.db.repos.repo_jobs import JobsRepository
 from src.data.db.repos.repo_notification import NotificationRepository
