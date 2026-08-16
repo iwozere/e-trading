@@ -27,6 +27,14 @@ Environment="TRADING_ENV=production"
 Environment="LOG_LEVEL=INFO"
 Environment="SCHEDULER_MAX_WORKERS=10"
 Environment="DATA_CACHE_ENABLED=true"
+# This venv runs Python 3.14 (newer than the project's tested 3.13 baseline).
+# numba's on-disk JIT cache locator is broken under 3.14 for pandas_ta_classic's
+# @njit(cache=True) functions ("no locator available for file"), crashing at
+# import time (AlertEvaluator -> IndicatorService -> PandasTaAdapter). Disabling
+# JIT caching sidesteps it -- indicators run as plain Python instead of compiled,
+# slower but correct. Remove once the venv is rebuilt against Python 3.13 to
+# match the rest of the project.
+Environment="NUMBA_DISABLE_JIT=1"
 
 # Security settings
 NoNewPrivileges=true
