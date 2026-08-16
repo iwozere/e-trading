@@ -99,6 +99,13 @@ See [Code-Review-2026-07-03.md](Code-Review-2026-07-03.md) for full details.
 - Trends poll has no persistent state for anchor-term calibration
 - `EdgarDownloader.download_form4_filings()` downloads ALL form 4s for a date — large payload on busy days
 - ~~Hardcoded `R:/data-cache` paths in 4 modules~~ — fixed 2026-07-03 (C1)
+- **Direct Reddit API (H2) is blocked at the platform level, not a code bug** — Reddit's Aug-2025 "Responsible
+  Builder Policy" replaced self-serve app creation at `/prefs/apps` with an approval-gated request form;
+  legitimate small non-commercial apps commonly get no response or a generic rejection. `social_poll.py`'s
+  app-only OAuth code (H2) is correct and untouched; `REDDIT_API_KEY`/`SECRET`/`USER_AGENT` are left empty in
+  `donotshare/.env` on purpose (2026-08-16). `_get_reddit_headers()` skips cleanly when unset, and ApeWisdom
+  (`pipeline-specification.md` §social) already serves as the free, keyless Reddit-mention fallback in the
+  composite `z_social` score — do not re-investigate the "not set; skipping" log line as a regression.
 
 ## Testing Requirements
 
