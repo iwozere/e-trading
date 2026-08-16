@@ -192,7 +192,7 @@ class DynamicPandasData(bt.feeds.PandasData):
     pass
 
 
-_DATA_FEED_CLASS_CACHE = {}
+_DATA_FEED_CLASS_CACHE: Dict[Tuple[str, ...], type] = {}
 
 
 def prepare_data_feed(df: pd.DataFrame, symbol: str):

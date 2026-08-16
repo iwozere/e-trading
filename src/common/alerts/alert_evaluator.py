@@ -1547,7 +1547,7 @@ class AlertEvaluator:
         Returns:
             Valid state dictionary with defaults for missing fields
         """
-        default_state = {
+        default_state: Dict[str, Any] = {
             "status": "ARMED",
             "sides": {},
             "last_evaluation": None,

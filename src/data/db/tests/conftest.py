@@ -11,7 +11,11 @@ from sqlalchemy.orm import sessionmaker
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-# ⚠️ CRITICAL: ALWAYS use TEST database for tests, NEVER production DB_URL!
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
+
+# CRITICAL: ALWAYS use TEST database for tests, NEVER production DB_URL!
 # Require TEST_DB_URL environment variable pointing to a PostgreSQL test database
 TEST_DB_URL = os.getenv("TEST_DB_URL")
 
@@ -27,13 +31,17 @@ if not TEST_DB_URL:
         from urllib.parse import quote_plus
 
         TEST_DB_URL = f"postgresql+psycopg2://{pg_user}:{quote_plus(pg_pass)}@{pg_host}:{pg_port}/{pg_db}"
-        print(
-            f"⚠️  TEST_DB_URL constructed from env vars: postgresql+psycopg2://{pg_user}:***@{pg_host}:{pg_port}/{pg_db}"
+        _logger.warning(
+            "TEST_DB_URL constructed from env vars: postgresql+psycopg2://%s:***@%s:%s/%s",
+            pg_user,
+            pg_host,
+            pg_port,
+            pg_db,
         )
     else:
-        print("❌  ERROR: TEST_DB_URL not set and cannot construct from POSTGRES_* env vars")
-        print("❌  Tests require a PostgreSQL test database!")
-        print("❌  Set TEST_DB_URL or POSTGRES_TEST_USER/POSTGRES_TEST_PASSWORD environment variables")
+        _logger.error("TEST_DB_URL not set and cannot construct from POSTGRES_* env vars")
+        _logger.error("Tests require a PostgreSQL test database!")
+        _logger.error("Set TEST_DB_URL or POSTGRES_TEST_USER/POSTGRES_TEST_PASSWORD environment variables")
         TEST_DB_URL = None
 
 # NEVER import production DB_URL for tests!

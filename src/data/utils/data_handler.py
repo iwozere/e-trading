@@ -393,7 +393,7 @@ class DataHandler:
 
 
 # Global data handler instances
-_data_handlers = {}
+_data_handlers: Dict[str, "DataHandler"] = {}
 
 
 def get_data_handler(provider: str, cache_enabled: bool = True) -> DataHandler:
