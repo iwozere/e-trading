@@ -74,7 +74,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
     - Binance-specific trading rules validation
     """
 
-    def __init__(self, api_key: str, api_secret: str, cash: float = 10000.0, config: Dict[str, Any] | None = None):
+    def __init__(self, api_key: str, api_secret: str, config: Dict[str, Any] | None = None):
         # Initialize configuration
         if config is None:
             config = {}

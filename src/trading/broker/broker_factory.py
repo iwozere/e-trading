@@ -292,7 +292,6 @@ def get_broker(config: Dict[str, Any]):
             return BinanceBroker(
                 api_key=credentials["api_key"],
                 api_secret=credentials["api_secret"],
-                cash=broker_config.get("cash", 10000.0),
                 config=broker_config,
             )
 

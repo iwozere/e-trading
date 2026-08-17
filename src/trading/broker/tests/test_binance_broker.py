@@ -112,7 +112,7 @@ class TestBinanceBroker:
             mock_client.return_value.get_account.return_value = {"accountType": "SPOT"}
             mock_client.return_value.get_exchange_info.return_value = mock_exchange_info
 
-            broker = BinanceBroker(api_key="test_key", api_secret="test_secret", cash=10000.0, config=paper_config)
+            broker = BinanceBroker(api_key="test_key", api_secret="test_secret", config=paper_config)
             broker.exchange_info = mock_exchange_info
             broker._load_exchange_info = AsyncMock()
             return broker
@@ -124,7 +124,7 @@ class TestBinanceBroker:
             mock_client.return_value.get_account.return_value = {"accountType": "SPOT"}
             mock_client.return_value.get_exchange_info.return_value = mock_exchange_info
 
-            broker = BinanceBroker(api_key="test_key", api_secret="test_secret", cash=5000.0, config=live_config)
+            broker = BinanceBroker(api_key="test_key", api_secret="test_secret", config=live_config)
             broker.exchange_info = mock_exchange_info
             broker._load_exchange_info = AsyncMock()
             return broker
@@ -488,7 +488,7 @@ class TestBinanceIntegration:
                 ]
             }
 
-            broker = BinanceBroker("test_key", "test_secret", 10000.0, config)
+            broker = BinanceBroker("test_key", "test_secret", config)
 
             # Connect
             await broker.connect()
