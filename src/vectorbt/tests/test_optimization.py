@@ -44,7 +44,7 @@ def test_liquidation_penalty():
     # trials with excessive drawdowns (>60%)
 
     # 1. Create synthetic data split (MultiIndex)
-    dates = pd.date_range("2024-01-01", periods=100, freq="1H")
+    dates = pd.date_range("2024-01-01", periods=100, freq="1h")  # pandas 3.0 dropped the deprecated "H" alias
     # Simulate a crash: price goes from 100 to 30 (70% drawdown)
     prices = np.linspace(100, 30, 100)
 
@@ -70,10 +70,10 @@ def test_liquidation_penalty():
             self.number = 1
             self.user_attrs = {}
 
-        def suggest_int(self, name, low, high):
+        def suggest_int(self, name, low, high, step=1):
             return self.params[name]
 
-        def suggest_float(self, name, low, high):
+        def suggest_float(self, name, low, high, step=None):
             return self.params[name]
 
         def set_user_attr(self, name, value):

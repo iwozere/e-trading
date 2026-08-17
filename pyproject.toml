@@ -48,6 +48,13 @@ line-ending = "auto"
 # without it every model instantiation reports false "missing named argument".
 plugins = ["pydantic.mypy"]
 disable_error_code = ["annotation-unchecked"]
+# src/ml/future is dormant/unwired code (nothing outside it imports anything
+# from it) that pyrightconfig.json already excludes entirely; mirrored here
+# because mlflow_integration.py and automated_training_pipeline.py import
+# mlflow, which was dropped from requirements.txt (see chore/upgrade-
+# pandas3-vectorbt: mlflow<3 pins pandas<3 on every 3.x release, permanently
+# blocking vectorbt>=1.1.0's pandas>=3.0.3 requirement).
+exclude = ["^src/ml/future/"]
 
 
 # Third-party packages that ship no type information and have no stub package
