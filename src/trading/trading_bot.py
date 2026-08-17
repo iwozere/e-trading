@@ -57,9 +57,12 @@ def main(config_name: str | None = None):
 
         # Setup signal handlers for graceful shutdown
         def signal_handler(signum, frame=None):
+            # bot.stop() schedules shutdown on the running loop; let bot.start()'s
+            # asyncio.run() return naturally once it completes rather than forcing
+            # sys.exit(0), which would abort the loop mid-shutdown instead of
+            # letting the scheduled stop actually run.
             _logger.info("Received signal %s, shutting down...", signum)
             bot.stop()
-            sys.exit(0)
 
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
@@ -112,12 +115,14 @@ def main(config_name: str | None = None):
 
         # Update signal handler to stop heartbeat
         def signal_handler_with_heartbeat(signum, frame=None):
+            # See signal_handler() above: no sys.exit(0) here either, for the
+            # same reason - let bot.start()'s asyncio.run() return on its own
+            # once the scheduled shutdown actually completes.
             _logger.info("Received signal %s, shutting down...", signum)
             if heartbeat_manager:
                 heartbeat_manager.stop_heartbeat()
                 _logger.info("Stopped trading bot heartbeat")
             bot.stop()
-            sys.exit(0)
 
         signal.signal(signal.SIGINT, signal_handler_with_heartbeat)
         signal.signal(signal.SIGTERM, signal_handler_with_heartbeat)

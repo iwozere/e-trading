@@ -41,6 +41,10 @@ class LiveTradingBot:
         # schedule the shutdown coroutine from a signal handler via
         # asyncio.run_coroutine_threadsafe().
         self._event_loop: asyncio.AbstractEventLoop | None = None
+        # Set (only) by _start_and_capture_loop() for the CLI path; used to keep
+        # that coroutine - and therefore the event loop - alive until stop()
+        # signals shutdown. See _start_and_capture_loop() for why this is needed.
+        self._stop_event: asyncio.Event | None = None
         _logger.info("Registered bot %s with StrategyManager. Instance ID: %s", config_file, self.instance_id)
 
     def _load_and_hydrate_config(self) -> Dict[str, Any]:
@@ -83,9 +87,30 @@ class LiveTradingBot:
             raise
 
     async def _start_and_capture_loop(self) -> None:
-        """Coroutine for asyncio.run() CLI startup; stores the event loop reference."""
+        """Coroutine for asyncio.run() CLI startup; stores the event loop reference.
+
+        start_instance() only *schedules* the bot's real work (the Backtrader
+        engine, real-time data feed, and trading loop) as background asyncio
+        tasks - it returns as soon as they're created, without awaiting them.
+        Without the wait below, asyncio.run() would tear the event loop down
+        the instant this coroutine returns, cancelling those tasks before they
+        ever get a chance to run. Block here until stop() (e.g. from a
+        SIGINT/SIGTERM handler) signals shutdown via _stop_event.
+        """
         self._event_loop = asyncio.get_running_loop()
-        await self.manager.start_instance(self.instance_id)
+        self._stop_event = asyncio.Event()
+        started = await self.manager.start_instance(self.instance_id)
+        if not started:
+            return
+        await self._stop_event.wait()
+
+    async def _shutdown(self) -> None:
+        """Stop the instance, then release _start_and_capture_loop()'s wait."""
+        try:
+            await self.manager.stop_instance(self.instance_id)
+        finally:
+            if self._stop_event is not None:
+                self._stop_event.set()
 
     def stop(self):
         """Stop the bot instance via the manager."""
@@ -93,17 +118,14 @@ class LiveTradingBot:
         try:
             asyncio.get_running_loop()
             # Inside an async context — schedule without blocking.
-            asyncio.ensure_future(self.manager.stop_instance(self.instance_id))
+            asyncio.ensure_future(self._shutdown())
         except RuntimeError:
             # Not in an async context (e.g. called from a SIGINT/SIGTERM signal
             # handler that interrupted asyncio.run() in the main thread).
             # run_coroutine_threadsafe() is the correct way to schedule a
             # coroutine from a non-async context onto a running event loop.
             if self._event_loop is not None and self._event_loop.is_running():
-                asyncio.run_coroutine_threadsafe(
-                    self.manager.stop_instance(self.instance_id),
-                    self._event_loop,
-                )
+                asyncio.run_coroutine_threadsafe(self._shutdown(), self._event_loop)
             else:
                 asyncio.run(self.manager.stop_instance(self.instance_id))
         except Exception:
@@ -139,9 +161,12 @@ def main():
     bot = LiveTradingBot(config_file)
 
     def signal_handler(signum, frame):
+        # Signal stop_event via bot.stop() and let bot.start()'s asyncio.run()
+        # return naturally once _shutdown() completes - sys.exit(0) here would
+        # abort the underlying event loop mid-shutdown instead of letting the
+        # scheduled _shutdown() coroutine (and the tasks it stops) run.
         _logger.info("Received signal %s, shutting down...", signum)
         bot.stop()
-        sys.exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
