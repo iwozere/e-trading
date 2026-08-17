@@ -60,8 +60,31 @@ def test_liquidation_penalty():
     data[("BTC", "Close")] = prices  # type: ignore
     data[("BTC", "Volume")] = 1000  # type: ignore
 
-    # 2. Setup objective with this crash data
-    obj = Objective(data_splits=[data], strategy_config={})
+    # 2. Setup objective with this crash data.
+    # A minimal single-indicator strategy: enter long whenever RSI < lower (rsi_main_lower=100
+    # below makes this always true post-warmup, so the portfolio stays long through the whole
+    # crash) and never exit (long_exit target of 999 is unreachable on a 0-100 RSI scale) --
+    # this is what actually realizes the drawdown pf.max_drawdown() is asserted on below.
+    # An empty strategy_config here (as this test previously had) skips indicator/logic
+    # evaluation entirely, so the engine never enters a position at all: max_drawdown is then
+    # trivially 0 on a flat portfolio, regardless of how severe the underlying price crash is.
+    strategy_config = {
+        "indicators": {
+            "rsi_main": {
+                "type": "RSI",
+                "space": {
+                    "window": {"type": "int", "min": 2, "max": 30},
+                    "lower": {"type": "int", "min": 1, "max": 100},
+                    "upper": {"type": "int", "min": 1, "max": 100},
+                },
+            },
+        },
+        "logic": {
+            "long_entry": {"indicator": "rsi_main", "field": "rsi", "op": "<", "target": "rsi_main.lower"},
+            "long_exit": {"indicator": "rsi_main", "field": "rsi", "op": ">", "target": 999},
+        },
+    }
+    obj = Objective(data_splits=[data], strategy_config=strategy_config)
 
     # 3. Create a mock trial with high leverage (which will surely cause >60% DD)
     class MockTrial:
@@ -81,11 +104,9 @@ def test_liquidation_penalty():
 
     # Strategy that's long all the time in a crash
     params = {
-        "rsi_window": 14,
-        "rsi_lower": 100,  # Always below -> long
-        "rsi_upper": 0,
-        "bb_window": 20,
-        "bb_std": 2.0,
+        "rsi_main_window": 14,
+        "rsi_main_lower": 100,  # RSI always below this post-warmup -> always long
+        "rsi_main_upper": 1,  # unused by long_entry/long_exit logic above, but suggest_int still needs a value
         "leverage": 1.0,  # Even 1x with 70% drop should trigger proxy penalty
     }
 
