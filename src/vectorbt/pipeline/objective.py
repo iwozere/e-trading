@@ -126,9 +126,15 @@ class Objective:
             # 4. Custom Liquidation Proxy (Senior Architect Requirement)
             # Discard if Max Drawdown > 60% (conservative threshold)
             # vectorbt attaches metric accessors dynamically; not visible to pyright
-            max_dd = pf.max_drawdown().max()  # pyright: ignore[reportAttributeAccessIssue]  # Max across all assets/columns
-            all_max_dd.append(max_dd)
-            if max_dd > 0.6:
+            # pf.max_drawdown() returns per-column NEGATIVE fractions (e.g. -0.7 for a 70%
+            # drawdown), so the worst case across assets/columns is the most negative value
+            # (.min()), not .max() -- .max() picks the mildest per-asset drawdown instead,
+            # which combined with the ">" comparison below meant this liquidation check could
+            # never trigger. Never caught before because vectorbt 1.0.0 had an unrelated
+            # packaging bug that made every test importing it fail at collection.
+            max_dd = pf.max_drawdown().min()  # pyright: ignore[reportAttributeAccessIssue]  # Worst across all assets/columns
+            all_max_dd.append(abs(max_dd))  # stored/reported as a positive magnitude
+            if max_dd < -0.6:
                 split_scores.append(-1.0)  # Penalty for this split
                 continue
 
@@ -148,20 +154,24 @@ class Objective:
                 s = (calmar * win_rate) / leverage
                 split_scores.append(s)
 
+        # Store metadata unconditionally -- total_trades and avg_max_drawdown are
+        # available regardless of whether the trial is rejected below, and losing
+        # them on a rejected trial makes it impossible to tell from user_attrs
+        # alone why a trial scored -1e6 (too few trades vs. no valid split at all).
+        trial.set_user_attr("total_trades", int(all_trades_count))
+        if all_max_dd:
+            trial.set_user_attr("avg_max_drawdown", float(np.mean(all_max_dd)))
+
         # 6. Stability Score (Senior Architect Requirement)
         # FinalScore = median(split_scores) - std(split_scores)
         if not split_scores:
             return -1e6
 
         final_score = np.median(split_scores) - np.std(split_scores)
+        trial.set_user_attr("stability_score", float(final_score))
 
         # 7. Minimum Trades Filter (Guardroom Requirement)
         if all_trades_count < 20:
             return -1e6
-
-        # Store metadata
-        trial.set_user_attr("total_trades", int(all_trades_count))
-        trial.set_user_attr("avg_max_drawdown", float(np.mean(all_max_dd)))
-        trial.set_user_attr("stability_score", float(final_score))
 
         return final_score

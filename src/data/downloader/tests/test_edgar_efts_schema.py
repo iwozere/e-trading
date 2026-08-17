@@ -56,17 +56,22 @@ def test_download_13f_index_parses_real_schema(tmp_path):
 
 
 def test_download_13dg_parses_real_schema(tmp_path):
+    # download_13dg_filings does NOT call _efts_search -- its own docstring says EDGAR's
+    # full-text search doesn't index SC 13D/G filings, so it parses the plain-text quarterly
+    # form.idx file via _fetch_quarterly_form_idx() instead. Mocking _efts_search here was a
+    # no-op: this test was silently exercising live SEC EDGAR data instead of the fixture
+    # below, and its assertions (CIK/entity_name shaped like an EFTS _source hit) never
+    # matched what the actual form.idx-parsing code path produces.
     dl = EdgarDownloader(cache_dir=tmp_path)
-    hits = [
-        _hit(
-            ["0000814052"], ["TELEFONICA S A  (TEF, TEFOF)  (CIK 0000814052)"], "0001493152-24-019672", form="SC 13D/A"
-        )
-    ]
-    with patch.object(dl, "_efts_search", return_value=hits):
+    idx_line = (
+        "SC 13D/A    TELEFONICA S A                                              "
+        "814052      2024-05-15  edgar/data/814052/0001493152-24-019672.txt"
+    )
+    with patch.object(dl, "_fetch_quarterly_form_idx", return_value=[idx_line]):
         df = dl.download_13dg_filings(as_of_date=date(2024, 5, 15), force=True)
     row = df.iloc[0]
     assert row["cik"] == "814052"
-    assert row["entity_name"] == "TELEFONICA S A  (TEF, TEFOF)"
+    assert row["entity_name"] == "TELEFONICA S A"
     assert row["accession_number"] == "0001493152-24-019672"
     assert row["form_type"] == "SC 13D/A"
 

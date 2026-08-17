@@ -59,9 +59,13 @@ class TestAlertEvaluator:
         return mock
 
     @pytest.fixture
-    def mock_jobs_service(self):
+    def mock_jobs_service(self, mock_job_run):
         """Create mock JobsService."""
         mock = Mock(spec=JobsService)
+        # evaluate_alert() re-fetches the schedule via jobs_service.get_schedule(schedule_id)
+        # rather than using mock_job_run.schedule directly; wire it to the same object so
+        # task_params/state_json are the ones the test actually configured, not a bare Mock.
+        mock.get_schedule.return_value = mock_job_run.schedule
         return mock
 
     @pytest.fixture
