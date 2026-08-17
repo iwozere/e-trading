@@ -1,7 +1,10 @@
 {
   "bot_id": "old_bot_001",
+  "symbol": "BTCUSDT",
   "broker": {
-    "type": "binance_paper",
+    "type": "binance",
+    "trading_mode": "paper",
+    "cash": 10000.0,
     "initial_balance": 10000.0,
     "commission": 0.001
   },
@@ -16,14 +19,16 @@
     "interval": "1h"
   },
   "strategy": {
-    "type": "custom",
-    "entry_logic": {
-      "name": "RSIBBVolumeEntryMixin",
-      "params": {}
-    },
-    "exit_logic": {
-      "name": "RSIBBExitMixin",
-      "params": {}
+    "type": "CustomStrategy",
+    "parameters": {
+      "entry_logic": {
+        "name": "RSIBBVolumeEntryMixin",
+        "params": {}
+      },
+      "exit_logic": {
+        "name": "RSIBBExitMixin",
+        "params": {}
+      }
     }
   }
 }

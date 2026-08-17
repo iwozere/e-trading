@@ -90,6 +90,8 @@ properties:
           - "alpaca"
           - "yahoo"
           - "websocket"
+          - "ibkr"
+          - "coingecko"
         description: "Data source type"
 
       # File-based data source

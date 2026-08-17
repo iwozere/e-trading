@@ -29,6 +29,7 @@ class TestBotConfigValidator:
         """Test validation of a valid bot configuration."""
         config = {
             "id": "test_bot_1",
+            "bot_id": "test_bot_1",
             "name": "Test Bot",
             "enabled": True,
             "symbol": "BTCUSDT",
@@ -47,7 +48,7 @@ class TestBotConfigValidator:
         }
 
         validator = BotConfigValidator()
-        is_valid, errors, warnings = validator.validate_bot_config(config)
+        is_valid, errors, _ = validator.validate_bot_config(config)
 
         assert is_valid, f"Configuration should be valid. Errors: {errors}"
         assert len(errors) == 0, f"Should have no errors: {errors}"
@@ -61,7 +62,7 @@ class TestBotConfigValidator:
         }
 
         validator = BotConfigValidator()
-        is_valid, errors, warnings = validator.validate_bot_config(config)
+        is_valid, errors, _ = validator.validate_bot_config(config)
 
         assert not is_valid, "Configuration should be invalid"
         assert len(errors) >= 3, f"Should have at least 3 errors for missing fields: {errors}"
@@ -88,7 +89,7 @@ class TestBotConfigValidator:
         }
 
         validator = BotConfigValidator()
-        is_valid, errors, warnings = validator.validate_bot_config(config)
+        is_valid, errors, _ = validator.validate_bot_config(config)
 
         assert not is_valid, "Configuration should be invalid"
         assert any("trading_mode" in error for error in errors), f"Should have trading_mode error: {errors}"
@@ -129,6 +130,7 @@ class TestBotConfigValidator:
         """Test validation from JSON string."""
         config_dict = {
             "id": "test_bot_1",
+            "bot_id": "test_bot_1",
             "name": "Test Bot",
             "enabled": True,
             "symbol": "BTCUSDT",
@@ -143,7 +145,7 @@ class TestBotConfigValidator:
         }
 
         config_json = json.dumps(config_dict)
-        is_valid, errors, warnings = validate_bot_config_json(config_json)
+        is_valid, errors, _ = validate_bot_config_json(config_json)
 
         assert is_valid, f"Configuration should be valid. Errors: {errors}"
 
@@ -156,6 +158,7 @@ class TestBotConfigValidator:
             "status": "stopped",
             "config": {
                 "id": "test_bot_1",
+                "bot_id": "test_bot_1",
                 "name": "Test Bot",
                 "enabled": True,
                 "symbol": "BTCUSDT",
@@ -179,7 +182,7 @@ class TestBotConfigValidator:
             "updated_at": None,
         }
 
-        is_valid, errors, warnings = validate_database_bot_record(bot_record)
+        is_valid, errors, _ = validate_database_bot_record(bot_record)
 
         assert is_valid, f"Database record should be valid. Errors: {errors}"
 
@@ -193,7 +196,7 @@ class TestBotConfigValidator:
             "config": "invalid_json",  # Invalid: not valid JSON
         }
 
-        is_valid, errors, warnings = validate_database_bot_record(bot_record)
+        is_valid, errors, _ = validate_database_bot_record(bot_record)
 
         assert not is_valid, "Database record should be invalid"
         assert len(errors) > 0, f"Should have errors: {errors}"

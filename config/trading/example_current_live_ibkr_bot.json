@@ -1,5 +1,6 @@
 {
   "id": "example-live-ibkr-bot-001",
+  "bot_id": "example-live-ibkr-bot-001",
   "name": "Example Live IBKR Bot",
   "description": "Current runtime example: IBKR live trading. Requires explicit live confirmation and risk limits.",
   "version": "1.0",
