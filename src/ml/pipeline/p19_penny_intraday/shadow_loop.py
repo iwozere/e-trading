@@ -10,40 +10,39 @@ The feed, store, and EOD OHLC fetcher are injectable so the orchestration is tes
 without a live Gateway.
 """
 
-import json
 import os
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Optional, Any, Callable, Dict, List
 
 from src.ml.pipeline.p19_penny_intraday.config import P19Config
-from src.ml.pipeline.p19_penny_intraday.metrics import compute_signal
-from src.ml.pipeline.p19_penny_intraday.models.watchlist_entry import WatchlistEntry
+from src.ml.pipeline.p19_penny_intraday.metrics import classify_momentum_tier, compute_same_day_labels, compute_signal
+from src.ml.pipeline.p19_penny_intraday.models.intraday_signal import IntradaySignal
+from src.ml.pipeline.p19_penny_intraday.models.structural_profile import StructuralProfile
+from src.ml.pipeline.p19_penny_intraday.sentiment_cache import SentimentCache
 from src.ml.pipeline.p19_penny_intraday.shadow_store import ShadowStore
+from src.ml.pipeline.p19_penny_intraday.structural.cache import StructuralProfileCache
+from src.ml.pipeline.p19_penny_intraday.watchlist_builder import load_watchlist
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
 DEFAULT_OUTPUT_DIR = "results/p19_penny_intraday"
 
-# WatchlistEntry fields we can rehydrate from watchlist.json.
-_ENTRY_FIELDS = {
-    "ticker",
-    "source",
-    "tier",
-    "explosive",
-    "company_name",
-    "prior_close",
-    "avg_volume_30d",
-    "float_shares",
-    "market_cap",
-    "dilution_penalty",
-    "short_interest_pct_float",
-    "has_catalyst",
-    "catalyst_signals",
-}
-
 OhlcFetcher = Callable[[str, str], Dict[str, float] | None]
+SentimentFetcher = Callable[[List[str]], Dict[str, Any]]
+
+
+def _default_sentiment_fetch(tickers: List[str]) -> Dict[str, Any]:
+    """
+    Batch sentiment via the shared cross-pipeline collector (spec §10). Errors
+    inside individual providers are already handled by
+    ``collect_sentiment_batch_sync`` itself (per-provider circuit breakers) —
+    this only guards the call boundary.
+    """
+    from src.common.sentiments.collect_sentiment_async import collect_sentiment_batch_sync
+
+    result = collect_sentiment_batch_sync(tickers, output_format="dict")
+    return result if isinstance(result, dict) else {}
 
 
 class ShadowLoop:
@@ -54,6 +53,9 @@ class ShadowLoop:
         output_dir: str = DEFAULT_OUTPUT_DIR,
         feed: Optional[Any] = None,
         store: ShadowStore | None = None,
+        structural_cache: Optional[StructuralProfileCache] = None,
+        sentiment_cache: Optional[SentimentCache] = None,
+        sentiment_fetcher: Optional[SentimentFetcher] = None,
     ) -> None:
         self.cfg = config
         self.target_date = target_date
@@ -64,24 +66,20 @@ class ShadowLoop:
             feed = IBKRIntradayFeed(config.feed_config)
         self._feed = feed
         self._store = store or ShadowStore(os.path.join(output_dir, "shadow.sqlite"))
-
-    # ── Watchlist ──────────────────────────────────────────────────────────
-
-    def _load_watchlist(self) -> List[WatchlistEntry]:
-        path = Path(self.output_dir) / self.target_date / "watchlist.json"
-        if not path.exists():
-            _logger.warning("No watchlist at %s — run build-watchlist first", path)
-            return []
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        entries: List[WatchlistEntry] = []
-        for d in payload.get("entries", []):
-            entries.append(WatchlistEntry(**{k: v for k, v in d.items() if k in _ENTRY_FIELDS}))
-        return entries
+        # Read-only lookup of the pre-market Layer 0 profile (spec §12.1 —
+        # denormalised as a point-in-time snapshot, never a live join). Missing
+        # for a name that hasn't been profiled yet — that's fine, the row still
+        # gets logged (decision #7), just with structural_grade="".
+        self._structural_cache = structural_cache or StructuralProfileCache(
+            ttl_days=config.structural_config.profile_cache_ttl_days
+        )
+        self._sentiment_cache = sentiment_cache or SentimentCache(os.path.join(output_dir, "sentiment_cache.json"))
+        self._sentiment_fetcher = sentiment_fetcher or _default_sentiment_fetch
 
     # ── One poll (shadow) ──────────────────────────────────────────────────
 
     def run_once(self) -> Dict[str, Any]:
-        entries = self._load_watchlist()
+        entries = load_watchlist(self.output_dir, self.target_date)
         if not entries:
             return {"date": self.target_date, "polled": 0, "logged": 0, "reason": "no watchlist"}
 
@@ -99,11 +97,72 @@ class ShadowLoop:
             for e in entries
             if e.ticker in quotes and (quotes[e.ticker].get("last") or 0) > 0
         ]
+        sentiment_by_ticker = self._fetch_sentiment([e.ticker for e in entries])
+        for s in signals:
+            self._apply_momentum_and_structural(s)
+            self._apply_sentiment(s, sentiment_by_ticker)
         logged = self._store.append_many(self.target_date, signals)
         _logger.info(
             "Shadow poll %s: polled=%d quotes=%d logged=%d", self.target_date, len(entries), len(quotes), logged
         )
         return {"date": self.target_date, "polled": len(entries), "quotes": len(quotes), "logged": logged}
+
+    def _apply_momentum_and_structural(self, signal: IntradaySignal) -> None:
+        """
+        Mutates `signal` in place: momentum_score/momentum_tier (spec §16 item
+        5 — the "simulated trigger point", log-only, no Disposition Engine yet)
+        and the structural-axis denormalisation from the cached Layer 0 profile
+        (spec §12.1). A name with no cached profile yet just logs with
+        structural_grade="" — never blocks or drops the poll (decision #7:
+        shadow logging happens for every watchlist name regardless of grade).
+        """
+        score, tier = classify_momentum_tier(signal, self.cfg.trigger_config)
+        signal.momentum_score = score
+        signal.momentum_tier = tier
+
+        profile: Optional[StructuralProfile] = self._structural_cache.load(signal.ticker)
+        if profile is None:
+            return
+        signal.structural_grade = profile.grade
+        signal.dilution_urgency = profile.dilution_urgency
+        signal.insider_conviction = profile.insider_conviction
+        signal.runway_quarters = profile.runway_quarters
+        signal.disqualifiers = list(profile.disqualifiers)
+        signal.structural_coverage = profile.coverage
+        signal.is_fpi = profile.is_fpi
+
+    # ── Sentiment (spec §10, context only — never a trigger) ────────────────
+
+    def _fetch_sentiment(self, tickers: List[str]) -> Dict[str, Any]:
+        """Batch fetch, throttled by ``SentimentCache`` (see its docstring for
+        why per-poll would be far too frequent for a multi-provider fetch)."""
+        if not tickers:
+            return {}
+        if self._sentiment_cache.is_fresh():
+            return self._sentiment_cache.data()
+        try:
+            data = self._sentiment_fetcher(tickers)
+        except Exception:
+            _logger.warning("Sentiment batch fetch failed for %d tickers", len(tickers))
+            return self._sentiment_cache.data()  # serve stale-but-something over nothing
+        self._sentiment_cache.save(data)
+        return data
+
+    @staticmethod
+    def _apply_sentiment(signal: IntradaySignal, sentiment_by_ticker: Dict[str, Any]) -> None:
+        feat = sentiment_by_ticker.get(signal.ticker)
+        if not feat:
+            return
+        out: Dict[str, float] = {}
+        for key in ("mentions_24h", "sentiment_score_24h", "mentions_growth_7d"):
+            val = feat.get(key)
+            if val is not None:
+                try:
+                    out[key] = float(val)
+                except (TypeError, ValueError):
+                    continue
+        if out:
+            signal.sentiment = out
 
     # ── EOD backfill ───────────────────────────────────────────────────────
 
@@ -115,8 +174,33 @@ class ShadowLoop:
             ohlc = fetcher(t, self.target_date)
             if ohlc:
                 updated += self._store.update_eod(self.target_date, t, ohlc)
-        _logger.info("EOD backfill %s: %d tickers, %d rows updated", self.target_date, len(tickers), updated)
-        return {"date": self.target_date, "tickers": len(tickers), "rows_updated": updated}
+
+        labelled = self._backfill_same_day_labels()
+        _logger.info(
+            "EOD backfill %s: %d tickers, %d rows updated, %d names labelled",
+            self.target_date,
+            len(tickers),
+            updated,
+            labelled,
+        )
+        return {"date": self.target_date, "tickers": len(tickers), "rows_updated": updated, "labelled": labelled}
+
+    def _backfill_same_day_labels(self) -> int:
+        """
+        Fills high_time/close_retention/mae_from_alert/mfe_from_alert (spec
+        §12.2) for every name that now has an EOD close but no labels yet —
+        i.e., every name update_eod just touched, this run or a prior one.
+        """
+        labelled = 0
+        for ticker in self._store.tickers_for_date_needing_labels(self.target_date):
+            polls = self._store.polls_for_date_ticker(self.target_date, ticker)
+            eod = self._store.get_eod(self.target_date, ticker)
+            if eod is None:
+                continue
+            labels = compute_same_day_labels(polls, eod)
+            self._store.update_same_day_labels(self.target_date, ticker, labels)
+            labelled += 1
+        return labelled
 
     @staticmethod
     def _default_ohlc_fetcher(ticker: str, date: str) -> Dict[str, float] | None:

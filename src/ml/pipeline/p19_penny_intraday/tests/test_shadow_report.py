@@ -59,3 +59,92 @@ def test_format_report_runs(tmp_path):
     )
     text = sr.format_report(sr.report(db, "2026-06-29"))
     assert "P19 shadow report" in text and "AAA" not in text  # summary, not row dump
+
+
+# ── v2: per-grade / coverage reporting ──────────────────────────────────────
+
+
+def test_by_grade_counts_and_unprofiled(tmp_path):
+    db = str(tmp_path / "s.sqlite")
+    st = ShadowStore(db)
+    st.append_many(
+        "2026-06-29",
+        [
+            _sig("AAA", structural_grade="D", structural_coverage=0.9),
+            _sig("BBB", structural_grade="B", structural_coverage=0.8),
+            _sig("CCC"),  # never profiled -- structural_grade stays ""
+        ],
+    )
+    s = sr.report(db, "2026-06-29")
+    assert s["by_grade"] == {"D": 1, "B": 1, "unprofiled": 1}
+    assert s["unprofiled_count"] == 1
+
+
+def test_low_coverage_flag_fires_above_threshold(tmp_path):
+    db = str(tmp_path / "s.sqlite")
+    st = ShadowStore(db)
+    st.append_many(
+        "2026-06-29",
+        [
+            _sig("AAA", structural_grade="C", structural_coverage=0.1),
+            _sig("BBB", structural_grade="C", structural_coverage=0.2),
+        ],
+    )
+    s = sr.report(db, "2026-06-29")
+    assert s["low_coverage_count"] == 2
+    assert any("coverage" in f for f in s["flags"])
+
+
+def test_small_grade_sample_flagged_non_conclusive(tmp_path):
+    db = str(tmp_path / "s.sqlite")
+    st = ShadowStore(db)
+    st.append("2026-06-29", _sig("AAA", structural_grade="A", structural_coverage=0.9))
+    s = sr.report(db, "2026-06-29")
+    assert any("n=1 < 30" in f for f in s["flags"])
+
+
+def test_grades_denormalised_across_polls_count_once_per_ticker(tmp_path):
+    """Same ticker, multiple polls same day -> counted once in by_grade, not once per poll."""
+    db = str(tmp_path / "s.sqlite")
+    st = ShadowStore(db)
+    st.append_many(
+        "2026-06-29",
+        [
+            _sig("AAA", structural_grade="B", structural_coverage=0.8),
+            _sig("AAA", structural_grade="B", structural_coverage=0.8),
+            _sig("AAA", structural_grade="B", structural_coverage=0.8),
+        ],
+    )
+    s = sr.report(db, "2026-06-29")
+    assert s["by_grade"] == {"B": 1}
+
+
+# ── Phase 3: FPI share reporting (StructuralSignals.md §2) ──────────────────
+
+
+def test_fpi_share_stats_and_flag(tmp_path):
+    db = str(tmp_path / "s.sqlite")
+    st = ShadowStore(db)
+    st.append_many(
+        "2026-06-29",
+        [
+            _sig("AAA", structural_grade="C", is_fpi=True, structural_coverage=0.4),
+            _sig("BBB", structural_grade="C", is_fpi=True, structural_coverage=0.4),
+            _sig("CCC", structural_grade="B", is_fpi=False, structural_coverage=0.9),
+            _sig("DDD", structural_grade="A", is_fpi=False, structural_coverage=0.9),
+            _sig("EEE", structural_grade="B", is_fpi=False, structural_coverage=0.9),
+        ],
+    )
+    s = sr.report(db, "2026-06-29")
+    assert s["fpi_count"] == 2
+    assert s["fpi_grade_c_count"] == 2
+    assert any("are FPIs" in f for f in s["flags"])  # 2/5 = 40% > 20% threshold
+
+
+def test_no_fpi_names_no_flag(tmp_path):
+    db = str(tmp_path / "s.sqlite")
+    st = ShadowStore(db)
+    st.append("2026-06-29", _sig("AAA", structural_grade="A", is_fpi=False, structural_coverage=0.9))
+    s = sr.report(db, "2026-06-29")
+    assert s.get("fpi_count", 0) == 0
+    assert not any("are FPIs" in f for f in s["flags"])

@@ -25,9 +25,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p19_penny_intraday.shadow_store import DEFAULT_DB_PATH
-from src.notification.logger import setup_logger
-
-_logger = setup_logger(__name__)
 
 
 def _percentiles(vals: List[float]) -> Dict[str, float]:
@@ -45,6 +42,58 @@ def _percentiles(vals: List[float]) -> Dict[str, float]:
         "median": round(at(0.5), 3),
         "p90": round(at(0.9), 3),
         "max": round(s[-1], 3),
+    }
+
+
+# N17's default coverage threshold (config.P19StructuralConfig.coverage_c_threshold)
+# — duplicated here rather than importing config, since this report is meant to
+# stay a standalone read-only tool against the DB file alone.
+_LOW_COVERAGE_THRESHOLD = 0.4
+
+
+def _fpi_share_stats(conn: sqlite3.Connection, date: str) -> Dict[str, Any]:
+    """
+    StructuralSignals.md §2 — FPIs cluster at grade C via N17 by construction
+    (no Form 4, no 8-K), which is correct behaviour but confounds the grade C
+    bucket with genuinely risky domestic filers unless tracked separately.
+    Same one-row-per-ticker (latest poll) shape as ``_structural_coverage_stats``.
+    """
+    rows = conn.execute(
+        "SELECT is_fpi, structural_grade, MAX(ts) FROM shadow_log WHERE date = ? GROUP BY ticker",
+        (date,),
+    ).fetchall()
+    if not rows:
+        return {}
+    fpi_count = sum(1 for r in rows if r[0] == 1)
+    fpi_grade_c_count = sum(1 for r in rows if r[0] == 1 and r[1] == "C")
+    return {"fpi_count": fpi_count, "fpi_grade_c_count": fpi_grade_c_count}
+
+
+def _structural_coverage_stats(conn: sqlite3.Connection, date: str, distinct_ticker_count: int) -> Dict[str, Any]:
+    """
+    Per-grade sample counts (spec §15's "guard against the obvious trap" —
+    report n alongside every result, treat n<30 as non-conclusive) plus a
+    low-coverage-share proxy for the FPI population (StructuralSignals.md §2 —
+    track it separately, don't silently fold it into grade C).
+
+    One row per ticker (most recent poll of the day — structural fields are a
+    constant-for-the-day snapshot from the pre-market profiler, so any poll's
+    value is the same; SQLite's MAX() aggregate picks the row it came from).
+    """
+    del distinct_ticker_count  # available to callers wanting a ratio; report prints both raw numbers
+    rows = conn.execute(
+        "SELECT ticker, structural_grade, structural_coverage, MAX(ts) FROM shadow_log WHERE date = ? GROUP BY ticker",
+        (date,),
+    ).fetchall()
+    if not rows:
+        return {}
+    by_grade = Counter(r[1] if r[1] else "unprofiled" for r in rows)
+    coverages = [r[2] for r in rows if r[2] is not None]
+    return {
+        "by_grade": dict(by_grade),
+        "structural_coverage": _percentiles(coverages),
+        "unprofiled_count": sum(1 for r in rows if not r[1]),
+        "low_coverage_count": sum(1 for r in rows if r[2] is not None and r[2] < _LOW_COVERAGE_THRESHOLD),
     }
 
 
@@ -84,6 +133,8 @@ def report(db_path: str = DEFAULT_DB_PATH, date: str | None = None) -> Dict[str,
         out["vol_ratio_median"] = round(sorted(ratios)[len(ratios) // 2], 4) if ratios else None
         out["gappers_zero_rvol"] = sum(1 for r in rows if r[1] == "gapper" and (not r[3]))
 
+        out.update(_structural_coverage_stats(conn, target, len(tickers)))
+        out.update(_fpi_share_stats(conn, target))
         out["flags"] = _flags(out)
         return out
     finally:
@@ -104,6 +155,28 @@ def _flags(s: Dict[str, Any]) -> List[str]:
         flags.append(f"{s['gappers_zero_rvol']} gapper rows with RVOL=0 — baseline enrichment gap")
     if s.get("rvol_so_far", {}).get("n", 0) == 0 and s.get("rows", 0) > 0:
         flags.append("no positive RVOL anywhere — feed/volume issue or all baselines missing")
+
+    by_grade = s.get("by_grade")
+    if by_grade:
+        for grade, n in by_grade.items():
+            if grade != "unprofiled" and n < 30:
+                flags.append(f"grade {grade}: n={n} < 30 — non-conclusive for calibration (spec §15)")
+    unprofiled = s.get("unprofiled_count", 0)
+    distinct = s.get("distinct_tickers", 0)
+    if distinct and unprofiled / distinct > 0.5:
+        flags.append(f"{unprofiled}/{distinct} names unprofiled — is the structural-profile job running?")
+    low_cov = s.get("low_coverage_count", 0)
+    if distinct and low_cov / distinct > 0.2:
+        flags.append(
+            f"{low_cov}/{distinct} names below coverage {_LOW_COVERAGE_THRESHOLD} — "
+            "check FPI share of the watchlist (StructuralSignals.md §2)"
+        )
+    fpi_count = s.get("fpi_count", 0)
+    if distinct and fpi_count / distinct > 0.2:
+        flags.append(
+            f"{fpi_count}/{distinct} names are FPIs (§2) — track the grade-C bucket separately in "
+            "calibration, it mixes genuinely risky domestic filers with opaque-by-structure FPIs"
+        )
     return flags
 
 
@@ -125,6 +198,14 @@ def format_report(s: Dict[str, Any]) -> str:
         f"|%-from-open| (n={pm['n']}): median {pm['median']}  p90 {pm['p90']}  max {pm['max']}",
         f"EOD fill rate: {s['eod_fill_rate']}   vol_ratio_median: {s['vol_ratio_median']}",
     ]
+    if s.get("by_grade"):
+        cov = s["structural_coverage"]
+        lines.append(
+            f"structural grades: {s['by_grade']}  coverage (n={cov['n']}): "
+            f"median {cov['median']}  p90 {cov['p90']}  low(<{_LOW_COVERAGE_THRESHOLD})={s['low_coverage_count']}"
+        )
+    if s.get("fpi_count"):
+        lines.append(f"FPI names: {s['fpi_count']}  ({s.get('fpi_grade_c_count', 0)} of them grade C via N17)")
     if s["flags"]:
         lines.append("FLAGS:")
         lines += [f"  ⚠ {f}" for f in s["flags"]]

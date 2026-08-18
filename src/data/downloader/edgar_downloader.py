@@ -25,6 +25,7 @@ Classes:
 """
 
 import gzip
+import html
 import json
 import re
 import sys
@@ -87,14 +88,27 @@ _SHARES_FACT_CANDIDATES = [
     ("dei", "EntityCommonStockSharesOutstanding"),
 ]
 
-# EFTS pagination page size (max 100)
-_EFTS_PAGE_SIZE = 100
-
 # EDGAR quarterly full-index (covers all form types including SC 13D/G which EFTS does not index)
 _EDGAR_FULL_INDEX_URL = "https://www.sec.gov/Archives/edgar/full-index/{year}/QTR{quarter}/form.gz"
 _13DG_FORM_TYPES = frozenset({"SC 13D", "SC 13G", "SC 13D/A", "SC 13G/A"})
 # Number of header lines to skip in the quarterly form.idx file
 _FORM_IDX_HEADER_LINES = 9
+
+# Form 4 non-derivative transaction columns (all codes, not just sales — see
+# download_form4_filings docstring).
+_FORM4_COLS = [
+    "ticker",
+    "issuer_cik",
+    "insider_name",
+    "transaction_code",
+    "acquired_disposed_code",
+    "shares",
+    "price_per_share",
+    "total_value_usd",
+    "filed_date",
+    "is_10b5_1_plan",
+    "is_derivative",
+]
 
 
 class EdgarDownloader(BaseDataDownloader):
@@ -710,7 +724,13 @@ class EdgarDownloader(BaseDataDownloader):
         """
         Download and parse Form 4 insider transaction filings for a given date.
 
-        Only sale transactions (codes S, S-) are retained. Results are cached as
+        All transaction codes are retained (not just sales) — callers filter to
+        what they need. This used to drop everything but sale codes {"S", "S-"}
+        before caching; P18's ``Form4Monitor.get_significant_sells`` already
+        re-filters to sale codes itself so it is unaffected by the wider set, and
+        P20 Kestrel's ``filings_ingest.py`` reads this same cache file directly
+        expecting buy codes {"P", "A"} that could never have appeared under the
+        old sale-only filter — this also fixes that. Results are cached as
         DATA_CACHE_DIR/edgar/13f/form4/{date}.csv.gz.
 
         Args:
@@ -720,7 +740,8 @@ class EdgarDownloader(BaseDataDownloader):
 
         Returns:
             DataFrame with columns: ticker, issuer_cik, insider_name, transaction_code,
-            shares, price_per_share, total_value_usd, filed_date.
+            acquired_disposed_code, shares, price_per_share, total_value_usd, filed_date,
+            is_10b5_1_plan, is_derivative.
         """
         target_date = as_of_date or (datetime.now().date() - timedelta(days=1))
         date_str = str(target_date)
@@ -758,21 +779,11 @@ class EdgarDownloader(BaseDataDownloader):
             for row in _parse_form4_xml(xml_content, filed_date=date_str):
                 records.append(row)
 
-        _FORM4_COLS = [
-            "ticker",
-            "issuer_cik",
-            "insider_name",
-            "transaction_code",
-            "shares",
-            "price_per_share",
-            "total_value_usd",
-            "filed_date",
-        ]
         df = pd.DataFrame(records, columns=_FORM4_COLS) if records else pd.DataFrame(columns=_FORM4_COLS)  # type: ignore[arg-type]
 
         dest.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(dest, index=False, compression="gzip")
-        _logger.info("Cached %d Form 4 sale transactions for %s → %s", len(df), date_str, dest)
+        _logger.info("Cached %d Form 4 transactions for %s → %s", len(df), date_str, dest)
         return df
 
     def download_13dg_filings(
@@ -1010,7 +1021,14 @@ class EdgarDownloader(BaseDataDownloader):
 
         return [ln.rstrip("\n") for ln in lines[_FORM_IDX_HEADER_LINES:]]
 
-    def _efts_search(self, forms: str, start_dt: str, end_dt: str) -> List[Dict]:
+    def _efts_search(
+        self,
+        forms: str,
+        start_dt: str,
+        end_dt: str,
+        q: str | None = None,
+        ciks: str | None = None,
+    ) -> List[Dict]:
         """
         Paginate through EDGAR EFTS full-text search results for given form types.
 
@@ -1018,6 +1036,14 @@ class EdgarDownloader(BaseDataDownloader):
             forms: Comma-separated form type filter, e.g. ``"13F-HR"`` or ``"4"``.
             start_dt: Start date string ``"YYYY-MM-DD"``.
             end_dt: End date string ``"YYYY-MM-DD"``.
+            q: Optional full-text search phrase (quote it yourself for an exact
+               phrase match, e.g. ``'"going concern"'``). Used by P19's Layer 0
+               text-scoped signals (N5/N6, design-v2.md §3.2) — omitted by every
+               other existing caller, which searches by form+date only.
+            ciks: Optional comma-separated 10-digit CIKs to scope the search to
+                  (EFTS param name is ``ciks``, not ``cik``). Used by the P19
+                  intraday filings poll to scope a single query to the whole
+                  watchlist instead of one query per ticker.
 
         Returns:
             List of ``hits`` dicts from the EFTS response.
@@ -1033,6 +1059,10 @@ class EdgarDownloader(BaseDataDownloader):
                 "enddt": end_dt,
                 "from": offset,
             }
+            if q:
+                params["q"] = q
+            if ciks:
+                params["ciks"] = ciks
             last_exc: Exception | None = None
             data: Dict[str, Any] = {}
             for attempt in range(3):
@@ -1085,6 +1115,210 @@ class EdgarDownloader(BaseDataDownloader):
                 break
 
         return all_hits
+
+    def efts_filings_search(
+        self,
+        ciks: List[str],
+        forms: str,
+        start_dt: str,
+        end_dt: str,
+    ) -> List[Dict]:
+        """
+        Multi-CIK EFTS filing lookup (no text phrase) — "did any of these
+        issuers file this form type in this date range". Used by P19's
+        intraday filings poll (spec §9) to scope one query per form type to
+        the whole watchlist at once, rather than one query per ticker.
+
+        Verified live against the EFTS endpoint (2026-08-18): ``ciks`` accepts
+        a comma-list and ORs it (an Elasticsearch ``terms`` filter, unlike
+        ``forms`` which is an exact match — see ``efts_text_search``'s
+        docstring for that quirk). Chunked at 100 CIKs per request — the
+        matching P19 watchlist cap (spec §4.1), so realistically always one
+        request per form type in practice.
+
+        Args:
+            ciks: Issuer CIKs (any digit-string form; zero-padded internally).
+            forms: A single form type, e.g. ``"424B5"``.
+            start_dt: Start date ``"YYYY-MM-DD"``.
+            end_dt: End date ``"YYYY-MM-DD"``.
+
+        Returns:
+            De-duplicated list of EFTS hit dicts across all CIK chunks.
+        """
+        padded = [f"{int(c):010d}" for c in ciks if str(c).strip()]
+        if not padded:
+            return []
+        seen_ids: set = set()
+        out: List[Dict] = []
+        chunk_size = 100
+        for i in range(0, len(padded), chunk_size):
+            chunk = padded[i : i + chunk_size]
+            try:
+                hits = self._efts_search(forms=forms, start_dt=start_dt, end_dt=end_dt, ciks=",".join(chunk))
+            except EftsUnavailableError:
+                _logger.warning("efts_filings_search: EFTS unavailable for forms=%s chunk %d", forms, i // chunk_size)
+                continue
+            for h in hits:
+                hid = h.get("_id")
+                if hid and hid not in seen_ids:
+                    seen_ids.add(hid)
+                    out.append(h)
+        return out
+
+    def efts_text_search(
+        self,
+        cik: str,
+        phrases: List[str],
+        forms: str,
+        start_dt: str,
+        end_dt: str,
+    ) -> List[Dict]:
+        """
+        CIK-scoped EFTS full-text phrase search (design-v2.md §3.2), for P19
+        Layer 0's text-parse-required signals: N5 (floating-rate/toxic
+        convertible), N6 (going-concern qualification), N16 (auditor quality,
+        via the EX-23.1 consent exhibit — see ``_fetch_filing_document``).
+
+        Verified live against the EFTS endpoint (2026-08-18): ``q`` does an
+        Elasticsearch ``match_phrase`` (quote the phrase yourself is
+        unnecessary — this method quotes it), ``ciks`` filters by CIK, and the
+        response contains no highlighted snippet — only match metadata
+        (``_source``: ciks/display_names/adsh/file_date/root_forms/file_type/
+        file_description), same shape as every other ``_efts_search`` caller
+        in this file.
+
+        Args:
+            cik: Issuer CIK (any digit-string form; zero-padded internally).
+            phrases: Exact phrases to search for (OR'd — hits are unioned and
+                     de-duplicated by ``_id``). Each phrase is sent as its own
+                     query since EFTS ``q`` is a single phrase match, not a
+                     boolean OR of several.
+            forms: A single form type, e.g. ``"10-K"``. **Do not pass a
+                   comma-list** — EFTS treats ``forms`` as an exact match, not
+                   an OR, so ``"10-K,10-K/A"`` paradoxically returns only the
+                   amendments (verified live, 2026-08-18; same quirk already
+                   documented on the 8-K catalyst path in this file). Callers
+                   needing several form types must issue one call per form and
+                   union the results — see ``get_auditor_name`` for the pattern.
+            start_dt: Start date ``"YYYY-MM-DD"`` — callers scope this
+                      themselves (StructuralSignals.md's N5 recency-scoping
+                      requirement: latest annual + latest interim only, not an
+                      unscoped all-history search).
+            end_dt: End date ``"YYYY-MM-DD"``.
+
+        Returns:
+            De-duplicated list of EFTS hit dicts across all phrases.
+        """
+        try:
+            cik_padded = f"{int(cik):010d}"
+        except (TypeError, ValueError):
+            return []
+        seen_ids: set = set()
+        out: List[Dict] = []
+        for phrase in phrases:
+            try:
+                hits = self._efts_search(forms=forms, start_dt=start_dt, end_dt=end_dt, q=f'"{phrase}"', ciks=cik_padded)
+            except EftsUnavailableError:
+                _logger.warning("efts_text_search: EFTS unavailable for CIK %s phrase %r — skipping", cik, phrase)
+                continue
+            for h in hits:
+                hid = h.get("_id")
+                if hid and hid not in seen_ids:
+                    seen_ids.add(hid)
+                    out.append(h)
+        return out
+
+    def _fetch_filing_document(self, cik_int: int, acc_norm: str, filename: str) -> str | None:
+        """
+        Fetch one specific document from a filing folder by its exact filename
+        (as opposed to ``_fetch_filing_xml``'s candidate-name guessing, which
+        is for filings whose XML document name isn't already known). Used to
+        pull the primary document an ``efts_text_search`` hit's ``_id``
+        already names.
+
+        Returns:
+            Raw document text (HTML or XML), or None if the fetch failed.
+        """
+        url = f"{_EDGAR_ARCHIVES_BASE}/{cik_int}/{acc_norm}/{filename}"
+        for attempt in range(3):
+            try:
+                elapsed = time.monotonic() - self._last_request_time
+                if elapsed < _MIN_REQUEST_INTERVAL:
+                    time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+                resp = self._session.get(url, timeout=30)
+                self._last_request_time = time.monotonic()
+                if resp.status_code == 200:
+                    return resp.text
+                if resp.status_code == 404:
+                    return None
+                if resp.status_code == 503:
+                    sleep_sec = 30 * (attempt + 1)
+                    _logger.warning("EDGAR rate-limited (503) for %s, sleeping %ds (attempt %d/3)", url, sleep_sec, attempt + 1)
+                    time.sleep(sleep_sec)
+                    continue
+                _logger.warning("Unexpected status %d for %s", resp.status_code, url)
+                return None
+            except Exception as e:
+                sleep_sec = 15 * (attempt + 1)
+                _logger.warning("Network error fetching %s (attempt %d/3), sleeping %ds: %s", url, attempt + 1, sleep_sec, e)
+                time.sleep(sleep_sec)
+        return None
+
+    def get_auditor_name(
+        self,
+        cik: str,
+        start_dt: str,
+        end_dt: str,
+        forms: str = "10-K,10-K/A,20-F,20-F/A",
+    ) -> str | None:
+        """
+        Best-effort auditor firm name for a CIK (StructuralSignals.md N16), via
+        the EX-23.1 "Consent of Independent Registered Public Accounting Firm"
+        exhibit filed alongside the latest annual report in the window.
+
+        This is a text-extraction heuristic (``_extract_auditor_name``), not a
+        structured field — no XBRL tag exists for auditor identity. Callers
+        (P19's ``structural/profiler.py``) scope ``start_dt``/``end_dt`` to
+        the issuer's latest annual filing window, matching the recency-scoping
+        convention ``efts_text_search`` callers already follow.
+
+        Returns:
+            The extracted firm name, or None if no consent exhibit was found
+            or extraction failed — never guesses.
+        """
+        # EFTS treats `forms` as an exact match, not an OR — a comma-list like
+        # "10-K,10-K/A" paradoxically returns only amendments (verified live,
+        # 2026-08-18; same quirk already documented for the 8-K catalyst path
+        # above). Query each form type separately and union the hits.
+        hits: List[Dict] = []
+        seen_ids: set = set()
+        for form in forms.split(","):
+            for h in self.efts_text_search(
+                cik=cik,
+                phrases=["CONSENT OF INDEPENDENT REGISTERED PUBLIC ACCOUNTING FIRM"],
+                forms=form.strip(),
+                start_dt=start_dt,
+                end_dt=end_dt,
+            ):
+                hid = h.get("_id")
+                if hid and hid not in seen_ids:
+                    seen_ids.add(hid)
+                    hits.append(h)
+        if not hits:
+            return None
+        # Most recent filing first (file_date descending) — an issuer can
+        # change auditors, and only the current one is relevant to N16.
+        hits.sort(key=lambda h: str(h.get("_source", {}).get("file_date", "")), reverse=True)
+        hit = hits[0]
+        acc_norm = str(hit.get("_source", {}).get("adsh", "")).replace("-", "")
+        filename = _primary_doc_from_efts_id(str(hit.get("_id", "")))
+        cik_str = _efts_first_cik(hit.get("_source", {}))
+        if not acc_norm or not filename or not cik_str:
+            return None
+        doc_text = self._fetch_filing_document(int(cik_str), acc_norm, filename)
+        if doc_text is None:
+            return None
+        return _extract_auditor_name(doc_text)
 
     def _fetch_filing_xml(
         self,
@@ -1409,20 +1643,42 @@ def _safe_int(value: str) -> int:
         return 0
 
 
+def _footnotes_mentioning_10b5_1(root: ET.Element) -> set:
+    """
+    Return the footnote ids whose text references a Rule 10b5-1 trading plan.
+
+    SEC's 2022 Rule 10b5-1 amendments added a structured plan-adoption indicator
+    to the Form 4 XML schema, but its exact element name has not been verified
+    against a live filing here (design-v2.md §3.1) — this falls back to the text
+    convention filers used before, and continue to use alongside, the structured
+    field: a footnote whose text mentions "10b5-1". Revisit once verified.
+    """
+    ids = set()
+    for fn in root.findall(".//footnote"):
+        if "10b5-1" in (fn.text or "").lower():
+            fid = fn.get("id")
+            if fid:
+                ids.add(fid)
+    return ids
+
+
 def _parse_form4_xml(xml_content: str, filed_date: str) -> List[Dict[str, Any]]:
     """
-    Parse a Form 4 XML document and return sale transaction rows.
+    Parse a Form 4 XML document and return all non-derivative transaction rows.
 
-    Only returns rows for open-market sale codes: S (sale) and S- (sale short).
+    Every transaction code is returned (not just sales) — callers filter to what
+    they need; see ``download_form4_filings``'s docstring for why the filtering
+    moved to the caller. Derivative transactions (options, warrants) are not
+    parsed — no current consumer needs them, and non-derivative open-market buys
+    (code P) / sales (code S) are what P17/P18/P19/P20 all actually use.
 
     Args:
         xml_content: Raw XML text of the Form 4 filing.
         filed_date: Date string ``"YYYY-MM-DD"`` added to every row.
 
     Returns:
-        List of row dicts (may be empty if no qualifying transactions found).
+        List of row dicts (may be empty if no transactions found).
     """
-    _SALE_CODES = {"S", "S-"}
     rows: List[Dict[str, Any]] = []
 
     try:
@@ -1437,19 +1693,23 @@ def _parse_form4_xml(xml_content: str, filed_date: str) -> List[Dict[str, Any]]:
     ticker = _xml_text(root, ".//issuerTradingSymbol")
     issuer_cik = _xml_text(root, ".//issuerCik")
     insider_name = _xml_text(root, ".//rptOwnerName")
+    plan_footnote_ids = _footnotes_mentioning_10b5_1(root)
 
     for txn in root.findall(".//nonDerivativeTransaction"):
         code = _xml_text(txn, ".//transactionCode")
-        if code not in _SALE_CODES:
+        if not code:
             continue
 
         shares_str = _xml_text(txn, ".//transactionShares/value")
         price_str = _xml_text(txn, ".//transactionPricePerShare/value")
+        acquired_disposed = _xml_text(txn, ".//transactionAcquiredDisposedCode/value")
         shares = _safe_int(shares_str)
         try:
             price = float(price_str) if price_str else 0.0
         except ValueError:
             price = 0.0
+
+        txn_footnote_ids = {fn.get("id") for fn in txn.findall(".//footnoteId") if fn.get("id")}
 
         rows.append(
             {
@@ -1457,10 +1717,13 @@ def _parse_form4_xml(xml_content: str, filed_date: str) -> List[Dict[str, Any]]:
                 "issuer_cik": issuer_cik,
                 "insider_name": insider_name,
                 "transaction_code": code,
+                "acquired_disposed_code": acquired_disposed,
                 "shares": shares,
                 "price_per_share": price,
                 "total_value_usd": shares * price,
                 "filed_date": filed_date,
+                "is_10b5_1_plan": bool(txn_footnote_ids & plan_footnote_ids),
+                "is_derivative": False,
             }
         )
 
@@ -1528,6 +1791,54 @@ def _efts_company(src: Dict[str, Any]) -> str:
     """Return the display name (CIK suffix stripped) from an EFTS ``_source``, or ""."""
     names = src.get("display_names") or []
     return _company_from_display_name(str(names[0])) if names else ""
+
+
+# Firm-name designation suffixes/markers that identify which *line* of an
+# EX-23.1 "Consent of Independent Registered Public Accounting Firm" exhibit
+# is the firm-name line, once split on block boundaries. Matched against the
+# whole line (not captured piecemeal) so odd separator characters real filers
+# use (``+``, ``&``) don't break extraction the way a bounded capture group
+# would — verified against a live filing (2026-08-18, DeltaSoft Corp CIK
+# 0002020919, accession 0001683168-26-005450): "/S/ Boladale lawal" is
+# followed by its own line, "BOLADALE LAWAL & CO".
+_AUDITOR_SUFFIX_MARKER = re.compile(
+    r"LLP|LLC|P\.?C\.?\b|CPAs?\b|&|\+|AND COMPANY|CHARTERED ACCOUNTANTS?",
+    re.IGNORECASE,
+)
+
+
+def _extract_auditor_name(doc_text: str) -> str | None:
+    """
+    Best-effort auditor firm-name extraction from an EX-23.1 consent exhibit's
+    HTML text (StructuralSignals.md N16). Returns None rather than guessing
+    when no confident match is found — an unresolved N16 must depress
+    ``coverage``, never be silently read as "no auditor flag" (N17 rule).
+
+    Text-parsing heuristic, not a structured field (no XBRL tag exists for
+    this) — precision is necessarily short of what a maintained PCAOB Form AP
+    integration would give (design-v2.md §Roadmap's documented simplification).
+    """
+    # Keep block-level tags as line breaks before stripping the rest, so the
+    # firm-name line isn't glued onto the signature line above it.
+    text = re.sub(r"<(p|div|br|tr)\b[^>]*>", "\n", doc_text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = html.unescape(text)
+    lines = [re.sub(r"\s+", " ", ln).strip(" ,.") for ln in text.split("\n")]
+    lines = [ln for ln in lines if ln]
+
+    sig_idx = next((i for i, ln in enumerate(lines) if ln.lower().startswith("/s/")), None)
+    if sig_idx is None:
+        # No signature line at all -- searching the whole document risks
+        # matching an unrelated "&"/"+" elsewhere in the boilerplate (e.g. the
+        # addressee line, "Shareholders & Board of Directors"). A genuine
+        # EX-23.1 consent always has a signature; if this doesn't, it's
+        # unresolved, not a document worth guessing from.
+        return None
+
+    for ln in lines[sig_idx + 1 : sig_idx + 8]:
+        if _AUDITOR_SUFFIX_MARKER.search(ln):
+            return ln
+    return None
 
 
 # ---------------------------------------------------------------------------

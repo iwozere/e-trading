@@ -32,6 +32,41 @@ DEFAULT_OUTPUT_DIR = "results/p19_penny_intraday"
 
 _P17_TIERS = {"A", "B", "C"}
 
+# WatchlistEntry fields rehydratable from watchlist.json's `entries` (excludes
+# `priority`, which is build-time-only bookkeeping, and `ticker`, handled separately).
+_ENTRY_FIELDS = {
+    "ticker",
+    "source",
+    "tier",
+    "explosive",
+    "company_name",
+    "prior_close",
+    "avg_volume_30d",
+    "float_shares",
+    "market_cap",
+    "dilution_penalty",
+    "short_interest_pct_float",
+    "has_catalyst",
+    "catalyst_signals",
+}
+
+
+def load_watchlist(output_dir: str, target_date: str) -> List[WatchlistEntry]:
+    """
+    Read back ``{output_dir}/{target_date}/watchlist.json`` as ``WatchlistEntry``
+    objects. Shared by the shadow loop and the structural profiler so both read
+    the same day's watchlist the same way. Returns [] (logged) if the watchlist
+    hasn't been built yet.
+    """
+    path = Path(output_dir) / target_date / "watchlist.json"
+    if not path.exists():
+        _logger.warning("No watchlist at %s — run build-watchlist first", path)
+        return []
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return [
+        WatchlistEntry(**{k: v for k, v in d.items() if k in _ENTRY_FIELDS}) for d in payload.get("entries", [])
+    ]
+
 
 def _f(value: Any, default: float = 0.0) -> float:
     try:

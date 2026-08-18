@@ -26,6 +26,8 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
+DEFAULT_OUTPUT_DIR = "results/p19_penny_intraday"
+
 
 def _today() -> str:
     """Trading date for the watchlist (UTC today; pre-market build)."""
@@ -47,9 +49,13 @@ def main() -> int:
 
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("build-watchlist", parents=[common], help="Build the daily watchlist (pre-market)")
+    ps = sub.add_parser("profile-structural", parents=[common], help="Layer 0 structural profile refresh (pre-market)")
+    ps.add_argument("--force", action="store_true", help="Bypass the weekly cache TTL, re-fetch every name")
     rp = sub.add_parser("run-once", parents=[common], help="One intraday poll (stateless)")
     rp.add_argument("--mode", choices=["shadow", "live"], default="shadow")
-    sub.add_parser("eod-backfill", parents=[common], help="Backfill EOD OHLC into shadow rows")
+    sub.add_parser("eod-backfill", parents=[common], help="Backfill EOD OHLC + same-day labels into shadow rows")
+    sub.add_parser("label-backfill", parents=[common], help="T+10: forward-return + structural-decay labels")
+    sub.add_parser("filings-poll", parents=[common], help="Intraday EDGAR filings poll (spec §9, log-only)")
 
     args = parser.parse_args()
     config = P19Config.create_default()
@@ -62,6 +68,20 @@ def main() -> int:
         target = args.date or _today()
         summary = WatchlistBuilder(config, target).run()
         print(f"P19 watchlist {target}: {summary['count']} names {summary['sources']}")
+        print(f"__SCHEDULER_RESULT__:{json.dumps(summary)}")
+        return 0
+    if args.cmd == "profile-structural":
+        from src.ml.pipeline.p19_penny_intraday.structural.profiler import StructuralProfiler
+        from src.ml.pipeline.p19_penny_intraday.watchlist_builder import load_watchlist
+
+        target = args.date or _today()
+        entries = load_watchlist(DEFAULT_OUTPUT_DIR, target)
+        profiles = StructuralProfiler(config).refresh_watchlist(entries, force=args.force)
+        by_grade: dict[str, int] = {}
+        for p in profiles.values():
+            by_grade[p.grade] = by_grade.get(p.grade, 0) + 1
+        summary = {"date": target, "count": len(profiles), "by_grade": by_grade}
+        print(f"P19 structural profile {target}: {summary['count']} names {by_grade}")
         print(f"__SCHEDULER_RESULT__:{json.dumps(summary)}")
         return 0
     if args.cmd == "run-once":
@@ -80,7 +100,22 @@ def main() -> int:
 
         target = args.date or _today()
         summary = ShadowLoop(config, target).eod_backfill()
-        print(f"P19 eod-backfill {target}: {summary.get('rows_updated')} rows")
+        print(f"P19 eod-backfill {target}: {summary.get('rows_updated')} rows, {summary.get('labelled')} labelled")
+        print(f"__SCHEDULER_RESULT__:{json.dumps(summary)}")
+        return 0
+    if args.cmd == "label-backfill":
+        from src.ml.pipeline.p19_penny_intraday.label_backfill import LabelBackfill
+
+        summary = LabelBackfill().run()
+        print(f"P19 label-backfill: {summary.get('dates')} dates, {summary.get('tickers')} tickers labelled")
+        print(f"__SCHEDULER_RESULT__:{json.dumps(summary)}")
+        return 0
+    if args.cmd == "filings-poll":
+        from src.ml.pipeline.p19_penny_intraday.filings_poll import FilingsPoll
+
+        target = args.date or _today()
+        summary = FilingsPoll(output_dir=DEFAULT_OUTPUT_DIR, target_date=target).run()
+        print(f"P19 filings-poll {target}: {summary.get('new_hits')} new hits across {summary.get('tickers')} tickers")
         print(f"__SCHEDULER_RESULT__:{json.dumps(summary)}")
         return 0
     return 1
