@@ -16,6 +16,7 @@ Classes:
 - BaseLiveDataFeed: Abstract base class for live data feeds
 """
 
+import queue
 import threading
 import time
 from abc import abstractmethod
@@ -54,6 +55,10 @@ class BaseLiveDataFeed(bt.feed.DataBase):
         ("close", "close"),
         ("volume", "volume"),
         ("openinterest", None),
+        # How long _load() blocks on the live-bar queue when idle (see do_qcheck()
+        # in backtrader.feed.AbstractDataBase). 0.0 (the backtrader default) would
+        # make Cerebro's live loop busy-poll; wait up to 1s per check instead.
+        ("qcheck", 1.0),
     )
 
     def __init__(
@@ -100,12 +105,25 @@ class BaseLiveDataFeed(bt.feed.DataBase):
         self.is_connected = False
         self.should_stop = False
 
+        # Bars queued by _process_new_data() (background update thread) for _load()
+        # (Cerebro's own thread) to pick up - see _load() for why a queue is used
+        # instead of writing into self.lines directly from the update thread.
+        self._live_queue: "queue.Queue[pd.Series]" = queue.Queue()
+        self._live_bars_received = 0
+
         # Load historical data first
         _logger.info("Loading %d historical bars for %s %s", lookback_bars, symbol, interval)
         historical_data = self._load_historical_data()
 
         if historical_data is None or historical_data.empty:
             raise ValueError("Failed to load historical data for %s", symbol)
+
+        # Buffered backlog _load() replays into Backtrader one bar per call before
+        # switching to _live_queue. Kept separate from self.pandas_data below,
+        # which exists only for .df/.p back-compat and is never fed to Cerebro.
+        self._historical_df = historical_data.copy(deep=True)
+        self._historical_pos = 0
+        self._last_queued_ts: Any = historical_data.index[-1] if not historical_data.empty else None
 
         # Prepare data for Backtrader PandasData
         # Reset index to make datetime a column instead of index
@@ -314,80 +332,42 @@ class BaseLiveDataFeed(bt.feed.DataBase):
 
     def _process_new_data(self, new_data: pd.DataFrame):
         """
-        Process new data and update Backtrader lines.
+        Queue new bar(s) for delivery to Backtrader via _load().
+
+        Runs on the background update thread (_update_loop) - must not touch
+        self.lines directly. Only _load(), invoked synchronously on Cerebro's
+        own thread as part of its load()/next() cycle, is allowed to write
+        into Backtrader's line buffers; the forward()/backwards() bookkeeping
+        wrapping _load() assumes that. See _fill_current_bar().
 
         Args:
             new_data: DataFrame with new bar(s)
         """
         try:
-            # Check if we have new data
-            if self.df is None or new_data.index[-1] not in self.df.index:
-                # Add new data to DataFrame
-                if self.df is None:
-                    # Create new pandas_data with the new data
-                    self.pandas_data = _PandasData(
-                        dataname=new_data,
-                        datetime=0,
-                        open=1,
-                        high=2,
-                        low=3,
-                        close=4,
-                        volume=5,
-                        openinterest=None,
-                        name=self.symbol,
-                    )
-                    self.p = self.pandas_data.p
-                else:
-                    # Concatenate new data with existing data
-                    combined_data = pd.concat([self.df, new_data])
-                    # Update the pandas_data with combined data
-                    self.pandas_data = _PandasData(
-                        dataname=combined_data,
-                        datetime=0,
-                        open=1,
-                        high=2,
-                        low=3,
-                        close=4,
-                        volume=5,
-                        openinterest=None,
-                        name=self.symbol,
-                    )
-                    self.p = self.pandas_data.p
+            queued = 0
+            for ts, row in new_data.iterrows():
+                if self._last_queued_ts is not None and ts <= self._last_queued_ts:
+                    continue  # duplicate/stale bar, already delivered
+                self._live_queue.put(row)
+                self._last_queued_ts = ts
+                queued += 1
 
-                # Update Backtrader lines
-                df = self.df
-                if df is None:
-                    _logger.warning("DataFrame unavailable after update for %s", self.symbol)
-                    return
-                latest = df.iloc[-1]
+            if queued == 0:
+                return
+
+            self.last_update = datetime.now()
+
+            latest_ts = new_data.index[-1]
+            if self.on_new_bar:
                 try:
-                    # Ensure lines are properly initialized before accessing
-                    if hasattr(self.lines, "datetime") and len(self.lines.datetime) > 0:
-                        self.lines.datetime[0] = bt.date2num(df.index[-1])
-                        self.lines.open[0] = latest["open"]
-                        self.lines.high[0] = latest["high"]
-                        self.lines.low[0] = latest["low"]
-                        self.lines.close[0] = latest["close"]
-                        self.lines.volume[0] = latest["volume"]
-                        self.lines.openinterest[0] = 0
-                    else:
-                        _logger.warning("Lines not properly initialized for %s, skipping line update", self.symbol)
-                except (IndexError, AttributeError) as e:
-                    _logger.warning("Failed to update lines for %s: %s", self.symbol, str(e))
+                    self.on_new_bar(self.symbol, latest_ts, new_data.iloc[-1].to_dict())
+                except Exception:
+                    _logger.exception("Error in on_new_bar callback: %s")
 
-                self.last_update = datetime.now()
-
-                # Call callback if provided
-                if self.on_new_bar:
-                    try:
-                        self.on_new_bar(self.symbol, df.index[-1], latest.to_dict())
-                    except Exception:
-                        _logger.exception("Error in on_new_bar callback: %s")
-
-                _logger.debug("Updated %s with new bar at %s", self.symbol, df.index[-1])
+            _logger.debug("Queued %d new bar(s) for %s, latest at %s", queued, self.symbol, latest_ts)
 
         except Exception:
-            _logger.exception("Error processing new data for %s: %s")
+            _logger.exception("Error processing new data for %s: %s", self.symbol)
 
     def _get_update_interval(self) -> int:
         """
@@ -408,14 +388,72 @@ class BaseLiveDataFeed(bt.feed.DataBase):
         }
         return interval_map.get(self.interval, 60)
 
-    def _load(self):
+    def islive(self) -> bool:
+        """Tell Cerebro this is a live feed.
+
+        Without this, Cerebro defaults to preload()+runonce() (the vectorized
+        backtest path): it calls _load() once, sees a falsy result, and ends
+        the strategy run immediately - never replaying the historical backlog
+        or waiting for live bars. Returning True switches Cerebro to the
+        tick-by-tick _runnext loop, which treats _load() returning None as
+        "nothing yet, keep polling" instead of "feed exhausted".
         """
-        Backtrader's _load method - called when Backtrader needs more data.
-        For live feeds, this is typically not used as data is pushed via real-time updates.
+        return True
+
+    def _fill_current_bar(self, ts: Any, row: pd.Series) -> None:
+        """Write one OHLCV row into the line slot load() just forward()-ed.
+
+        Only _load() may call this - it must run on Cerebro's own thread,
+        synchronously within its load()/next() cycle, never concurrently with
+        _process_new_data() (which only enqueues; it never touches self.lines).
         """
-        # For live feeds, data is pushed via real-time updates
-        # This method is kept for compatibility but should not be called
-        return None
+        py_dt = pd.Timestamp(ts)
+        if py_dt.tzinfo is not None:
+            py_dt = py_dt.tz_convert("UTC").tz_localize(None)
+        self.lines.datetime[0] = bt.date2num(py_dt.to_pydatetime())
+        self.lines.open[0] = float(row["open"])
+        self.lines.high[0] = float(row["high"])
+        self.lines.low[0] = float(row["low"])
+        self.lines.close[0] = float(row["close"])
+        self.lines.volume[0] = float(row["volume"])
+        self.lines.openinterest[0] = 0.0
+
+    def _load(self) -> bool | None:
+        """Backtrader's _load - called once per next()/load() cycle to fill line[0].
+
+        Two phases:
+        1. Replay the historical backlog loaded in __init__ (self._historical_df),
+           one row per call, so every cached bar actually reaches the strategy
+           before anything live does.
+        2. Once exhausted, pull from _live_queue (fed by _process_new_data(), on
+           the background update thread) - blocking up to self._qcheck seconds,
+           backtrader's own live-polling pace (see the 'qcheck' param and
+           AbstractDataBase.do_qcheck()). Returning None here (not False) is
+           what tells Cerebro's live loop "nothing yet, keep polling" rather
+           than "feed exhausted, stop" - see islive() above.
+
+        should_stop is checked only after the backlog is drained, so stop()
+        lets this return False (truly ending the feed) instead of blocking
+        Cerebro.run() forever: asyncio.run()'s shutdown_default_executor()
+        waits for that executor thread to finish before the process can exit.
+        """
+        if self._historical_pos < len(self._historical_df):
+            row = self._historical_df.iloc[self._historical_pos]
+            self._historical_pos += 1
+            self._fill_current_bar(row.name, row)
+            return True
+
+        if self.should_stop:
+            return False
+
+        try:
+            row = self._live_queue.get(timeout=self._qcheck)
+        except queue.Empty:
+            return None
+
+        self._live_bars_received += 1
+        self._fill_current_bar(row.name, row)
+        return True
 
     def stop(self):
         """Stop the real-time updates and disconnect."""
@@ -432,12 +470,16 @@ class BaseLiveDataFeed(bt.feed.DataBase):
         Returns:
             Dictionary with status information
         """
+        # self.df is the static __init__-time historical snapshot (never mutated
+        # after construction - see _process_new_data()); add live bars delivered
+        # since then so this reflects what Backtrader has actually consumed.
+        historical_points = len(self.df) if self.df is not None else 0
         return {
             "symbol": self.symbol,
             "interval": self.interval,
             "is_connected": self.is_connected,
             "last_update": self.last_update,
-            "data_points": len(self.df) if self.df is not None else 0,
+            "data_points": historical_points + self._live_bars_received,
             "should_stop": self.should_stop,
             "data_source": self.__class__.__name__.replace("LiveDataFeed", "").lower(),
         }

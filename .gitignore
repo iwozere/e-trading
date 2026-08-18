@@ -51,6 +51,7 @@ htmlcov/
 *.db
 db/
 data/
+test_cache/
 !config/data/
 !src/data/
 !src/data/db/
@@ -72,6 +73,7 @@ logs/
 *.jsonl.gz.part
 *.jsonl.gz.part.tmp
 *.jsonl.gz.part.tmp.tmp
+*.parquet
 
 !config/*/*.yaml
 !config/*/*.json

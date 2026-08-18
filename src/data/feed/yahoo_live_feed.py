@@ -17,6 +17,7 @@ Classes:
 - YahooLiveDataFeed: Live data feed for Yahoo Finance
 """
 
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 import pandas as pd
@@ -51,7 +52,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
         """
         self.polling_interval = polling_interval
         self.ticker: Optional[Any] = None
-        self.last_poll_time = None
+        self.last_poll_time: Optional[datetime] = None
 
         # Convert interval to yfinance format
         self.yahoo_interval = self._convert_interval(interval)
@@ -187,37 +188,34 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
             required_columns = ["open", "high", "low", "close", "volume"]
             recent_data = recent_data[required_columns]
 
-            # Check if we have new data
-            if self.df is not None and not self.df.empty:
-                # Get the current DataFrame and ensure it has a datetime index
-                current_df = self.df.copy()
-                if not isinstance(current_df.index, pd.DatetimeIndex):
-                    if "timestamp" in current_df.columns:
-                        current_df = current_df.set_index("timestamp")
-                    else:
-                        # If no timestamp column, create a dummy datetime index
-                        current_df.index = pd.date_range("2023-01-01", periods=len(current_df), freq="D")
+            # Make sure recent_data index is timezone-naive, to compare against
+            # _last_queued_ts below (always tz-naive - see BaseLiveDataFeed).
+            if recent_data.index.tz is not None:
+                recent_data.index = recent_data.index.tz_localize(None)
 
-                last_known_time = current_df.index[-1]
+            self.last_poll_time = datetime.now()
 
-                # Ensure both timestamps are timezone-naive for comparison
-                if last_known_time.tz is not None:
-                    last_known_time = last_known_time.tz_localize(None)
-
-                # Make sure recent_data index is also timezone-naive
-                if recent_data.index.tz is not None:
-                    recent_data.index = recent_data.index.tz_localize(None)
-
-                new_data = recent_data[recent_data.index > last_known_time]
-
-                if not new_data.empty:
-                    _logger.debug("Found %d new bars for %s", len(new_data), self.symbol)
-                    return new_data
-                else:
-                    return None
-            else:
+            # _last_queued_ts is the timestamp of the last bar BaseLiveDataFeed has
+            # already queued for Cerebro - seeded from the historical backlog in
+            # __init__ and advanced by _process_new_data() on every bar delivered
+            # since. self.df, by contrast, is a static snapshot frozen at __init__
+            # time (see BaseLiveDataFeed.get_status()) and would never advance,
+            # making every poll after the first look like it found new data.
+            last_known_time = self._last_queued_ts
+            if last_known_time is None:
                 # First time getting data
                 return recent_data.tail(1)
+
+            if last_known_time.tz is not None:
+                last_known_time = last_known_time.tz_localize(None)
+
+            new_data = recent_data[recent_data.index > last_known_time]
+
+            if not new_data.empty:
+                _logger.debug("Found %d new bars for %s", len(new_data), self.symbol)
+                return new_data
+            else:
+                return None
 
         except Exception:
             _logger.exception("Error getting latest data for %s: %s")
