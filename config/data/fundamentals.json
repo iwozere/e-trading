@@ -5,21 +5,18 @@
     "statements": [
       "alpha_vantage",
       "yahoo",
-      "twelvedata",
       "fmp"
     ],
     "ratios": [
       "finnhub",
       "yahoo",
       "alpha_vantage",
-      "twelvedata",
       "fmp"
     ],
     "profile": [
       "yahoo",
       "finnhub",
       "alpha_vantage",
-      "twelvedata",
       "fmp"
     ],
     "calendar": [

@@ -7,9 +7,9 @@ Cache: DATA_CACHE_DIR/index_changes/YYYY-MM-DD.csv.gz (cached daily)
 
 import re
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Callable, List, cast
+from typing import Any, List, cast
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -43,7 +43,28 @@ class WikipediaDownloader(BaseDataDownloader):
     def get_supported_intervals(self) -> List[str]:
         return []
 
-    def get_ohlcv(self, symbol, interval, start_date, end_date, **kwargs):
+    def get_ohlcv(
+        self,
+        symbol: str,
+        interval: str,
+        start_date: datetime,
+        end_date: datetime,
+        **kwargs: Any,
+    ) -> pd.DataFrame:
+        """
+        Not supported — returns an empty DataFrame.
+
+        Args:
+            symbol: Unused.
+            interval: Unused.
+            start_date: Unused.
+            end_date: Unused.
+            **kwargs: Unused.
+
+        Returns:
+            Empty DataFrame.
+        """
+        del symbol, interval, start_date, end_date, kwargs
         _logger.warning("WikipediaDownloader does not provide OHLCV data")
         return pd.DataFrame()
 
@@ -58,10 +79,15 @@ class WikipediaDownloader(BaseDataDownloader):
         headers = {"User-Agent": "Mozilla/5.0"}
 
         # 1. S&P 500
-        r_sp = requests.get("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies", headers=headers, timeout=15)
+        # Wikipedia used to keep the "Selected changes" table on
+        # List_of_S%26P_500_companies (as tables[1]); it has since been split out
+        # onto its own page, Historical_components_of_the_S%26P_500 (table[0]).
+        r_sp = requests.get(
+            "https://en.wikipedia.org/wiki/Historical_components_of_the_S%26P_500", headers=headers, timeout=15
+        )
         r_sp.raise_for_status()
         tables_sp = pd.read_html(StringIO(r_sp.text))
-        df_sp = tables_sp[1]
+        df_sp = tables_sp[0]
         df_sp.columns = [f"{col[0]}_{col[1]}" if col[0] != col[1] else col[0] for col in df_sp.columns]
         df_sp = df_sp.rename(columns={"Effective Date": "date"})
         df_sp["index_name"] = "SP500"

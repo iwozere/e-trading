@@ -89,6 +89,16 @@ _logger = setup_logger(__name__)
 
 from src.data.provider_selector import ProviderSelector  # noqa: F401
 
+# Gap-detection tolerance, expressed as a multiple of one bar's duration, below which a
+# missing stretch of cached data is treated as an expected non-trading window (not a real
+# gap to backfill). Used by both get_ohlcv() and get_multiple_symbols_ohlcv().
+#
+# 1d=8 bars (8 days) covers a weekend (3d) plus known extended closures (Sandy=5d, 9/11=7d).
+# Intraday timeframes are sized to the same ~192h (8-day) ceiling so a Friday-close ->
+# Monday-open weekend (~64.5h) doesn't get misdetected as a gap and walked through the
+# whole provider failover chain every week for data that will never exist.
+_GAP_TOLERANCE_BARS = {"1d": 8.0, "1h": 192.0, "30m": 384.0, "15m": 768.0, "5m": 2304.0}
+
 
 class DataManager:
     """
@@ -213,10 +223,8 @@ class DataManager:
             bar_duration = self._get_bar_duration(timeframe)
             # Covers overnight/weekend gaps so EOD runs don't trigger suffix
             # re-fetches just because end_date extends past the last trading bar.
-            # 1d=8 covers weekends (3d) plus known extended closures (Sandy=5d, 9/11=7d).
-            # 1h=18 bars (~overnight+buffer), sub-hour scaled.
-            _TOLERANCE = {"1d": 8.0, "1h": 18.0, "30m": 36.0, "15m": 72.0, "5m": 216.0}
-            tolerance_factor = _TOLERANCE.get(timeframe, 4.0)
+            # See _GAP_TOLERANCE_BARS for the reasoning behind the values.
+            tolerance_factor = _GAP_TOLERANCE_BARS.get(timeframe, 4.0)
 
             cache_start = cached_data.index[0]
             cache_end = cached_data.index[-1]
@@ -375,11 +383,10 @@ class DataManager:
 
             safe_start = start_date.replace(tzinfo=UTC) if start_date.tzinfo is None else start_date
 
-            # Tolerance: covers overnight/weekend gaps (same table as get_ohlcv).
-            # 1d=8 covers weekends (3d) plus known extended closures (Sandy=5d, 9/11=7d).
+            # Tolerance: covers overnight/weekend gaps. See _GAP_TOLERANCE_BARS (same
+            # table used by get_ohlcv) for the reasoning behind the values.
             bar_duration = self._get_bar_duration(timeframe)
-            _TOLERANCE = {"1d": 8.0, "1h": 18.0, "30m": 36.0, "15m": 72.0, "5m": 216.0}
-            tolerance_factor = _TOLERANCE.get(timeframe, 4.0)
+            tolerance_factor = _GAP_TOLERANCE_BARS.get(timeframe, 4.0)
 
             if (cache_start - safe_start) > (bar_duration * tolerance_factor):
                 missing_ranges.setdefault(sym, []).append((safe_start, cache_start - bar_duration))
@@ -1224,11 +1231,13 @@ class DataManager:
 
         Args:
             data_type: Type of data requested
-            combiner: Fundamentals combiner instance
+            combiner: Unused. Accepted to mirror _load_data_type_provider_sequence()'s
+                signature, since both are called from the same fallback path.
 
         Returns:
             List of fallback provider names
         """
+        del combiner
         # Data type categories for intelligent fallbacks
         statement_types = ["statements", "financial_statements", "income_statement", "balance_sheet", "cash_flow"]
         ratio_types = [
@@ -1942,7 +1951,8 @@ class DataManager:
         import threading
         import time
 
-        def timeout_handler(signum, frame):
+        def timeout_handler(signum: int, frame: Any) -> None:
+            del signum, frame  # required by signal.signal()'s callback signature; unused
             raise TimeoutException(f"Request timed out after {timeout} seconds")
 
         # Set up timeout handling (Unix-like systems, main thread only)
@@ -1950,7 +1960,7 @@ class DataManager:
         if hasattr(signal, "SIGALRM") and threading.current_thread() is threading.main_thread():
             try:
                 old_handler = signal.signal(signal.SIGALRM, timeout_handler)  # pyright: ignore[reportAttributeAccessIssue]  # hasattr-guarded
-                signal.alarm(int(timeout))  # type: ignore[attr-defined]  # hasattr-guarded
+                signal.alarm(int(timeout))  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue]  # hasattr-guarded
                 sigalrm_set = True
             except ValueError:
                 pass
@@ -1967,8 +1977,8 @@ class DataManager:
             # Clean up timeout handling
             if sigalrm_set:
                 try:
-                    signal.alarm(0)  # type: ignore[attr-defined]  # hasattr-guarded
-                    signal.signal(signal.SIGALRM, old_handler)  # type: ignore[attr-defined]  # hasattr-guarded
+                    signal.alarm(0)  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue]  # hasattr-guarded
+                    signal.signal(signal.SIGALRM, old_handler)  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue]  # hasattr-guarded
                 except ValueError:
                     pass
 
