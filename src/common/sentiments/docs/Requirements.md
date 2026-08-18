@@ -12,7 +12,9 @@
 
 ## External Services
 - **StockTwits API**: Public API for social sentiment data
-- **Pushshift API**: Reddit data aggregation service
+- **Reddit API**: Direct OAuth2 access via `AsyncRedditAdapter` (requires app credentials; the
+  legacy Pushshift-based adapter was removed — Pushshift has been restricted to verified Reddit
+  moderators since May 2023, with no public or developer access)
 - **HuggingFace Models**: Pre-trained sentiment analysis models
 
 ## System Requirements

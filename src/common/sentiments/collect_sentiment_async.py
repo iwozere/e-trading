@@ -80,7 +80,6 @@ def _load_config_from_env() -> Dict[str, Any]:
         "discord": os.getenv("SENTIMENT_DISCORD_ENABLED", "true").lower() == "true",
         "twitter": os.getenv("SENTIMENT_TWITTER_ENABLED", "false").lower() == "true",
         "finnhub": os.getenv("SENTIMENT_FINNHUB_ENABLED", "true").lower() == "true",
-        "reddit_pushshift": os.getenv("SENTIMENT_PUSHSHIFT_ENABLED", "false").lower() == "true",
         "hf_enabled": os.getenv("SENTIMENT_HF_ENABLED", "false").lower() == "true",
     }
 
@@ -149,7 +148,6 @@ DEFAULT_CONFIG = {
         "discord": True,
         "twitter": False,
         "finnhub": True,
-        "reddit_pushshift": False,
         "apewisdom": True,
         "hf_enabled": False,
     },
@@ -231,7 +229,9 @@ def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
         ValueError: If configuration is invalid
     """
     if not isinstance(config, dict):
-        raise ValueError("Config must be a dictionary")
+        # Static type is Dict[str, Any], but callers outside the type-checked
+        # boundary (e.g. JSON-loaded config) can still pass the wrong runtime type.
+        raise ValueError("Config must be a dictionary")  # pyright: ignore[reportUnreachable]
 
     # Validate required sections
     required_sections = ["providers", "batching", "weights", "heuristic"]

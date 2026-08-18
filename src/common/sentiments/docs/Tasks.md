@@ -4,7 +4,7 @@
 
 ### ✅ COMPLETED FEATURES
 - [x] Async StockTwits adapter with rate limiting
-- [x] Async Pushshift (Reddit) adapter
+- [x] Async Reddit adapter (direct OAuth2 API)
 - [x] HuggingFace sentiment model integration
 - [x] Batch processing with concurrency control
 - [x] Sentiment aggregation and normalization
@@ -29,7 +29,9 @@
 - [ ] Improve error recovery mechanisms
 
 ## Known Issues
-- Pushshift API occasionally returns incomplete data
+- The Pushshift-based Reddit adapter (`async_pushshift_adapter`) was removed 2026-08-18: Pushshift
+  has been restricted to verified Reddit moderators since May 2023 (no public/developer access).
+  The direct-API `AsyncRedditAdapter` remains but requires manually-approved app credentials.
 - HuggingFace model loading can be slow on first run
 - Rate limiting may need adjustment based on usage patterns
 

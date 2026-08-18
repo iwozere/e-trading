@@ -213,8 +213,9 @@ Weights/thresholds live in config and are calibrated against the shadow dataset
 
 ## 10. Sentiment — context only
 
-- Adapters: Reddit (`async_reddit`/`async_pushshift`), StockTwits, ApeWisdom,
-  Google Trends (`async_trends`), NewsAPI/Finnhub news, FinBERT (`async_hf_sentiment`).
+- Adapters: Reddit (`async_reddit`, direct OAuth2 API — Pushshift-based `async_pushshift`
+  was removed, see `src/common/sentiments/docs/sentiment-spec-rev2.md`), StockTwits,
+  ApeWisdom, Google Trends (`async_trends`), NewsAPI/Finnhub news, FinBERT (`async_hf_sentiment`).
 - Captured **per poll into the shadow log** and **attached to alerts**, never used to
   trigger (decision #4). Once shadow data exists, test mention-spike **lead time**
   vs price move; promote to a trigger only if it demonstrably leads.

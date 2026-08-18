@@ -8,7 +8,6 @@ The p04_short_squeeze pipeline now supports **multi-source sentiment analysis** 
 
 ### 🎯 Multi-Source Sentiment
 - **StockTwits**: Trading-focused social sentiment
-- **Reddit**: Community discussion analysis via Pushshift API
 - **News APIs**: Credible news sources (Finnhub, NewsAPI, Alpha Vantage)
 - **Google Trends**: Search volume and trending analysis
 - **Twitter**: Social media sentiment (optional)
@@ -78,7 +77,6 @@ Update your pipeline configuration:
 sentiment:
   providers:
     stocktwits: true
-    reddit_pushshift: true
     news: true
     hf_enabled: false  # Disable ML by default (CPU intensive)
 
@@ -88,10 +86,14 @@ sentiment:
 
   weights:
     stocktwits: 0.4
-    reddit: 0.3
     news: 0.2
     google_trends: 0.1
 ```
+
+> **Note (2026-08-18):** the Reddit-via-Pushshift provider (`reddit_pushshift`) was removed —
+> Pushshift access has been restricted to verified Reddit moderators since May 2023. See
+> `src/common/sentiments/docs/sentiment-spec-rev2.md` for the replacement plan (Bluesky +
+> Hacker News adapters).
 
 See [pipeline_config_example.yaml](../config/pipeline_config_example.yaml) for full configuration options.
 

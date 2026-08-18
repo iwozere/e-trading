@@ -160,7 +160,7 @@ class DailyDeepScan:
                     time.sleep(self.config.api_delay_seconds)
 
             # Store results in database
-            self._store_results(scored_candidates, scan_date, data_quality_metrics)
+            self._store_results(scored_candidates, scan_date)
 
             # Calculate runtime metrics
             end_time = datetime.now()
@@ -355,7 +355,6 @@ class DailyDeepScan:
             if days_to_cover is None:
                 days_to_cover = 0.0
 
-            short_interest_shares = finra_data.get("short_interest_shares", 0)
             data_age_days = finra_data.get("data_age_days", 0)
 
             # Create enhanced structural metrics
@@ -405,7 +404,6 @@ class DailyDeepScan:
         try:
             # This would ideally be a service method, but for now we can access via UoW
             # TODO: Move this query to ShortSqueezeService
-            service = ShortSqueezeService()
 
             # For now, return None - this needs to be implemented in the service layer
             # The sentiment collection will work without historical data
@@ -438,7 +436,6 @@ class DailyDeepScan:
                 sentiment_config_dict = {
                     "providers": {
                         "stocktwits": self.sentiment_config.providers.stocktwits,
-                        "reddit_pushshift": self.sentiment_config.providers.reddit_pushshift,
                         "news": self.sentiment_config.providers.news,
                         "google_trends": self.sentiment_config.providers.google_trends,
                         "twitter": self.sentiment_config.providers.twitter,
@@ -451,7 +448,6 @@ class DailyDeepScan:
                     },
                     "weights": {
                         "stocktwits": self.sentiment_config.weights.stocktwits,
-                        "reddit": self.sentiment_config.weights.reddit,
                         "news": self.sentiment_config.weights.news,
                         "google_trends": self.sentiment_config.weights.google_trends,
                         "heuristic_vs_hf": self.sentiment_config.weights.heuristic_vs_hf,
@@ -884,16 +880,13 @@ class DailyDeepScan:
             _logger.warning("Error calculating preliminary squeeze score: %s", e)
             return screener_score  # Fallback to screener score
 
-    def _store_results(
-        self, scored_candidates: List[ScoredCandidate], scan_date: date, data_quality_metrics: Dict[str, Any]
-    ) -> None:
+    def _store_results(self, scored_candidates: List[ScoredCandidate], scan_date: date) -> None:
         """
         Store deep scan results in database.
 
         Args:
             scored_candidates: List of scored candidates
             scan_date: Date of the scan
-            data_quality_metrics: Data quality metrics
         """
         try:
             service = ShortSqueezeService()

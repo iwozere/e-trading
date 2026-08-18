@@ -82,7 +82,8 @@ The module is configured via environment variables and `collect_sentiment_async.
 | **News Aggregator**| ✅ Healthy | Multi-feed aggregation active. |
 | **Twitter/X** | 🔕 Suppressed | Disabled by default due to Free Tier limits. |
 | **StockTwits** | ❌ Blocked | 403 Forbidden issues (WAF/Anti-bot). |
-| **Reddit/Pushshift**| 🔕 Suppressed | Force-disabled to reduce log noise. |
+| **Reddit (Pushshift)** | 🗑️ Removed | `async_pushshift_adapter` deleted 2026-08-18 — Pushshift has been restricted to verified Reddit moderators since May 2023, no public/developer access. See `sentiment-spec-rev2.md`. |
+| **Reddit (direct API)**| 🔕 Suppressed | `AsyncRedditAdapter` present but requires manually-approved OAuth2 app credentials. |
 
 ---
 *Last updated: December 2025*

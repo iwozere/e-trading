@@ -53,7 +53,6 @@ class TestConfigurationManagement(unittest.TestCase):
 
         # Check provider settings
         self.assertIn("stocktwits", config["providers"])
-        self.assertIn("reddit_pushshift", config["providers"])
         self.assertIn("hf_enabled", config["providers"])
 
         # Check batching settings
@@ -91,7 +90,6 @@ class TestConfigurationManagement(unittest.TestCase):
 
         # Check boolean values
         self.assertIsInstance(config["providers"]["stocktwits"], bool)
-        self.assertIsInstance(config["providers"]["reddit_pushshift"], bool)
         self.assertIsInstance(config["providers"]["hf_enabled"], bool)
 
     @patch.dict(
@@ -112,7 +110,6 @@ class TestConfigurationManagement(unittest.TestCase):
 
         # Check environment overrides
         self.assertFalse(config["providers"]["stocktwits"])
-        self.assertTrue(config["providers"]["reddit_pushshift"])
         self.assertTrue(config["providers"]["hf_enabled"])
         self.assertEqual(config["lookback_hours"], 48)
         self.assertEqual(config["batching"]["concurrency"], 16)
@@ -155,13 +152,12 @@ class TestConfigurationManagement(unittest.TestCase):
 
         # Should return default values
         self.assertTrue(config["providers"]["stocktwits"])
-        self.assertTrue(config["providers"]["reddit_pushshift"])
         self.assertFalse(config["providers"]["hf_enabled"])
 
     def test_validate_config_valid(self):
         """Test configuration validation with valid config."""
         valid_config = {
-            "providers": {"stocktwits": True, "reddit_pushshift": True, "hf_enabled": False},
+            "providers": {"stocktwits": True, "hf_enabled": False},
             "lookback_hours": 24,
             "batching": {"concurrency": 8, "rate_limit_delay_sec": 0.3},
             "weights": {"stocktwits": 0.4, "reddit": 0.6, "heuristic_vs_hf": 0.5},
@@ -199,7 +195,7 @@ class TestConfigurationManagement(unittest.TestCase):
         """Test configuration validation with invalid values."""
         # Test negative lookback hours
         invalid_config = {
-            "providers": {"stocktwits": True, "reddit_pushshift": True},
+            "providers": {"stocktwits": True},
             "lookback_hours": -5,  # Invalid
             "batching": {"concurrency": 8, "rate_limit_delay_sec": 0.3},
             "weights": {"stocktwits": 0.4, "reddit": 0.6},
@@ -214,7 +210,7 @@ class TestConfigurationManagement(unittest.TestCase):
     def test_validate_config_zero_concurrency(self):
         """Test configuration validation with zero concurrency."""
         invalid_config = {
-            "providers": {"stocktwits": True, "reddit_pushshift": True},
+            "providers": {"stocktwits": True},
             "lookback_hours": 24,
             "batching": {"concurrency": 0, "rate_limit_delay_sec": 0.3},  # Invalid
             "weights": {"stocktwits": 0.4, "reddit": 0.6},
@@ -227,24 +223,26 @@ class TestConfigurationManagement(unittest.TestCase):
         self.assertIn("concurrency must be positive", str(context.exception))
 
     def test_validate_config_zero_weights(self):
-        """Test configuration validation with zero provider weights."""
-        invalid_config = {
-            "providers": {"stocktwits": True, "reddit_pushshift": True},
+        """Test configuration validation falls back to equal weighting when weights sum to zero."""
+        zero_weight_config = {
+            "providers": {"stocktwits": True, "reddit": True},
             "lookback_hours": 24,
             "batching": {"concurrency": 8, "rate_limit_delay_sec": 0.3},
-            "weights": {"stocktwits": 0.0, "reddit": 0.0},  # Invalid - sum to zero
+            "weights": {"stocktwits": 0.0, "reddit": 0.0},  # Sum to zero
             "heuristic": {"positive_tokens": [], "negative_tokens": []},
         }
 
-        with self.assertRaises(ValueError) as context:
-            validate_config(invalid_config)
+        # validate_config degrades gracefully rather than raising: an all-zero
+        # weight configuration falls back to equal weighting across active providers.
+        validated_config = validate_config(zero_weight_config)
 
-        self.assertIn("Provider weights must sum to a positive value", str(context.exception))
+        self.assertAlmostEqual(validated_config["weights"]["stocktwits"], 0.5, places=3)
+        self.assertAlmostEqual(validated_config["weights"]["reddit"], 0.5, places=3)
 
     def test_validate_config_weight_normalization(self):
         """Test configuration validation normalizes weights."""
         config_with_unnormalized_weights = {
-            "providers": {"stocktwits": True, "reddit_pushshift": True},
+            "providers": {"stocktwits": True, "reddit": True},
             "lookback_hours": 24,
             "batching": {"concurrency": 8, "rate_limit_delay_sec": 0.3},
             "weights": {"stocktwits": 0.8, "reddit": 1.2},  # Sum to 2.0
@@ -389,7 +387,7 @@ class TestConfigurationManagement(unittest.TestCase):
         """Test configuration validation edge cases."""
         # Test with minimal valid config
         minimal_config = {
-            "providers": {"stocktwits": True, "reddit_pushshift": False},
+            "providers": {"stocktwits": True},
             "lookback_hours": 24,  # Add required field
             "batching": {"concurrency": 1, "rate_limit_delay_sec": 0},
             "weights": {"stocktwits": 1.0, "reddit": 0.0},
@@ -401,7 +399,7 @@ class TestConfigurationManagement(unittest.TestCase):
 
         # Test with missing optional fields but required ones present
         config_missing_optional = {
-            "providers": {"stocktwits": True, "reddit_pushshift": True},
+            "providers": {"stocktwits": True},
             "lookback_hours": 48,  # Add required field
             "batching": {"concurrency": 8, "rate_limit_delay_sec": 0.3},
             "weights": {"stocktwits": 0.5, "reddit": 0.5},

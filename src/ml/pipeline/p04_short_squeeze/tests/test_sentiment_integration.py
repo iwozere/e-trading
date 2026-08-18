@@ -219,7 +219,6 @@ class TestScoringEngineEnhanced:
 
     def test_normalize_virality_index(self, scoring_engine):
         """Test virality index normalization (already normalized)."""
-        metrics = {"virality_index": 0.75}
         normalized = scoring_engine._minmax_normalize("virality_index", 0.75)
 
         assert normalized == 0.75  # Already in [0, 1]
@@ -258,7 +257,6 @@ class TestSentimentConfiguration:
         config = SentimentConfig()
 
         assert config.providers.stocktwits is True
-        assert config.providers.reddit_pushshift is True
         assert config.providers.hf_enabled is False
         assert config.batching.concurrency == 8
         assert config.weights.stocktwits == 0.4
@@ -270,7 +268,7 @@ class TestSentimentConfiguration:
         config = SentimentConfig(
             providers=SentimentProviders(stocktwits=False, hf_enabled=True),
             batching=SentimentBatching(concurrency=16, batch_size=100),
-            weights=SentimentWeights(stocktwits=0.5, reddit=0.5),
+            weights=SentimentWeights(stocktwits=0.5, news=0.5),
         )
 
         assert config.providers.stocktwits is False

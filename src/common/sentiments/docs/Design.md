@@ -14,7 +14,7 @@ The system follows an async adapter pattern that allows concurrent data collecti
 
 ### Component Design
 - **AsyncStocktwitsAdapter**: Social sentiment from StockTwits platform
-- **AsyncPushshiftAdapter**: Reddit sentiment via Pushshift API
+- **AsyncRedditAdapter**: Reddit sentiment via direct Reddit OAuth2 API (requires app credentials)
 - **AsyncHFSentiment**: ML-based sentiment using HuggingFace transformers
 - **SentimentFeatures**: Standardized output dataclass
 

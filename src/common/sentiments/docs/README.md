@@ -1,4 +1,9 @@
-# Sentiment Check — Requirements & Detailed Design
+# Sentiment Check — Requirements & Detailed Design (Rev 1)
+
+> **Superseded by [`sentiment-spec-rev2.md`](sentiment-spec-rev2.md).** The Reddit/Pushshift path
+> described below (`async_pushshift_adapter`) was deleted 2026-08-18 — Pushshift has been
+> restricted to verified Reddit moderators since May 2023, with no public or developer access.
+> Kept here for historical context only; do not implement against this revision.
 
 Below are two clearly separated artifacts you asked for:
 

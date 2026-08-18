@@ -4,7 +4,13 @@
 **Document Version**: 1.0
 **Created**: 2025-11-17
 **Author**: System Architecture Team
-**Status**: Planning Phase
+**Status**: Planning Phase (superseded — see note below)
+
+> **2026-08-18:** the `reddit_pushshift` provider referenced throughout this plan
+> (`async_pushshift_adapter`) has been deleted. Pushshift access has been restricted to
+> verified Reddit moderators since May 2023, with no public or developer access. This document
+> is kept for historical context; see `src/common/sentiments/docs/sentiment-spec-rev2.md` for
+> the current Reddit-replacement plan (Bluesky + Hacker News adapters).
 
 ---
 

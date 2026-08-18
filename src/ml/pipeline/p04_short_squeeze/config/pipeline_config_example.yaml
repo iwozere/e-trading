@@ -61,7 +61,6 @@ sentiment:
   # Provider Toggles
   providers:
     stocktwits: true                  # StockTwits sentiment (trading-focused)
-    reddit_pushshift: true            # Reddit sentiment (community discussion)
     news: true                        # News sentiment (credible sources)
     google_trends: false              # Google Trends (optional, rate-limited)
     twitter: false                    # Twitter sentiment (requires API access)

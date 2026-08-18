@@ -133,7 +133,10 @@ class AdapterRegistry:
             default_config: Default configuration for the adapter
         """
         if not issubclass(adapter_class, BaseSentimentAdapter):
-            raise ValueError(f"Adapter class {adapter_class} must inherit from BaseSentimentAdapter")
+            # Static type is Type[BaseSentimentAdapter], but callers outside the
+            # type-checked boundary (e.g. config-driven adapter registration) can
+            # still pass an unrelated class at runtime.
+            raise ValueError(f"Adapter class {adapter_class} must inherit from BaseSentimentAdapter")  # pyright: ignore[reportUnreachable]
 
         self._adapter_types[name] = adapter_class
         self._adapter_configs[name] = default_config or {}
@@ -523,15 +526,6 @@ def register_default_adapters() -> None:
         manager.register_adapter_type("stocktwits", AsyncStocktwitsAdapter, {"concurrency": 5, "rate_limit_delay": 0.5})
     except ImportError as e:
         _logger.warning("Could not register StockTwits adapter: %s", e)
-
-    try:
-        from src.common.sentiments.adapters.async_pushshift import AsyncPushshiftAdapter
-
-        manager.register_adapter_type(
-            "reddit_pushshift", AsyncPushshiftAdapter, {"concurrency": 5, "rate_limit_delay": 0.5}
-        )
-    except ImportError as e:
-        _logger.warning("Could not register Pushshift adapter: %s", e)
 
     try:
         from src.common.sentiments.adapters.async_reddit import AsyncRedditAdapter

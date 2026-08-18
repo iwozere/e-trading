@@ -237,7 +237,6 @@ class SentimentProviders:
     """Configuration for sentiment data providers."""
 
     stocktwits: bool = True
-    reddit_pushshift: bool = True
     news: bool = True
     google_trends: bool = False  # Optional, conservative rate limit
     twitter: bool = False  # Requires API access
@@ -259,7 +258,6 @@ class SentimentWeights:
     """Configuration for sentiment source weighting."""
 
     stocktwits: float = 0.4  # High quality, trading-focused
-    reddit: float = 0.3  # Good coverage, some noise
     news: float = 0.2  # Credible but lagging
     google_trends: float = 0.1  # Supplementary
     heuristic_vs_hf: float = 0.5  # 50/50 if HF enabled
