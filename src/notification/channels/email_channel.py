@@ -132,6 +132,10 @@ class EmailChannel(NotificationChannel):
         """
         start_time = datetime.now(UTC)
 
+        # SMTP has no native priority mechanism (see supports_feature -> "priority": False),
+        # so this channel can't act on it - log it for traceability instead of discarding it.
+        _logger.debug("send_message called with priority=%s (unused: SMTP has no native priority support)", priority)
+
         try:
             # Extract metadata for email-specific options
             metadata = content.metadata or {}
@@ -147,29 +151,39 @@ class EmailChannel(NotificationChannel):
                         # It's already an email address
                         to_email = recipient
                     else:
-                        # Try to resolve as user_id
+                        # Numeric recipients are ambiguous: they may be an internal DB
+                        # user_id or a Telegram chat ID (both are digit strings), since
+                        # some callers pass message.recipient_id through unchanged for
+                        # every channel. Try user_id resolution first, then fall back to
+                        # telegram_id resolution whenever that didn't yield an email -
+                        # not only when int() fails to parse.
+                        user_id_int: Optional[int] = None
                         try:
                             user_id_int = int(recipient)
-                            _logger.debug(f"Attempting to resolve email for user_id: {user_id_int}")
+                        except (ValueError, TypeError):
+                            user_id_int = None
+
+                        if user_id_int is not None:
+                            _logger.debug("Attempting to resolve email for user_id: %s", user_id_int)
                             user_channels = users_service.get_user_notification_channels(user_id_int)
                             if user_channels and user_channels.get("email"):
                                 to_email = user_channels["email"]
-                                _logger.info(f"Resolved user_id {user_id_int} to email: {to_email}")
+                                _logger.info("Resolved user_id %s to email: %s", user_id_int, to_email)
                             else:
-                                _logger.warning(f"No email found for user_id: {user_id_int}")
-                        except (ValueError, TypeError):
-                            # Not an email, or integer resolution failed
-                            # Try to resolve as telegram_id
+                                _logger.debug("No email found for user_id: %s", user_id_int)
+
+                        if not to_email:
+                            # Not a valid/known user_id - try to resolve as telegram_id
                             try:
-                                _logger.debug(f"Attempting to resolve email for telegram_id: {recipient}")
+                                _logger.debug("Attempting to resolve email for telegram_id: %s", recipient)
                                 user = users_service.get_user_by_telegram_id(recipient)
                                 if user and getattr(user, "email", None):
                                     to_email = user.email
-                                    _logger.info(f"Resolved telegram_id {recipient} to email: {to_email}")
+                                    _logger.info("Resolved telegram_id %s to email: %s", recipient, to_email)
                                 else:
-                                    _logger.warning(f"No user or email found for telegram_id: {recipient}")
+                                    _logger.warning("No user or email found for telegram_id: %s", recipient)
                             except Exception as e:
-                                _logger.error(f"Error resolving telegram_id {recipient}: {e}")
+                                _logger.error("Error resolving telegram_id %s: %s", recipient, e)
 
             if not to_email:
                 raise ValueError(
@@ -186,8 +200,10 @@ class EmailChannel(NotificationChannel):
             bcc_emails = metadata.get("bcc", [])
             reply_to = metadata.get("reply_to")
 
-            # Create email message
-            msg = await self._create_email_message(recipients, content, cc_emails, bcc_emails, reply_to, message_id)
+            # Create email message. bcc_emails is intentionally not passed in: BCC
+            # recipients must never appear in message headers, and the actual SMTP
+            # envelope (RCPT TO) already includes them via _send_email_async below.
+            msg = await self._create_email_message(recipients, content, cc_emails, reply_to, message_id)
 
             # Send email
             await self._send_email_async(msg, recipients + cc_emails + bcc_emails)
@@ -258,7 +274,6 @@ class EmailChannel(NotificationChannel):
         recipients: List[str],
         content: MessageContent,
         cc_emails: List[str],
-        bcc_emails: List[str],
         reply_to: Optional[str],
         message_id: Optional[str],
     ) -> MIMEMultipart:
