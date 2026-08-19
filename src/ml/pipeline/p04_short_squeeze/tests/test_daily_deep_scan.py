@@ -395,7 +395,7 @@ class TestDailyDeepScan(unittest.TestCase):
 
             # Test storing results
             scan_date = date.today()
-            self.daily_deep_scan._store_results([scored_candidate], scan_date, {})
+            self.daily_deep_scan._store_results([scored_candidate], scan_date)
 
             # Verify service was called
             mock_service.save_deep_scan_results.assert_called_once()
