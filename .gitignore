@@ -39,7 +39,9 @@ wheels/
 .env.local
 
 # Real IBKR brokerage exports (holdings + cost basis) — downloaded daily by
-# src/portfolio/pnl_alert/flex_downloader.py, never commit these.
+# src/portfolio/pnl_alert/flex_downloader.py into data/portfolio/pnl_alert/,
+# already covered by the blanket data/ ignore below. Never commit these.
+# Also ignore the pre-migration location in case stale exports are still there.
 src/portfolio/pnl_alert/config/Open_Positions.xml
 src/portfolio/pnl_alert/config/Open_Positions-*.xml
 

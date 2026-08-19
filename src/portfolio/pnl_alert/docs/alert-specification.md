@@ -26,7 +26,7 @@ The digest is sent to Telegram and Email in one combined message, sorted from hi
   threshold_pct: 0.10
   channels: [telegram, email]
   cron: "30 21 * * 1-5"
-  ibkr_xml_path: src/portfolio/pnl_alert/config/Open_Positions.xml
+  ibkr_xml_path: data/portfolio/pnl_alert/Open_Positions.xml
   include_ibkr: true
   ibkr_stk_only: true
   ```
@@ -117,7 +117,6 @@ src/portfolio/pnl_alert/
   seed_schedule.py          # one-shot inserter for the job_schedules row
   config/
     pnl_alert.yaml
-    Open_Positions.xml      # refreshed daily by flex_downloader.py
   docs/
     alert-specification.md  (this file)
   tests/
@@ -126,6 +125,10 @@ src/portfolio/pnl_alert/
     test_notifier_format.py
     test_ibkr_xml_loader.py
     test_flex_downloader.py
+
+data/portfolio/pnl_alert/
+  Open_Positions.xml        # refreshed daily by flex_downloader.py (writable path
+                             # under scheduler.service's ProtectSystem=strict)
 ```
 
 ## 5. End-to-end flow

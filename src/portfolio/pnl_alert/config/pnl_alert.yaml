@@ -17,11 +17,14 @@ cron: "30 21 * * 1-5"
 # Supports glob patterns — the lexicographically-last match is used,
 # so ISO-date filenames (Open_Positions-YYYY-MM-DD.xml) resolve to the newest file.
 # Use the fixed-name export for simplicity, or a glob to auto-pick the latest dated file.
+# Must live under data/ (or another ReadWritePaths entry) — the Flex downloader
+# refreshes this file every run, and scheduler.service's ProtectSystem=strict
+# only allows writes under logs/, data/, /share/data-cache, and results/.
 # Examples:
-#   ibkr_xml_path: src/portfolio/pnl_alert/config/Open_Positions.xml
-#   ibkr_xml_path: src/portfolio/pnl_alert/config/Open_Positions-*.xml
+#   ibkr_xml_path: data/portfolio/pnl_alert/Open_Positions.xml
+#   ibkr_xml_path: data/portfolio/pnl_alert/Open_Positions-*.xml
 # Leave empty to disable.
-ibkr_xml_path: src/portfolio/pnl_alert/config/Open_Positions.xml
+ibkr_xml_path: data/portfolio/pnl_alert/Open_Positions.xml
 
 # User ID whose email address and Telegram chat ID will receive the alert.
 recipient_id: 2

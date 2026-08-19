@@ -65,7 +65,7 @@ class ManagementConfig:
     trigger_window_minutes: int = 15
     channels: List[str] = field(default_factory=lambda: ["telegram", "email"])
     cron: str = "*/15 12-22 * * 1-5"
-    ibkr_xml_path: str = "src/portfolio/pnl_alert/config/Open_Positions.xml"
+    ibkr_xml_path: str = "data/portfolio/pnl_alert/Open_Positions.xml"
     ibkr_stk_only: bool = True
     ibkr_live_host: str = ""
     ibkr_live_port: int = DEFAULT_LIVE_PORT
@@ -142,7 +142,7 @@ def load_config(path: str | None = None) -> ManagementConfig:
         trigger_window_minutes=int(raw.get("trigger_window_minutes", 15)),
         channels=list(raw.get("channels", ["telegram", "email"])),
         cron=str(raw.get("cron", "*/15 12-22 * * 1-5")),
-        ibkr_xml_path=str(raw.get("ibkr_xml_path", "src/portfolio/pnl_alert/config/Open_Positions.xml")),
+        ibkr_xml_path=str(raw.get("ibkr_xml_path", "data/portfolio/pnl_alert/Open_Positions.xml")),
         ibkr_stk_only=bool(raw.get("ibkr_stk_only", True)),
         ibkr_live_host=str(raw.get("ibkr_live_host") or IBKR_HOST or ""),
         ibkr_live_port=int(raw.get("ibkr_live_port") or IBKR_PORT or DEFAULT_LIVE_PORT),

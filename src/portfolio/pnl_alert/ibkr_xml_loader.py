@@ -127,7 +127,7 @@ def resolve_xml_path(path_or_glob: str) -> Path:
 
     Args:
         path_or_glob: Exact file path or a glob such as
-            ``src/portfolio/pnl_alert/config/Open_Positions-*.xml``.
+            ``data/portfolio/pnl_alert/Open_Positions-*.xml``.
 
     Returns:
         Resolved :class:`pathlib.Path` to the XML file.

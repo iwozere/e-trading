@@ -233,7 +233,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
         """Load IBKR account information."""
         try:
             # Request account summary
-            account_summary = self.ib.accountSummary()
+            account_summary = await self.ib.accountSummaryAsync()
 
             # Store account values
             for item in account_summary:

@@ -43,8 +43,9 @@ Already satisfied by the root `requirements.txt`:
   env-var-only convention (never committed).
 - `Open_Positions.xml` / `Open_Positions-YYYY-MM-DD.xml` contain real
   brokerage holdings and cost basis. They live under
-  `src/portfolio/pnl_alert/config/` and are excluded from version control via
-  `.gitignore` (`Open_Positions.xml`, `Open_Positions-*.xml`).
+  `data/portfolio/pnl_alert/` — a writable path under scheduler.service's
+  `ProtectSystem=strict` — and are excluded from version control via the
+  blanket `data/` entry in `.gitignore`.
 
 ## Performance Requirements
 - Runs once a day, processing a short list (tens) of tickers. No throughput
