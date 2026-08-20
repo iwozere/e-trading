@@ -1,9 +1,14 @@
 # Sentiment Check — Requirements & Detailed Design (Rev 1)
 
-> **Superseded by [`sentiment-spec-rev2.md`](sentiment-spec-rev2.md).** The Reddit/Pushshift path
-> described below (`async_pushshift_adapter`) was deleted 2026-08-18 — Pushshift has been
-> restricted to verified Reddit moderators since May 2023, with no public or developer access.
-> Kept here for historical context only; do not implement against this revision.
+> **Superseded by [`sentiment-spec-rev2.md`](sentiment-spec-rev2.md), which is now fully
+> implemented** (Phases 1-4, 2026-08-20 — see [`Tasks.md`](Tasks.md) for the current status). The
+> Reddit/Pushshift path described below (`async_pushshift_adapter`) was deleted 2026-08-18 --
+> Pushshift has been restricted to verified Reddit moderators since May 2023, with no public or
+> developer access. Kept here for historical context only; do not implement against this
+> revision. In particular: `virality_index` and `sentiment_raw_payload` below describe the Rev 1
+> shapes -- see [`Design.md`](Design.md)/[`Requirements.md`](Requirements.md) for the current
+> (Rev 2) architecture: `retail` vs. `tech_discourse` signal classes, per-source calibration, and
+> the redefined `virality_index` (unsigned reach, not a 0..1 sentiment-weighted score).
 
 Below are two clearly separated artifacts you asked for:
 

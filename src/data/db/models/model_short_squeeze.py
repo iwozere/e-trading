@@ -15,6 +15,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    Float,
     Index,
     Integer,
     Numeric,
@@ -125,7 +126,9 @@ class DeepScanMetrics(Base):
     # daily_deep_scan.py previously computed but never persisted them.
     mentions_24h: Mapped[int | None] = mapped_column(Integer, default=0)
     mentions_growth_7d: Mapped[float | None] = mapped_column(Numeric(8, 4))
-    virality_index: Mapped[float | None] = mapped_column(Numeric(5, 4), default=0.0)
+    # FLOAT in the DB (migration 001), not NUMERIC -- unsigned reach (Σengagement /
+    # sqrt(unique_authors+1)), unbounded above since the Rev 2 redefinition (spec §2.5.5).
+    virality_index: Mapped[float | None] = mapped_column(Float, default=0.0)
     bot_pct: Mapped[float | None] = mapped_column(Numeric(4, 3), default=0.0)
     sentiment_data_quality: Mapped[dict | None] = mapped_column(JsonType())
 
@@ -160,7 +163,9 @@ class DeepScanMetrics(Base):
         CheckConstraint("tech_sentiment_24h >= -1 AND tech_sentiment_24h <= 1", name="check_tech_sentiment_24h"),
         CheckConstraint("tech_discussion_depth >= 0", name="check_tech_discussion_depth"),
         CheckConstraint("mentions_24h >= 0", name="check_mentions_positive"),
-        CheckConstraint("virality_index >= 0 AND virality_index <= 1", name="check_virality_range"),
+        # virality_index is unsigned reach (Σengagement / sqrt(unique_authors+1)), unbounded
+        # above, since the Rev 2 redefinition (sentiment-spec-rev2.md §2.5.5) -- was 0..1 pre-Rev2.
+        CheckConstraint("virality_index >= 0", name="check_virality_range"),
         CheckConstraint("bot_pct >= 0 AND bot_pct <= 1", name="check_bot_pct_range"),
     )
 
@@ -185,6 +190,7 @@ class DeepScanMetrics(Base):
             virality_index=self.virality_index if self.virality_index is not None else 0.0,
             bot_pct=self.bot_pct if self.bot_pct is not None else 0.0,
             sentiment_data_quality=self.sentiment_data_quality if self.sentiment_data_quality is not None else {},
+            raw_payload=self.raw_payload if self.raw_payload is not None else {},
             tech_sentiment_24h=self.tech_sentiment_24h,
         )
 

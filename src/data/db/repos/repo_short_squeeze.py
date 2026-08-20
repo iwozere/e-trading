@@ -8,7 +8,7 @@ Provides CRUD operations for all short squeeze related tables.
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Dict, List, Sequence
 
-from sqlalchemy import and_, delete, desc, func, select, update
+from sqlalchemy import and_, delete, desc, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -164,6 +164,34 @@ class DeepScanMetricsRepo:
                 .where(and_(DeepScanMetrics.date == scan_date, DeepScanMetrics.squeeze_score.is_not(None)))
                 .order_by(desc(DeepScanMetrics.squeeze_score))
                 .limit(limit)
+            ).scalars()
+        )
+
+    def count_raw_payload_older_than(self, retention_days: int) -> int:
+        """Count rows with a non-null raw_payload older than retention_days (dry-run helper)."""
+        cutoff = date.today() - timedelta(days=retention_days)
+        return (
+            self.session.execute(
+                select(func.count())
+                .select_from(DeepScanMetrics)
+                .where(and_(DeepScanMetrics.date < cutoff, DeepScanMetrics.raw_payload.is_not(None)))
+            ).scalar_one()
+            or 0
+        )
+
+    def purge_raw_payload_older_than(self, retention_days: int) -> int:
+        """
+        Null out raw_payload for rows older than retention_days via the DB-side
+        ``purge_old_sentiment_raw_payload`` function (migration 005). Returns rows purged.
+        """
+        result = self.session.execute(text("SELECT purge_old_sentiment_raw_payload(:retention_days)"), {"retention_days": retention_days})
+        return int(result.scalar_one())
+
+    def get_metrics_since(self, since_date: date) -> Sequence[DeepScanMetrics]:
+        """Get all metrics (all tickers) with ``date >= since_date`` -- backs coverage-report."""
+        return list(
+            self.session.execute(
+                select(DeepScanMetrics).where(DeepScanMetrics.date >= since_date).order_by(desc(DeepScanMetrics.date))
             ).scalars()
         )
 

@@ -63,6 +63,23 @@
   history" concern) -- `_get_historical_mentions_async` in `daily_deep_scan.py` is a pre-existing
   stub that always returns `None`, so growth is currently always `None` regardless of source.
   Making it source-aware needs a new per-provider mention-history table; deferred.
+- (Fixed 2026-08-20, Rev 2 Phase 4) `ss_deep_metrics.raw_payload` (JSONB) already existed in the
+  DB schema -- predates any of this sentiment work -- but nothing ever wrote to it;
+  `daily_deep_scan.py` computed `sentiment_features.raw_payload` and discarded it.
+  `coverage-report`/the 90-day retention job both need it, so `TransientMetrics` and
+  `_store_results()` now carry it through to the DB.
+- (Fixed 2026-08-20, Rev 2 Phase 4) `virality_index`'s DB check constraint (`>= 0 AND <= 1`,
+  migration 001) and `TransientMetrics.__post_init__`/`TransientMetricsCreate`'s validation still
+  assumed the pre-Rev-2 0..1 scale after Phase 3 redefined it as unbounded unsigned reach --
+  every one of these would reject real data as soon as HF-enhancement actually ran (which was
+  itself dead code until Phase 3's `"huggingface"` registration fix, so the mismatch was latent
+  until then). Widened to `>= 0` everywhere (migration 004); the ORM's `Numeric(5,4)` type
+  annotation was also wrong for years -- the real DB column is `FLOAT`, corrected to match.
+- (Fixed 2026-08-20, Rev 2 Phase 4) Sentiment calibration stats (`calibration_lookup`) were being
+  refetched from the DB once per `(ticker, provider)` pair inside the per-ticker loop, even though
+  a provider's trailing distribution doesn't vary by ticker -- for a 50-ticker batch with 2 retail
+  providers that's 100 redundant DB round-trips for data that's identical across all of them.
+  Hoisted to once per provider per batch.
 
 ## Testing Requirements
 - [ ] Unit tests for ConfigManager class

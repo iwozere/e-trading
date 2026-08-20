@@ -450,6 +450,22 @@ class AsyncHackerNewsAdapter(BaseSentimentAdapter):
             for ticker in match.tickers:
                 self._ticker_index.setdefault(ticker, []).append(item)
 
+    def get_observability_stats(self) -> Dict[str, Any]:
+        """
+        Corpus-level stats for structured logging (spec §2.10:
+        ``sentiment.hn.corpus_size``/``sentiment.hn.entity_match_rate``).
+
+        Returns ``{}`` if the corpus hasn't been built yet (no ticker was ever processed).
+        """
+        if self._corpus is None:
+            return {}
+        corpus_size = len(self._corpus)
+        matched_items: set[int] = set()
+        for items in self._ticker_index.values():
+            matched_items.update(id(item) for item in items)
+        entity_match_rate = len(matched_items) / corpus_size if corpus_size else 0.0
+        return {"corpus_size": corpus_size, "entity_match_rate": round(entity_match_rate, 4)}
+
     # ------------------------------------------------------------------
     # AsyncAdapter contract
     # ------------------------------------------------------------------

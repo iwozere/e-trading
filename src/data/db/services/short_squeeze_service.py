@@ -281,6 +281,60 @@ class ShortSqueezeService(BaseDBService):
         return self.repos.short_squeeze.sentiment_calibration.get_trailing_observations(provider, window_days)
 
     @with_uow
+    @handle_db_error
+    def get_universe_from_latest_screener_snapshot(self) -> List[str]:
+        """
+        Return the ticker universe from the most recent weekly screener run (``ss_snapshot``).
+
+        Backs ``coverage-report --universe screener_snapshot`` (spec §1.4/§2.10) -- coverage
+        should be measured against the same candidate universe the pipeline actually scans, not
+        an arbitrary ticker list.
+        """
+        latest_run_date = self.repos.short_squeeze.screener_snapshots.get_latest_run_date()
+        if latest_run_date is None:
+            return []
+        snapshots = self.repos.short_squeeze.screener_snapshots.get_snapshots_by_run_date(latest_run_date)
+        return [s.ticker for s in snapshots]
+
+    @with_uow
+    @handle_db_error
+    def get_deep_scan_metrics_since(self, since_date: date) -> List[Dict[str, Any]]:
+        """
+        Return all deep-scan metrics rows (all tickers) with ``date >= since_date`` as plain dicts.
+
+        Backs ``coverage-report``'s ``--days`` window (spec §2.10): per-provider coverage is
+        computed from each row's ``raw_payload``/``sentiment_data_quality``, not a fresh live
+        collection, so this reports on what the pipeline actually saw on its scheduled runs.
+        """
+        rows = self.repos.short_squeeze.deep_scan_metrics.get_metrics_since(since_date)
+        return [
+            {
+                "ticker": row.ticker,
+                "date": row.date,
+                "mentions_24h": row.mentions_24h,
+                "tech_mentions_24h": row.tech_mentions_24h,
+                "tech_coverage_available": row.tech_coverage_available,
+                "sentiment_data_quality": row.sentiment_data_quality or {},
+                "raw_payload": row.raw_payload or {},
+            }
+            for row in rows
+        ]
+
+    @with_uow
+    @handle_db_error
+    def count_sentiment_raw_payload_older_than(self, retention_days: int) -> int:
+        """Count ss_deep_metrics rows with a raw_payload older than retention_days (dry-run helper)."""
+        return self.repos.short_squeeze.deep_scan_metrics.count_raw_payload_older_than(retention_days)
+
+    @with_uow
+    @handle_db_error
+    def purge_sentiment_raw_payload_older_than(self, retention_days: int) -> int:
+        """Null out raw_payload for ss_deep_metrics rows older than retention_days. Returns rows purged."""
+        purged = self.repos.short_squeeze.deep_scan_metrics.purge_raw_payload_older_than(retention_days)
+        self._logger.info("Purged sentiment raw_payload on %d rows older than %d days", purged, retention_days)
+        return purged
+
+    @with_uow
     def get_candidates_for_deep_scan_tickers(self) -> List[str]:
         """Get all tickers that should be analyzed in deep scan."""
         return self.repos.short_squeeze.get_active_candidates_for_deep_scan()

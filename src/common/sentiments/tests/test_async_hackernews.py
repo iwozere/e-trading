@@ -272,6 +272,34 @@ class TestAsyncHackerNewsAdapter:
             assert msg["provider"] == "hackernews"
 
 
+    @pytest.mark.asyncio
+    async def test_observability_stats_empty_before_corpus_built(self, adapter: AsyncHackerNewsAdapter) -> None:
+        """get_observability_stats() backs sentiment.hn.corpus_size/entity_match_rate (spec §2.10)."""
+        assert adapter.get_observability_stats() == {}
+
+    @pytest.mark.asyncio
+    async def test_observability_stats_reports_corpus_size_and_match_rate(
+        self, adapter: AsyncHackerNewsAdapter
+    ) -> None:
+        matched_story = self._story(10, "Nvidia unveils new datacenter chip")
+        unmatched_story = self._story(11, "A story about gardening")
+
+        async def fake_fetch_json(path, timeout=10):
+            del timeout
+            if path == "newstories.json":
+                return [10, 11]
+            if path == "topstories.json":
+                return []
+            return {"item/10.json": matched_story, "item/11.json": unmatched_story}.get(path)
+
+        with patch.object(adapter, "_fetch_json", side_effect=fake_fetch_json):
+            await adapter.fetch_summary("NVDA")
+
+        stats = adapter.get_observability_stats()
+        assert stats["corpus_size"] == 2
+        assert stats["entity_match_rate"] == pytest.approx(0.5)
+
+
 class TestPerformanceInvariant:
     """Fan-out must be flat across batch size (spec §2.9's performance test)."""
 

@@ -742,6 +742,12 @@ class DailyDeepScan:
                 virality_index = sentiment_features.virality_index
                 bot_pct = sentiment_features.bot_pct
                 sentiment_data_quality = sentiment_features.data_quality
+                # Per-provider raw payloads (spec §1.3/§2.7) -- writes into ss_deep_metrics'
+                # existing (previously never-populated) `raw_payload` column, audited under
+                # access control and purged after 90 days by run_sentiment_retention.py. Without
+                # this, coverage-report has no historical per-provider mention data to report on
+                # (only the blended mentions_24h/tech_mentions_24h totals).
+                raw_payload = sentiment_features.raw_payload
                 # tech_discourse signal class -- None means "not covered by the entity map",
                 # never defaulted to neutral (spec §2.13). Deliberately not `or 0.0` here.
                 tech_sentiment_24h = sentiment_features.tech_sentiment_normalized
@@ -756,6 +762,7 @@ class DailyDeepScan:
                 virality_index = 0.0
                 bot_pct = 0.0
                 sentiment_data_quality = {}
+                raw_payload = {}
                 tech_sentiment_24h = None  # no batch collection means no tech_discourse data either
 
                 if sentiment_24h is not None:
@@ -786,6 +793,7 @@ class DailyDeepScan:
                 virality_index=virality_index,
                 bot_pct=bot_pct,
                 sentiment_data_quality=sentiment_data_quality,
+                raw_payload=raw_payload,
                 tech_sentiment_24h=tech_sentiment_24h,
             )
 
@@ -1025,6 +1033,10 @@ class DailyDeepScan:
                         "virality_index": sc.transient_metrics.virality_index,
                         "bot_pct": sc.transient_metrics.bot_pct,
                         "sentiment_data_quality": sc.transient_metrics.sentiment_data_quality,
+                        # Per-provider raw payloads (spec §1.3/§2.7) -- ss_deep_metrics.raw_payload
+                        # already existed but was never populated before this. Purged after 90
+                        # days by run_sentiment_retention.py.
+                        "raw_payload": sc.transient_metrics.raw_payload,
                         # tech_discourse signal class -- None means "not covered", not neutral.
                         "tech_sentiment_24h": sc.transient_metrics.tech_sentiment_24h,
                     }

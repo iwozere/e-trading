@@ -55,6 +55,9 @@ class TransientMetrics:
     virality_index: float = 0.0
     bot_pct: float = 0.0
     sentiment_data_quality: Dict[str, Any] = field(default_factory=dict)
+    # Per-provider raw sentiment payloads (spec §1.3/§2.7) -- persisted to ss_deep_metrics'
+    # `raw_payload` column, purged after 90 days by run_sentiment_retention.py.
+    raw_payload: Dict[str, Any] = field(default_factory=dict)
 
     # tech_discourse signal class (Hacker News) -- reported separately, never blended into
     # sentiment_24h above (sentiment-spec-rev2.md §2.5.6). None means "not in the tech_discourse
@@ -76,8 +79,10 @@ class TransientMetrics:
         # Validate new sentiment metrics
         if self.mentions_24h < 0:
             raise ValueError("Mentions count must be non-negative")
-        if self.virality_index < 0 or self.virality_index > 1:
-            raise ValueError("Virality index must be between 0 and 1")
+        # virality_index is unsigned reach (Σengagement / sqrt(unique_authors+1)), not a 0..1
+        # score, since the Rev 2 redefinition (sentiment-spec-rev2.md §2.5.5) -- unbounded above.
+        if self.virality_index < 0:
+            raise ValueError("Virality index must be non-negative")
         if self.bot_pct < 0 or self.bot_pct > 1:
             raise ValueError("Bot percentage must be between 0 and 1")
         if self.mentions_growth_7d is not None and self.mentions_growth_7d < -1:
@@ -182,9 +187,12 @@ class TransientMetricsCreate(BaseModel):
     # Enhanced sentiment metrics
     mentions_24h: int = Field(default=0, ge=0)
     mentions_growth_7d: float | None = Field(default=None, ge=-1)
-    virality_index: float = Field(default=0.0, ge=0, le=1)
+    # Unsigned reach (Σengagement / sqrt(unique_authors+1)), unbounded above -- not a 0..1 score
+    # since the Rev 2 redefinition (sentiment-spec-rev2.md §2.5.5).
+    virality_index: float = Field(default=0.0, ge=0)
     bot_pct: float = Field(default=0.0, ge=0, le=1)
     sentiment_data_quality: Dict[str, Any] = Field(default_factory=dict)
+    raw_payload: Dict[str, Any] = Field(default_factory=dict)
 
     # tech_discourse signal class -- reported separately, never blended into sentiment_24h.
     # None means "not in the tech_discourse entity map", not neutral (spec §2.13).

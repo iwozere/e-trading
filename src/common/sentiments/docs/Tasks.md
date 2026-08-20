@@ -51,12 +51,40 @@
   to make source-aware yet; doing so needs its own schema (a `ss_sentiment_provider_history` table)
   and is deferred rather than bolted on here.
 
+- [x] **Rev 2 Phase 4** (2026-08-20): `coverage-report` CLI
+  (`p04_short_squeeze/scripts/coverage_report.py`) reads stored `ss_deep_metrics.raw_payload`
+  history (not a fresh live collection) and reports per-provider `ticker_coverage_pct`, median
+  `mentions_24h`, zero-mention and below-`min_mentions` counts, against either the latest weekly
+  screener universe or an explicit ticker list; structured observability log lines
+  (`sentiment.coverage.tickers_with_zero_mentions`, `sentiment.blend.providers_available`,
+  `sentiment.calibration.status{provider}`, `sentiment.hn.corpus_size`/`entity_match_rate`,
+  `sentiment.bluesky.auth_refresh_count`/`pagination_fallback_count`) emitted once per
+  `collect_sentiment_batch` call, matching this repo's "no Prometheus, structured logs instead"
+  convention; §2.1.1 StockTwits verification (see `Requirements.md`) -- live and functional,
+  unauthenticated, behind Cloudflare bot protection the adapter already clears, but with no
+  stable authenticated-access path if it's ever tightened further; 90-day `raw_payload` retention
+  (`purge_old_sentiment_raw_payload()` Postgres function + `run_sentiment_retention.py`, nulls the
+  column rather than deleting rows so scalar metrics stay available for backtesting); docs pass
+  across `README.md`/`Design.md`/`Requirements.md` retiring stale Rev 1-only language.
+  Fixed alongside this phase: `ss_deep_metrics.raw_payload` already existed in the DB (predates
+  this migration entirely) but `daily_deep_scan.py` never wrote to it -- there was no historical
+  per-provider data for `coverage-report` to read until this was wired; `virality_index`'s Rev 2
+  redefinition (unsigned reach, Phase 3) made its old `[0,1]` DB check constraint and
+  `TransientMetrics.__post_init__` validation reject real data whenever HF-enhancement actually
+  ran (only reachable after Phase 3's HF-registration fix) -- both widened to `>= 0`, unbounded
+  above (migration 004); redundant per-(ticker, provider) calibration DB lookups hoisted to
+  once-per-provider-per-batch while wiring `sentiment.calibration.status` logging. 10 new tests
+  (NVDA/GME end-to-end integration, HN fan-out-flat-across-batch-size performance invariant,
+  HN corpus-size/entity-match-rate observability stats).
+
 ### 🔄 IN PROGRESS
-- [ ] Rev 2 Phase 4: `coverage-report` CLI, structured-log observability metrics, §2.1.1 Stocktwits
-  API-terms verification, 90-day `sentiment_raw_payload` retention job, docs pass
 - [ ] Performance optimization for large batches
 - [ ] Enhanced bot detection algorithms
 - [ ] Sentiment trend analysis over time
+- [ ] `test_unified_sentiment.py` (pre-existing, predates Rev 2) is fully broken independent of
+  this work -- its `MagicMock()`-based adapter manager makes `await manager.start()` raise
+  `TypeError: object MagicMock can't be used in 'await' expression`; needs `AsyncMock()` instead
+  (see `test_sentiment_integration.py` for the working pattern). Not fixed as part of Rev 2.
 
 ### 🚀 PLANNED ENHANCEMENTS
 - [ ] Twitter API integration (when available)

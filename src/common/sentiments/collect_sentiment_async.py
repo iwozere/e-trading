@@ -642,6 +642,39 @@ async def collect_sentiment_batch(
         weights = config["weights"]
         heuristic_config = config["heuristic"]
 
+        # Batch-level observability accumulators (spec §2.10) -- populated synchronously inside
+        # process_one_ticker (safe under asyncio's cooperative scheduling: no `await` splits the
+        # read-modify-write), logged once after the whole batch completes rather than per ticker.
+        provider_available_tickers: Dict[str, int] = {}
+        provider_zero_mentions: Dict[str, int] = {}
+
+        # Precompute calibration stats once per provider, not once per (ticker, provider) --
+        # calibration history is provider-level, not ticker-level, so this also gives a clean
+        # point to log sentiment.calibration.status{provider} once for the whole batch instead of
+        # once per ticker (spec §2.10).
+        calibration_config = config.get("calibration", {})
+        calibration_enabled = calibration_config.get("enabled", True) and calibration_lookup is not None
+        min_calibration_obs = calibration_config.get("min_observations", 200)
+        calibration_stats_by_provider: Dict[str, CalibrationStats | None] = {}
+        if calibration_enabled:
+            retail_providers_for_calibration = [
+                p
+                for p, enabled in config["providers"].items()
+                if enabled and p != "hf_enabled" and manager.get_signal_class(p) == "retail"
+            ]
+            for provider in retail_providers_for_calibration:
+                try:
+                    stats = await _call_lookup(calibration_lookup, provider)
+                except Exception as e:
+                    _logger.debug("Calibration lookup failed for %s: %s", provider, e)
+                    stats = None
+                calibration_stats_by_provider[provider] = stats
+                _logger.info(
+                    "sentiment.calibration.status provider=%s status=%s",
+                    provider,
+                    calibration_status(stats, min_calibration_obs),
+                )
+
         # Concurrency semaphore
         sem = asyncio.Semaphore(concurrency)
 
@@ -710,6 +743,12 @@ async def collect_sentiment_batch(
                                 data_quality[provider] = f"error: {summary['error']}"
                             else:
                                 data_quality[provider] = "ok"
+                                # sentiment.coverage.tickers_with_zero_mentions{provider} (spec
+                                # §2.10) -- "watch this one first". Accumulated per-batch, logged
+                                # once after all tickers are processed.
+                                provider_available_tickers[provider] = provider_available_tickers.get(provider, 0) + 1
+                                if summary.get("mentions", 0) == 0:
+                                    provider_zero_mentions[provider] = provider_zero_mentions.get(provider, 0) + 1
                         else:
                             data_quality[provider] = "missing"
 
@@ -728,10 +767,6 @@ async def collect_sentiment_batch(
                     unique_authors = 0
                     weighted_sentiment = 0.0
                     total_weight = 0.0
-
-                    calibration_config = config.get("calibration", {})
-                    calibration_enabled = calibration_config.get("enabled", True) and calibration_lookup is not None
-                    min_calibration_obs = calibration_config.get("min_observations", 200)
                     calibration_insufficient = False
 
                     for provider, summary in retail_summaries.items():
@@ -745,15 +780,12 @@ async def collect_sentiment_batch(
                         # its own trailing distribution before blending (spec §2.5.6) -- raw
                         # scores aren't comparable across platforms (Bluesky finance chatter
                         # skews promotional-positive), so blending them directly would import
-                        # that platform bias straight into sentiment_24h.
+                        # that platform bias straight into sentiment_24h. Stats are precomputed
+                        # once per provider for the whole batch, not refetched per ticker.
                         raw_sentiment = summary.get("sentiment_score", 0.0)
                         sentiment = raw_sentiment
                         if calibration_enabled:
-                            try:
-                                stats = await _call_lookup(calibration_lookup, provider)
-                            except Exception as e:
-                                _logger.debug("Calibration lookup failed for %s: %s", provider, e)
-                                stats = None
+                            stats = calibration_stats_by_provider.get(provider)
                             if calibration_status(stats, min_calibration_obs) == "insufficient_history":
                                 calibration_insufficient = True
                             sentiment = calibrate_score(raw_sentiment, stats, min_calibration_obs)
@@ -1020,6 +1052,38 @@ async def collect_sentiment_batch(
                 output[ticker.upper()] = None
             else:
                 output[ticker.upper()] = result
+
+        # Batch-level observability summary (spec §2.10), logged once per collect_sentiment_batch
+        # call -- mirrors how daily_deep_scan.py already logs its own batch summaries. No
+        # Prometheus in this repo; these are structured log lines, not metrics-server counters.
+        for provider in sorted(set(provider_available_tickers) | set(provider_zero_mentions)):
+            _logger.info(
+                "sentiment.coverage.tickers_with_zero_mentions provider=%s zero=%d available=%d batch_size=%d",
+                provider,
+                provider_zero_mentions.get(provider, 0),
+                provider_available_tickers.get(provider, 0),
+                len(tickers),
+            )
+        _logger.info("sentiment.blend.providers_available providers=%s", sorted(provider_available_tickers.keys()))
+
+        hn_adapter = manager._adapters.get("hackernews")
+        get_hn_stats = getattr(hn_adapter, "get_observability_stats", None) if hn_adapter is not None else None
+        if get_hn_stats is not None:
+            hn_stats = get_hn_stats()
+            if hn_stats:
+                _logger.info(
+                    "sentiment.hn.corpus_size=%d sentiment.hn.entity_match_rate=%.4f",
+                    hn_stats["corpus_size"],
+                    hn_stats["entity_match_rate"],
+                )
+
+        bluesky_adapter = manager._adapters.get("bluesky")
+        if bluesky_adapter is not None:
+            _logger.info(
+                "sentiment.bluesky.auth_refresh_count=%d sentiment.bluesky.pagination_fallback_count=%d",
+                getattr(bluesky_adapter, "auth_refresh_count", 0),
+                getattr(bluesky_adapter, "pagination_fallback_count", 0),
+            )
 
         # Format output based on requested format
         if output_format == "dataclass":
