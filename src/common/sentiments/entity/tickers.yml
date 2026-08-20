@@ -1,0 +1,531 @@
+# src/common/sentiments/entity/tickers.yml
+#
+# Curated ticker <-> company/product name entity map. Seeded with the largest listed tech
+# companies (see sentiment-spec-rev2.md §2.4: "Seed the map with the 100-150 largest listed
+# tech companies. Accept that coverage stops there.").
+#
+# `entities`: used by the Hacker News adapter's name-based matching. HN text never contains a
+#   ticker symbol -- only `names`/`products` are matched, whole-word and case-insensitive.
+# `ambiguous_tickers`: a *different*, flat list of cashtags that collide with common English
+#   words (spec §2.3). Cashtag-search adapters (Bluesky) require the literal `$` prefix for
+#   these and must not fall back to bare-name matching.
+#
+# Adding a ticker: keep `names`/`products` specific enough to avoid false positives in
+# general-purpose text (see COIN below for why "coin" alone is excluded).
+
+entities:
+  NVDA:
+    names: ["nvidia"]
+    products: ["cuda", "h100", "b200", "geforce", "rtx", "grace hopper", "blackwell"]
+    ambiguous: false
+  AMD:
+    names: ["amd", "advanced micro devices"]
+    products: ["ryzen", "epyc", "radeon", "instinct mi300"]
+    ambiguous: false
+  INTC:
+    names: ["intel"]
+    products: ["core i9", "xeon", "arc gpu", "foveros"]
+    ambiguous: false
+  TSM:
+    names: ["tsmc", "taiwan semiconductor"]
+    products: []
+    ambiguous: false
+  AVGO:
+    names: ["broadcom"]
+    products: []
+    ambiguous: false
+  QCOM:
+    names: ["qualcomm"]
+    products: ["snapdragon"]
+    ambiguous: false
+  MU:
+    names: ["micron"]
+    products: []
+    ambiguous: false
+  ARM:
+    names: ["arm holdings"]
+    products: []
+    ambiguous: true # "arm" is far too generic on its own
+  ASML:
+    names: ["asml"]
+    products: ["euv lithography"]
+    ambiguous: false
+  TXN:
+    names: ["texas instruments"]
+    products: []
+    ambiguous: false
+  AAPL:
+    names: ["apple"]
+    products: ["iphone", "macbook", "ipad", "visionpro", "ios", "macos", "apple silicon"]
+    ambiguous: false
+  MSFT:
+    names: ["microsoft"]
+    products: ["windows", "azure", "copilot", "office 365", "xbox", "teams", "github"]
+    ambiguous: false
+  GOOGL:
+    names: ["google", "alphabet"]
+    products: ["gemini", "android", "chrome", "google cloud", "waymo", "tpu"]
+    ambiguous: false
+  AMZN:
+    names: ["amazon"]
+    products: ["aws", "alexa", "kindle", "prime video"]
+    ambiguous: false
+  META:
+    names: ["meta platforms", "facebook", "instagram"]
+    products: ["llama", "quest headset", "threads", "whatsapp"]
+    ambiguous: false
+  NFLX:
+    names: ["netflix"]
+    products: []
+    ambiguous: false
+  TSLA:
+    names: ["tesla"]
+    products: ["cybertruck", "model 3", "model y", "full self-driving", "optimus robot", "gigafactory"]
+    ambiguous: false
+  ORCL:
+    names: ["oracle"]
+    products: ["oci", "netsuite", "java"]
+    ambiguous: false
+  CRM:
+    names: ["salesforce"]
+    products: ["slack", "agentforce", "tableau"]
+    ambiguous: false
+  ADBE:
+    names: ["adobe"]
+    products: ["photoshop", "acrobat", "premiere pro", "firefly"]
+    ambiguous: false
+  SAP:
+    names: ["sap"]
+    products: []
+    ambiguous: false
+  IBM:
+    names: ["ibm", "international business machines"]
+    products: ["watsonx", "red hat"]
+    ambiguous: false
+  CSCO:
+    names: ["cisco"]
+    products: ["webex"]
+    ambiguous: false
+  NOW:
+    names: ["servicenow"]
+    products: []
+    ambiguous: true # bare "now" is a common word, handled via the ambiguous_tickers guard too
+  INTU:
+    names: ["intuit"]
+    products: ["turbotax", "quickbooks", "credit karma"]
+    ambiguous: false
+  SNOW:
+    names: ["snowflake"]
+    products: []
+    ambiguous: true # "snow" is common; require the full company name
+  PLTR:
+    names: ["palantir"]
+    products: ["foundry", "gotham", "aip"]
+    ambiguous: false
+  PANW:
+    names: ["palo alto networks"]
+    products: ["cortex xdr"]
+    ambiguous: false
+  CRWD:
+    names: ["crowdstrike"]
+    products: ["falcon platform"]
+    ambiguous: false
+  FTNT:
+    names: ["fortinet"]
+    products: []
+    ambiguous: false
+  ZS:
+    names: ["zscaler"]
+    products: []
+    ambiguous: false
+  DDOG:
+    names: ["datadog"]
+    products: []
+    ambiguous: false
+  NET:
+    names: ["cloudflare"]
+    products: []
+    ambiguous: false
+  MDB:
+    names: ["mongodb"]
+    products: []
+    ambiguous: false
+  TEAM:
+    names: ["atlassian"]
+    products: ["jira", "confluence", "trello"]
+    ambiguous: false
+  WDAY:
+    names: ["workday"]
+    products: []
+    ambiguous: false
+  SHOP:
+    names: ["shopify"]
+    products: []
+    ambiguous: false
+  UBER:
+    names: ["uber"]
+    products: []
+    ambiguous: false
+  LYFT:
+    names: ["lyft"]
+    products: []
+    ambiguous: false
+  ABNB:
+    names: ["airbnb"]
+    products: []
+    ambiguous: false
+  DASH:
+    names: ["doordash"]
+    products: []
+    ambiguous: false
+  BKNG:
+    names: ["booking holdings", "booking.com"]
+    products: []
+    ambiguous: false
+  SPOT:
+    names: ["spotify"]
+    products: []
+    ambiguous: false
+  PYPL:
+    names: ["paypal"]
+    products: ["venmo"]
+    ambiguous: false
+  SQ:
+    names: ["block inc", "square"]
+    products: ["cash app", "square terminal"]
+    ambiguous: true # "square" the common word requires the disambiguated "block inc"/"square" pairing
+  COIN:
+    names: ["coinbase"]
+    products: ["base l2"]
+    ambiguous: true # "coin" alone is far too generic -- require full name
+  HOOD:
+    names: ["robinhood"]
+    products: []
+    ambiguous: false
+  AFRM:
+    names: ["affirm"]
+    products: []
+    ambiguous: false
+  SOFI:
+    names: ["sofi technologies"]
+    products: []
+    ambiguous: false
+  V:
+    names: ["visa inc"]
+    products: []
+    ambiguous: true # bare "visa" collides with the travel document; require "visa inc"
+  MA:
+    names: ["mastercard"]
+    products: []
+    ambiguous: false
+  ADYEY:
+    names: ["adyen"]
+    products: []
+    ambiguous: false
+  MSTR:
+    names: ["microstrategy", "strategy inc"]
+    products: []
+    ambiguous: false
+  IBKR:
+    names: ["interactive brokers"]
+    products: []
+    ambiguous: false
+  RBLX:
+    names: ["roblox"]
+    products: []
+    ambiguous: false
+  U:
+    names: ["unity software", "unity technologies"]
+    products: ["unity engine"]
+    ambiguous: true # bare "unity" is a common word; require the software/technologies suffix
+  EA:
+    names: ["electronic arts"]
+    products: []
+    ambiguous: false
+  TTWO:
+    names: ["take-two interactive"]
+    products: ["gta", "grand theft auto"]
+    ambiguous: false
+  RDDT:
+    names: ["reddit inc"]
+    products: []
+    ambiguous: false
+  PINS:
+    names: ["pinterest"]
+    products: []
+    ambiguous: false
+  SNAP:
+    names: ["snap inc", "snapchat"]
+    products: []
+    ambiguous: false
+  ZM:
+    names: ["zoom video", "zoom communications"]
+    products: []
+    ambiguous: false
+  DOCU:
+    names: ["docusign"]
+    products: []
+    ambiguous: false
+  TWLO:
+    names: ["twilio"]
+    products: []
+    ambiguous: false
+  OKTA:
+    names: ["okta inc"]
+    products: []
+    ambiguous: false
+  DELL:
+    names: ["dell technologies"]
+    products: []
+    ambiguous: false
+  HPQ:
+    names: ["hp inc"]
+    products: []
+    ambiguous: false
+  HPE:
+    names: ["hewlett packard enterprise"]
+    products: []
+    ambiguous: false
+  NTAP:
+    names: ["netapp"]
+    products: []
+    ambiguous: false
+  WDC:
+    names: ["western digital"]
+    products: []
+    ambiguous: false
+  STX:
+    names: ["seagate"]
+    products: []
+    ambiguous: false
+  LRCX:
+    names: ["lam research"]
+    products: []
+    ambiguous: false
+  KLAC:
+    names: ["kla corp", "kla-tencor"]
+    products: []
+    ambiguous: false
+  AMAT:
+    names: ["applied materials"]
+    products: []
+    ambiguous: false
+  "ON": # quoted -- YAML 1.1 parses the bare word "on" as a boolean True
+    names: ["onsemi", "on semiconductor"]
+    products: []
+    ambiguous: true # bare "on" is one of the most common words in English
+  MRVL:
+    names: ["marvell technology"]
+    products: []
+    ambiguous: false
+  SWKS:
+    names: ["skyworks solutions"]
+    products: []
+    ambiguous: false
+  MPWR:
+    names: ["monolithic power systems"]
+    products: []
+    ambiguous: false
+  ANET:
+    names: ["arista networks"]
+    products: []
+    ambiguous: false
+  JNPR:
+    names: ["juniper networks"]
+    products: []
+    ambiguous: false
+  FFIV:
+    names: ["f5 inc", "f5 networks"]
+    products: []
+    ambiguous: false
+  AKAM:
+    names: ["akamai"]
+    products: []
+    ambiguous: false
+  VRSN:
+    names: ["verisign"]
+    products: []
+    ambiguous: false
+  GDDY:
+    names: ["godaddy"]
+    products: []
+    ambiguous: false
+  WIX:
+    names: ["wix.com"]
+    products: []
+    ambiguous: false
+  BILL:
+    names: ["bill.com"]
+    products: []
+    ambiguous: false
+  HUBS:
+    names: ["hubspot"]
+    products: []
+    ambiguous: false
+  ZI:
+    names: ["zoominfo"]
+    products: []
+    ambiguous: false
+  APP:
+    names: ["applovin"]
+    products: []
+    ambiguous: false
+  TTD:
+    names: ["the trade desk"]
+    products: []
+    ambiguous: false
+  ROKU:
+    names: ["roku"]
+    products: []
+    ambiguous: false
+  IOT:
+    names: ["samsara inc"]
+    products: []
+    ambiguous: true # bare "iot" collides with the generic term "internet of things"
+  S:
+    names: ["sentinelone"]
+    products: []
+    ambiguous: true # single-letter ticker; bare "s" is meaningless, require full company name
+  CFLT:
+    names: ["confluent inc"]
+    products: ["apache kafka"]
+    ambiguous: false
+  ESTC:
+    names: ["elastic nv", "elasticsearch"]
+    products: []
+    ambiguous: false
+  GTLB:
+    names: ["gitlab"]
+    products: []
+    ambiguous: false
+  PATH:
+    names: ["uipath"]
+    products: []
+    ambiguous: false
+  AI:
+    names: ["c3.ai"]
+    products: []
+    ambiguous: true # bare "ai" is far too generic to ever match on its own
+  SMCI:
+    names: ["super micro computer", "supermicro"]
+    products: []
+    ambiguous: false
+  GRAB:
+    names: ["grab holdings"]
+    products: []
+    ambiguous: false
+  SE:
+    names: ["sea limited"]
+    products: ["shopee", "garena"]
+    ambiguous: true # bare "se" is a two-letter word/abbreviation
+  MELI:
+    names: ["mercadolibre"]
+    products: []
+    ambiguous: false
+  BABA:
+    names: ["alibaba"]
+    products: []
+    ambiguous: false
+  JD:
+    names: ["jd.com"]
+    products: []
+    ambiguous: true # bare "jd" collides with initials; require the ".com" form in source text
+  PDD:
+    names: ["pinduoduo", "pdd holdings", "temu"]
+    products: []
+    ambiguous: false
+  BIDU:
+    names: ["baidu"]
+    products: []
+    ambiguous: false
+  NTES:
+    names: ["netease"]
+    products: []
+    ambiguous: false
+  SONY:
+    names: ["sony"]
+    products: ["playstation"]
+    ambiguous: false
+  SSNLF:
+    names: ["samsung"]
+    products: ["galaxy"]
+    ambiguous: false
+  ASX:
+    names: ["ase technology"]
+    products: []
+    ambiguous: false
+  CDNS:
+    names: ["cadence design systems"]
+    products: []
+    ambiguous: false
+  SNPS:
+    names: ["synopsys"]
+    products: []
+    ambiguous: false
+  ANSS:
+    names: ["ansys"]
+    products: []
+    ambiguous: false
+  FICO:
+    names: ["fair isaac", "fico"]
+    products: []
+    ambiguous: false
+  PAYC:
+    names: ["paycom"]
+    products: []
+    ambiguous: false
+  PAYX:
+    names: ["paychex"]
+    products: []
+    ambiguous: false
+  ADP:
+    names: ["automatic data processing"]
+    products: []
+    ambiguous: false
+  GEN:
+    names: ["gen digital", "norton", "lifelock"]
+    products: []
+    ambiguous: false
+  NTNX:
+    names: ["nutanix"]
+    products: []
+    ambiguous: false
+  QLYS:
+    names: ["qualys"]
+    products: []
+    ambiguous: false
+  TENB:
+    names: ["tenable"]
+    products: []
+    ambiguous: false
+  RPD:
+    names: ["rapid7"]
+    products: []
+    ambiguous: false
+  VRNS:
+    names: ["varonis"]
+    products: []
+    ambiguous: false
+  CYBR:
+    names: ["cyberark"]
+    products: []
+    ambiguous: false
+
+# Cashtags that collide with common English words. Cashtag-search adapters (Bluesky) must
+# require the literal "$" prefix for these and never fall back to bare-word matching (spec §2.3).
+ambiguous_tickers:
+  - ALL
+  - IT
+  - "ON" # quoted -- YAML 1.1 parses the bare word "on" as a boolean True
+  - NOW
+  - GOOD
+  - LOVE
+  - CAR
+  - KEY
+  - REAL
+  - OPEN
+  - PLAY
+  - WORK
+  - FAST
+  - SO
+  - ARE

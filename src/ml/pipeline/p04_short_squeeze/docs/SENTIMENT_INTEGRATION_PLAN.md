@@ -681,7 +681,7 @@ sentiment_config:
     stocktwits: true
     reddit_pushshift: true
     news: true
-    google_trends: false  # Optional, conservative rate limit
+    trends: false  # Google Trends -- optional, conservative rate limit (adapter registry name, not "google_trends")
     twitter: false         # Requires API access
     discord: false         # Requires channel access
     hf_enabled: false      # ML enhancement (CPU intensive)
@@ -697,7 +697,7 @@ sentiment_config:
     stocktwits: 0.4        # High quality, trading-focused
     reddit: 0.3            # Good coverage, some noise
     news: 0.2              # Credible but lagging
-    google_trends: 0.1     # Supplementary
+    trends: 0.1            # Supplementary
     heuristic_vs_hf: 0.5   # 50/50 if HF enabled
 
   # Quality thresholds
@@ -828,7 +828,7 @@ class SentimentConfig:
                 'stocktwits': 0.4,
                 'reddit': 0.3,
                 'news': 0.2,
-                'google_trends': 0.1
+                'trends': 0.1
             }
 ```
 

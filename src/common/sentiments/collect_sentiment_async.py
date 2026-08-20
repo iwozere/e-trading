@@ -28,6 +28,11 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Awaitable, Callable, Dict, List, Union, cast
 
+from src.common.sentiments.processing.calibration import (
+    CalibrationStats,
+    calibrate_score,
+    calibration_status,
+)
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -50,12 +55,22 @@ class SentimentFeatures:
     unique_authors_24h: int
     mentions_growth_7d: float | None
     positive_ratio_24h: float | None
-    sentiment_score_24h: float  # -1..+1
-    sentiment_normalized: float  # 0..1 mapped for scoring
+    sentiment_score_24h: float  # -1..+1, retail signal class only
+    sentiment_normalized: float  # 0..1 mapped for scoring, retail signal class only
     virality_index: float
     bot_pct: float  # 0..1
     data_quality: Dict[str, str]  # provider -> 'ok'|'partial'|'missing'|'hf_disabled'|'hf_failed'
     raw_payload: Dict[str, Any]  # raw provider payloads for audit
+
+    # tech_discourse signal class (Hacker News) -- reported separately, never blended into the
+    # retail fields above (sentiment-spec-rev2.md §2.5.6). tech_coverage_available=False means
+    # the ticker isn't in the entity map at all; the other tech_* fields are then None, not a
+    # fabricated neutral reading -- distinct from tech_coverage_available=True with 0 mentions.
+    tech_mentions_24h: int | None = None
+    tech_sentiment_score_24h: float | None = None  # -1..+1
+    tech_sentiment_normalized: float | None = None  # 0..1
+    tech_discussion_depth: float | None = None  # mean comments per matched story
+    tech_coverage_available: bool | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary format."""
@@ -149,12 +164,29 @@ DEFAULT_CONFIG = {
         "twitter": False,
         "finnhub": True,
         "apewisdom": True,
+        "hackernews": True,  # tech_discourse signal class -- no auth required
+        # Gated off until BLUESKY_HANDLE/BLUESKY_APP_PASSWORD are configured (spec §2.3).
+        "bluesky": False,
         "hf_enabled": False,
     },
     "lookback_hours": 24,
     "min_mentions_for_hf": 20,
     "min_mentions_for_confident_signal": 5,
-    "hf": {"model_name": "cardiffnlp/twitter-roberta-base-sentiment", "device": -1, "max_workers": 1},
+    "hf": {
+        "model_name": "cardiffnlp/twitter-roberta-base-sentiment",  # back-compat alias for models.retail
+        "models": {
+            "retail": "cardiffnlp/twitter-roberta-base-sentiment",
+            "tech_discourse": "distilbert-base-uncased-finetuned-sst-2-english",
+        },
+        "long_text_strategy": "truncate",  # 'truncate' | 'chunk_mean' | 'chunk_max' -- spec §2.5.4
+        "device": -1,
+        "max_workers": 1,
+    },
+    "calibration": {
+        "enabled": True,
+        "window_days": 30,
+        "min_observations": 200,
+    },
     "batching": {"concurrency": 8, "rate_limit_delay_sec": 0.3},
     "weights": {
         "stocktwits": 0.2,
@@ -165,7 +197,27 @@ DEFAULT_CONFIG = {
         "discord": 0.1,
         "twitter": 0.1,
         "apewisdom": 0.2,
+        # Inert while providers.bluesky is False. Renormalized alongside the other retail
+        # weights once enabled -- set deliberately, not adopted from the spec's minimal example.
+        "bluesky": 0.0,
+        # hackernews is intentionally absent: it is signal_class="tech_discourse" and is never
+        # blended into the retail score regardless of weight (spec §2.5.6) -- routed out in
+        # collect_sentiment_batch by adapter.signal_class, not by this weights dict.
         "heuristic_vs_hf": 0.5,
+    },
+    "hackernews": {
+        "corpus_lookback_hours": 48,
+        "max_depth": 4,
+        "max_items_per_thread": 300,
+        "rate_limit_rps": 10.0,
+        "hn_corpus_ttl_seconds": 1800,
+        "entity_map_path": None,
+    },
+    "bluesky": {
+        "lang_filter": "en",
+        "max_posts_per_ticker": 200,
+        "search_terms": ["cashtag", "company_name"],
+        "entity_map_path": None,
     },
     "heuristic": {
         "positive_tokens": ["moon", "🚀", "diamond", "buy", "long", "hold", "to the moon", "rocket"],
@@ -327,6 +379,26 @@ def message_weight(engagement: float, engagement_weight_formula: str = "sqrt") -
     return max(1.0, engagement)
 
 
+async def _call_lookup(fn: Callable[[str], Any] | None, arg: str) -> Any:
+    """
+    Call a caller-injected lookup callback (``history_lookup`` or ``calibration_lookup``),
+    transparently supporting both sync and async callables without blocking the event loop.
+
+    Args:
+        fn: The lookup callable, or ``None`` (returns ``None`` immediately).
+        arg: The single positional argument to pass (ticker or provider name).
+
+    Returns:
+        The callback's resolved return value, or ``None`` if ``fn`` is ``None``.
+    """
+    if fn is None:
+        return None
+    if inspect.iscoroutinefunction(fn):
+        return await fn(arg)
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, fn, arg)
+
+
 def combine_scores(heuristic: float, hf: float | None, hf_weight: float) -> float:
     """
     Combine heuristic and HuggingFace sentiment scores.
@@ -363,17 +435,78 @@ def _initialize_adapters(manager, config: Dict[str, Any]) -> None:
                     "rate_limit_delay": config["batching"]["rate_limit_delay_sec"],
                 }
 
-                # Special handling for HuggingFace
-                if provider == "huggingface":
+                # Special handling for Hacker News -- shared-corpus knobs, not part of the
+                # generic batching config.
+                if provider == "hackernews":
+                    hn_config = config.get("hackernews", {})
                     adapter_config.update(
                         {
-                            "model_name": config["hf"]["model_name"],
-                            "device": config["hf"]["device"],
-                            "max_workers": config["hf"]["max_workers"],
+                            "corpus_lookback_hours": hn_config.get("corpus_lookback_hours", 48),
+                            "max_depth": hn_config.get("max_depth", 4),
+                            "max_items_per_thread": hn_config.get("max_items_per_thread", 300),
+                            "rate_limit_rps": hn_config.get("rate_limit_rps", 10.0),
+                            "hn_corpus_ttl_seconds": hn_config.get("hn_corpus_ttl_seconds", 1800),
+                            "entity_map_path": hn_config.get("entity_map_path"),
+                        }
+                    )
+
+                # Special handling for Bluesky -- auth/search knobs, not part of the generic
+                # batching config. handle/app_password default to None here so the adapter falls
+                # back to config.donotshare.donotshare.BLUESKY_HANDLE/BLUESKY_APP_PASSWORD itself.
+                if provider == "bluesky":
+                    bsky_config = config.get("bluesky", {})
+                    adapter_config.update(
+                        {
+                            "lang_filter": bsky_config.get("lang_filter", "en"),
+                            "max_posts_per_ticker": bsky_config.get("max_posts_per_ticker", 200),
+                            "search_terms": tuple(bsky_config.get("search_terms", ["cashtag", "company_name"])),
+                            "entity_map_path": bsky_config.get("entity_map_path"),
                         }
                     )
 
                 manager.add_adapter(provider, adapter_config)
+
+        # HuggingFace enhancement -- gated on hf_enabled, not part of the provider loop above:
+        # it enhances messages already fetched from retail/tech_discourse providers rather than
+        # being a message source itself. (This used to be special-cased *inside* the provider
+        # loop keyed on a "huggingface" entry that never existed in config["providers"], so the
+        # adapter was never actually added and the whole enhancement path was silently dead
+        # whenever hf_enabled=True -- fixed here while wiring per-source model routing.)
+        if config["providers"].get("hf_enabled", False):
+            hf_config = config.get("hf", {})
+            models = hf_config.get("models", {})
+            long_text_strategy = hf_config.get("long_text_strategy", "truncate")
+            device = hf_config.get("device", -1)
+            max_workers = hf_config.get("max_workers", 1)
+
+            # Per-source model routing (spec §2.5.4): twitter-roberta is tuned for short informal
+            # posts and degrades on Hacker News' long-form technical prose.
+            retail_model = models.get("retail") or hf_config.get(
+                "model_name", "cardiffnlp/twitter-roberta-base-sentiment"
+            )
+            manager.add_adapter(
+                "huggingface",
+                {
+                    "model_name": retail_model,
+                    "device": device,
+                    "max_workers": max_workers,
+                    "long_text_strategy": long_text_strategy,
+                },
+            )
+
+            # Only loaded when Hacker News is actually enabled -- avoids paying for a second
+            # heavy model when tech_discourse isn't being collected at all.
+            if config["providers"].get("hackernews", False):
+                tech_model = models.get("tech_discourse", "distilbert-base-uncased-finetuned-sst-2-english")
+                manager.add_adapter(
+                    "huggingface_tech",
+                    {
+                        "model_name": tech_model,
+                        "device": device,
+                        "max_workers": max_workers,
+                        "long_text_strategy": long_text_strategy,
+                    },
+                )
 
     except Exception as e:
         _logger.warning("Could not initialize some adapters: %s", e)
@@ -413,6 +546,9 @@ async def collect_sentiment_batch(
     lookback_hours: int | None = None,
     config: Dict[str, Any] | None = None,
     history_lookup: Callable[[str], float | None] | Callable[[str], Awaitable[float | None]] | None = None,
+    calibration_lookup: Callable[[str], "CalibrationStats | None"]
+    | Callable[[str], Awaitable["CalibrationStats | None"]]
+    | None = None,
     output_format: str = "dataclass",
 ) -> Union[Dict[str, SentimentFeatures | None], Dict[str, Dict[str, Any] | None], str]:
     """
@@ -426,6 +562,13 @@ async def collect_sentiment_batch(
         lookback_hours: Hours to look back for data (default: from config)
         config: Configuration dictionary (default: get_default_config())
         history_lookup: Optional function to get historical mention averages for growth calculation
+        calibration_lookup: Optional function, keyed by provider name, returning that provider's
+            pooled trailing-window ``CalibrationStats`` (or ``None`` if there's no history yet).
+            Mirrors ``history_lookup``'s injection pattern so this module stays DB-agnostic --
+            callers (e.g. ``daily_deep_scan.py``) own persistence of the trailing distribution in
+            ``ss_sentiment_calibration`` and inject a read of it here. When omitted, retail scores
+            are blended raw (spec §2.5.6's calibration step is skipped entirely, not silently
+            no-op'd -- ``data_quality["calibration"]`` is left out of the output in that case).
         output_format: Output format - "dataclass", "dict", or "json"
 
     Returns:
@@ -572,54 +715,122 @@ async def collect_sentiment_batch(
 
                     raw_payload.update(summaries)
 
-                    # Aggregate basic metrics
+                    # Split providers by signal_class -- retail and tech_discourse are never
+                    # blended into the same score (spec §2.5.6). Routing is by adapter class,
+                    # never by adapter name (spec §2.2's invariant).
+                    retail_summaries = {p: s for p, s in summaries.items() if manager.get_signal_class(p) == "retail"}
+                    tech_summaries = {
+                        p: s for p, s in summaries.items() if manager.get_signal_class(p) == "tech_discourse"
+                    }
+
+                    # Aggregate retail basic metrics
                     total_mentions = 0
                     unique_authors = 0
                     weighted_sentiment = 0.0
                     total_weight = 0.0
 
-                    for provider, summary in summaries.items():
+                    calibration_config = config.get("calibration", {})
+                    calibration_enabled = calibration_config.get("enabled", True) and calibration_lookup is not None
+                    min_calibration_obs = calibration_config.get("min_observations", 200)
+                    calibration_insufficient = False
+
+                    for provider, summary in retail_summaries.items():
                         mentions = summary.get("mentions", 0)
                         total_mentions += mentions
 
-                        if provider == "reddit":
+                        if provider in ("reddit", "bluesky"):
                             unique_authors += summary.get("unique_authors", 0)
 
-                        # Weight sentiment scores
-                        sentiment = summary.get("sentiment_score", 0.0)
+                        # Weight sentiment scores. Calibrate the raw per-provider score against
+                        # its own trailing distribution before blending (spec §2.5.6) -- raw
+                        # scores aren't comparable across platforms (Bluesky finance chatter
+                        # skews promotional-positive), so blending them directly would import
+                        # that platform bias straight into sentiment_24h.
+                        raw_sentiment = summary.get("sentiment_score", 0.0)
+                        sentiment = raw_sentiment
+                        if calibration_enabled:
+                            try:
+                                stats = await _call_lookup(calibration_lookup, provider)
+                            except Exception as e:
+                                _logger.debug("Calibration lookup failed for %s: %s", provider, e)
+                                stats = None
+                            if calibration_status(stats, min_calibration_obs) == "insufficient_history":
+                                calibration_insufficient = True
+                            sentiment = calibrate_score(raw_sentiment, stats, min_calibration_obs)
+
                         weight = weights.get(provider, 0.0)
                         weighted_sentiment += sentiment * weight
                         total_weight += weight
 
-                    # Calculate combined sentiment
+                    # Calculate combined sentiment. Weights are renormalized implicitly here --
+                    # total_weight only ever sums the weights of providers that actually
+                    # responded, so an outage doesn't silently halve the score (spec §2.5.6).
                     if total_weight > 0:
                         combined_sentiment = weighted_sentiment / total_weight
                     else:
                         combined_sentiment = 0.0
 
-                    # Clamp sentiment to valid range
+                    # Clamp to the schema's -1..+1 range. When calibration is active this also
+                    # folds the (unbounded) z-score blend back into the documented range.
                     combined_sentiment = max(-1.0, min(1.0, combined_sentiment))
 
-                    # Enhanced analysis with HuggingFace if enabled and threshold met
+                    if calibration_enabled:
+                        data_quality["calibration"] = "insufficient_history" if calibration_insufficient else "ok"
+
+                    # Aggregate tech_discourse basic metrics. tech_coverage_available stays None
+                    # when no tech_discourse provider returned a summary at all (distinct from
+                    # "covered, zero mentions"); every other tech_* value stays None until it is
+                    # confirmed True, never defaulted to a fabricated neutral reading (spec §2.4).
+                    tech_coverage_available: bool | None = None
+                    tech_total_mentions = 0
+                    tech_weighted_sentiment = 0.0
+                    tech_discussion_depths: List[float] = []
+
+                    for summary in tech_summaries.values():
+                        coverage = summary.get("tech_coverage_available")
+                        if coverage is not None:
+                            tech_coverage_available = coverage if tech_coverage_available is None else (
+                                tech_coverage_available or coverage
+                            )
+                        mentions = summary.get("mentions", 0)
+                        tech_total_mentions += mentions
+                        tech_weighted_sentiment += summary.get("sentiment_score", 0.0) * mentions
+                        if "discussion_depth" in summary:
+                            tech_discussion_depths.append(summary["discussion_depth"])
+
+                    if tech_coverage_available:
+                        tech_combined_sentiment: float | None = (
+                            max(-1.0, min(1.0, tech_weighted_sentiment / tech_total_mentions))
+                            if tech_total_mentions > 0
+                            else 0.0
+                        )
+                        tech_discussion_depth: float | None = (
+                            sum(tech_discussion_depths) / len(tech_discussion_depths) if tech_discussion_depths else 0.0
+                        )
+                    else:
+                        tech_combined_sentiment = None
+                        tech_discussion_depth = None
+
+                    # Enhanced analysis with HuggingFace if enabled and threshold met. Retail uses
+                    # the "huggingface" adapter (twitter-roberta by default); tech_discourse uses
+                    # its own "huggingface_tech" adapter/model (distilbert by default) and its own
+                    # tech_discourse lexicon -- never the retail model/lexicon, which would
+                    # silently reintroduce the exact cross-source bias this spec exists to remove
+                    # (spec §2.5.3/§2.5.4).
                     enhanced_sentiment = combined_sentiment
                     positive_ratio = None
-                    bot_pct = 0.0
+                    bot_pct: float | None = 0.0
                     virality_index = 0.0
+                    hf_enabled = config["providers"].get("hf_enabled", False)
 
-                    if (
-                        total_mentions >= min_mentions_hf
-                        and "huggingface" in available_adapters
-                        and config["providers"].get("hf_enabled", False)
-                    ):
+                    if total_mentions >= min_mentions_hf and "huggingface" in available_adapters and hf_enabled:
                         try:
-                            # Fetch detailed messages for HF analysis
+                            # Fetch detailed messages for HF analysis from retail providers only
                             all_messages = []
 
-                            # Fetch messages for HF analysis from all active providers
-                            fetch_msg_tasks = []
-                            for p in active_providers:
-                                if p in available_adapters:
-                                    fetch_msg_tasks.append(manager.fetch_messages_from_adapter(p, tk, since_ts, 150))
+                            fetch_msg_tasks = [
+                                manager.fetch_messages_from_adapter(p, tk, since_ts, 150) for p in retail_summaries
+                            ]
 
                             results = await asyncio.gather(*fetch_msg_tasks, return_exceptions=True)
                             for res in results:
@@ -646,7 +857,11 @@ async def collect_sentiment_batch(
                                         bot_pct,
                                         virality_index,
                                     ) = await _process_messages_with_hf(
-                                        all_messages, manager, heuristic_config, weights.get("heuristic_vs_hf", 0.5)
+                                        all_messages,
+                                        manager,
+                                        heuristic_config,
+                                        weights.get("heuristic_vs_hf", 0.5),
+                                        hf_adapter_name="huggingface",
                                     )
                                     # Cache HF results
                                     if cache_manager:
@@ -661,25 +876,77 @@ async def collect_sentiment_batch(
                             _logger.warning("HuggingFace processing failed for %s: %s", tk, e)
                             data_quality["huggingface"] = "failed"
 
-                    # Calculate mentions growth if history lookup provided
+                    # Tech_discourse HF enhancement -- symmetric to the retail block above but
+                    # routed through "huggingface_tech" and skipping bot detection entirely (HN is
+                    # heavily human-moderated with negligible automated posting; applying
+                    # Bluesky-style thresholds there would misflag prolific legitimate commenters,
+                    # spec §2.5.2). Only runs for tickers actually covered by the entity map.
+                    if (
+                        tech_coverage_available
+                        and tech_total_mentions >= min_mentions_hf
+                        and "huggingface_tech" in available_adapters
+                        and hf_enabled
+                    ):
+                        try:
+                            tech_fetch_tasks = [
+                                manager.fetch_messages_from_adapter(p, tk, since_ts, 150) for p in tech_summaries
+                            ]
+                            tech_results = await asyncio.gather(*tech_fetch_tasks, return_exceptions=True)
+                            tech_messages: List[Dict[str, Any]] = []
+                            for res in tech_results:
+                                if isinstance(res, list):
+                                    tech_messages.extend(res)
+
+                            if tech_messages:
+                                (
+                                    tech_hf_sentiment,
+                                    _tech_positive_ratio,
+                                    _tech_bot_pct,
+                                    _tech_virality,
+                                ) = await _process_messages_with_hf(
+                                    tech_messages,
+                                    manager,
+                                    heuristic_config,
+                                    weights.get("heuristic_vs_hf", 0.5),
+                                    hf_adapter_name="huggingface_tech",
+                                    skip_bot_detection=True,
+                                )
+                                tech_combined_sentiment = tech_hf_sentiment
+                                data_quality["huggingface_tech"] = "ok"
+                            else:
+                                data_quality["huggingface_tech"] = "no_messages"
+
+                        except Exception as e:
+                            _logger.warning("HuggingFace (tech_discourse) processing failed for %s: %s", tk, e)
+                            data_quality["huggingface_tech"] = "failed"
+
+                    # Calculate mentions growth if history lookup provided. Reddit-era baselines
+                    # no longer exist (spec §2.5.5) -- callers should have their history_lookup
+                    # return None for tickers with no post-migration history, which naturally
+                    # falls through here as "growth stays None" rather than a fabricated 1.0.
                     mentions_growth = None
                     if history_lookup and total_mentions > 0:
                         try:
-                            if inspect.iscoroutinefunction(history_lookup):
-                                prev_avg = await history_lookup(tk)
-                            else:
-                                loop = asyncio.get_running_loop()
-                                prev_avg = await loop.run_in_executor(None, history_lookup, tk)
-
-                            # both branches above resolve any awaitable to a plain value
-                            prev_avg = cast("float | None", prev_avg)
+                            prev_avg = cast("float | None", await _call_lookup(history_lookup, tk))
                             if prev_avg and prev_avg > 0:
                                 mentions_growth = total_mentions / prev_avg
                         except Exception as e:
                             _logger.debug("History lookup failed for %s: %s", tk, e)
 
-                    # Create final features
+                    # Create final features. bot_pct is retail-only in the output schema (spec
+                    # §1.2 -- Hacker News has no bot_pct field at all, skip_bot_detection=True on
+                    # the retail call never applies), so the retail HF block above always returns
+                    # a float here; this narrows the shared helper's float|None return type.
+                    if bot_pct is None:
+                        bot_pct = 0.0
+
                     sentiment_normalized = max(0.0, min(1.0, (enhanced_sentiment + 1.0) / 2.0))
+
+                    tech_sentiment_normalized = (
+                        max(0.0, min(1.0, (tech_combined_sentiment + 1.0) / 2.0))
+                        if tech_combined_sentiment is not None
+                        else None
+                    )
 
                     features = SentimentFeatures(
                         ticker=tk,
@@ -693,6 +960,11 @@ async def collect_sentiment_batch(
                         bot_pct=float(bot_pct),
                         data_quality=data_quality,
                         raw_payload=raw_payload,
+                        tech_mentions_24h=tech_total_mentions if tech_coverage_available else None,
+                        tech_sentiment_score_24h=tech_combined_sentiment,
+                        tech_sentiment_normalized=tech_sentiment_normalized,
+                        tech_discussion_depth=tech_discussion_depth,
+                        tech_coverage_available=tech_coverage_available,
                     )
 
                     # Cache the final aggregated result
@@ -782,12 +1054,64 @@ async def collect_sentiment_batch(
                 _logger.info("Batch processing summary: %s", perf_summary)
 
 
+def _percentile_ranks(values: List[float]) -> List[float]:
+    """
+    Rank each value's percentile position (0..1) within ``values``, using average rank for ties.
+
+    Backs ``normalized_engagement`` (spec §2.5.5): "a per-source percentile rank, not a raw
+    count" -- an HN story score of 300 and a Bluesky like count of 300 are not comparable
+    quantities, but "this message is in the top 10% of engagement for this batch" is.
+    """
+    n = len(values)
+    if n <= 1:
+        return [1.0] * n
+    order = sorted(range(n), key=lambda i: values[i])
+    ranks = [0.0] * n
+    i = 0
+    while i < n:
+        j = i
+        while j + 1 < n and values[order[j + 1]] == values[order[i]]:
+            j += 1
+        # Average rank (0-indexed) across the tied run, then scale to 0..1.
+        avg_rank = (i + j) / 2.0
+        for k in range(i, j + 1):
+            ranks[order[k]] = avg_rank / (n - 1)
+        i = j + 1
+    return ranks
+
+
 async def _process_messages_with_hf(
-    messages: List[Dict[str, Any]], manager, heuristic_config: Dict[str, Any], hf_weight: float
-) -> tuple[float, float | None, float, float]:
-    """Process messages with HuggingFace sentiment analysis."""
+    messages: List[Dict[str, Any]],
+    manager,
+    heuristic_config: Dict[str, Any],
+    hf_weight: float,
+    hf_adapter_name: str = "huggingface",
+    skip_bot_detection: bool = False,
+) -> tuple[float, float | None, float | None, float]:
+    """
+    Score messages with HuggingFace + heuristic sentiment and compute reach/bot metrics.
+
+    Args:
+        messages: Normalized messages from one or more adapters of the *same* signal class
+            (retail or tech_discourse) -- callers must not mix classes in one call (spec §2.5.6).
+        manager: The adapter manager, used to reach the HF adapter instance.
+        heuristic_config: ``config["heuristic"]`` -- token lists and engagement formula name.
+        hf_weight: Blend weight for the HF score vs. the heuristic score (0..1).
+        hf_adapter_name: Which registered HF adapter instance to use -- ``"huggingface"``
+            (retail-tuned model) or ``"huggingface_tech"`` (tech_discourse-tuned model), per the
+            per-source model routing in spec §2.5.4.
+        skip_bot_detection: True for Hacker News -- HN is heavily human-moderated with negligible
+            automated posting, so Bluesky-style thresholds would misflag prolific legitimate
+            commenters (spec §2.5.2). Returns ``bot_pct=None`` (not 0.0) in that case.
+
+    Returns:
+        ``(sentiment_score, positive_ratio, bot_pct, virality_index)``. ``sentiment_score`` and
+        ``virality_index`` are computed as orthogonal quantities (spec §2.5.5) -- the former is
+        signed direction only, the latter is unsigned reach only; they are no longer conflated
+        into a single formula the way Rev 1 did.
+    """
     if not messages:
-        return 0.0, None, 0.0, 0.0
+        return 0.0, None, None if skip_bot_detection else 0.0, 0.0
 
     # Extract text for HF processing
     texts = []
@@ -800,27 +1124,33 @@ async def _process_messages_with_hf(
             message_data.append(msg)
 
     if not texts:
-        return 0.0, None, 0.0, 0.0
+        return 0.0, None, None if skip_bot_detection else 0.0, 0.0
 
-    # Get HF predictions
+    # Get HF predictions from the per-source-routed model
     try:
-        hf_predictions = await manager._adapters["huggingface"].predict_batch(texts)
+        hf_predictions = await manager._adapters[hf_adapter_name].predict_batch(texts)
     except Exception as e:
-        _logger.warning("HF prediction failed: %s", e)
-        return 0.0, None, 0.0, 0.0
+        _logger.warning("HF prediction failed (%s): %s", hf_adapter_name, e)
+        return 0.0, None, None if skip_bot_detection else 0.0, 0.0
 
-    # Process results
+    pos_tokens = heuristic_config.get("positive_tokens", [])
+    neg_tokens = heuristic_config.get("negative_tokens", [])
+
+    # normalized_engagement is a per-batch percentile rank, not a raw count (spec §2.5.5) -- an
+    # HN story score and a Bluesky like count are not comparable quantities, but "top decile of
+    # engagement in this batch" is.
+    engagements = [compute_engagement(msg) for msg in message_data]
+    engagement_percentiles = _percentile_ranks(engagements)
+
     positive_count = 0
     negative_count = 0
     bot_count = 0
     weighted_sentiment_sum = 0.0
     total_weight = 0.0
-    virality_sum = 0.0
+    reach_sum = 0.0
+    unique_authors: set[str] = set()
 
-    pos_tokens = heuristic_config.get("positive_tokens", [])
-    neg_tokens = heuristic_config.get("negative_tokens", [])
-
-    for msg, hf_pred in zip(message_data, hf_predictions):
+    for msg, hf_pred, engagement, norm_engagement in zip(message_data, hf_predictions, engagements, engagement_percentiles):
         # Convert HF prediction to sentiment score
         label = hf_pred.get("label", "").upper()
         if "POS" in label or "POSITIVE" in label or "LABEL_2" in label:
@@ -836,11 +1166,21 @@ async def _process_messages_with_hf(
         # Combine HF and heuristic
         combined_sentiment = hf_weight * hf_sentiment + (1.0 - hf_weight) * heuristic_sentiment
 
-        # Calculate engagement weight
-        engagement = compute_engagement(msg)
-        weight = message_weight(engagement, heuristic_config.get("engagement_weight_formula", "sqrt"))
+        # Provider-native bot signal, set at the adapter boundary before the raw author identity
+        # is hashed away (meta.is_bot -- e.g. Bluesky's post-volume/account-age heuristic,
+        # StockTwits/Reddit/Twitter/Discord's username-shape heuristic). HN skips bot detection
+        # entirely (spec §2.5.2).
+        is_bot = bool(msg.get("meta", {}).get("is_bot")) if not skip_bot_detection else False
+        if is_bot:
+            bot_count += 1
 
-        # Accumulate metrics
+        # message weight = sqrt(normalized_engagement + 1) * author_trust (spec §2.5.5).
+        # author_trust: suspected bots 0.2, HN uniformly 1.0 (bot detection skipped), otherwise
+        # 1.0 -- no per-author quality signal survives the salted-hash boundary to derive a finer
+        # 0.5..1.0 trust score from.
+        author_trust = 1.0 if skip_bot_detection else (0.2 if is_bot else 1.0)
+        weight = math.sqrt(norm_engagement + 1.0) * author_trust
+
         weighted_sentiment_sum += combined_sentiment * weight
         total_weight += weight
 
@@ -849,21 +1189,21 @@ async def _process_messages_with_hf(
         elif combined_sentiment < 0:
             negative_count += 1
 
-        # Bot detection (simple heuristic)
-        author = str(msg.get("user", {}).get("username", "")).lower()
-        if "bot" in author or "auto" in author:
-            bot_count += 1
+        reach_sum += engagement
+        author_id = msg.get("user", {}).get("id")
+        if author_id:
+            unique_authors.add(str(author_id))
 
-        # Virality calculation
-        virality_sum += engagement * abs(combined_sentiment)
-
-    # Calculate final metrics
+    # sentiment_score = Σ(polarity * weight) / Σ(weight) -- direction only.
     final_sentiment = weighted_sentiment_sum / total_weight if total_weight > 0 else 0.0
     positive_ratio = (
         positive_count / (positive_count + negative_count) if (positive_count + negative_count) > 0 else None
     )
-    bot_percentage = bot_count / len(message_data) if message_data else 0.0
-    virality_index = virality_sum / max(1.0, math.sqrt(len(message_data)))
+    bot_percentage = None if skip_bot_detection else (bot_count / len(message_data) if message_data else 0.0)
+    # virality_index = Σ(engagement) / sqrt(unique_authors + 1) -- reach only, unsigned. No longer
+    # multiplied by |sentiment| (Rev 1's conflation: a viral negative post and a quiet positive
+    # one produced the same value) -- see spec §2.5.5.
+    virality_index = reach_sum / math.sqrt(len(unique_authors) + 1)
 
     return final_sentiment, positive_ratio, bot_percentage, virality_index
 

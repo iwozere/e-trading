@@ -16,6 +16,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
@@ -119,6 +120,26 @@ class DeepScanMetrics(Base):
     raw_payload: Mapped[dict | None] = mapped_column(JsonType())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
 
+    # Multi-source retail sentiment metrics (added by migration 001_add_sentiment_metrics.sql).
+    # These columns existed in the DB before this ORM class mapped them -- _store_results() in
+    # daily_deep_scan.py previously computed but never persisted them.
+    mentions_24h: Mapped[int | None] = mapped_column(Integer, default=0)
+    mentions_growth_7d: Mapped[float | None] = mapped_column(Numeric(8, 4))
+    virality_index: Mapped[float | None] = mapped_column(Numeric(5, 4), default=0.0)
+    bot_pct: Mapped[float | None] = mapped_column(Numeric(4, 3), default=0.0)
+    sentiment_data_quality: Mapped[dict | None] = mapped_column(JsonType())
+
+    # Tech-discourse signal class (Hacker News) -- reported separately from retail sentiment
+    # above, never blended into it. See sentiment-spec-rev2.md §2.5.6. `tech_coverage_available`
+    # distinguishes "ticker absent from the HN entity map" (False) from "covered but zero
+    # mentions" (True, tech_mentions_24h=0) -- the other tech_* columns stay NULL, never 0.5,
+    # when coverage is unavailable.
+    tech_mentions_24h: Mapped[int | None] = mapped_column(Integer)
+    tech_sentiment_score_24h: Mapped[float | None] = mapped_column(Numeric(4, 3))
+    tech_sentiment_24h: Mapped[float | None] = mapped_column(Numeric(4, 3))
+    tech_discussion_depth: Mapped[float | None] = mapped_column(Numeric(8, 2))
+    tech_coverage_available: Mapped[bool | None] = mapped_column(Boolean)
+
     __table_args__ = (
         UniqueConstraint("ticker", "date", name="unique_ticker_date"),
         Index("idx_ss_deep_metrics_ticker_date", "ticker", "date"),
@@ -132,6 +153,15 @@ class DeepScanMetrics(Base):
         CheckConstraint("borrow_fee_pct >= 0", name="check_borrow_fee_pct"),
         CheckConstraint("squeeze_score >= 0 AND squeeze_score <= 1", name="check_squeeze_score"),
         CheckConstraint("alert_level IN ('LOW', 'MEDIUM', 'HIGH')", name="check_alert_level"),
+        CheckConstraint("tech_mentions_24h >= 0", name="check_tech_mentions_24h"),
+        CheckConstraint(
+            "tech_sentiment_score_24h >= -1 AND tech_sentiment_score_24h <= 1", name="check_tech_sentiment_score_24h"
+        ),
+        CheckConstraint("tech_sentiment_24h >= -1 AND tech_sentiment_24h <= 1", name="check_tech_sentiment_24h"),
+        CheckConstraint("tech_discussion_depth >= 0", name="check_tech_discussion_depth"),
+        CheckConstraint("mentions_24h >= 0", name="check_mentions_positive"),
+        CheckConstraint("virality_index >= 0 AND virality_index <= 1", name="check_virality_range"),
+        CheckConstraint("bot_pct >= 0 AND bot_pct <= 1", name="check_bot_pct_range"),
     )
 
     def __repr__(self):
@@ -150,7 +180,76 @@ class DeepScanMetrics(Base):
             call_put_ratio=self.call_put_ratio,
             sentiment_24h=self.sentiment_24h,
             borrow_fee_pct=self.borrow_fee_pct,
+            mentions_24h=self.mentions_24h if self.mentions_24h is not None else 0,
+            mentions_growth_7d=self.mentions_growth_7d,
+            virality_index=self.virality_index if self.virality_index is not None else 0.0,
+            bot_pct=self.bot_pct if self.bot_pct is not None else 0.0,
+            sentiment_data_quality=self.sentiment_data_quality if self.sentiment_data_quality is not None else {},
+            tech_sentiment_24h=self.tech_sentiment_24h,
         )
+
+
+class HnCorpusItem(Base):
+    """
+    Shared Hacker News corpus cache.
+
+    Populated once per batch run by the shared-corpus fetch strategy (spec §2.4) and matched
+    against every ticker's entity map in-process -- cost is O(corpus size), independent of how
+    many tickers are being scanned. Re-running a scan must not re-fetch item IDs already present
+    here within the configured TTL.
+    """
+
+    __tablename__ = "ss_hn_corpus"
+
+    item_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    item_type: Mapped[str] = mapped_column(String(10))  # "story" | "comment" | "job" | "poll"
+    parent_id: Mapped[int | None] = mapped_column(BigInteger)
+    story_id: Mapped[int | None] = mapped_column(BigInteger)
+    author_hash: Mapped[str | None] = mapped_column(String(64))  # salted SHA-256, see §2.11
+    created_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    text_clean: Mapped[str | None] = mapped_column(Text)
+    score: Mapped[int | None] = mapped_column(Integer)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+
+    __table_args__ = (
+        Index("idx_ss_hn_corpus_created_utc", "created_utc"),
+        Index("idx_ss_hn_corpus_story_id", "story_id"),
+        Index("idx_ss_hn_corpus_fetched_at", "fetched_at"),
+        CheckConstraint("item_type IN ('story', 'comment', 'job', 'poll')", name="check_hn_item_type"),
+    )
+
+    def __repr__(self):
+        return f"<HnCorpusItem(item_id={self.item_id}, type='{self.item_type}', story_id={self.story_id})>"
+
+
+class SentimentCalibration(Base):
+    """
+    Per-source, per-day sentiment score distribution used to z-score calibrate raw scores before
+    blending (spec §2.5.6).
+
+    Raw scores aren't comparable across platforms -- Bluesky finance chatter skews
+    promotional-positive, Hacker News skews critical-negative. One row is written per
+    (provider, day) after each batch run; a trailing window (default 30 days) of rows is pooled
+    into one distribution at read time (see ``processing/calibration.py``).
+    """
+
+    __tablename__ = "ss_sentiment_calibration"
+
+    provider: Mapped[str] = mapped_column(String(32), primary_key=True)
+    day: Mapped[DateType] = mapped_column(Date, primary_key=True)
+    mean_score: Mapped[float] = mapped_column(Numeric(10, 6))
+    std_score: Mapped[float] = mapped_column(Numeric(10, 6))
+    n_obs: Mapped[int] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index("idx_ss_sentiment_calibration_day", "day"),
+        CheckConstraint("n_obs >= 0", name="check_calibration_n_obs_nonneg"),
+        CheckConstraint("std_score >= 0", name="check_calibration_std_nonneg"),
+    )
+
+    def __repr__(self):
+        return f"<SentimentCalibration(provider='{self.provider}', day={self.day}, n_obs={self.n_obs})>"
 
 
 class SqueezeAlert(Base):

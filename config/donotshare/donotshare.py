@@ -144,6 +144,18 @@ REDDIT_API_KEY = os.getenv("REDDIT_API_KEY")
 REDDIT_API_SECRET = os.getenv("REDDIT_API_SECRET")
 REDDIT_USER_AGENT = os.getenv("REDDIT_USER_AGENT")
 
+# Bluesky retail-chatter adapter (spec sentiment-spec-rev2.md §2.3). App password only --
+# NEVER the account password. Unset until an app password is created via
+# Settings -> App Passwords on bsky.app; the adapter stays gated off (providers.bluesky=False)
+# until both are set.
+BLUESKY_HANDLE = os.getenv("BLUESKY_HANDLE")
+BLUESKY_APP_PASSWORD = os.getenv("BLUESKY_APP_PASSWORD")
+
+# Salt used to hash sentiment-adapter author IDs at the adapter boundary
+# (SHA256(salt + native_id)) so unique_authors_24h/bot detection work without retaining raw
+# handles/DIDs (spec §2.11). Never logged.
+SENTIMENT_AUTHOR_HASH_SALT = os.getenv("SENTIMENT_AUTHOR_HASH_SALT")
+
 
 ##################################################################
 #

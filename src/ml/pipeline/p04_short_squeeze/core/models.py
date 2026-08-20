@@ -13,9 +13,6 @@ from pydantic import BaseModel, Field, field_validator
 
 # Import enums from database models to avoid duplication
 from src.data.db.models.model_short_squeeze import AlertLevel, CandidateSource
-from src.notification.logger import setup_logger
-
-_logger = setup_logger(__name__)
 
 
 # Business logic dataclasses
@@ -59,6 +56,12 @@ class TransientMetrics:
     bot_pct: float = 0.0
     sentiment_data_quality: Dict[str, Any] = field(default_factory=dict)
 
+    # tech_discourse signal class (Hacker News) -- reported separately, never blended into
+    # sentiment_24h above (sentiment-spec-rev2.md §2.5.6). None means "not in the tech_discourse
+    # entity map at all"; scoring must handle None explicitly and must not default it to 0.5
+    # (spec §2.13).
+    tech_sentiment_24h: float | None = None
+
     def __post_init__(self):
         """Validate transient metrics after initialization."""
         if self.volume_spike < 0:
@@ -79,6 +82,8 @@ class TransientMetrics:
             raise ValueError("Bot percentage must be between 0 and 1")
         if self.mentions_growth_7d is not None and self.mentions_growth_7d < -1:
             raise ValueError("Mentions growth must be >= -1 (cannot shrink more than 100%)")
+        if self.tech_sentiment_24h is not None and (self.tech_sentiment_24h < -1 or self.tech_sentiment_24h > 1):
+            raise ValueError("Tech-discourse sentiment must be between -1 and 1")
 
 
 @dataclass
@@ -180,6 +185,10 @@ class TransientMetricsCreate(BaseModel):
     virality_index: float = Field(default=0.0, ge=0, le=1)
     bot_pct: float = Field(default=0.0, ge=0, le=1)
     sentiment_data_quality: Dict[str, Any] = Field(default_factory=dict)
+
+    # tech_discourse signal class -- reported separately, never blended into sentiment_24h.
+    # None means "not in the tech_discourse entity map", not neutral (spec §2.13).
+    tech_sentiment_24h: float | None = Field(default=None, ge=-1, le=1)
 
 
 class CandidateCreate(BaseModel):

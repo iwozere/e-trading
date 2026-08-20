@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, ClassVar, Dict, List, Literal
 
 
 class AdapterStatus(Enum):
@@ -40,7 +40,16 @@ class BaseSentimentAdapter(ABC):
 
     All sentiment adapters must implement this interface to ensure
     consistent behavior and error handling across different data sources.
+
+    ``signal_class`` and ``supports_cashtag`` are class-level, not instance-level: they describe
+    what *kind* of signal a provider produces, not something that varies per adapter instance.
+    Aggregation (see ``collect_sentiment_async.py``) routes on ``signal_class`` alone -- never on
+    adapter name -- so retail chatter (StockTwits, Reddit, Bluesky, ...) and tech discourse
+    (Hacker News) are never blended into the same score (sentiment-spec-rev2.md §2.5.6).
     """
+
+    signal_class: ClassVar[Literal["retail", "tech_discourse"]] = "retail"
+    supports_cashtag: ClassVar[bool] = True
 
     def __init__(self, name: str, concurrency: int = 5, rate_limit_delay: float = 0.5):
         """

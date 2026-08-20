@@ -56,7 +56,7 @@ class AsyncFinnhubSentimentAdapter(BaseSentimentAdapter):
         self.max_retries = max_retries
         self._session = session
         self._provided_session = session is not None
-        self._analyzer = HeuristicSentimentAnalyzer()
+        self._analyzer = HeuristicSentimentAnalyzer(signal_class=self.signal_class)
 
     async def fetch_messages(
         self, ticker: str, since_ts: int | None = None, limit: int = 200

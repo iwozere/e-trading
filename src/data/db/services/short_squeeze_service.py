@@ -11,9 +11,6 @@ from typing import Any, Dict, List
 
 from src.data.db.models.model_short_squeeze import AlertLevel, CandidateSource
 from src.data.db.services.base_service import BaseDBService, handle_db_error, with_uow
-from src.notification.logger import setup_logger
-
-_logger = setup_logger(__name__)
 
 
 # Business logic dataclasses
@@ -246,6 +243,42 @@ class ShortSqueezeService(BaseDBService):
         metrics = self.repos.short_squeeze.deep_scan_metrics.bulk_upsert_metrics(results)
         self._logger.info("Successfully saved %d deep scan metrics", len(metrics))
         return len(metrics)
+
+    @with_uow
+    @handle_db_error
+    def get_hn_corpus_cached_ids(self, item_ids: List[int], ttl_seconds: int) -> set[int]:
+        """Return which of ``item_ids`` are already cached in ``ss_hn_corpus`` within TTL."""
+        return self.repos.short_squeeze.hn_corpus.get_cached_item_ids(item_ids, ttl_seconds)
+
+    @with_uow
+    @handle_db_error
+    def upsert_hn_corpus_items(self, items: List[Dict[str, Any]]) -> int:
+        """Bulk upsert freshly-fetched Hacker News corpus items."""
+        count = self.repos.short_squeeze.hn_corpus.upsert_items(items)
+        self._logger.debug("Upserted %d Hacker News corpus items", count)
+        return count
+
+    @with_uow
+    @handle_db_error
+    def get_hn_corpus_items_since(
+        self, since: datetime, fetched_after: datetime | None = None
+    ) -> List[Dict[str, Any]]:
+        """Return cached Hacker News corpus items created at or after ``since``."""
+        return self.repos.short_squeeze.hn_corpus.get_items_since(since, fetched_after=fetched_after)
+
+    @with_uow
+    @handle_db_error
+    def upsert_sentiment_calibration_stats(
+        self, provider: str, day: date, mean_score: float, std_score: float, n_obs: int
+    ) -> None:
+        """Upsert one day's (mean, std, n) sentiment distribution for one provider."""
+        self.repos.short_squeeze.sentiment_calibration.upsert_daily_stats(provider, day, mean_score, std_score, n_obs)
+
+    @with_uow
+    @handle_db_error
+    def get_sentiment_calibration_trailing_observations(self, provider: str, window_days: int) -> List[Dict[str, Any]]:
+        """Return the trailing ``window_days`` of daily calibration rows for one provider."""
+        return self.repos.short_squeeze.sentiment_calibration.get_trailing_observations(provider, window_days)
 
     @with_uow
     def get_candidates_for_deep_scan_tickers(self) -> List[str]:
@@ -590,10 +623,16 @@ class ShortSqueezeService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def store_finra_data(self, finra_data_list: List[Dict[str, Any]]) -> int:
-        """Store FINRA short interest data."""
+    def store_finra_data(self, _finra_data_list: List[Dict[str, Any]]) -> int:
+        """
+        Store FINRA short interest data.
+
+        Stub: the FINRAShortInterest model does not exist yet, so this is a documented no-op
+        rather than a functioning write path (see the matching comment in ``cleanup_old_data``).
+        The parameter is prefixed ``_`` because it is unused until that model lands.
+        """
         try:
-            # count = self.repos.short_squeeze.finra_short_interest.bulk_upsert(finra_data_list)
+            # count = self.repos.short_squeeze.finra_short_interest.bulk_upsert(_finra_data_list)
             count = 0
             self._logger.info("Stored %d FINRA records", count)
             return count

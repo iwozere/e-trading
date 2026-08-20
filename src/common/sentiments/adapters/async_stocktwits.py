@@ -25,6 +25,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
+from src.common.sentiments.processing.bot_detector import hash_author_id, is_bot_username
 from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
 from src.notification.logger import setup_logger
 
@@ -46,7 +47,7 @@ class AsyncStocktwitsAdapter(BaseSentimentAdapter):
         self._session = session
         self.max_retries = max_retries
         self._consecutive_failures = 0
-        self._analyzer = HeuristicSentimentAnalyzer()
+        self._analyzer = HeuristicSentimentAnalyzer(signal_class=self.signal_class)
         self.user_agents = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -252,19 +253,24 @@ class AsyncStocktwitsAdapter(BaseSentimentAdapter):
                         _logger.debug("Skipping invalid or missing ID message for ticker %s", symbol)
                         continue
 
+                    native_username = str(m.get("user", {}).get("username", ""))
                     msg = {
                         "id": str(m.get("id")),
                         "body": str(m.get("body", "")),
                         "created_at": m.get("created_at"),
+                        # No raw username retained -- author_hash is the salted hash
+                        # (sentiment-spec-rev2.md §2.11). The bot signal from the username shape
+                        # survives into meta.is_bot before the raw value is hashed away.
                         "user": {
-                            "username": m.get("user", {}).get("username", ""),
-                            "id": str(m.get("user", {}).get("id", "")),
+                            "username": "",
+                            "id": hash_author_id(str(m.get("user", {}).get("id", ""))),
                             "followers": self._to_int(m.get("user", {}).get("followers", 0)),
                         },
                         "likes": self._to_int(m.get("likes", 0)),
                         "replies": self._to_int(m.get("replies", 0)),
                         "retweets": 0,  # StockTwits doesn't have retweets, normalize to 0
                         "provider": "stocktwits",
+                        "meta": {"is_bot": is_bot_username(native_username)},
                     }
                     msgs.append(msg)
 

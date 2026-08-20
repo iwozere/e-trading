@@ -28,6 +28,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import config.donotshare.donotshare as secrets
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
+from src.common.sentiments.processing.bot_detector import hash_author_id, is_bot_username
 from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
 from src.notification.logger import setup_logger
 
@@ -54,7 +55,7 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
         self._token: str | None = None
         self._token_expiry: float = 0
         self._token_lock = asyncio.Lock()
-        self._analyzer = HeuristicSentimentAnalyzer()
+        self._analyzer = HeuristicSentimentAnalyzer(signal_class=self.signal_class)
         self._subreddits: List[str] = self._analyzer.get_subreddits()
 
         # API Credentials from config
@@ -229,13 +230,18 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
                     if since_ts and created_utc and created_utc < since_ts:
                         continue
 
+                    native_username = str(data.get("author", ""))
                     msg = {
                         "id": data.get("name"),  # Fullname
                         "body": (data.get("title", "") + " " + data.get("selftext", "")).strip(),
                         "created_at": created_utc,
+                        # No raw username retained -- author_hash is the salted hash
+                        # (sentiment-spec-rev2.md §2.11). Falls back to the display name for
+                        # hashing when Reddit omits author_fullname; either way, only the hash
+                        # survives into the returned message.
                         "user": {
-                            "username": data.get("author", ""),
-                            "id": data.get("author_fullname", ""),
+                            "username": "",
+                            "id": hash_author_id(str(data.get("author_fullname") or native_username)),
                             "followers": 0,
                         },
                         "likes": int(data.get("score", 0)),
@@ -244,6 +250,7 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
                         "provider": self.name,
                         "type": "submission",
                         "url": f"https://reddit.com{data.get('permalink', '')}",
+                        "meta": {"is_bot": is_bot_username(native_username)},
                     }
                     all_messages.append(msg)
 

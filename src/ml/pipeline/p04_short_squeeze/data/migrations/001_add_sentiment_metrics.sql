@@ -26,14 +26,24 @@ CREATE INDEX IF NOT EXISTS idx_ss_deep_metrics_mentions
 ON ss_deep_metrics(mentions_24h DESC)
 WHERE mentions_24h > 0;
 
--- Add check constraints for data validation
-ALTER TABLE ss_deep_metrics
-ADD CONSTRAINT IF NOT EXISTS check_virality_range
-    CHECK (virality_index >= 0 AND virality_index <= 1),
-ADD CONSTRAINT IF NOT EXISTS check_bot_pct_range
-    CHECK (bot_pct >= 0 AND bot_pct <= 1),
-ADD CONSTRAINT IF NOT EXISTS check_mentions_positive
-    CHECK (mentions_24h >= 0);
+-- Add check constraints for data validation.
+-- PostgreSQL has no "ADD CONSTRAINT IF NOT EXISTS" (unlike ADD COLUMN IF NOT EXISTS) --
+-- wrap each in a DO block that checks pg_constraint first so this migration stays idempotent.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'check_virality_range') THEN
+        ALTER TABLE ss_deep_metrics
+            ADD CONSTRAINT check_virality_range CHECK (virality_index >= 0 AND virality_index <= 1);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'check_bot_pct_range') THEN
+        ALTER TABLE ss_deep_metrics
+            ADD CONSTRAINT check_bot_pct_range CHECK (bot_pct >= 0 AND bot_pct <= 1);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'check_mentions_positive') THEN
+        ALTER TABLE ss_deep_metrics
+            ADD CONSTRAINT check_mentions_positive CHECK (mentions_24h >= 0);
+    END IF;
+END $$;
 
 -- Add comments for documentation
 COMMENT ON COLUMN ss_deep_metrics.mentions_24h IS

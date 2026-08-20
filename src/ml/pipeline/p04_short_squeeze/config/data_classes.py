@@ -234,13 +234,26 @@ class ScoringConfig:
 
 @dataclass
 class SentimentProviders:
-    """Configuration for sentiment data providers."""
+    """
+    Configuration for sentiment data providers.
+
+    NOTE: field names here must match the adapter's *registered* name in
+    ``adapter_manager.register_default_adapters()`` (e.g. the Google Trends adapter is
+    registered as ``"trends"``, not ``"google_trends"``) -- ``daily_deep_scan.py`` forwards
+    these field names as dict keys straight into ``collect_sentiment_batch``'s provider/weight
+    config, which is keyed by adapter registry name. A mismatch here means the corresponding
+    provider's on/off toggle and blend weight silently never reach the adapter loop.
+    """
 
     stocktwits: bool = True
     news: bool = True
-    google_trends: bool = False  # Optional, conservative rate limit
+    trends: bool = False  # Google Trends -- optional, conservative rate limit
     twitter: bool = False  # Requires API access
     discord: bool = False  # Requires channel access
+    hackernews: bool = True  # tech_discourse signal class -- no auth required
+    # Gated off until BLUESKY_HANDLE/BLUESKY_APP_PASSWORD are configured (spec §2.3). Flip to
+    # True once you've created a Bluesky app password (Settings > App Passwords on bsky.app).
+    bluesky: bool = False
     hf_enabled: bool = False  # ML enhancement (CPU intensive)
 
 
@@ -254,13 +267,76 @@ class SentimentBatching:
 
 
 @dataclass
+class SentimentHackerNews:
+    """
+    Hacker News (`tech_discourse`) adapter configuration. See sentiment-spec-rev2.md §2.4/§2.6.
+    """
+
+    corpus_lookback_hours: int = 48
+    max_depth: int = 4
+    max_items_per_thread: int = 300
+    rate_limit_rps: float = 10.0
+    hn_corpus_ttl_seconds: int = 1800
+    entity_map_path: str | None = None  # defaults to entity/tickers.yml when None
+
+
+@dataclass
+class SentimentBluesky:
+    """Bluesky (`retail`) adapter configuration. See sentiment-spec-rev2.md §2.3/§2.6."""
+
+    lang_filter: str = "en"
+    max_posts_per_ticker: int = 200
+    search_company_name: bool = True  # also search the entity-map company name, not just $TICKER
+    entity_map_path: str | None = None  # defaults to entity/tickers.yml when None
+
+
+@dataclass
 class SentimentWeights:
-    """Configuration for sentiment source weighting."""
+    """
+    Configuration for sentiment source *retail* blend weighting.
+
+    `tech_discourse` providers (Hacker News) are intentionally absent here -- they are never
+    blended into the retail score (spec §2.5.6), so a per-provider weight for them would be
+    meaningless.
+    """
 
     stocktwits: float = 0.4  # High quality, trading-focused
     news: float = 0.2  # Credible but lagging
-    google_trends: float = 0.1  # Supplementary
+    trends: float = 0.1  # Supplementary (Google Trends, adapter name "trends" -- see SentimentProviders)
+    # Inert while providers.bluesky is False. Spec §2.5.6 example: bluesky=0.6, stocktwits=0.4 --
+    # renormalized here alongside the existing weights once Bluesky is enabled, not adopted as-is,
+    # since this project already blends more retail sources than the spec's minimal example.
+    bluesky: float = 0.0
     heuristic_vs_hf: float = 0.5  # 50/50 if HF enabled
+
+
+@dataclass
+class SentimentHf:
+    """
+    Per-source HuggingFace model routing (spec §2.5.4). Only loaded when
+    ``SentimentProviders.hf_enabled`` is True.
+    """
+
+    retail_model: str = "cardiffnlp/twitter-roberta-base-sentiment"
+    tech_discourse_model: str = "distilbert-base-uncased-finetuned-sst-2-english"
+    # 'truncate' | 'chunk_mean' | 'chunk_max' -- HN comments routinely exceed 512 tokens; silent
+    # truncation systematically under-weights the tail of long comments.
+    long_text_strategy: str = "truncate"
+    device: int = -1  # -1 = CPU
+    max_workers: int = 1
+
+
+@dataclass
+class SentimentCalibration:
+    """
+    Per-source sentiment score calibration (spec §2.5.6). Raw scores aren't comparable across
+    platforms -- calibrating each to a z-score against its own trailing distribution before
+    blending answers "is this ticker unusually positive *for this platform*?" instead.
+    """
+
+    enabled: bool = True
+    window_days: int = 30
+    min_observations: int = 200  # Falls back to raw scores below this trailing observation count
 
 
 @dataclass
@@ -300,6 +376,10 @@ class SentimentConfig:
     thresholds: SentimentThresholds = field(default_factory=SentimentThresholds)
     cache: SentimentCache = field(default_factory=SentimentCache)
     monitoring: SentimentMonitoring = field(default_factory=SentimentMonitoring)
+    hackernews: SentimentHackerNews = field(default_factory=SentimentHackerNews)
+    bluesky: SentimentBluesky = field(default_factory=SentimentBluesky)
+    hf: SentimentHf = field(default_factory=SentimentHf)
+    calibration: SentimentCalibration = field(default_factory=SentimentCalibration)
 
 
 @dataclass

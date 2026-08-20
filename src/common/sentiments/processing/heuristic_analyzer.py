@@ -14,7 +14,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 from urllib.parse import urlparse
 
 # Add project root to path for imports
@@ -52,14 +52,22 @@ class HeuristicSentimentAnalyzer:
     - Configurable sentiment weights and rules
     """
 
-    def __init__(self, config: Dict | None = None):
+    def __init__(self, config: Dict | None = None, signal_class: Literal["retail", "tech_discourse"] = "retail"):
         """
         Initialize the heuristic sentiment analyzer.
 
         Args:
             config: Configuration dictionary with sentiment rules and keywords
+            signal_class: Which per-source lexicon bucket to use (sentiment-spec-rev2.md §2.5.3).
+                ``"retail"`` (default) reads the top-level ``positive_keywords``/
+                ``negative_keywords`` -- StockTwits/Bluesky/Reddit/etc. hype vocabulary.
+                ``"tech_discourse"`` reads ``lexicons.tech_discourse.*`` -- Hacker News'
+                engineering-reputation vocabulary. Retail and tech_discourse measure different
+                constructs and must never share a lexicon (spec: "a shared lexicon silently
+                returns neutral for every HN message").
         """
         self.config = config or self._load_default_config()
+        self.signal_class = signal_class
 
         # Load sentiment keywords and rules
         self._load_sentiment_keywords()
@@ -87,10 +95,21 @@ class HeuristicSentimentAnalyzer:
             return {}
 
     def _load_sentiment_keywords(self) -> None:
-        """Load financial domain-specific sentiment keywords."""
-        # Load from config or use internal defaults (abbreviated here for brevity, assuming sentiments.json is primary)
-        self.positive_keywords = set(self.config.get("positive_keywords", ["moon", "rocket", "buy", "long", "bull"]))
-        self.negative_keywords = set(self.config.get("negative_keywords", ["short", "sell", "dump", "crash", "bear"]))
+        """Load per-source sentiment keywords (spec §2.5.3: retail vs. tech_discourse buckets)."""
+        if self.signal_class == "tech_discourse":
+            bucket = self.config.get("lexicons", {}).get("tech_discourse", {})
+            default_positive = ["impressive", "solid", "elegant", "ships", "reliable", "well-designed"]
+            default_negative = ["broken", "regression", "outage", "layoffs", "abandoned", "deprecated"]
+        else:
+            # Retail bucket lives at the top level of sentiments.json for backward compatibility
+            # (this predates the lexicons.* split) -- the config's positive_keywords/
+            # negative_keywords ARE the retail lexicon.
+            bucket = self.config
+            default_positive = ["moon", "rocket", "buy", "long", "bull"]
+            default_negative = ["short", "sell", "dump", "crash", "bear"]
+
+        self.positive_keywords = set(bucket.get("positive_keywords", default_positive))
+        self.negative_keywords = set(bucket.get("negative_keywords", default_negative))
 
         # Create weighted keyword mappings
         self.keyword_weights = self.config.get("keyword_weights", {})

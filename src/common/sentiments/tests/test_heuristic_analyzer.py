@@ -50,5 +50,40 @@ class TestHeuristicSentimentAnalyzer(unittest.TestCase):
         self.assertEqual(self.analyzer.get_credibility("https://unknown.com"), 0.50)
 
 
+class TestPerSourceLexicons(unittest.TestCase):
+    """
+    signal_class routes to a different lexicon bucket (sentiment-spec-rev2.md §2.5.3): retail
+    measures hype, tech_discourse measures engineering reputation. Sharing one lexicon across
+    both is the exact Rev 1 failure mode this split exists to fix.
+    """
+
+    def test_default_signal_class_is_retail(self):
+        analyzer = HeuristicSentimentAnalyzer()
+        self.assertEqual(analyzer.signal_class, "retail")
+        self.assertIn("moon", analyzer.positive_keywords)
+
+    def test_tech_discourse_uses_engineering_vocabulary(self):
+        analyzer = HeuristicSentimentAnalyzer(signal_class="tech_discourse")
+        self.assertIn("elegant", analyzer.positive_keywords)
+        self.assertIn("outage", analyzer.negative_keywords)
+
+    def test_tech_discourse_does_not_use_retail_hype_words(self):
+        # "moon"/"diamond hands" are WSB slang with near-zero frequency on HN -- a shared lexicon
+        # would silently return neutral for almost every HN message (spec §0).
+        analyzer = HeuristicSentimentAnalyzer(signal_class="tech_discourse")
+        self.assertNotIn("moon", analyzer.positive_keywords)
+
+    def test_retail_does_not_use_tech_discourse_vocabulary(self):
+        analyzer = HeuristicSentimentAnalyzer()
+        self.assertNotIn("outage", analyzer.negative_keywords)
+
+    def test_tech_discourse_scores_engineering_reputation(self):
+        analyzer = HeuristicSentimentAnalyzer(signal_class="tech_discourse")
+        positive = analyzer.analyze_sentiment("The new release is solid and well-designed, ships reliably.")
+        negative = analyzer.analyze_sentiment("Another regression, the outage was caused by vendor lock-in.")
+        self.assertGreater(positive.score, 0.0)
+        self.assertLess(negative.score, 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()

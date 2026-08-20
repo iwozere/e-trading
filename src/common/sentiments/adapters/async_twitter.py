@@ -29,6 +29,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
+from src.common.sentiments.processing.bot_detector import hash_author_id, is_bot_username
 from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
 from src.notification.logger import setup_logger
 
@@ -60,7 +61,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
         self._in_backoff = False
         self._backoff_until = 0.0
         self._consecutive_failures = 0
-        self._analyzer = HeuristicSentimentAnalyzer()
+        self._analyzer = HeuristicSentimentAnalyzer(signal_class=self.signal_class)
 
         # Twitter API configuration
         self.bearer_token = bearer_token or os.getenv("TWITTER_BEARER_TOKEN")
@@ -392,16 +393,19 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                     hashtags = [tag.get("tag", "") for tag in entities.get("hashtags", [])]
                     mentions = [mention.get("username", "") for mention in entities.get("mentions", [])]
 
+                    native_username = str(user_info.get("username", ""))
                     normalized_tweet = {
                         "id": str(tweet.get("id")),
                         "body": str(tweet.get("text", "")),
                         "created_at": tweet.get("created_at"),
+                        # No raw username/display-name retained -- author_hash is the salted hash
+                        # (sentiment-spec-rev2.md §2.11).
                         "user": {
-                            "username": user_info.get("username", ""),
-                            "id": str(author_id or ""),
+                            "username": "",
+                            "id": hash_author_id(str(author_id or "")),
                             "followers": int(user_info.get("public_metrics", {}).get("followers_count", 0)),
                             "verified": bool(user_info.get("verified", False)),
-                            "name": user_info.get("name", ""),
+                            "name": "",
                         },
                         "likes": int(metrics.get("like_count", 0)),
                         "replies": int(metrics.get("reply_count", 0)),
@@ -410,6 +414,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                         "hashtags": hashtags,
                         "mentions": mentions,
                         "provider": "twitter",
+                        "meta": {"is_bot": is_bot_username(native_username)},
                     }
                     tweets.append(normalized_tweet)
 

@@ -24,6 +24,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.common.sentiments.adapters.async_stocktwits import AsyncStocktwitsAdapter
 from src.common.sentiments.adapters.base_adapter import AdapterStatus
+from src.common.sentiments.processing.bot_detector import hash_author_id
 
 
 class TestAsyncStocktwitsAdapter:
@@ -82,7 +83,10 @@ class TestAsyncStocktwitsAdapter:
             assert messages[0]["id"] == "123456"
             assert messages[0]["body"] == "AAPL to the moon! 🚀 Buy and hold!"
             assert messages[0]["provider"] == "stocktwits"
-            assert messages[0]["user"]["username"] == "trader123"
+            # Raw username is never retained -- author_hash is the salted hash of the native
+            # user ID (sentiment-spec-rev2.md §2.11).
+            assert messages[0]["user"]["username"] == ""
+            assert messages[0]["user"]["id"] == hash_author_id("789")
             assert messages[0]["likes"] == 25
             assert messages[0]["replies"] == 5
             assert messages[0]["retweets"] == 0  # StockTwits doesn't have retweets

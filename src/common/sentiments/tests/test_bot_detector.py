@@ -18,7 +18,14 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.common.sentiments.processing.bot_detector import BotDetectionResult, BotDetector, PostMetrics, UserProfile
+from src.common.sentiments.processing.bot_detector import (
+    BotDetectionResult,
+    BotDetector,
+    PostMetrics,
+    UserProfile,
+    hash_author_id,
+    is_bot_username,
+)
 
 
 class TestBotDetector(unittest.TestCase):
@@ -556,6 +563,61 @@ class TestPostMetrics(unittest.TestCase):
         self.assertEqual(post.replies, 3)
         self.assertEqual(post.retweets, 2)
         self.assertEqual(post.content_hash, "test_hash_123")
+
+
+class TestHashAuthorId(unittest.TestCase):
+    """Test cases for the salted-hash author ID helper (sentiment-spec-rev2.md §2.11)."""
+
+    def test_deterministic_with_same_salt(self):
+        h1 = hash_author_id("did:plc:abc123", salt="fixed-salt")
+        h2 = hash_author_id("did:plc:abc123", salt="fixed-salt")
+        self.assertEqual(h1, h2)
+
+    def test_different_salts_produce_different_hashes(self):
+        h1 = hash_author_id("did:plc:abc123", salt="salt-a")
+        h2 = hash_author_id("did:plc:abc123", salt="salt-b")
+        self.assertNotEqual(h1, h2)
+
+    def test_different_ids_produce_different_hashes(self):
+        h1 = hash_author_id("user-1", salt="fixed-salt")
+        h2 = hash_author_id("user-2", salt="fixed-salt")
+        self.assertNotEqual(h1, h2)
+
+    def test_output_is_hex_sha256_digest(self):
+        digest = hash_author_id("some-native-id", salt="fixed-salt")
+        self.assertEqual(len(digest), 64)
+        int(digest, 16)  # raises ValueError if not valid hex
+
+    def test_never_echoes_the_raw_native_id(self):
+        digest = hash_author_id("trader123", salt="fixed-salt")
+        self.assertNotIn("trader123", digest)
+
+
+class TestIsBotUsername(unittest.TestCase):
+    """Test cases for the lightweight username-shape bot heuristic."""
+
+    def test_empty_username_is_not_flagged(self):
+        self.assertFalse(is_bot_username(""))
+
+    def test_ordinary_username_is_not_flagged(self):
+        self.assertFalse(is_bot_username("trader"))
+        self.assertFalse(is_bot_username("bear_trader"))
+
+    def test_letters_plus_many_digits_is_flagged(self):
+        self.assertTrue(is_bot_username("trader1234"))
+
+    def test_bot_suffix_is_flagged(self):
+        self.assertTrue(is_bot_username("cryptobot"))
+        self.assertTrue(is_bot_username("tradingbot123"))
+
+    def test_auto_suffix_is_flagged(self):
+        self.assertTrue(is_bot_username("trader_auto"))
+
+    def test_user_plus_digits_is_flagged(self):
+        self.assertTrue(is_bot_username("user48213"))
+
+    def test_case_insensitive(self):
+        self.assertTrue(is_bot_username("CryptoBOT"))
 
 
 if __name__ == "__main__":

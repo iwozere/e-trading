@@ -33,6 +33,12 @@ _logger = setup_logger(__name__)
 # Sentiment module import (with feature flag)
 try:
     from src.common.sentiments.collect_sentiment_async import collect_sentiment_batch
+    from src.common.sentiments.processing.calibration import (
+        CalibrationStats,
+        DailyObservation,
+        compute_daily_stats,
+        pool_daily_observations,
+    )
 
     SENTIMENT_MODULE_AVAILABLE = True
 except ImportError:
@@ -413,6 +419,67 @@ class DailyDeepScan:
             _logger.warning("Failed to get historical mentions for %s: %s", ticker, e)
             return None
 
+    async def _get_calibration_stats_async(self, provider: str) -> "CalibrationStats | None":
+        """
+        Pool the trailing calibration window for one provider from ``ss_sentiment_calibration``.
+
+        Injected into ``collect_sentiment_batch`` as ``calibration_lookup`` (spec §2.5.6) -- keeps
+        the sentiment module itself DB-agnostic while letting this pipeline supply real history.
+        """
+        window_days = self.sentiment_config.calibration.window_days if self.sentiment_config else 30
+        try:
+            service = ShortSqueezeService()
+            rows = service.get_sentiment_calibration_trailing_observations(provider, window_days)
+            observations = [
+                DailyObservation(
+                    provider=r["provider"], day=r["day"], mean_score=r["mean_score"], std_score=r["std_score"], n_obs=r["n_obs"]
+                )
+                for r in rows
+            ]
+            return pool_daily_observations(observations)
+        except Exception as e:
+            _logger.warning("Failed to load calibration stats for %s: %s", provider, e)
+            return None
+
+    def _record_calibration_observations(self, sentiment_map: Dict[str, Any]) -> None:
+        """
+        Extract each provider's raw per-ticker sentiment scores from this batch's
+        ``raw_payload`` and upsert today's (mean, std, n) into ``ss_sentiment_calibration``.
+
+        This is what tomorrow's :meth:`_get_calibration_stats_async` reads back as history --
+        without this, calibration would stay perpetually "insufficient_history" (spec §2.5.6).
+        """
+        if not self.sentiment_config or not self.sentiment_config.calibration.enabled:
+            return
+
+        per_provider_scores: Dict[str, List[float]] = {}
+        for features in sentiment_map.values():
+            if not features:
+                continue
+            raw_payload = getattr(features, "raw_payload", None) or {}
+            for provider, summary in raw_payload.items():
+                if not isinstance(summary, dict) or "error" in summary:
+                    continue
+                score = summary.get("sentiment_score")
+                if score is None:
+                    continue
+                per_provider_scores.setdefault(provider, []).append(float(score))
+
+        if not per_provider_scores:
+            return
+
+        try:
+            service = ShortSqueezeService()
+            today = date.today()
+            for provider, scores in per_provider_scores.items():
+                mean, std, n = compute_daily_stats(scores)
+                if n == 0:
+                    continue
+                service.upsert_sentiment_calibration_stats(provider, today, mean, std, n)
+            _logger.debug("Recorded sentiment calibration observations for %d providers", len(per_provider_scores))
+        except Exception as e:
+            _logger.warning("Failed to record sentiment calibration observations: %s", e)
+
     def _collect_batch_sentiment(self, candidates: List[Candidate], metrics: Dict[str, Any]) -> Dict[str, Any]:
         """
         Collect sentiment data for a batch of candidates using multi-source sentiment module.
@@ -437,9 +504,11 @@ class DailyDeepScan:
                     "providers": {
                         "stocktwits": self.sentiment_config.providers.stocktwits,
                         "news": self.sentiment_config.providers.news,
-                        "google_trends": self.sentiment_config.providers.google_trends,
+                        "trends": self.sentiment_config.providers.trends,
                         "twitter": self.sentiment_config.providers.twitter,
                         "discord": self.sentiment_config.providers.discord,
+                        "hackernews": self.sentiment_config.providers.hackernews,
+                        "bluesky": self.sentiment_config.providers.bluesky,
                         "hf_enabled": self.sentiment_config.providers.hf_enabled,
                     },
                     "batching": {
@@ -449,13 +518,47 @@ class DailyDeepScan:
                     "weights": {
                         "stocktwits": self.sentiment_config.weights.stocktwits,
                         "news": self.sentiment_config.weights.news,
-                        "google_trends": self.sentiment_config.weights.google_trends,
+                        "trends": self.sentiment_config.weights.trends,
+                        "bluesky": self.sentiment_config.weights.bluesky,
                         "heuristic_vs_hf": self.sentiment_config.weights.heuristic_vs_hf,
                     },
-                    "cache": {
+                    # NOTE: this must be "caching" to match collect_sentiment_async.DEFAULT_CONFIG's
+                    # top-level key -- it was previously "cache", which silently never merged and
+                    # left these settings inert.
+                    "caching": {
                         "enabled": self.sentiment_config.cache.enabled,
                         "ttl_seconds": self.sentiment_config.cache.ttl_seconds,
                         "redis_enabled": self.sentiment_config.cache.redis_enabled,
+                    },
+                    "hackernews": {
+                        "corpus_lookback_hours": self.sentiment_config.hackernews.corpus_lookback_hours,
+                        "max_depth": self.sentiment_config.hackernews.max_depth,
+                        "max_items_per_thread": self.sentiment_config.hackernews.max_items_per_thread,
+                        "rate_limit_rps": self.sentiment_config.hackernews.rate_limit_rps,
+                        "hn_corpus_ttl_seconds": self.sentiment_config.hackernews.hn_corpus_ttl_seconds,
+                        "entity_map_path": self.sentiment_config.hackernews.entity_map_path,
+                    },
+                    "bluesky": {
+                        "lang_filter": self.sentiment_config.bluesky.lang_filter,
+                        "max_posts_per_ticker": self.sentiment_config.bluesky.max_posts_per_ticker,
+                        "search_terms": ["cashtag", "company_name"]
+                        if self.sentiment_config.bluesky.search_company_name
+                        else ["cashtag"],
+                        "entity_map_path": self.sentiment_config.bluesky.entity_map_path,
+                    },
+                    "hf": {
+                        "models": {
+                            "retail": self.sentiment_config.hf.retail_model,
+                            "tech_discourse": self.sentiment_config.hf.tech_discourse_model,
+                        },
+                        "long_text_strategy": self.sentiment_config.hf.long_text_strategy,
+                        "device": self.sentiment_config.hf.device,
+                        "max_workers": self.sentiment_config.hf.max_workers,
+                    },
+                    "calibration": {
+                        "enabled": self.sentiment_config.calibration.enabled,
+                        "window_days": self.sentiment_config.calibration.window_days,
+                        "min_observations": self.sentiment_config.calibration.min_observations,
                     },
                 }
 
@@ -472,12 +575,15 @@ class DailyDeepScan:
                             lookback_hours=24,
                             config=sentiment_config_dict,
                             history_lookup=self._get_historical_mentions_async,
+                            calibration_lookup=self._get_calibration_stats_async,
                             output_format="dataclass",
                         )
                     ),
                 )
             finally:
                 loop.close()
+
+            self._record_calibration_observations(sentiment_map)
 
             # Count successes and update metrics
             success_count = sum(1 for v in sentiment_map.values() if v)
@@ -486,7 +592,11 @@ class DailyDeepScan:
             # Log notable signals
             for ticker, features in sentiment_map.items():
                 if features:
-                    if features.virality_index > 0.7:
+                    # virality_index is now unsigned reach (Σengagement / sqrt(unique_authors+1),
+                    # spec §2.5.5) rather than Rev 1's sentiment-weighted 0..1-ish score, so this
+                    # threshold is on a different, unbounded scale. Left as an informational log
+                    # line, not tuned -- run coverage-report (Phase 4) before trusting it.
+                    if features.virality_index > 50.0:
                         _logger.info("  %s: HIGH VIRALITY detected (%.2f)", ticker, features.virality_index)
                     if features.mentions_growth_7d and features.mentions_growth_7d > 2.0:
                         _logger.info(
@@ -632,6 +742,9 @@ class DailyDeepScan:
                 virality_index = sentiment_features.virality_index
                 bot_pct = sentiment_features.bot_pct
                 sentiment_data_quality = sentiment_features.data_quality
+                # tech_discourse signal class -- None means "not covered by the entity map",
+                # never defaulted to neutral (spec §2.13). Deliberately not `or 0.0` here.
+                tech_sentiment_24h = sentiment_features.tech_sentiment_normalized
 
                 metrics["valid_sentiment_data"] += 1
                 # API calls already counted in batch collection
@@ -643,6 +756,7 @@ class DailyDeepScan:
                 virality_index = 0.0
                 bot_pct = 0.0
                 sentiment_data_quality = {}
+                tech_sentiment_24h = None  # no batch collection means no tech_discourse data either
 
                 if sentiment_24h is not None:
                     metrics["valid_sentiment_data"] += 1
@@ -672,6 +786,7 @@ class DailyDeepScan:
                 virality_index=virality_index,
                 bot_pct=bot_pct,
                 sentiment_data_quality=sentiment_data_quality,
+                tech_sentiment_24h=tech_sentiment_24h,
             )
 
             return transient_metrics
@@ -903,6 +1018,15 @@ class DailyDeepScan:
                         "call_put_ratio": sc.transient_metrics.call_put_ratio,
                         "borrow_fee_pct": sc.transient_metrics.borrow_fee_pct,
                         "alert_level": sc.alert_level.value if sc.alert_level else None,
+                        # Previously computed but silently dropped before reaching the DB even
+                        # though migration 001 already added these columns.
+                        "mentions_24h": sc.transient_metrics.mentions_24h,
+                        "mentions_growth_7d": sc.transient_metrics.mentions_growth_7d,
+                        "virality_index": sc.transient_metrics.virality_index,
+                        "bot_pct": sc.transient_metrics.bot_pct,
+                        "sentiment_data_quality": sc.transient_metrics.sentiment_data_quality,
+                        # tech_discourse signal class -- None means "not covered", not neutral.
+                        "tech_sentiment_24h": sc.transient_metrics.tech_sentiment_24h,
                     }
                 )
 

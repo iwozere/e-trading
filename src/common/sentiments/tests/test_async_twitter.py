@@ -26,6 +26,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.common.sentiments.adapters.async_twitter import AsyncTwitterAdapter
 from src.common.sentiments.adapters.base_adapter import AdapterStatus
+from src.common.sentiments.processing.bot_detector import hash_author_id
 
 
 class TestAsyncTwitterAdapter:
@@ -179,7 +180,10 @@ class TestAsyncTwitterAdapter:
             assert tweet1["id"] == "1234567890"
             assert "AAPL to the moon!" in tweet1["body"]
             assert tweet1["provider"] == "twitter"
-            assert tweet1["user"]["username"] == "bullish_trader"
+            # Raw username is never retained -- author_hash is the salted hash of author_id
+            # (sentiment-spec-rev2.md §2.11).
+            assert tweet1["user"]["username"] == ""
+            assert tweet1["user"]["id"] == hash_author_id("user123")
             assert tweet1["user"]["verified"] is True
             assert tweet1["user"]["followers"] == 5000
             assert tweet1["likes"] == 150

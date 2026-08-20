@@ -67,6 +67,80 @@ class PostMetrics:
     content_hash: str
 
 
+def hash_author_id(native_id: str, salt: str | None = None) -> str:
+    """
+    Salt-hash a provider-native author ID at the adapter boundary.
+
+    Preserves ``unique_authors_24h`` counting and bot detection without retaining raw
+    handles/DIDs/usernames anywhere downstream (sentiment-spec-rev2.md §2.11). Every adapter's
+    message-normalization step should call this immediately on the native author identifier
+    (Bluesky DID, StockTwits user ID, Hacker News username, ...) and never pass the raw value
+    through to ``author_hash``.
+
+    Args:
+        native_id: Provider-native author identifier (never logged by the caller).
+        salt: Hash salt. Defaults to ``SENTIMENT_AUTHOR_HASH_SALT`` from
+            ``config.donotshare.donotshare``. Lazily imported so importing this module never
+            pulls secrets into memory for callers that don't hash anything.
+
+    Returns:
+        Hex-encoded SHA-256 digest of ``salt + native_id``.
+    """
+    if salt is None:
+        try:
+            import config.donotshare.donotshare as _secrets  # type: ignore[import]
+
+            salt = _secrets.SENTIMENT_AUTHOR_HASH_SALT
+        except ImportError:
+            salt = None
+        if not salt:
+            _logger.warning(
+                "SENTIMENT_AUTHOR_HASH_SALT is not set -- hashing with an empty salt. "
+                "Author hashes will not be stable/secret across environments until it is configured."
+            )
+            salt = ""
+
+    digest = hashlib.sha256((salt + native_id).encode("utf-8")).hexdigest()
+    return digest
+
+
+# Mirrors BotDetector's username regex bank (see _load_bot_patterns below) but as module-level
+# compiled patterns usable without instantiating a full BotDetector. Adapters call
+# is_bot_username() on the *native* username at the same normalization boundary where they call
+# hash_author_id() -- i.e. before the raw username is dropped -- so the bot signal survives into
+# ``meta.is_bot`` even though the identifier itself never does (sentiment-spec-rev2.md §2.5.2,
+# §2.11).
+_BOT_USERNAME_PATTERNS = [
+    re.compile(r"^[a-zA-Z]+\d{4,}$", re.IGNORECASE),  # Letters followed by 4+ digits
+    re.compile(r"^[a-zA-Z]+_\d{4,}$", re.IGNORECASE),  # Letters, underscore, 4+ digits
+    re.compile(r"^\w+bot\w*$", re.IGNORECASE),  # Contains "bot"
+    re.compile(r"^\w+auto\w*$", re.IGNORECASE),  # Contains "auto"
+    re.compile(r"^user\d+$", re.IGNORECASE),  # "user" + digits
+    re.compile(r"^[a-zA-Z]{1,3}\d{6,}$", re.IGNORECASE),  # 1-3 letters + 6+ digits
+    re.compile(r"^\w*crypto\w*\d+$", re.IGNORECASE),  # Contains "crypto" + digits
+    re.compile(r"^\w*trade\w*\d+$", re.IGNORECASE),  # Contains "trade" + digits
+]
+
+
+def is_bot_username(username: str) -> bool:
+    """
+    Lightweight, per-source bot heuristic based on username shape alone.
+
+    Intended for adapters (StockTwits, Reddit, Twitter, Discord, ...) to call on the native
+    username immediately before it is hashed/dropped, so ``meta.is_bot`` carries a real signal
+    into the central aggregation even though the raw username itself is never retained.
+
+    Args:
+        username: Provider-native username (never logged or returned by the caller).
+
+    Returns:
+        True if the username matches a known bot-like shape (e.g. ``trader_1234``, ``cryptobot``).
+    """
+    if not username:
+        return False
+    return any(pattern.match(username) for pattern in _BOT_USERNAME_PATTERNS)
+
+
 class BotDetector:
     """
     Advanced bot detection system for social media content.

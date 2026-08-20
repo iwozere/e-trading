@@ -87,13 +87,17 @@ sentiment:
   weights:
     stocktwits: 0.4
     news: 0.2
-    google_trends: 0.1
+    trends: 0.1
 ```
 
 > **Note (2026-08-18):** the Reddit-via-Pushshift provider (`reddit_pushshift`) was removed —
 > Pushshift access has been restricted to verified Reddit moderators since May 2023. See
 > `src/common/sentiments/docs/sentiment-spec-rev2.md` for the replacement plan (Bluesky +
 > Hacker News adapters).
+>
+> **Note (2026-08-20):** the `google_trends` config key above was renamed to `trends` — it must
+> match the adapter's registered name in `adapter_manager.register_default_adapters()`. The old
+> key silently never reached the adapter loop.
 
 See [pipeline_config_example.yaml](../config/pipeline_config_example.yaml) for full configuration options.
 
@@ -398,7 +402,7 @@ print(f"Enhanced sentiment enabled: {scanner.use_enhanced_sentiment}")
    ```yaml
    sentiment:
      providers:
-       google_trends: false  # Slow provider
+       trends: false  # Slow provider (Google Trends)
        hf_enabled: false      # CPU intensive
    ```
 

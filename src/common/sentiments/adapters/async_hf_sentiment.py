@@ -16,7 +16,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -37,6 +37,19 @@ except Exception:
 DEFAULT_MODEL = os.getenv("SENTIMENT_MODEL", "cardiffnlp/twitter-roberta-base-sentiment")
 
 
+#: HN comments routinely exceed the 512-token window most sentiment checkpoints were trained
+#: with. "truncate" (default, matches historic behavior) silently drops everything past the
+#: limit; "chunk_mean"/"chunk_max" split the text into word-based chunks, score each
+#: independently, and aggregate -- spec §2.5.4 requires this be explicit and recorded, never a
+#: silent truncation.
+LongTextStrategy = Literal["truncate", "chunk_mean", "chunk_max"]
+
+#: Word-based chunk size used by chunk_mean/chunk_max. Approximates the model's token budget
+#: without requiring a tokenizer call up front (~1.3 tokens/word for English is a safe margin
+#: under 512 tokens at 350 words).
+_CHUNK_WORD_SIZE = 350
+
+
 class AsyncHFSentiment(BaseSentimentAdapter):
     def __init__(
         self,
@@ -46,6 +59,7 @@ class AsyncHFSentiment(BaseSentimentAdapter):
         max_workers: int = 1,
         concurrency: int = 1,
         rate_limit_delay: float = 0.1,
+        long_text_strategy: LongTextStrategy = "truncate",
     ):
         super().__init__(name, concurrency, rate_limit_delay)
 
@@ -55,6 +69,7 @@ class AsyncHFSentiment(BaseSentimentAdapter):
         self.model_name = model_name or DEFAULT_MODEL
         self.device = device  # -1 means CPU
         self.max_workers = max_workers
+        self.long_text_strategy = long_text_strategy
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._pipe: Any = None
         self._initialization_error: Optional[Exception] = None
@@ -93,7 +108,7 @@ class AsyncHFSentiment(BaseSentimentAdapter):
 
             # Validate inputs
             if not texts or not any(text.strip() for text in texts):
-                return [{"label": "NEUTRAL", "score": 0.5} for _ in texts]
+                return [{"label": "NEUTRAL", "score": 0.5, "long_text_strategy": self.long_text_strategy} for _ in texts]
 
             # Clean texts
             clean_texts = []
@@ -103,18 +118,77 @@ class AsyncHFSentiment(BaseSentimentAdapter):
                     clean_text = "neutral"  # Fallback for empty texts
                 clean_texts.append(clean_text)
 
-            results = self._pipe(clean_texts, truncation=True, max_length=512)
+            if self.long_text_strategy == "truncate":
+                results = self._pipe(clean_texts, truncation=True, max_length=512)
+                if not isinstance(results, list):
+                    results = [results]
+                for r in results:
+                    if isinstance(r, dict):
+                        r["long_text_strategy"] = "truncate"
+                return results
 
-            # Ensure results is a list
-            if not isinstance(results, list):
-                results = [results]
+            # chunk_mean / chunk_max: split each text into word-based chunks, score every chunk
+            # in one batched pipe() call, then aggregate per text (spec §2.5.4 -- HN comments
+            # routinely exceed 512 tokens; silently truncating under-weights the tail of long
+            # comments, so the strategy is explicit and recorded on every prediction).
+            chunk_lists = [self._chunk_text(t) for t in clean_texts]
+            flat_chunks = [c for chunks in chunk_lists for c in chunks]
+            flat_results = self._pipe(flat_chunks, truncation=True, max_length=512)
+            if not isinstance(flat_results, list):
+                flat_results = [flat_results]
 
-            return results
+            out = []
+            idx = 0
+            for chunks in chunk_lists:
+                n = len(chunks)
+                out.append(self._aggregate_chunks(flat_results[idx : idx + n]))
+                idx += n
+            return out
 
         except Exception as e:
             _logger.exception("HF blocking predict failed: %s", e)
             # Return neutral fallback for all texts
-            return [{"label": "NEUTRAL", "score": 0.5} for _ in texts]
+            return [{"label": "NEUTRAL", "score": 0.5, "long_text_strategy": self.long_text_strategy} for _ in texts]
+
+    @staticmethod
+    def _chunk_text(text: str, chunk_words: int = _CHUNK_WORD_SIZE) -> List[str]:
+        """Split text into word-based chunks of roughly ``chunk_words`` words each."""
+        words = text.split()
+        if len(words) <= chunk_words:
+            return [text]
+        return [" ".join(words[i : i + chunk_words]) for i in range(0, len(words), chunk_words)]
+
+    def _aggregate_chunks(self, chunk_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Aggregate per-chunk HF predictions into one prediction per ``self.long_text_strategy``."""
+        signed: List[float] = []
+        for r in chunk_results:
+            label = str(r.get("label", "")).upper()
+            score = float(r.get("score", 0.5))
+            if "NEG" in label or "LABEL_0" in label:
+                signed.append(-score)
+            elif "POS" in label or "LABEL_2" in label:
+                signed.append(score)
+            else:
+                signed.append(0.0)
+
+        if not signed:
+            return {"label": "NEUTRAL", "score": 0.5, "long_text_strategy": self.long_text_strategy}
+
+        value = max(signed, key=abs) if self.long_text_strategy == "chunk_max" else sum(signed) / len(signed)
+
+        if value > 0.05:
+            label = "POSITIVE"
+        elif value < -0.05:
+            label = "NEGATIVE"
+        else:
+            label = "NEUTRAL"
+
+        return {
+            "label": label,
+            "score": abs(value),
+            "long_text_strategy": self.long_text_strategy,
+            "chunk_count": len(chunk_results),
+        }
 
     async def predict_batch(self, texts: List[str]) -> List[Dict]:
         """

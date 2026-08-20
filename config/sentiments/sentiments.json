@@ -1,4 +1,42 @@
 {
+    "lexicons": {
+        "tech_discourse": {
+            "positive_keywords": [
+                "impressive",
+                "solid",
+                "elegant",
+                "ships",
+                "reliable",
+                "well-designed",
+                "well designed",
+                "fast",
+                "clean",
+                "robust",
+                "innovative",
+                "polished",
+                "delightful",
+                "great documentation",
+                "just works"
+            ],
+            "negative_keywords": [
+                "broken",
+                "regression",
+                "outage",
+                "vendor lock-in",
+                "enshittification",
+                "layoffs",
+                "abandoned",
+                "deprecated",
+                "buggy",
+                "unreliable",
+                "sluggish",
+                "clunky",
+                "anticompetitive",
+                "dark pattern",
+                "rug pull"
+            ]
+        }
+    },
     "subreddits": [
         "wallstreetbets",
         "stocks",

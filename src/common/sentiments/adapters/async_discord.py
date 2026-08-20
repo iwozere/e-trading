@@ -28,6 +28,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
+from src.common.sentiments.processing.bot_detector import hash_author_id, is_bot_username
 from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
 from src.notification.logger import setup_logger
 
@@ -57,7 +58,7 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
         self._session = session
         self.max_retries = max_retries
         self._consecutive_failures = 0
-        self._analyzer = HeuristicSentimentAnalyzer()
+        self._analyzer = HeuristicSentimentAnalyzer(signal_class=self.signal_class)
 
         # Discord API configuration
         self.bot_token = bot_token or os.getenv("DISCORD_BOT_TOKEN")
@@ -413,16 +414,19 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
                             if author.get("bot", False):
                                 continue
 
+                            native_username = str(author.get("username", ""))
                             normalized_msg = {
                                 "id": str(msg.get("id")),
                                 "body": content,
                                 "created_at": msg.get("timestamp"),
+                                # No raw username/discriminator/avatar retained -- author_hash is
+                                # the salted hash (sentiment-spec-rev2.md §2.11).
                                 "user": {
-                                    "username": author.get("username", ""),
-                                    "id": str(author.get("id", "")),
+                                    "username": "",
+                                    "id": hash_author_id(str(author.get("id", ""))),
                                     "followers": 0,  # Discord doesn't have followers concept
-                                    "discriminator": author.get("discriminator", ""),
-                                    "avatar": author.get("avatar", ""),
+                                    "discriminator": "",
+                                    "avatar": "",
                                 },
                                 "likes": 0,  # Discord doesn't have likes
                                 "replies": 0,  # Would need additional API calls to count
@@ -434,6 +438,10 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
                                     "guild_id": channel.get("guild_id", ""),
                                 },
                                 "provider": "discord",
+                                # Discord's own "bot" API flag already filtered these messages out
+                                # above; is_bot_username is still recorded for parity with the
+                                # other adapters' meta shape.
+                                "meta": {"is_bot": is_bot_username(native_username)},
                             }
                             messages.append(normalized_msg)
 

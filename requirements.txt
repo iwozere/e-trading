@@ -43,6 +43,7 @@ dramatiq>=1.15.0
 apscheduler>=3.10.4,<4.0  # pin to 3.x API (AsyncIOScheduler/get_jobs/remove_job); 4.x has no stable release (latest is 4.0.0a6, alpha) as of this writing — see chore/upgrade-all-dependencies
 croniter>=2.0.1
 asyncpg>=0.29.0
+atproto>=0.0.71  # Bluesky retail-sentiment adapter (src/common/sentiments/adapters/async_bluesky.py); ships no py.typed marker, see pyproject.toml mypy overrides
 vectorbt>=1.1.0  # requires pandas>=3.0.3; see pandas floor above
 
 # Web UI Backend

@@ -471,6 +471,20 @@ class AdapterManager:
 
             self._last_health_check = current_time
 
+    def get_signal_class(self, adapter_name: str) -> str:
+        """
+        Return the ``signal_class`` ("retail" | "tech_discourse") of a registered adapter
+        instance. Defaults to "retail" for unknown/unregistered names so callers can route
+        safely even before an adapter has been added.
+
+        This is the only place aggregation should ever ask "what kind of signal is this
+        provider" -- never by adapter name (sentiment-spec-rev2.md §2.2's routing invariant).
+        """
+        adapter = self._adapters.get(adapter_name)
+        if adapter is None:
+            return "retail"
+        return adapter.signal_class
+
     def get_available_adapters(self) -> List[str]:
         """Get list of adapters that are currently available (not circuit broken)."""
         available = []
@@ -538,6 +552,11 @@ def register_default_adapters() -> None:
         from src.common.sentiments.adapters.async_hf_sentiment import AsyncHFSentiment
 
         manager.register_adapter_type("huggingface", AsyncHFSentiment, {"device": -1, "max_workers": 1})
+        # Second registration of the same class under a distinct type name -- lets
+        # collect_sentiment_async.py run a tech_discourse-tuned model (e.g. distilbert) alongside
+        # the retail-tuned one (e.g. twitter-roberta) as two independent adapter instances
+        # (spec §2.5.4 per-source model routing).
+        manager.register_adapter_type("huggingface_tech", AsyncHFSentiment, {"device": -1, "max_workers": 1})
     except ImportError as e:
         _logger.warning("Could not register HuggingFace adapter: %s", e)
 
@@ -584,3 +603,21 @@ def register_default_adapters() -> None:
         manager.register_adapter_type("apewisdom", AsyncApeWisdomAdapter, {"concurrency": 3, "rate_limit_delay": 1.0})
     except ImportError as e:
         _logger.warning("Could not register ApeWisdom sentiment adapter: %s", e)
+
+    try:
+        from src.common.sentiments.adapters.async_hackernews import AsyncHackerNewsAdapter
+
+        # `tech_discourse` signal class -- no auth, shared-corpus fetch. concurrency/rate_limit
+        # here govern the many item.json fan-out requests, not per-ticker calls.
+        manager.register_adapter_type("hackernews", AsyncHackerNewsAdapter, {"concurrency": 10, "rate_limit_rps": 10.0})
+    except ImportError as e:
+        _logger.warning("Could not register Hacker News adapter: %s", e)
+
+    try:
+        from src.common.sentiments.adapters.async_bluesky import AsyncBlueskyAdapter
+
+        # `retail` signal class. Gated off by default (providers.bluesky=False) until
+        # BLUESKY_HANDLE/BLUESKY_APP_PASSWORD are configured -- see async_bluesky.py.
+        manager.register_adapter_type("bluesky", AsyncBlueskyAdapter, {"concurrency": 5, "rate_limit_delay": 0.2})
+    except ImportError as e:
+        _logger.warning("Could not register Bluesky adapter: %s", e)

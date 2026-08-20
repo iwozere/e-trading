@@ -62,7 +62,7 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
         self._session = session
         self.max_retries = max_retries
         self._consecutive_failures = 0
-        self._analyzer = HeuristicSentimentAnalyzer()
+        self._analyzer = HeuristicSentimentAnalyzer(signal_class=self.signal_class)
 
         # API tokens
         self.finnhub_token = finnhub_token or os.getenv("FINNHUB_API_KEY")

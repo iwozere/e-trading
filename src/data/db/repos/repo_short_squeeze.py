@@ -9,13 +9,16 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any, Dict, List, Sequence
 
 from sqlalchemy import and_, delete, desc, func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from src.data.db.models.model_short_squeeze import (
     AdHocCandidateModel,
     AlertLevel,
     DeepScanMetrics,
+    HnCorpusItem,
     ScreenerSnapshot,
+    SentimentCalibration,
     SqueezeAlert,
 )
 from src.notification.logger import setup_logger
@@ -176,6 +179,104 @@ class DeepScanMetricsRepo:
         )
 
 
+class HnCorpusRepo:
+    """
+    Repository for the shared Hacker News corpus cache (``ss_hn_corpus``).
+
+    Backs the shared-corpus fetch strategy in ``adapters/async_hackernews.py`` (spec §2.4):
+    items already cached within the configured TTL are never re-fetched from the Firebase API,
+    keeping the fetch cost O(corpus size) regardless of how many tickers are being scanned.
+    """
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def get_cached_item_ids(self, item_ids: List[int], ttl_seconds: int) -> set[int]:
+        """Return the subset of ``item_ids`` already cached and still within ``ttl_seconds``."""
+        if not item_ids:
+            return set()
+        cutoff = datetime.now(UTC) - timedelta(seconds=ttl_seconds)
+        rows = self.session.execute(
+            select(HnCorpusItem.item_id).where(
+                and_(HnCorpusItem.item_id.in_(item_ids), HnCorpusItem.fetched_at >= cutoff)
+            )
+        ).scalars()
+        return set(rows)
+
+    def upsert_items(self, items: List[Dict[str, Any]]) -> int:
+        """Bulk upsert corpus items (PK: item_id). Returns row count."""
+        if not items:
+            return 0
+        stmt = pg_insert(HnCorpusItem).values(items)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["item_id"],
+            set_={k: stmt.excluded[k] for k in items[0] if k != "item_id"},
+        )
+        self.session.execute(stmt)
+        return len(items)
+
+    def get_items_since(
+        self, since: datetime, fetched_after: datetime | None = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Return cached corpus items created at or after ``since``, as plain dicts.
+
+        Args:
+            since: Only return items whose ``created_utc`` is at or after this time.
+            fetched_after: When given, additionally require ``fetched_at >= fetched_after`` --
+                used to detect a "the whole corpus is still fresh" cache hit (see
+                ``async_hackernews.py``'s TTL-based whole-corpus reuse).
+        """
+        conditions = [HnCorpusItem.created_utc >= since]
+        if fetched_after is not None:
+            conditions.append(HnCorpusItem.fetched_at >= fetched_after)
+        rows = self.session.execute(select(HnCorpusItem).where(and_(*conditions))).scalars()
+        return [{c.key: getattr(row, c.key) for c in HnCorpusItem.__table__.columns} for row in rows]
+
+
+class SentimentCalibrationRepo:
+    """
+    Repository for per-source daily sentiment calibration rows (``ss_sentiment_calibration``).
+
+    Backs the z-score calibration step in ``processing/calibration.py`` (spec §2.5.6): one row
+    per (provider, day) is upserted after each batch run, and a trailing window is read back and
+    pooled before the next run's raw scores are calibrated.
+    """
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def upsert_daily_stats(self, provider: str, day: date, mean_score: float, std_score: float, n_obs: int) -> None:
+        """Upsert one day's (mean, std, n) for one provider (PK: provider, day)."""
+        stmt = pg_insert(SentimentCalibration).values(
+            provider=provider, day=day, mean_score=mean_score, std_score=std_score, n_obs=n_obs
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["provider", "day"],
+            set_={"mean_score": stmt.excluded.mean_score, "std_score": stmt.excluded.std_score, "n_obs": stmt.excluded.n_obs},
+        )
+        self.session.execute(stmt)
+
+    def get_trailing_observations(self, provider: str, window_days: int) -> List[Dict[str, Any]]:
+        """Return the trailing ``window_days`` of daily rows for one provider, as plain dicts."""
+        cutoff = date.today() - timedelta(days=window_days)
+        rows = self.session.execute(
+            select(SentimentCalibration).where(
+                and_(SentimentCalibration.provider == provider, SentimentCalibration.day >= cutoff)
+            )
+        ).scalars()
+        return [
+            {
+                "provider": row.provider,
+                "day": row.day.isoformat(),
+                "mean_score": float(row.mean_score),
+                "std_score": float(row.std_score),
+                "n_obs": row.n_obs,
+            }
+            for row in rows
+        ]
+
+
 class SqueezeAlertRepo:
     """Repository for squeeze alert operations."""
 
@@ -334,6 +435,8 @@ class ShortSqueezeRepo:
         self.deep_scan_metrics = DeepScanMetricsRepo(session)
         self.alerts = SqueezeAlertRepo(session)
         self.adhoc_candidates = AdHocCandidateRepo(session)
+        self.hn_corpus = HnCorpusRepo(session)
+        self.sentiment_calibration = SentimentCalibrationRepo(session)
 
     def get_active_candidates_for_deep_scan(self) -> List[str]:
         """Get all tickers that should be included in deep scan."""

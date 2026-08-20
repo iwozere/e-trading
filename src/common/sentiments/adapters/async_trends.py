@@ -188,7 +188,7 @@ class AsyncTrendsAdapter(BaseSentimentAdapter):
         if self._analyzer is None:
             from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
 
-            self._analyzer = HeuristicSentimentAnalyzer()
+            self._analyzer = HeuristicSentimentAnalyzer(signal_class=self.signal_class)
 
         msgs = await self.fetch_messages(ticker, limit=50)
         volume = sum(m.get("search_volume", 0) for m in msgs)
