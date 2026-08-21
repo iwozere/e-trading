@@ -80,37 +80,38 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
             return
 
         async with self._token_lock:
-            # Re-check after acquiring lock
+            # Re-check after acquiring lock: another coroutine may have
+            # already refreshed the token while we were waiting for the lock.
             if self._token and time.time() < self._token_expiry - 60:
                 return
 
-        if not self._session:
-            self._session = aiohttp.ClientSession()
+            if not self._session:
+                self._session = aiohttp.ClientSession()
 
-        _logger.info("Fetching new Reddit OAuth token")
-        client_id = self.client_id or ""
-        client_secret = self.client_secret or ""
-        auth = aiohttp.BasicAuth(client_id, client_secret)
-        data = {"grant_type": "client_credentials"}
-        headers = {"User-Agent": self.user_agent}
+            _logger.info("Fetching new Reddit OAuth token")
+            client_id = self.client_id or ""
+            client_secret = self.client_secret or ""
+            auth = aiohttp.BasicAuth(client_id, client_secret)
+            data = {"grant_type": "client_credentials"}
+            headers = {"User-Agent": self.user_agent}
 
-        try:
-            async with self._session.post(REDDIT_TOKEN_URL, auth=auth, data=data, headers=headers) as resp:
-                if resp.status != 200:
-                    error_text = await resp.text()
-                    _logger.error("Failed to fetch Reddit token (Status %d): %s", resp.status, error_text)
-                    resp.raise_for_status()
-                payload = await resp.json()
-                self._token = payload["access_token"]
-                # Expires in usually 3600 seconds
-                self._token_expiry = time.time() + payload.get("expires_in", 3600)
-                _logger.debug(
-                    "Successfully acquired Reddit token, expires in %d seconds", payload.get("expires_in", 3600)
-                )
-        except Exception as e:
-            _logger.error("Failed to fetch Reddit token: %s", e)
-            self._update_health_failure(e)
-            raise
+            try:
+                async with self._session.post(REDDIT_TOKEN_URL, auth=auth, data=data, headers=headers) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        _logger.error("Failed to fetch Reddit token (Status %d): %s", resp.status, error_text)
+                        resp.raise_for_status()
+                    payload = await resp.json()
+                    self._token = payload["access_token"]
+                    # Expires in usually 3600 seconds
+                    self._token_expiry = time.time() + payload.get("expires_in", 3600)
+                    _logger.debug(
+                        "Successfully acquired Reddit token, expires in %d seconds", payload.get("expires_in", 3600)
+                    )
+            except Exception as e:
+                _logger.error("Failed to fetch Reddit token: %s", e)
+                self._update_health_failure(e)
+                raise
 
     async def _request_with_retry(
         self, method: str, path: str, params: Dict | None = None, data: Dict | None = None
