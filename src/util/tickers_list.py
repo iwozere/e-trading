@@ -107,6 +107,32 @@ def get_sp500_tickers_wikipedia():
     return tickers
 
 
+def get_sp500_constituents_with_sector() -> pd.DataFrame:
+    """
+    Return current S&P 500 constituents with their GICS sector.
+
+    Same Wikipedia page and header workaround as get_sp500_tickers_wikipedia()
+    (Wikipedia rejects the default urllib User-Agent with a 403), but keeps
+    the "GICS Sector" column that the ticker-only helper drops. Added for
+    src/ml/pipeline/p21_momentum, which needs sector for its per-sector
+    position cap (docs/pipeline-specification.md §6) — kept here rather than
+    pipeline-local so any other pipeline needing sector can reuse it too.
+
+    Returns:
+        DataFrame with columns ["ticker", "sector"], one row per constituent.
+        Ticker symbols are yfinance-normalized (dots replaced with hyphens,
+        e.g. "BRK.B" -> "BRK-B"), matching get_sp500_tickers_wikipedia().
+    """
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    response = requests.get(url, headers=_WIKIPEDIA_HEADERS)
+    response.raise_for_status()
+    tables = pd.read_html(io.StringIO(response.text))
+    table = tables[0][["Symbol", "GICS Sector"]].copy()
+    table["Symbol"] = table["Symbol"].str.replace(".", "-", regex=False)  # Convert for yfinance
+    table = table.rename(columns={"Symbol": "ticker", "GICS Sector": "sector"})
+    return table.reset_index(drop=True)
+
+
 # S&P400 midcap with pandas_datareader and Wikipedia
 def get_sp_midcap_wikipedia():
     """

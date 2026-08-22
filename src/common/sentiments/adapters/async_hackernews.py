@@ -471,12 +471,16 @@ class AsyncHackerNewsAdapter(BaseSentimentAdapter):
     # ------------------------------------------------------------------
     async def fetch_summary(self, ticker: str, since_ts: int | None = None) -> Dict[str, Any]:
         tk = ticker.upper().strip()
-        await self._ensure_corpus()
-
         base = {"provider": "hackernews", "timestamp": datetime.now(UTC).isoformat()}
+
+        # Coverage is a static entity-map lookup, independent of the corpus -- check it *before*
+        # paying for (or waiting on) a shared-corpus build. Ticker not in the entity map at all --
+        # "no data", never a fabricated neutral reading -- and never worth the wait (was timing
+        # out on a cold corpus build for uncovered tickers, e.g. RYET, before this reorder).
         if self._resolver is None or not self._resolver.is_covered(tk):
-            # Not in the entity map at all -- "no data", never a fabricated neutral reading.
             return {**base, "mentions": 0, "sentiment_score": 0.0, "discussion_depth": 0.0, "tech_coverage_available": False}
+
+        await self._ensure_corpus()
 
         items = self._ticker_index.get(tk, [])
         if since_ts is not None:

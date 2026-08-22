@@ -81,6 +81,7 @@ module = [
     "hmmlearn.*",
     "joblib",
     "numba",
+    "pandas_market_calendars.*",
     "plotly.*",
     "pyarrow.*",
     "sklearn.*",

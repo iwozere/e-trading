@@ -47,29 +47,14 @@ from src.notification.logger import setup_logger
 # Initialize logger
 _logger = setup_logger(__name__)
 
-# Import API keys from donotshare configuration
+# Import cache directory from donotshare configuration. The per-provider API key constants
+# (ALPACA_API_KEY, FINNHUB_API_KEY, etc.) used to be imported here too, but DataManager never
+# reads them directly -- each downloader reads its own key from donotshare -- so they were dead
+# imports; removed rather than kept "just in case" (see monitoring.txt diagnostics cleanup).
 try:
-    from config.donotshare.donotshare import (
-        ALPACA_API_KEY,
-        ALPACA_SECRET_KEY,
-        ALPHA_VANTAGE_API_KEY,
-        DATA_CACHE_DIR,
-        FINNHUB_API_KEY,
-        FMP_API_KEY,
-        POLYGON_API_KEY,
-        TIINGO_API_KEY,
-        TWELVE_DATA_API_KEY,
-    )
+    from config.donotshare.donotshare import DATA_CACHE_DIR
 except ImportError:
-    # Fallback to environment variables if donotshare is not available
-    ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
-    FMP_API_KEY = os.getenv("FMP_API_KEY")
-    POLYGON_API_KEY = os.getenv("POLYGON_API_KEY")
-    TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY")
-    FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
-    TIINGO_API_KEY = os.getenv("TIINGO_API_KEY")
-    ALPACA_API_KEY = os.getenv("ALPACA_API_KEY")
-    ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
+    # Fallback to environment variable if donotshare is not available
     DATA_CACHE_DIR = os.getenv("DATA_CACHE_DIR", "c:/data-cache")  # Fallback if import fails
 
 # Import cache and utilities

@@ -28,9 +28,6 @@ from src.ml.pipeline.p04_short_squeeze.core.models import (
     StructuralMetrics,
     TransientMetrics,
 )
-from src.notification.logger import setup_logger
-
-_logger = setup_logger(__name__)
 
 
 class TestDailyDeepScan(unittest.TestCase):
@@ -354,6 +351,7 @@ class TestDailyDeepScan(unittest.TestCase):
 
         # Mock successful scanning for first two, failure for third
         def mock_scan_candidate(candidate, metrics):
+            del metrics  # signature must match _scan_candidate; unused in this mock
             if candidate.ticker in ["TEST1", "TEST2"]:
                 transient_metrics = TransientMetrics(
                     volume_spike=2.0, call_put_ratio=1.5, sentiment_24h=0.2, borrow_fee_pct=3.0

@@ -295,7 +295,13 @@ class NotificationServiceClient:
             message_data: Dict[str, Any] = {
                 "message_type": str(notification_type),
                 "priority": str(priority),
-                "channels": channels or ["telegram", "email"],
+                # "telegram" is intentionally excluded from the default: this queue is served by
+                # notification-bot.service, which never initializes a telegram channel instance
+                # (telegram delivery is owned by the separate telegram bot service). Defaulting to
+                # telegram here just produced a doomed delivery attempt and log noise on every
+                # unscoped send() call -- see monitoring.txt "Channel instance not available:
+                # telegram" (2026-08-22 investigation).
+                "channels": channels or ["email"],
                 "recipient_id": recipient_id or email_receiver,
                 "template_name": None,
                 "content": {"title": title, "message": message, "source": source},
@@ -648,7 +654,8 @@ class NotificationServiceClient:
             notification_type: Type of notification
             priority: Notification priority (default: HIGH)
             data: Additional data for the notification
-            channels: Specific channels to use (default: ["telegram"])
+            channels: Specific channels to use (default: ["email"] -- telegram delivery is owned
+                by the separate telegram bot service, not this notification queue)
 
         Returns:
             Dict with success status and counts:
@@ -673,8 +680,11 @@ class NotificationServiceClient:
             total_count = len(admin_ids)
             failed_admins = []
 
-            # Use telegram channel by default for admin notifications
-            notification_channels = channels or ["telegram"]
+            # Default to email: this queue is served by notification-bot.service, which never
+            # initializes a telegram channel instance (telegram delivery is owned by the separate
+            # telegram bot service). Defaulting to telegram here just produced a doomed delivery
+            # attempt and log noise ("Channel instance not available: telegram") on every call.
+            notification_channels = channels or ["email"]
 
             # Send message to each admin
             for admin_id in admin_ids:

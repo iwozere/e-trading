@@ -802,7 +802,13 @@ class FinnhubDataDownloader(BaseDataDownloader):
                         return None
 
                     if response.status != 200:
-                        _logger.warning("Finnhub news sentiment API error: %s", response.status)
+                        # 403 here means the API key's tier lacks access to this premium endpoint
+                        # -- an expected condition, not a failure: async_finnhub.py's fetch_summary
+                        # already falls back to news-based analysis when this returns None.
+                        if response.status == 403:
+                            _logger.debug("Finnhub news sentiment unavailable (403, premium endpoint)")
+                        else:
+                            _logger.warning("Finnhub news sentiment API error: %s", response.status)
                         return None
 
                     data = await response.json()
@@ -896,7 +902,13 @@ class FinnhubDataDownloader(BaseDataDownloader):
                         return None
 
                     if response.status != 200:
-                        _logger.warning("Finnhub social sentiment API error: %s", response.status)
+                        # 403 here means the API key's tier lacks access to this premium endpoint
+                        # -- an expected condition, not a failure: async_finnhub.py's fetch_summary
+                        # already falls back to news-based analysis when this returns None.
+                        if response.status == 403:
+                            _logger.debug("Finnhub social sentiment unavailable (403, premium endpoint)")
+                        else:
+                            _logger.warning("Finnhub social sentiment API error: %s", response.status)
                         return None
 
                     data = await response.json()

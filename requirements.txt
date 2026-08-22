@@ -39,6 +39,7 @@ watchdog >=6.0.0
 websocket_client >=0.40.0
 xgboost >=3.0.4
 yfinance>=0.2.64
+pandas_market_calendars>=5.4.0  # P21 momentum — NYSE (XNYS) trading calendar, see src/ml/pipeline/p21_momentum/calendar.py
 dramatiq>=1.15.0
 apscheduler>=3.10.4,<4.0  # pin to 3.x API (AsyncIOScheduler/get_jobs/remove_job); 4.x has no stable release (latest is 4.0.0a6, alpha) as of this writing — see chore/upgrade-all-dependencies
 croniter>=2.0.1
