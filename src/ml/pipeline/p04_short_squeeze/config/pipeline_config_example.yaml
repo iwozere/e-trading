@@ -66,8 +66,8 @@ sentiment:
     twitter: false                    # Twitter sentiment (requires API access)
     discord: false                    # Discord sentiment (requires channel access)
     hackernews: true                  # Hacker News tech_discourse signal (no auth required)
-    bluesky: false                    # Bluesky retail sentiment -- gated off until BLUESKY_HANDLE/
-                                       # BLUESKY_APP_PASSWORD are set (spec §2.3); flip to true once configured
+    bluesky: true                     # Bluesky retail sentiment -- enabled 2026-08-22, BLUESKY_HANDLE/
+                                      # BLUESKY_APP_PASSWORD configured (spec §2.3)
     hf_enabled: false                 # HuggingFace ML enhancement (CPU intensive)
 
   # Batch Processing Settings
@@ -78,10 +78,11 @@ sentiment:
 
   # Source Weighting (should sum to 1.0 for active providers)
   weights:
-    stocktwits: 0.4                   # 40% - high quality, trading-focused
-    news: 0.2                         # 20% - credible but lagging
-    trends: 0.1                       # 10% - supplementary
-    bluesky: 0.0                      # Inert while providers.bluesky is false; renormalized in once enabled
+    stocktwits: 0.35                  # 35% - high quality, trading-focused
+    news: 0.15                        # 15% - credible but lagging
+    trends: 0.1                       # 10% - supplementary; inert while providers.trends is false
+    bluesky: 0.4                      # 40% - largest single retail signal; the intended hedge
+                                      # against StockTwits' fragile unauthenticated access (spec §0.1)
     heuristic_vs_hf: 0.5              # 50/50 mix if HF enabled
     # hackernews is intentionally absent -- tech_discourse is never blended into this retail
     # weighting (spec §2.5.6), reported separately as tech_sentiment_24h.
