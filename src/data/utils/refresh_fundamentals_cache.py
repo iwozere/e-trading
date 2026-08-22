@@ -24,6 +24,7 @@ Usage:
 """
 
 import argparse
+import math
 import os
 import random
 import sys
@@ -117,28 +118,42 @@ def _get_symbol_cache_age_days(cache, symbol: str, data_type: str = "general") -
         return None
 
 
-def _filter_symbols_by_staleness(
+def _select_symbols_by_staleness(
     symbols: List[str],
     cache_dir: str,
     data_type: str = "general",
     stale_min_days: float | None = None,
     stale_fraction: float | None = None,
     ttl_days: int = 14,
+    chunk_fraction: float | None = None,
 ) -> List[str]:
     """
-    Keep only symbols whose latest cache age exceeds the stale threshold.
+    Narrow `symbols` down to the ones due for a refresh, oldest cache first.
 
-    Threshold can be explicit days or fraction of TTL.
+    Two independent knobs compose on top of a single age lookup per symbol:
+    - `stale_min_days` / `stale_fraction`: a hard "not due yet" filter — drop symbols
+      whose cache isn't old enough. Same semantics as before.
+    - `chunk_fraction`: after that filter (or over the full list, if no threshold is
+      given), keep only the oldest `chunk_fraction` share of what's left, e.g. 0.5 to
+      process half the backlog per run. Symbols with no cache yet are treated as
+      infinitely stale and always sort first, so chunking never strands them.
+
+    Combine `chunk_fraction` with a schedule that runs more than once per cycle (e.g.
+    twice a week): since a just-refreshed symbol's age drops to ~0, it sorts to the
+    back of the next run's list, so repeated runs naturally round-robin through the
+    full backlog instead of re-picking the same chunk every time.
     """
-    if stale_min_days is None and stale_fraction is None:
+    if stale_min_days is None and stale_fraction is None and chunk_fraction is None:
         return symbols
 
+    threshold_days: float | None = None
     if stale_min_days is not None:
         threshold_days = float(stale_min_days)
     elif stale_fraction is not None:
         threshold_days = ttl_days * float(stale_fraction)
-    else:  # unreachable: both-None case returned above
-        return symbols
+
+    if chunk_fraction is not None and not 0.0 < chunk_fraction <= 1.0:
+        raise ValueError(f"chunk_fraction must be in (0, 1], got {chunk_fraction}")
 
     combiner = get_fundamentals_combiner()
     cache = get_fundamentals_cache(cache_dir, combiner)
@@ -150,24 +165,36 @@ def _filter_symbols_by_staleness(
     for symbol in symbols:
         age_days = _get_symbol_cache_age_days(cache, symbol, data_type=data_type)
         if age_days is None:
-            # Missing cache should be treated as stale and refreshed.
+            # Missing cache should be treated as stale (and most stale) and refreshed.
             eligible.append(symbol)
             missing_count += 1
             continue
-        if age_days >= threshold_days:
+        if threshold_days is None or age_days >= threshold_days:
             eligible.append(symbol)
             ages[symbol] = age_days
 
-    # Prefer oldest symbols first when not explicitly shuffled.
+    # Oldest (or never-cached, treated as infinitely stale) first.
     eligible.sort(key=lambda s: ages.get(s, float("inf")), reverse=True)
 
-    _logger.info(
-        "Staleness filter: threshold=%.2f days, eligible=%d/%d (missing=%d)",
-        threshold_days,
-        len(eligible),
-        len(symbols),
-        missing_count,
-    )
+    if threshold_days is not None:
+        _logger.info(
+            "Staleness filter: threshold=%.2f days, eligible=%d/%d (missing=%d)",
+            threshold_days,
+            len(eligible),
+            len(symbols),
+            missing_count,
+        )
+
+    if chunk_fraction is not None:
+        chunk_size = math.ceil(len(eligible) * chunk_fraction)
+        _logger.info(
+            "Chunk filter: keeping oldest %.0f%% of eligible symbols (%d/%d)",
+            chunk_fraction * 100,
+            chunk_size,
+            len(eligible),
+        )
+        eligible = eligible[:chunk_size]
+
     return eligible
 
 
@@ -260,6 +287,10 @@ Examples:
 
   # Cleanup only
   python src/data/utils/refresh_fundamentals_cache.py --cleanup-only
+
+  # Process only the stalest half of the cached universe (e.g. for a twice-weekly
+  # schedule where each run covers a different half of the backlog)
+  python src/data/utils/refresh_fundamentals_cache.py --chunk-fraction 0.5
         """,
     )
 
@@ -300,6 +331,16 @@ Examples:
         "--stale-fraction", type=float, default=None, help="Refresh only symbols older than TTL * fraction (e.g. 0.7)"
     )
     parser.add_argument("--stale-ttl-days", type=int, default=14, help="TTL used with --stale-fraction (default: 14)")
+    parser.add_argument(
+        "--chunk-fraction",
+        type=float,
+        default=None,
+        help=(
+            "Process only this fraction of the (optionally stale-filtered) symbols, oldest cache first "
+            "(e.g. 0.5 for half the backlog per run). Pair with a schedule that runs more than once per "
+            "cycle so the rest gets picked up next time -- already-refreshed symbols sort to the back."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done without actually doing it")
 
     args = parser.parse_args()
@@ -312,6 +353,7 @@ Examples:
     _logger.info("Data types: %s", data_types)
     _logger.info("Force refresh: %s", args.force_refresh)
     _logger.info("Max symbols: %s", args.max_symbols if args.max_symbols > 0 else "all")
+    _logger.info("Chunk fraction: %s", args.chunk_fraction if args.chunk_fraction is not None else "disabled")
     _logger.info("Shuffle: %s", args.shuffle)
     _logger.info("Dry run: %s", args.dry_run)
 
@@ -364,15 +406,16 @@ Examples:
             _logger.warning("No symbols to refresh")
             return
 
-        # Optional stale-only filtering for staggered refresh schedules
-        if args.stale_min_days is not None or args.stale_fraction is not None:
-            symbols = _filter_symbols_by_staleness(
+        # Optional stale-only filtering and/or chunking for staggered refresh schedules
+        if args.stale_min_days is not None or args.stale_fraction is not None or args.chunk_fraction is not None:
+            symbols = _select_symbols_by_staleness(
                 symbols=symbols,
                 cache_dir=args.cache_dir,
                 data_type="general",
                 stale_min_days=args.stale_min_days,
                 stale_fraction=args.stale_fraction,
                 ttl_days=args.stale_ttl_days,
+                chunk_fraction=args.chunk_fraction,
             )
             if not symbols:
                 _logger.info("No symbols meet stale threshold; nothing to refresh")

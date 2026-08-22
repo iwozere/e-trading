@@ -137,7 +137,12 @@ VALUES (
 -- ==============================================================================
 -- 4. Fundamentals Cache Refresh (Weekend)
 -- ==============================================================================
--- Runs every Saturday at 14:00 UTC (2:00 PM UTC)
+-- Runs every Saturday AND Sunday at 14:00 UTC (2:00 PM UTC).
+-- Each run processes only the stalest 50% of the cached universe
+-- (--chunk-fraction 0.5): a just-refreshed symbol's cache age drops to ~0, so it
+-- sorts to the back of the next run's list -- Sat and Sun naturally split the
+-- backlog into two disjoint halves instead of both re-picking the same one.
+-- See incident writeup: 2026-08-22 timeouts scanning all ~7.3k tickers in one run.
 -- Notifies via email on completion (success or error)
 -- ==============================================================================
 
@@ -149,8 +154,8 @@ VALUES (
     'src.data.utils.refresh_fundamentals_cache',
     '{
         "script_path": "src/data/utils/refresh_fundamentals_cache.py",
-        "script_args": [],
-        "timeout_seconds": 3600,
+        "script_args": ["--chunk-fraction", "0.5"],
+        "timeout_seconds": 21600,
         "notification_rules": {
             "conditions": [
                 {
@@ -163,7 +168,7 @@ VALUES (
             ]
         }
     }'::jsonb,
-    '0 14 * * 6',
+    '0 14 * * 6,0',
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
