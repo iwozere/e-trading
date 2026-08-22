@@ -14,6 +14,7 @@ name, weekly cadence via the profile cache TTL) but real, unlike Form4/13D-G.
 """
 
 import sys
+import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
@@ -41,6 +42,20 @@ _FORM4_LOOKBACK_DAYS = 100
 # P8's trailing-2-quarters window (config.py's default p8_lookback_quarters=2),
 # expressed in calendar days for the daily-cache walk (design-v2.md §3.1 pattern).
 _DG_LOOKBACK_DAYS = 183
+
+# Incident 2026-08-19/20/21: the on-disk Form4/13D-G caches these windows walk
+# don't yet go back the full lookback, so the "self-heal via one live EDGAR
+# call" fallback (see _load_form4_window/_load_dg_window docstrings) fired for
+# many consecutive days in a row. Each live day is EDGAR-rate-limited and can
+# take several minutes, so an unbounded backfill silently ate the entire job
+# timeout (1800s) every run, three days running, without a single watchlist
+# ticker ever getting profiled. Cap each window loader's *live-fetch* time so
+# a cold/gappy cache degrades to "fewer historical days of signal this run"
+# (self-heals gradually, day by day, same as before) instead of starving
+# per-ticker profiling completely. Budget is generous relative to the
+# scheduled job's timeout but small enough to guarantee time remains for the
+# actual profiling loop.
+_WINDOW_WARMUP_BUDGET_SECONDS = 300.0
 
 _ANNUAL_FORMS = ("10-K", "10-K/A", "20-F", "20-F/A")
 _INTERIM_FORMS = ("10-Q", "10-Q/A", "6-K")
@@ -116,6 +131,7 @@ class StructuralProfiler:
     ) -> Dict[str, StructuralProfile]:
         """Refresh (or reuse cached) profiles for every entry, return ticker → profile."""
         as_of = as_of or datetime.now().date()
+        _logger.info("Structural profiler starting: %d watchlist entries, as_of=%s", len(entries), as_of)
         form4_df = self._load_form4_window(as_of)
         dg_df = self._load_dg_window(as_of)
         out: Dict[str, StructuralProfile] = {}
@@ -271,8 +287,24 @@ class StructuralProfiler:
         frames = []
         d = as_of
         start = as_of - timedelta(days=_FORM4_LOOKBACK_DAYS)
+        window_start = time.monotonic()
+        days_walked = 0
+        days_stopped_early = 0
         while d >= start:
             if d.weekday() < 5:
+                if time.monotonic() - window_start > _WINDOW_WARMUP_BUDGET_SECONDS:
+                    days_stopped_early = 1
+                    _logger.warning(
+                        "Form 4 window load exceeded its %.0fs budget after %d day(s) — stopping early at "
+                        "%s (window start %s); older days missing from this run's signal, will self-heal "
+                        "on a later run",
+                        _WINDOW_WARMUP_BUDGET_SECONDS,
+                        days_walked,
+                        d,
+                        start,
+                    )
+                    break
+                days_walked += 1
                 try:
                     # force=False reads the on-disk cache written by the daily
                     # P15/P18 job; only a genuinely missing day triggers a
@@ -283,6 +315,14 @@ class StructuralProfiler:
                 except Exception:
                     _logger.debug("Form 4 cache read failed for %s", d)
             d -= timedelta(days=1)
+        elapsed = time.monotonic() - window_start
+        _logger.info(
+            "Form 4 window load done: %d day(s) walked, %d row-frame(s), %.1fs elapsed%s",
+            days_walked,
+            len(frames),
+            elapsed,
+            " (stopped early — see warning above)" if days_stopped_early else "",
+        )
         if not frames:
             return pd.DataFrame()
         return pd.concat(frames, ignore_index=True)
@@ -300,8 +340,24 @@ class StructuralProfiler:
         frames = []
         d = as_of
         start = as_of - timedelta(days=_DG_LOOKBACK_DAYS)
+        window_start = time.monotonic()
+        days_walked = 0
+        days_stopped_early = 0
         while d >= start:
             if d.weekday() < 5:
+                if time.monotonic() - window_start > _WINDOW_WARMUP_BUDGET_SECONDS:
+                    days_stopped_early = 1
+                    _logger.warning(
+                        "13D/G window load exceeded its %.0fs budget after %d day(s) — stopping early at "
+                        "%s (window start %s); older days missing from this run's signal, will self-heal "
+                        "on a later run",
+                        _WINDOW_WARMUP_BUDGET_SECONDS,
+                        days_walked,
+                        d,
+                        start,
+                    )
+                    break
+                days_walked += 1
                 try:
                     # force=False reads the on-disk cache P18's daily scan
                     # already writes (design-v2.md §3.1's Form4 pattern, same
@@ -313,6 +369,14 @@ class StructuralProfiler:
                 except Exception:
                     _logger.debug("13D/G cache read failed for %s", d)
             d -= timedelta(days=1)
+        elapsed = time.monotonic() - window_start
+        _logger.info(
+            "13D/G window load done: %d day(s) walked, %d row-frame(s), %.1fs elapsed%s",
+            days_walked,
+            len(frames),
+            elapsed,
+            " (stopped early — see warning above)" if days_stopped_early else "",
+        )
         if not frames:
             return pd.DataFrame()
         return pd.concat(frames, ignore_index=True)

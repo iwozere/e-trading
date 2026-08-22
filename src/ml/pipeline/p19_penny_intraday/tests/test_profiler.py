@@ -16,6 +16,7 @@ import pandas as pd
 
 from src.ml.pipeline.p19_penny_intraday.config import P19Config
 from src.ml.pipeline.p19_penny_intraday.models.watchlist_entry import WatchlistEntry
+from src.ml.pipeline.p19_penny_intraday.structural import profiler as profiler_module
 from src.ml.pipeline.p19_penny_intraday.structural.cache import StructuralProfileCache
 from src.ml.pipeline.p19_penny_intraday.structural.profiler import StructuralProfiler
 
@@ -92,6 +93,27 @@ def test_form4_read_failure_for_one_day_does_not_abort_the_window(tmp_path):
     with patch("yfinance.Ticker") as mock_ticker:
         mock_ticker.return_value.splits = pd.Series(dtype=float)
         profiles = profiler.refresh_watchlist([_entry("AAA")], as_of=_AS_OF)  # must not raise
+    assert profiles["AAA"].grade in ("A", "B", "C", "D")
+
+
+def test_form4_window_load_stops_early_once_over_time_budget(tmp_path, monkeypatch):
+    """
+    Incident 2026-08-19/20/21: a gappy on-disk cache made the "self-heal via
+    live EDGAR call" fallback walk many consecutive missing days, each slow
+    and EDGAR-rate-limited, burning the entire job timeout before a single
+    watchlist ticker got profiled. The window loader must give up on further
+    historical days once its time budget is spent rather than starve
+    per-ticker profiling — see _WINDOW_WARMUP_BUDGET_SECONDS.
+    """
+    monkeypatch.setattr(profiler_module, "_WINDOW_WARMUP_BUDGET_SECONDS", 0.0)
+    edgar = _make_edgar_mock()
+    profiler, _cache = _profiler(tmp_path, edgar=edgar)
+    with patch("yfinance.Ticker") as mock_ticker:
+        mock_ticker.return_value.splits = pd.Series(dtype=float)
+        profiles = profiler.refresh_watchlist([_entry("AAA")], as_of=_AS_OF)  # must not raise/hang
+    # Budget of 0s means the window loader must bail before its first fetch.
+    edgar.download_form4_filings.assert_not_called()
+    # Per-ticker profiling still runs to completion despite the truncated window.
     assert profiles["AAA"].grade in ("A", "B", "C", "D")
 
 
