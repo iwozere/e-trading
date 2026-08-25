@@ -12,6 +12,7 @@ from backtest.p21_momentum.robustness import (
     is_top_quartile_separated,
     log_oos_access,
     run_grid,
+    run_grid_parallel,
 )
 from backtest.p21_momentum.tests.fixtures import make_universe_panel
 
@@ -134,6 +135,59 @@ class TestRunGrid(unittest.TestCase):
             row = rows[0]
             self.assertEqual(row.lookback_start, 252)
             self.assertIn("sharpe_a", row.to_dict())
+
+
+class TestRunGridParallel(unittest.TestCase):
+    def setUp(self):
+        robustness._OOS_TOUCHED["value"] = False
+        # Strictly in-sample (pre-2017) so a test can call both run_grid() and
+        # run_grid_parallel() without tripping Rule 4's single-touch guard against itself.
+        self.panel, self.sector_by_ticker = make_universe_panel(10, "2010-01-01", "2011-06-30")
+
+    def test_matches_sequential_grid_row_content(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as d:
+            seq_rows = run_grid(
+                self.panel, self.sector_by_ticker, date(2010, 1, 1), date(2011, 6, 30),
+                grid=_TINY_GRID, oos_log_path=Path(d) / "seq_log.md",
+            )
+            par_rows = run_grid_parallel(
+                self.panel, self.sector_by_ticker, date(2010, 1, 1), date(2011, 6, 30),
+                grid=_TINY_GRID, max_workers=2, oos_log_path=Path(d) / "par_log.md",
+            )
+            self.assertEqual(len(par_rows), len(seq_rows))
+            self.assertEqual(par_rows[0].to_dict(), seq_rows[0].to_dict())
+
+    def test_multi_combo_grid_runs_all_combinations(self):
+        import tempfile
+        from pathlib import Path
+
+        grid = {**_TINY_GRID, "hold_rank": (40, 60, 100)}
+        with tempfile.TemporaryDirectory() as d:
+            rows = run_grid_parallel(
+                self.panel, self.sector_by_ticker, date(2010, 1, 1), date(2011, 6, 30),
+                grid=grid, max_workers=2, oos_log_path=Path(d) / "log.md",
+            )
+            self.assertEqual(len(rows), 3)
+            self.assertEqual(sorted(r.hold_rank for r in rows), [40, 60, 100])
+
+    def test_out_of_sample_touch_twice_without_ack_raises(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as d:
+            log_path = Path(d) / "oos_access_log.md"
+            run_grid_parallel(
+                self.panel, self.sector_by_ticker, date(2020, 1, 1), date(2026, 6, 30),
+                grid=_TINY_GRID, max_workers=2, oos_log_path=log_path,
+            )
+            with self.assertRaises(OutOfSampleReaccessError):
+                run_grid_parallel(
+                    self.panel, self.sector_by_ticker, date(2020, 1, 1), date(2026, 6, 30),
+                    grid=_TINY_GRID, max_workers=2, oos_log_path=log_path,
+                )
 
 
 if __name__ == "__main__":

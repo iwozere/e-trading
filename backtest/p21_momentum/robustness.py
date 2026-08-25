@@ -32,7 +32,7 @@ import numpy as np
 import pandas as pd
 
 from backtest.p21_momentum.metrics import compute_return_metrics
-from backtest.p21_momentum.runner import BacktestParams, run_backtest
+from backtest.p21_momentum.runner import BacktestParams, BacktestResult, run_backtest
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -216,38 +216,148 @@ def run_grid(
     keys = list(grid.keys())
     rows: List[GridRow] = []
     for combo in itertools.product(*(grid[k] for k in keys)):
-        params_kwargs = dict(zip(keys, combo))
-        params = BacktestParams(**params_kwargs)
-        result = run_backtest(panel, sector_by_ticker, start, end, params=params)
-        if result.nav_daily.empty:
-            continue
-        return_a = compute_return_metrics(result.nav_daily["nav_a"], result.nav_daily["nav_c"])
-        return_c = compute_return_metrics(result.nav_daily["nav_c"], result.nav_daily["nav_c"])
-        turnover_pct: List[float] = []
-        nav_index = pd.DatetimeIndex(result.nav_daily.index)
-        for m in result.monthly_metrics:
-            year, mon = (int(x) for x in m.month.split("-"))
-            month_rows = result.nav_daily[(nav_index.year == year) & (nav_index.month == mon)]
-            if len(month_rows):
-                nav = float(month_rows["nav_a"].iloc[-1])
-                if nav > 0:
-                    turnover_pct.append(m.turnover_two_way_usd / nav * 100.0)
-        turnover_annualized = float(np.median(turnover_pct) * 12) if turnover_pct else 0.0
-
-        rows.append(
-            GridRow(
-                lookback_start=params.lookback_start,
-                skip_recent=params.skip_recent,
-                entry_rank=params.entry_rank,
-                hold_rank=params.hold_rank,
-                max_per_sector=params.max_per_sector,
-                vix_threshold=params.vix_threshold,
-                sharpe_a=return_a.sharpe,
-                sharpe_c=return_c.sharpe,
-                turnover_annualized_median_pct=turnover_annualized,
-            )
-        )
+        params = BacktestParams(**dict(zip(keys, combo)))
+        row = _run_one_combo_inline(panel, sector_by_ticker, start, end, params)
+        if row is not None:
+            rows.append(row)
     _logger.info("Robustness grid: %d combinations evaluated over %s", len(rows), window_label)
+    return rows
+
+
+def _grid_row_from_result(result: "BacktestResult", params: BacktestParams) -> Optional[GridRow]:
+    """Shared per-combination metric extraction, used by both the sequential and parallel grid runners."""
+    if result.nav_daily.empty:
+        return None
+    return_a = compute_return_metrics(result.nav_daily["nav_a"], result.nav_daily["nav_c"])
+    return_c = compute_return_metrics(result.nav_daily["nav_c"], result.nav_daily["nav_c"])
+    turnover_pct: List[float] = []
+    nav_index = pd.DatetimeIndex(result.nav_daily.index)
+    for m in result.monthly_metrics:
+        year, mon = (int(x) for x in m.month.split("-"))
+        month_rows = result.nav_daily[(nav_index.year == year) & (nav_index.month == mon)]
+        if len(month_rows):
+            nav = float(month_rows["nav_a"].iloc[-1])
+            if nav > 0:
+                turnover_pct.append(m.turnover_two_way_usd / nav * 100.0)
+    turnover_annualized = float(np.median(turnover_pct) * 12) if turnover_pct else 0.0
+
+    return GridRow(
+        lookback_start=params.lookback_start,
+        skip_recent=params.skip_recent,
+        entry_rank=params.entry_rank,
+        hold_rank=params.hold_rank,
+        max_per_sector=params.max_per_sector,
+        vix_threshold=params.vix_threshold,
+        sharpe_a=return_a.sharpe,
+        sharpe_c=return_c.sharpe,
+        turnover_annualized_median_pct=turnover_annualized,
+    )
+
+
+def _run_one_combo_inline(
+    panel: Dict[str, pd.DataFrame], sector_by_ticker: Dict[str, str], start: date, end: date, params: BacktestParams
+) -> Optional[GridRow]:
+    """One grid combination's run, in the calling process (used by the sequential run_grid())."""
+    result = run_backtest(panel, sector_by_ticker, start, end, params=params)
+    return _grid_row_from_result(result, params)
+
+
+# ---------------------------------------------------------------------------
+# Parallel grid runner — same math as run_grid(), fanned out across processes.
+#
+# 729 sequential runs of the ~230s-per-run in-sample window is ~46 hours; not
+# realistic to run interactively. Across 8 processes that drops to roughly
+# 46/8 ~= 6 hours, closer to an overnight run. Each worker gets its own copy
+# of the frozen panel via the pool initializer (paid once per worker, not
+# once per combination) rather than reloading from disk per task.
+# ---------------------------------------------------------------------------
+
+_worker_panel: Optional[Dict[str, pd.DataFrame]] = None
+_worker_sector_by_ticker: Optional[Dict[str, str]] = None
+
+
+def _init_worker(panel: Dict[str, pd.DataFrame], sector_by_ticker: Dict[str, str]) -> None:
+    """ProcessPoolExecutor initializer — stashes the frozen panel in this worker's globals once."""
+    global _worker_panel, _worker_sector_by_ticker
+    _worker_panel = panel
+    _worker_sector_by_ticker = sector_by_ticker
+
+
+def _run_one_combo_worker(args: Tuple[Dict[str, object], date, date]) -> Optional[dict]:
+    """One grid combination's run, inside a worker process. Returns a plain dict (picklable)."""
+    params_kwargs, start, end = args
+    if _worker_panel is None or _worker_sector_by_ticker is None:
+        raise RuntimeError("_run_one_combo_worker called before _init_worker populated this process's globals")
+    params = BacktestParams(**params_kwargs)  # type: ignore[arg-type]
+    result = run_backtest(_worker_panel, _worker_sector_by_ticker, start, end, params=params)
+    row = _grid_row_from_result(result, params)
+    return row.to_dict() if row is not None else None
+
+
+def run_grid_parallel(
+    panel: Dict[str, pd.DataFrame],
+    sector_by_ticker: Dict[str, str],
+    start: date,
+    end: date,
+    grid: Optional[Dict[str, Sequence]] = None,
+    max_workers: Optional[int] = None,
+    acknowledge_oos_reaccess: bool = False,
+    oos_log_path: Path = DEFAULT_OOS_LOG_PATH,
+    progress_every: int = 25,
+) -> List[GridRow]:
+    """
+    Same computation as :func:`run_grid`, fanned out across a process pool.
+
+    Rule 4's single-out-of-sample-touch guard (:data:`_OOS_TOUCHED`) and access log
+    (:func:`log_oos_access`) are evaluated once up front in this (the calling) process, exactly
+    as in :func:`run_grid` — workers never touch that state.
+
+    Args:
+        max_workers: Defaults to ``os.cpu_count()``.
+        progress_every: Log an info line every N completed combinations (729 combinations at
+            ~minutes each otherwise gives no feedback for hours).
+
+    Returns:
+        One GridRow per parameter combination that produced a non-empty result. Order is
+        completion order, not grid iteration order (unlike run_grid()) — callers that need a
+        deterministic row order should sort the result themselves; §14.9 B10's determinism
+        requirement is about the backtest engine's own output, not this aggregation's row
+        order, so this is not a Rule 4/B10 violation.
+    """
+    import os
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    grid = grid or ROBUSTNESS_GRID
+    touches_oos = start <= OUT_OF_SAMPLE_END and end >= OUT_OF_SAMPLE_START
+    if touches_oos:
+        if _OOS_TOUCHED["value"] and not acknowledge_oos_reaccess:
+            raise OutOfSampleReaccessError(
+                "This process has already evaluated the out-of-sample window once (spec §14.5 "
+                "Rule 4). Pass acknowledge_oos_reaccess=True if this repeated access is deliberate."
+            )
+        _OOS_TOUCHED["value"] = True
+
+    window_label = f"{start.isoformat()}..{end.isoformat()}"
+    reason = "out-of-sample grid run (parallel)" if touches_oos else "in-sample grid run (parallel)"
+    log_oos_access(window_label, reason, log_path=oos_log_path)
+
+    keys = list(grid.keys())
+    combos = list(itertools.product(*(grid[k] for k in keys)))
+    tasks = [(dict(zip(keys, combo)), start, end) for combo in combos]
+    workers = max_workers or os.cpu_count() or 1
+
+    _logger.info("Robustness grid (parallel): %d combinations, %d workers, %s", len(tasks), workers, window_label)
+    rows: List[GridRow] = []
+    completed = 0
+    with ProcessPoolExecutor(max_workers=workers, initializer=_init_worker, initargs=(panel, sector_by_ticker)) as ex:
+        futures = [ex.submit(_run_one_combo_worker, task) for task in tasks]
+        for fut in as_completed(futures):
+            row_dict = fut.result()
+            completed += 1
+            if row_dict is not None:
+                rows.append(GridRow(**row_dict))
+            if completed % progress_every == 0 or completed == len(tasks):
+                _logger.info("Robustness grid (parallel): %d/%d combinations done", completed, len(tasks))
     return rows
 
 

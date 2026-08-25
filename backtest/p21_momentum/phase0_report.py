@@ -56,6 +56,7 @@ from backtest.p21_momentum.robustness import (  # noqa: E402
     render_deflated_sharpe_md,
     render_grid_csv,
     run_grid,
+    run_grid_parallel,
 )
 from backtest.p21_momentum.runner import BacktestParams, BacktestResult, run_backtest  # noqa: E402
 from backtest.p21_momentum.stress_windows import (  # noqa: E402
@@ -316,6 +317,8 @@ def run_phase0_study(
     acknowledge_oos_reaccess: bool = False,
     skip_robustness: bool = False,
     skip_cost_sensitivity: bool = False,
+    sequential_grid: bool = False,
+    grid_max_workers: Optional[int] = None,
     start: date = BACKTEST_START,
     end: date = BACKTEST_END,
 ) -> Path:
@@ -363,7 +366,22 @@ def run_phase0_study(
         in_sample_start = max(start, IN_SAMPLE_START)
         in_sample_end = min(end, IN_SAMPLE_END)
         if in_sample_start < in_sample_end:
-            grid_rows = run_grid(panel, sector_by_ticker, in_sample_start, in_sample_end)
+            if sequential_grid:
+                grid_rows = run_grid(panel, sector_by_ticker, in_sample_start, in_sample_end)
+            else:
+                grid_rows = run_grid_parallel(
+                    panel, sector_by_ticker, in_sample_start, in_sample_end, max_workers=grid_max_workers
+                )
+                # run_grid_parallel() returns completion order, not grid order — sort for a
+                # reproducible grid_729.csv row order across runs (spec §14.9 B10's spirit, even
+                # though B10 itself is about the backtest engine, not this CSV's row order).
+                grid_rows = sorted(
+                    grid_rows,
+                    key=lambda r: (
+                        r.lookback_start, r.skip_recent, r.entry_rank,
+                        r.hold_rank, r.max_per_sector, r.vix_threshold,
+                    ),
+                )
             render_grid_csv(grid_rows).to_csv(ROBUSTNESS_DIR / "grid_729.csv", index=False)
             n_months = (
                 (in_sample_end.year - in_sample_start.year) * 12 + (in_sample_end.month - in_sample_start.month)
@@ -402,6 +420,14 @@ def main() -> None:
     parser.add_argument(
         "--skip-cost-sensitivity", action="store_true", help="Skip the slippage sweep + turnover curve."
     )
+    parser.add_argument(
+        "--sequential-grid", action="store_true",
+        help="Run the robustness grid single-process (default: parallel across all CPU cores).",
+    )
+    parser.add_argument(
+        "--grid-workers", type=int, default=None,
+        help="Worker process count for the parallel robustness grid (default: os.cpu_count()).",
+    )
     args = parser.parse_args()
 
     run_phase0_study(
@@ -409,6 +435,8 @@ def main() -> None:
         acknowledge_oos_reaccess=args.acknowledge_oos_reaccess,
         skip_robustness=args.skip_robustness,
         skip_cost_sensitivity=args.skip_cost_sensitivity,
+        sequential_grid=args.sequential_grid,
+        grid_max_workers=args.grid_workers,
     )
 
 
