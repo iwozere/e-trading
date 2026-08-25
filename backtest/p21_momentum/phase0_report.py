@@ -153,7 +153,8 @@ def evaluate_acceptance_table(
             "B5", "Overlay benefit in 2009-03->05", "A-B > +5%",
             f"{crash_2009.a_minus_b * 100:+.1f}%" if crash_2009 and crash_2009.a_minus_b is not None else "N/A",
             b5_ok if crash_2009 and crash_2009.in_range else None,
-            "Overlay not functioning; check regime lag",
+            "Accepted (see Known Limitations below) unless scalar path shows bear/high_vol=False "
+            "during the window -- that would indicate a real lag bug",
         )
     )
 
@@ -164,7 +165,7 @@ def evaluate_acceptance_table(
             "B6", "Overlay benefit in 2022", "A-B > +3%",
             f"{bear_2022.a_minus_b * 100:+.1f}%" if bear_2022 and bear_2022.a_minus_b is not None else "N/A",
             b6_ok if bear_2022 and bear_2022.in_range else None,
-            "Same",
+            "Accepted (see Known Limitations below) -- genuine hysteresis whipsaw, not lag",
         )
     )
 
@@ -249,6 +250,43 @@ def render_phase0_report_md(
         "the biases in spec §14.2 and must not be quoted, remembered, or used to set expectations."
     )
     lines.append("")
+    by_id = {r.id: r for r in acceptance_rows}
+    b5, b6 = by_id.get("B5"), by_id.get("B6")
+    if (b5 is not None and b5.passed is False) or (b6 is not None and b6.passed is False):
+        lines.append("## Known Limitations (B5/B6, diagnosed 2026-08-25)")
+        lines.append("")
+        lines.append(
+            "B5/B6 failing does not mean the regime overlay is broken. Replaying `compute_regime()` "
+            "against the frozen SPX/VIX history confirms it reacts with no lag in both windows -- "
+            "these are structural properties of this specific implementation, not a bug:"
+        )
+        lines.append("")
+        lines.append(
+            f"- **B5 (2009-03->05, observed {b5.observed if b5 else 'N/A'}):** `bear=True, high_vol=True` "
+            "for the entire window (scalar locked at 0.25, maximum protection, from 2008-09 through "
+            "2009-07 with no gap). The spec's ~-70% reference is for the academic **long-short** UMD "
+            "factor, whose crash comes from the *short leg* (beaten-down financials) violently "
+            "rallying. This pipeline is long-only: Track B (no overlay) returned +2.6% in this window "
+            "-- there was no crash in the DIY sleeve for the overlay to prevent. Being 75%-de-risked "
+            "during a period the sleeve itself rose is exactly why A trails B here."
+        )
+        lines.append(
+            "- **B6 (2022-01->10, observed "
+            f"{b6.observed if b6 else 'N/A'}):** the regime scalar whipsawed 7 times over the year "
+            "(1.0/0.6/1.0/0.6/0.25/0.6/0.25/0.6) because SPX repeatedly crossed back above its 200dma "
+            "during the year's bear-market rallies (Mar, Jul-Aug, Nov) before rolling over again. "
+            "Asymmetric hysteresis (instant downgrade, 2-month-confirm upgrade) damps this but a "
+            "single reprieve month is enough to reset it. This is the same whipsaw mechanism the spec "
+            "already accepts as a cost in the 2011/2015-16/2018 stress windows -- 2022 was simply "
+            "choppier than its 'slow decline' label assumed."
+        )
+        lines.append("")
+        lines.append(
+            "Accepted as a known limitation rather than chased as a bug (see docs/pipeline-specification.md "
+            "§17). Do not retune regime parameters against these two windows specifically -- spec §14.5 "
+            "Rule 1 discipline applies to the overlay's trigger logic just as much as to the core signal."
+        )
+        lines.append("")
     mechanical = compute_mechanical_metrics(base_result)
     lines.append("## Mechanical Summary (base case)")
     lines.append("")

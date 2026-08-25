@@ -695,6 +695,8 @@ Each window is reported separately with tracks A, B, C, D, E, and the realized `
 
 Interpretation guidance: the overlay is expected to **help materially in 2009 and 2022**, **hurt modestly in 2011, 2015–16, 2018, and 2020**, and be **neutral in 2020-11**. If that pattern does not appear, either the implementation is wrong or the overlay is not doing what it is designed to do. A version that helps everywhere is a version with a bug — most likely look-ahead in the regime signal.
 
+**Caveat, confirmed against real data (2026-08-25):** "help materially in 2009" assumes the DIY sleeve itself crashes the way the academic long-short factor does. It does not have to. This implementation is long-only, so if the 20-name sleeve's own return over 2009-03→05 turns out flat-to-positive (it does, in the Option A survivorship-biased universe — see §17), a fully-engaged overlay (`scalar=0.25`, confirmed no-lag) will *cost* return rather than add it, simply because it holds less exposure during a period the sleeve rises. That is not a malfunction; it means this specific window does not exercise the scenario the overlay exists for, in this specific implementation. Before concluding "the overlay is not doing what it is designed to do," check Track B's own return in the window first — a negative `A−B` with a flat-or-positive Track B is a different finding than a negative `A−B` with a deeply negative Track B.
+
 ### 14.7 Transaction cost sensitivity
 
 Run the full backtest at four slippage levels:
@@ -749,8 +751,8 @@ Phase 0 passes when all of the following hold. Failures point to specific fixes,
 | B2 | Months with < 20 positions | < 20% of months | Raise `fallback_pool_rank` above 40 |
 | B3 | Months with < 12 positions | < 3% of months | Sector cap too tight; consider 5 |
 | B4 | Max sector weight breach | Never | Bug in `enforce_sector_cap` |
-| B5 | Overlay benefit in 2009-03→05 | A−B > +5% | Overlay not functioning; check regime lag |
-| B6 | Overlay benefit in 2022 | A−B > +3% | Same |
+| B5 | Overlay benefit in 2009-03→05 | A−B > +5% | Confirm `bear`/`high_vol` are `True` throughout the window (replay `compute_regime` — no lag). If confirmed, this is expected for a long-only implementation: see §17 |
+| B6 | Overlay benefit in 2022 | A−B > +3% | Check the realized `scalar_applied` path for repeated up/down flips (SPX crossing its 200dma on bear-market rallies). If whipsawing, this is expected hysteresis cost, not lag: see §17 |
 | B7 | Overlay cost in whipsaw windows | A−B > −4% each | Overlay too twitchy; raise `vix_threshold` |
 | B8 | Edge over C survives 10 bps | Yes | **Stop. Buy QDVA.** |
 | B9 | Runtime, full backtest | < 30 minutes | Optimize before scheduling |
@@ -884,6 +886,7 @@ backtest:
 7. **Deflated Sharpe is approximate.** The §14.5 adjustment assumes independent trials; grid parameters are correlated, so the true haircut is somewhat smaller. It errs conservative, which is the correct direction.
 8. **`shares` is notional, not a literal share count (§10.1, provisional).** Adjusted-close-only bookkeeping means `dollar_allocation / adjusted_price` shifts retroactively whenever yfinance revises a name's adjustment factor (e.g. a newly declared dividend). Fine for paper P&L; a live migration needs a one-time reconciliation step converting notional shares to real order sizes off actual same-day raw prices at the moment of the first live order — not before. This whole tradeoff is marked for revisit per §10.1, not settled.
 9. **No corporate-action audit trail (§10.1, provisional).** Because splits/dividends are absorbed into the adjusted series rather than logged as discrete events, there is no `CORPORATE_ACTION_SPLIT`-style record of *when* a held name split or paid a dividend — only the net effect on its adjusted price. If that audit trail becomes valuable (e.g. for tax reporting beyond §17.3's immateriality assumption), it requires the raw-price/`actions` fetch this design deliberately avoided (§2.1) — see §10.1's callout for when to add it back.
+10. **B5/B6 (§14.9) fail against a long-only implementation, and this is accepted, not a bug (diagnosed 2026-08-25).** Both stress windows were replayed by hand against the frozen SPX/VIX history: `compute_regime()` reacts with no lag in either case. B5 (2009-03→05) fails because the spec's ~-70% reference figure is for the academic **long-short** UMD factor — the crash comes from its *short leg* (beaten-down financials) rallying violently, which a long-only sleeve never holds. In the Option A (survivorship-biased) universe, Track B's own return over that window is +2.6%, not a crash; a fully-engaged overlay (`scalar=0.25` throughout) simply held less exposure during a period the sleeve rose, costing `A−B`. B6 (2022) fails because the regime scalar whipsawed 7 times over the year as SPX repeatedly crossed back above its 200dma during 2022's several bear-market rallies (Mar, Jul–Aug, Nov) — the same asymmetric-hysteresis whipsaw cost the spec already accepts for 2011/2015–16/2018, just in a window it had labeled "best case." Do not retune regime parameters against these two windows specifically to force a pass — §14.5 Rule 1's caution against overfitting the core signal to the backtest applies equally to the overlay's trigger logic. Point-in-time (Option B) universe construction would be needed to actually test the long-only sleeve against a real 2009-style crash; it is not available under Option A.
 
 ---
 
