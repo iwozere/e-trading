@@ -45,7 +45,12 @@ PRICES_PATH = DATA_DIR / "prices.parquet"
 SIDECAR_PATH = DATA_DIR / "prices_fetch_metadata.json"
 SECTORS_PATH = DATA_DIR / "constituents.json"
 
-BACKTEST_START = "2005-01-01"
+# Fetched 15 months before the official study start (2005-01-01, phase0_report.BACKTEST_START)
+# so compute_signal's MIN_HISTORY=260-bar lookback (~13 months, confirmed by
+# tests/test_runner.py's warmup comment) is already satisfied on day one of the evaluation
+# window. Without this buffer the strategy holds zero positions for all of 2005 -- the exact
+# cause of the P21 Phase 0 B3 acceptance failure (pct_months_below_12), diagnosed 2026-08-23.
+BACKTEST_START = "2003-10-01"
 BACKTEST_END = "2026-06-30"
 
 _PROXY_TICKER = "MTUM"

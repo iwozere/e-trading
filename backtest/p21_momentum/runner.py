@@ -63,7 +63,7 @@ mutating live state directly has no such reconstruction gap.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from typing import Dict, List, Literal, Optional, Set, Tuple
 
 import pandas as pd
@@ -489,9 +489,21 @@ def run_backtest(
         raise ValueError(f"No trading days between {start} and {end}")
     calendar_index = pd.DatetimeIndex([pd.Timestamp(d) for d in cal_days])
 
-    close_frame = _prepare_field_frame(panel, all_tickers, calendar_index, "close")
-    open_frame = _prepare_field_frame(panel, all_tickers, calendar_index, "open")
-    volume_frame = _prepare_field_frame(panel, universe, calendar_index, "volume")
+    # The frames signal computation reads via `.loc[:ts]` need history *before* `start` too —
+    # compute_signal's MIN_HISTORY=260-bar lookback (~13 months) would otherwise find nothing
+    # to look back on for the first ~13 months of the range, holding zero positions the entire
+    # time (diagnosed as the cause of the P21 Phase 0 B3 acceptance failure, 2026-08-23). This
+    # buffer only widens the frames used for lookback slicing — `calendar_index` (which drives
+    # the day loop, signal/execution dates, and nav_daily's own date range) is untouched, so
+    # output still starts exactly at `start`. fetch_frozen_panel.py fetches 15 months of extra
+    # history up front for exactly this purpose; 450 calendar days here matches that with a
+    # small margin for lookback_days to round down or fall on a weekend/holiday.
+    lookback_days = trading_days(start - timedelta(days=450), end)
+    lookback_calendar_index = pd.DatetimeIndex([pd.Timestamp(d) for d in lookback_days])
+
+    close_frame = _prepare_field_frame(panel, all_tickers, lookback_calendar_index, "close")
+    open_frame = _prepare_field_frame(panel, all_tickers, lookback_calendar_index, "open")
+    volume_frame = _prepare_field_frame(panel, universe, lookback_calendar_index, "volume")
 
     pairs = _signal_execution_pairs(start, end)
     signal_dates: Dict[date, Tuple[date, str]] = {sd: (ed, key) for sd, ed, key in pairs}

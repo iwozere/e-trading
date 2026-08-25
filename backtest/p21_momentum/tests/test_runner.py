@@ -89,6 +89,35 @@ class TestRunBacktestParamOverrides(unittest.TestCase):
             self.assertLessEqual(m.position_count, 5)
 
 
+class TestRunBacktestLookbackBuffer(unittest.TestCase):
+    """
+    Regression test for the P21 Phase 0 B3 acceptance failure (diagnosed 2026-08-23):
+    run_backtest() used to build close_frame/open_frame/volume_frame from
+    trading_days(start, end) only, silently discarding any panel history before
+    `start` — so compute_signal's MIN_HISTORY=260-bar lookback had nothing to look
+    back on for the first ~13 months of *any* range, regardless of how much history
+    the panel actually held before `start`. Fixed by widening the frames (only) to
+    start - timedelta(days=450), while the day loop / signal dates / nav_daily still
+    run exactly [start, end].
+    """
+
+    def test_position_count_positive_from_first_month_given_panel_history_before_start(self):
+        # Panel covers 16 months before `start` -- comfortably over MIN_HISTORY's ~13-month
+        # requirement -- so, with the fix, the very first rebalance should already hold
+        # positions. Under the pre-fix behavior this would be 0 (warmup restarts at `start`
+        # regardless of the panel's actual history).
+        panel, sector_by_ticker = _make_universe_panel(20, "2018-09-01", "2021-12-31")
+        result = run_backtest(panel, sector_by_ticker, date(2020, 1, 1), date(2021, 12, 31))
+        self.assertGreater(result.monthly_metrics[0].position_count, 0)
+
+    def test_nav_daily_still_starts_exactly_at_start_despite_lookback_buffer(self):
+        # The lookback widening must only affect the internal signal-lookback frames,
+        # never the reported date range.
+        panel, sector_by_ticker = _make_universe_panel(20, "2018-09-01", "2021-12-31")
+        result = run_backtest(panel, sector_by_ticker, date(2020, 1, 1), date(2021, 12, 31))
+        self.assertEqual(result.nav_daily.index.min().date(), date(2020, 1, 2))  # first trading day of 2020
+
+
 class TestRunBacktestEdgeCases(unittest.TestCase):
     def test_empty_panel_raises_or_produces_no_trades(self):
         result = run_backtest({}, {}, date(2020, 1, 1), date(2020, 3, 31))

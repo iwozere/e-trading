@@ -98,3 +98,9 @@ logs/
 *.pth
 *.pkl
 *.png
+
+# P21 Phase 0 backtest generated reports (data/ and results/ subdirs under
+# backtest/p21_momentum/ are already covered by the blanket data//results/
+# rules above; the .py source + tests/ package stay tracked as normal).
+backtest/p21_momentum/*.md
+!backtest/p21_momentum/README.md
