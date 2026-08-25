@@ -7,10 +7,12 @@ from datetime import date
 
 import backtest.p21_momentum.robustness as robustness
 from backtest.p21_momentum.robustness import (
+    GridRow,
     OutOfSampleReaccessError,
     deflated_sharpe_band,
     is_top_quartile_separated,
     log_oos_access,
+    render_deflated_sharpe_md,
     run_grid,
     run_grid_parallel,
 )
@@ -54,6 +56,55 @@ class TestTopQuartileSeparation(unittest.TestCase):
     def test_clear_outlier_is_separated(self):
         sharpes = [0.5] * 19 + [5.0]
         self.assertTrue(is_top_quartile_separated(sharpes))
+
+
+def _rows_with_sharpes(sharpes) -> list:
+    """Build minimal GridRow objects carrying only the sharpe_a values under test."""
+    return [GridRow(252, 21, 20, 60, 4, 28.0, s, 0.5, 150.0) for s in sharpes]
+
+
+class TestRenderDeflatedSharpeMd(unittest.TestCase):
+    """
+    Regression tests for the wording bug fixed 2026-08-25: the report used to claim the
+    best configuration was "above the by-chance band" whenever it was merely separated
+    from the top-quartile median, even when `best` actually fell *inside* [low, high].
+    Four cases must each get their own, factually accurate sentence.
+    """
+
+    N_TRIALS = 50
+    N_OBSERVATIONS = 200
+
+    def _band(self):
+        return deflated_sharpe_band(self.N_TRIALS, self.N_OBSERVATIONS)
+
+    def test_below_band_reports_no_skill(self):
+        low, _ = self._band()
+        md = render_deflated_sharpe_md(_rows_with_sharpes([low - 10.0] * self.N_TRIALS), self.N_OBSERVATIONS)
+        self.assertIn("falls below the by-chance band", md)
+
+    def test_flat_surface_not_separated(self):
+        low, high = self._band()
+        constant = low + 0.1 * (high - low)
+        md = render_deflated_sharpe_md(_rows_with_sharpes([constant] * self.N_TRIALS), self.N_OBSERVATIONS)
+        self.assertIn("not clearly separated from the top quartile", md)
+
+    def test_separated_but_within_band_is_not_reported_as_above_it(self):
+        low, high = self._band()
+        width = high - low
+        v = low + 0.1 * width
+        best = low + 0.6 * width  # separated from v (see docstring math), still <= high
+        sharpes = [v] * (self.N_TRIALS - 1) + [best]
+        md = render_deflated_sharpe_md(_rows_with_sharpes(sharpes), self.N_OBSERVATIONS)
+        self.assertIn("falls **within** the expected-by-chance band, not above it", md)
+        self.assertNotIn("above the by-chance band", md)
+
+    def test_separated_and_above_band_reports_above(self):
+        low, high = self._band()
+        v = low + 0.1 * (high - low)
+        best = high + 1.0
+        sharpes = [v] * (self.N_TRIALS - 1) + [best]
+        md = render_deflated_sharpe_md(_rows_with_sharpes(sharpes), self.N_OBSERVATIONS)
+        self.assertIn("separated from the top-quartile median and above the by-chance band", md)
 
 
 class TestOosAccessLog(unittest.TestCase):

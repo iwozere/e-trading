@@ -391,6 +391,18 @@ def render_deflated_sharpe_md(rows: List[GridRow], n_observations: int) -> str:
             "(spec §14.5 Rule 3's practical decision rule). Treat the whole surface as flat and "
             "use the literature defaults — this is the expected, correct outcome."
         )
+    elif best <= high:
+        # Separated from the rest of the grid, but that is a different claim from beating chance
+        # outright -- `best` still sits inside [low, high], not above it. Conflating the two
+        # overstates the evidence (caught 2026-08-25: this branch used to fall through to the
+        # "above the by-chance band" text below even when best <= high).
+        lines.append(
+            "The best configuration is separated from the top-quartile median, but its Sharpe still "
+            "falls **within** the expected-by-chance band, not above it — separation from the rest "
+            "of the grid is not the same as beating chance outright. Inspect the marginal surface "
+            "before trusting this; the literature defaults remain the safer choice absent stronger "
+            "evidence."
+        )
     else:
         lines.append(
             "The best configuration is separated from the top-quartile median and above the "
