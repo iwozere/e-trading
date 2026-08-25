@@ -34,6 +34,17 @@ from src.ml.pipeline.p04_short_squeeze.config.data_classes import (
     ScreenerConfig,
     ScreenerFilters,
     ScreenerWeights,
+    SentimentBatching,
+    SentimentBluesky,
+    SentimentCache,
+    SentimentCalibration,
+    SentimentConfig,
+    SentimentHackerNews,
+    SentimentHf,
+    SentimentMonitoring,
+    SentimentProviders,
+    SentimentThresholds,
+    SentimentWeights,
     UniverseConfig,
     WeeklyReportConfig,
 )
@@ -164,6 +175,7 @@ class ConfigManager:
             reporting = self._build_report_config(config_dict.get("reporting", {}))
             performance = self._build_performance_config(config_dict.get("performance", {}))
             scoring = self._build_scoring_config(config_dict.get("scoring", {}))
+            sentiment = self._build_sentiment_config(config_dict.get("sentiment", {}))
 
             return PipelineConfig(
                 scheduling=scheduling,
@@ -174,6 +186,7 @@ class ConfigManager:
                 reporting=reporting,
                 performance=performance,
                 scoring=scoring,
+                sentiment=sentiment,
             )
 
         except Exception as e:
@@ -357,6 +370,107 @@ class ConfigManager:
             weight_validation=config.get("weight_validation", True),
         )
 
+    def _build_sentiment_config(self, config: Dict[str, Any]) -> SentimentConfig:
+        """Build sentiment module configuration (spec sentiment-spec-rev2.md)."""
+        providers_config = config.get("providers", {})
+        batching_config = config.get("batching", {})
+        weights_config = config.get("weights", {})
+        thresholds_config = config.get("thresholds", {})
+        cache_config = config.get("cache", {})
+        hackernews_config = config.get("hackernews", {})
+        bluesky_config = config.get("bluesky", {})
+        hf_config = config.get("hf", {})
+        calibration_config = config.get("calibration", {})
+        monitoring_config = config.get("monitoring", {})
+
+        providers = SentimentProviders(
+            stocktwits=providers_config.get("stocktwits", True),
+            news=providers_config.get("news", True),
+            trends=providers_config.get("trends", False),
+            twitter=providers_config.get("twitter", False),
+            discord=providers_config.get("discord", False),
+            hackernews=providers_config.get("hackernews", True),
+            bluesky=providers_config.get("bluesky", False),
+            hf_enabled=providers_config.get("hf_enabled", False),
+        )
+
+        batching = SentimentBatching(
+            concurrency=batching_config.get("concurrency", 8),
+            rate_limit_delay_sec=batching_config.get("rate_limit_delay_sec", 0.3),
+            batch_size=batching_config.get("batch_size", 50),
+        )
+
+        weights = SentimentWeights(
+            stocktwits=weights_config.get("stocktwits", 0.4),
+            news=weights_config.get("news", 0.2),
+            trends=weights_config.get("trends", 0.1),
+            bluesky=weights_config.get("bluesky", 0.0),
+            heuristic_vs_hf=weights_config.get("heuristic_vs_hf", 0.5),
+        )
+
+        thresholds = SentimentThresholds(
+            min_mentions_for_hf=thresholds_config.get("min_mentions_for_hf", 20),
+            bot_pct_warning=thresholds_config.get("bot_pct_warning", 0.5),
+            min_data_quality_sources=thresholds_config.get("min_data_quality_sources", 1),
+        )
+
+        cache = SentimentCache(
+            enabled=cache_config.get("enabled", True),
+            ttl_seconds=cache_config.get("ttl_seconds", 1800),
+            redis_enabled=cache_config.get("redis_enabled", False),
+        )
+
+        hackernews = SentimentHackerNews(
+            corpus_lookback_hours=hackernews_config.get("corpus_lookback_hours", 48),
+            max_depth=hackernews_config.get("max_depth", 4),
+            max_items_per_thread=hackernews_config.get("max_items_per_thread", 300),
+            rate_limit_rps=hackernews_config.get("rate_limit_rps", 10.0),
+            hn_corpus_ttl_seconds=hackernews_config.get("hn_corpus_ttl_seconds", 1800),
+            entity_map_path=hackernews_config.get("entity_map_path"),
+        )
+
+        bluesky = SentimentBluesky(
+            lang_filter=bluesky_config.get("lang_filter", "en"),
+            max_posts_per_ticker=bluesky_config.get("max_posts_per_ticker", 200),
+            search_company_name=bluesky_config.get("search_company_name", True),
+            entity_map_path=bluesky_config.get("entity_map_path"),
+        )
+
+        hf = SentimentHf(
+            retail_model=hf_config.get("retail_model", "cardiffnlp/twitter-roberta-base-sentiment"),
+            tech_discourse_model=hf_config.get(
+                "tech_discourse_model", "distilbert-base-uncased-finetuned-sst-2-english"
+            ),
+            long_text_strategy=hf_config.get("long_text_strategy", "truncate"),
+            device=hf_config.get("device", -1),
+            max_workers=hf_config.get("max_workers", 1),
+        )
+
+        calibration = SentimentCalibration(
+            enabled=calibration_config.get("enabled", True),
+            window_days=calibration_config.get("window_days", 30),
+            min_observations=calibration_config.get("min_observations", 200),
+        )
+
+        monitoring = SentimentMonitoring(
+            log_failures=monitoring_config.get("log_failures", True),
+            alert_on_all_providers_down=monitoring_config.get("alert_on_all_providers_down", True),
+            performance_profiling=monitoring_config.get("performance_profiling", False),
+        )
+
+        return SentimentConfig(
+            providers=providers,
+            batching=batching,
+            weights=weights,
+            thresholds=thresholds,
+            cache=cache,
+            monitoring=monitoring,
+            hackernews=hackernews,
+            bluesky=bluesky,
+            hf=hf,
+            calibration=calibration,
+        )
+
     def _validate_config(self, config: PipelineConfig) -> None:
         """
         Validate the loaded configuration.
@@ -445,6 +559,10 @@ class ConfigManager:
     def get_scheduling_config(self) -> SchedulingConfig:
         """Get scheduling configuration."""
         return self.get_config().scheduling
+
+    def get_sentiment_config(self) -> SentimentConfig:
+        """Get sentiment module configuration."""
+        return self.get_config().sentiment
 
     def export_config_to_dict(self) -> Dict[str, Any]:
         """

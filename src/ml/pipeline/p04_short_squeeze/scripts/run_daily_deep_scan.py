@@ -381,13 +381,14 @@ class DailyDeepScanRunner:
                 raise RuntimeError("setup() must be called before running the deep scan")
 
             config = self.config_manager.get_deep_scan_config()
+            sentiment_config = self.config_manager.get_sentiment_config()
 
             # Override batch size if specified
             if batch_size:
                 config.batch_size = batch_size
                 _logger.info("Using custom batch size: %d", batch_size)
 
-            deep_scan = create_daily_deep_scan(self.fmp_downloader, self.finnhub_downloader, config)
+            deep_scan = create_daily_deep_scan(self.fmp_downloader, self.finnhub_downloader, config, sentiment_config)
 
             # Override database writes for dry run
             if dry_run:
