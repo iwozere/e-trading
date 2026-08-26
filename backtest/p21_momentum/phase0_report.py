@@ -55,6 +55,7 @@ from backtest.p21_momentum.robustness import (  # noqa: E402
     IN_SAMPLE_START,
     render_deflated_sharpe_md,
     render_grid_csv,
+    render_marginal_surfaces_png,
     run_grid,
     run_grid_parallel,
 )
@@ -427,6 +428,10 @@ def run_phase0_study(
             (ROBUSTNESS_DIR / "deflated_sharpe.md").write_text(
                 render_deflated_sharpe_md(grid_rows, n_months), encoding="utf-8"
             )
+            try:
+                render_marginal_surfaces_png(grid_rows, ROBUSTNESS_DIR / "marginal_surfaces.png")
+            except ImportError:
+                _logger.warning("matplotlib unavailable — skipped marginal_surfaces.png")
 
     determinism_verified: Optional[bool] = None
     if verify_determinism_flag:
