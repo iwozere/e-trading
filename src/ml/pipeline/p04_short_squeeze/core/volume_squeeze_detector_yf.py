@@ -16,7 +16,7 @@ import pandas as pd
 import yfinance as yf
 
 # Add project root to path for imports
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
+PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p04_short_squeeze.core.models import Candidate, CandidateSource, StructuralMetrics

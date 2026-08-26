@@ -8,7 +8,7 @@ from datetime import datetime, date, timedelta
 from typing import List, Optional, Dict, Any, Tuple
 from pathlib import Path
 import sys
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
+PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 from src.data.db.services.short_squeeze_service import ShortSqueezeService
 from src.ml.pipeline.p04_short_squeeze.core.models import StructuralMetrics, TransientMetrics, Candidate, ScoredCandidate, Alert, AdHocCandidate, AlertLevel, CandidateSource

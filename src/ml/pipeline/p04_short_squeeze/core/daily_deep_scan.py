@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, cast
 
 # Add project root to path for imports
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
+PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.short_squeeze_service import ShortSqueezeService
@@ -1053,7 +1053,10 @@ class DailyDeepScan:
 
 
 def create_daily_deep_scan(
-    fmp_downloader: FMPDataDownloader, finnhub_downloader: FinnhubDataDownloader | None, config: DeepScanConfig
+    fmp_downloader: FMPDataDownloader,
+    finnhub_downloader: FinnhubDataDownloader | None,
+    config: DeepScanConfig,
+    sentiment_config: SentimentConfig | None = None,
 ) -> DailyDeepScan:
     """
     Factory function to create Daily Deep Scan.
@@ -1062,11 +1065,14 @@ def create_daily_deep_scan(
         fmp_downloader: FMP data downloader instance
         finnhub_downloader: Finnhub data downloader instance
         config: Deep scan configuration
+        sentiment_config: Optional multi-source sentiment configuration (src.common.sentiments).
+            Omitting this silently falls back to legacy single-source Finnhub sentiment --
+            callers should pass ``ConfigManager.get_sentiment_config()`` to get the real thing.
 
     Returns:
         Configured Daily Deep Scan instance
     """
-    return DailyDeepScan(fmp_downloader, finnhub_downloader, config)
+    return DailyDeepScan(fmp_downloader, finnhub_downloader, config, sentiment_config)
 
 
 # Example usage

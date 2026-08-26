@@ -79,15 +79,19 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
         if not universe_row:
             continue
 
-        adv_20d = universe_row.get("adv_20d")
+        sig_map = get_signals_for_date(ticker, target_date)
+
+        # adv_20d is written daily to k20_signals by eod_ingest.py, not to the
+        # k20_universe row itself (that column is only ever left null) — fall
+        # back to the signal like sleeve_a.py already does, or every ticker
+        # gets rejected here before RS is ever computed.
+        adv_20d = universe_row.get("adv_20d") or sig_map.get("adv_20d")
         if not adv_20d or adv_20d < SLEEVE_C_MIN_ADV_USD:
             continue
 
         revenue_growth = universe_row.get("revenue_yoy_growth")
         if revenue_growth is not None and revenue_growth <= 0:
             continue
-
-        sig_map = get_signals_for_date(ticker, target_date)
 
         # Price regime: price > 50DMA > 200DMA
         price_vs_50 = sig_map.get("price_vs_50dma", 0)

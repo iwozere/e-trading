@@ -62,3 +62,65 @@ def test_regime_filter_allows_above_200dma(monkeypatch):
 
     monkeypatch.setattr(sleeve_c, "get_latest_signal", lambda *_: 1.0)
     assert sleeve_c._regime_allows_new_entry() is True
+
+
+def test_run_falls_back_to_signal_adv_20d(monkeypatch):
+    """
+    Regression guard: adv_20d is never populated on the k20_universe row
+    itself (eod_ingest.py only ever writes it as a k20_signals row) — run()
+    must fall back to the signals dict, same as sleeve_a.py's
+    _passes_hard_filters does, or every ticker is rejected before RS is ever
+    computed (as happened in production for every trading day from at least
+    2026-08-10 through 2026-08-25).
+    """
+    import src.ml.pipeline.p20_kestrel.screening.sleeve_c as sleeve_c
+
+    sig_map = {
+        "adv_20d": 25_000_000,  # only source of truth — universe row omits it
+        "price_vs_50dma": 1.0,
+        "price_vs_200dma": 1.0,
+        "sma_50": 110.0,
+        "sma_200": 100.0,
+        "return_3m": 0.20,
+        "return_6m": 0.40,
+    }
+    upserted_watchlist = []
+
+    monkeypatch.setattr(sleeve_c, "get_latest_signal", lambda *_: 1.0)  # regime open
+    monkeypatch.setattr(sleeve_c, "get_active_tickers", lambda: ["TST"])
+    monkeypatch.setattr(sleeve_c, "get_universe_row", lambda *_: {"ticker": "TST"})
+    monkeypatch.setattr(sleeve_c, "get_signals_for_date", lambda *_: sig_map)
+    monkeypatch.setattr(sleeve_c, "upsert_signals", lambda *_: None)
+    monkeypatch.setattr(sleeve_c, "upsert_watchlist", lambda row: upserted_watchlist.append(row))
+
+    result = sleeve_c.run()
+
+    assert result["rs_computed"] == 1
+    assert result["candidates"] == 1
+    assert upserted_watchlist and upserted_watchlist[0]["ticker"] == "TST"
+
+
+def test_run_rejects_when_adv_20d_missing_everywhere(monkeypatch):
+    """Sanity complement: still correctly rejects when adv_20d is genuinely absent."""
+    import src.ml.pipeline.p20_kestrel.screening.sleeve_c as sleeve_c
+
+    sig_map = {
+        "price_vs_50dma": 1.0,
+        "price_vs_200dma": 1.0,
+        "sma_50": 110.0,
+        "sma_200": 100.0,
+        "return_3m": 0.20,
+        "return_6m": 0.40,
+    }
+
+    monkeypatch.setattr(sleeve_c, "get_latest_signal", lambda *_: 1.0)
+    monkeypatch.setattr(sleeve_c, "get_active_tickers", lambda: ["TST"])
+    monkeypatch.setattr(sleeve_c, "get_universe_row", lambda *_: {"ticker": "TST"})
+    monkeypatch.setattr(sleeve_c, "get_signals_for_date", lambda *_: sig_map)
+    monkeypatch.setattr(sleeve_c, "upsert_signals", lambda *_: None)
+    monkeypatch.setattr(sleeve_c, "upsert_watchlist", lambda *_: None)
+
+    result = sleeve_c.run()
+
+    assert result["rs_computed"] == 0
+    assert result["candidates"] == 0
