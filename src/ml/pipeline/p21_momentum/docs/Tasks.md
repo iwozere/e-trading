@@ -167,17 +167,13 @@ which depends on Phase 1 having run) is not started — see "Not Yet Started" be
       (0 pyright, 0 mypy `--ignore-missing-imports`) as of this session, but CI will not catch a future
       regression here unless one of those two configs is deliberately extended to include `backtest` —
       flagged, not fixed, since widening CI scope is a process decision, not a code change this task implied.
-- [ ] `src/ml/pipeline/p21_momentum/calendar.py`'s `import pandas_market_calendars` fails plain
-      `mypy src` with `[import-untyped]` (no stubs/py.typed marker) — pre-existing since the module was first
-      written, not introduced by Step 19, but `backtest/`'s new modules import `calendar.py` transitively.
-      `python scripts/typecheck.py --mypy` (the actual CI gate) currently fails on this today. Not fixed here
-      since it needs a decision (add a `[[tool.mypy.overrides]]`-style per-module ignore, or an inline
-      `# type: ignore[import-untyped]`, or a vendored stub) rather than a mechanical fix.
+- [x] `src/ml/pipeline/p21_momentum/calendar.py`'s `import pandas_market_calendars` — **resolved**: `pyproject.toml`
+      already carries a `[[tool.mypy.overrides]]` entry with `pandas_market_calendars.*` under
+      `ignore_missing_imports = true` (2026-08-26 solution-architect review confirmed `python scripts/typecheck.py
+      --mypy` passes clean, 1143 files, 0 errors). This item's original text was stale.
 
 ## Known Issues
 - `jobs/run_monthly_execute.py` full multi-track NAV/attribution rollup — see Technical Debt above
-- `python scripts/typecheck.py --mypy` currently fails on `calendar.py`'s `pandas_market_calendars` import —
-  see Technical Debt above
 
 ## Testing Requirements
 - [x] All of Step 18 above

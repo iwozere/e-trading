@@ -92,6 +92,15 @@ See [Code-Review-2026-07-03.md](Code-Review-2026-07-03.md) for full details.
 - [x] **C10** — Risk factor diff HTML index fetch — fixed: gets primaryDocument text
 - [x] **H5** — Watchlist candidate drawdown fallback — fixed: calls get_latest_signal()
 - [x] **L1** — LLM client cost fallback test failure — fixed
+- [x] **C11** — Sleeve C (`screening/sleeve_c.py`) read `adv_20d` only from the `k20_universe` row, which
+      `universe_loader.py` never populates — the field is only ever written as a daily `k20_signals` row by
+      `eod_ingest.py`. Every ticker was rejected by the liquidity filter before RS was ever computed, so
+      `p20_momentum_rank` silently produced zero candidates on every trading day from at least 2026-08-10
+      through 2026-08-25 (confirmed via production logs). Fixed by falling back to the signals dict, matching
+      the pattern `sleeve_a.py`'s `_passes_hard_filters` already used; added `test_run_falls_back_to_signal_adv_20d`
+      / `test_run_rejects_when_adv_20d_missing_everywhere` as regression guards (found 2026-08-26 solution-architect
+      review — `run()` had no test coverage at all before this, only the pure helpers did, which is how it went
+      unnoticed).
 
 ## Known Issues
 
