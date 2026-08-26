@@ -18,9 +18,6 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p04_short_squeeze.config.data_classes import UniverseConfig
 from src.ml.pipeline.p04_short_squeeze.core.universe_loader import UniverseLoader, create_universe_loader
-from src.notification.logger import setup_logger
-
-_logger = setup_logger(__name__)
 
 
 class TestUniverseLoader(unittest.TestCase):
@@ -54,11 +51,16 @@ class TestUniverseLoader(unittest.TestCase):
         # Load universe
         result = self.universe_loader.load_universe()
 
-        # Assertions
-        self.assertEqual(len(result), 5)
+        # Assertions -- _load_from_screener() always combines the screener results with a
+        # curated list of known short-interest candidates (Strategy 3), so the result is the
+        # union of both, not just the mocked screener tickers.
+        known_candidates = self.universe_loader._get_known_short_interest_candidates()
+        expected = set(mock_tickers) | set(known_candidates)
+        self.assertEqual(len(result), len(expected))
         self.assertIn("AAPL", result)
         self.assertIn("GOOGL", result)
-        self.mock_fmp_downloader.load_universe_from_screener.assert_called_once()
+        # Called once per screener strategy (mid-cap and small-cap)
+        self.assertEqual(self.mock_fmp_downloader.load_universe_from_screener.call_count, 2)
 
     def test_load_universe_empty_response(self):
         """Test universe loading with empty screener response."""
@@ -68,9 +70,11 @@ class TestUniverseLoader(unittest.TestCase):
         # Load universe
         result = self.universe_loader.load_universe()
 
-        # Assertions
-        self.assertEqual(len(result), 0)
-        self.mock_fmp_downloader.load_universe_from_screener.assert_called_once()
+        # Assertions -- Strategy 3 always adds the known short-interest candidates, even when
+        # the screener itself returns nothing.
+        known_candidates = self.universe_loader._get_known_short_interest_candidates()
+        self.assertEqual(len(result), len(known_candidates))
+        self.assertEqual(self.mock_fmp_downloader.load_universe_from_screener.call_count, 2)
 
     def test_load_universe_with_cache(self):
         """Test universe loading from cache."""
@@ -121,11 +125,14 @@ class TestUniverseLoader(unittest.TestCase):
         # Load universe (should ignore expired cache)
         result = self.universe_loader.load_universe()
 
-        # Assertions
-        self.assertEqual(len(result), 3)
+        # Assertions -- Strategy 3 always adds the known short-interest candidates on top of the
+        # fresh screener results.
+        known_candidates = self.universe_loader._get_known_short_interest_candidates()
+        expected = set(mock_tickers) | set(known_candidates)
+        self.assertEqual(len(result), len(expected))
         self.assertIn("NEW1", result)
         self.assertNotIn("OLD1", result)
-        self.mock_fmp_downloader.load_universe_from_screener.assert_called_once()
+        self.assertEqual(self.mock_fmp_downloader.load_universe_from_screener.call_count, 2)
 
     def test_is_valid_ticker(self):
         """Test ticker validation logic."""

@@ -21,9 +21,6 @@ from src.ml.pipeline.p04_short_squeeze.core.weekly_screener import (
     WeeklyScreener,
     create_weekly_screener,
 )
-from src.notification.logger import setup_logger
-
-_logger = setup_logger(__name__)
 
 
 class TestWeeklyScreener(unittest.TestCase):
@@ -235,13 +232,10 @@ class TestWeeklyScreener(unittest.TestCase):
         scores = [c.screener_score for c in top_candidates]
         self.assertEqual(scores, [0.9, 0.8, 0.7, 0.6, 0.5])
 
-    @patch("src.ml.pipeline.p04_short_squeeze.core.weekly_screener.session_scope")
-    def test_store_results(self, mock_session_scope):
+    def test_store_results(self):
         """Test storing results in database."""
-        # Mock database session and service
-        mock_session = Mock()
+        # Mock service
         mock_service = Mock()
-        mock_session_scope.return_value.__enter__.return_value = mock_session
 
         with patch("src.ml.pipeline.p04_short_squeeze.core.weekly_screener.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
@@ -372,40 +366,51 @@ class TestWeeklyScreener(unittest.TestCase):
         self.assertEqual(screener.config, self.screener_config)
 
     def test_run_screener_integration(self):
-        """Test the complete screener run integration."""
+        """Test the complete screener run integration.
 
-        # Mock successful API responses for multiple tickers
-        def mock_short_interest(ticker):
-            return {"shortInterest": 5_000_000} if ticker in ["GOOD1", "GOOD2"] else None
+        The screener now runs a hybrid FINRA + volume-analysis pipeline (see
+        WeeklyScreener.__init__/run_screener): short interest comes from a dedicated
+        finra_downloader and candidates come from volume_detector.screen_universe(), rather
+        than directly from fmp_downloader.get_short_interest_data()/get_float_shares_data()/
+        get_ohlcv(). Mock at those two integration points instead.
+        """
 
-        def mock_float_data(ticker):
-            return (
-                {"sharesOutstanding": 25_000_000, "floatShares": 20_000_000, "marketCap": 500_000_000}
-                if ticker in ["GOOD1", "GOOD2"]
-                else None
+        def make_candidate(ticker: str) -> Candidate:
+            return Candidate(
+                ticker=ticker,
+                screener_score=0.6,
+                structural_metrics=StructuralMetrics(
+                    short_interest_pct=0.2,
+                    days_to_cover=10.0,
+                    float_shares=20_000_000,
+                    avg_volume_14d=400_000,
+                    market_cap=500_000_000,
+                ),
+                last_updated=datetime.now(),
+                source=CandidateSource.VOLUME_SCREENER,
             )
 
-        def mock_ohlcv(ticker, interval, start_date, end_date):
-            import pandas as pd
-
-            return pd.DataFrame({"volume": [400_000] * 20}) if ticker in ["GOOD1", "GOOD2"] else None
-
-        self.mock_fmp_downloader.get_short_interest_data.side_effect = mock_short_interest
-        self.mock_fmp_downloader.get_float_shares_data.side_effect = mock_float_data
-        self.mock_fmp_downloader.get_ohlcv.side_effect = mock_ohlcv
+        volume_results = [(make_candidate("GOOD1"), Mock()), (make_candidate("GOOD2"), Mock())]
 
         # Mock database storage
-        with patch("src.ml.pipeline.p04_short_squeeze.core.weekly_screener.session_scope"):
-            with patch("src.ml.pipeline.p04_short_squeeze.core.weekly_screener.ShortSqueezeService"):
-                # Run screener
-                universe = ["GOOD1", "GOOD2", "BAD1", "BAD2"]
-                results = self.weekly_screener.run_screener(universe)
+        with patch("src.ml.pipeline.p04_short_squeeze.core.weekly_screener.ShortSqueezeService") as mock_service_class:
+            mock_service_class.return_value.get_bulk_finra_short_interest.return_value = {}
 
-                # Assertions
-                self.assertIsInstance(results, ScreenerResults)
-                self.assertEqual(results.total_universe, 4)
-                self.assertEqual(results.candidates_found, 2)  # Only GOOD1 and GOOD2 should pass
-                self.assertEqual(len(results.top_candidates), 2)
+            with patch.object(self.weekly_screener, "finra_downloader") as mock_finra_downloader:
+                mock_finra_downloader.get_short_interest_data.return_value = None
+
+                with patch.object(self.weekly_screener, "volume_detector") as mock_volume_detector:
+                    mock_volume_detector.screen_universe.return_value = volume_results
+
+                    # Run screener
+                    universe = ["GOOD1", "GOOD2", "BAD1", "BAD2"]
+                    results = self.weekly_screener.run_screener(universe)
+
+            # Assertions
+            self.assertIsInstance(results, ScreenerResults)
+            self.assertEqual(results.total_universe, 4)
+            self.assertEqual(results.candidates_found, 2)  # Only GOOD1 and GOOD2 were returned
+            self.assertEqual(len(results.top_candidates), 2)
 
 
 if __name__ == "__main__":
