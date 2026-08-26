@@ -140,15 +140,22 @@ which depends on Phase 1 having run) is not started — see "Not Yet Started" be
 ## 🔄 Not Yet Started
 
 **Step 19 — Backtest harness, remaining work**
-- [ ] Run `fetch_frozen_panel.py` for real (one-time, network) to produce `data/prices.parquet` +
-      `data/constituents.json`, then run `phase0_report.py` end-to-end over 2005-2026 and inspect the
-      resulting `PHASE0_REPORT.md` acceptance table — nothing in Step 19 has been exercised against real
-      market data yet, only synthetic fixtures
+- [x] Run `fetch_frozen_panel.py` for real (2026-08-23) + `phase0_report.py` end-to-end over 2005-2026
+      (2026-08-25) — `PHASE0_REPORT.md`'s acceptance table: 8/10 criteria PASS; B5/B6 fail their numeric
+      threshold but are diagnosed and accepted as expected long-only-implementation behavior, not bugs (see
+      the report's "Known Limitations" section and spec §17). These artifacts live under `backtest/p21_momentum/
+      {data,results}/` and the generated `.md` reports, all gitignored by design (spec §14.2's frozen panel is
+      a local, regenerable operator artifact, not something to commit) — that's why this item stayed marked
+      "not yet executed" here well after it was actually done; corrected 2026-08-26 solution-architect review.
 - [ ] `robustness.py`'s out-of-sample evaluation (2017-01 -> 2026-06) is a deliberate, separate manual call
       (`run_grid(..., acknowledge_oos_reaccess=...)`) — `phase0_report.py` only ever touches the in-sample
-      grid automatically, by design (spec §14.5 Rule 4); an operator still has to make that one OOS call
-- [ ] `marginal_surfaces.png` (per-parameter plateau plots from the 729-grid, spec §14.10) is not yet
-      generated — `grid_729.csv` has everything needed to plot it, but no renderer was built
+      grid automatically, by design (spec §14.5 Rule 4); an operator still has to make that one OOS call.
+      `oos_access_log.md` confirms only in-sample runs so far (2026-08-22, 2026-08-24) — the one-time OOS
+      look is still untouched.
+- [x] `marginal_surfaces.png` (per-parameter plateau plots from the 729-grid, spec §14.10) — added
+      `robustness.render_marginal_surfaces_png()` (2026-08-26), wired into `phase0_report.py`'s robustness
+      block, and generated from the existing `grid_729.csv` (no grid re-run needed). See `PHASE0_REPORT.md`'s
+      "Marginal Surfaces" section for the read.
 
 **Step 20 — Parameter freezing** (§15, post-Phase-1 only — nothing to freeze against until Phase 1 runs)
 - [ ] `scripts/freeze_params.py`, `verify_frozen_params()` wired into every job's `main()`

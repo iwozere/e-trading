@@ -410,3 +410,44 @@ def render_deflated_sharpe_md(rows: List[GridRow], n_observations: int) -> str:
             "still overfitting even when nominally 'significant'."
         )
     return "\n".join(lines) + "\n"
+
+
+def render_marginal_surfaces_png(rows: List[GridRow], out_path) -> None:
+    """
+    Render spec §14.10's ``marginal_surfaces.png`` deliverable.
+
+    Spec §14.5 Rule 2: "plot each parameter's marginal effect. A parameter sitting on a
+    broad plateau is robust. A parameter sitting on a narrow peak is overfitted — and the
+    correct response is to move to the plateau's center, not to the peak."
+
+    One subplot per grid parameter: track-A Sharpe (y) grouped by that parameter's own
+    grid value (x), marginalizing over the other five parameters via a boxplot per value
+    (the full grid is 3^6, so each value has 243 combinations behind it). Overlapping,
+    similarly-centered boxes across a parameter's three values is the "plateau" the spec
+    asks for; a value whose box sits well above or below the others is the "narrow peak"
+    warning sign.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    param_names = list(ROBUSTNESS_GRID.keys())
+    df = pd.DataFrame([r.to_dict() for r in rows])
+
+    fig, axes = plt.subplots(2, 3, figsize=(15, 9))
+    for ax, param in zip(axes.flat, param_names):
+        levels = sorted(df[param].unique())
+        data = [df.loc[df[param] == level, "sharpe_a"].to_numpy() for level in levels]
+        ax.boxplot(data, tick_labels=[str(level) for level in levels])
+        ax.set_xlabel(param)
+        ax.set_ylabel("Sharpe (track A)")
+        ax.set_title(param)
+        ax.grid(True, alpha=0.3)
+    fig.suptitle(
+        "Parameter marginal effects on Sharpe, track A (spec §14.5 Rule 2)\n"
+        "overlapping boxes = robust plateau; a value standing apart = narrow-peak overfit warning"
+    )
+    fig.tight_layout()
+    fig.savefig(out_path)
+    plt.close(fig)

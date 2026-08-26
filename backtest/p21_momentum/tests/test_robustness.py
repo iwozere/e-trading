@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import itertools
+import tempfile
 import unittest
 from datetime import date
+from pathlib import Path
 
 import backtest.p21_momentum.robustness as robustness
 from backtest.p21_momentum.robustness import (
@@ -13,6 +16,7 @@ from backtest.p21_momentum.robustness import (
     is_top_quartile_separated,
     log_oos_access,
     render_deflated_sharpe_md,
+    render_marginal_surfaces_png,
     run_grid,
     run_grid_parallel,
 )
@@ -105,6 +109,42 @@ class TestRenderDeflatedSharpeMd(unittest.TestCase):
         sharpes = [v] * (self.N_TRIALS - 1) + [best]
         md = render_deflated_sharpe_md(_rows_with_sharpes(sharpes), self.N_OBSERVATIONS)
         self.assertIn("separated from the top-quartile median and above the by-chance band", md)
+
+
+class TestRenderMarginalSurfacesPng(unittest.TestCase):
+    """spec §14.10 deliverable — one subplot per ROBUSTNESS_GRID parameter."""
+
+    def test_writes_a_nonempty_png_covering_every_grid_parameter(self):
+        keys = list(robustness.ROBUSTNESS_GRID.keys())
+        combos = list(itertools.product(*(robustness.ROBUSTNESS_GRID[k] for k in keys)))
+        rows = [
+            GridRow(
+                lookback_start=combo[0],
+                skip_recent=combo[1],
+                entry_rank=combo[2],
+                hold_rank=combo[3],
+                max_per_sector=combo[4],
+                vix_threshold=combo[5],
+                sharpe_a=float(i % 5),
+                sharpe_c=0.5,
+                turnover_annualized_median_pct=150.0,
+            )
+            for i, combo in enumerate(combos)
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = Path(tmp) / "marginal_surfaces.png"
+            render_marginal_surfaces_png(rows, out_path)
+            self.assertTrue(out_path.exists())
+            self.assertGreater(out_path.stat().st_size, 0)
+
+    def test_handles_a_single_combination(self):
+        """The grid can be overridden down to one combo (as tests do) — must not crash on that."""
+        rows = [GridRow(252, 21, 20, 60, 4, 28.0, 0.7, 0.5, 150.0)]
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = Path(tmp) / "marginal_surfaces.png"
+            render_marginal_surfaces_png(rows, out_path)
+            self.assertTrue(out_path.exists())
 
 
 class TestOosAccessLog(unittest.TestCase):
