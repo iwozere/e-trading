@@ -87,7 +87,7 @@ def _filings_by_form(filings: List[Dict[str, Any]], forms: frozenset) -> List[Tu
         d = _parse_filing_date(f.get("filingDate", ""))
         if d is not None:
             out.append((d, f))
-    return sorted(out)
+    return sorted(out, key=lambda hit: hit[0])
 
 
 def _parse_filing_date(s: str) -> Optional[date]:

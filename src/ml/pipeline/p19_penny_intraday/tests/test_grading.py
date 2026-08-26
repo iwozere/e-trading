@@ -131,6 +131,33 @@ def test_grade_d_disqualifier_present_even_with_high_insider_conviction():
     assert profile.grade == "D"  # N7 (active deficiency notice) wins regardless of P1
 
 
+def test_offering_recency_two_filings_same_day_does_not_crash():
+    """
+    Regression: _filings_by_form sorted raw (date, filing_dict) tuples. Two
+    offering-form filings on the same filingDate (e.g. a 424B4 followed same
+    day by a 424B5 amendment) made sorted() fall through to comparing the
+    filing dicts, which raises TypeError: '<' not supported between
+    instances of 'dict' and 'dict' -- this crashed the prod P19 Structural
+    Profile job (2026-08-25).
+    """
+    same_day = (_AS_OF - timedelta(days=1)).isoformat()  # within offering_window_d_days (N8 -> D)
+    inputs = GradingInputs(
+        ticker="AAA",
+        cik="123",
+        as_of=_AS_OF,
+        company_facts=None,
+        filings=[
+            {"form": "424B4", "items": "", "filingDate": same_day},
+            {"form": "424B5", "items": "", "filingDate": same_day},
+        ],
+        splits=[],
+        form4_rows=None,
+    )
+    profile = grade_ticker(inputs)  # must not raise
+    assert profile.grade == "D"
+    assert any("N8" in d for d in profile.disqualifiers)
+
+
 # ── insider_conviction renormalisation ───────────────────────────────────────
 
 
