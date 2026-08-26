@@ -151,7 +151,12 @@ which depends on Phase 1 having run) is not started — see "Not Yet Started" be
       (`run_grid(..., acknowledge_oos_reaccess=...)`) — `phase0_report.py` only ever touches the in-sample
       grid automatically, by design (spec §14.5 Rule 4); an operator still has to make that one OOS call.
       `oos_access_log.md` confirms only in-sample runs so far (2026-08-22, 2026-08-24) — the one-time OOS
-      look is still untouched.
+      look is still untouched. Tooling for it now exists (`run_oos_check.py`, added 2026-08-26, 11 tests,
+      0 pyright/0 mypy) — it runs a single default-parameter point estimate plus the one-time 729-grid over
+      the out-of-sample window and writes `OOS_REPORT.md`, but the script has deliberately **not been executed
+      against the real frozen panel yet**: this is the mechanically-enforced single look, ~2-3 hours on 8
+      cores (extrapolated from the in-sample grid's runtime), so it is triggered on operator request, not
+      automatically.
 - [x] `marginal_surfaces.png` (per-parameter plateau plots from the 729-grid, spec §14.10) — added
       `robustness.render_marginal_surfaces_png()` (2026-08-26), wired into `phase0_report.py`'s robustness
       block, and generated from the existing `grid_729.csv` (no grid re-run needed). See `PHASE0_REPORT.md`'s
