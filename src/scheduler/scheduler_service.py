@@ -739,6 +739,21 @@ class SchedulerService:
             _logger.error(timeout_msg)
             await self._complete_run_record(run_record, RunStatus.FAILED, None, timeout_msg)
             return
+        except asyncio.CancelledError:
+            # The scheduler itself was shut down mid-run (e.g. an external SIGTERM
+            # restart) and APScheduler cancelled this in-flight job. Without this
+            # branch the run record is left stuck in RUNNING forever -- neither the
+            # TimeoutError branch above nor the result handling below ever runs to
+            # close it out, so the job reads as never-ending on any dashboard.
+            # Mark it FAILED, then re-raise: swallowing CancelledError here would
+            # break the shutdown's cooperative cancellation.
+            cancel_msg = (
+                f"Job cancelled -- scheduler shut down mid-run "
+                f"(schedule: {schedule.name!r}, type: {schedule.job_type})"
+            )
+            _logger.error(cancel_msg)
+            await self._complete_run_record(run_record, RunStatus.FAILED, None, cancel_msg)
+            raise
 
         # A script that exited nonzero is a failed run, even though the
         # executor itself ran to completion.

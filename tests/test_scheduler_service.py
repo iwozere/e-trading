@@ -8,6 +8,7 @@ Tests the complete scheduler service functionality including:
 """
 
 # Add src to path
+import asyncio
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -334,6 +335,37 @@ class TestJobExecution:
         assert update_data.status == RunStatus.COMPLETED
         assert update_data.result == test_result
         assert update_data.finished_at is not None
+
+    @pytest.mark.asyncio
+    async def test_run_schedule_cancelled_marks_run_failed(self, scheduler_service):
+        """
+        A CancelledError mid-run (e.g. the scheduler process itself is shut down,
+        as happens on an external SIGTERM restart) must still close out the run
+        record as FAILED. Without this, the record is left stuck in RUNNING
+        forever, since neither the TimeoutError branch nor the normal result
+        handling in `_run_schedule` ever runs -- the job reads as never-ending.
+        """
+        test_schedule = MockSchedule(1, "Test Alert", "alert", "0 9 * * *")
+        test_run = MockScheduleRun(1, 1)
+
+        with (
+            patch.object(
+                scheduler_service, "_execute_alert_job", new_callable=AsyncMock, side_effect=asyncio.CancelledError()
+            ),
+            patch.object(scheduler_service, "_complete_run_record", new_callable=AsyncMock) as mock_complete,
+        ):
+            with pytest.raises(asyncio.CancelledError):
+                await scheduler_service._run_schedule(test_schedule, test_run)
+
+            # The run must be marked FAILED rather than left RUNNING ...
+            mock_complete.assert_called_once()
+            complete_call = mock_complete.call_args
+            assert complete_call[0][0] is test_run
+            assert complete_call[0][1] == RunStatus.FAILED
+            assert "cancelled" in complete_call[0][3].lower()
+
+            # ... and the cancellation must still propagate so the scheduler's
+            # own shutdown isn't silently swallowed.
 
 
 class TestErrorRecovery:
