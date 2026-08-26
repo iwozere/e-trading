@@ -18,9 +18,6 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p04_short_squeeze.core.models import Candidate, CandidateSource, StructuralMetrics
 from src.ml.pipeline.p04_short_squeeze.data.candidate_store import CandidateStore
-from src.notification.logger import setup_logger
-
-_logger = setup_logger(__name__)
 
 
 class TestCandidateStore(unittest.TestCase):
@@ -52,13 +49,10 @@ class TestCandidateStore(unittest.TestCase):
             "data_quality": Decimal("0.95"),
         }
 
-    @patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.session_scope")
-    def test_store_screener_snapshot_success(self, mock_session_scope):
+    def test_store_screener_snapshot_success(self):
         """Test successful storage of screener snapshot."""
-        # Mock session and service
-        mock_session = Mock()
+        # Mock service
         mock_service = Mock()
-        mock_session_scope.return_value.__enter__.return_value = mock_session
 
         with patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
@@ -75,13 +69,10 @@ class TestCandidateStore(unittest.TestCase):
             self.assertEqual(result, 2)
             mock_service.save_screener_results.assert_called_once_with(candidates, run_date)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.session_scope")
-    def test_retrieve_screener_snapshot_latest(self, mock_session_scope):
+    def test_retrieve_screener_snapshot_latest(self):
         """Test retrieval of latest screener snapshot."""
-        # Mock session and service
-        mock_session = Mock()
+        # Mock service
         mock_service = Mock()
-        mock_session_scope.return_value.__enter__.return_value = mock_session
 
         expected_results = [
             {"ticker": "TSLA", "screener_score": 0.85, "short_interest_pct": 0.25, "run_date": date.today()}
@@ -98,17 +89,14 @@ class TestCandidateStore(unittest.TestCase):
             self.assertEqual(result, expected_results)
             mock_service.get_top_candidates_by_screener_score.assert_called_once_with(10)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.session_scope")
-    def test_retrieve_screener_snapshot_specific_date(self, mock_session_scope):
+    def test_retrieve_screener_snapshot_specific_date(self):
         """Test retrieval of screener snapshot for specific date."""
-        # Mock session and service
-        mock_session = Mock()
+        # Mock service
         mock_service = Mock()
-        mock_session_scope.return_value.__enter__.return_value = mock_session
 
         # Mock repository structure
         mock_repo = Mock()
-        mock_service.repo = mock_repo
+        mock_service.repos.short_squeeze = mock_repo
 
         # Mock snapshot objects
         mock_snapshot = Mock()
@@ -137,13 +125,10 @@ class TestCandidateStore(unittest.TestCase):
             self.assertEqual(result[0]["screener_score"], 0.85)
             mock_repo.screener_snapshots.get_top_candidates.assert_called_once_with(run_date, 10)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.session_scope")
-    def test_store_deep_scan_results_success(self, mock_session_scope):
+    def test_store_deep_scan_results_success(self):
         """Test successful storage of deep scan results."""
-        # Mock session and service
-        mock_session = Mock()
+        # Mock service
         mock_service = Mock()
-        mock_session_scope.return_value.__enter__.return_value = mock_session
 
         with patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
@@ -160,26 +145,23 @@ class TestCandidateStore(unittest.TestCase):
             self.assertEqual(result, 3)
             mock_service.save_deep_scan_results.assert_called_once_with(results, scan_date)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.session_scope")
-    def test_get_active_candidates(self, mock_session_scope):
+    def test_get_active_candidates(self):
         """Test retrieval of active candidates."""
-        # Mock session and service
-        mock_session = Mock()
+        # Mock service
         mock_service = Mock()
-        mock_session_scope.return_value.__enter__.return_value = mock_session
 
         expected_tickers = ["TSLA", "GME", "AMC"]
 
         with patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
-            mock_service.get_candidates_for_deep_scan.return_value = expected_tickers
+            mock_service.get_candidates_for_deep_scan_tickers.return_value = expected_tickers
 
             # Execute
             result = self.candidate_store.get_active_candidates()
 
             # Verify
             self.assertEqual(result, expected_tickers)
-            mock_service.get_candidates_for_deep_scan.assert_called_once()
+            mock_service.get_candidates_for_deep_scan_tickers.assert_called_once()
 
     def test_create_candidate_success(self):
         """Test successful candidate creation."""
@@ -214,13 +196,10 @@ class TestCandidateStore(unittest.TestCase):
                 structural_metrics=self.sample_structural_metrics,
             )
 
-    @patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.session_scope")
-    def test_get_candidate_history(self, mock_session_scope):
+    def test_get_candidate_history(self):
         """Test retrieval of candidate history."""
-        # Mock session and service
-        mock_session = Mock()
+        # Mock service
         mock_service = Mock()
-        mock_session_scope.return_value.__enter__.return_value = mock_session
 
         expected_history = {"ticker": "TSLA", "screener_history": [], "metrics_history": [], "alert_history": []}
 
@@ -296,13 +275,10 @@ class TestCandidateStore(unittest.TestCase):
         self.assertFalse(is_valid)
         self.assertIn("Ticker must be 10 characters or less", errors)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.session_scope")
-    def test_batch_store_candidates_with_validation(self, mock_session_scope):
+    def test_batch_store_candidates_with_validation(self):
         """Test batch storage of candidates with validation."""
-        # Mock session and service
-        mock_session = Mock()
+        # Mock service
         mock_service = Mock()
-        mock_session_scope.return_value.__enter__.return_value = mock_session
 
         with patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
@@ -329,13 +305,10 @@ class TestCandidateStore(unittest.TestCase):
             self.assertEqual(len(errors), 2)  # 2 validation errors
             mock_service.save_screener_results.assert_called_once()
 
-    @patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.session_scope")
-    def test_cleanup_expired_candidates(self, mock_session_scope):
+    def test_cleanup_expired_candidates(self):
         """Test cleanup of expired candidates."""
-        # Mock session and service
-        mock_session = Mock()
+        # Mock service
         mock_service = Mock()
-        mock_session_scope.return_value.__enter__.return_value = mock_session
 
         expected_cleanup_stats = {"snapshots_deleted": 10, "metrics_deleted": 5, "alerts_deleted": 3}
 
@@ -350,13 +323,10 @@ class TestCandidateStore(unittest.TestCase):
             self.assertEqual(result, expected_cleanup_stats)
             mock_service.cleanup_old_data.assert_called_once_with(90)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.session_scope")
-    def test_get_candidate_statistics(self, mock_session_scope):
+    def test_get_candidate_statistics(self):
         """Test retrieval of candidate statistics."""
-        # Mock session and service
-        mock_session = Mock()
+        # Mock service
         mock_service = Mock()
-        mock_session_scope.return_value.__enter__.return_value = mock_session
 
         expected_stats = {
             "latest_screener_run": date.today(),

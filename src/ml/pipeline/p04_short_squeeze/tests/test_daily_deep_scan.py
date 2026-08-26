@@ -350,8 +350,8 @@ class TestDailyDeepScan(unittest.TestCase):
         ]
 
         # Mock successful scanning for first two, failure for third
-        def mock_scan_candidate(candidate, metrics):
-            del metrics  # signature must match _scan_candidate; unused in this mock
+        def mock_scan_candidate(candidate, metrics, sentiment_features=None):
+            del metrics, sentiment_features  # signature must match _scan_candidate; unused in this mock
             if candidate.ticker in ["TEST1", "TEST2"]:
                 transient_metrics = TransientMetrics(
                     volume_spike=2.0, call_put_ratio=1.5, sentiment_24h=0.2, borrow_fee_pct=3.0
@@ -371,13 +371,10 @@ class TestDailyDeepScan(unittest.TestCase):
             self.assertEqual(metrics_dict["successful_scans"], 2)
             self.assertEqual(metrics_dict["failed_scans"], 1)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.core.daily_deep_scan.session_scope")
-    def test_store_results(self, mock_session_scope):
+    def test_store_results(self):
         """Test storing results in database."""
-        # Mock database session and service
-        mock_session = Mock()
+        # Mock service
         mock_service = Mock()
-        mock_session_scope.return_value.__enter__.return_value = mock_session
 
         with patch("src.ml.pipeline.p04_short_squeeze.core.daily_deep_scan.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
@@ -409,13 +406,10 @@ class TestDailyDeepScan(unittest.TestCase):
         self.assertEqual(deep_scan.finnhub_downloader, self.mock_finnhub_downloader)
         self.assertEqual(deep_scan.config, self.deep_scan_config)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.core.daily_deep_scan.session_scope")
-    def test_run_deep_scan_with_candidates(self, mock_session_scope):
+    def test_run_deep_scan_with_candidates(self):
         """Test complete deep scan run with provided candidates."""
-        # Mock database operations
-        mock_session = Mock()
+        # Mock service
         mock_service = Mock()
-        mock_session_scope.return_value.__enter__.return_value = mock_session
 
         with patch("src.ml.pipeline.p04_short_squeeze.core.daily_deep_scan.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service

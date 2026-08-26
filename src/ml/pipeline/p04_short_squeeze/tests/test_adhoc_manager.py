@@ -17,9 +17,6 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p04_short_squeeze.core.models import AdHocCandidate
 from src.ml.pipeline.p04_short_squeeze.data.adhoc_manager import AdHocManager
-from src.notification.logger import setup_logger
-
-_logger = setup_logger(__name__)
 
 
 class TestAdHocManager(unittest.TestCase):
@@ -121,7 +118,7 @@ class TestAdHocManager(unittest.TestCase):
 
         # Mock repository and model
         mock_repo = Mock()
-        mock_service.repo = mock_repo
+        mock_service.repos.short_squeeze = mock_repo
 
         mock_model = Mock()
         mock_model.ticker = "TSLA"
@@ -156,7 +153,7 @@ class TestAdHocManager(unittest.TestCase):
 
         # Mock repository and model
         mock_repo = Mock()
-        mock_service.repo = mock_repo
+        mock_service.repos.short_squeeze = mock_repo
 
         mock_model = Mock()
         mock_model.ticker = "TSLA"
@@ -191,7 +188,7 @@ class TestAdHocManager(unittest.TestCase):
 
         # Mock repository
         mock_repo = Mock()
-        mock_service.repo = mock_repo
+        mock_service.repos.short_squeeze = mock_repo
         mock_repo.adhoc_candidates.get_candidate.return_value = None
 
         with patch("src.ml.pipeline.p04_short_squeeze.data.adhoc_manager.ShortSqueezeService") as mock_service_class:
@@ -213,7 +210,7 @@ class TestAdHocManager(unittest.TestCase):
 
         # Mock repository and model
         mock_repo = Mock()
-        mock_service.repo = mock_repo
+        mock_service.repos.short_squeeze = mock_repo
 
         mock_model = Mock()
         mock_model.ticker = "TSLA"
@@ -243,7 +240,7 @@ class TestAdHocManager(unittest.TestCase):
 
         # Mock repository and model
         mock_repo = Mock()
-        mock_service.repo = mock_repo
+        mock_service.repos.short_squeeze = mock_repo
 
         mock_model = Mock()
         mock_model.ticker = "TSLA"
@@ -293,7 +290,7 @@ class TestAdHocManager(unittest.TestCase):
 
         # Mock repository and model
         mock_repo = Mock()
-        mock_service.repo = mock_repo
+        mock_service.repos.short_squeeze = mock_repo
 
         mock_model = Mock()
         mock_model.ticker = "TSLA"
@@ -331,7 +328,7 @@ class TestAdHocManager(unittest.TestCase):
 
         # Mock repository
         mock_repo = Mock()
-        mock_service.repo = mock_repo
+        mock_service.repos.short_squeeze = mock_repo
         mock_repo.adhoc_candidates.promote_by_screener.return_value = True
 
         with patch("src.ml.pipeline.p04_short_squeeze.data.adhoc_manager.ShortSqueezeService") as mock_service_class:

@@ -7,6 +7,7 @@ and end-to-end execution with sample data.
 """
 
 import csv
+import importlib
 import os
 import subprocess
 import sys
@@ -75,6 +76,31 @@ class ScriptIntegrationTestBase(unittest.TestCase):
 
         return result
 
+    def call_script_main(self, module_name: str, args: list) -> int:
+        """
+        Import a script module and call its main() function in-process.
+
+        Unlike run_script(), this does not spawn a subprocess, so @patch decorators
+        targeting the script's module-level names (e.g. its data providers or manager
+        classes) actually take effect. Use this for scenarios that must be mocked to
+        run quickly/deterministically (real API calls, real database writes).
+
+        Args:
+            module_name: Fully-qualified module name of the script (e.g.
+                "src.ml.pipeline.p04_short_squeeze.scripts.manage_adhoc_candidates")
+            args: Command-line arguments (excluding the script path itself)
+
+        Returns:
+            The script's exit code
+        """
+        module = importlib.import_module(module_name)
+        old_argv = sys.argv
+        sys.argv = [str(getattr(module, "__file__", module_name))] + args
+        try:
+            return module.main()
+        finally:
+            sys.argv = old_argv
+
     def create_test_config(self) -> str:
         """Create a test configuration file."""
         config_content = """run_id: "test_run_001"
@@ -133,7 +159,7 @@ class TestWeeklyScreenerScript(ScriptIntegrationTestBase):
         """Test that help argument works."""
         result = self.run_script("run_weekly_screener.py", ["--help"], expect_success=False)
         self.assertEqual(result.returncode, 0)
-        self.assertIn("weekly screener", result.stdout.lower())
+        self.assertIn("weekly stock universe", result.stdout.lower())
 
     def test_invalid_arguments(self):
         """Test handling of invalid arguments."""
@@ -156,13 +182,12 @@ class TestWeeklyScreenerScript(ScriptIntegrationTestBase):
         result = self.run_script("run_weekly_screener.py", ["--config", config_path, "--test-connection"])
 
         self.assertEqual(result.returncode, 0)
-        self.assertIn("connection test successful", result.stdout.lower())
+        self.assertIn("connection test successful", (result.stdout + result.stderr).lower())
 
     @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_weekly_screener.FMPDataDownloader")
     @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_weekly_screener.ConfigManager")
     @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_weekly_screener.create_universe_loader")
-    @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_weekly_screener.create_weekly_screener")
-    def test_dry_run_mode(self, mock_create_screener, mock_create_universe, mock_config_manager, mock_fmp_downloader):
+    def test_dry_run_mode(self, mock_create_universe, mock_config_manager, mock_fmp_downloader):
         """Test dry run mode execution."""
         # Setup mocks
         mock_config = MagicMock()
@@ -177,25 +202,13 @@ class TestWeeklyScreenerScript(ScriptIntegrationTestBase):
         mock_universe_loader.load_universe.return_value = ["AAPL", "TSLA", "GME"]
         mock_create_universe.return_value = mock_universe_loader
 
-        mock_screener = MagicMock()
-        mock_results = MagicMock()
-        mock_results.run_id = "test_run"
-        mock_results.run_date = datetime.now().date()
-        mock_results.total_universe = 3
-        mock_results.candidates_found = 2
-        mock_results.top_candidates = []
-        mock_results.data_quality_metrics = {}
-        mock_results.runtime_metrics = {}
-        mock_screener.run_screener.return_value = mock_results
-        mock_create_screener.return_value = mock_screener
-
         config_path = self.create_test_config()
         result = self.run_script(
             "run_weekly_screener.py", ["--config", config_path, "--dry-run", "--max-universe", "3"]
         )
 
         self.assertEqual(result.returncode, 0)
-        self.assertIn("dry run mode", result.stdout.lower())
+        self.assertIn("dry run mode", (result.stdout + result.stderr).lower())
 
     def test_verbose_logging(self):
         """Test verbose logging option."""
@@ -263,13 +276,16 @@ class TestDailyDeepScanScript(ScriptIntegrationTestBase):
         result = self.run_script("run_daily_deep_scan.py", ["--config", config_path, "--test-connection"])
 
         self.assertEqual(result.returncode, 0)
-        self.assertIn("connection test successful", result.stdout.lower())
+        self.assertIn("connection test successful", (result.stdout + result.stderr).lower())
 
+    @patch("src.common.sentiments.collect_sentiment_async.collect_sentiment_batch_sync")
     @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_daily_deep_scan.FMPDataDownloader")
     @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_daily_deep_scan.FinnhubDataDownloader")
     @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_daily_deep_scan.ConfigManager")
     @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_daily_deep_scan.create_daily_deep_scan")
-    def test_manual_tickers_mode(self, mock_create_deep_scan, mock_config_manager, mock_finnhub, mock_fmp):
+    def test_manual_tickers_mode(
+        self, mock_create_deep_scan, mock_config_manager, mock_finnhub, mock_fmp, mock_collect_sentiment
+    ):
         """Test manual tickers mode execution."""
         # Setup mocks
         mock_config = MagicMock()
@@ -294,13 +310,18 @@ class TestDailyDeepScanScript(ScriptIntegrationTestBase):
         mock_deep_scan.run_deep_scan.return_value = mock_results
         mock_create_deep_scan.return_value = mock_deep_scan
 
-        config_path = self.create_test_config()
-        result = self.run_script(
-            "run_daily_deep_scan.py", ["--config", config_path, "--tickers", "AAPL,TSLA", "--dry-run"]
-        )
+        # Avoid a real (slow) sentiment collection call for the manual tickers
+        mock_collect_sentiment.return_value = {}
 
-        self.assertEqual(result.returncode, 0)
-        self.assertIn("dry run mode", result.stdout.lower())
+        config_path = self.create_test_config()
+        with self.assertLogs(level="INFO") as log_ctx:
+            returncode = self.call_script_main(
+                "src.ml.pipeline.p04_short_squeeze.scripts.run_daily_deep_scan",
+                ["--config", config_path, "--tickers", "AAPL,TSLA", "--dry-run"],
+            )
+
+        self.assertEqual(returncode, 0)
+        self.assertIn("dry run mode", "\n".join(log_ctx.output).lower())
 
     def test_scan_date_parsing(self):
         """Test scan date parsing functionality."""
@@ -394,9 +415,12 @@ class TestAdHocCandidateManagementScript(ScriptIntegrationTestBase):
         mock_adhoc_manager.return_value = mock_manager
 
         config_path = self.create_test_config()
-        result = self.run_script("manage_adhoc_candidates.py", ["--config", config_path, "add", "AAPL", "Test reason"])
+        returncode = self.call_script_main(
+            "src.ml.pipeline.p04_short_squeeze.scripts.manage_adhoc_candidates",
+            ["--config", config_path, "add", "AAPL", "Test reason"],
+        )
 
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(returncode, 0)
         mock_manager.add_candidate.assert_called_once_with("AAPL", "Test reason", None)
 
     @patch("src.ml.pipeline.p04_short_squeeze.scripts.manage_adhoc_candidates.AdHocManager")
@@ -413,9 +437,12 @@ class TestAdHocCandidateManagementScript(ScriptIntegrationTestBase):
         mock_adhoc_manager.return_value = mock_manager
 
         config_path = self.create_test_config()
-        result = self.run_script("manage_adhoc_candidates.py", ["--config", config_path, "list"])
+        returncode = self.call_script_main(
+            "src.ml.pipeline.p04_short_squeeze.scripts.manage_adhoc_candidates",
+            ["--config", config_path, "list"],
+        )
 
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(returncode, 0)
         mock_manager.get_active_candidates.assert_called_once()
 
     @patch("src.ml.pipeline.p04_short_squeeze.scripts.manage_adhoc_candidates.AdHocManager")
@@ -440,9 +467,12 @@ class TestAdHocCandidateManagementScript(ScriptIntegrationTestBase):
         mock_adhoc_manager.return_value = mock_manager
 
         config_path = self.create_test_config()
-        result = self.run_script("manage_adhoc_candidates.py", ["--config", config_path, "stats"])
+        returncode = self.call_script_main(
+            "src.ml.pipeline.p04_short_squeeze.scripts.manage_adhoc_candidates",
+            ["--config", config_path, "stats"],
+        )
 
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(returncode, 0)
         mock_manager.get_statistics.assert_called_once()
 
     def test_bulk_add_with_invalid_csv(self):
@@ -476,9 +506,12 @@ class TestAdHocCandidateManagementScript(ScriptIntegrationTestBase):
         mock_adhoc_manager.return_value = mock_manager
 
         config_path = self.create_test_config()
-        result = self.run_script("manage_adhoc_candidates.py", ["--config", config_path, "bulk-add", csv_file])
+        returncode = self.call_script_main(
+            "src.ml.pipeline.p04_short_squeeze.scripts.manage_adhoc_candidates",
+            ["--config", config_path, "bulk-add", csv_file],
+        )
 
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(returncode, 0)
         mock_manager.bulk_add_candidates.assert_called_once()
 
     def test_verbose_logging(self):
@@ -521,8 +554,6 @@ class TestScriptPerformanceAndResourceUsage(ScriptIntegrationTestBase):
     def test_memory_usage_reasonable(self):
         """Test that scripts don't consume excessive memory."""
         # This is a basic test - in production you might use memory profiling tools
-        config_path = self.create_test_config()
-
         result = self.run_script("manage_adhoc_candidates.py", ["sample-csv", os.path.join(self.test_dir, "test.csv")])
 
         self.assertEqual(result.returncode, 0)
@@ -548,12 +579,12 @@ class TestScriptPerformanceAndResourceUsage(ScriptIntegrationTestBase):
 class TestEndToEndScriptExecution(ScriptIntegrationTestBase):
     """End-to-end integration tests with sample data."""
 
+    @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_weekly_screener.ShortSqueezeService")
     @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_weekly_screener.FMPDataDownloader")
     @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_weekly_screener.ConfigManager")
     @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_weekly_screener.create_universe_loader")
-    @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_weekly_screener.create_weekly_screener")
     def test_weekly_screener_end_to_end(
-        self, mock_create_screener, mock_create_universe, mock_config_manager, mock_fmp_downloader
+        self, mock_create_universe, mock_config_manager, mock_fmp_downloader, mock_short_squeeze_service
     ):
         """Test complete weekly screener execution with mocked data."""
         # Setup comprehensive mocks for end-to-end test
@@ -568,55 +599,36 @@ class TestEndToEndScriptExecution(ScriptIntegrationTestBase):
 
         mock_universe_loader = MagicMock()
         mock_universe_loader.load_universe.return_value = ["AAPL", "TSLA", "GME", "AMC", "NVDA"]
+        mock_universe_loader._get_known_short_interest_candidates.return_value = []
         mock_create_universe.return_value = mock_universe_loader
 
-        # Create realistic mock results
-
-        mock_candidate = MagicMock()
-        mock_candidate.ticker = "GME"
-        mock_candidate.screener_score = 0.85
-        mock_candidate.structural_metrics.short_interest_pct = 0.25
-        mock_candidate.structural_metrics.days_to_cover = 5.2
-        mock_candidate.structural_metrics.market_cap = 1000000000
-        mock_candidate.source.value = "SCREENER"
-
-        mock_screener = MagicMock()
-        mock_results = MagicMock()
-        mock_results.run_id = "test_e2e_001"
-        mock_results.run_date = datetime.now().date()
-        mock_results.total_universe = 5
-        mock_results.candidates_found = 3
-        mock_results.top_candidates = [mock_candidate]
-        mock_results.data_quality_metrics = {
-            "total_tickers": 5,
-            "successful_fetches": 4,
-            "failed_fetches": 1,
-            "api_calls_made": 15,
-        }
-        mock_results.runtime_metrics = {"duration_seconds": 45.2, "tickers_per_second": 0.11}
-        mock_screener.run_screener.return_value = mock_results
-        mock_create_screener.return_value = mock_screener
+        # Avoid a real database write when the universe gets stored
+        mock_short_squeeze_service.return_value.save_screener_results.return_value = 5
 
         # Run the test
         config_path = self.create_test_config()
         output_dir = os.path.join(self.test_dir, "output")
 
-        result = self.run_script(
-            "run_weekly_screener.py",
-            ["--config", config_path, "--max-universe", "5", "--output-dir", output_dir, "--verbose"],
-        )
+        with self.assertLogs(level="INFO") as log_ctx:
+            returncode = self.call_script_main(
+                "src.ml.pipeline.p04_short_squeeze.scripts.run_weekly_screener",
+                ["--config", config_path, "--max-universe", "5", "--output-dir", output_dir, "--verbose"],
+            )
 
-        self.assertEqual(result.returncode, 0)
-        self.assertIn("completed successfully", result.stdout.lower())
+        self.assertEqual(returncode, 0)
+        self.assertIn("completed successfully", "\n".join(log_ctx.output).lower())
 
         # Verify output files were created
         self.assertTrue(os.path.exists(output_dir))
 
+    @patch("src.common.sentiments.collect_sentiment_async.collect_sentiment_batch_sync")
     @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_daily_deep_scan.FMPDataDownloader")
     @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_daily_deep_scan.FinnhubDataDownloader")
     @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_daily_deep_scan.ConfigManager")
     @patch("src.ml.pipeline.p04_short_squeeze.scripts.run_daily_deep_scan.create_daily_deep_scan")
-    def test_daily_deep_scan_end_to_end(self, mock_create_deep_scan, mock_config_manager, mock_finnhub, mock_fmp):
+    def test_daily_deep_scan_end_to_end(
+        self, mock_create_deep_scan, mock_config_manager, mock_finnhub, mock_fmp, mock_collect_sentiment
+    ):
         """Test complete daily deep scan execution with mocked data."""
         # Setup comprehensive mocks
         mock_config = MagicMock()
@@ -663,17 +675,21 @@ class TestEndToEndScriptExecution(ScriptIntegrationTestBase):
         mock_deep_scan.run_deep_scan.return_value = mock_results
         mock_create_deep_scan.return_value = mock_deep_scan
 
+        # Avoid a real (slow) sentiment collection call for the manual tickers
+        mock_collect_sentiment.return_value = {}
+
         # Run the test
         config_path = self.create_test_config()
         output_dir = os.path.join(self.test_dir, "output")
 
-        result = self.run_script(
-            "run_daily_deep_scan.py",
-            ["--config", config_path, "--tickers", "GME,AMC,AAPL", "--output-dir", output_dir, "--progress"],
-        )
+        with self.assertLogs(level="INFO") as log_ctx:
+            returncode = self.call_script_main(
+                "src.ml.pipeline.p04_short_squeeze.scripts.run_daily_deep_scan",
+                ["--config", config_path, "--tickers", "GME,AMC,AAPL", "--output-dir", output_dir, "--progress"],
+            )
 
-        self.assertEqual(result.returncode, 0)
-        self.assertIn("completed successfully", result.stdout.lower())
+        self.assertEqual(returncode, 0)
+        self.assertIn("completed successfully", "\n".join(log_ctx.output).lower())
 
 
 if __name__ == "__main__":

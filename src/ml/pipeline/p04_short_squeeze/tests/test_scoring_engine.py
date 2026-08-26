@@ -116,13 +116,24 @@ class TestScoringEngine(unittest.TestCase):
         """Test transient metrics extraction."""
         metrics_dict = self.scoring_engine._extract_transient_metrics(self.transient_metrics)
 
-        expected_keys = ["volume_spike", "sentiment_24h", "call_put_ratio", "borrow_fee"]
+        expected_keys = [
+            "volume_spike",
+            "sentiment_24h",
+            "call_put_ratio",
+            "borrow_fee",
+            "virality_index",
+            "mentions_growth_7d",
+            "bot_pct",
+        ]
         self.assertEqual(set(metrics_dict.keys()), set(expected_keys))
 
         self.assertEqual(metrics_dict["volume_spike"], 3.5)
         self.assertEqual(metrics_dict["sentiment_24h"], 0.6)
         self.assertEqual(metrics_dict["call_put_ratio"], 2.1)
         self.assertEqual(metrics_dict["borrow_fee"], 0.15)
+        self.assertEqual(metrics_dict["virality_index"], 0.0)
+        self.assertEqual(metrics_dict["mentions_growth_7d"], 0.0)
+        self.assertEqual(metrics_dict["bot_pct"], 0.0)
 
     def test_extract_transient_metrics_with_none_values(self):
         """Test transient metrics extraction with None values."""

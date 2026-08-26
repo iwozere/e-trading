@@ -33,8 +33,14 @@ from src.ml.pipeline.p04_short_squeeze.core.models import (
 )
 
 
-class TestAlertEngine(unittest.TestCase):
-    """Test cases for AlertEngine class."""
+class TestAlertEngine(unittest.IsolatedAsyncioTestCase):
+    """Test cases for AlertEngine class.
+
+    IsolatedAsyncioTestCase (rather than plain TestCase) so the `async def test_*` methods
+    below actually run under an event loop instead of being silently skipped -- a plain
+    TestCase never awaits an async test method, it just warns "coroutine was never awaited".
+    Synchronous test methods are unaffected and still run directly.
+    """
 
     def setUp(self):
         """Set up test fixtures."""
@@ -200,15 +206,11 @@ class TestAlertEngine(unittest.TestCase):
         expected_low = now + timedelta(days=3)
         self.assertAlmostEqual(low_expiry.timestamp(), expected_low.timestamp(), delta=60)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope")
-    def test_is_in_cooldown_false(self, mock_session_scope):
+    def test_is_in_cooldown_false(self):
         """Test cooldown check when not in cooldown."""
-        # Mock database session and service
-        mock_session = Mock()
+        # Mock service
         mock_service = Mock()
-        mock_service.repo.alerts.check_cooldown.return_value = False
-
-        mock_session_scope.return_value.__enter__.return_value = mock_session
+        mock_service.repos.short_squeeze.alerts.check_cooldown.return_value = False
 
         with patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
@@ -216,17 +218,13 @@ class TestAlertEngine(unittest.TestCase):
             result = self.alert_engine._is_in_cooldown("TSLA", AlertLevel.HIGH)
 
             self.assertFalse(result)
-            mock_service.repo.alerts.check_cooldown.assert_called_once_with("TSLA", AlertLevel.HIGH)
+            mock_service.repos.short_squeeze.alerts.check_cooldown.assert_called_once_with("TSLA", AlertLevel.HIGH)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope")
-    def test_is_in_cooldown_true(self, mock_session_scope):
+    def test_is_in_cooldown_true(self):
         """Test cooldown check when in cooldown."""
-        # Mock database session and service
-        mock_session = Mock()
+        # Mock service
         mock_service = Mock()
-        mock_service.repo.alerts.check_cooldown.return_value = True
-
-        mock_session_scope.return_value.__enter__.return_value = mock_session
+        mock_service.repos.short_squeeze.alerts.check_cooldown.return_value = True
 
         with patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
@@ -235,15 +233,11 @@ class TestAlertEngine(unittest.TestCase):
 
             self.assertTrue(result)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope")
-    def test_evaluate_candidate_alert_success(self, mock_session_scope):
+    def test_evaluate_candidate_alert_success(self):
         """Test successful alert evaluation for a candidate."""
-        # Mock database to return no cooldown
-        mock_session = Mock()
+        # Mock service to return no cooldown
         mock_service = Mock()
-        mock_service.repo.alerts.check_cooldown.return_value = False
-
-        mock_session_scope.return_value.__enter__.return_value = mock_session
+        mock_service.repos.short_squeeze.alerts.check_cooldown.return_value = False
 
         with patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
@@ -261,15 +255,11 @@ class TestAlertEngine(unittest.TestCase):
             self.assertEqual(alert.squeeze_score, 0.85)
             self.assertIsNotNone(alert.cooldown_expires)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope")
-    def test_evaluate_candidate_alert_cooldown(self, mock_session_scope):
+    def test_evaluate_candidate_alert_cooldown(self):
         """Test alert evaluation when candidate is in cooldown."""
-        # Mock database to return cooldown active
-        mock_session = Mock()
+        # Mock service to return cooldown active
         mock_service = Mock()
-        mock_service.repo.alerts.check_cooldown.return_value = True
-
-        mock_session_scope.return_value.__enter__.return_value = mock_session
+        mock_service.repos.short_squeeze.alerts.check_cooldown.return_value = True
 
         with patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
@@ -346,16 +336,12 @@ class TestAlertEngine(unittest.TestCase):
 
         self.assertFalse(result)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope")
-    async def test_mark_alert_sent(self, mock_session_scope):
+    async def test_mark_alert_sent(self):
         """Test marking alert as sent in database."""
-        # Mock database session and service
-        mock_session = Mock()
+        # Mock service
         mock_service = Mock()
         mock_service.create_alert.return_value = 123  # Mock alert ID
         mock_service.mark_alert_sent.return_value = True
-
-        mock_session_scope.return_value.__enter__.return_value = mock_session
 
         with patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service
@@ -395,11 +381,9 @@ class TestAlertEngine(unittest.TestCase):
             self.assertEqual(results["alerts_failed"], 0)
             self.assertEqual(len(results["alert_details"]), 1)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.session_scope")
-    def test_get_alert_statistics(self, mock_session_scope):
+    def test_get_alert_statistics(self):
         """Test getting alert statistics."""
-        # Mock database session and service
-        mock_session = Mock()
+        # Mock service
         mock_service = Mock()
 
         # Mock recent alerts
@@ -408,9 +392,7 @@ class TestAlertEngine(unittest.TestCase):
             Mock(alert_level="MEDIUM", sent=True),
             Mock(alert_level="LOW", sent=False),
         ]
-        mock_service.repo.alerts.get_recent_alerts.return_value = mock_alerts
-
-        mock_session_scope.return_value.__enter__.return_value = mock_session
+        mock_service.repos.short_squeeze.alerts.get_recent_alerts.return_value = mock_alerts
 
         with patch("src.ml.pipeline.p04_short_squeeze.core.alert_engine.ShortSqueezeService") as mock_service_class:
             mock_service_class.return_value = mock_service

@@ -54,7 +54,7 @@ class TestScriptBasicFunctionality(unittest.TestCase):
 
         for script_name in scripts:
             script_path = self.scripts_dir / script_name
-            with open(script_path) as f:
+            with open(script_path, encoding="utf-8") as f:
                 first_line = f.readline().strip()
                 self.assertTrue(
                     first_line.startswith("#!/usr/bin/env python") or first_line.startswith("#!/usr/bin/python"),
@@ -67,7 +67,7 @@ class TestScriptBasicFunctionality(unittest.TestCase):
 
         for script_name in scripts:
             script_path = self.scripts_dir / script_name
-            with open(script_path) as f:
+            with open(script_path, encoding="utf-8") as f:
                 content = f.read()
                 # Check for docstring
                 self.assertIn('"""', content, f"Script {script_name} should have docstring")
@@ -84,7 +84,7 @@ class TestScriptBasicFunctionality(unittest.TestCase):
 
         for script_name in scripts:
             script_path = self.scripts_dir / script_name
-            with open(script_path) as f:
+            with open(script_path, encoding="utf-8") as f:
                 content = f.read()
 
             try:
@@ -98,7 +98,7 @@ class TestScriptBasicFunctionality(unittest.TestCase):
 
         for script_name in scripts:
             script_path = self.scripts_dir / script_name
-            with open(script_path) as f:
+            with open(script_path, encoding="utf-8") as f:
                 content = f.read()
 
             # Check for main function
@@ -112,7 +112,7 @@ class TestScriptBasicFunctionality(unittest.TestCase):
 
         for script_name in scripts:
             script_path = self.scripts_dir / script_name
-            with open(script_path) as f:
+            with open(script_path, encoding="utf-8") as f:
                 content = f.read()
 
             # Check for argparse usage
@@ -126,7 +126,7 @@ class TestScriptBasicFunctionality(unittest.TestCase):
 
         for script_name in scripts:
             script_path = self.scripts_dir / script_name
-            with open(script_path) as f:
+            with open(script_path, encoding="utf-8") as f:
                 content = f.read()
 
             # Check for exception handling
@@ -138,7 +138,7 @@ class TestScriptBasicFunctionality(unittest.TestCase):
     def test_adhoc_script_has_subcommands(self):
         """Test that ad-hoc management script has proper subcommand structure."""
         script_path = self.scripts_dir / "manage_adhoc_candidates.py"
-        with open(script_path) as f:
+        with open(script_path, encoding="utf-8") as f:
             content = f.read()
 
         # Check for subparsers
@@ -148,7 +148,7 @@ class TestScriptBasicFunctionality(unittest.TestCase):
         # Check for expected commands
         expected_commands = ["add", "remove", "list", "status", "stats"]
         for command in expected_commands:
-            self.assertIn(f"'{command}'", content, f"Ad-hoc script should have {command} command")
+            self.assertIn(f'"{command}"', content, f"Ad-hoc script should have {command} command")
 
     def test_scripts_have_configuration_support(self):
         """Test that scripts support configuration files."""
@@ -156,7 +156,7 @@ class TestScriptBasicFunctionality(unittest.TestCase):
 
         for script_name in scripts:
             script_path = self.scripts_dir / script_name
-            with open(script_path) as f:
+            with open(script_path, encoding="utf-8") as f:
                 content = f.read()
 
             # Check for config argument
@@ -170,7 +170,7 @@ class TestScriptBasicFunctionality(unittest.TestCase):
 
         for script_name in scripts:
             script_path = self.scripts_dir / script_name
-            with open(script_path) as f:
+            with open(script_path, encoding="utf-8") as f:
                 content = f.read()
 
             # Check for logging setup
@@ -192,7 +192,7 @@ class TestScriptIntegrationRequirements(unittest.TestCase):
 
         # Weekly screener should have these arguments
         weekly_script = self.scripts_dir / "run_weekly_screener.py"
-        with open(weekly_script) as f:
+        with open(weekly_script, encoding="utf-8") as f:
             content = f.read()
 
         expected_args = ["--config", "--max-universe", "--dry-run", "--verbose", "--test-connection"]
@@ -201,7 +201,7 @@ class TestScriptIntegrationRequirements(unittest.TestCase):
 
         # Daily deep scan should have these arguments
         daily_script = self.scripts_dir / "run_daily_deep_scan.py"
-        with open(daily_script) as f:
+        with open(daily_script, encoding="utf-8") as f:
             content = f.read()
 
         expected_args = ["--config", "--tickers", "--batch-size", "--dry-run", "--progress"]
@@ -216,7 +216,7 @@ class TestScriptIntegrationRequirements(unittest.TestCase):
 
         for script_name in scripts:
             script_path = self.scripts_dir / script_name
-            with open(script_path) as f:
+            with open(script_path, encoding="utf-8") as f:
                 content = f.read()
 
             # Should handle various exception types
@@ -235,7 +235,7 @@ class TestScriptIntegrationRequirements(unittest.TestCase):
 
         for script_name in scripts:
             script_path = self.scripts_dir / script_name
-            with open(script_path) as f:
+            with open(script_path, encoding="utf-8") as f:
                 content = f.read()
 
             # Should track runtime metrics
@@ -251,7 +251,7 @@ class TestScriptIntegrationRequirements(unittest.TestCase):
 
         # Weekly screener should support universe limiting for testing
         weekly_script = self.scripts_dir / "run_weekly_screener.py"
-        with open(weekly_script) as f:
+        with open(weekly_script, encoding="utf-8") as f:
             content = f.read()
 
         self.assertIn("max-universe", content, "Weekly screener should support universe limiting")
@@ -259,7 +259,7 @@ class TestScriptIntegrationRequirements(unittest.TestCase):
 
         # Daily deep scan should support manual ticker input
         daily_script = self.scripts_dir / "run_daily_deep_scan.py"
-        with open(daily_script) as f:
+        with open(daily_script, encoding="utf-8") as f:
             content = f.read()
 
         self.assertIn("tickers", content, "Daily deep scan should support manual ticker input")

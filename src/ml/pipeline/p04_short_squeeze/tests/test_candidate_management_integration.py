@@ -19,9 +19,6 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.ml.pipeline.p04_short_squeeze.core.models import AdHocCandidate, Candidate, CandidateSource, StructuralMetrics
 from src.ml.pipeline.p04_short_squeeze.data.adhoc_manager import AdHocManager
 from src.ml.pipeline.p04_short_squeeze.data.candidate_store import CandidateStore
-from src.notification.logger import setup_logger
-
-_logger = setup_logger(__name__)
 
 
 class TestCandidateManagementIntegration(unittest.TestCase):
@@ -41,17 +38,15 @@ class TestCandidateManagementIntegration(unittest.TestCase):
             market_cap=1000000000,
         )
 
-    @patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.session_scope")
     @patch("src.ml.pipeline.p04_short_squeeze.data.adhoc_manager.session_scope")
-    def test_combined_candidate_retrieval(self, mock_adhoc_session, mock_store_session):
+    def test_combined_candidate_retrieval(self, mock_adhoc_session):
         """Test that active candidates include both screener and ad-hoc candidates."""
-        # Mock sessions
-        mock_store_session.return_value.__enter__.return_value = Mock()
+        # Mock session
         mock_adhoc_session.return_value.__enter__.return_value = Mock()
 
         # Mock CandidateStore returning screener candidates
         with patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.ShortSqueezeService") as mock_store_service:
-            mock_store_service.return_value.get_candidates_for_deep_scan.return_value = ["TSLA", "GME", "AMC"]
+            mock_store_service.return_value.get_candidates_for_deep_scan_tickers.return_value = ["TSLA", "GME", "AMC"]
 
             # Mock AdHocManager returning ad-hoc candidates
             mock_adhoc_candidates = [
@@ -74,12 +69,10 @@ class TestCandidateManagementIntegration(unittest.TestCase):
                 all_candidates = list(set(store_candidates + adhoc_tickers))
                 self.assertEqual(len(all_candidates), 5)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.session_scope")
     @patch("src.ml.pipeline.p04_short_squeeze.data.adhoc_manager.session_scope")
-    def test_candidate_lifecycle_workflow(self, mock_adhoc_session, mock_store_session):
+    def test_candidate_lifecycle_workflow(self, mock_adhoc_session):
         """Test complete candidate lifecycle from addition to expiration."""
-        # Mock sessions
-        mock_store_session.return_value.__enter__.return_value = Mock()
+        # Mock session
         mock_adhoc_session.return_value.__enter__.return_value = Mock()
 
         # Step 1: Add ad-hoc candidate
@@ -100,7 +93,7 @@ class TestCandidateManagementIntegration(unittest.TestCase):
 
         with patch("src.ml.pipeline.p04_short_squeeze.data.adhoc_manager.ShortSqueezeService") as mock_adhoc_service:
             mock_repo = Mock()
-            mock_adhoc_service.return_value.repo = mock_repo
+            mock_adhoc_service.return_value.repos.short_squeeze = mock_repo
             mock_repo.adhoc_candidates.get_active_candidates.return_value = [mock_candidate]
 
             active_candidates = self.adhoc_manager.get_active_candidates()
@@ -110,7 +103,7 @@ class TestCandidateManagementIntegration(unittest.TestCase):
         # Step 3: Candidate gets promoted by screener
         with patch("src.ml.pipeline.p04_short_squeeze.data.adhoc_manager.ShortSqueezeService") as mock_adhoc_service:
             mock_repo = Mock()
-            mock_adhoc_service.return_value.repo = mock_repo
+            mock_adhoc_service.return_value.repos.short_squeeze = mock_repo
             mock_repo.adhoc_candidates.promote_by_screener.return_value = True
 
             result = self.adhoc_manager.promote_by_screener("TSLA")
@@ -139,12 +132,8 @@ class TestCandidateManagementIntegration(unittest.TestCase):
             expired = self.adhoc_manager.expire_candidates()
             self.assertEqual(expired, ["OLD_TICKER"])
 
-    @patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.session_scope")
-    def test_data_consistency_validation(self, mock_session_scope):
+    def test_data_consistency_validation(self):
         """Test data consistency between different storage operations."""
-        # Mock session
-        mock_session_scope.return_value.__enter__.return_value = Mock()
-
         # Test data validation in CandidateStore
         valid_data = {
             "ticker": "TSLA",
@@ -177,12 +166,10 @@ class TestCandidateManagementIntegration(unittest.TestCase):
         )
         self.assertEqual(candidate.ticker, "TSLA")  # Should be normalized to uppercase
 
-    @patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.session_scope")
     @patch("src.ml.pipeline.p04_short_squeeze.data.adhoc_manager.session_scope")
-    def test_error_handling_integration(self, mock_adhoc_session, mock_store_session):
+    def test_error_handling_integration(self, mock_adhoc_session):
         """Test error handling across both components."""
-        # Mock sessions
-        mock_store_session.return_value.__enter__.return_value = Mock()
+        # Mock session
         mock_adhoc_session.return_value.__enter__.return_value = Mock()
 
         # Test CandidateStore error handling
@@ -212,12 +199,10 @@ class TestCandidateManagementIntegration(unittest.TestCase):
                 self.assertEqual(added_count, 1)
                 self.assertEqual(len(errors), 1)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.session_scope")
     @patch("src.ml.pipeline.p04_short_squeeze.data.adhoc_manager.session_scope")
-    def test_performance_statistics_integration(self, mock_adhoc_session, mock_store_session):
+    def test_performance_statistics_integration(self, mock_adhoc_session):
         """Test integration of performance statistics from both components."""
-        # Mock sessions
-        mock_store_session.return_value.__enter__.return_value = Mock()
+        # Mock session
         mock_adhoc_session.return_value.__enter__.return_value = Mock()
 
         # Mock CandidateStore statistics
@@ -294,12 +279,10 @@ class TestCandidateManagementIntegration(unittest.TestCase):
         # Both should normalize ticker to uppercase
         self.assertEqual(store_candidate.ticker, adhoc_candidate.ticker)
 
-    @patch("src.ml.pipeline.p04_short_squeeze.data.candidate_store.session_scope")
     @patch("src.ml.pipeline.p04_short_squeeze.data.adhoc_manager.session_scope")
-    def test_ttl_expiration_workflow(self, mock_adhoc_session, mock_store_session):
+    def test_ttl_expiration_workflow(self, mock_adhoc_session):
         """Test TTL expiration workflow integration."""
-        # Mock sessions
-        mock_store_session.return_value.__enter__.return_value = Mock()
+        # Mock session
         mock_adhoc_session.return_value.__enter__.return_value = Mock()
 
         # Step 1: Add candidates with different TTLs

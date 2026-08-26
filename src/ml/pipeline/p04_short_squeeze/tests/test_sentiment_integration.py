@@ -65,16 +65,32 @@ class TestTransientMetricsEnhanced:
         assert metrics.bot_pct == 0.0
         assert metrics.sentiment_data_quality == {}
 
-    def test_transient_metrics_validation_virality_range(self):
-        """Test virality index must be in [0, 1] range."""
-        with pytest.raises(ValueError, match="Virality index must be between 0 and 1"):
+    def test_transient_metrics_validation_virality_non_negative(self):
+        """Test virality index must be non-negative.
+
+        Per the Rev 2 redefinition (sentiment-spec-rev2.md SS2.5.5), virality_index is an
+        unsigned reach metric (Sigma engagement / sqrt(unique_authors+1)), not a 0..1 score,
+        so it is unbounded above -- only negative values are rejected.
+        """
+        with pytest.raises(ValueError, match="Virality index must be non-negative"):
             TransientMetrics(
                 volume_spike=1.0,
                 sentiment_24h=0.0,
                 call_put_ratio=None,
                 borrow_fee_pct=None,
-                virality_index=1.5,  # Invalid: > 1.0
+                virality_index=-0.1,  # Invalid: negative
             )
+
+    def test_transient_metrics_virality_unbounded_above(self):
+        """Test virality index accepts values greater than 1.0 (it is unbounded above)."""
+        metrics = TransientMetrics(
+            volume_spike=1.0,
+            sentiment_24h=0.0,
+            call_put_ratio=None,
+            borrow_fee_pct=None,
+            virality_index=42.5,
+        )
+        assert metrics.virality_index == 42.5
 
     def test_transient_metrics_validation_bot_pct_range(self):
         """Test bot percentage must be in [0, 1] range."""
@@ -283,7 +299,6 @@ class TestSentimentConfiguration:
 # ============================================================================
 
 
-@pytest.mark.asyncio
 class TestDailyDeepScanSentiment:
     """Test daily deep scan with sentiment integration."""
 
@@ -304,6 +319,7 @@ class TestDailyDeepScanSentiment:
             bot_pct: float
             data_quality: dict
             raw_payload: dict
+            tech_sentiment_normalized: float | None = None
 
         return MockSentimentFeatures(
             ticker="AAPL",
@@ -317,11 +333,19 @@ class TestDailyDeepScanSentiment:
             bot_pct=0.15,
             data_quality={"stocktwits": "ok", "reddit": "ok"},
             raw_payload={},
+            tech_sentiment_normalized=None,
         )
 
     @patch("src.ml.pipeline.p04_short_squeeze.core.daily_deep_scan.collect_sentiment_batch")
-    async def test_batch_sentiment_collection(self, mock_collect, mock_sentiment_features):
-        """Test batch sentiment collection."""
+    def test_batch_sentiment_collection(self, mock_collect, mock_sentiment_features):
+        """Test batch sentiment collection.
+
+        _collect_batch_sentiment() is a synchronous method (it bridges to the async
+        collect_sentiment_batch() internally via loop.run_until_complete), and it is only ever
+        called from synchronous code (_process_batch()). This test must therefore stay
+        synchronous too -- running it as an `async def` under pytest-asyncio means it is already
+        inside a running event loop, and run_until_complete() cannot nest inside that.
+        """
         from src.ml.pipeline.p04_short_squeeze.config.data_classes import DeepScanConfig
         from src.ml.pipeline.p04_short_squeeze.core.daily_deep_scan import DailyDeepScan
         from src.ml.pipeline.p04_short_squeeze.core.models import Candidate, StructuralMetrics
@@ -391,7 +415,14 @@ class TestDailyDeepScanSentiment:
         with patch.object(scanner, "_calculate_volume_spike_ratio", return_value=3.0):
             with patch.object(scanner, "_get_call_put_ratio", return_value=2.0):
                 with patch.object(scanner, "_get_borrow_fee_percentage", return_value=15.0):
-                    metrics = {}
+                    metrics = {
+                        "valid_volume_data": 0,
+                        "valid_sentiment_data": 0,
+                        "valid_options_data": 0,
+                        "valid_borrow_rates": 0,
+                        "api_calls_fmp": 0,
+                        "api_calls_finnhub": 0,
+                    }
                     transient = scanner.calculate_transient_metrics("AAPL", metrics, mock_sentiment_features)
 
                     assert transient is not None

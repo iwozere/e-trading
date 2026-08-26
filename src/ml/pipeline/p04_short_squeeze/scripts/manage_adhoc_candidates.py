@@ -124,29 +124,29 @@ class AdHocCandidateManager:
             ticker = ticker.upper().strip()
 
             if not ticker:
-                print("Error: Ticker cannot be empty")
+                _logger.error("Cannot add candidate: ticker cannot be empty")
                 return False
 
             if not reason or not reason.strip():
-                print("Error: Reason cannot be empty")
+                _logger.error("Cannot add candidate: reason cannot be empty")
                 return False
 
-            print(f"Adding ad-hoc candidate: {ticker}")
-            print(f"Reason: {reason}")
+            _logger.info("Adding ad-hoc candidate: %s", ticker)
+            _logger.info("Reason: %s", reason)
             if ttl_days:
-                print(f"TTL: {ttl_days} days")
+                _logger.info("TTL: %d days", ttl_days)
 
             success = self._require_manager().add_candidate(ticker, reason, ttl_days)
 
             if success:
-                print(f"✅ Successfully added ad-hoc candidate: {ticker}")
+                _logger.info("Successfully added ad-hoc candidate: %s", ticker)
                 return True
             else:
-                print(f"❌ Failed to add ad-hoc candidate: {ticker}")
+                _logger.error("Failed to add ad-hoc candidate: %s", ticker)
                 return False
 
-        except Exception as e:
-            print(f"❌ Error adding candidate: {e}")
+        except Exception:
+            _logger.exception("Error adding candidate:")
             return False
 
     def remove_candidate(self, ticker: str) -> bool:
@@ -163,22 +163,22 @@ class AdHocCandidateManager:
             ticker = ticker.upper().strip()
 
             if not ticker:
-                print("Error: Ticker cannot be empty")
+                _logger.error("Cannot remove candidate: ticker cannot be empty")
                 return False
 
-            print(f"Removing ad-hoc candidate: {ticker}")
+            _logger.info("Removing ad-hoc candidate: %s", ticker)
 
             success = self._require_manager().remove_candidate(ticker)
 
             if success:
-                print(f"✅ Successfully removed ad-hoc candidate: {ticker}")
+                _logger.info("Successfully removed ad-hoc candidate: %s", ticker)
                 return True
             else:
-                print(f"❌ Failed to remove ad-hoc candidate: {ticker} (may not exist or already inactive)")
+                _logger.error("Failed to remove ad-hoc candidate: %s (may not exist or already inactive)", ticker)
                 return False
 
-        except Exception as e:
-            print(f"❌ Error removing candidate: {e}")
+        except Exception:
+            _logger.exception("Error removing candidate:")
             return False
 
     def list_candidates(self, show_details: bool = False) -> bool:
@@ -195,35 +195,35 @@ class AdHocCandidateManager:
             candidates = self._require_manager().get_active_candidates()
 
             if not candidates:
-                print("No active ad-hoc candidates found.")
+                _logger.info("No active ad-hoc candidates found.")
                 return True
 
-            print(f"\n📋 Active Ad-hoc Candidates ({len(candidates)}):")
-            print("=" * 80)
+            _logger.info("Active Ad-hoc Candidates (%d):", len(candidates))
 
             for i, candidate in enumerate(candidates, 1):
-                print(f"{i:2d}. {candidate.ticker}")
+                _logger.info("%2d. %s", i, candidate.ticker)
 
                 if show_details:
-                    print(f"    Reason: {candidate.reason}")
-                    print(f"    Added: {candidate.first_seen.strftime('%Y-%m-%d %H:%M:%S')}")
+                    _logger.info("    Reason: %s", candidate.reason)
+                    _logger.info("    Added: %s", candidate.first_seen.strftime("%Y-%m-%d %H:%M:%S"))
 
                     if candidate.expires_at:
                         days_left = (candidate.expires_at - datetime.now()).days
-                        status = "⚠️ EXPIRING SOON" if days_left <= 3 else "✅ Active"
-                        print(
-                            f"    Expires: {candidate.expires_at.strftime('%Y-%m-%d %H:%M:%S')} ({days_left} days left) {status}"
+                        status = "EXPIRING SOON" if days_left <= 3 else "Active"
+                        _logger.info(
+                            "    Expires: %s (%d days left) %s",
+                            candidate.expires_at.strftime("%Y-%m-%d %H:%M:%S"),
+                            days_left,
+                            status,
                         )
 
                     if candidate.promoted_by_screener:
-                        print("    🎯 Promoted by screener")
-
-                    print()
+                        _logger.info("    Promoted by screener")
 
             return True
 
-        except Exception as e:
-            print(f"❌ Error listing candidates: {e}")
+        except Exception:
+            _logger.exception("Error listing candidates:")
             return False
 
     def show_candidate_status(self, ticker: str) -> bool:
@@ -241,32 +241,27 @@ class AdHocCandidateManager:
             candidate = self._require_manager().get_candidate(ticker)
 
             if not candidate:
-                print(f"❌ Ad-hoc candidate '{ticker}' not found")
+                _logger.error("Ad-hoc candidate '%s' not found", ticker)
                 return False
 
-            print(f"\n📊 Ad-hoc Candidate Status: {candidate.ticker}")
-            print("=" * 50)
-            print(f"Ticker: {candidate.ticker}")
-            print(f"Reason: {candidate.reason}")
-            print(f"Status: {'✅ Active' if candidate.active else '❌ Inactive'}")
-            print(f"Added: {candidate.first_seen.strftime('%Y-%m-%d %H:%M:%S')}")
+            _logger.info("Ad-hoc Candidate Status: %s", candidate.ticker)
+            _logger.info("Ticker: %s", candidate.ticker)
+            _logger.info("Reason: %s", candidate.reason)
+            _logger.info("Status: %s", "Active" if candidate.active else "Inactive")
+            _logger.info("Added: %s", candidate.first_seen.strftime("%Y-%m-%d %H:%M:%S"))
 
             if candidate.expires_at:
                 days_left = (candidate.expires_at - datetime.now()).days
-                status_emoji = "⚠️" if days_left <= 3 else "✅"
-                print(
-                    f"Expires: {candidate.expires_at.strftime('%Y-%m-%d %H:%M:%S')} ({days_left} days left) {status_emoji}"
+                _logger.info(
+                    "Expires: %s (%d days left)", candidate.expires_at.strftime("%Y-%m-%d %H:%M:%S"), days_left
                 )
 
-            if candidate.promoted_by_screener:
-                print("🎯 Promoted by screener: Yes")
-            else:
-                print("🎯 Promoted by screener: No")
+            _logger.info("Promoted by screener: %s", "Yes" if candidate.promoted_by_screener else "No")
 
             return True
 
-        except Exception as e:
-            print(f"❌ Error showing candidate status: {e}")
+        except Exception:
+            _logger.exception("Error showing candidate status:")
             return False
 
     def activate_candidate(self, ticker: str) -> bool:
@@ -281,19 +276,19 @@ class AdHocCandidateManager:
         """
         try:
             ticker = ticker.upper().strip()
-            print(f"Activating ad-hoc candidate: {ticker}")
+            _logger.info("Activating ad-hoc candidate: %s", ticker)
 
             success = self._require_manager().activate_candidate(ticker)
 
             if success:
-                print(f"✅ Successfully activated ad-hoc candidate: {ticker}")
+                _logger.info("Successfully activated ad-hoc candidate: %s", ticker)
                 return True
             else:
-                print(f"❌ Failed to activate ad-hoc candidate: {ticker}")
+                _logger.error("Failed to activate ad-hoc candidate: %s", ticker)
                 return False
 
-        except Exception as e:
-            print(f"❌ Error activating candidate: {e}")
+        except Exception:
+            _logger.exception("Error activating candidate:")
             return False
 
     def deactivate_candidate(self, ticker: str) -> bool:
@@ -308,19 +303,19 @@ class AdHocCandidateManager:
         """
         try:
             ticker = ticker.upper().strip()
-            print(f"Deactivating ad-hoc candidate: {ticker}")
+            _logger.info("Deactivating ad-hoc candidate: %s", ticker)
 
             success = self._require_manager().deactivate_candidate(ticker)
 
             if success:
-                print(f"✅ Successfully deactivated ad-hoc candidate: {ticker}")
+                _logger.info("Successfully deactivated ad-hoc candidate: %s", ticker)
                 return True
             else:
-                print(f"❌ Failed to deactivate ad-hoc candidate: {ticker}")
+                _logger.error("Failed to deactivate ad-hoc candidate: %s", ticker)
                 return False
 
-        except Exception as e:
-            print(f"❌ Error deactivating candidate: {e}")
+        except Exception:
+            _logger.exception("Error deactivating candidate:")
             return False
 
     def expire_candidates(self) -> bool:
@@ -331,21 +326,19 @@ class AdHocCandidateManager:
             True if expiration process completed successfully, False otherwise
         """
         try:
-            print("Running ad-hoc candidate expiration process...")
+            _logger.info("Running ad-hoc candidate expiration process...")
 
             expired_tickers = self._require_manager().expire_candidates()
 
             if expired_tickers:
-                print(f"✅ Expired {len(expired_tickers)} candidates:")
-                for ticker in expired_tickers:
-                    print(f"  - {ticker}")
+                _logger.info("Expired %d candidates: %s", len(expired_tickers), expired_tickers)
             else:
-                print("✅ No candidates expired")
+                _logger.info("No candidates expired")
 
             return True
 
-        except Exception as e:
-            print(f"❌ Error running expiration process: {e}")
+        except Exception:
+            _logger.exception("Error running expiration process:")
             return False
 
     def extend_ttl(self, ticker: str, additional_days: int) -> bool:
@@ -363,22 +356,22 @@ class AdHocCandidateManager:
             ticker = ticker.upper().strip()
 
             if additional_days <= 0:
-                print("Error: Additional days must be positive")
+                _logger.error("Cannot extend TTL: additional days must be positive")
                 return False
 
-            print(f"Extending TTL for {ticker} by {additional_days} days...")
+            _logger.info("Extending TTL for %s by %d days...", ticker, additional_days)
 
             success = self._require_manager().extend_ttl(ticker, additional_days)
 
             if success:
-                print(f"✅ Successfully extended TTL for {ticker}")
+                _logger.info("Successfully extended TTL for %s", ticker)
                 return True
             else:
-                print(f"❌ Failed to extend TTL for {ticker}")
+                _logger.error("Failed to extend TTL for %s", ticker)
                 return False
 
-        except Exception as e:
-            print(f"❌ Error extending TTL: {e}")
+        except Exception:
+            _logger.exception("Error extending TTL:")
             return False
 
     def bulk_add_candidates(self, csv_file: str) -> bool:
@@ -394,10 +387,10 @@ class AdHocCandidateManager:
         try:
             csv_path = Path(csv_file)
             if not csv_path.exists():
-                print(f"❌ CSV file not found: {csv_file}")
+                _logger.error("CSV file not found: %s", csv_file)
                 return False
 
-            print(f"Loading candidates from CSV file: {csv_file}")
+            _logger.info("Loading candidates from CSV file: %s", csv_file)
 
             candidates_data = []
             with open(csv_path, encoding="utf-8") as f:
@@ -406,8 +399,8 @@ class AdHocCandidateManager:
                 # Validate required columns
                 required_columns = {"ticker", "reason"}
                 if not reader.fieldnames or not required_columns.issubset(reader.fieldnames):
-                    print(f"❌ CSV file must contain columns: {required_columns}")
-                    print(f"Found columns: {reader.fieldnames}")
+                    _logger.error("CSV file must contain columns: %s", required_columns)
+                    _logger.error("Found columns: %s", reader.fieldnames)
                     return False
 
                 for row_num, row in enumerate(reader, 1):
@@ -421,39 +414,36 @@ class AdHocCandidateManager:
                         # Validate data
                         is_valid, errors = self._require_manager().validate_candidate_data(candidate_data)
                         if not is_valid:
-                            print(f"⚠️ Row {row_num}: Validation errors: {errors}")
+                            _logger.warning("Row %d: Validation errors: %s", row_num, errors)
                             continue
 
                         candidates_data.append(candidate_data)
 
                     except Exception as e:
-                        print(f"⚠️ Row {row_num}: Error parsing data: {e}")
+                        _logger.warning("Row %d: Error parsing data: %s", row_num, e)
                         continue
 
             if not candidates_data:
-                print("❌ No valid candidates found in CSV file")
+                _logger.error("No valid candidates found in CSV file")
                 return False
 
-            print(f"Found {len(candidates_data)} valid candidates in CSV")
+            _logger.info("Found %d valid candidates in CSV", len(candidates_data))
 
             # Perform bulk add
             added_count, errors = self._require_manager().bulk_add_candidates(candidates_data)
 
-            print("\n📊 Bulk Add Results:")
-            print(f"✅ Successfully added: {added_count}")
-            print(f"❌ Errors: {len(errors)}")
+            _logger.info("Bulk Add Results: added=%d, errors=%d", added_count, len(errors))
 
             if errors:
-                print("\nErrors:")
                 for error in errors[:10]:  # Show first 10 errors
-                    print(f"  - {error}")
+                    _logger.warning("  - %s", error)
                 if len(errors) > 10:
-                    print(f"  ... and {len(errors) - 10} more errors")
+                    _logger.warning("  ... and %d more errors", len(errors) - 10)
 
             return added_count > 0
 
-        except Exception as e:
-            print(f"❌ Error in bulk add: {e}")
+        except Exception:
+            _logger.exception("Error in bulk add:")
             return False
 
     def show_statistics(self) -> bool:
@@ -466,29 +456,28 @@ class AdHocCandidateManager:
         try:
             stats = self._require_manager().get_statistics()
 
-            print("\n📊 Ad-hoc Candidate Statistics")
-            print("=" * 40)
-            print(f"Total Active: {stats['total_active']}")
-            print(f"Promoted by Screener: {stats['promoted_by_screener']}")
-            print(f"Expiring within 3 days: {stats['expiring_within_3_days']}")
-            print(f"Average Age: {stats['average_age_days']} days")
-            print(f"Default TTL: {stats['default_ttl_days']} days")
-            print(f"Last Updated: {stats['last_updated'].strftime('%Y-%m-%d %H:%M:%S')}")
+            _logger.info("Ad-hoc Candidate Statistics")
+            _logger.info("Total Active: %s", stats["total_active"])
+            _logger.info("Promoted by Screener: %s", stats["promoted_by_screener"])
+            _logger.info("Expiring within 3 days: %s", stats["expiring_within_3_days"])
+            _logger.info("Average Age: %s days", stats["average_age_days"])
+            _logger.info("Default TTL: %s days", stats["default_ttl_days"])
+            _logger.info("Last Updated: %s", stats["last_updated"].strftime("%Y-%m-%d %H:%M:%S"))
 
             # Show expiring candidates if any
             if stats["expiring_within_3_days"] > 0:
-                print("\n⚠️ Candidates Expiring Soon:")
+                _logger.info("Candidates Expiring Soon:")
                 expiring = self._require_manager().get_expiring_candidates(3)
                 for candidate in expiring:
                     if candidate.expires_at is None:
                         continue
                     days_left = (candidate.expires_at - datetime.now()).days
-                    print(f"  - {candidate.ticker}: {days_left} days left")
+                    _logger.info("  - %s: %d days left", candidate.ticker, days_left)
 
             return True
 
-        except Exception as e:
-            print(f"❌ Error showing statistics: {e}")
+        except Exception:
+            _logger.exception("Error showing statistics:")
             return False
 
     def cleanup_expired(self) -> bool:
@@ -522,12 +511,12 @@ class AdHocCandidateManager:
                 writer.writeheader()
                 writer.writerows(sample_data)
 
-            print(f"✅ Sample CSV file created: {output_file}")
-            print("Edit this file and use 'bulk-add' command to import candidates")
+            _logger.info("Sample CSV file created: %s", output_file)
+            _logger.info("Edit this file and use 'bulk-add' command to import candidates")
             return True
 
-        except Exception as e:
-            print(f"❌ Error creating sample CSV: {e}")
+        except Exception:
+            _logger.exception("Error creating sample CSV:")
             return False
 
 
@@ -573,7 +562,7 @@ def create_parser() -> argparse.ArgumentParser:
     deactivate_parser.add_argument("ticker", help="Stock ticker symbol")
 
     # Expire command
-    expire_parser = subparsers.add_parser("expire", help="Run expiration process")
+    subparsers.add_parser("expire", help="Run expiration process")
 
     # Extend command
     extend_parser = subparsers.add_parser("extend", help="Extend TTL for a candidate")
@@ -585,10 +574,10 @@ def create_parser() -> argparse.ArgumentParser:
     bulk_add_parser.add_argument("csv_file", help="Path to CSV file")
 
     # Stats command
-    stats_parser = subparsers.add_parser("stats", help="Show statistics")
+    subparsers.add_parser("stats", help="Show statistics")
 
     # Cleanup command
-    cleanup_parser = subparsers.add_parser("cleanup", help="Clean up expired candidates")
+    subparsers.add_parser("cleanup", help="Clean up expired candidates")
 
     # Sample CSV command
     sample_parser = subparsers.add_parser("sample-csv", help="Create sample CSV file")
@@ -666,17 +655,17 @@ def main() -> int:
             success = manager.cleanup_expired()
 
         else:
-            print(f"❌ Unknown command: {args.command}")
+            _logger.error("Unknown command: %s", args.command)
             parser.print_help()
             return 1
 
         return 0 if success else 1
 
     except KeyboardInterrupt:
-        print("\n⚠️ Operation cancelled by user")
+        _logger.warning("Operation cancelled by user")
         return 130
-    except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+    except Exception:
+        _logger.exception("Unexpected error:")
         return 1
 
 
