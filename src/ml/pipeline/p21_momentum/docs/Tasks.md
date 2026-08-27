@@ -147,11 +147,25 @@ which depends on Phase 1 having run) is not started — see "Not Yet Started" be
       {data,results}/` and the generated `.md` reports, all gitignored by design (spec §14.2's frozen panel is
       a local, regenerable operator artifact, not something to commit) — that's why this item stayed marked
       "not yet executed" here well after it was actually done; corrected 2026-08-26 solution-architect review.
-- [ ] `robustness.py`'s out-of-sample evaluation (2017-01 -> 2026-06) is a deliberate, separate manual call
-      (`run_grid(..., acknowledge_oos_reaccess=...)`) — `phase0_report.py` only ever touches the in-sample
-      grid automatically, by design (spec §14.5 Rule 4); an operator still has to make that one OOS call.
-      `oos_access_log.md` confirms only in-sample runs so far (2026-08-22, 2026-08-24) — the one-time OOS
-      look is still untouched.
+- [x] `robustness.py`'s out-of-sample evaluation (2017-01 -> 2026-06), the mechanically-enforced single look
+      (spec §14.5 Rule 4) — executed 2026-08-27 via `run_oos_check.py` (added 2026-08-26, 11 tests, 0
+      pyright/0 mypy). Logged once in `oos_access_log.md`; guard now refuses a second run without
+      `--acknowledge-oos-reaccess`. Actual runtime was ~22.5 hours end-to-end on this dev machine (8 cores,
+      ~100-120s/combo observed), far past the ~2-3h extrapolated estimate — the in-sample grid's own
+      multi-day wall-clock span had included idle gaps, not continuous compute, so that extrapolation had no
+      real per-combo rate behind it.
+
+      **Findings** (`OOS_REPORT.md`, `results/oos_check/`): the 729-grid's shape held up out-of-sample — best
+      Sharpe fell *within* its expected-by-chance band in both windows (in-sample 0.91 in [0.82, 1.01];
+      out-of-sample 1.01 in [0.93, 1.13]), so Rule 3's "flat surface, use the literature defaults" reading is
+      not contradicted; no evidence the in-sample grid was overfit to a lucky config. However, the
+      **default-parameter point estimate over this window alone shows track A trailing track C by -0.6% CAGR
+      (3.0% vs 3.6%), and that gap exists even at 0 added slippage — not a costs problem, a raw-return one**.
+      This does not overturn `PHASE0_REPORT.md`'s B8 PASS (measured over the full 2005-2026 history, where the
+      edge does survive 10bps), but it does mean the edge is concentrated in 2005-2016 and has been flat-to-
+      negative since 2017, consistent with spec §14.11's own caveat about momentum's weaker post-2009 record.
+      This is not a spec-numbered acceptance criterion — it is additional information for the Phase 1
+      go/no-go decision, not something this tooling resolves on its own (Rule 4: findings only, no retuning).
 - [x] `marginal_surfaces.png` (per-parameter plateau plots from the 729-grid, spec §14.10) — added
       `robustness.render_marginal_surfaces_png()` (2026-08-26), wired into `phase0_report.py`'s robustness
       block, and generated from the existing `grid_729.csv` (no grid re-run needed). See `PHASE0_REPORT.md`'s
