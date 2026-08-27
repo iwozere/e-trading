@@ -278,6 +278,53 @@ VALUES (
     CURRENT_TIMESTAMP
 ) ON CONFLICT (user_id, name) DO NOTHING;
 
+-- 10a. PDUFA/AdCom/Readout Calendar Ingest — 20:52 UTC (added 2026-08-27, gap 10.2 / C12)
+-- Sleeve B1 data source: one fetch of pdufa.bio/search-index.json covers all
+-- three FDA event types (pdufa/adcom/clinical_readout) for the tracked
+-- universe; upserts into k20_catalysts. Must run before P20 Screen Spinoffs.
+-- Result fields: entries_seen, entries_matched, catalysts_upserted, status
+-- Timeout: 5 min (one HTTP fetch + DB writes).
+INSERT INTO job_schedules (user_id, name, job_type, target, task_params, cron, enabled, created_at, updated_at)
+VALUES (
+    2,
+    'P20 PDUFA Calendar Ingest',
+    'data_processing',
+    'src.ml.pipeline.p20_kestrel.jobs.run_pdufa_calendar_ingest',
+    '{
+        "script_path": "src/ml/pipeline/p20_kestrel/jobs/run_pdufa_calendar_ingest.py",
+        "script_args": [],
+        "timeout_seconds": 300
+    }'::jsonb,
+    '52 20 * * 1-5',
+    true,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+) ON CONFLICT (user_id, name) DO NOTHING;
+
+-- 10b. Spin-off Registration Monitor — 20:53 UTC (added 2026-08-27, gap 10.2 / C12)
+-- Sleeve B2 data source: scans yesterday's EDGAR quarterly form index for new
+-- Form 10/10-12B spin-off registrations, resolves CIK to ticker, upserts into
+-- k20_catalysts (event_date is the filing date, a proxy for the distribution
+-- date — see spinoff_ingest.py docstring). Must run before P20 Screen Spinoffs.
+-- Result fields: filings_seen, tickers_resolved, catalysts_upserted
+-- Timeout: 5 min (EDGAR fetch + DB writes).
+INSERT INTO job_schedules (user_id, name, job_type, target, task_params, cron, enabled, created_at, updated_at)
+VALUES (
+    2,
+    'P20 Spinoff Ingest',
+    'data_processing',
+    'src.ml.pipeline.p20_kestrel.jobs.run_spinoff_ingest',
+    '{
+        "script_path": "src/ml/pipeline/p20_kestrel/jobs/run_spinoff_ingest.py",
+        "script_args": [],
+        "timeout_seconds": 300
+    }'::jsonb,
+    '53 20 * * 1-5',
+    true,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+) ON CONFLICT (user_id, name) DO NOTHING;
+
 -- ==============================================================================
 -- SCREENING CHAIN  (weekdays, UTC 21:00 – 22:00)
 -- ==============================================================================

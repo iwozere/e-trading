@@ -91,6 +91,12 @@ _SHARES_FACT_CANDIDATES = [
 # EDGAR quarterly full-index (covers all form types including SC 13D/G which EFTS does not index)
 _EDGAR_FULL_INDEX_URL = "https://www.sec.gov/Archives/edgar/full-index/{year}/QTR{quarter}/form.gz"
 _13DG_FORM_TYPES = frozenset({"SC 13D", "SC 13G", "SC 13D/A", "SC 13G/A"})
+# Form 10 / 10-12B / 10-12G registration statements — the filing a company makes
+# to register the stock being distributed in a spin-off (P20 Kestrel Sleeve B2,
+# spec gap 10.2). Same EDGAR quarterly-index approach as 13D/G: verified against
+# a real quarterly form.idx (2015 QTR4) that this form-type string is exactly
+# how EDGAR labels it there (e.g. Fortive Corp, Ingevity Corp spin-offs).
+_FORM10_FORM_TYPES = frozenset({"10-12B", "10-12B/A", "10-12G", "10-12G/A"})
 # Number of header lines to skip in the quarterly form.idx file
 _FORM_IDX_HEADER_LINES = 9
 
@@ -146,6 +152,7 @@ class EdgarDownloader(BaseDataDownloader):
         self._13f_holdings_dir = self._13f_dir / "holdings"
         self._form4_dir = self._13f_dir / "form4"
         self._13dg_dir = self._13f_dir / "13dg"
+        self._form10_dir = self._13f_dir / "form10"
         self._8k_dir = self._edgar_dir / "8k"
         self._8k_index_dir = self._8k_dir / "index"
         self._full_index_dir = self._edgar_dir / "full-index"
@@ -849,6 +856,75 @@ class EdgarDownloader(BaseDataDownloader):
         dest.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(dest, index=False, compression="gzip")
         _logger.info("Cached %d 13D/G filings for %s → %s", len(df), date_str, dest)
+        return df
+
+    def download_form10_filings(
+        self,
+        as_of_date: date | None = None,
+        force: bool = False,
+    ) -> pd.DataFrame:
+        """
+        Download Form 10 / 10-12B / 10-12G registration statements filed on a given date.
+
+        This is the filing a company makes to register the stock being distributed
+        in a spin-off (P20 Kestrel Sleeve B2, spec gap 10.2). Results are cached as
+        DATA_CACHE_DIR/edgar/13f/form10/{date}.csv.gz.
+
+        Like SC 13D/G, EDGAR's full-text search (EFTS) does not reliably index
+        every Form 10 variant, so this uses the same official quarterly form.idx
+        file as ``download_13dg_filings``.
+
+        Note: a spin-off's ticker frequently does not exist yet in
+        company_tickers.json at Form 10 filing time (the entity is still
+        pre-listing) — resolving CIK to ticker is the caller's responsibility and
+        may need to be retried on a later run once the ticker is assigned.
+
+        Args:
+            as_of_date: Filing date to fetch. Defaults to yesterday.
+            force: Re-download even if cached (also forces quarterly index refresh).
+
+        Returns:
+            DataFrame with columns: cik, entity_name, accession_number, filed_date,
+            form_type (10-12B, 10-12G, or their /A amendments).
+        """
+        target_date = as_of_date or (datetime.now().date() - timedelta(days=1))
+        date_str = str(target_date)
+        dest = self._form10_dir / f"{date_str}.csv.gz"
+
+        if dest.exists() and not force:
+            _logger.info("Form 10 filings for %s already cached at %s", date_str, dest)
+            return pd.read_csv(dest, compression="gzip")
+
+        _logger.info("Fetching Form 10 filings for %s from EDGAR quarterly form index ...", date_str)
+        quarter = (target_date.month - 1) // 3 + 1
+        idx_lines = self._fetch_quarterly_form_idx(target_date.year, quarter, force=force)
+
+        records = []
+        for line in idx_lines:
+            if not line.startswith("10-12"):
+                continue
+            parts = re.split(r"\s{2,}", line.strip())
+            if len(parts) < 5:
+                continue
+            form_type, entity_name, cik_str, filed_date, filename = parts[:5]
+            if form_type not in _FORM10_FORM_TYPES or filed_date != date_str:
+                continue
+            acc_no = Path(filename).stem
+            records.append(
+                {
+                    "cik": cik_str.strip(),
+                    "entity_name": entity_name.strip(),
+                    "accession_number": acc_no,
+                    "filed_date": filed_date,
+                    "form_type": form_type,
+                }
+            )
+
+        _FORM10_COLS = ["cik", "entity_name", "accession_number", "filed_date", "form_type"]
+        df = pd.DataFrame(records, columns=_FORM10_COLS) if records else pd.DataFrame(columns=_FORM10_COLS)  # type: ignore[arg-type]
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(dest, index=False, compression="gzip")
+        _logger.info("Cached %d Form 10 filings for %s → %s", len(df), date_str, dest)
         return df
 
     def download_8k_filings(

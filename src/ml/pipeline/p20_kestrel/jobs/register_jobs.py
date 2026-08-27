@@ -66,6 +66,22 @@ _JOB_SPECS: List[Dict[str, Any]] = [
     # Must run before p20_screen_turnaround so revisions_score is fresh when
     # sleeve_a.py eventually reads it.
     {"name": "p20_revisions_ingest", "cron": "50 20 * * 1-5", "script": "run_revisions_ingest.py", "enabled": True},
+    # Gap 10.2 (half A): Sleeve B1 FDA calendar (pdufa.bio: PDUFA/AdCom/readout
+    # dates in one fetch). PDUFA_CALENDAR_AVAILABLE=True in config.py — unlike
+    # revisions_ingest this isn't a scoring-formula input, so there's no
+    # shadow-mode review gate: it just makes a screen that was always empty
+    # start producing real candidates. Must run before p20_screen_spinoffs
+    # (which also runs sleeve_b.py's screen_b1()).
+    {
+        "name": "p20_pdufa_calendar_ingest",
+        "cron": "52 20 * * 1-5",
+        "script": "run_pdufa_calendar_ingest.py",
+        "enabled": True,
+    },
+    # Gap 10.2 (half B): Sleeve B2 spin-off registration monitor (EDGAR Form
+    # 10/10-12B). event_date is the filing date, not the confirmed distribution
+    # date — see spinoff_ingest.py docstring. Must run before p20_screen_spinoffs.
+    {"name": "p20_spinoff_ingest", "cron": "53 20 * * 1-5", "script": "run_spinoff_ingest.py", "enabled": True},
     # Screening
     {"name": "p20_screen_turnaround", "cron": "0 21 * * 1-5", "script": "run_screen_turnaround.py", "enabled": True},
     {"name": "p20_screen_spinoffs", "cron": "15 21 * * 1-5", "script": "run_screen_spinoffs.py", "enabled": True},

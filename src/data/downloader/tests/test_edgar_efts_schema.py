@@ -76,6 +76,44 @@ def test_download_13dg_parses_real_schema(tmp_path):
     assert row["form_type"] == "SC 13D/A"
 
 
+# ── Form 10 / 10-12B (spin-off registration) ────────────────────────────────
+
+
+def test_download_form10_parses_real_quarterly_index_schema(tmp_path):
+    """
+    Same story as 13D/G: EFTS doesn't reliably index every Form 10 variant, so
+    download_form10_filings() parses the quarterly form.idx file. Fixture line
+    below is shaped exactly like a real entry verified against a live EDGAR
+    2015 QTR4 form.idx (Fortive Corp's actual 10-12B spin-off filing).
+    """
+    dl = EdgarDownloader(cache_dir=tmp_path)
+    idx_line = (
+        "10-12B           Fortive Corp                                                  "
+        "1659166     2015-12-03  edgar/data/1659166/0001193125-15-394365.txt"
+    )
+    with patch.object(dl, "_fetch_quarterly_form_idx", return_value=[idx_line]):
+        df = dl.download_form10_filings(as_of_date=date(2015, 12, 3), force=True)
+    row = df.iloc[0]
+    assert row["cik"] == "1659166"
+    assert row["entity_name"] == "Fortive Corp"
+    assert row["accession_number"] == "0001193125-15-394365"
+    assert row["form_type"] == "10-12B"
+
+
+def test_download_form10_ignores_non_form10_and_wrong_date_lines(tmp_path):
+    """Lines with other form types, or a different filed_date, must not match."""
+    dl = EdgarDownloader(cache_dir=tmp_path)
+    lines = [
+        "10-K              Fortive Corp                                                  "
+        "1659166     2015-12-03  edgar/data/1659166/0001193125-15-000001.txt",
+        "10-12B            Ingevity Corp                                                 "
+        "1653477     2015-10-06  edgar/data/1653477/0001571049-15-008105.txt",  # different date
+    ]
+    with patch.object(dl, "_fetch_quarterly_form_idx", return_value=lines):
+        df = dl.download_form10_filings(as_of_date=date(2015, 12, 3), force=True)
+    assert df.empty
+
+
 # ── Form 4 (adsh + _id primary document) ────────────────────────────────────
 
 

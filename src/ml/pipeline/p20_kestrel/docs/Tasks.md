@@ -51,6 +51,13 @@
       (20:50 UTC weekdays). Ships in **shadow mode**: writes signals but
       `REVISIONS_FEED_AVAILABLE` stays `False` (zero scoring impact) until
       reviewed.
+- [x] Sleeve B1/B2 ingestion (gap 10.2, C12) — `ingest/pdufa_calendar_ingest.py`
+      (pdufa.bio PDUFA/AdCom/readout calendar) + `ingest/spinoff_ingest.py`
+      (EDGAR Form 10 quarterly-index scan), registered as
+      `p20_pdufa_calendar_ingest` / `p20_spinoff_ingest` (20:52/20:53 UTC
+      weekdays). `PDUFA_CALENDAR_AVAILABLE` / `SPINOFF_MONITOR_AVAILABLE` are
+      `True` — see C12 for the full writeup and the LLM-confirmed-spin-off-date
+      follow-up under Planned Enhancements.
 
 ### 🔄 IN PROGRESS
 
@@ -68,37 +75,22 @@
 - [ ] Sleeve A: EV/EBITDA relative valuation scoring when data available
 - [ ] Performance attribution — realized P&L by sleeve in weekly report
 - [ ] Backtester integration — validate sleeve screens against historical data
-- [ ] **Sleeve B1 — source a PDUFA/AdCom/clinical-readout calendar (closes gap 10.2, half A).** Scope:
-      - New ingest step in `ingest/calendar_sync.py` (or a sibling module), same shadow-mode-first rollout
-        pattern as `revisions_ingest.py`: write `k20_catalysts` rows without changing scoring/screening
-        behavior until reviewed, then flip `PDUFA_CALENDAR_AVAILABLE` in `config.py`.
-      - `pdufa.bio` was the original plan (`implementation-plan.md:556`) — free but an unofficial scrape
-        target with a circuit breaker; verify it's still up and scrapable before building against it.
-        `event_type='pdufa'` only covers the `pdufa` filter value in `screen_b1()`'s `fda_types` set.
-      - `adcom` (FDA advisory committee meetings) and `clinical_readout` need separate sources —
-        AdCom dates aren't on `pdufa.bio`; the FDA's own advisory-committee calendar page is a candidate.
-        `clinical_readout` (trial completion/data readout dates) could plausibly come from the free
-        `clinicaltrials.gov` API (official, has a completion-date field) — unresearched, needs a spike
-        before committing.
-      - Spec explicitly calls for "weekly manual verify" (`pipeline-specification.md:361`) — scraped PDUFA
-        dates are the kind of thing that silently drifts; budget for that recurring check, not just the
-        one-time build.
-      - Cheapest first step: ship PDUFA-only (drop `adcom`/`clinical_readout` from `fda_types` until their
-        sources are separately scoped) — unblocks B1 without waiting on three sources at once.
-- [ ] **Sleeve B2 — build the spin-off distribution monitor (closes gap 10.2, half B).** Scope:
-      - Two candidate approaches, per the original Phase 6 plan (`implementation-plan.md:559`, "scan
-        `k20_llm_runs` for Form 10 filings"): (a) extend `filings_ingest.py`'s existing EDGAR full-text
-        monitor — it already does accession-grouped CIK→ticker matching for 13D/13G (`docs/Tasks.md` H3) —
-        to also flag Form 10 / Form 10-12B registrations, or (b) a dedicated EDGAR full-text-search query for
-        those form types feeding a new classifier task.
-      - The hard part isn't finding the Form 10 filing, it's the **distribution date**: registration date ≠
-        completion date, and `screen_b2()`'s 20–60-day entry window is anchored on the actual spin-off
-        completion, not the filing date. The spec's existing "mandatory LLM Form-10 dossier" (§8.1, already
-        listed in `llm/prompts.py`'s prompt templates but currently unreachable since nothing ever triggers
-        it) is the natural place to extract/confirm that date from the filing text — this item likely depends
-        on wiring that dossier trigger, not just the EDGAR scan.
-      - Once a confirmed distribution date exists, upsert `k20_catalysts(event_type='spinoff', event_date=...)`
-        and flip `SPINOFF_MONITOR_AVAILABLE`.
+- [ ] **Sleeve B2 follow-up — LLM-confirmed spin-off distribution dates.** `ingest/spinoff_ingest.py` (built
+      2026-08-27, closes the filing-detection half of gap 10.2) upserts `event_date` as the Form 10 *filing*
+      date, not the true distribution date — those are frequently weeks apart and the filing itself often
+      doesn't state a firm date yet. Closing that properly needs the spec's "mandatory LLM Form-10 dossier"
+      (§8.1, already listed in `llm/prompts.py`'s prompt templates but currently unreachable since nothing
+      ever triggers it) to read and confirm a distribution date from filing text, then update the catalyst
+      row. Not built — the filing-date proxy (tagged `confidence: "estimated"`) is a working first version,
+      not the final form.
+- [ ] **Sleeve B1 follow-up — verify `adcom`/`clinical_readout` coverage from pdufa.bio holds up over time.**
+      `ingest/pdufa_calendar_ingest.py` (built 2026-08-27) sources all three of `screen_b1()`'s `fda_types`
+      values from one endpoint (`pdufa.bio/search-index.json`), which turned out to already carry `AdComm`
+      and `Readout` categories alongside `PDUFA` — better than the original plan assumed (a 3rd-party
+      unofficial site, not an official FDA/clinicaltrials.gov source). Spec's own "weekly manual verify"
+      caution (`pipeline-specification.md:361`) still applies: spot-check a sample of upcoming B1 candidates
+      against the source pages periodically, since a single unofficial site is a single point of failure for
+      all three event types.
 
 ## Technical Debt
 
@@ -132,6 +124,33 @@ See [Code-Review-2026-07-03.md](Code-Review-2026-07-03.md) for full details.
       / `test_run_rejects_when_adv_20d_missing_everywhere` as regression guards (found 2026-08-26 solution-architect
       review — `run()` had no test coverage at all before this, only the pure helpers did, which is how it went
       unnoticed).
+- [x] **C12** — Sleeve B1 (`screening/sleeve_b.py`'s `screen_b1()`) and B2 (`screen_b2()` / `get_past_spinoffs()`)
+      filtered `k20_catalysts` for event types (`pdufa`/`adcom`/`fda_readout`/`clinical_readout`, `spinoff`)
+      that nothing in the codebase ever wrote — `ingest/calendar_sync.py` only ever implemented the Finnhub
+      earnings half of what `implementation-plan.md` Phase 6 scoped for it. Confirmed via production logs:
+      `B1=0`/`B2=0` every single day 2026-08-10 through 2026-08-26 (17/17). Spec gap **10.2**, marked
+      CRITICAL. Fixed 2026-08-27:
+      - `ingest/pdufa_calendar_ingest.py` (new) — one fetch of `pdufa.bio/search-index.json` covers all three
+        FDA event types (`PDUFA`→`pdufa`, `AdComm`→`adcom`, `Readout`→`clinical_readout`); scoped to
+        `get_active_tickers()` (the tracked universe, not just watchlist ∪ positions, so B1 can actually
+        *discover* new candidates); circuit breaker (`_fetch_pdufa_bio_index`) logs a warning and leaves
+        existing rows untouched on fetch failure per `implementation-plan.md:556`; date-precision
+        (`p`: day/month/quarter) mapped to `confidence` (confirmed/estimated).
+      - `ingest/spinoff_ingest.py` (new) + `EdgarDownloader.download_form10_filings()` (new) — same
+        quarterly-`form.idx` approach `download_13dg_filings()` already used (EFTS doesn't reliably index
+        every Form 10 variant), scanning for `10-12B`/`10-12B/A`/`10-12G`/`10-12G/A`. CIK→ticker resolved via
+        `company_tickers.json`, same pattern as `filings_ingest.py`'s `_build_cik_to_ticker`. Known
+        simplification (documented in the module docstring, not silently dropped): `event_date` is the
+        *filing* date, not the confirmed *distribution* date — see the Planned Enhancements follow-up.
+      - Both jobs registered in `register_jobs.py` (`p20_pdufa_calendar_ingest`, `p20_spinoff_ingest`,
+        20:52/20:53 UTC weekdays, before `p20_screen_spinoffs`); `PDUFA_CALENDAR_AVAILABLE` /
+        `SPINOFF_MONITOR_AVAILABLE` flipped `True` in `config.py` — unlike `REVISIONS_FEED_AVAILABLE` these
+        don't gate a scoring formula, only the Data Health warning, so there was no shadow-mode review gate
+        to wait out.
+      - 22 new tests (`test_pdufa_calendar_ingest.py`, `test_spinoff_ingest.py`,
+        `test_download_form10_parses_real_quarterly_index_schema` +
+        `test_download_form10_ignores_non_form10_and_wrong_date_lines` in `test_edgar_efts_schema.py`) plus 2
+        in `test_daily_digest.py` for the warning toggle.
 
 ## Known Issues
 
@@ -146,21 +165,21 @@ See [Code-Review-2026-07-03.md](Code-Review-2026-07-03.md) for full details.
   `donotshare/.env` on purpose (2026-08-16). `_get_reddit_headers()` skips cleanly when unset, and ApeWisdom
   (`pipeline-specification.md` §social) already serves as the free, keyless Reddit-mention fallback in the
   composite `z_social` score — do not re-investigate the "not set; skipping" log line as a regression.
-- **Sleeve B1 (FDA run-ups) and B2 (spin-offs) can never surface a candidate — missing ingestion, not a code
-  bug, same class of issue as C11 but not a quick fix.** Confirmed via production logs: `B1=0`/`B2=0` every
+- ~~**Sleeve B1 (FDA run-ups) and B2 (spin-offs) can never surface a candidate — missing ingestion, not a code
+  bug.**~~ — fixed 2026-08-27 (C12). Confirmed via production logs: `B1=0`/`B2=0` every
   single day from at least 2026-08-10 through 2026-08-26 (17/17). `screening/sleeve_b.py`'s `screen_b1()`
   filters `k20_catalysts` for `event_type ∈ {pdufa, adcom, fda_readout, clinical_readout}`; `screen_b2()`
-  reads `get_past_spinoffs()`, which filters for `event_type='spinoff'`. Nothing in the codebase ever writes
-  either event type: `ingest/calendar_sync.py` only implements the Finnhub **earnings** half of what
+  reads `get_past_spinoffs()`, which filters for `event_type='spinoff'`. Nothing in the codebase ever wrote
+  either event type: `ingest/calendar_sync.py` only implemented the Finnhub **earnings** half of what
   `implementation-plan.md` Phase 6 scoped for it (line 556: "PDUFA: scrape pdufa.bio ... → event_type='pdufa'";
   line 559: "Spin-off dates: scan `k20_llm_runs` for Form 10 filings → event_type='spinoff_distribution'") —
-  neither the PDUFA scrape nor the Form-10 spin-off scan was ever built. This is spec gap **10.2**
-  (`pipeline-specification.md:361`, marked CRITICAL) — only its earnings half shipped. B3 (activist 13D via
-  `filings_ingest.py`, index changes via P15's Wikipedia scrape) is correctly wired and does produce
-  candidates on real event days (confirmed non-zero `B3_idx` on 2026-08-10/19/20/21). Data Health now warns on
-  both via `PDUFA_CALENDAR_AVAILABLE` / `SPINOFF_MONITOR_AVAILABLE` in `config.py` (both default `False`) so
-  this can't silently persist unnoticed again the way it did for 17+ days. Not fixed here — closing it needs
-  new ingestion, not a patch; see the two scoped-out items under Planned Enhancements below.
+  neither the PDUFA scrape nor the Form-10 spin-off scan had been built. This was spec gap **10.2**
+  (`pipeline-specification.md:361`, marked CRITICAL) — only its earnings half had shipped. B3 (activist 13D via
+  `filings_ingest.py`, index changes via P15's Wikipedia scrape) was already correctly wired and produced
+  candidates on real event days (confirmed non-zero `B3_idx` on 2026-08-10/19/20/21) — see C12 for what was
+  built and Planned Enhancements for the two follow-ups (LLM-confirmed spin-off dates; ongoing pdufa.bio
+  spot-checks) that weren't. Data Health still warns if either flag ever needs to go back to `False` so
+  this can't silently persist unnoticed again the way it did for 17+ days.
 
 ## Testing Requirements
 

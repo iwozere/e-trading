@@ -32,24 +32,22 @@ LLM_MONTHLY_BUDGET_USD: float = 75.0
 # Until then Sleeve A uses renormalized 70-point scoring.
 REVISIONS_FEED_AVAILABLE: bool = False
 
-# Set True when a PDUFA/AdCom/clinical-readout calendar source is wired into
-# ingest/calendar_sync.py (spec gap 10.2 — currently only the Finnhub earnings
-# half of that job is implemented). Until then screen_b1() in sleeve_b.py can
-# never match a candidate: it filters k20_catalysts for event_type in
-# {pdufa, adcom, fda_readout, clinical_readout}, none of which are ever
-# written. Confirmed via production logs: B1=0 every day 2026-08-10 through
-# 2026-08-26 (17/17). Purely a Data Health flag for now -- flipping it does
-# nothing until the ingest side is built.
-PDUFA_CALENDAR_AVAILABLE: bool = False
+# 2026-08-27: wired via ingest/pdufa_calendar_ingest.py (pdufa.bio's
+# search-index.json covers PDUFA/AdCom/clinical-readout in one fetch, no
+# per-ticker requests). Was False from at least 2026-08-10 through 2026-08-26
+# (17/17 days), during which screen_b1() in sleeve_b.py could never match a
+# candidate — confirmed via production logs. Unlike REVISIONS_FEED_AVAILABLE
+# this doesn't gate a scoring formula, just the Data Health warning, so there
+# was no shadow-mode review gate to wait out before flipping it.
+PDUFA_CALENDAR_AVAILABLE: bool = True
 
-# Set True when a spin-off distribution monitor is wired (spec gap 10.2 /
-# implementation-plan.md Phase 6, "scan k20_llm_runs for Form 10 filings").
-# Until then screen_b2() in sleeve_b.py can never match a candidate: it reads
-# get_past_spinoffs(), which filters k20_catalysts for event_type='spinoff',
-# and nothing ever writes that event type. Confirmed via production logs:
-# B2=0 every day 2026-08-10 through 2026-08-26 (17/17). Purely a Data Health
-# flag for now -- flipping it does nothing until the ingest side is built.
-SPINOFF_MONITOR_AVAILABLE: bool = False
+# 2026-08-27: wired via ingest/spinoff_ingest.py (EDGAR Form 10/10-12B quarterly
+# index scan). Was False from at least 2026-08-10 through 2026-08-26 (17/17
+# days), during which screen_b2() in sleeve_b.py could never match a candidate
+# — confirmed via production logs. Note: event_date is the filing date, not a
+# confirmed distribution date — see spinoff_ingest.py docstring for why, and
+# docs/Tasks.md for the LLM-dossier-based follow-up that would close that gap.
+SPINOFF_MONITOR_AVAILABLE: bool = True
 
 # ---------------------------------------------------------------------------
 # Universe source
