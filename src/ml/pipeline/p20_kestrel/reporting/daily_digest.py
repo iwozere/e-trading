@@ -17,7 +17,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
-from src.ml.pipeline.p20_kestrel.config import REVISIONS_FEED_AVAILABLE
+from src.ml.pipeline.p20_kestrel.config import (
+    PDUFA_CALENDAR_AVAILABLE,
+    REVISIONS_FEED_AVAILABLE,
+    SPINOFF_MONITOR_AVAILABLE,
+)
 
 _kestrel = _KestrelService()
 finish_job_run = _kestrel.finish_job_run
@@ -121,6 +125,12 @@ def _build_data_health_section() -> str:
 
     if not REVISIONS_FEED_AVAILABLE:
         warnings.append("⚠ revisions feed unavailable — Sleeve A in interim mode (§4.2.1)")
+
+    if not PDUFA_CALENDAR_AVAILABLE:
+        warnings.append("⚠ PDUFA calendar not sourced — Sleeve B1 (FDA run-ups) inactive (gap 10.2)")
+
+    if not SPINOFF_MONITOR_AVAILABLE:
+        warnings.append("⚠ spin-off monitor not built — Sleeve B2 inactive (gap 10.2)")
 
     return "Data Health: " + ("; ".join(warnings) if warnings else "OK")
 

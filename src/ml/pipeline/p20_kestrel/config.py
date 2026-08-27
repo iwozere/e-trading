@@ -32,6 +32,25 @@ LLM_MONTHLY_BUDGET_USD: float = 75.0
 # Until then Sleeve A uses renormalized 70-point scoring.
 REVISIONS_FEED_AVAILABLE: bool = False
 
+# Set True when a PDUFA/AdCom/clinical-readout calendar source is wired into
+# ingest/calendar_sync.py (spec gap 10.2 — currently only the Finnhub earnings
+# half of that job is implemented). Until then screen_b1() in sleeve_b.py can
+# never match a candidate: it filters k20_catalysts for event_type in
+# {pdufa, adcom, fda_readout, clinical_readout}, none of which are ever
+# written. Confirmed via production logs: B1=0 every day 2026-08-10 through
+# 2026-08-26 (17/17). Purely a Data Health flag for now -- flipping it does
+# nothing until the ingest side is built.
+PDUFA_CALENDAR_AVAILABLE: bool = False
+
+# Set True when a spin-off distribution monitor is wired (spec gap 10.2 /
+# implementation-plan.md Phase 6, "scan k20_llm_runs for Form 10 filings").
+# Until then screen_b2() in sleeve_b.py can never match a candidate: it reads
+# get_past_spinoffs(), which filters k20_catalysts for event_type='spinoff',
+# and nothing ever writes that event type. Confirmed via production logs:
+# B2=0 every day 2026-08-10 through 2026-08-26 (17/17). Purely a Data Health
+# flag for now -- flipping it does nothing until the ingest side is built.
+SPINOFF_MONITOR_AVAILABLE: bool = False
+
 # ---------------------------------------------------------------------------
 # Universe source
 # ---------------------------------------------------------------------------
