@@ -115,14 +115,25 @@ def mock_alert_evaluator():
 
 @pytest.fixture
 def scheduler_service(mock_jobs_service, mock_alert_evaluator):
-    """Create a SchedulerService with mocked dependencies."""
-    return SchedulerService(
+    """
+    Create a SchedulerService with mocked dependencies.
+
+    SchedulerService enforces a process-wide singleton (only one instance may be
+    registered at a time; see `_deregister_instance` in scheduler_service.py), so
+    each test gets a fresh instance and the registration is cleared on teardown --
+    otherwise every test after the first would fail its own construction with
+    "A SchedulerService instance is already registered."
+    """
+    SchedulerService._deregister_instance()
+    service = SchedulerService(
         jobs_service=mock_jobs_service,
         alert_evaluator=mock_alert_evaluator,
         notification_db_service=Mock(),
         database_url="sqlite:///:memory:",
         max_workers=2,
     )
+    yield service
+    SchedulerService._deregister_instance()
 
 
 class TestSchedulerServiceInitialization:
@@ -283,8 +294,11 @@ class TestJobExecution:
     @pytest.mark.asyncio
     async def test_execute_job_schedule_disabled(self, scheduler_service, mock_jobs_service):
         """Test job execution when schedule is disabled."""
-        # Setup disabled schedule
+        # Setup disabled schedule. The fixture already set `side_effect` on this
+        # mock, which silently overrides `return_value` -- clear it first or this
+        # schedule is never actually used.
         disabled_schedule = MockSchedule(1, "Disabled Alert", "alert", "0 9 * * *", enabled=False)
+        mock_jobs_service.get_schedule.side_effect = None
         mock_jobs_service.get_schedule.return_value = disabled_schedule
 
         # Execute job - should handle gracefully
@@ -491,6 +505,8 @@ class TestSchedulerServiceIntegration:
             patch.object(scheduler_service, "_update_schedule_state", new_callable=AsyncMock) as mock_update_state,
             patch.object(scheduler_service, "_send_notification", new_callable=AsyncMock) as mock_notify,
         ):
+            mock_notify.return_value = True
+
             # Execute the complete flow
             await scheduler_service._execute_job(1)
 
@@ -517,6 +533,11 @@ class TestSchedulerServiceIntegration:
     @pytest.mark.asyncio
     async def test_multiple_job_types_execution(self, scheduler_service, mock_jobs_service):
         """Test execution of different job types."""
+        # The fixture already set `side_effect` on this mock, which silently
+        # overrides `return_value` -- clear it once so each `return_value =`
+        # swap below actually takes effect.
+        mock_jobs_service.get_schedule.side_effect = None
+
         # Test alert job
         alert_schedule = MockSchedule(1, "Alert Job", "alert", "0 9 * * *")
         mock_jobs_service.get_schedule.return_value = alert_schedule
