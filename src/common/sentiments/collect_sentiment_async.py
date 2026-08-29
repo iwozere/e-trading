@@ -631,9 +631,17 @@ async def collect_sentiment_batch(
         config_hash = cache_keys.config_hash(config)
 
         # Initialize performance optimization (needed for decorator below)
-        from src.common.sentiments.performance.performance_profiler import PerformanceProfiler
+        from src.common.sentiments.performance.performance_profiler import (
+            PerformanceProfiler,
+            ProfilerConfig,
+        )
 
-        profiler = PerformanceProfiler()
+        # process_one_ticker fans out concurrent HTTP calls to multiple external sentiment
+        # providers (each allowed up to 180s before it's treated as a timeout -- see
+        # fetch_one_summary below), so the profiler's generic 5s bottleneck_threshold_seconds
+        # default fires on ordinary network latency. Raise it so the WARNING only fires when a
+        # ticker is genuinely stalling, not on routine multi-provider fetch variance.
+        profiler = PerformanceProfiler(config=ProfilerConfig(bottleneck_threshold_seconds=60.0))
 
         # Extract configuration values
         lookback = lookback_hours or config.get("lookback_hours", 24)
