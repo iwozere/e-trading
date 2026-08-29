@@ -125,12 +125,30 @@ type = "filter"
 inputs = ["exclude_docker_dns"]
 condition = "!(match(string!(.source_name), r'^docker\\.service$') && match(string!(.message), r'Error decoding log file.*invalid character'))"
 
+# SEC EDGAR full-text search transient 500s — exponential-backoff retry (attempt 1/3, 2/3)
+# self-heals; the final exhaustion after 3 attempts logs a distinct "EFTS search failed
+# after 3 attempts" line via _logger.exception, which still alerts.
+[transforms.exclude_edgar_efts_retry]
+type = "filter"
+inputs = ["exclude_docker_log_decode"]
+condition = "!match(string!(.message), r'EFTS attempt \\d/3 failed.*retrying')"
+
+# Caddy bogus ACME HTTP-challenge probes — internet scanners requesting made-up paths under
+# /.well-known/acme-challenge/ (e.g. about.php) for a domain Caddy has no pending cert order
+# for. Caddy only ever logs "no information found to solve challenge for identifier" when the
+# request doesn't match a token it actually issued, so this can't mask a genuine ACME failure
+# (a real in-progress challenge would have info and log a different error).
+[transforms.exclude_caddy_bogus_acme_challenge]
+type = "filter"
+inputs = ["exclude_edgar_efts_retry"]
+condition = "!(match(string!(.source_name), r'caddy') && match(string!(.message), r'no information found to solve challenge for identifier'))"
+
 # ─── Fingerprint ──────────────────────────────────────────────────────────────
 # Build a stable dedup key by stripping timestamps, UUIDs, and numbers.
 
 [transforms.fingerprint]
 type = "remap"
-inputs = ["exclude_docker_log_decode"]
+inputs = ["exclude_caddy_bogus_acme_challenge"]
 source = '''
   fp = replace(string!(.message), r'[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}[^ ]*', "<TS>")
   fp = replace(fp, r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', "<UUID>")
