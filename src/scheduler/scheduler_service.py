@@ -1006,15 +1006,23 @@ class SchedulerService:
 
             _logger.info("Script exit code: %d", exit_code)
             if stderr_str:
+                # Collapse to one line before logging. journald splits a service's
+                # multi-line stdout/stderr into a separate journal entry per newline, which
+                # shreds a Python traceback into fragments -- only the content-free
+                # "Traceback (most recent call last):" header reliably matches the log
+                # monitor's alert keywords on its own, while the actual exception type and
+                # message (the useful part) ends up in a different, unrelated entry.
+                # Joining into a single line keeps the whole traceback in one alert.
+                single_line_stderr = " | ".join(line for line in stderr_str.splitlines() if line.strip())
                 # Keep the tail — that's where Python tracebacks are.
-                if len(stderr_str) <= 4000:
-                    _logger.warning("Script stderr: %s", stderr_str)
+                if len(single_line_stderr) <= 4000:
+                    _logger.warning("Script stderr: %s", single_line_stderr)
                 else:
                     _logger.warning(
-                        "Script stderr (%d chars, middle truncated): %s\n... [truncated] ...\n%s",
-                        len(stderr_str),
-                        stderr_str[:1000],
-                        stderr_str[-3000:],
+                        "Script stderr (%d chars, middle truncated): %s ... [truncated] ... %s",
+                        len(single_line_stderr),
+                        single_line_stderr[:1000],
+                        single_line_stderr[-3000:],
                     )
 
             # Parse result from stdout
