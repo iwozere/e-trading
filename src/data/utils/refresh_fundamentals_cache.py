@@ -13,6 +13,17 @@ It supports:
 Default Behavior:
 - Scans DATA_CACHE_DIR/fundamentals directory for all tickers with cached data
 - Refreshes fundamentals for all found tickers
+- Skips tickers already tracked as having no data from any provider on repeated runs
+  (see "Delisted-symbol tracking" below), so a ticker that is genuinely gone stops
+  being re-fetched forever
+
+Delisted-symbol tracking:
+Once a scanned ticker (from the directory scan, not an explicit --symbols run) comes
+back with no data from any provider on DELISTED_FAILURE_THRESHOLD separate days, it is
+recorded in DATA_CACHE_DIR/fundamentals/.delisted_symbols.json and excluded from future
+scans by default. A symbol's tracking clears itself the moment any provider returns
+data for it again. Pass --include-excluded to force a recheck of everything, including
+already-excluded symbols.
 
 Usage:
     python src/data/utils/refresh_fundamentals_cache.py                    # Scan and refresh all cached tickers
@@ -21,9 +32,11 @@ Usage:
     python src/data/utils/refresh_fundamentals_cache.py --cleanup-only
     python src/data/utils/refresh_fundamentals_cache.py --symbols-file my_symbols.txt
     python src/data/utils/refresh_fundamentals_cache.py --force-refresh --symbols AAPL
+    python src/data/utils/refresh_fundamentals_cache.py --include-excluded  # Recheck delisted-tracked tickers too
 """
 
 import argparse
+import json
 import math
 import os
 import random
@@ -31,7 +44,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent.parent
@@ -49,6 +62,13 @@ except ImportError:
     DATA_CACHE_DIR = "data-cache"
 
 _logger = setup_logger(__name__)
+
+# Number of separate days a scanned ticker must come back with no data from any
+# provider before it's excluded from future scans. Requiring several distinct days
+# (not just several attempts in one run) keeps a same-day multi-provider outage from
+# getting a ticker permanently excluded on a fluke.
+DELISTED_FAILURE_THRESHOLD = 3
+DELISTED_TRACKING_FILENAME = ".delisted_symbols.json"
 
 
 def get_cached_symbols(cache_dir: str) -> List[str]:
@@ -85,6 +105,92 @@ def get_cached_symbols(cache_dir: str) -> List[str]:
     except Exception:
         _logger.exception("Error scanning fundamentals directory:")
         return []
+
+
+def _delisted_tracking_path(cache_dir: str) -> Path:
+    """Path to the persistent delisted-symbol tracking file for `cache_dir`."""
+    return Path(cache_dir) / "fundamentals" / DELISTED_TRACKING_FILENAME
+
+
+def _load_delisted_tracking(cache_dir: str) -> Dict[str, Dict[str, Any]]:
+    """Load the delisted-symbol tracking file, or {} if missing/unreadable."""
+    path = _delisted_tracking_path(cache_dir)
+    if not path.exists():
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        _logger.exception("Error reading delisted-symbol tracking file %s:", path)
+        return {}
+
+
+def _save_delisted_tracking(cache_dir: str, tracking: Dict[str, Dict[str, Any]]) -> None:
+    """Persist the delisted-symbol tracking file."""
+    path = _delisted_tracking_path(cache_dir)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(tracking, f, indent=2, sort_keys=True)
+    except OSError:
+        _logger.exception("Error writing delisted-symbol tracking file %s:", path)
+
+
+def get_excluded_symbols(cache_dir: str, threshold: int = DELISTED_FAILURE_THRESHOLD) -> Set[str]:
+    """
+    Symbols whose fundamentals fetch has come back with no data from any provider on
+    `threshold` or more separate days.
+
+    These are treated as permanently gone (delisted, suspended, or otherwise dropped
+    from every provider's coverage) so scheduled scans stop re-fetching them and
+    raising the same noisy per-ticker alert forever.
+    """
+    tracking = _load_delisted_tracking(cache_dir)
+    return {symbol for symbol, info in tracking.items() if info.get("failure_count", 0) >= threshold}
+
+
+def record_fetch_outcome(cache_dir: str, symbol: str, had_any_data: bool) -> None:
+    """
+    Update the delisted-symbol tracking file with today's outcome for `symbol`.
+
+    A day where any provider returned data clears the symbol's failure history
+    (self-heals if it relists or a provider's coverage catches up); a day with no
+    data from any provider adds one strike, counted at most once per calendar day
+    so re-running the script the same day doesn't inflate the count.
+    """
+    tracking = _load_delisted_tracking(cache_dir)
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    if had_any_data:
+        if symbol in tracking:
+            del tracking[symbol]
+            _save_delisted_tracking(cache_dir, tracking)
+        return
+
+    entry = tracking.get(symbol, {"failure_count": 0, "first_failed_at": today})
+    if entry.get("last_failed_at") != today:
+        entry["failure_count"] = entry.get("failure_count", 0) + 1
+        entry["last_failed_at"] = today
+        tracking[symbol] = entry
+        _save_delisted_tracking(cache_dir, tracking)
+
+
+def _filter_excluded_symbols(symbols: List[str], cache_dir: str, include_excluded: bool) -> List[str]:
+    """Drop symbols already tracked as delisted, unless `include_excluded` forces a recheck."""
+    if include_excluded:
+        return symbols
+    excluded = get_excluded_symbols(cache_dir)
+    removed = sorted(set(symbols) & excluded)
+    if not removed:
+        return symbols
+    _logger.info(
+        "Skipping %d symbol(s) with no fundamentals data from any provider on %d+ separate days "
+        "(tracked as delisted; rerun with --include-excluded to force a recheck): %s",
+        len(removed),
+        DELISTED_FAILURE_THRESHOLD,
+        ", ".join(removed),
+    )
+    return [s for s in symbols if s not in excluded]
 
 
 def load_symbols_from_file(file_path: str) -> List[str]:
@@ -222,6 +328,7 @@ def refresh_symbol_fundamentals(
             else:
                 results["data_types"][data_type] = {"success": False, "error": "No data returned"}
                 results["errors"].append(f"No data for {data_type}")
+                results["success"] = False
 
         except Exception as e:
             error_msg = f"Error refreshing {data_type} for {symbol}: {e}"
@@ -342,6 +449,15 @@ Examples:
         ),
     )
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done without actually doing it")
+    parser.add_argument(
+        "--include-excluded",
+        action="store_true",
+        help=(
+            "Also scan/refresh symbols already tracked as having no data from any provider on "
+            f"{DELISTED_FAILURE_THRESHOLD}+ separate days (normally skipped). Use to force a recheck, "
+            "e.g. in case a symbol has relisted."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -379,6 +495,7 @@ Examples:
         if args.all_symbols:
             symbols = get_cached_symbols(args.cache_dir)
             _logger.info("Found %d cached symbols to refresh", len(symbols))
+            symbols = _filter_excluded_symbols(symbols, args.cache_dir, args.include_excluded)
         elif args.symbols:
             symbols = [s.strip().upper() for s in args.symbols.split(",")]
             _logger.info("Refreshing %d specified symbols", len(symbols))
@@ -391,6 +508,7 @@ Examples:
             if symbols:
                 _logger.info("No symbols specified, scanning fundamentals directory")
                 _logger.info("Found %d symbols with cached fundamentals data to refresh", len(symbols))
+                symbols = _filter_excluded_symbols(symbols, args.cache_dir, args.include_excluded)
             else:
                 # Fallback to example_tickers.txt if no cached symbols found
                 default_file = os.path.join(os.path.dirname(__file__), "example_tickers.txt")
@@ -442,6 +560,9 @@ Examples:
                 result = refresh_symbol_fundamentals(dm, symbol, data_types, args.force_refresh)
                 results.append(result)
 
+                had_any_data = any(dt.get("success") for dt in result["data_types"].values())
+                record_fetch_outcome(args.cache_dir, symbol, had_any_data)
+
                 # Add delay between symbols to respect rate limits
                 if i < len(symbols) - 1 and args.delay > 0:
                     time.sleep(args.delay)
@@ -470,8 +591,6 @@ Examples:
 
         # Output result for scheduler
         if not args.dry_run:
-            import json
-
             result = {
                 "success": True,
                 "total_symbols": len(symbols),
@@ -485,8 +604,6 @@ Examples:
         _logger.exception("Error during cache refresh:")
 
         # Output error result for scheduler
-        import json
-
         result = {"success": False, "error": str(e)}
         print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")
 
