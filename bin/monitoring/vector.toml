@@ -143,12 +143,31 @@ type = "filter"
 inputs = ["exclude_edgar_efts_retry"]
 condition = "!(match(string!(.source_name), r'caddy') && match(string!(.message), r'no information found to solve challenge for identifier'))"
 
+# Yahoo Finance quoteSummary 404s for delisted/invalid tickers — yfinance's curl_cffi
+# backend raises "HTTP Error 404: <raw Yahoo error JSON>" per ticker when Yahoo has no
+# quoteSummary data for the symbol (delisted, suspended, or a stale watchlist entry).
+# It's a single-ticker fetch failure, not a job crash -- self-contained and known since
+# review-2026-06-22.md ("Delisted Tickers Causing Noisy 404 Errors"). The real fix is
+# purging stale watchlist entries, tracked separately -- this only silences the alert.
+[transforms.exclude_yahoo_quoteSummary_404]
+type = "filter"
+inputs = ["exclude_caddy_bogus_acme_challenge"]
+condition = "!match(string!(.message), r'HTTP Error 404:.*(quoteSummary|Quote not found for symbol)')"
+
+# Vector's own journald source discarding one malformed record (e.g. a truncated/binary
+# cursor line) -- self-recovering, journald keeps streaming the next record. Internal to
+# the log pipeline itself, not a signal about the trading app.
+[transforms.exclude_vector_journald_parse_error]
+type = "filter"
+inputs = ["exclude_yahoo_quoteSummary_404"]
+condition = "!(match(string!(.source_name), r'vector') && match(string!(.message), r'Invalid record from journald, discarding'))"
+
 # ─── Fingerprint ──────────────────────────────────────────────────────────────
 # Build a stable dedup key by stripping timestamps, UUIDs, and numbers.
 
 [transforms.fingerprint]
 type = "remap"
-inputs = ["exclude_caddy_bogus_acme_challenge"]
+inputs = ["exclude_vector_journald_parse_error"]
 source = '''
   fp = replace(string!(.message), r'[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}[^ ]*', "<TS>")
   fp = replace(fp, r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', "<UUID>")
