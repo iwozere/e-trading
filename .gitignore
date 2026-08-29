@@ -104,3 +104,5 @@ logs/
 # rules above; the .py source + tests/ package stay tracked as normal).
 backtest/p21_momentum/*.md
 !backtest/p21_momentum/README.md
+
+monitoring.txt
