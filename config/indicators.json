@@ -1,0 +1,233 @@
+{
+  "version": "2.0",
+  "description": "Unified indicator service configuration",
+  "default_parameters": {
+    "rsi": {
+      "timeperiod": 14
+    },
+    "macd": {
+      "fastperiod": 12,
+      "slowperiod": 26,
+      "signalperiod": 9
+    },
+    "bbands": {
+      "timeperiod": 20,
+      "nbdevup": 2,
+      "nbdevdn": 2
+    },
+    "stoch": {
+      "fastk_period": 14,
+      "slowk_period": 3,
+      "slowd_period": 3
+    },
+    "adx": {
+      "timeperiod": 14
+    },
+    "plus_di": {
+      "timeperiod": 14
+    },
+    "minus_di": {
+      "timeperiod": 14
+    },
+    "sma": {
+      "timeperiod": 20
+    },
+    "ema": {
+      "timeperiod": 12
+    },
+    "cci": {
+      "timeperiod": 14
+    },
+    "roc": {
+      "timeperiod": 10
+    },
+    "mfi": {
+      "timeperiod": 14
+    },
+    "williams_r": {
+      "timeperiod": 14
+    },
+    "atr": {
+      "timeperiod": 14
+    },
+    "obv": {},
+    "ad": {},
+    "supertrend": {
+      "period": 10,
+      "multiplier": 3.0
+    },
+    "ichimoku": {
+      "tenkan_period": 9,
+      "kijun_period": 26,
+      "senkou_span_b_period": 52
+    }
+  },
+  "presets": {
+    "default": {
+      "description": "Default parameters for balanced trading",
+      "parameters": {
+        "rsi": {"timeperiod": 14},
+        "macd": {"fastperiod": 12, "slowperiod": 26, "signalperiod": 9},
+        "bbands": {"timeperiod": 20, "nbdevup": 2, "nbdevdn": 2},
+        "stoch": {"fastk_period": 14, "slowk_period": 3, "slowd_period": 3},
+        "sma": {"timeperiod": 20},
+        "ema": {"timeperiod": 12},
+        "atr": {"timeperiod": 14}
+      }
+    },
+    "conservative": {
+      "description": "Conservative parameters for lower risk trading",
+      "parameters": {
+        "rsi": {"timeperiod": 21},
+        "macd": {"fastperiod": 15, "slowperiod": 30, "signalperiod": 12},
+        "bbands": {"timeperiod": 25, "nbdevup": 2.5, "nbdevdn": 2.5},
+        "stoch": {"fastk_period": 21, "slowk_period": 5, "slowd_period": 5},
+        "sma": {"timeperiod": 30},
+        "ema": {"timeperiod": 21},
+        "atr": {"timeperiod": 21}
+      }
+    },
+    "aggressive": {
+      "description": "Aggressive parameters for higher frequency trading",
+      "parameters": {
+        "rsi": {"timeperiod": 7},
+        "macd": {"fastperiod": 8, "slowperiod": 17, "signalperiod": 5},
+        "bbands": {"timeperiod": 15, "nbdevup": 1.5, "nbdevdn": 1.5},
+        "stoch": {"fastk_period": 7, "slowk_period": 2, "slowd_period": 2},
+        "sma": {"timeperiod": 10},
+        "ema": {"timeperiod": 8},
+        "atr": {"timeperiod": 7}
+      }
+    },
+    "day_trading": {
+      "description": "Optimized parameters for day trading",
+      "parameters": {
+        "rsi": {"timeperiod": 5},
+        "macd": {"fastperiod": 5, "slowperiod": 13, "signalperiod": 3},
+        "bbands": {"timeperiod": 10, "nbdevup": 1.8, "nbdevdn": 1.8},
+        "stoch": {"fastk_period": 5, "slowk_period": 1, "slowd_period": 1},
+        "sma": {"timeperiod": 8},
+        "ema": {"timeperiod": 5},
+        "atr": {"timeperiod": 5}
+      }
+    }
+  },
+  "legacy_mappings": {
+    "RSI": "rsi",
+    "MACD": "macd",
+    "MACD_SIGNAL": "macd",
+    "MACD_HISTOGRAM": "macd",
+    "Bollinger_Bands": "bbands",
+    "BB_UPPER": "bbands",
+    "BB_MIDDLE": "bbands",
+    "BB_LOWER": "bbands",
+    "Stochastic": "stoch",
+    "STOCH_K": "stoch",
+    "STOCH_D": "stoch",
+    "ADX": "adx",
+    "PLUS_DI": "plus_di",
+    "MINUS_DI": "minus_di",
+    "SMA_FAST": "sma",
+    "SMA_SLOW": "sma",
+    "SMA_50": "sma",
+    "SMA_200": "sma",
+    "EMA_FAST": "ema",
+    "EMA_SLOW": "ema",
+    "EMA_12": "ema",
+    "EMA_26": "ema",
+    "CCI": "cci",
+    "ROC": "roc",
+    "MFI": "mfi",
+    "Williams_R": "williams_r",
+    "WILLIAMS_R": "williams_r",
+    "ATR": "atr",
+    "ADR": "atr",
+    "OBV": "obv",
+    "AD": "ad",
+    "SuperTrend": "supertrend",
+    "Ichimoku": "ichimoku"
+  },
+  "plotter_config": {
+    "entry_mixins": {
+      "RSIBBEntryMixin": {
+        "indicators": ["rsi", "bbands"],
+        "subplot_type": {
+          "rsi": "separate",
+          "bbands": "overlay"
+        }
+      },
+      "RSIOrBBEntryMixin": {
+        "indicators": ["rsi", "bbands"],
+        "subplot_type": {
+          "rsi": "separate",
+          "bbands": "overlay"
+        }
+      },
+      "RSIBBVolumeEntryMixin": {
+        "indicators": ["rsi", "bbands", "volume"],
+        "subplot_type": {
+          "rsi": "separate",
+          "bbands": "overlay",
+          "volume": "separate"
+        }
+      },
+      "RSIIchimokuEntryMixin": {
+        "indicators": ["rsi", "ichimoku"],
+        "subplot_type": {
+          "rsi": "separate",
+          "ichimoku": "overlay"
+        }
+      },
+      "RSIVolumeSupertrendEntryMixin": {
+        "indicators": ["rsi", "volume", "supertrend"],
+        "subplot_type": {
+          "rsi": "separate",
+          "volume": "separate",
+          "supertrend": "overlay"
+        }
+      },
+      "BBVolumeSuperTrendEntryMixin": {
+        "indicators": ["bbands", "volume", "supertrend"],
+        "subplot_type": {
+          "bbands": "overlay",
+          "volume": "separate",
+          "supertrend": "overlay"
+        }
+      }
+    },
+    "exit_mixins": {
+      "ATRExitMixin": {
+        "indicators": ["atr"],
+        "subplot_type": {
+          "atr": "separate"
+        }
+      },
+      "RSIBBExitMixin": {
+        "indicators": ["rsi", "bbands"],
+        "subplot_type": {
+          "rsi": "separate",
+          "bbands": "overlay"
+        }
+      },
+      "MACrossoverExitMixin": {
+        "indicators": ["sma", "ema"],
+        "subplot_type": {
+          "sma": "overlay",
+          "ema": "overlay"
+        }
+      },
+      "TrailingStopExitMixin": {
+        "indicators": [],
+        "subplot_type": {}
+      },
+      "TimeBasedExitMixin": {
+        "indicators": [],
+        "subplot_type": {}
+      },
+      "FixedRatioExitMixin": {
+        "indicators": [],
+        "subplot_type": {}
+      }
+    }
+  }
+}

@@ -84,6 +84,7 @@ logs/
 *.parquet
 
 !config/*/*.yaml
+!config/*.json
 !config/*/*.json
 !config/*/*/*.json
 !pyrightconfig.json

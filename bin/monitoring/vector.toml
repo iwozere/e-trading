@@ -162,12 +162,23 @@ type = "filter"
 inputs = ["exclude_yahoo_quoteSummary_404"]
 condition = "!(match(string!(.source_name), r'vector') && match(string!(.message), r'Invalid record from journald, discarding'))"
 
+# aiogram's long-polling loop (dp.start_polling) catches TelegramNetworkError internally,
+# logs it at ERROR, and retries with backoff on its own -- a transient upstream connection
+# reset during polling, not a crash or a bug in our code (monitoring.txt, 2026-08-29).
+# Matched on message content only: the aiogram.dispatcher logger name plus the exact
+# exception is distinctive enough, and source_name for this service varies (telegram-bot
+# vs ekb-bot depending on deployment).
+[transforms.exclude_telegram_polling_network_error]
+type = "filter"
+inputs = ["exclude_vector_journald_parse_error"]
+condition = "!match(string!(.message), r'aiogram\\.dispatcher\\s+Failed to fetch updates.*TelegramNetworkError')"
+
 # ─── Fingerprint ──────────────────────────────────────────────────────────────
 # Build a stable dedup key by stripping timestamps, UUIDs, and numbers.
 
 [transforms.fingerprint]
 type = "remap"
-inputs = ["exclude_vector_journald_parse_error"]
+inputs = ["exclude_telegram_polling_network_error"]
 source = '''
   fp = replace(string!(.message), r'[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}[^ ]*', "<TS>")
   fp = replace(fp, r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', "<UUID>")
