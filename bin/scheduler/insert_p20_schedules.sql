@@ -9,7 +9,10 @@
 -- All times UTC. Data ownership rule:
 --   P15 daily (13:00 UTC) writes: GDELT GKG, 8-K index, Form 4, 13D/G cache files.
 --   P15 weekly (13:30 UTC Fri) writes: Nasdaq screener CSV.
---   P20 reads those files only — never downloads raw data itself.
+--   P20 reads those files only — never downloads raw data itself, with one
+--   exception: P20 GDELT Download (05:30 UTC) re-fetches yesterday's GKG file
+--   early, because P15's 13:00 UTC bundle lands seven hours after P20's own
+--   06:00/06:15 morning chain needs it. See run_gdelt_download.py docstring.
 --
 -- __SCHEDULER_RESULT__ field reference (common across all P20 scripts):
 --   success     — bool, overall job success
@@ -24,6 +27,30 @@
 -- MORNING CHAIN  (weekdays, UTC 06:00 – 07:30)
 -- Depends on P15 daily (13:00 UTC previous day) having finished.
 -- ==============================================================================
+
+-- 0a. GDELT GKG Early Download — 05:30 UTC (added 2026-08-30, was fallback-only)
+-- Downloads yesterday's (and, as catch-up, the day before's) GKG file. Must
+-- precede P20 Data Health Check (06:00) and P20 GDELT Process (06:15) --
+-- P15's own GDELT bundle doesn't land until 13:00 UTC, too late for either.
+-- Idempotent: already-cached days are skipped.
+-- Result fields: one entry per target date -- cache path, "no data", or "error: ..."
+-- Timeout: 10 min (two days' worth of 15-minute GKG files over HTTP).
+INSERT INTO job_schedules (user_id, name, job_type, target, task_params, cron, enabled, created_at, updated_at)
+VALUES (
+    2,
+    'P20 GDELT Download',
+    'data_processing',
+    'src.ml.pipeline.p20_kestrel.jobs.run_gdelt_download',
+    '{
+        "script_path": "src/ml/pipeline/p20_kestrel/jobs/run_gdelt_download.py",
+        "script_args": [],
+        "timeout_seconds": 600
+    }'::jsonb,
+    '30 5 * * 1-5',
+    true,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+) ON CONFLICT (user_id, name) DO NOTHING;
 
 -- 1. Data Health Check — 06:00 UTC
 -- Verifies P15 cache freshness (GDELT, EDGAR), AV/LLM budget state.
@@ -278,7 +305,33 @@ VALUES (
     CURRENT_TIMESTAMP
 ) ON CONFLICT (user_id, name) DO NOTHING;
 
--- 10a. PDUFA/AdCom/Readout Calendar Ingest — 20:52 UTC (added 2026-08-27, gap 10.2 / C12)
+-- 10a. Sleeve A Revisions Feed Ingest — 20:50 UTC (added 2026-08-30, gap 10.1, was fallback-only)
+-- Blends Finnhub recommendation-trend momentum, FMP analyst rating-change net
+-- count (60d), and FMP forward-EPS-consensus delta into `revisions_score` in
+-- k20_signals for watchlist ∪ positions tickers. Shadow mode:
+-- REVISIONS_FEED_AVAILABLE stays False in config.py (sleeve_a.py ignores the
+-- score) until reviewed. Must run before P20 Screen Turnaround so the score
+-- is fresh when sleeve_a.py eventually reads it.
+-- Result fields: success, tickers_processed, signals_written
+-- Timeout: 10 min (Finnhub + FMP API calls; no EPS-delta cold start).
+INSERT INTO job_schedules (user_id, name, job_type, target, task_params, cron, enabled, created_at, updated_at)
+VALUES (
+    2,
+    'P20 Revisions Ingest',
+    'data_processing',
+    'src.ml.pipeline.p20_kestrel.jobs.run_revisions_ingest',
+    '{
+        "script_path": "src/ml/pipeline/p20_kestrel/jobs/run_revisions_ingest.py",
+        "script_args": [],
+        "timeout_seconds": 600
+    }'::jsonb,
+    '50 20 * * 1-5',
+    true,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+) ON CONFLICT (user_id, name) DO NOTHING;
+
+-- 10b. PDUFA/AdCom/Readout Calendar Ingest — 20:52 UTC (added 2026-08-27, gap 10.2 / C12)
 -- Sleeve B1 data source: one fetch of pdufa.bio/search-index.json covers all
 -- three FDA event types (pdufa/adcom/clinical_readout) for the tracked
 -- universe; upserts into k20_catalysts. Must run before P20 Screen Spinoffs.
@@ -301,7 +354,7 @@ VALUES (
     CURRENT_TIMESTAMP
 ) ON CONFLICT (user_id, name) DO NOTHING;
 
--- 10b. Spin-off Registration Monitor — 20:53 UTC (added 2026-08-27, gap 10.2 / C12)
+-- 10c. Spin-off Registration Monitor — 20:53 UTC (added 2026-08-27, gap 10.2 / C12)
 -- Sleeve B2 data source: scans yesterday's EDGAR quarterly form index for new
 -- Form 10/10-12B spin-off registrations, resolves CIK to ticker, upserts into
 -- k20_catalysts (event_date is the filing date, a proxy for the distribution

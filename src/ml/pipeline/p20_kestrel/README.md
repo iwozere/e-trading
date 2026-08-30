@@ -16,6 +16,7 @@ P20 Kestrel is a three-sleeve trading intelligence pipeline that screens, scores
 |-------|---------------|-------------------------------|
 | 03:00 | Mon–Fri       | Google Trends poll            |
 | 05:00 | Monday        | Weekly maintenance            |
+| 05:30 | Mon–Fri       | GDELT GKG early download       |
 | 06:00 | Mon–Fri       | Data health check             |
 | 06:15 | Mon–Fri       | GDELT processing              |
 | 06:30 | Mon–Fri       | Social sentiment poll         |
