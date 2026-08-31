@@ -1,0 +1,6 @@
+Check if all EDGAR downloads are following the edgar_downloader pattern and added to this downloader as well.
+
+If DB is required, make sure db access pattern used in src/data/db is respected.
+
+Data which is downloaded from trading data sources must be cached in data-cache folder, like any other downloaders do.
+

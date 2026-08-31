@@ -1,0 +1,57 @@
+# P22 Biotech M&A — controlled vocabulary: therapeutic area (spec §3.5).
+#
+# DRAFT, 2026-08-30 — assembled from the two partial lists spec §3.5 and
+# §4.2 give explicitly (a "~20 values" example list in §3.5, plus the
+# `by_therapeutic_area` keys in §4.2's base_rates.yaml example, plus the
+# named "areas requiring particular care" in §4.2's prose: gene/cell
+# therapy, rare/orphan disease, neurology, psychiatry).
+#
+# UPDATE 2026-08-31 — reviewed against the actual study's disease-area
+# taxonomy (found: "Clinical Development Success Rates and Contributing
+# Factors 2011-2020", BIO/QLS Advisors/Informa UK Ltd, Feb 2021 — freely
+# downloadable, same study lineage spec §4.2 cites, its own "14 major disease
+# areas" language matches spec's prose closely enough that this is almost
+# certainly the edition spec was written against). The mapping decision spec
+# §4.2 asks to be recorded here is recorded in `p22_base_rates.yaml`'s header
+# and per-key comments instead of here, since it's inherently about how each
+# vocab KEY maps to a rate VALUE — see that file for exactly which of these
+# 21 values have a direct match in the study, which use a disclosed blended
+# proxy, and which have no match at all (6 remain, by user decision
+# 2026-08-31, not filled with a guess). This list itself is unchanged by that
+# review — no vocab value needed adding or removing, only rates assigning.
+#
+# UPDATE 2026-08-31, later same day — added `unclassified`, NOT part of
+# spec's own list. `ingest/therapeutic_area_classifier.py`'s best-effort
+# keyword classifier (built for `ingest/asset_normalization.py`, per user
+# decision 2026-08-31) needs a safe value to return when a trial's free-text
+# `conditions` match none of its keyword rules — `p22_asset.therapeutic_area`
+# is `NOT NULL`, so something must be written. This is a disclosed "we
+# couldn't classify this" marker, not a 21st real therapeutic area — treat
+# any asset row classified `unclassified` as needing manual review before
+# trusting it in a Block B computation that branches on therapeutic area.
+#
+# Per spec §3.5: "Changes to this file bump config_hash and require a re-score."
+
+values:
+  - unclassified             # classifier fallback, not a spec-given value — see note above
+  - oncology_solid
+  - oncology_heme
+  - hematology_nonmalig      # non-malignant hematology — distinct from oncology_heme per spec §4.2
+  - immunology
+  - autoimmune
+  - neurology
+  - psychiatry
+  - cardiometabolic
+  - cardiovascular
+  - metabolic
+  - rare_metabolic
+  - infectious_disease
+  - respiratory
+  - ophthalmology
+  - dermatology
+  - gastroenterology
+  - nephrology
+  - musculoskeletal
+  - gene_cell_therapy        # platform, not indication — spec §4.2 flags it as needing its own base rate
+  - rare_orphan_disease      # cross-cuts other areas; spec §4.2's phase-conditional note applies here specifically
+  - vaccines

@@ -1,0 +1,36 @@
+# P22 Biotech M&A — CVR (contingent value right) valuation policy (spec §10).
+#
+# Created 2026-08-31, at the user's request, ahead of its natural M6 milestone
+# (spec §10: "decide at M6" — this is the label-convention decision M6's
+# backtest return targets are built on; M7's return model then trains on
+# whatever's baked in here). Not urgent to build against yet — no M6 code
+# exists — but cheap to settle now so it isn't rediscovered cold at M6.
+#
+# spec §10, "On CVR valuation": §5.3 specifies including CVRs "at
+# probability-weighted value," but nothing in the spec estimates that
+# probability, and CVRs frequently pay zero or partial value — treating
+# `cvr_max_per_share` as a known input would systematically overstate
+# realised deal returns. Recommended v1 convention, adopted here as-is:
+#
+#   "value CVRs at zero and store `upfront_per_share` as the return basis,
+#    with `cvr_max_per_share` retained but unused. This is conservative,
+#    unambiguous, and cannot silently inflate backtest returns."
+#
+# `p22_deal.cvr_realized_per_share` (already in the schema, spec §3.2) is
+# still populated as real outcomes become known, per spec's own instruction —
+# this policy governs the RETURN-LABEL convention for M6/M7, not whether
+# realized CVR outcomes get recorded at all.
+#
+# At M7, if the realized-outcome dataset built above supports it, spec
+# recommends replacing this zero convention with a real estimate (reusing
+# Block B's trial-outcome machinery, since most CVR milestones are clinical/
+# regulatory events with the same base rates) — that is new work with its
+# own calibration, not a parameter flip in this file.
+#
+# spec §10: "Any change to cvr_policy.yaml invalidates existing labels and
+# forces a full re-score. Wire it into config_hash." (No config-loader/
+# config_hash mechanism exists yet — see docs/Tasks.md; this file isn't read
+# by any code today, same as the other config/pipeline/*.yaml drafts.)
+
+valuation_method: zero   # v1 convention — see header. Only other spec-anticipated value: "probability_weighted" (M7+, not built)
+return_basis: upfront_per_share   # cvr_max_per_share is retained on p22_deal but unused for return labels under this policy

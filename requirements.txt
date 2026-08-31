@@ -18,9 +18,12 @@ openpyxl >=3.1.5
 optuna>=4.4.0
 pandas >=3.0.3  # mlflow (every 3.x release) pins pandas<3, so mlflow was dropped below to unblock this + vectorbt>=1.1.0; dormant src/ml/future/mlflow_integration.py is excluded from mypy/pyright accordingly
 pandas-ta-classic>=0.3.0
+pandera>=0.24.0  # P22 feature-store data quality — spec §8.2 (cash_runway_months/enterprise_value/loe_date/lead_asset_poa bounds)
 pydantic>=2.11.7
 pydantic-settings>=2.0.0
 python_binance>=1.0.29
+PyYAML>=6.0.3  # config/pipeline/*.yaml loaders (P22 acquirer config: ingest/acquirer_config.py); already installed transitively and used by ~15 other modules repo-wide, previously unpinned
+rapidfuzz>=3.9.0  # P22 entity resolution — spec §3.3 token-set fuzzy matching (>= 88 threshold)
 reportlab>=4.4.2
 Requests>=2.32.4
 schedule>=1.2.2

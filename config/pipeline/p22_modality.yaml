@@ -1,0 +1,24 @@
+# P22 Biotech M&A — controlled vocabulary: modality (spec §3.5).
+#
+# DRAFT, 2026-08-30 — spec §3.5 names this file but gives no example values
+# (unlike therapeutic_area.yaml, which gets a partial list). This is a
+# reasonable standard drug-modality taxonomy, NOT sourced from any value the
+# spec itself provides — needs a domain reviewer's sign-off before relying
+# on it for base-rate lookups or Block D's `modality_capability(acquirer,
+# target.modality)` term (spec §4.4). Logged as an open decision in
+# docs/Tasks.md.
+#
+# Per spec §3.5: "Changes to this file bump config_hash and require a re-score."
+
+values:
+  - small_molecule
+  - biologic_antibody         # mAb, bispecific, ADC payload-carrier
+  - antibody_drug_conjugate
+  - gene_therapy
+  - cell_therapy               # CAR-T, TCR-T, TIL, allogeneic
+  - rna_therapeutic             # siRNA, ASO, mRNA
+  - vaccine
+  - radioligand
+  - peptide
+  - protein_replacement
+  - device_combination          # drug-device combination products

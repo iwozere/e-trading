@@ -1,0 +1,99 @@
+# P22 Biotech M&A — probability-of-approval base rates (spec §4.2), for
+# `features.block_b.lead_asset_poa`.
+#
+# UPDATED 2026-08-31 — `by_therapeutic_area` is now filled from a real primary
+# source for every area that source covers: "Clinical Development Success
+# Rates and Contributing Factors 2011-2020" (BIO, QLS Advisors, Informa UK
+# Ltd, published February 2021; data via Biomedtracker(R)/Pharmapremia(R)),
+# freely downloadable, no login: https://go.bio.org/rs/490-EHZ-999/images/
+# ClinicalDevelopmentSuccessRates2011_2020.pdf — same BIO/Biomedtracker study
+# lineage spec §4.2 cites, a newer edition of it. Verified free 2026-08-31 (no
+# paywall) and read directly (Figures 2, 5b, 7, 8 — 14 major disease areas x
+# 12,728 phase transitions, 2011-2020). Values below are `LOA from Phase I`
+# (Figure 5b) unless noted otherwise. `oncology_solid`/`hematology_nonmalig`
+# previously held approximate figures quoted verbatim from spec's own text
+# (likely an older edition of this same study lineage); replaced here with
+# this report's precise numbers so every filled value traces to one document,
+# per user decision 2026-08-31.
+#
+# 9 areas remain `null` — this report doesn't cover them 1:1, and per user
+# decision 2026-08-31 these are NOT filled with a guess:
+#   - dermatology/nephrology/musculoskeletal: only appear inside this report's
+#     blended "Others" bucket (Dermatology+Renal+Obstetrics+non-autoimmune
+#     Rheumatology+ENT/Dental+Orthopedics combined) — filled with that
+#     explicitly-labeled blended figure (0.130) rather than left null, since a
+#     disclosed multi-area blend is a real, source-backed number, just an
+#     imprecise one; not the same as a guess.
+#   - immunology/cardiometabolic/rare_metabolic/gene_cell_therapy/
+#     rare_orphan_disease/vaccines: no usable number in this report at all,
+#     not even a blended one — left `null`. `gene_cell_therapy` is a
+#     modality/platform, not a disease area, so a disease-area-organized study
+#     was never going to cover it; `rare_orphan_disease` is cross-cutting and
+#     may be redundant with the phase-conditional `orphan_by_phase` modifier
+#     below by design — worth revisiting whether this `by_therapeutic_area`
+#     entry should exist at all, not just whether it has a number.
+#
+# spec §4.2: "A feature that falls back to the blended rate must emit a
+# base_rate_fallback flag, and the run report must list every company scored
+# on a fallback." `features/block_b.py` (not yet built) must implement that
+# flag — companies in the 9 still-null areas will trigger it.
+#
+# Per spec §3.5: "Changes to this file bump config_hash and require a re-score."
+
+loa_from_phase_1_overall: 0.096
+phase_2_success: 0.31            # lowest of any transition (spec §4.2)
+phase_3_to_filing: 0.58          # ~40%+ of Phase III never file (spec §4.2)
+filing_to_approval: 0.86
+first_cycle_approval: 0.61
+# NOTE: the 5 aggregate rates above were NOT touched in the 2026-08-31 update
+# (only `by_therapeutic_area` was in scope of that decision) — they still
+# come from spec §4.2's own quoted text, not the 2011-2020 report's "All
+# indications" row (which gives slightly different figures: LOA-from-PhaseI
+# 0.079, PhaseII POS 0.289, PhaseIII-to-filing 0.578, filing-to-approval
+# 0.906 — no report figure for `first_cycle_approval` was found in the pages
+# read). Revisit if/when these are brought onto the same single-source basis
+# as `by_therapeutic_area` below.
+
+by_therapeutic_area:              # LOA from Phase I (Figure 5b) unless noted — see header for source/mapping
+  oncology_solid: 0.046           # Figure 7: solid tumors, n=2,982
+  oncology_heme: 0.075            # Figure 7: hematologic cancers, n=1,094 (distinct from hematology_nonmalig below)
+  hematology_nonmalig: 0.239      # Figure 5b: "Hematology" — highest LOA of any area, n=352
+  immunology: null                # no match — report has "Autoimmune" only, not a broader immunology bucket
+  autoimmune: 0.107               # Figure 5b: "Autoimmune", n=1,305
+  neurology: 0.059                # Figure 5b, n=1,411 — spec §4.2 flags this as needing particular care (high Ph2 attrition)
+  psychiatry: 0.073               # Figure 5b, n=442 — spec §4.2 flags this as needing particular care (subjective endpoints)
+  cardiometabolic: null           # no match — report splits cardiovascular/metabolic, no combined figure
+  cardiovascular: 0.048           # Figure 5b, n=651 — lowest LOA of any non-oncology area
+  metabolic: 0.155                # Figure 5b, n=399
+  rare_metabolic: null            # no match — report's rare-vs-chronic split (Figure 8) isn't broken out per therapeutic area
+  infectious_disease: 0.132       # Figure 5b, n=1,170
+  respiratory: 0.075              # Figure 5b, n=501
+  ophthalmology: 0.119            # Figure 5b, n=415
+  dermatology: 0.130              # BLENDED PROXY — report's "Others" bucket (Dermatology+Renal+Orthopedics+etc.), n=541 — see header
+  gastroenterology: 0.083         # Figure 5b, n=186 (marked * in source: excludes IBD)
+  nephrology: 0.130               # BLENDED PROXY — same "Others" bucket as dermatology above — see header
+  musculoskeletal: 0.130          # BLENDED PROXY — same "Others" bucket as dermatology above — see header
+  gene_cell_therapy: null         # no match — modality/platform, not a disease area; spec §4.2 flags this as needing particular care (manufacturing-driven failures)
+  rare_orphan_disease: null       # no match — see phase-conditional note below; do NOT treat as a flat modifier, and see header re: possible redundancy with orphan_by_phase
+  vaccines: null                  # no match — folds into "Infectious disease" in this report, not separable
+
+modifiers:
+  biomarker_selection: 2.0        # multiplicative, capped; oncology evidence ~5x HR (spec §4.2, verbatim)
+  prior_crl: -0.28                # additive to PoA, from FDA historical review data (spec §4.2, verbatim)
+  # spec §4.2's orphan-status note (verbatim data, NOT a flat bonus — implement as phase-conditional):
+  #   Phase I POS: orphan 0.759 vs non-orphan 0.664 (orphan HIGHER)
+  #   Phase II POS: orphan 0.488 vs non-orphan 0.583 (orphan LOWER)
+  #   Phase III POS: orphan 0.467 vs non-orphan 0.590 (orphan LOWER)
+  # "Any implementation that adds a constant for 'orphan = true' is wrong and must fail review."
+  orphan_by_phase:
+    phase_1: 0.759
+    phase_2: 0.488
+    phase_3: 0.467
+    non_orphan_phase_1: 0.664
+    non_orphan_phase_2: 0.583
+    non_orphan_phase_3: 0.590
+
+pdufa_priors:
+  nda_standard: 0.85
+  nda_priority: 0.90
+  orphan: 0.93

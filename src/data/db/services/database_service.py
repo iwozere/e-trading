@@ -20,6 +20,7 @@ from src.data.db.core.base import Base as _SharedBase
 from src.data.db.repos.repo_jobs import JobsRepository
 from src.data.db.repos.repo_kestrel import KestrelRepo
 from src.data.db.repos.repo_notification import NotificationRepository
+from src.data.db.repos.repo_p22_biotech_ma import P22Repo
 from src.data.db.repos.repo_short_squeeze import ShortSqueezeRepo
 from src.data.db.repos.repo_system_health import SystemHealthRepository
 from src.data.db.repos.repo_telegram import (
@@ -109,6 +110,9 @@ class ReposBundle:
     # P20 Kestrel Pipeline
     kestrel: KestrelRepo
 
+    # P22 Biotech M&A Pipeline
+    p22: P22Repo
+
 
 # ----------------------------- Database service ------------------------------
 
@@ -173,6 +177,8 @@ class DatabaseService:
                 short_squeeze=ShortSqueezeRepo(s),
                 # P20 Kestrel Pipeline
                 kestrel=KestrelRepo(s),
+                # P22 Biotech M&A Pipeline
+                p22=P22Repo(s),
             )
             yield repos
             s.commit()

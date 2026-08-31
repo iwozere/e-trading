@@ -1,0 +1,216 @@
+# P22 Biotech M&A — hand-curated acquirer universe (spec §2.0.4, §4.1).
+#
+# DRAFT, 2026-08-30 (list count reviewed with the user 2026-08-31 — now 25,
+# matching spec's "~25 acquirers" target). Spec §2.0.4 explicitly
+# calls for a HAND-CURATED list "with entry/exit dates so a company isn't
+# treated as a possible acquirer before it reached acquirer scale (or after
+# it was itself acquired)" — this draft supplies 25 companies whose
+# identity as large-cap serial biotech/pharma acquirers is uncontroversial
+# public knowledge, but does NOT supply real entry/exit dates: every
+# `entry_date` below is a placeholder set to the backtest's own start date
+# (spec §2.0.1: "walk every quarter from 2010"), not a researched
+# "when did this company actually reach acquirer scale" determination.
+# **User decision 2026-08-31:** since none of these 25 companies has itself
+# been acquired, `exit_date: null` is accepted as correct for all of them;
+# the 2010-01-01 `entry_date` placeholder (except AbbVie's real 2013 spinoff
+# anchor) is accepted as "good enough for now" rather than individually
+# researched — all 25 are mega-caps plausibly already at acquirer scale by
+# 2010. Revisit only if a specific company's pre-2010 status becomes
+# material to a real score. This does NOT mean Block A (spec §4.1) is ready
+# to run against this file: `cash_capacity`/`equity_capacity` still need real
+# market-cap/financial data (the vendor decision, docs/Tasks.md item 1), not
+# just entry/exit dates.
+#
+# `cik` values live-verified 2026-08-31 against SEC's own
+# company_tickers.json (US-registrant tickers) and, for the 3 that weren't
+# in that file, a direct EDGAR company-name search for a 20-F filer — Roche,
+# Bayer, and Ipsen genuinely have no SEC CIK (their US ADRs — RHHBY, BAYRY —
+# are unsponsored programs set up by a depositary bank, not a direct SEC
+# registration by the company itself; confirmed by an empty EDGAR company
+# search, not just an unmatched ticker lookup). `null` for those three is a
+# verified fact, not an unverified gap — see the per-entry comments below.
+#
+# `bloc` values feed the §4.4.1 foreign-investment-screening gate
+# (`us` | `allied` | `neutral` | `elevated_scrutiny`) — assigned here from
+# each company's public headquarters/domicile, which is low-risk factual
+# information, unlike the entry/exit dates above.
+#
+# Per spec §3.5: "Changes to this file bump config_hash and require a re-score."
+
+acquirers:
+  - name: Pfizer Inc
+    ticker: PFE
+    cik: "0000078003"
+    bloc: us
+    entry_date: 2010-01-01   # PLACEHOLDER — see header
+    exit_date: null
+
+  - name: Merck & Co Inc
+    ticker: MRK
+    cik: "0000310158"
+    bloc: us
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: AbbVie Inc
+    ticker: ABBV
+    cik: "0001551152"
+    bloc: us
+    entry_date: 2013-01-02   # spun off from Abbott Laboratories 2013 — the one date here with a real public anchor
+    exit_date: null
+
+  - name: Amgen Inc
+    ticker: AMGN
+    cik: "0000318154"
+    bloc: us
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Gilead Sciences Inc
+    ticker: GILD
+    cik: "0000882095"
+    bloc: us
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Johnson & Johnson
+    ticker: JNJ
+    cik: "0000200406"
+    bloc: us
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Bristol-Myers Squibb Company
+    ticker: BMY
+    cik: "0000014272"
+    bloc: us
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Eli Lilly and Company
+    ticker: LLY
+    cik: "0000059478"
+    bloc: us
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Vertex Pharmaceuticals Inc
+    ticker: VRTX
+    cik: "0000875320"
+    bloc: us
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Biogen Inc
+    ticker: BIIB
+    cik: "0000875045"
+    bloc: us
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Regeneron Pharmaceuticals Inc
+    ticker: REGN
+    cik: "0000872589"
+    bloc: us
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Incyte Corporation
+    ticker: INCY
+    cik: "0000879169"
+    bloc: us
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Novartis AG
+    ticker: NVS
+    cik: "0001114448"
+    bloc: allied   # Switzerland
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Roche Holding AG
+    ticker: RHHBY
+    cik: null            # verified no SEC CIK exists — see header (unsponsored ADR, not a direct SEC filer)
+    bloc: allied   # Switzerland
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: AstraZeneca PLC
+    ticker: AZN
+    cik: "0000901832"
+    bloc: allied   # United Kingdom
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Sanofi
+    ticker: SNY
+    cik: "0001121404"
+    bloc: allied   # France
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: GSK plc
+    ticker: GSK
+    cik: "0001131399"
+    bloc: allied   # United Kingdom
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Novo Nordisk A/S
+    ticker: NVO
+    cik: "0000353278"
+    bloc: allied   # Denmark
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Bayer AG
+    ticker: BAYRY
+    cik: null            # verified no SEC CIK exists — see header (unsponsored ADR, not a direct SEC filer)
+    bloc: allied   # Germany
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Takeda Pharmaceutical Company Limited
+    ticker: TAK
+    cik: "0001395064"
+    bloc: allied   # Japan
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Ipsen S.A.
+    ticker: IPN.PA
+    cik: null            # verified no SEC CIK exists — see header (no US SEC registration found for this name)
+    bloc: allied   # France
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Jazz Pharmaceuticals plc
+    ticker: JAZZ
+    cik: "0001232524"
+    bloc: allied   # Ireland
+    entry_date: 2010-01-01
+    exit_date: null
+
+  # Added 2026-08-31, user-approved: strong recent large-cap biotech acquisitions each, bringing
+  # the roster to 25 per spec §2.0.4's "~25 acquirers" target.
+  - name: Astellas Pharma Inc
+    ticker: ALPMY
+    cik: null            # verified no SEC CIK exists — see header (unsponsored ADR, not a direct SEC filer)
+    bloc: allied   # Japan — Iveric Bio ($5.9B, 2023), Audentes Therapeutics (~$3B, 2020)
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: Daiichi Sankyo Company Limited
+    ticker: DSNKY
+    cik: "0001340156"    # live-verified 2026-08-31 — HAS a real SEC CIK, unlike most other Japanese majors checked
+    bloc: allied   # Japan — major ADC licensing partner to AZ/Merck; weaker fit for outright "acquirer" but retained for its practical trackability
+    entry_date: 2010-01-01
+    exit_date: null
+
+  - name: CSL Limited
+    ticker: CSLLY
+    cik: "0001274152"    # live-verified 2026-08-31 via SEC submissions API (ticker CSLLY, OTC)
+    bloc: allied   # Australia — Vifor Pharma ($11.7B, 2022); core business is plasma/vaccines, a different acquirer profile than diversified biotech M&A
+    entry_date: 2010-01-01
+    exit_date: null
