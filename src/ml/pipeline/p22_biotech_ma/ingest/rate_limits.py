@@ -17,6 +17,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.data.utils.rate_limiting import RateLimiter
 from src.ml.pipeline.p22_biotech_ma.config import (
     CLINICALTRIALS_RATE_LIMIT_RPS,
+    FMP_RATE_LIMIT_RPS,
     OPENFDA_RATE_LIMIT_RPS,
 )
 
@@ -27,3 +28,4 @@ openfda_limiter = RateLimiter(requests_per_second=OPENFDA_RATE_LIMIT_RPS)
 # Orange Book / Purple Book are infrequent (quarterly), single large downloads —
 # no per-request limiter needed, but keep a conservative one for retry backoff.
 fda_book_limiter = RateLimiter(requests_per_second=2)
+fmp_limiter = RateLimiter(requests_per_second=FMP_RATE_LIMIT_RPS)

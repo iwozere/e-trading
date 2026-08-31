@@ -129,6 +129,31 @@ def write(
     )
 
 
+def has_any_landed(source: str, entity: str, *, root: Path | None = None) -> bool:
+    """
+    True if ANY partition (any ingest date) already has a landed payload for
+    this `(source, entity)` pair — for a resumable bulk job to skip
+    re-fetching something a prior, possibly-interrupted run already landed
+    (e.g. `ingest/fmp_backfill.py`'s historical-price backfill).
+
+    O(files under `source`) per call — fine for a one-time/occasional bulk
+    job checking a few hundred/thousand entities once each; not meant for a
+    hot path called per-request in a high-frequency job.
+    """
+    zone_root = root if root is not None else RAW_ZONE_ROOT
+    source_dir = zone_root / source
+    if not source_dir.is_dir():
+        return False
+    for date_dir in source_dir.iterdir():
+        if not date_dir.is_dir():
+            continue
+        for manifest_path in date_dir.glob("*.manifest.json"):
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if manifest.get("entity") == entity:
+                return True
+    return False
+
+
 def read(path: Path) -> Any:
     """Read back a gzipped JSON payload previously written by `write()`."""
     with gzip.open(path, "rb") as f:

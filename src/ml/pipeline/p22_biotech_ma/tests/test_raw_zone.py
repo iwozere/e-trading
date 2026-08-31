@@ -85,3 +85,25 @@ def test_read_latest_partition_with_manifest_pairs_payload_and_manifest(tmp_path
 
 def test_read_latest_partition_with_manifest_missing_source_returns_empty(tmp_path):
     assert raw_zone.read_latest_partition_with_manifest("no_such_source", root=tmp_path) == []
+
+
+def test_has_any_landed_true_after_write(tmp_path):
+    raw_zone.write(source="test_source", entity="MRNA", as_of_date=date(2024, 3, 1), payload={"x": 1}, root=tmp_path)
+    assert raw_zone.has_any_landed("test_source", "MRNA", root=tmp_path) is True
+
+
+def test_has_any_landed_false_for_unlanded_entity(tmp_path):
+    raw_zone.write(source="test_source", entity="MRNA", as_of_date=date(2024, 3, 1), payload={"x": 1}, root=tmp_path)
+    assert raw_zone.has_any_landed("test_source", "OTHER", root=tmp_path) is False
+
+
+def test_has_any_landed_false_for_missing_source(tmp_path):
+    assert raw_zone.has_any_landed("no_such_source", "MRNA", root=tmp_path) is False
+
+
+def test_has_any_landed_true_across_older_date_partition_not_just_latest(tmp_path):
+    """Unlike read_latest_partition, this must find a landing under ANY date partition, not just
+    the most recent — a resumable job needs to know "was this ever landed", not "was it landed today"."""
+    raw_zone.write(source="test_source", entity="MRNA", as_of_date=date(2024, 1, 1), payload={"x": 1}, root=tmp_path)
+    raw_zone.write(source="test_source", entity="OTHER", as_of_date=date(2024, 6, 1), payload={"y": 2}, root=tmp_path)
+    assert raw_zone.has_any_landed("test_source", "MRNA", root=tmp_path) is True

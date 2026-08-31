@@ -179,7 +179,10 @@ src/ml/pipeline/p22_biotech_ma/
 │   ├── asset_normalization.py       # M3: single-intervention trial -> p22_asset, deduped per (company_id, name)
 │   ├── therapeutic_area_classifier.py  # M3: best-effort keyword classifier, CT.gov conditions -> therapeutic_area.yaml
 │   ├── acquirer_config.py           # M3: p22_acquirers.yaml -> p22_company identity rows (§2.0.4)
-│   └── patent_expiry_normalization.py  # M3: Orange Book patent.txt -> p22_patent_expiry (§2.3, §4.1)
+│   ├── patent_expiry_normalization.py  # M3: Orange Book patent.txt -> p22_patent_expiry (§2.3, §4.1)
+│   ├── fmp_client.py                # M3: FMP /stable client (historical price, name search) — live-verified endpoints
+│   ├── fmp_universe.py              # M3: known-ticker vs. needs-name-search universe split
+│   └── fmp_backfill.py              # M3: bulk historical-price backfill orchestration, resumable
 ├── features/                         # M3: feature store (spec §4)
 │   ├── __init__.py
 │   ├── context.py                   # FeatureContext — the one lookahead-safe read path every feature uses
@@ -204,7 +207,8 @@ src/ml/pipeline/p22_biotech_ma/
 │   └── register_jobs.py             # idempotent job_schedules upserts
 ├── cli/                              # human-run interactive tools, NOT scheduler jobs (§3.4)
 │   ├── __init__.py
-│   └── review_queue_cli.py          # M2: argparse status/list/show/confirm/reject over p22_review_item
+│   ├── review_queue_cli.py          # M2: argparse status/list/show/confirm/reject over p22_review_item
+│   └── fmp_backfill_cli.py          # M3: test-search / backfill --dry-run / backfill (one-time, run during a Premium month)
 ├── tests/
 │   ├── __init__.py
 │   ├── test_db_models.py            # table-shape assertions, no live DB (mirrors P20's)
@@ -227,6 +231,9 @@ src/ml/pipeline/p22_biotech_ma/
 │   ├── test_therapeutic_area_classifier.py  # incl. heme-vs-solid-oncology ordering, never-guessed categories
 │   ├── test_acquirer_config.py      # incl. round-trip against the real repo config file
 │   ├── test_patent_expiry_normalization.py  # incl. unmatched-product and blank-date drop cases
+│   ├── test_fmp_client.py           # incl. 402/404/unexpected-shape cases
+│   ├── test_fmp_universe.py         # incl. dedup-by-CIK-keeping-latest-name
+│   ├── test_fmp_backfill.py         # incl. the live-caught multi-exact-match tie-break, resumability
 │   ├── test_feature_context.py      # incl. get_trailing_average
 │   ├── test_feature_registry.py
 │   ├── test_block_c.py              # every feature's real-computation path AND null path (§8.1)
@@ -615,12 +622,15 @@ because it was pure mechanical plumbing (the acquirer loader) or because the ope
 
 Per the user's request to work through `docs/Tasks.md` "Decisions needed" step by step. Outcomes:
 
-- **Item 1 (vendor)** — decided: FMP, reusing the repo's existing `FMPDataDownloader`
-  (`src/data/downloader/fmp_data_downloader.py`, already used by P20/P05/Telegram) rather than
-  building a new client. Found live: the account's current plan returns 402 on some endpoints
-  (`p20_kestrel/ingest/revisions_ingest.py`'s own comment), so delisted-ticker coverage — the actual
-  reason FMP was picked — is not confirmed yet. User is checking/upgrading the account tier; a thin
-  `MarketDataProvider` adapter over `FMPDataDownloader` is the next step once confirmed.
+- **Item 1 (vendor)** — decided: FMP. Web search found Basic/Starter both capped at ~5yr history,
+  only Premium unlocks 30yr (spec's "Starter ~$15/mo" recommendation looks stale). Bulk-backfill
+  infrastructure built ahead of the account decision, at user request (`ingest/fmp_client.py`,
+  `fmp_universe.py`, `fmp_backfill.py`, `cli/fmp_backfill_cli.py`) — live-verified against the
+  account's real active key in the process, catching 2 real bugs (a dead endpoint URL; a
+  multi-exact-name-match ticker bug) before they shipped, and surfacing a NEW, more confusing finding:
+  the account can fetch some symbols (MRNA, PFE) but gets 402 on others (AMGN, GILD, SRPT) across
+  every date range — looks like a per-symbol entitlement list, not a date cap, and needs checking
+  against the FMP dashboard directly. See docs/Tasks.md item 1 for the full detail.
 - **Item 2 (base rates)** — mostly resolved: found the actual study is freely downloadable (a newer
   edition of the same BIO/Biomedtracker lineage spec §4.2 cites), downloaded and read it directly,
   filled 15/21 `by_therapeutic_area` entries with real cited figures. 6 remain `null` by user decision

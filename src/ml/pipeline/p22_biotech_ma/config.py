@@ -116,7 +116,12 @@ ORANGE_BOOK_ZIP_URL = "https://www.fda.gov/media/76860/download"
 PURPLE_BOOK_DOWNLOADS_PAGE = "https://purplebooksearch.fda.gov/index.cfm?event=downloads"
 
 # ---------------------------------------------------------------------------
-# Market-data vendor (spec §2.4) — deferred, see docs/Tasks.md
+# Market-data vendor (spec §2.4) — FMP selected 2026-08-31, see docs/Tasks.md
+# item 1. Reuses src.data.downloader.fmp_data_downloader.FMPDataDownloader
+# for API-key resolution; the constants below are for the NEW direct calls
+# P22 makes that downloader doesn't already implement (full raw historical
+# price JSON, name search for delisted tickers with no ticker on file) —
+# see ingest/fmp_client.py.
 # ---------------------------------------------------------------------------
 # Set True once a real MarketDataProvider implementation is wired in behind
 # ingest/vendor_market_data.py's Protocol.
@@ -125,6 +130,10 @@ VENDOR_MARKET_DATA_AVAILABLE: bool = False
 # timestamps (spec §2.4): known_from = period_end + this many days.
 VENDOR_FUNDAMENTALS_LAG_DAYS: int = 45
 VENDOR_PRICE_LAG_DAYS: int = 0
+FMP_STABLE_URL = "https://financialmodelingprep.com/stable"
+# Conservative default, well under Premium's published 750 req/min — not yet
+# tuned against a real key's actual observed behavior (see docs/Tasks.md).
+FMP_RATE_LIMIT_RPS: int = 5
 
 # ---------------------------------------------------------------------------
 # Logging / results directory

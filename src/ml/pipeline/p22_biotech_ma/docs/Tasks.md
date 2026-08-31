@@ -13,18 +13,55 @@ use in the code/config; this section exists so they're all in one place to walk 
    `atm_capacity_pct`, and the whole backtest. **Decided 2026-08-31: FMP.** Spec's own recommendation
    (Starter, ~$15/mo), and confirmed the same day that this repo already has a real, working FMP
    integration (`src/data/downloader/fmp_data_downloader.py` — `FMPDataDownloader`, already used by
-   P20 Kestrel, P05, and the Telegram screener), so P22's vendor adapter should wrap/reuse that class
-   rather than build a new client from scratch.
-   **Not yet unblocked — waiting on the user to check the account, not a decision anymore:**
-   `FMP_API_KEY` is already configured in production, but `p20_kestrel/ingest/revisions_ingest.py`'s
-   own comment notes `period=quarter` on the analyst-estimates endpoint "returns 402 Payment Required
-   ... on the account's current plan" — a real signal the currently-active tier is limited, and
-   delisted-ticker historical price/market-cap data (spec's whole reason for picking FMP) is a
-   paid-tier feature that may not be covered. User is checking/upgrading the existing FMP plan.
-   Next step once confirmed: write a thin `MarketDataProvider` adapter over `FMPDataDownloader`
-   (`ingest/vendor_market_data.py`'s `NullMarketDataProvider` gets replaced) and run the
-   delisted-ticker validation against ~20 known acquisitions spec calls for, live, before trusting it
-   for real scoring.
+   P20 Kestrel, P05, and the Telegram screener).
+
+   **Web-search-based plan comparison done 2026-08-31** (FMP's own pricing pages 403 every fetch
+   attempt — Cloudflare-blocked — so this is search-index-derived, not a page read): Basic AND
+   Starter are BOTH capped at ~5 years of history; only **Premium** (~$69/mo vs. Starter's ~$29/mo)
+   unlocks up to 30 years. Spec's "Starter (~$15/mo)" recommendation looks stale against current FMP
+   pricing/tiers. User is checking/considering the existing account.
+
+   **Live-verified against the account's real, currently-active key, 2026-08-31 (a second, separate
+   check, same day) — and it complicates the "5-year cap" framing above:**
+   - `/stable/historical-price-full` (what `FMPDataDownloader.get_ohlcv` calls) is **dead (404)**,
+     even for an obviously-valid symbol (MRNA). The correct current endpoint is
+     `/stable/historical-price-eod/full` — confirmed working, and confirmed to return full history
+     back to a company's own IPO date (MRNA: back to 2018-12-07, its actual IPO), not truncated to a
+     5-year rolling window.
+   - **But** the same key gets `402 Payment Required` ("this value set for 'symbol' is not available
+     under your current subscription") for AMGN, GILD, and SRPT — every date range tried, `/full` and
+     `/light` alike — while MRNA and PFE work fine. This looks like a **per-symbol entitlement list**,
+     not a date-depth cap at all. Whether upgrading to Premium changes symbol coverage, date depth, or
+     both is not something this session could determine from outside — **needs checking directly
+     against the FMP account dashboard**, and is now the real open question, more than "how many years
+     of history."
+   - `/stable/search-name` (company name search, for the delisted-ticker-with-no-symbol-on-file gap)
+     is real and working — confirmed live. A single query can return multiple exact-name matches
+     across exchanges (e.g. Moderna's real NASDAQ listing AND an unrelated Frankfurt cross-listing,
+     both literally named "Moderna, Inc.") — `ingest/fmp_backfill.resolve_ticker_by_name` handles this
+     (prefers a USD/US-exchange candidate), a real bug this live check caught before it shipped.
+   - The historical-price response has no `adjClose` field at all — whether `close` is raw/unadjusted
+     or already split/dividend-adjusted is **still unresolved**, deliberately deferred (see
+     `ingest/fmp_client.py`'s docstring) — land raw now, verify against a known split event once real
+     data is examined, not before.
+
+   **Built and ready, 2026-08-31, ahead of the account decision** (per user request, "ready by the
+   time I buy premium"): `ingest/fmp_client.py` (the two live-verified endpoints above),
+   `ingest/fmp_universe.py` (splits the target universe into "already has a ticker" vs. "needs
+   name-search resolution first" — FMP is ticker-keyed and most delisted-before-we-resolved-them
+   companies only have a CIK on file, not a ticker), `ingest/fmp_backfill.py` (orchestration: resolve
+   unresolved names, land full raw price history per ticker, resumable via new
+   `raw_zone.has_any_landed`), and `cli/fmp_backfill_cli.py` (human-run: `test-search`, `backfill
+   --dry-run`, `backfill --limit N` for a small test batch, `backfill` for the full run). **Explicitly
+   NOT built yet**: normalizing landed payloads into `p22_price_daily`/`p22_corporate_action` — a
+   deliberate choice, not a gap, since that step isn't time-boxed to a Premium month (raw zone is
+   immutable) and depends on resolving the raw-vs-adjusted question above against real data first. Nor
+   is a `MarketDataProvider` Protocol implementation (`ingest/vendor_market_data.py`'s
+   `NullMarketDataProvider`) — same reasoning, plus point-in-time `market_cap` may not need a
+   dedicated FMP endpoint at all: it can likely be derived as `raw_close(t) × shares_outstanding(t)`
+   from data already normalized (`financial_facts.py`'s `shares_outstanding`) once prices are landed,
+   avoiding FMP's current-snapshot-only `company_profile` endpoint (no point-in-time history) entirely
+   — a design simplification found this session, not yet built.
 2. ~~**`config/pipeline/p22_base_rates.yaml` is ~90% incomplete**~~ — **mostly resolved 2026-08-31.**
    The actual primary source turned out to be freely available: "Clinical Development Success Rates
    and Contributing Factors 2011-2020" (BIO, QLS Advisors, Informa UK Ltd, Feb 2021) — a newer,
@@ -265,6 +302,16 @@ use in the code/config; this section exists so they're all in one place to walk 
       `conditions` text, with an explicit `unclassified` fallback added to `p22_therapeutic_area.yaml`
       rather than a forced guess — disclosed as imperfect in its own docstring, not validated against
       real clinical taxonomy. New `P22Repo.upsert_asset`/`get_asset_by_company_and_name`, DB-tested.
+- [x] FMP historical bulk-backfill infrastructure, 2026-08-31 — `ingest/fmp_client.py`,
+      `ingest/fmp_universe.py`, `ingest/fmp_backfill.py`, `cli/fmp_backfill_cli.py`, new
+      `raw_zone.has_any_landed()`, new `P22Repo.list_companies_full()`. Built ahead of the vendor
+      account decision (item 1) at user request, so the download itself doesn't waste a paid-tier
+      month on development time. Live-verified against the account's real, currently-active key
+      (caught and fixed 2 real bugs before they shipped: a dead endpoint URL, and a
+      multiple-exact-name-match ticker-resolution bug) — see item 1 for the full findings, including
+      the still-open per-symbol-entitlement discovery. Deliberately does NOT write
+      `p22_price_daily`/`p22_corporate_action` or implement `MarketDataProvider` — see item 1's "Built
+      and ready" note for why both are correctly deferred past the download step.
 - [x] `ingest/acquirer_config.py` + `jobs/run_acquirer_load.py`, 2026-08-30, later same day — loads
       `p22_acquirers.yaml` into `p22_company` (role `acquirer`, or `both` if the ticker already
       matches a resolved DERA target row — `P22Repo.upsert_acquirer_company` merges by ticker rather
@@ -400,7 +447,11 @@ use in the code/config; this section exists so they're all in one place to walk 
       (`test_feature_context.py`), CT.gov single-intervention asset linkage incl. the deduping and
       multi-intervention-stays-unlinked cases (`test_asset_normalization.py`), keyword therapeutic-
       area classification incl. the heme-vs-solid-oncology ordering and never-guessed-category cases
-      (`test_therapeutic_area_classifier.py`) — 229 tests total in the non-DB suite as of 2026-08-31.
+      (`test_therapeutic_area_classifier.py`), FMP historical-price/name-search client incl. the
+      402/404/unexpected-shape cases (`test_fmp_client.py`), the known-vs-unresolved-ticker universe
+      split incl. dedup-by-CIK-keeping-latest-name (`test_fmp_universe.py`), backfill orchestration
+      incl. the live-caught multi-exact-match tie-break and skip-already-landed resumability
+      (`test_fmp_backfill.py`) — 258 tests total in the non-DB suite as of 2026-08-31.
 - [ ] Real-Postgres integration tests for `P22Repo.upsert_financial_fact_bitemporal` restatement
       behavior, the price-archive round trip (`upsert_price_daily` immutability,
       `get_adjusted_close`'s lookahead guard through the repo layer), `upsert_trial`'s

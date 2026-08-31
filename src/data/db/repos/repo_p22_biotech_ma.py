@@ -139,6 +139,12 @@ class P22Repo:
         ).all()
         return {row.company_id: row.name for row in rows}
 
+    def list_companies_full(self) -> List[Dict[str, Any]]:
+        """Every `p22_company` row, all columns — for callers that need more than `list_companies`'s
+        `{company_id: name}` (e.g. `ingest/fmp_universe.py`'s need for `cik`/`ticker` too)."""
+        rows = self.session.execute(select(P22Company)).scalars().all()
+        return [{c.key: getattr(r, c.key) for c in P22Company.__table__.columns} for r in rows]
+
     def get_companies_without_verified_alias(self) -> List[int]:
         """
         `company_id`s with no `p22_company_alias` row where `is_verified = TRUE` — spec §8.2's
