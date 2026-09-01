@@ -100,28 +100,52 @@ class P22Repo:
         self, *, name: str, ticker: str, cik: Optional[str] = None
     ) -> int:
         """
-        Upsert one acquirer-roster company (spec §2.0.4). If `cik` is known,
-        this delegates to the stronger `upsert_company` (cik-keyed upsert).
-        Otherwise — the common case today, since `p22_acquirers.yaml`'s CIKs
-        are all unverified/null (see docs/Tasks.md "Decisions needed" item 3)
-        — it merges on `ticker` instead, because `p22_company.ticker` has no
-        DB-level uniqueness to upsert against via `ON CONFLICT`.
+        Upsert one acquirer-roster company (spec §2.0.4). Looks up by `cik`
+        FIRST when one is given, then falls back to `ticker` — because
+        `p22_company.ticker` has no DB-level uniqueness to upsert against via
+        `ON CONFLICT`, unlike `cik`, which does.
 
-        Critically, this looks up by `ticker` regardless of whether the
-        matching row already has a `cik` — an acquirer that's also SIC-coded
-        into the DERA target universe (large-cap pharma routinely is) may
-        already exist as a `role='target'` row with a real `cik`. Without
-        this check, a naive ticker-less insert would create a second,
-        duplicate identity for the same real-world company. When a match is
-        found, `role` is merged (`target` + `acquirer` -> `both`) rather than
-        overwritten, and the `cik`-bearing row is kept intact.
+        **Bug found and fixed 2026-08-31, live, the first time this method
+        ran against real acquirer CIKs**: an earlier version checked by
+        `ticker` only, regardless of whether `cik` was given. That crashed on
+        a real `UniqueViolation` for Bristol-Myers Squibb — its
+        DERA-resolved `p22_company` row (CIK `0000014272`) already exists,
+        but SEC's own current ticker snapshot maps that CIK to `CELG-RI` (a
+        leftover Celgene contingent-value-right security ticker from the
+        BMY/Celgene merger), not `BMY`. The ticker-only lookup found no match
+        and tried to INSERT a new row with the real CIK, colliding with the
+        row that already has it. Checking `cik` first finds the correct
+        existing row regardless of what stale/unrelated ticker string SEC's
+        snapshot happens to have on file for it.
+
+        Critically, the ticker fallback path looks up by `ticker` regardless
+        of whether the matching row already has a `cik` — an acquirer that's
+        also SIC-coded into the DERA target universe (large-cap pharma
+        routinely is) may already exist as a `role='target'` row with a real
+        `cik` we don't know about yet (the config's own `cik` is `null`).
+        Without this check, a naive insert would create a second, duplicate
+        identity for the same real-world company.
+
+        When any match is found, `role` is merged (`target` + `acquirer` ->
+        `both`) rather than overwritten, and — since the curated acquirer
+        config is the more authoritative source for these two fields, as the
+        BMY/CELG-RI case above demonstrates — `ticker` and `name` are updated
+        to the config's values. Other fields (`exchange`, `sic_code`,
+        `is_active`, `delisted_date`) are left alone; the acquirer config
+        doesn't know about those.
         """
-        existing = self.session.execute(select(P22Company).where(P22Company.ticker == ticker)).scalars().first()
+        existing = None
+        if cik:
+            existing = self.session.execute(select(P22Company).where(P22Company.cik == cik)).scalars().first()
+        if existing is None:
+            existing = self.session.execute(select(P22Company).where(P22Company.ticker == ticker)).scalars().first()
 
         if existing is not None:
             new_role = "both" if existing.role in ("target", "both") else "acquirer"
             self.session.execute(
-                update(P22Company).where(P22Company.company_id == existing.company_id).values(role=new_role)
+                update(P22Company)
+                .where(P22Company.company_id == existing.company_id)
+                .values(role=new_role, ticker=ticker, name=name)
             )
             self.session.flush()
             return existing.company_id

@@ -1,17 +1,25 @@
 """
 P22 — market-data vendor adapter interface (spec §2.4, narrowed by §2.0.5-2.0.6).
 
-No vendor has been selected yet (deferred decision, 2026-08-30). This module
-defines the bitemporal contract any future adapter must satisfy, so call
-sites that will eventually need vendor data can be written now against a
-stable interface.
+This module defines the bitemporal contract any future FUNDAMENTALS adapter
+(market cap, shares outstanding, segment revenue — point-in-time facts) must
+satisfy. Daily OHLCV price ingest does NOT go through this Protocol — it has
+its own dedicated, already-implemented path (`P22Repo.upsert_price_daily`/
+`upsert_corporate_action`, `ingest/price_ingest.py`, `ingest/fmp_backfill.py`)
+directly against `p22_price_daily`'s own `vendor` column, which was already
+designed to be multi-source (`'ibkr'|'fmp'|'yfinance'`).
 
-Per §2.0's source-capability matrix, this gap is narrower than it first
-looked: EDGAR (fundamentals, already integrated via EdgarDownloader) and IBKR
-(daily prices for currently-listed names, already integrated) cover most of
-what §2.4 originally asked for. What's actually missing is historical prices
-for *delisted* tickers, needed for `E[return | deal]` labeling (M6/M7) — see
-docs/Tasks.md for the recommended path (FMP Starter, ~$15/mo).
+Per §2.0's source-capability matrix, the fundamentals gap this Protocol
+exists for is narrower than it first looked: EDGAR (already integrated via
+EdgarDownloader) covers most of what §2.4 originally asked for on the
+fundamentals side. **Price data resolved differently and is DONE, not
+deferred** (2026-09-01): ongoing/current daily prices are covered by
+yfinance (`ingest/yfinance_client.py`, `jobs/run_price_ingest.py`, running
+daily in production) rather than IBKR — sidesteps IBKR's still-unverified
+raw-vs-adjusted question (`docs/Tasks.md` item 6) and needs no live
+TWS/Gateway session. Deep historical prices for delisted tickers (needed for
+`E[return | deal]` labeling, M6/M7) are FMP's role
+(`ingest/fmp_backfill.py`) — see `docs/Tasks.md` item 1.
 """
 
 from __future__ import annotations

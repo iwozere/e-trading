@@ -182,7 +182,9 @@ src/ml/pipeline/p22_biotech_ma/
 │   ├── patent_expiry_normalization.py  # M3: Orange Book patent.txt -> p22_patent_expiry (§2.3, §4.1)
 │   ├── fmp_client.py                # M3: FMP /stable client (historical price, name search) — live-verified endpoints
 │   ├── fmp_universe.py              # M3: known-ticker vs. needs-name-search universe split
-│   └── fmp_backfill.py              # M3: bulk historical-price backfill orchestration, resumable
+│   ├── fmp_backfill.py              # M3: bulk historical-price backfill orchestration, resumable
+│   ├── yfinance_client.py           # M3: narrow trailing-window daily bars — never wide/historical, see docstring
+│   └── price_ingest.py              # M3: yfinance bars -> p22_price_daily/p22_corporate_action
 ├── features/                         # M3: feature store (spec §4)
 │   ├── __init__.py
 │   ├── context.py                   # FeatureContext — the one lookahead-safe read path every feature uses
@@ -204,6 +206,7 @@ src/ml/pipeline/p22_biotech_ma/
 │   ├── run_orange_book_ingest.py
 │   ├── run_patent_expiry_normalization.py  # M3: landed Orange Book -> p22_patent_expiry
 │   ├── run_purple_book_ingest.py
+│   ├── run_price_ingest.py          # M3: DAILY (unlike fmp_backfill's one-time run) — yfinance current prices
 │   └── register_jobs.py             # idempotent job_schedules upserts
 ├── cli/                              # human-run interactive tools, NOT scheduler jobs (§3.4)
 │   ├── __init__.py
@@ -234,6 +237,8 @@ src/ml/pipeline/p22_biotech_ma/
 │   ├── test_fmp_client.py           # incl. 402/404/unexpected-shape cases
 │   ├── test_fmp_universe.py         # incl. dedup-by-CIK-keeping-latest-name
 │   ├── test_fmp_backfill.py         # incl. the live-caught multi-exact-match tie-break, resumability
+│   ├── test_yfinance_client.py      # incl. the narrow-trailing-window request assertion
+│   ├── test_price_ingest.py         # incl. forward/reverse split ratio handling
 │   ├── test_feature_context.py      # incl. get_trailing_average
 │   ├── test_feature_registry.py
 │   ├── test_block_c.py              # every feature's real-computation path AND null path (§8.1)
@@ -649,6 +654,29 @@ Per the user's request to work through `docs/Tasks.md` "Decisions needed" step b
 
 Only item 5's already-noted "financial-fact tag mapping" resolution (from the prior pass) and these
 outcomes needed no further discussion — every other item had a genuine user decision embedded in it.
+
+## 4.8 FMP quota exhaustion, and building the daily price job first (2026-09-01)
+
+Live-testing the FMP backfill CLI against the real account surfaced a genuine quota wall (`429
+Limit Reach`, no rate-limit headers, persisted through a 90s cooldown) — not the per-second pacing
+issue it first looked like. This, combined with the earlier per-symbol `402` discovery, means the
+account's real limits still need checking against the FMP dashboard directly before any bulk
+backfill runs (see item 1). No further FMP API calls were made once this was found.
+
+Separately, the user clarified the intended sequencing: build the **daily current-price job first**,
+independent of FMP entirely, then buy FMP Premium for a one-time historical backfill afterward. This
+was always the intended architecture (IBKR/yfinance for ongoing current prices, FMP only for the
+delisted-ticker historical gap — see `ingest/vendor_market_data.py`), just not yet built. Built and
+shipped the same day: `ingest/yfinance_client.py`, `ingest/price_ingest.py`,
+`jobs/run_price_ingest.py`, registered as a real daily job. yfinance was picked over the
+originally-planned IBKR specifically because it needs no live broker session and its raw-vs-adjusted
+behavior is checkable without one — and checking it live surfaced the same retroactive-split-
+adjustment trap suspected for IBKR (item 6), confirmed here rather than left theoretical, with a
+design (narrow trailing-window fetches only) that sidesteps it. Also found and fixed a real bug the
+same day: `upsert_acquirer_company` crashed on a real CIK collision (Bristol-Myers Squibb) the first
+time it ran against real curated CIKs — see `docs/Tasks.md`'s Implementation Status entry. The full
+job then ran successfully against the real, now-migrated-and-populated local DB: 860 companies, 4,003
+price rows, 6 corporate actions, 16 genuine failures (delisted tickers).
 
 ## 5. Open items carried into M2+/M3+
 

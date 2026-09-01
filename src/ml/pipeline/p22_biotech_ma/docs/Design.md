@@ -262,6 +262,22 @@ linkage decision, `docs/Tasks.md` "Decisions needed" item 8.
   `p22_therapeutic_area.yaml` as a classifier-fallback marker, not a 21st real disease area — so
   downstream code and reviewers can filter on it to find candidate misclassifications rather than
   silently trusting every asset's therapeutic area.
+- **Two independent, differently-scoped price sources, not one vendor doing both jobs** — FMP
+  (`ingest/fmp_backfill.py`, one-time, manually run during a paid month) for deep historical
+  backfill of delisted tickers; yfinance (`ingest/price_ingest.py`, `jobs/run_price_ingest.py`,
+  daily, free) for the ongoing current-price role spec §2.0.5 originally assigned to IBKR. Neither
+  was ever meant to depend on the other, and `p22_price_daily.vendor` was already designed
+  multi-source for exactly this. yfinance was picked over IBKR specifically because it needs no live
+  broker session and its raw-vs-adjusted behavior is checkable without one — which is how the same
+  retroactive-split-adjustment risk suspected for IBKR (`docs/Tasks.md` item 6) got confirmed for
+  yfinance too, live, rather than staying theoretical.
+- **yfinance is restricted to a narrow trailing window, never a historical range, as a hard design
+  rule, not a preference** — live-verified that its `Close` column is retroactively split-adjusted
+  across a stock's entire history even with `auto_adjust=False`. A bar fetched shortly after its own
+  trading day is genuinely raw (no future split exists yet to adjust it); the same client used to
+  backfill years of history would silently store already-adjusted values under a column named
+  `close_raw`. `P22Repo.upsert_price_daily`'s pre-existing never-rewrite behavior is a deliberate
+  second line of defense against this class of mistake, not just against duplicate writes.
 
 ## Integration Patterns
 - Job scripts follow the P20 contract exactly: `PROJECT_ROOT` on `sys.path`, `run_common.py`'s

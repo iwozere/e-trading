@@ -121,6 +121,14 @@ _JOB_SPECS: List[Dict[str, Any]] = [
         "script": "run_purple_book_ingest.py",
         "enabled": True,
     },
+    {
+        "name": "P22 Daily Price Ingest",
+        "cron": "0 22 * * 1-5",  # 22:00 UTC weekdays, after US market close
+        "script": "run_price_ingest.py",
+        "enabled": True,
+        # Hundreds of companies, one yfinance call each plus a considerate pacing delay per call.
+        "task_params": {"timeout_seconds": 3600},
+    },
 ]
 
 

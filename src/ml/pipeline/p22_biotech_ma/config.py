@@ -136,6 +136,19 @@ FMP_STABLE_URL = "https://financialmodelingprep.com/stable"
 FMP_RATE_LIMIT_RPS: int = 5
 
 # ---------------------------------------------------------------------------
+# yfinance — ongoing/daily current-price ingest (spec §2.0.7), 2026-09-01.
+# Free, no API key. Deliberately NOT used for historical backfill — see
+# ingest/yfinance_client.py's docstring for the live-verified retroactive
+# split-adjustment trap that disqualifies it from that role. FMP (above)
+# remains the historical-backfill source; yfinance covers the narrow,
+# ongoing "today's bar" role IBKR was originally slated for (spec §2.0.5),
+# sidestepping IBKR's own unverified raw-vs-adjusted question (docs/Tasks.md
+# item 6) and the need for a live TWS/Gateway connection.
+# ---------------------------------------------------------------------------
+YFINANCE_LOOKBACK_DAYS: int = 7  # narrow trailing window only — see ingest/yfinance_client.py
+YFINANCE_REQUEST_DELAY_SECONDS: float = 0.3  # no official yfinance rate limit; considerate pacing
+
+# ---------------------------------------------------------------------------
 # Logging / results directory
 # ---------------------------------------------------------------------------
 RESULTS_DIR = PROJECT_ROOT / "results" / "p22_biotech_ma"

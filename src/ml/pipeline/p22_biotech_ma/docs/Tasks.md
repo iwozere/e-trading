@@ -105,11 +105,13 @@ use in the code/config; this section exists so they're all in one place to walk 
    live-verified for only 1 of 3 filers checked (Sarepta) — Moderna/Alnylam report neither it nor
    spec's suggested alternative in the periods checked, and rather than fabricate a fallback tag,
    `None` is correct for a company with no live-verified match. See Implementation Status for detail.
-6. **IBKR split-adjustment behavior** (spec §2.0.7) — still not live-verified; confirmed 2026-08-31
-   this needs a real TWS/Gateway connection on the user's own machine, not something verifiable
-   remotely — user doesn't have it running right now. Genuinely blocked on the user's environment,
-   not on more investigation; verify when M6/M7 price-archive ingest is actually being built, closer
-   to when TWS/Gateway would need to be running anyway. See "Known Issues" below.
+6. ~~**IBKR split-adjustment behavior**~~ — **superseded 2026-09-01, not resolved.** Still not
+   live-verified (still needs a real TWS/Gateway connection this session never had), but IBKR is no
+   longer in the critical path for the ongoing/current-price role that motivated checking it: that
+   role is now served by yfinance instead (see the new "Daily current-price ingest" entry below),
+   which sidesteps this question entirely rather than answering it. IBKR remains a candidate for a
+   *different* future role (e.g. options IV / short interest, spec §2.0.5) where this question would
+   need revisiting on its own merits, not carried forward from this decision.
 7. ~~**CVR valuation policy**~~ — **done 2026-08-31**, at the user's request, ahead of its natural M6
    milestone. `config/pipeline/p22_cvr_policy.yaml` created with spec's own recommended v1 convention
    (value CVRs at zero, `upfront_per_share` as the return basis). Not wired to any code yet (M6
@@ -313,15 +315,46 @@ use in the code/config; this section exists so they're all in one place to walk 
       `p22_price_daily`/`p22_corporate_action` or implement `MarketDataProvider` — see item 1's "Built
       and ready" note for why both are correctly deferred past the download step.
 - [x] `ingest/acquirer_config.py` + `jobs/run_acquirer_load.py`, 2026-08-30, later same day — loads
-      `p22_acquirers.yaml` into `p22_company` (role `acquirer`, or `both` if the ticker already
-      matches a resolved DERA target row — `P22Repo.upsert_acquirer_company` merges by ticker rather
-      than duplicating an identity, since the config's CIKs are all `null`; DB-tested for both the
-      new-row and merge-into-existing-row cases). Deliberately loads only *identity* — `bloc`/
-      `entry_date`/`exit_date` are read as data but never written to any DB column (none exists;
-      they stay in the config for Block A to read directly once built). This was NOT gated on
-      "Decisions needed" item 3: whether the roster's dates/CIKs are accurate is a curation question,
-      but whether the ~21 already-named companies exist as `p22_company` rows is a separate,
-      mechanical one — see that module's docstring for the reasoning.
+      `p22_acquirers.yaml` into `p22_company` (role `acquirer`, or `both` if the company already
+      matches a resolved DERA target row). Deliberately loads only *identity* — `bloc`/`entry_date`/
+      `exit_date` are read as data but never written to any DB column (none exists; they stay in the
+      config for Block A to read directly once built). This was NOT gated on "Decisions needed" item
+      3: whether the roster's dates/CIKs are accurate is a curation question, but whether the ~21
+      already-named companies exist as `p22_company` rows is a separate, mechanical one — see that
+      module's docstring for the reasoning.
+      **Real bug found and fixed 2026-09-01**, the first time this ran against real data with real
+      acquirer CIKs (the earlier decisions-walkthrough pass): `upsert_acquirer_company` originally
+      looked up by `ticker` only, regardless of whether `cik` was given. That crashed with a real
+      `UniqueViolation` on Bristol-Myers Squibb — its already-resolved `p22_company` row (from DERA)
+      has CIK `0000014272`, but SEC's own current ticker snapshot maps that CIK to `CELG-RI` (a
+      leftover Celgene contingent-value-right security ticker from the BMY/Celgene merger), not
+      `BMY`. The ticker lookup found no match and tried to INSERT a duplicate with the same
+      (unique-constrained) CIK. Now checks `cik` first, and updates `ticker`/`name` on a CIK-matched
+      merge (the curated config is more authoritative than a stale snapshot ticker) — DB-tested for
+      this exact scenario. All 25 acquirers now load cleanly against the real, populated DB.
+- [x] **Daily current-price ingest — a NEW, third price source, separate from FMP**, 2026-09-01 —
+      `ingest/yfinance_client.py`, `ingest/price_ingest.py`, `jobs/run_price_ingest.py`, registered in
+      `register_jobs.py` (daily, weekdays, after US market close). At the user's explicit request
+      ("build daily job first, buy Premium after") to decouple the ongoing/current-price role from
+      the one-time FMP historical backfill entirely — confirms neither was ever meant to depend on
+      the other. Uses **yfinance** (free, no API key, already a repo dependency), not IBKR — spec
+      §2.0.5 originally assigned IBKR to this role, but IBKR needs a live TWS/Gateway session (not
+      available in any session so far) and has its own unverified raw-vs-adjusted question (item 6).
+      **Live-verified correctness trap, caught before it shipped**: yfinance's `Close`, even with
+      `auto_adjust=False` ("not adjusted"), is retroactively split-adjusted across a stock's ENTIRE
+      history — confirmed against NVDA's real 2024-06-10 10-for-1 split, where a wide-range fetch
+      shows `Close` running smoothly through the split date with no discontinuity, despite the real
+      pre-split price being ~10x higher. This is the exact risk class flagged for IBKR (item 6),
+      now *confirmed*, not just suspected, for yfinance too. The design deliberately sidesteps it:
+      this client is ONLY ever called with a narrow trailing window (`YFINANCE_LOOKBACK_DAYS`, config
+      default 7 days), never a historical backfill — a bar landed shortly after its own trading day
+      is genuinely raw, since no future split has happened yet to retroactively adjust it.
+      `P22Repo.upsert_price_daily`'s existing never-rewrite behavior is a second line of defense.
+      **Run successfully against the real, now-populated production DB, 2026-09-01**: 860 companies
+      attempted, 4,003 daily price rows written, 6 corporate actions detected (splits/dividends),
+      16 failed (genuinely delisted tickers, e.g. `$APTN`/`$CLYD` — "possibly delisted"). Notably
+      covers acquirers with no SEC CIK at all (`BAYRY`, `RHHBY`, `IPN.PA`) since yfinance only needs
+      a ticker, not a CIK — reaches further than FMP's CIK-oriented historical gap for this purpose.
 - [x] `ingest/patent_expiry_normalization.py` + `jobs/run_patent_expiry_normalization.py`, 2026-08-30,
       later same day — normalizes landed Orange Book `products.txt`+`patent.txt` into
       `p22_patent_expiry` (Block A input). Orange Book file format live-verified against the real,
@@ -451,7 +484,10 @@ use in the code/config; this section exists so they're all in one place to walk 
       402/404/unexpected-shape cases (`test_fmp_client.py`), the known-vs-unresolved-ticker universe
       split incl. dedup-by-CIK-keeping-latest-name (`test_fmp_universe.py`), backfill orchestration
       incl. the live-caught multi-exact-match tie-break and skip-already-landed resumability
-      (`test_fmp_backfill.py`) — 258 tests total in the non-DB suite as of 2026-08-31.
+      (`test_fmp_backfill.py`), yfinance daily-bar parsing incl. the narrow-window-request assertion
+      (`test_yfinance_client.py`), daily price/corporate-action normalization incl. forward/reverse
+      split ratio handling (`test_price_ingest.py`) — 270 tests total in the non-DB suite as of
+      2026-09-01.
 - [ ] Real-Postgres integration tests for `P22Repo.upsert_financial_fact_bitemporal` restatement
       behavior, the price-archive round trip (`upsert_price_daily` immutability,
       `get_adjusted_close`'s lookahead guard through the repo layer), `upsert_trial`'s
