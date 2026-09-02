@@ -427,6 +427,24 @@ use in the code/config; this section exists so they're all in one place to walk 
   own history-viewer UI). Same risk class as P20's pdufa.bio dependency: could change or vanish
   without notice, and there's no documented alternative for spec §2.2's "Critical" requirement.
   Monitor; if it breaks, there is currently no fallback source for this data.
+- ~~**P22 ClinicalTrials Ingest timed out in production (2026-09-02)**~~ — **fixed same day**: the
+  job's first full-universe run (1705 companies) hit its 7200s timeout having covered only
+  215 (`ls .../clinicaltrials_studies/2026-09-02 | grep -c manifest`). Root-caused from the real
+  prod log (`/opt/apps/e-trading/results/p22_biotech_ma/2026-09-02/pipeline.log`, mounted read-only
+  at `R:\` — no SSH needed): the undocumented `/api/int/studies/{id}/history` endpoint throttles far
+  harder than the public `/api/v2/studies` endpoint, and sharing one 5rps limiter between both let
+  history 429s (1600/8132 history requests, ~20%) burn ~5390s of the 7200s run in exponential-backoff
+  sleeps — not raw request volume (only 8686 total requests were issued the entire run). Fixed with
+  two changes: (1) `clinicaltrials_history_limiter` (2 rps, unverified starting guess — same
+  "no published limit" situation as below) now used only for the history endpoint, keeping the
+  public endpoint's 5 rps limiter unaffected by its 429s; (2) `run_clinicaltrials_ingest.py` now
+  skips the history re-fetch for any study whose `lastUpdatePostDate` (already present in the
+  sponsor-search response) hasn't changed since the previous landed partition
+  (`raw_zone.read_partition_before`, new) — both cuts total request volume from day 2 onward and is
+  more correct for a "what changed since yesterday" job. `timeout_seconds` widened to 21600 to cover
+  the one-time cold-start pass (no prior partition exists yet, so day 1 still fetches every study's
+  history); `max_instances=1` on the schedule means this can't overlap the next day's fire. Revisit
+  shrinking the timeout once a non-cold-start run's real duration is observed.
 - **CT.gov `fields` param requires fully-qualified paths**, not the bare names spec §2.2 lists —
   fixed in `config.CLINICALTRIALS_FIELDS`; see `docs/implementation-plan.md` §4.1.
 - **openFDA `sponsor_name` search is case-sensitive** — fixed by uppercasing the search term in

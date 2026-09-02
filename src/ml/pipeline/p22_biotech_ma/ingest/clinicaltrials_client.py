@@ -26,6 +26,16 @@ Two live-verified corrections vs. a literal reading of the spec (2026-08-30):
    risk class as P20's pdufa.bio dependency (see that pipeline's
    docs/Tasks.md); there is no officially documented alternative for this
    spec-required data.
+3. **The history endpoint throttles far harder than the public one**
+   (live-verified 2026-09-02, first full-universe production run): sharing
+   `clinicaltrials_limiter`'s 5 rps between both endpoints got ~20% of history
+   requests 429'd, and the resulting backoff sleeps consumed most of the run's
+   7200s timeout — only 215/1705 companies got processed. Fixed by giving the
+   history endpoint its own, more conservative `clinicaltrials_history_limiter`
+   (see rate_limits.py). `run_clinicaltrials_ingest.py` also now skips the
+   history re-fetch for any study whose `lastUpdatePostDate` hasn't changed
+   since the previous landed partition, which is both cheaper and more
+   correct for a "what changed since yesterday" daily job.
 
 This module owns request/parse/retry for clinicaltrials.gov only. It does not
 write to the raw zone or the DB — callers (job scripts) do that.
@@ -48,7 +58,7 @@ from src.ml.pipeline.p22_biotech_ma.config import (
     CLINICALTRIALS_HISTORY_BASE_URL,
 )
 from src.ml.pipeline.p22_biotech_ma.ingest.http_retry import get_with_retry
-from src.ml.pipeline.p22_biotech_ma.ingest.rate_limits import clinicaltrials_limiter
+from src.ml.pipeline.p22_biotech_ma.ingest.rate_limits import clinicaltrials_history_limiter, clinicaltrials_limiter
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -130,7 +140,7 @@ class ClinicalTrialsClient:
             history or the request failed.
         """
         url = f"{CLINICALTRIALS_HISTORY_BASE_URL}/{nct_id}/history"
-        resp = get_with_retry(self._client, url, rate_limiter=clinicaltrials_limiter)
+        resp = get_with_retry(self._client, url, rate_limiter=clinicaltrials_history_limiter)
         if resp is None or resp.status_code != 200:
             if resp is not None:
                 _logger.error(

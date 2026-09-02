@@ -79,7 +79,19 @@ _JOB_SPECS: List[Dict[str, Any]] = [
         "enabled": True,
         # Per-company pagination + per-NCT-ID version-history fetch across the
         # full universe — the most request-heavy M1 job by a wide margin.
-        "task_params": {"timeout_seconds": 7200},
+        # 2026-09-02: first full-universe run timed out at 7200s having covered
+        # only 215/1705 companies — root cause was the shared 5rps limiter
+        # letting CT.gov's internal history endpoint's 429s (~20% of those
+        # requests) burn ~75% of the run in backoff sleeps; fixed via a
+        # dedicated, more conservative limiter for that endpoint plus a
+        # skip-if-unchanged-since-last-run optimization (see
+        # clinicaltrials_client.py, run_clinicaltrials_ingest.py). Timeout
+        # widened to cover the one-time cold-start pass (no prior partition
+        # to diff against yet, so day 1 still fetches history for every
+        # study); max_instances=1 on this schedule means a long run cannot
+        # overlap the next day's fire. Revisit shrinking this once a normal
+        # (non-cold-start) run's duration is observed.
+        "task_params": {"timeout_seconds": 21600},
     },
     {
         "name": "P22 openFDA Ingest",

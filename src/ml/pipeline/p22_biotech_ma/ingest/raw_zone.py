@@ -194,6 +194,39 @@ def read_latest_partition(source: str, *, root: Path | None = None) -> list[Any]
     return payloads
 
 
+def read_partition_before(source: str, before_date: date, *, root: Path | None = None) -> list[Any]:
+    """
+    Read every payload landed under `source`'s most recent date partition
+    strictly earlier than `before_date`.
+
+    For a daily job comparing "what did we land last time" against "what did
+    we just fetch" while it is still mid-run — `read_latest_partition` would
+    incorrectly return the partition being written *this* run as soon as its
+    first file lands, since `as_of_date` is normally today. Callers doing that
+    comparison (e.g. `run_clinicaltrials_ingest.py` skipping a re-fetch for an
+    unchanged study) pass today's date as `before_date` to see only prior runs.
+
+    Returns:
+        List of payloads from that partition, possibly empty if none exists.
+    """
+    zone_root = root if root is not None else RAW_ZONE_ROOT
+    source_dir = zone_root / source
+    if not source_dir.is_dir():
+        return []
+    date_dirs = sorted(
+        (d for d in source_dir.iterdir() if d.is_dir() and d.name < before_date.isoformat()),
+        reverse=True,
+    )
+    if not date_dirs:
+        return []
+    latest_dir = date_dirs[0]
+    payloads = [read(f) for f in latest_dir.glob("*.json.gz")]
+    _logger.info(
+        "Loaded %d payloads from %s snapshot before %s (%s)", len(payloads), source, before_date.isoformat(), latest_dir.name
+    )
+    return payloads
+
+
 def read_latest_partition_with_manifest(source: str, *, root: Path | None = None) -> "list[tuple[Any, dict[str, Any]]]":
     """
     Like `read_latest_partition`, but pairs each payload with its full

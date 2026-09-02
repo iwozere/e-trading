@@ -87,6 +87,16 @@ CLINICALTRIALS_RATE_LIMIT_RPS: int = 5
 # endpoint under the documented /api/v2 surface serves this. See
 # clinicaltrials_client.py's module docstring and docs/Tasks.md.
 CLINICALTRIALS_HISTORY_BASE_URL = "https://clinicaltrials.gov/api/int/studies"
+# Separate, more conservative limiter for the history endpoint above — live
+# production data (2026-09-02 first full run) showed it throttles far harder
+# than the public /api/v2/studies endpoint: at the shared 5 rps limit, 1600 of
+# 6532+1600≈8132 history requests got 429'd (~20%), and the resulting
+# exponential-backoff sleeps (2/4/8s per retry) ate ~5390s of the 7200s
+# budget — the run only covered 215/1705 companies before its timeout fired.
+# 2 rps is an unverified starting guess, not a confirmed safe threshold (same
+# "no published limit, tune from observed 429 rate" situation as FMP/openFDA
+# elsewhere in this file) — see docs/Tasks.md.
+CLINICALTRIALS_HISTORY_RATE_LIMIT_RPS: int = 2
 
 # ---------------------------------------------------------------------------
 # openFDA (spec §2.3)

@@ -107,3 +107,33 @@ def test_has_any_landed_true_across_older_date_partition_not_just_latest(tmp_pat
     raw_zone.write(source="test_source", entity="MRNA", as_of_date=date(2024, 1, 1), payload={"x": 1}, root=tmp_path)
     raw_zone.write(source="test_source", entity="OTHER", as_of_date=date(2024, 6, 1), payload={"y": 2}, root=tmp_path)
     assert raw_zone.has_any_landed("test_source", "MRNA", root=tmp_path) is True
+
+
+def test_read_partition_before_skips_todays_in_progress_partition(tmp_path):
+    """A mid-run comparison (e.g. run_clinicaltrials_ingest.py's skip-unchanged check) must see
+    only the PRIOR run's partition, not today's — which may already have files landed by the time
+    the comparison runs, since the job writes as it goes rather than all at once at the end."""
+    raw_zone.write(source="test_source", entity="E1", as_of_date=date(2024, 3, 1), payload=["yesterday"], root=tmp_path)
+    raw_zone.write(source="test_source", entity="E2", as_of_date=date(2024, 3, 2), payload=["today-so-far"], root=tmp_path)
+
+    payloads = raw_zone.read_partition_before("test_source", date(2024, 3, 2), root=tmp_path)
+
+    assert payloads == [["yesterday"]]
+
+
+def test_read_partition_before_picks_most_recent_of_multiple_prior_partitions(tmp_path):
+    raw_zone.write(source="test_source", entity="E1", as_of_date=date(2024, 1, 1), payload=["oldest"], root=tmp_path)
+    raw_zone.write(source="test_source", entity="E1", as_of_date=date(2024, 2, 1), payload=["newer"], root=tmp_path)
+
+    payloads = raw_zone.read_partition_before("test_source", date(2024, 3, 1), root=tmp_path)
+
+    assert payloads == [["newer"]]
+
+
+def test_read_partition_before_missing_source_returns_empty(tmp_path):
+    assert raw_zone.read_partition_before("no_such_source", date(2024, 3, 1), root=tmp_path) == []
+
+
+def test_read_partition_before_no_prior_partition_returns_empty(tmp_path):
+    raw_zone.write(source="test_source", entity="E1", as_of_date=date(2024, 3, 1), payload=["only"], root=tmp_path)
+    assert raw_zone.read_partition_before("test_source", date(2024, 3, 1), root=tmp_path) == []
