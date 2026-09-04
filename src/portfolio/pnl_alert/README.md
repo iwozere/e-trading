@@ -1,9 +1,11 @@
 # Portfolio PnL Alert
 
 ## Overview
-Sends one combined Telegram + Email notification once per weekday listing every
-ticker whose current market price is at least +10% above the user's average buy
-price. Holdings come from IBKR alone: the daily Flex Query XML export,
+Sends one combined Telegram + Email notification once per weekday listing
+**every** currently held ticker, sorted by PnL% descending — positions at or
+above +10% above the user's average buy price are highlighted. Each held
+ticker also shows any insider (Form 4) buying/selling from the trailing 30
+days. Holdings come from IBKR alone: the daily Flex Query XML export,
 optionally topped up with same-day live broker positions.
 
 ## Features
@@ -15,7 +17,12 @@ optionally topped up with same-day live broker positions.
   LSE vs NYSE) using the Flex Query `listingExchange` column — see
   "IBKR symbol collisions" below
 - Fetches latest daily close via the shared `DataManager.get_ohlcv`
-- Sends a single digest message sorted by PnL% descending
+- Sends a single digest of every held position, sorted by PnL% descending,
+  with rows at/above `threshold_pct` highlighted
+- Attaches trailing 30-day insider (Form 4) activity — both buys and sells,
+  any insider role — under each held ticker that has any, sourced from
+  P18's shared EDGAR daily cache (no new network polling); 10b5-1 plan
+  trades are labeled, not filtered out
 - Runs on the existing APScheduler service - a single row in the
   `job_schedules` table is the only runtime wiring required
 - Also exposes a CLI (`python -m src.portfolio.pnl_alert`) for manual runs
@@ -47,6 +54,8 @@ python -m src.scheduler.cli reload
 ## Integration
 - `src.trading.broker.ibkr_broker` - live positions and average cost
 - `src.data.data_manager` - market price lookup
+- `src.data.downloader.edgar_downloader.EdgarDownloader` - Form 4 insider
+  activity for held tickers, read from P18's shared daily cache
 - `src.notification.service.client` - Telegram + Email delivery
 - `src.scheduler.scheduler_service` - APScheduler host (one dispatch branch
   added for `target == "portfolio.pnl_alert"`)

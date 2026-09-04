@@ -74,7 +74,7 @@ def test_download_index_changes(downloader):
         patch(
             "pandas.read_html",
             side_effect=[
-                [None, df_sp],  # First tables list for S&P 500
+                [df_sp],  # First tables list for S&P 500 (df_sp is tables_sp[0] - see wikipedia_downloader.py)
                 [None, None, None, None, None, None, df_nd],  # Tables list for Nasdaq-100 (Table 6)
             ],
         ),

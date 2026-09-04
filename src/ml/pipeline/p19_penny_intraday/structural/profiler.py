@@ -15,7 +15,7 @@ name, weekly cadence via the profile cache TTL) but real, unlike Form4/13D-G.
 
 import sys
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
@@ -290,8 +290,17 @@ class StructuralProfiler:
         window_start = time.monotonic()
         days_walked = 0
         days_stopped_early = 0
+        # A day's Form 4 filings aren't complete until that day has closed —
+        # fetching today's (still-open) date here would cache a partial
+        # same-day snapshot as if it were final (download_form4_filings never
+        # re-fetches once the file exists), poisoning every later reader —
+        # including P18's next-morning "yesterday" read — for the rest of
+        # that date's lifetime. Incident 2026-08-19: this loop's first
+        # iteration (d == as_of, P19's market-hours cron firing near the
+        # open) did exactly that every trading day for two weeks straight.
+        today_utc = datetime.now(timezone.utc).date()
         while d >= start:
-            if d.weekday() < 5:
+            if d.weekday() < 5 and d < today_utc:
                 if time.monotonic() - window_start > _WINDOW_WARMUP_BUDGET_SECONDS:
                     days_stopped_early = 1
                     _logger.warning(
@@ -343,8 +352,12 @@ class StructuralProfiler:
         window_start = time.monotonic()
         days_walked = 0
         days_stopped_early = 0
+        # Same same-day cache-poisoning hazard as _load_form4_window above —
+        # download_13dg_filings' quarterly form.idx source isn't complete for
+        # today's date either, and it caches whatever it gets as final.
+        today_utc = datetime.now(timezone.utc).date()
         while d >= start:
-            if d.weekday() < 5:
+            if d.weekday() < 5 and d < today_utc:
                 if time.monotonic() - window_start > _WINDOW_WARMUP_BUDGET_SECONDS:
                     days_stopped_early = 1
                     _logger.warning(

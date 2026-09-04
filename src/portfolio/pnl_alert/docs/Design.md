@@ -1,8 +1,10 @@
 # Design
 
 ## Purpose
-Give the user a daily digest of every holding currently above a configurable
-profit threshold (default +10%). Holdings come from IBKR alone: the daily
+Give the user a daily digest of the **entire** portfolio, sorted by PnL%
+descending, with holdings at or above a configurable profit threshold
+(default +10%) highlighted. Each held ticker also shows any insider (Form 4)
+activity from the trailing 30 days. Holdings come from IBKR alone: the daily
 Flex Query XML export, optionally topped up with same-day live positions.
 
 ## Architecture
@@ -18,11 +20,13 @@ APScheduler  ->  runner.run_once(cfg)
                      |       +--> ibkr_xml_loader (Flex Query XML export)
                      |       +--> IBKRBroker.get_positions / ib.positions()
                      |
-                     +--> price_fetcher  (DataManager.get_ohlcv, last close)
+                     +--> price_fetcher       (DataManager.get_ohlcv, last close)
                      |
-                     +--> pnl_evaluator  (pure function)
+                     +--> pnl_evaluator       (pure function)
                      |
-                     +--> notifier       (NotificationServiceClient)
+                     +--> insider_activity    (EdgarDownloader, held tickers only)
+                     |
+                     +--> notifier            (NotificationServiceClient)
 ```
 
 ### Component Design
@@ -40,10 +44,19 @@ APScheduler  ->  runner.run_once(cfg)
 - **price_fetcher.py** - wraps `DataManager.get_ohlcv`, returns
   `dict[str, float]` keyed by symbol, resilient to per-symbol failures.
 - **pnl_evaluator.py** - pure function:
-  `evaluate(holdings, prices, threshold) -> list[AlertRow]`. Sorts by
-  `pnl_pct` descending.
-- **notifier.py** - formats one plain-text body + one HTML body, dispatches
-  via `NotificationServiceClient.send_notification(...)`.
+  `evaluate(holdings, prices, threshold) -> list[AlertRow]`. Returns every
+  priced holding (not just threshold-qualifying ones) sorted by `pnl_pct`
+  descending; each row carries `flagged = pnl_pct >= threshold`.
+- **insider_activity.py** - `load_insider_activity(tickers, edgar, as_of,
+  lookback_days) -> dict[str, list[InsiderTransaction]]`. Reads the shared
+  EDGAR Form 4 daily cache P18 maintains (`edgar/13f/form4/{date}.csv.gz`),
+  filtered to the caller's held tickers only over a trailing 30-day window.
+  No new EDGAR network surface in steady state — same cache-reuse pattern as
+  P19's structural profiler. Never fetches *today*'s date (see "Never fetch
+  today's Form4 date" below).
+- **notifier.py** - formats one plain-text body + one HTML body (every row,
+  flagged ones highlighted, insider activity nested under its ticker),
+  dispatches via `NotificationServiceClient.send_notification(...)`.
 - **runner.py** - orchestrates the steps above; usable from the CLI, tests,
   and the scheduler.
 - **cli.py** / **__main__.py** - `python -m src.portfolio.pnl_alert` with
@@ -75,6 +88,46 @@ dispatch key is zero-migration and semantically correct.
 ### No dedup / state
 Per user's explicit choice: notify every day for every symbol currently above
 threshold. No "first-crossing" tracking.
+
+### Full digest, not a threshold-gated alert (2026-09-04)
+Originally the notification only fired, and only listed, holdings that
+crossed `threshold_pct`. Changed per user request to a full daily portfolio
+view: `pnl_evaluator.evaluate` now returns every priced holding, and
+`threshold_pct` only sets `AlertRow.flagged` for the notifier to highlight.
+This means the digest is sent every weekday the portfolio is non-empty and
+priced, even when nothing crosses the threshold — the "skip if 0 rows" early
+return in `runner.run_once` now only triggers when literally nothing got
+priced (a real data-availability failure), not "nothing qualified".
+
+### Insider activity scoped to held tickers, sourced from P18's shared cache
+Rather than a market-wide insider-trading scan, `insider_activity.py` only
+looks up the tickers already in the digest — this is portfolio context, not
+a discovery signal. It deliberately reuses P18's existing daily Form4 cache
+(`edgar/13f/form4/{date}.csv.gz`) instead of adding a second EDGAR polling
+job: the cache already exists, is already fresh (SEC requires Form 4 within
+2 business days of the trade), and reading it is a handful of local gzip
+reads once the window is warm.
+
+### Never fetch today's Form4 date (cache-poisoning hazard)
+A day's Form 4 filings aren't complete until the day has closed, and
+`EdgarDownloader.download_form4_filings` never re-fetches a date once cached
+— so fetching *today* would permanently cache a partial snapshot for every
+future reader of that date, not just this run. `insider_activity.py`'s
+window walker starts at `as_of - 1 day`, mirroring the fix applied to P19's
+`structural/profiler.py` (`_load_form4_window`/`_load_dg_window`) after a
+2026-08-19 incident where exactly this bug silently degraded the shared
+Form4 cache for two weeks (~40x fewer rows/day) before being caught while
+scoping this feature. See `docs/Tasks.md`'s Known Issues for the incident.
+
+### Both buys and sells, any insider role, 10b5-1 labeled not filtered
+Per user's explicit choice: show open-market buys and sells (and grants,
+exercises, etc. — every non-derivative transaction code), from officers,
+directors, and 10%-owners alike (`EdgarDownloader`'s Form 4 parser was
+widened to capture `is_director`/`is_officer`/`is_ten_percent_owner`/
+`officer_title`, additive to the existing schema). Rule 10b5-1 plan trades
+(pre-scheduled, non-discretionary) are shown but tagged "[10b5-1 plan]"
+rather than dropped — they're still informative context, just weaker signal
+than a same-day discretionary trade.
 
 ### IBKR connection is best-effort
 If the live IBKR broker is unreachable the pipeline proceeds with whatever the
@@ -132,3 +185,8 @@ resolution falls back to the bare symbol.
 - Per-symbol price failure: WARNING, symbol excluded, run continues.
 - All prices fail: ERROR, run emits a critical notification saying "price
   fetch failed" and exits non-zero.
+- Insider activity lookup failure: best-effort — a per-day Form4 cache-read
+  error is swallowed inside `insider_activity.py` (that ticker/day is simply
+  omitted, self-heals next run); anything unexpected escaping that is caught
+  in `runner.run_once` (`"insider_activity_failed"` added to
+  `RunSummary.errors`) and the PnL digest is still sent without it.

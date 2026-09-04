@@ -112,6 +112,11 @@ _FORM4_COLS = [
     "price_per_share",
     "total_value_usd",
     "filed_date",
+    "transaction_date",
+    "is_director",
+    "is_officer",
+    "is_ten_percent_owner",
+    "officer_title",
     "is_10b5_1_plan",
     "is_derivative",
 ]
@@ -748,7 +753,8 @@ class EdgarDownloader(BaseDataDownloader):
         Returns:
             DataFrame with columns: ticker, issuer_cik, insider_name, transaction_code,
             acquired_disposed_code, shares, price_per_share, total_value_usd, filed_date,
-            is_10b5_1_plan, is_derivative.
+            transaction_date, is_director, is_officer, is_ten_percent_owner,
+            officer_title, is_10b5_1_plan, is_derivative.
         """
         target_date = as_of_date or (datetime.now().date() - timedelta(days=1))
         date_str = str(target_date)
@@ -1738,6 +1744,11 @@ def _footnotes_mentioning_10b5_1(root: ET.Element) -> set:
     return ids
 
 
+def _safe_bool(value: str) -> bool:
+    """Parse a Form 4 XML boolean flag (``"1"``/``"0"``, occasionally ``"true"``/``"false"``)."""
+    return value.strip().lower() in {"1", "true"}
+
+
 def _parse_form4_xml(xml_content: str, filed_date: str) -> List[Dict[str, Any]]:
     """
     Parse a Form 4 XML document and return all non-derivative transaction rows.
@@ -1750,7 +1761,8 @@ def _parse_form4_xml(xml_content: str, filed_date: str) -> List[Dict[str, Any]]:
 
     Args:
         xml_content: Raw XML text of the Form 4 filing.
-        filed_date: Date string ``"YYYY-MM-DD"`` added to every row.
+        filed_date: Date string ``"YYYY-MM-DD"`` added to every row (when the
+            filing was received by SEC — up to 2 business days after the trade).
 
     Returns:
         List of row dicts (may be empty if no transactions found).
@@ -1771,6 +1783,14 @@ def _parse_form4_xml(xml_content: str, filed_date: str) -> List[Dict[str, Any]]:
     insider_name = _xml_text(root, ".//rptOwnerName")
     plan_footnote_ids = _footnotes_mentioning_10b5_1(root)
 
+    relationship = root.find(".//reportingOwnerRelationship")
+    is_director = _safe_bool(_xml_text(relationship, ".//isDirector")) if relationship is not None else False
+    is_officer = _safe_bool(_xml_text(relationship, ".//isOfficer")) if relationship is not None else False
+    is_ten_pct_owner = (
+        _safe_bool(_xml_text(relationship, ".//isTenPercentOwner")) if relationship is not None else False
+    )
+    officer_title = _xml_text(relationship, ".//officerTitle") if relationship is not None else ""
+
     for txn in root.findall(".//nonDerivativeTransaction"):
         code = _xml_text(txn, ".//transactionCode")
         if not code:
@@ -1785,6 +1805,12 @@ def _parse_form4_xml(xml_content: str, filed_date: str) -> List[Dict[str, Any]]:
         except ValueError:
             price = 0.0
 
+        # Per-transaction trade date, distinct from `filed_date` (the SEC receipt
+        # date). Falls back to filed_date on a malformed/missing element rather
+        # than leaving it blank — the two are never more than a couple of
+        # business days apart by law.
+        transaction_date = _xml_text(txn, ".//transactionDate/value") or filed_date
+
         txn_footnote_ids = {fn.get("id") for fn in txn.findall(".//footnoteId") if fn.get("id")}
 
         rows.append(
@@ -1798,6 +1824,11 @@ def _parse_form4_xml(xml_content: str, filed_date: str) -> List[Dict[str, Any]]:
                 "price_per_share": price,
                 "total_value_usd": shares * price,
                 "filed_date": filed_date,
+                "transaction_date": transaction_date,
+                "is_director": is_director,
+                "is_officer": is_officer,
+                "is_ten_percent_owner": is_ten_pct_owner,
+                "officer_title": officer_title,
                 "is_10b5_1_plan": bool(txn_footnote_ids & plan_footnote_ids),
                 "is_derivative": False,
             }

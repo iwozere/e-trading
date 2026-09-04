@@ -24,8 +24,9 @@ class PnLAlertConfig:
     Runtime configuration for the portfolio PnL alert pipeline.
 
     Attributes:
-        threshold_pct: Minimum PnL fraction to include a holding in the alert.
-            0.10 means +10%.
+        threshold_pct: Minimum PnL fraction for a holding to be flagged/
+            highlighted in the digest. Every priced holding is included
+            regardless — this does not filter rows. 0.10 means +10%.
         channels: Notification channels (subset of "telegram", "email").
         cron: Cron expression (UTC) for the daily scheduled run.
         ibkr_xml_path: Path (or glob pattern) to an IBKR Flex Query Open

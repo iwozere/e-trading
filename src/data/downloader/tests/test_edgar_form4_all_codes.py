@@ -19,7 +19,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.downloader.edgar_downloader import EdgarDownloader, _FORM4_COLS, _footnotes_mentioning_10b5_1, _parse_form4_xml
 
-_ISSUER_HEADER = """
+def _issuer_header(relationship: str = "") -> str:
+    return f"""
     <issuer>
         <issuerCik>0000886163</issuerCik>
         <issuerTradingSymbol>LGND</issuerTradingSymbol>
@@ -29,18 +30,28 @@ _ISSUER_HEADER = """
             <rptOwnerCik>0001649903</rptOwnerCik>
             <rptOwnerName>Korenberg Matthew E</rptOwnerName>
         </reportingOwnerId>
+        {relationship}
     </reportingOwner>
 """
 
 
-def _txn_xml(code: str, shares: str = "1000", price: str = "10.50", acq_disp: str = "A", footnote_id: str = "") -> str:
+def _txn_xml(
+    code: str,
+    shares: str = "1000",
+    price: str = "10.50",
+    acq_disp: str = "A",
+    footnote_id: str = "",
+    transaction_date: str = "",
+) -> str:
     footnote_ref = f'<footnoteId id="{footnote_id}"/>' if footnote_id else ""
+    date_elem = f"<transactionDate><value>{transaction_date}</value></transactionDate>" if transaction_date else ""
     return f"""
     <nonDerivativeTransaction>
         <transactionCoding>
             <transactionFormType>4</transactionFormType>
             <transactionCode>{code}</transactionCode>
         </transactionCoding>
+        {date_elem}
         <transactionAmounts>
             <transactionShares><value>{shares}</value></transactionShares>
             <transactionPricePerShare><value>{price}</value></transactionPricePerShare>
@@ -51,8 +62,24 @@ def _txn_xml(code: str, shares: str = "1000", price: str = "10.50", acq_disp: st
     """
 
 
-def _doc(*txns: str, footnotes: str = "") -> str:
-    return f"<ownershipDocument>{_ISSUER_HEADER}<nonDerivativeTable>{''.join(txns)}</nonDerivativeTable>{footnotes}</ownershipDocument>"
+def _relationship_xml(is_director: str = "0", is_officer: str = "0", is_ten_pct: str = "0", title: str = "") -> str:
+    title_elem = f"<officerTitle>{title}</officerTitle>" if title else ""
+    return f"""
+    <reportingOwnerRelationship>
+        <isDirector>{is_director}</isDirector>
+        <isOfficer>{is_officer}</isOfficer>
+        <isTenPercentOwner>{is_ten_pct}</isTenPercentOwner>
+        <isOther>0</isOther>
+        {title_elem}
+    </reportingOwnerRelationship>
+    """
+
+
+def _doc(*txns: str, footnotes: str = "", relationship: str = "") -> str:
+    return (
+        f"<ownershipDocument>{_issuer_header(relationship)}"
+        f"<nonDerivativeTable>{''.join(txns)}</nonDerivativeTable>{footnotes}</ownershipDocument>"
+    )
 
 
 def test_buy_code_p_is_returned():
@@ -103,6 +130,40 @@ def test_footnotes_mentioning_10b5_1_helper():
 
 def test_malformed_xml_returns_empty_list():
     assert _parse_form4_xml("<not><valid", filed_date="2026-08-18") == []
+
+
+def test_director_role_and_officer_title_are_parsed():
+    xml = _doc(
+        _txn_xml("S"),
+        relationship=_relationship_xml(is_director="1", is_officer="1", title="Chief Financial Officer"),
+    )
+    row = _parse_form4_xml(xml, filed_date="2026-08-18")[0]
+    assert row["is_director"] is True
+    assert row["is_officer"] is True
+    assert row["is_ten_percent_owner"] is False
+    assert row["officer_title"] == "Chief Financial Officer"
+
+
+def test_ten_percent_owner_with_no_relationship_element_defaults_false():
+    xml = _doc(_txn_xml("P"))
+    row = _parse_form4_xml(xml, filed_date="2026-08-18")[0]
+    assert row["is_director"] is False
+    assert row["is_officer"] is False
+    assert row["is_ten_percent_owner"] is False
+    assert row["officer_title"] == ""
+
+
+def test_transaction_date_captured_separately_from_filed_date():
+    xml = _doc(_txn_xml("S", transaction_date="2026-08-14"))
+    row = _parse_form4_xml(xml, filed_date="2026-08-18")[0]
+    assert row["transaction_date"] == "2026-08-14"
+    assert row["filed_date"] == "2026-08-18"
+
+
+def test_transaction_date_falls_back_to_filed_date_when_missing():
+    xml = _doc(_txn_xml("S"))
+    row = _parse_form4_xml(xml, filed_date="2026-08-18")[0]
+    assert row["transaction_date"] == "2026-08-18"
 
 
 def test_form4_cols_has_no_duplicates_and_matches_row_keys():

@@ -17,6 +17,7 @@ from src.notification.logger import setup_logger
 from src.portfolio.pnl_alert.config import PnLAlertConfig
 from src.portfolio.pnl_alert.flex_downloader import download_open_positions_xml
 from src.portfolio.pnl_alert.ibkr_xml_loader import load_ibkr_xml
+from src.portfolio.pnl_alert.insider_activity import InsiderTransaction, load_insider_activity
 from src.portfolio.pnl_alert.notifier import send_alert
 from src.portfolio.pnl_alert.pnl_evaluator import AlertRow, evaluate
 from src.portfolio.pnl_alert.position_aggregator import (
@@ -39,7 +40,8 @@ class RunSummary:
         ibkr_count: Number of raw IBKR positions used (after STK filter).
         holdings_count: Total merged holdings.
         priced_count: Holdings for which a current price was obtained.
-        alert_row_count: Rows above threshold (included in the notification).
+        digest_row_count: Rows included in the digest (every priced holding).
+        flagged_row_count: Of those, how many are at/above `threshold_pct`.
         notification_sent: Whether the notifier reported success.
         dry_run: True if delivery was skipped.
         errors: Non-fatal errors collected during the run.
@@ -49,7 +51,8 @@ class RunSummary:
     ibkr_count: int = 0
     holdings_count: int = 0
     priced_count: int = 0
-    alert_row_count: int = 0
+    digest_row_count: int = 0
+    flagged_row_count: int = 0
     notification_sent: bool = False
     dry_run: bool = False
     errors: List[str] = field(default_factory=list)
@@ -119,6 +122,7 @@ async def run_once(
     broker: Any | None = None,
     data_manager: Any | None = None,
     client: Any | None = None,
+    edgar: Any | None = None,
 ) -> RunSummary:
     """
     Execute one pipeline run.
@@ -130,6 +134,8 @@ async def run_once(
         broker: Optional pre-built `IBKRBroker` (mainly for tests).
         data_manager: Optional pre-built `DataManager` (mainly for tests).
         client: Optional pre-built `NotificationServiceClient` (for tests).
+        edgar: Optional pre-built `EdgarDownloader` for insider-activity
+            lookups (mainly for tests).
 
     Returns:
         `RunSummary` describing what happened.
@@ -199,11 +205,28 @@ async def run_once(
         return summary
 
     rows: List[AlertRow] = evaluate(holdings, prices, threshold)
-    summary.alert_row_count = len(rows)
+    summary.digest_row_count = len(rows)
+    summary.flagged_row_count = sum(1 for r in rows if r.flagged)
 
     if not rows:
-        _logger.info("No symbols above threshold; no notification sent")
+        _logger.info("No priced holdings; no notification sent")
         return summary
+
+    # Insider activity is best-effort: a lookup failure (e.g. a cold Form 4
+    # cache) must not prevent the PnL digest itself from going out.
+    insider_by_ticker: Dict[str, List[InsiderTransaction]] = {}
+    try:
+        # Synchronous (blocking file/network I/O); offload to a thread pool
+        # so the scheduler's event loop is not blocked (same as prices above).
+        insider_by_ticker = await asyncio.to_thread(
+            load_insider_activity,
+            [r.symbol for r in rows],
+            edgar,
+            ran_at.date(),
+        )
+    except Exception:
+        _logger.exception("Insider activity lookup failed; sending digest without it")
+        summary.errors.append("insider_activity_failed")
 
     sent = await send_alert(
         rows=rows,
@@ -213,6 +236,7 @@ async def run_once(
         client=client,
         dry_run=dry_run,
         as_of=ran_at,
+        insider_by_ticker=insider_by_ticker,
     )
     summary.notification_sent = sent
     return summary

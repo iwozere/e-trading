@@ -1,7 +1,8 @@
 # Portfolio PnL Alert - Pipeline configuration.
 
-# Notify when current price is at least this fraction above the average buy price.
-# 0.10 means +10%.
+# Every held position is always included in the daily digest. This only
+# controls which rows get highlighted as "flagged" (current price at least
+# this fraction above the average buy price). 0.10 means +10%.
 threshold_pct: 0.10
 
 # Channels to notify (any subset of: telegram, email).

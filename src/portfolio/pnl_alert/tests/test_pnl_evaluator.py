@@ -10,24 +10,37 @@ def _h(symbol: str, avg: float, qty: float = 1.0, source: str = "ibkr") -> Holdi
     return Holding(symbol=symbol, avg_price=avg, quantity=qty, source=source)
 
 
-def test_filters_below_threshold():
-    """Rows with pnl_pct below the threshold are excluded."""
+def test_all_priced_holdings_are_included_regardless_of_threshold():
+    """The digest is a full portfolio view — below-threshold rows are kept, not dropped."""
     holdings = [_h("AAA", 100.0), _h("BBB", 100.0)]
     prices = {"AAA": 109.0, "BBB": 115.0}
 
     rows = evaluate(holdings, prices, threshold_pct=0.10)
 
-    assert [r.symbol for r in rows] == ["BBB"]
+    assert [r.symbol for r in rows] == ["BBB", "AAA"]
 
 
-def test_exact_threshold_included():
-    """An exactly-at-threshold row is included (>= semantics)."""
+def test_flagged_marks_rows_at_or_above_threshold():
+    """`flagged` is True iff pnl_pct >= threshold_pct; below-threshold rows are flagged=False."""
+    holdings = [_h("AAA", 100.0), _h("BBB", 100.0)]
+    prices = {"AAA": 109.0, "BBB": 115.0}
+
+    rows = evaluate(holdings, prices, threshold_pct=0.10)
+    by_symbol = {r.symbol: r for r in rows}
+
+    assert by_symbol["AAA"].flagged is False
+    assert by_symbol["BBB"].flagged is True
+
+
+def test_exact_threshold_is_flagged():
+    """An exactly-at-threshold row is flagged (>= semantics)."""
     holdings = [_h("AAA", 100.0)]
     prices = {"AAA": 110.0}
 
     rows = evaluate(holdings, prices, threshold_pct=0.10)
 
     assert len(rows) == 1
+    assert rows[0].flagged is True
     assert rows[0].pnl_pct == pytest.approx(0.10)
     assert rows[0].pnl_abs == pytest.approx(10.0)
 

@@ -17,7 +17,7 @@ _logger = setup_logger(__name__)
 @dataclass(frozen=True)
 class AlertRow:
     """
-    One row in the alert digest.
+    One row in the PnL digest.
 
     Attributes:
         symbol: Ticker symbol.
@@ -27,6 +27,8 @@ class AlertRow:
         pnl_abs: Absolute PnL in USD = `(current - avg) * quantity`.
         pnl_pct: Fractional PnL = `(current - avg) / avg`. 0.10 means +10%.
         source: Always "ibkr" currently (see `position_aggregator.Holding`).
+        flagged: True if `pnl_pct >= threshold_pct` — the notifier highlights
+            these rows. Every priced holding is still included regardless.
     """
 
     symbol: str
@@ -36,6 +38,7 @@ class AlertRow:
     pnl_abs: float
     pnl_pct: float
     source: str
+    flagged: bool
 
 
 def evaluate(
@@ -44,17 +47,23 @@ def evaluate(
     threshold_pct: float,
 ) -> List[AlertRow]:
     """
-    Compute PnL per holding and return rows meeting the threshold.
+    Compute PnL for every priced holding, flagging the ones above threshold.
+
+    Every holding with a valid price is returned — the digest is a full
+    portfolio view, not just an alert on qualifying rows. `threshold_pct`
+    only controls which rows come back with `flagged=True` for the notifier
+    to highlight.
 
     Args:
         holdings: Merged holdings from the aggregator.
         prices: Mapping of `{symbol: current_price}`.
-        threshold_pct: Inclusive threshold. A row is kept iff
+        threshold_pct: Inclusive threshold. A row is flagged iff
             `pnl_pct >= threshold_pct`.
 
     Returns:
-        List of `AlertRow`, sorted by `pnl_pct` descending. Ties are broken by
-        `pnl_abs` descending, then by symbol ascending.
+        List of `AlertRow` for every priced holding, sorted by `pnl_pct`
+        descending. Ties are broken by `pnl_abs` descending, then by symbol
+        ascending.
     """
     if threshold_pct <= 0:
         raise ValueError(f"threshold_pct must be > 0, got {threshold_pct}")
@@ -79,9 +88,6 @@ def evaluate(
         pnl_pct = (price - holding.avg_price) / holding.avg_price
         pnl_abs = (price - holding.avg_price) * holding.quantity
 
-        if pnl_pct < threshold_pct:
-            continue
-
         rows.append(
             AlertRow(
                 symbol=holding.symbol,
@@ -91,6 +97,7 @@ def evaluate(
                 pnl_abs=pnl_abs,
                 pnl_pct=pnl_pct,
                 source=holding.source,
+                flagged=pnl_pct >= threshold_pct,
             )
         )
 
@@ -98,14 +105,15 @@ def evaluate(
 
     if missing_prices:
         _logger.warning(
-            "No current price for %d symbols (excluded from alert): %s",
+            "No current price for %d symbols (excluded from digest): %s",
             len(missing_prices),
             missing_prices,
         )
 
     _logger.info(
-        "Evaluated PnL: %d rows above %.2f%% threshold",
+        "Evaluated PnL: %d holdings priced, %d flagged >= %.2f%% threshold",
         len(rows),
+        sum(1 for r in rows if r.flagged),
         threshold_pct * 100,
     )
     return rows

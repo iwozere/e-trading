@@ -2,11 +2,11 @@
 
 Owner: portfolio monitoring
 Status: Implemented
-Last updated: 2026-08-13
+Last updated: 2026-09-04
 
 ## 1. Purpose
 
-Send the user a single daily notification that lists every ticker whose current price is at least **+10%** above the user's average buy price. Holdings come from a single source of truth: IBKR.
+Send the user a single daily notification listing **every currently held ticker**, sorted by PnL% descending, with positions at or above **+10%** above the user's average buy price highlighted. Each held ticker also carries any insider (Form 4) buying/selling from the trailing 30 days. Holdings come from a single source of truth: IBKR.
 
 1. The daily Flex Query "Open Positions" XML export (downloaded automatically by `flex_downloader.py` at the start of every run).
 2. Optionally, same-day live positions from the connected `IBKRBroker`, merged on top of the XML on matching symbol (live wins - it reflects same-day fills the XML export, generated at prior-day close, wouldn't yet have).
@@ -48,33 +48,46 @@ For each holding with a valid current price:
 
 - `pnl_abs = (current_price - avg_price) * quantity`
 - `pnl_pct = (current_price - avg_price) / avg_price`
-- Include in the alert iff `pnl_pct >= threshold_pct`.
-- Sort the included rows by `pnl_pct` descending. Ties broken by `pnl_abs` descending, then symbol alphabetically.
+- **Every** priced holding is included in the digest — `threshold_pct` no longer filters rows, it only sets `flagged = pnl_pct >= threshold_pct` for the notifier to highlight (changed 2026-09-04; previously only qualifying rows were included at all).
+- Sort all rows by `pnl_pct` descending. Ties broken by `pnl_abs` descending, then symbol alphabetically.
 
 ### 2.5 Notification
 
 - **One** combined message per run, sent to every channel in `channels`.
-- If zero symbols cross the threshold: send nothing, log an INFO line `"PnL alert: 0 symbols above threshold; no notification sent"`.
+- Sent whenever at least one holding was priced. If literally no holding could be priced (a data-availability failure, not "nothing qualified"), send nothing and log an INFO line.
 - Delivery uses `NotificationServiceClient` from [src/notification/service/client.py](../../../notification/service/client.py). Channels are configured via existing env vars (`TELEGRAM_BOT_TOKEN`, `SMTP_SERVER`, `SMTP_USER`, `SMTP_PASSWORD`, ...). No new env vars are introduced.
-- **Dedup behavior**: none. The user explicitly chose to be notified every day for every symbol currently above threshold.
+- **Dedup behavior**: none. The user explicitly chose to be notified every day for every symbol, not just ones above threshold.
 
 ### 2.6 Message format
 
-Telegram (plain text) and Email (HTML table with same column layout):
+Telegram (plain text) and Email (HTML table with same column layout). 🔺 marks rows at/above `threshold_pct`; every held position is listed regardless. A ticker's insider activity (if any in the trailing 30 days) is nested directly under its row:
 
 ```
-Portfolio PnL Alert - 2026-04-20
-3 positions above +10% threshold
+Portfolio PnL Digest - 2026-04-20
+3 position(s), 2 flagged >= +10.00% threshold
 
-1. NVDA   avg $120.00   now $156.40   PnL +$364.00  (+30.33%)
-2. AAPL   avg $150.00   now $180.15   PnL +$301.50  (+20.10%)
-3. MSFT   avg $310.00   now $352.70   PnL +$42.70   (+13.77%)
+🔺 1. NVDA   avg $120.00   now $156.40   PnL +$364.00  (+30.33%)
+      Insider activity (30d):
+      2026-04-15  Buy          Jensen Huang (Officer (CEO)) — 10,000 sh @ $145.20 = $1,452,000.00
+      2026-04-02  Sell         Colette Kress (Officer (CFO)) — 5,000 sh @ $150.10 = $750,500.00  [10b5-1 plan]
+🔺 2. AAPL   avg $150.00   now $180.15   PnL +$301.50  (+20.10%)
+   3. MSFT   avg $310.00   now $312.00   PnL +$2.00   (+0.65%)
 
 Sources: ibkr=3
 ```
 
 - Columns: rank, ticker, average buy price, current price, absolute PnL (USD), percent PnL.
 - Monetary formatting rounds to 2 decimals at the output boundary.
+
+### 2.8 Insider activity (Form 4)
+
+- For each ticker in the digest (i.e. currently held only — not a market-wide scan), the trailing 30 calendar days of Form 4 non-derivative transactions are pulled from the shared EDGAR daily cache P18's daily scan maintains (`edgar/13f/form4/{date}.csv.gz`, via `EdgarDownloader.download_form4_filings`). No new EDGAR polling job — a genuinely missing day self-heals via one live call, capped at a 60s budget for the whole window per run.
+- Both buys and sells (and other non-derivative codes — grants, exercises, etc.) are shown, from any insider role (officer, director, or 10%-owner) — not sells-only or directors-only.
+- Each transaction shows: trade date (`transactionDate`, not the later `filed_date`), a human label for the transaction code (Buy/Sell/Grant.../Acquired/Disposed), the insider's name and role, share count, price, and total value.
+- Rule 10b5-1 plan trades (pre-scheduled, non-discretionary — detected via footnote text referencing "10b5-1") are shown but tagged `[10b5-1 plan]`, not filtered out.
+- A ticker with no insider activity in the window gets no sub-section at all.
+- **Never fetches today's date** — a day's Form 4 filings aren't complete until the day has closed, and the shared cache never re-fetches a date once written, so fetching today would permanently poison that date's cache entry for every other reader (P18, P19, P20). See `Design.md`'s "Never fetch today's Form4 date" decision for the 2026-08-19 incident this guards against.
+- Best-effort: any failure in this lookup is caught in `runner.run_once` and logged to `RunSummary.errors` (`"insider_activity_failed"`) — the PnL digest itself still sends without the insider section.
 
 ### 2.7 Scheduling
 
@@ -111,6 +124,7 @@ src/portfolio/pnl_alert/
   position_aggregator.py    # raw IBKR positions -> list[Holding]
   price_fetcher.py          # DataManager-backed latest-close fetch
   pnl_evaluator.py          # pure function: evaluate(holdings, prices, threshold)
+  insider_activity.py       # trailing-30d Form4 activity for held tickers (EdgarDownloader)
   notifier.py               # format message + dispatch via NotificationServiceClient
   runner.py                 # async run_once(cfg) orchestrator
   cli.py                    # python -m src.portfolio.pnl_alert (--dry-run, --threshold, --config)
@@ -125,6 +139,8 @@ src/portfolio/pnl_alert/
     test_notifier_format.py
     test_ibkr_xml_loader.py
     test_flex_downloader.py
+    test_insider_activity.py
+    test_runner.py
 
 data/portfolio/pnl_alert/
   Open_Positions.xml        # refreshed daily by flex_downloader.py (writable path
@@ -142,9 +158,10 @@ flowchart LR
     XmlLoad --> Agg[position_aggregator]
     Live --> Agg
     Agg --> Px[price_fetcher latest 1d close]
-    Px --> Eval[pnl_evaluator filter gte 10pct sort desc]
-    Eval -->|rows gt 0| Notif[notifier]
+    Px --> Eval[pnl_evaluator all priced rows sort desc flag gte 10pct]
+    Eval -->|rows gt 0| Insider[insider_activity Form4 for held tickers]
     Eval -->|rows eq 0| Skip[log no-op]
+    Insider --> Notif[notifier]
     Notif --> TG[Telegram]
     Notif --> EM[Email]
 ```
@@ -174,12 +191,14 @@ Any of the above can be layered on later without changing the core schema or sch
 
 - None at the time of writing.
 - **Resolved 2026-08-13**: the YAML watchlist (manually tracked / outside-IBKR positions) was removed. At the time, all but 4 of its 12 entries duplicated positions already present in the IBKR XML; the remaining 4 (`IOVA`, `RPD`, `RGNX`, `MELI`) were confirmed closed/stale and intentionally dropped rather than migrated. If a genuine outside-IBKR holding needs tracking again in the future, reintroducing a second source is straightforward (`Holding.source` already supports more than `"ibkr"`), but it is not implemented today.
+- **Resolved 2026-09-04**: two open design questions from the original spec — (a) show only qualifying rows vs. the full portfolio, and (b) whether insider activity is worth showing given the 2-business-day Form 4 filing lag — were resolved per user discussion: full digest with threshold-based highlighting (not filtering), and yes, insider activity is fresh enough for a once-daily digest (the 2-day lag is not "stale"); the real risk found during scoping was a cache-poisoning bug in P19's window loader, fixed the same day (see `Design.md`).
 
 ## 9. References
 
 - Plan file: `.cursor/plans/portfolio_pnl_alert_*.plan.md`
 - IBKR broker: [src/trading/broker/ibkr_broker.py](../../../trading/broker/ibkr_broker.py)
 - Data manager: [src/data/data_manager.py](../../../data/data_manager.py)
+- EDGAR downloader: [src/data/downloader/edgar_downloader.py](../../../data/downloader/edgar_downloader.py)
 - Notification client: [src/notification/service/client.py](../../../notification/service/client.py)
 - Notification config (env mapping): [src/notification/service/config.py](../../../notification/service/config.py)
 - Scheduler service: [src/scheduler/scheduler_service.py](../../../scheduler/scheduler_service.py)

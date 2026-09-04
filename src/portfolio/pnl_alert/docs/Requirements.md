@@ -14,6 +14,11 @@ Already satisfied by the root `requirements.txt`:
 ## External Module Dependencies
 - `src.trading.broker.ibkr_broker` - live positions + average cost
 - `src.data.data_manager` - batched OHLCV / latest close
+- `src.data.downloader.edgar_downloader.EdgarDownloader` - Form 4 insider
+  transactions for held tickers, read from the shared daily cache P18
+  maintains (`edgar/13f/form4/{date}.csv.gz`). No new EDGAR network surface
+  in steady state; a genuinely missing day self-heals via one live call, same
+  pattern as P19's structural profiler.
 - `src.notification.service.client` - notification dispatch
 - `src.notification.logger` - logger factory
 - `src.scheduler.scheduler_service` - job dispatcher (one branch added for
@@ -53,3 +58,7 @@ Already satisfied by the root `requirements.txt`:
 - Each IBKR round-trip and price fetch must have reasonable timeouts so a
   single slow provider cannot stall the whole run.
 - Per-symbol price failures must not fail the entire run.
+- Insider-activity lookup is bounded: `insider_activity.py` caps its own
+  live-fetch time at 60s (`_WINDOW_WARMUP_BUDGET_SECONDS`) so a cold/gappy
+  Form4 cache degrades to "fewer historical days this run" rather than
+  stalling the whole digest — mirroring P19's structural profiler.

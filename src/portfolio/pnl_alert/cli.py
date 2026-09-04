@@ -27,7 +27,8 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse CLI arguments."""
     parser = argparse.ArgumentParser(
         prog="python -m src.portfolio.pnl_alert",
-        description="Daily portfolio PnL alert: IBKR positions digest above a threshold.",
+        description="Daily portfolio PnL digest: every IBKR position, sorted by PnL%, with insider "
+        "activity per ticker; rows above threshold are highlighted.",
     )
     parser.add_argument(
         "--config",
