@@ -21,6 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.database_service import DatabaseService
+from src.data.pipeline.dependency_status import deferred_result, require_dependencies_or_defer
 from src.ml.pipeline.p22_biotech_ma.ingest.entity_resolution import (
     build_universe,
     fetch_ticker_exchange_map,
@@ -36,6 +37,10 @@ _logger = setup_logger(__name__)
 
 def run() -> dict:
     setup_run_logging()
+
+    ready, statuses = require_dependencies_or_defer("P22 Entity Resolution")
+    if not ready:
+        return deferred_result(statuses)
 
     dera_rows = latest_universe_rows()
     if not dera_rows:

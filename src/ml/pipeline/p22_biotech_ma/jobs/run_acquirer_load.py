@@ -21,6 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.database_service import DatabaseService
+from src.data.pipeline.dependency_status import deferred_result, require_dependencies_or_defer
 from src.ml.pipeline.p22_biotech_ma.ingest.acquirer_config import load_acquirers, upsert_acquirer_roster
 from src.ml.pipeline.p22_biotech_ma.jobs.run_common import setup_run_logging
 from src.notification.logger import setup_logger
@@ -30,6 +31,10 @@ _logger = setup_logger(__name__)
 
 def run() -> dict:
     setup_run_logging()
+
+    ready, statuses = require_dependencies_or_defer("P22 Acquirer Roster Load")
+    if not ready:
+        return deferred_result(statuses)
 
     acquirers = load_acquirers()
     if not acquirers:

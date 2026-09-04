@@ -24,6 +24,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.database_service import DatabaseService
+from src.data.pipeline.dependency_status import deferred_result, require_dependencies_or_defer
 from src.ml.pipeline.p22_biotech_ma.ingest import raw_zone
 from src.ml.pipeline.p22_biotech_ma.ingest.trial_normalization import extract_trial_records, write_trial_records
 from src.ml.pipeline.p22_biotech_ma.jobs.run_common import setup_run_logging
@@ -34,6 +35,10 @@ _logger = setup_logger(__name__)
 
 def run() -> dict:
     setup_run_logging()
+
+    ready, statuses = require_dependencies_or_defer("P22 Trial Normalization")
+    if not ready:
+        return deferred_result(statuses)
 
     studies_by_entity = raw_zone.read_latest_partition_with_manifest("clinicaltrials_studies")
     if not studies_by_entity:

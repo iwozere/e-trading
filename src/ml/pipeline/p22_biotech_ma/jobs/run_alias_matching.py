@@ -21,6 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.database_service import DatabaseService
+from src.data.pipeline.dependency_status import deferred_result, require_dependencies_or_defer
 from src.ml.pipeline.p22_biotech_ma.ingest import raw_zone
 from src.ml.pipeline.p22_biotech_ma.ingest.alias_matching import (
     extract_ctgov_sponsor_names,
@@ -36,6 +37,15 @@ _logger = setup_logger(__name__)
 
 def run() -> dict:
     setup_run_logging()
+
+    # Cron fires this 60 minutes after ClinicalTrials Ingest *starts* — not a
+    # guarantee it finished. That gap has already failed once in production
+    # (ClinicalTrials Ingest timed out at 7200s having covered only 215/1705
+    # companies; see specs/p22_specs.py) — check both ingests actually
+    # completed today before reading their raw-zone output.
+    ready, statuses = require_dependencies_or_defer("P22 Alias Matching")
+    if not ready:
+        return deferred_result(statuses)
 
     db_service = DatabaseService()
     with db_service.uow() as uow:

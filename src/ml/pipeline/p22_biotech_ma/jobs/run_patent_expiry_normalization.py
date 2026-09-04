@@ -21,6 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.database_service import DatabaseService
+from src.data.pipeline.dependency_status import deferred_result, require_dependencies_or_defer
 from src.ml.pipeline.p22_biotech_ma.ingest import raw_zone
 from src.ml.pipeline.p22_biotech_ma.ingest.patent_expiry_normalization import (
     extract_patent_expiry_records,
@@ -34,6 +35,10 @@ _logger = setup_logger(__name__)
 
 def run() -> dict:
     setup_run_logging()
+
+    ready, statuses = require_dependencies_or_defer("P22 Patent Expiry Normalization")
+    if not ready:
+        return deferred_result(statuses)
 
     payloads_by_entity = raw_zone.read_latest_partition_with_manifest("orange_book")
     products_rows = next((p for p, m in payloads_by_entity if m.get("entity") == "products.txt"), None)

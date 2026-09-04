@@ -7,6 +7,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.data.pipeline.dependency_status import deferred_result, require_dependencies_or_defer
 from src.ml.pipeline.p20_kestrel.sentiment.gdelt_processor import run
 from src.notification.logger import setup_logger
 
@@ -19,8 +20,12 @@ from src.ml.pipeline.p20_kestrel.jobs.run_common import setup_run_logging
 def main() -> None:
     """Process today's GDELT GKG and print scheduler result."""
     setup_run_logging()
-    result = run()
-    _logger.info("GDELT process complete: %s", result)
+    ready, statuses = require_dependencies_or_defer("P20 GDELT Process")
+    if ready:
+        result = run()
+        _logger.info("GDELT process complete: %s", result)
+    else:
+        result = deferred_result(statuses)
     print(f"__SCHEDULER_RESULT__:{json.dumps(result, default=str)}")
 
 
