@@ -109,10 +109,19 @@ removal SQL was written, since there's nothing for it to target.
       — out of scope for this pass (see chat: user confirmed P20/P22-only
       scope for now). P18 was the pipeline that prompted this whole
       dependency-ordering feature; it's the natural next candidate.
-- [ ] Once the 5 rows above are resolved and `apply()` has been run for real:
-      delete the 3 superseded `jobs/register_jobs.py` modules (P20/P21/P22)
-      and archive (not delete) the 11 `bin/scheduler/insert_*.sql` files
-      under `bin/scheduler/archive/`.
+- [x] `apply()` run for real against **production** `job_schedules` on the Pi
+      (2026-09-05): `--dry-run` and the real run both reported
+      `72 unchanged, 0 inserts, 0 updates` — confirms every row already
+      matched the registry exactly, including the 4 rows hand-reconciled
+      2026-09-04. The 3 superseded `jobs/register_jobs.py` modules
+      (P20/P21/P22) are deleted; all 12 `bin/scheduler/insert_*.sql` files
+      (11 pipeline files + the original core `insert_schedules.sql` — one
+      more than this doc originally counted) are archived under
+      `bin/scheduler/archive/`, not deleted. Runbooks that pointed at the old
+      files (`p20_kestrel/README.md` + `docs/manual_run.txt`,
+      `p21_momentum/README.md`, `p22_biotech_ma/README.md`,
+      `p18_institutional_flow_tracker/README.md`, `bin/scheduler/README.md`)
+      were updated to point at `src.data.pipeline.register_jobs` instead.
 - [ ] Update P22's internal imports to `src.data.pipeline.raw_zone` directly
       and retire the shim, once there's a reason to touch those files anyway.
 - [ ] Consider whether `apply()` should refuse to touch a row whose live

@@ -2,7 +2,7 @@
 
   ---
   Phase 0 — One-time prerequisites (if not done yet)
-  python src/ml/pipeline/p20_kestrel/jobs/register_jobs.py   # register scheduler jobs
+  python -m src.data.pipeline.register_jobs --category p20   # register scheduler jobs
 
   ---
   Phase 1 — Weekly maintenance (run first to populate universe + aliases)

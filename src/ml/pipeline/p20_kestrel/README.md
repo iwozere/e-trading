@@ -61,7 +61,7 @@ One-time setup (run in order):
 python src/data/db/migrations/002_kestrel_schema.py
 
 # 2. Insert scheduler jobs (idempotent — safe to re-run)
-psql -d $DB_NAME < bin/scheduler/insert_p20_schedules.sql
+python -m src.data.pipeline.register_jobs --category p20
 
 # 3. Seed universe (first run — downloads Nasdaq screener via P15 weekly first)
 python src/ml/pipeline/p20_kestrel/jobs/run_weekly_maintenance.py
@@ -170,9 +170,11 @@ p20_kestrel/
 │   ├── data_health.py     # 07:00 freshness guard
 │   └── weekly_report.py   # Sunday 18:00 performance report
 └── jobs/
-    ├── register_jobs.py   # One-time job schedule registration (21 jobs)
     └── run_*.py           # Scheduler entry points (21 scheduled + 1 manual backfill)
 ```
+
+Job schedule registration lives in `src/data/pipeline/` now (see below), not in `jobs/` —
+`register_jobs.py` here has been superseded and removed.
 
 ## Integration
 
@@ -182,6 +184,8 @@ p20_kestrel/
 - `src.data.fundamentals` — get_fundamentals_unified()
 - `src.data.edgar` — EDGAR Form 4, 8-K, 10-K/Q, 13D/G
 - P15 GDELT GKG files at `R:/data-cache/gdelt/gkg/`
+- `src.data.pipeline` — `job_schedules` registration (see `specs/p20_specs.py`), superseding this
+  module's own `jobs/register_jobs.py`
 
 ## Related Documentation
 

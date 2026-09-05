@@ -25,7 +25,8 @@ studies = client.fetch_studies_for_sponsor("Example Therapeutics Inc")
 ```
 
 Jobs are run as standalone scripts (see `jobs/`) and registered with the scheduler via
-`jobs/register_jobs.py`, following the same pattern as `p20_kestrel`.
+`src.data.pipeline` (`specs/p22_specs.py`), which supersedes this module's own
+`jobs/register_jobs.py`.
 
 ## Integration
 This module integrates with:

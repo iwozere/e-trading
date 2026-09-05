@@ -13,15 +13,19 @@ The Scheduler Service runs scheduled jobs for:
 
 ### 1. Insert Schedules into Database
 
-First, populate the database with the 4 scheduled jobs:
+All scheduled jobs (including the 4 below) are now registered from the
+`src/data/pipeline/` plugin registry, not this directory's SQL files:
 
 ```bash
-# PostgreSQL
-psql -d your_database_name < bin/scheduler/insert_schedules.sql
+# Review the diff against the live DB first
+python -m src.data.pipeline.register_jobs --dry-run
 
-# SQLite
-sqlite3 your_database.db < bin/scheduler/insert_schedules.sql
+# Apply
+python -m src.data.pipeline.register_jobs
 ```
+
+`insert_schedules.sql` is kept only as an archived historical reference under
+`bin/scheduler/archive/` — do not run it against a live database.
 
 ### 2. Start the Scheduler
 
@@ -62,7 +66,7 @@ bin\scheduler\stop.bat
 ## Files
 
 ### Configuration
-- `insert_schedules.sql` - SQL script to create 4 scheduled jobs
+- `archive/insert_schedules.sql` - archived; superseded by `src/data/pipeline/register_jobs.py`
 
 ### Linux/Mac Scripts
 - `start.sh` - Start scheduler service

@@ -106,9 +106,11 @@ that the filing window has closed).
 
 During filing windows the *daily* scan can also approach its 3600s timeout
 because it downloads each new filer's infotable. See
-`bin/scheduler/insert_p18_schedules.sql` for how to seasonally raise
+`src/data/pipeline/specs/p18_specs.py` for how to seasonally raise
 `timeout_seconds` for the daily scan (this is the incremental job and is fine to
-run through the scheduler — only the full rebuild must not be).
+run through the scheduler — only the full rebuild must not be). The old
+`bin/scheduler/insert_p18_schedules.sql` this used to point to is archived
+under `bin/scheduler/archive/` — no longer the live source.
 
 ## Cache Layout
 

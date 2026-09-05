@@ -50,7 +50,8 @@ This module integrates with:
 - `src.data.downloader` — all price/fundamentals fetching goes through `YahooDataDownloader`, never raw `yfinance`
 - `src.util.tickers_list` — S&P 500 constituents + GICS sector (`get_sp500_constituents_with_sector`)
 - `src.notification` — logger convention and ABORT-alert delivery (`NotificationServiceClient`)
-- The project scheduler (`job_schedules` table) — see `jobs/register_jobs.py`
+- The project scheduler (`job_schedules` table) — registered via `src.data.pipeline`
+  (`specs/p21_specs.py`), superseding this module's own `jobs/register_jobs.py`
 
 ## Configuration
 
