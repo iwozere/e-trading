@@ -57,6 +57,12 @@ test_cache/
 !config/data/
 !src/data/
 !src/data/db/
+# Same story for a test package literally named "db/" (real-Postgres
+# integration tests, opt-in via ETRADING_TEST_DB_URL — not a data directory)
+# — discovered 2026-09-05 never having been tracked at all because of the
+# blanket db/ rule above, despite docs/Tasks.md documenting it as a real,
+# written deliverable.
+!src/ml/pipeline/p22_biotech_ma/tests/db/
 # Source packages that happen to be named "data/" — these are code, not data,
 # and must be tracked (otherwise CI checks out a tree missing these modules).
 !src/vectorbt/data/

@@ -286,13 +286,22 @@ class P22Repo:
         Every fact for (company_id, metric) known as of `as_of_date` — i.e.
         `known_from <= as_of_date`. Backtests must never see a fact whose
         `known_from` is after the as-of date (spec §3.1).
+
+        The upper bound is built with an explicit `tzinfo=timezone.utc` —
+        `known_from` is `TIMESTAMPTZ` and every write site stamps it
+        timezone-aware UTC (`datetime.now(timezone.utc)` or
+        `datetime.combine(..., tzinfo=timezone.utc)`). A naive bound here
+        would be interpreted in the DB session's own timezone rather than
+        UTC, silently shifting this lookahead guard by hours if that session
+        timezone is ever not UTC — exactly the class of bug this guard exists
+        to prevent (spec §3.1, §8.3).
         """
         rows = self.session.execute(
             select(P22FinancialFact)
             .where(
                 P22FinancialFact.company_id == company_id,
                 P22FinancialFact.metric == metric,
-                P22FinancialFact.known_from <= datetime.combine(as_of_date, datetime.max.time()),
+                P22FinancialFact.known_from <= datetime.combine(as_of_date, datetime.max.time(), tzinfo=timezone.utc),
             )
             .order_by(P22FinancialFact.known_from.desc())
         ).scalars().all()

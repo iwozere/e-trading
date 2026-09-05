@@ -410,9 +410,49 @@ use in the code/config; this section exists so they're all in one place to walk 
 - [ ] **M10 — API + alerts:** FastAPI read endpoints; idempotent change alerts.
 
 ## Technical Debt
-- None yet — M1 is a fresh build.
+- **Fetch-failure logging (spec §7.2) is only wired into SEC EDGAR ingest and daily price ingest**,
+  fixed 2026-09-05 alongside the bugs below. `P22Repo.log_fetch_failure` existed since M1 but was
+  never called anywhere — every other client's failures (CT.gov, openFDA, Orange Book, Purple Book,
+  SEC DERA universe) only reach the log file, not `p22_fetch_failure`, and those jobs don't open a DB
+  session at all today. Extending them the same way needs each client's return contract to
+  distinguish "legitimately empty" from "request failed after retries" (they currently both return
+  `[]`/`None` indistinguishably) — a real but separate refactor, not done speculatively here.
 
 ## Known Issues / Open Decisions
+- ~~**Naive `as_of` upper bound in `get_financial_facts_as_of`**~~ — **fixed 2026-09-05**:
+  `datetime.combine(as_of_date, datetime.max.time())` had no `tzinfo`, while `known_from`
+  (`TIMESTAMPTZ`) is always written UTC-aware. A naive bound would be interpreted in the DB session's
+  own timezone rather than UTC — silently shifting the single most safety-critical lookahead guard in
+  the system (spec §3.1, §8.3) by hours if that session timezone is ever not UTC. Fixed by adding
+  `tzinfo=timezone.utc` explicitly (matching the existing correct pattern in
+  `src/data/pipeline/dependency_status.py`); regression test sets the DB session's own timezone away
+  from UTC to prove the bound doesn't ride along with it
+  (`tests/db/test_repo_p22_bitemporal.py::test_lookahead_filter_uses_utc_not_db_session_timezone`).
+- ~~**`p22_fetch_failure` was dead code**~~ — **partially fixed 2026-09-05**: `P22Repo.log_fetch_failure`
+  is now called from `ingest/sec_raw_ingest.py` (per-CIK submissions/company-facts failures) and
+  `jobs/run_price_ingest.py` (per-ticker: no bars returned, or a write failure). `run_sec_ingest.py`
+  now opens a `DatabaseService().uow()` for this (it previously ran DB-free). See Technical Debt above
+  for what's still not wired.
+- ~~**`run_price_ingest.py` held one uow open across the whole daily loop with no write-failure
+  isolation**~~ — **fixed 2026-09-05**: a DB write failure for one ticker (distinct from a fetch
+  failure, which `fetch_recent_daily_bars` already handles internally) used to leave the session's
+  transaction aborted for the rest of the loop, and would have rolled back every already-written
+  ticker from earlier in the run when the outer `uow()` rolled back on exit — the exact "one bad
+  write nukes the whole run" failure mode Design.md's error-handling contract exists to prevent. Now
+  each ticker's DB write runs inside its own `uow.s.begin_nested()` SAVEPOINT, so one failure rolls
+  back only that ticker and is logged via `log_fetch_failure`, not the whole day's run.
+- ~~**Review queue had no dedup — grew unbounded with duplicate `entity_match` items**~~ — **fixed
+  2026-09-05**: `run_alias_matching.py` runs daily and re-extracts the FULL current CT.gov/openFDA
+  snapshot every time, and `alias_matching.resolve_aliases` had no check against already-pending
+  review items or even against repeats within a single run (the same sponsor string routinely appears
+  across dozens of trials for one company). Fixed with two changes: (1) candidates are now deduped by
+  name before matching (keeping the earliest `known_from`); (2) `resolve_aliases` takes an
+  `already_queued` set of `(candidate_name, matched_company_id, source)` triples — built by
+  `run_alias_matching.py` from `get_pending_review_items(item_type="entity_match")` before matching —
+  and skips re-queuing a fuzzy match already sitting there pending (counted under the new
+  `fuzzy_already_queued`, not silently dropped). Deliberately scoped to *pending* items only —
+  suppressing a previously *rejected* candidate forever is a judgment call, not a mechanical dedup,
+  and was left alone.
 - **Purple Book has no stable "latest" URL** — discovered live 2026-08-30 while building the
   client: FDA publishes one dated CSV per month
   (`.../PurpleBook/{year}/purplebook-search-{Month}-data-download.csv`), each a full ~2,270-row

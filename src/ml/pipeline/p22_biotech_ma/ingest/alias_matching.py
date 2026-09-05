@@ -40,7 +40,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 from rapidfuzz import fuzz
 
@@ -100,6 +100,8 @@ def resolve_aliases(
     known_companies: Dict[int, str],
     repo: Any,
     source: str,
+    *,
+    already_queued: Optional[FrozenSet[Tuple[str, int, str]]] = None,
 ) -> Dict[str, int]:
     """
     Run `match_alias` over every candidate name and write the outcome:
@@ -107,6 +109,12 @@ def resolve_aliases(
       - fuzzy -> review queue (`item_type='entity_match'`), not written to
         `p22_company_alias` until a human confirms (spec §3.3)
       - none -> logged only
+
+    Candidates are deduped by name before matching (keeping the earliest
+    `known_from`) — the same sponsor/applicant string routinely appears
+    across dozens of trials/applications for one company, and matching (and,
+    for the fuzzy path, review-queuing) it once per occurrence would write
+    that many near-identical rows for a single run, not just waste work.
 
     Args:
         candidates: `(candidate_name, known_from)` pairs — external
@@ -123,13 +131,33 @@ def resolve_aliases(
         known_companies: `company_id -> name`, the resolved roster to match against.
         repo: A `P22Repo`-shaped object (duck-typed for test doubles).
         source: Tag recorded on the alias/review item (e.g. `'clinicaltrials'`, `'openfda'`).
+        already_queued: `(candidate_name, matched_company_id, source)` triples
+            that already have a PENDING `fuzzy_alias_candidate` review item
+            (typically built by the caller from `get_pending_review_items`
+            before calling this). A fuzzy match landing on one of these is
+            counted (`fuzzy_already_queued`) but not re-queued. This job runs
+            daily and re-extracts the full current snapshot every time, so
+            without this, a sponsor string that keeps failing to resolve
+            would get a brand-new review-queue row every single business day
+            forever, burying genuinely new candidates under an
+            ever-growing pile of repeats of ones a human just hasn't reviewed
+            yet. Deliberately scoped to *pending* items only — a previously
+            rejected candidate is not suppressed, since whether "already
+            rejected" should also mean "never ask again" is a judgment call,
+            not a mechanical dedup, and it's left to the review queue itself.
 
     Returns:
-        Counters: `deterministic`, `fuzzy_flagged`, `unresolved`.
+        Counters: `deterministic`, `fuzzy_flagged`, `fuzzy_already_queued`, `unresolved`.
     """
-    counts = {"deterministic": 0, "fuzzy_flagged": 0, "unresolved": 0}
+    already_queued = already_queued or frozenset()
+    counts = {"deterministic": 0, "fuzzy_flagged": 0, "fuzzy_already_queued": 0, "unresolved": 0}
 
+    earliest_known_from: Dict[str, datetime] = {}
     for candidate_name, known_from in candidates:
+        if candidate_name not in earliest_known_from or known_from < earliest_known_from[candidate_name]:
+            earliest_known_from[candidate_name] = known_from
+
+    for candidate_name, known_from in earliest_known_from.items():
         result = match_alias(candidate_name, known_companies)
 
         if result.match_type == "deterministic" and result.company_id is not None:
@@ -142,6 +170,9 @@ def resolve_aliases(
             )
             counts["deterministic"] += 1
         elif result.match_type == "fuzzy" and result.company_id is not None:
+            if (candidate_name, result.company_id, source) in already_queued:
+                counts["fuzzy_already_queued"] += 1
+                continue
             repo.add_review_item(
                 item_type="entity_match",
                 payload={

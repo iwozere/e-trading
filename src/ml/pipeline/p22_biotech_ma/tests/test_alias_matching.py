@@ -83,6 +83,59 @@ def test_resolve_aliases_logs_unresolved_without_any_write():
     assert counts["unresolved"] == 1
 
 
+def test_resolve_aliases_dedupes_repeated_candidate_name_within_one_run():
+    """The same sponsor string appearing across many trials/applications must be
+    matched (and, for a fuzzy match, review-queued) once per run, not once per
+    occurrence."""
+    repo = MagicMock()
+    candidates = [("Acme Therapuetics Inc", _KNOWN_FROM)] * 5  # same typo'd name, 5 "trials"
+
+    counts = resolve_aliases(candidates, _KNOWN, repo, source="clinicaltrials")
+
+    repo.add_review_item.assert_called_once()
+    assert counts["fuzzy_flagged"] == 1
+
+
+def test_resolve_aliases_keeps_earliest_known_from_when_deduping():
+    repo = MagicMock()
+    earlier = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    later = datetime(2024, 6, 1, tzinfo=timezone.utc)
+    candidates = [("Acme Therapeutics Inc", later), ("Acme Therapeutics Inc", earlier)]
+
+    resolve_aliases(candidates, _KNOWN, repo, source="clinicaltrials")
+
+    assert repo.add_company_alias.call_args.kwargs["known_from"] == earlier
+
+
+def test_resolve_aliases_skips_fuzzy_candidate_already_pending_in_review_queue():
+    """This job re-extracts the full daily snapshot every run — a fuzzy candidate that
+    already has a pending review item must not get a second, duplicate one."""
+    repo = MagicMock()
+    already_queued = frozenset({("Acme Therapuetics Inc", 1, "clinicaltrials")})
+
+    counts = resolve_aliases(
+        [("Acme Therapuetics Inc", _KNOWN_FROM)], _KNOWN, repo, source="clinicaltrials", already_queued=already_queued
+    )
+
+    repo.add_review_item.assert_not_called()
+    assert counts["fuzzy_flagged"] == 0
+    assert counts["fuzzy_already_queued"] == 1
+
+
+def test_resolve_aliases_already_queued_is_scoped_by_source():
+    """The same candidate/company pair pending under a different source must not suppress
+    queuing for this source — `already_queued` triples are (candidate_name, company_id, source)."""
+    repo = MagicMock()
+    already_queued = frozenset({("Acme Therapuetics Inc", 1, "openfda")})
+
+    counts = resolve_aliases(
+        [("Acme Therapuetics Inc", _KNOWN_FROM)], _KNOWN, repo, source="clinicaltrials", already_queued=already_queued
+    )
+
+    repo.add_review_item.assert_called_once()
+    assert counts["fuzzy_flagged"] == 1
+
+
 def test_extract_ctgov_sponsor_names_pulls_lead_sponsor_name():
     studies = [
         {

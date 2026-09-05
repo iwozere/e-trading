@@ -13,7 +13,7 @@ from __future__ import annotations
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -26,7 +26,11 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
-def land_submissions_and_facts(ciks: List[str], downloader: EdgarDownloader | None = None) -> Dict[str, Dict[str, bool]]:
+def land_submissions_and_facts(
+    ciks: List[str],
+    downloader: EdgarDownloader | None = None,
+    repo: Optional[Any] = None,
+) -> Dict[str, Dict[str, bool]]:
     """
     Fetch submissions history and XBRL company facts for each CIK and land
     both in the raw zone.
@@ -34,6 +38,11 @@ def land_submissions_and_facts(ciks: List[str], downloader: EdgarDownloader | No
     Args:
         ciks: CIKs to fetch, zero-padded or not (EdgarDownloader normalizes).
         downloader: Optional shared EdgarDownloader instance (tests inject a mock).
+        repo: Optional `P22Repo`-shaped object. When given, each fetch that
+            raises is also recorded via `repo.log_fetch_failure` (spec §7.2:
+            "every failed fetch, after retries, is logged to
+            p22_fetch_failure") — omit it (as tests do) to skip the DB write
+            and rely on the logger call alone.
 
     Returns:
         Per-CIK dict of {"submissions": bool, "company_facts": bool} indicating
@@ -52,16 +61,20 @@ def land_submissions_and_facts(ciks: List[str], downloader: EdgarDownloader | No
             if submissions:
                 raw_zone.write(source="sec_submissions", entity=cik, as_of_date=today, payload=submissions)
                 outcome["submissions"] = True
-        except Exception:
+        except Exception as exc:
             _logger.exception("Failed to land SEC submissions for CIK %s", cik)
+            if repo is not None:
+                repo.log_fetch_failure(source="sec_submissions", entity=cik, error_message=str(exc))
 
         try:
             facts = dl.load_company_facts(cik)
             if facts:
                 raw_zone.write(source="sec_company_facts", entity=cik, as_of_date=today, payload=facts)
                 outcome["company_facts"] = True
-        except Exception:
+        except Exception as exc:
             _logger.exception("Failed to land SEC company facts for CIK %s", cik)
+            if repo is not None:
+                repo.log_fetch_failure(source="sec_company_facts", entity=cik, error_message=str(exc))
 
         outcomes[cik] = outcome
 

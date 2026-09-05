@@ -48,13 +48,41 @@ def run() -> dict:
 
         for i, company in enumerate(companies, 1):
             companies_attempted += 1
-            bars = fetch_recent_daily_bars(company["ticker"])
+            ticker = company["ticker"]
+
+            bars = fetch_recent_daily_bars(ticker)
             if not bars:
-                failed.append(company["ticker"])
+                # `fetch_recent_daily_bars` never raises (module docstring) — an
+                # empty result covers both "genuinely no trading days in the
+                # window" and "the fetch itself failed after retries" (already
+                # logged there). Either way, record it (spec §7.2) so a
+                # delisted/failing ticker is queryable, not just grep-able from
+                # a log file.
+                failed.append(ticker)
+                uow.p22.log_fetch_failure(
+                    source=_RAW_SOURCE, entity=ticker, error_message="yfinance returned no bars for the lookback window"
+                )
                 continue
 
-            raw_zone.write(source=_RAW_SOURCE, entity=company["ticker"], as_of_date=date.today(), payload=bars)
-            result = write_daily_bars(company["company_id"], bars, uow.p22)
+            try:
+                raw_zone.write(source=_RAW_SOURCE, entity=ticker, as_of_date=date.today(), payload=bars)
+                # A SAVEPOINT, not the bare uow.p22 calls directly: without it, a
+                # write failure for ONE ticker (e.g. an unexpected constraint hit)
+                # would leave the whole session's transaction aborted, and every
+                # already-fetched company earlier in this loop would be lost when
+                # the outer `with db_service.uow()` rolls back on the way out —
+                # exactly the "one bad write nukes the whole run" failure mode
+                # Design.md's error-handling contract exists to prevent. Rolling
+                # back only this ticker's savepoint keeps the rest of the day's
+                # writes intact and the session usable for the next ticker.
+                with uow.s.begin_nested():
+                    result = write_daily_bars(company["company_id"], bars, uow.p22)
+            except Exception as exc:
+                _logger.exception("Failed to persist daily bars for %s", ticker)
+                failed.append(ticker)
+                uow.p22.log_fetch_failure(source=_RAW_SOURCE, entity=ticker, error_message=str(exc))
+                continue
+
             prices_written += result["prices_written"]
             actions_written += result["actions_written"]
 

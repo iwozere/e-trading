@@ -54,6 +54,18 @@ def run() -> dict:
             _logger.warning("No resolved companies in p22_company — run run_entity_resolution.py first")
             return {"clinicaltrials": {}, "openfda": {}}
 
+        # This job runs daily and re-extracts the FULL current CT.gov/openFDA
+        # snapshot every time, not just what changed — so a still-unresolved
+        # fuzzy candidate must be checked against what's already sitting in
+        # the queue, or it gets a brand-new review item every single run
+        # (see alias_matching.resolve_aliases's `already_queued` docstring).
+        already_pending = uow.p22.get_pending_review_items(item_type="entity_match")
+        already_queued = frozenset(
+            (item["payload"]["candidate_name"], item["payload"]["matched_company_id"], item["payload"]["source"])
+            for item in already_pending
+            if item["payload"].get("reason") == "fuzzy_alias_candidate"
+        )
+
         ctgov_candidates: list[tuple[str, datetime]] = []
         for studies, manifest in raw_zone.read_latest_partition_with_manifest("clinicaltrials_studies"):
             if isinstance(studies, list):
@@ -66,8 +78,12 @@ def run() -> dict:
                 known_from = datetime.fromisoformat(manifest["known_from"])
                 openfda_candidates.extend((name, known_from) for name in extract_openfda_sponsor_names(applications))
 
-        ctgov_stats = resolve_aliases(ctgov_candidates, known_companies, uow.p22, source="clinicaltrials")
-        openfda_stats = resolve_aliases(openfda_candidates, known_companies, uow.p22, source="openfda")
+        ctgov_stats = resolve_aliases(
+            ctgov_candidates, known_companies, uow.p22, source="clinicaltrials", already_queued=already_queued
+        )
+        openfda_stats = resolve_aliases(
+            openfda_candidates, known_companies, uow.p22, source="openfda", already_queued=already_queued
+        )
         pending = uow.p22.get_pending_review_items()
 
     # Spec §3.4: "Queue depth and median age by item_type are reported in every run."

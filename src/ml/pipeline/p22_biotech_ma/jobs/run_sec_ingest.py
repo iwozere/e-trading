@@ -16,6 +16,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.data.db.services.database_service import DatabaseService
 from src.ml.pipeline.p22_biotech_ma.ingest.sec_raw_ingest import land_submissions_and_facts
 from src.ml.pipeline.p22_biotech_ma.ingest.universe_snapshot import latest_universe_rows
 from src.ml.pipeline.p22_biotech_ma.jobs.run_common import setup_run_logging
@@ -32,7 +33,12 @@ def run() -> dict:
         _logger.warning("No universe CIKs available — run run_sec_universe_ingest.py first")
         return {"ciks_attempted": 0, "ciks_landed": 0}
 
-    outcomes = land_submissions_and_facts(ciks)
+    # A repo is passed so a per-CIK fetch failure lands in p22_fetch_failure
+    # (spec §7.2), not just the log file — this job holds no other DB state,
+    # so the whole run still succeeds/commits even if every fetch fails.
+    db_service = DatabaseService()
+    with db_service.uow() as uow:
+        outcomes = land_submissions_and_facts(ciks, repo=uow.p22)
     landed = sum(1 for o in outcomes.values() if o["submissions"] or o["company_facts"])
     summary = {"ciks_attempted": len(ciks), "ciks_landed": landed}
     _logger.info("SEC ingest complete: %s", summary)
