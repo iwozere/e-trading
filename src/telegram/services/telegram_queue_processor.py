@@ -28,7 +28,8 @@ from src.data.db.services.users_service import users_service
 from src.notification.logger import setup_logger
 from src.notification.service.message_queue_client import get_message_queue_client
 
-_logger = setup_logger(__name__)
+# No module-level _logger here -- every log call in this file goes through
+# self._logger (setup_logger(f"{__name__}.TelegramQueueProcessor")) instead.
 
 
 class TelegramQueueProcessor:
@@ -93,20 +94,23 @@ class TelegramQueueProcessor:
 
         while self._running:
             try:
-                # Get pending Telegram messages
-                messages = self._message_queue_client.get_pending_messages_for_channels(
+                # Claim pending Telegram deliveries (per-channel row, not the whole message --
+                # see MessageQueueClient.claim_pending_deliveries)
+                deliveries = self._message_queue_client.claim_pending_deliveries(
                     channels=["telegram"],
-                    limit=10,  # Process up to 10 messages per poll
+                    limit=10,  # Process up to 10 deliveries per poll
                 )
 
-                if messages:
-                    self._logger.info("Processing %s pending Telegram messages", len(messages))
+                if deliveries:
+                    self._logger.info("Processing %s pending Telegram deliveries", len(deliveries))
 
-                    for message in messages:
+                    for delivery in deliveries:
                         try:
-                            await self._process_message(message)
+                            await self._process_message(delivery)
                         except Exception:
-                            self._logger.exception("Failed to process message %s:", message.get("id"))
+                            self._logger.exception(
+                                "Failed to process delivery %s:", delivery.get("delivery_status_id")
+                            )
 
                 # Successful poll — reset error counter and use normal interval
                 self._consecutive_errors = 0
@@ -133,27 +137,25 @@ class TelegramQueueProcessor:
 
     async def _process_message(self, message: Dict[str, Any]):
         """
-        Process a single message from the queue.
+        Process a single claimed Telegram delivery from the queue.
 
         Args:
-            message: Message dictionary from database
+            message: Claimed-delivery dict from MessageQueueClient.claim_pending_deliveries
         """
-        message_id = message["id"]
-        self._logger.info("Processing message %s", message_id)
-
-        # Mark as processing
-        self._message_queue_client.mark_message_processing(message_id)
+        delivery_status_id = message["delivery_status_id"]
+        message_id = message["message_id"]
+        self._logger.info("Processing delivery %s (message %s)", delivery_status_id, message_id)
 
         try:
             # Extract telegram-specific data
             telegram_chat_id = self._extract_telegram_chat_id(message)
             if not telegram_chat_id:
                 error_msg = "Missing telegram_chat_id in message metadata"
-                self._logger.error("Message %s: %s", message_id, error_msg)
-                self._message_queue_client.mark_message_failed(
-                    message_id,
+                self._logger.error("Delivery %s (message %s): %s", delivery_status_id, message_id, error_msg)
+                self._message_queue_client.record_delivery_failure(
+                    delivery_status_id,
                     error_msg,
-                    increment_retry=False,  # Don't retry if chat_id is missing
+                    permanent=True,  # Don't retry if chat_id is missing
                 )
                 return
 
@@ -181,20 +183,20 @@ class TelegramQueueProcessor:
                 )
 
             # Mark as delivered
-            self._message_queue_client.mark_message_delivered(message_id)
-            self._logger.info("Successfully delivered message %s to Telegram", message_id)
+            self._message_queue_client.record_delivery_success(delivery_status_id)
+            self._logger.info("Successfully delivered message %s (delivery %s) to Telegram", message_id, delivery_status_id)
 
         except (TelegramAPIError, TelegramBadRequest) as e:
             # Telegram API error
             error_msg = f"Telegram API error: {str(e)}"
-            self._logger.error("Message %s: %s", message_id, error_msg)
-            self._message_queue_client.mark_message_failed(message_id, error_msg, increment_retry=True)
+            self._logger.error("Delivery %s (message %s): %s", delivery_status_id, message_id, error_msg)
+            self._message_queue_client.record_delivery_failure(delivery_status_id, error_msg)
 
         except Exception as e:
             # Other errors
             error_msg = f"Unexpected error: {str(e)}"
-            self._logger.exception("Message %s: %s", message_id, error_msg)
-            self._message_queue_client.mark_message_failed(message_id, error_msg, increment_retry=True)
+            self._logger.exception("Delivery %s (message %s): %s", delivery_status_id, message_id, error_msg)
+            self._message_queue_client.record_delivery_failure(delivery_status_id, error_msg)
 
     def _extract_telegram_chat_id(self, message: Dict[str, Any]) -> int | None:
         """

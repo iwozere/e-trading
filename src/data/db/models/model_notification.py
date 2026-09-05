@@ -7,7 +7,6 @@ Includes Message, DeliveryStatus, ChannelHealth, RateLimit, and ChannelConfig mo
 
 from __future__ import annotations
 
-import datetime
 from datetime import datetime as dt
 from enum import StrEnum
 from typing import Any, Dict, List
@@ -132,6 +131,11 @@ class MessageDeliveryStatus(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     external_id: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now())
+    # Bumped on every status change (including the raw-SQL claim UPDATE in
+    # MessageRepository.claim_pending_deliveries). Lets a stale SENT row --
+    # claimed by a consumer that then crashed before writing back
+    # DELIVERED/FAILED -- be detected and reclaimed.
+    updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
     # Relationships
     message = relationship("Message", back_populates="delivery_statuses")

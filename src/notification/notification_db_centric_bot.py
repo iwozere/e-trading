@@ -91,47 +91,61 @@ class MessagePoller:
 
     async def _poll_pending_messages(self):
         """
-        Poll database for pending messages with distributed locking.
+        Poll database for pending per-channel deliveries this instance owns.
+
+        Claims msg_delivery_status rows for the processor's enabled channels
+        (e.g. ["email"]) rather than whole msg_messages rows, so a message
+        requesting channels this instance doesn't own (e.g. "telegram") is
+        left for the service that does own them instead of being fully
+        claimed here and failing on the channels it can't deliver
+        (monitoring.txt, 2026-09-02 "Channel instance not available: telegram").
 
         Returns:
-            List of messages claimed for processing
+            List of claimed-delivery dicts (see MessageRepository.claim_pending_deliveries)
         """
         try:
             db_service = get_database_service()
 
-            with db_service.uow() as uow:
-                # Get enabled channels from the processor
-                enabled_channels = None
-                if self.processor and hasattr(self.processor, "_channel_instances"):
-                    enabled_channels = list(self.processor._channel_instances.keys())
+            # Get enabled channels from the processor
+            enabled_channels = []
+            if self.processor and hasattr(self.processor, "_channel_instances"):
+                enabled_channels = list(self.processor._channel_instances.keys())
 
+            if not enabled_channels:
+                return []
+
+            with db_service.uow() as uow:
                 # Use repository method for atomic locking (this is acceptable at this level)
-                messages = uow.notifications.messages.get_pending_messages_with_lock(
-                    limit=10, lock_instance_id=self.instance_id, channels=enabled_channels
-                )
+                claimed = uow.notifications.claim_pending_deliveries(channels=enabled_channels, limit=10)
 
                 # No manual commit needed - UoW auto-commits on successful exit
-                return messages
+                return claimed
 
         except Exception:
             self._logger.exception("Error polling pending messages:")
             return []
 
-    async def _process_messages(self, messages):
+    async def _process_messages(self, claimed_deliveries):
         """
-        Process messages through the message processor.
+        Process claimed per-channel deliveries through the message processor.
 
         Args:
-            messages: List of messages to process
+            claimed_deliveries: List of claimed-delivery dicts from _poll_pending_messages
         """
         try:
-            # Process each message using the database-centric method
-            for message in messages:
-                if self.processor is not None and hasattr(self.processor, "process_database_message"):
-                    result = await self.processor.process_database_message(message)
-                    self._logger.debug("Processed message %s: success=%s", message.id, result.success)
+            # Process each claimed delivery using the per-channel database-centric method
+            for claimed in claimed_deliveries:
+                if self.processor is not None and hasattr(self.processor, "process_claimed_delivery"):
+                    result = await self.processor.process_claimed_delivery(claimed)
+                    self._logger.debug(
+                        "Processed delivery %s (message %s, channel %s): success=%s",
+                        claimed["delivery_status_id"],
+                        claimed["message_id"],
+                        claimed["channel"],
+                        result.success,
+                    )
                 else:
-                    self._logger.error("Message processor does not support database messages")
+                    self._logger.error("Message processor does not support claimed deliveries")
 
         except Exception:
             self._logger.exception("Error processing messages:")
@@ -387,7 +401,7 @@ def setup_signal_handlers(stop_event: asyncio.Event):
     main() coroutine can reach its finally block and run shutdown().
     """
 
-    def signal_handler(signum, frame):
+    def signal_handler(signum, _frame):
         _logger.info("Received signal %s, initiating shutdown...", signum)
         stop_event.set()
 

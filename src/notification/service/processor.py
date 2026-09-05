@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional, Set
 
 from src.data.db.models.model_notification import Message, MessageStatus
-from src.notification.channels.base import MessageContent, channel_registry
+from src.notification.channels.base import DeliveryStatus, MessageContent, channel_registry
 from src.notification.logger import setup_logger
 from src.notification.service.config import config
 from src.notification.service.fallback_manager import FallbackManager
@@ -848,6 +848,133 @@ class MessageProcessor:
                 processing_time_ms=processing_time_ms,
             )
 
+    async def process_claimed_delivery(self, claimed: Dict[str, Any]) -> ProcessingResult:
+        """
+        Process a single per-channel delivery claimed via
+        ``MessageRepository.claim_pending_deliveries``.
+
+        Unlike ``process_database_message`` (which attempts every channel in a
+        message's ``channels`` array, regardless of whether this instance owns
+        them), this only ever attempts the one channel the row was claimed
+        for. notification-bot.service and the Telegram bot's queue consumer
+        each poll for their own channel(s) independently now, so a message
+        requesting ``["telegram", "email"]`` is delivered by both instead of
+        being fully claimed by whichever service's overlap match on the whole
+        message fires first -- see monitoring.txt, 2026-09-02 "Channel
+        instance not available: telegram".
+
+        Retry budget is still tracked on the parent ``Message`` (shared across
+        its channels, same as before this change) rather than added per-channel
+        to ``msg_delivery_status`` -- a failure here retries only this channel,
+        but counts against the same ``retry_count``/``max_retries`` the message
+        was already using.
+
+        Args:
+            claimed: One entry from ``claim_pending_deliveries()``.
+
+        Returns:
+            ProcessingResult for this channel's delivery attempt.
+        """
+        start_time = time.time()
+        delivery_status_id = claimed["delivery_status_id"]
+        message_id = claimed["message_id"]
+        channel = claimed["channel"]
+
+        from src.data.db.services.database_service import get_database_service
+
+        try:
+            self._logger.debug(
+                "Processing delivery %s for message %s (channel=%s, type=%s, priority=%s)",
+                delivery_status_id,
+                message_id,
+                channel,
+                claimed["message_type"],
+                claimed["priority"],
+            )
+
+            content_data = claimed["content"] or {}
+            message_metadata = claimed["message_metadata"] or {}
+
+            content = MessageContent(
+                text=content_data.get("message") or content_data.get("text") or content_data.get("body") or "",
+                subject=content_data.get("title", content_data.get("subject")),
+                html=content_data.get("html"),
+                attachments=content_data.get("attachments"),
+                metadata={**message_metadata, "source": content_data.get("source")},
+            )
+
+            recipient = message_metadata.get("email_receiver") or claimed["recipient_id"]
+
+            success, delivery_results, failed_message = await self.fallback_manager.attempt_delivery_with_fallback(
+                message_id=message_id,
+                channels=[channel],
+                recipient=recipient,
+                content=content,
+                priority=claimed["priority"],
+                channel_instances=self._channel_instances,
+            )
+
+            processing_time_ms = int((time.time() - start_time) * 1000)
+            error_message = (failed_message.failure_details if failed_message else "Delivery failed") or "Delivery failed"
+
+            db_service = get_database_service()
+            with db_service.uow() as uow:
+                if success:
+                    uow.notifications.record_delivery_success(delivery_status_id, response_time_ms=processing_time_ms)
+                    self._logger.info(
+                        "Delivery %s (message %s, channel %s) delivered in %sms",
+                        delivery_status_id,
+                        message_id,
+                        channel,
+                        processing_time_ms,
+                    )
+                else:
+                    # record_delivery_failure retries this channel while the message's shared
+                    # retry_count/max_retries budget allows it, else marks it terminally FAILED.
+                    uow.notifications.record_delivery_failure(delivery_status_id, error_message)
+                    self._logger.warning(
+                        "Delivery %s (message %s, channel %s) failed: %s",
+                        delivery_status_id,
+                        message_id,
+                        channel,
+                        error_message,
+                    )
+
+            self._stats["messages_processed"] += 1
+            if success:
+                self._stats["messages_delivered"] += 1
+            else:
+                self._stats["messages_failed"] += 1
+
+            result_dict = self._build_delivery_result_dict(delivery_results)
+            return self._make_processing_result(message_id, success, failed_message, result_dict, processing_time_ms)
+
+        except Exception as e:
+            processing_time_ms = int((time.time() - start_time) * 1000)
+            error_message = f"Processing exception: {str(e)}"
+            self._logger.exception(
+                "Error processing delivery %s (message %s, channel %s):", delivery_status_id, message_id, channel
+            )
+
+            try:
+                db_service = get_database_service()
+                with db_service.uow() as uow:
+                    uow.notifications.record_delivery_result(
+                        delivery_status_id, DeliveryStatus.FAILED.value, error_message=error_message
+                    )
+            except Exception:
+                self._logger.exception("Failed to record delivery-result failure for %s:", delivery_status_id)
+
+            self._stats["messages_processed"] += 1
+            self._stats["messages_failed"] += 1
+
+            return ProcessingResult(
+                message_id=message_id,
+                success=False,
+                error_message=error_message,
+                processing_time_ms=processing_time_ms,
+            )
+
 
 # Global message processor instance
 message_processor = MessageProcessor()
@@ -857,7 +984,7 @@ message_processor = MessageProcessor()
 def setup_signal_handlers():
     """Set up signal handlers for graceful shutdown."""
 
-    def signal_handler(signum, frame):
+    def signal_handler(signum, _frame):
         _logger.info("Received signal %s, initiating shutdown...", signum)
         if message_processor.is_running:
             asyncio.create_task(message_processor.shutdown())

@@ -105,6 +105,97 @@ class MessageQueueClient:
             self._logger.exception("Failed to get pending messages for channels %s:", channels)
             return []
 
+    def claim_pending_deliveries(self, channels: List[str], limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Atomically claim per-channel delivery rows for the given channels.
+
+        Scoped to msg_delivery_status rather than the whole msg_messages row, so a
+        message requesting several channels (e.g. ["telegram", "email"]) is
+        delivered independently by whichever consumer owns each channel, instead
+        of being fully claimed by whichever service's overlap match on the whole
+        message fires first (monitoring.txt, 2026-09-02 "Channel instance not
+        available: telegram"). Replaces get_pending_messages_for_channels for
+        consumers that deliver.
+
+        Args:
+            channels: Channel names this consumer can deliver (e.g. ["telegram"]).
+            limit: Maximum number of rows to claim.
+
+        Returns:
+            List of dicts with the delivery row id/channel plus the message fields
+            needed to attempt delivery (content, metadata, recipient, etc.).
+        """
+        try:
+            with self._db_service.uow() as r:
+                claimed = r.notifications.claim_pending_deliveries(channels=channels, limit=limit)
+
+                if claimed:
+                    self._logger.info("Claimed %s pending deliveries for channels %s", len(claimed), channels)
+
+                return claimed
+
+        except Exception:
+            self._logger.exception("Failed to claim pending deliveries for channels %s:", channels)
+            return []
+
+    def record_delivery_success(self, delivery_status_id: int, **kwargs) -> bool:
+        """
+        Record a successfully delivered per-channel delivery row.
+
+        Args:
+            delivery_status_id: The msg_delivery_status row claimed via claim_pending_deliveries.
+            **kwargs: Forwarded to the repository (response_time_ms, external_id).
+
+        Returns:
+            True if the update succeeded, False otherwise.
+        """
+        try:
+            with self._db_service.uow() as r:
+                message = r.notifications.record_delivery_success(delivery_status_id, **kwargs)
+
+                if message:
+                    self._logger.info("Delivery %s recorded as delivered", delivery_status_id)
+                    return True
+                self._logger.warning("Failed to record delivery %s as delivered", delivery_status_id)
+                return False
+
+        except Exception:
+            self._logger.exception("Failed to record delivery %s as delivered:", delivery_status_id)
+            return False
+
+    def record_delivery_failure(self, delivery_status_id: int, error_message: str, permanent: bool = False) -> bool:
+        """
+        Record a failed per-channel delivery attempt.
+
+        Retries just this channel while the parent message's shared retry budget
+        allows it, or marks it terminally FAILED once exhausted -- see
+        MessageRepository.record_delivery_failure.
+
+        Args:
+            delivery_status_id: The msg_delivery_status row claimed via claim_pending_deliveries.
+            error_message: Error description.
+            permanent: Skip the retry budget and go straight to terminal FAILED
+                (e.g. a missing/invalid recipient -- retrying won't help).
+
+        Returns:
+            True if the update succeeded, False otherwise.
+        """
+        try:
+            with self._db_service.uow() as r:
+                message = r.notifications.record_delivery_failure(
+                    delivery_status_id, error_message, permanent=permanent
+                )
+
+                if message:
+                    self._logger.warning("Delivery %s recorded as failed: %s", delivery_status_id, error_message)
+                    return True
+                self._logger.warning("Failed to record delivery %s as failed", delivery_status_id)
+                return False
+
+        except Exception:
+            self._logger.exception("Failed to record delivery %s as failed:", delivery_status_id)
+            return False
+
     def mark_message_processing(self, message_id: int) -> bool:
         """
         Mark a message as currently being processed.

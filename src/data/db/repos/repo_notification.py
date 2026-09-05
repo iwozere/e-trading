@@ -585,6 +585,248 @@ class DeliveryStatusRepository:
             _logger.error("Failed to update delivery status %s: %s", status_id, e)
             raise
 
+    def claim_pending_deliveries(
+        self, channels: List[str], limit: int = 10, stale_minutes: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Atomically claim per-channel delivery rows for the given channels.
+
+        Scoped to msg_delivery_status rather than the whole msg_messages row, so a
+        message requesting multiple channels (e.g. ["telegram", "email"]) is consumed
+        independently by each channel's own service instead of being fully claimed by
+        whichever service's overlap match on the message row fires first -- see
+        monitoring.txt, 2026-09-02 "Channel instance not available: telegram".
+
+        Claims rows that are PENDING, or SENT but stuck past `stale_minutes` (a
+        consumer claimed the row then crashed before writing back DELIVERED/FAILED),
+        transitioning them to SENT as the "claimed, attempting delivery" marker --
+        reusing the existing DeliveryStatus enum instead of adding separate lock
+        columns to this table.
+
+        Args:
+            channels: Channel names this consumer can deliver (e.g. ["telegram"]).
+            limit: Maximum number of rows to claim.
+            stale_minutes: Minutes after which a SENT row is considered abandoned.
+
+        Returns:
+            List of dicts with the delivery row id/channel plus the message fields
+            needed to attempt delivery (content, metadata, recipient, etc.).
+        """
+        current_time = datetime.now(UTC)
+        stale_threshold = current_time - timedelta(minutes=stale_minutes)
+
+        try:
+            query = text("""
+                UPDATE msg_delivery_status
+                SET status = 'SENT', updated_at = :current_time
+                WHERE id IN (
+                    SELECT ds.id
+                    FROM msg_delivery_status ds
+                    JOIN msg_messages m ON m.id = ds.message_id
+                    WHERE ds.channel = ANY(CAST(:channels AS TEXT[]))
+                      AND (
+                          ds.status = 'PENDING'
+                          OR (ds.status = 'SENT' AND ds.updated_at < :stale_threshold)
+                      )
+                      AND m.scheduled_for <= :current_time
+                      AND m.status != 'CANCELLED'
+                    ORDER BY
+                        CASE m.priority
+                            WHEN 'CRITICAL' THEN 1
+                            WHEN 'HIGH' THEN 2
+                            WHEN 'NORMAL' THEN 3
+                            WHEN 'LOW' THEN 4
+                        END,
+                        m.scheduled_for ASC
+                    LIMIT :limit
+                    FOR UPDATE OF ds SKIP LOCKED
+                )
+                RETURNING id, message_id, channel
+            """)
+
+            params = {
+                "channels": channels,
+                "current_time": current_time,
+                "stale_threshold": stale_threshold,
+                "limit": limit,
+            }
+            claimed_rows = self.session.execute(query, params).fetchall()
+
+            if not claimed_rows:
+                return []
+
+            message_ids = list({row.message_id for row in claimed_rows})
+            messages = {m.id: m for m in self.session.query(Message).filter(Message.id.in_(message_ids)).all()}
+
+            results: List[Dict[str, Any]] = []
+            for row in claimed_rows:
+                message = messages.get(row.message_id)
+                if message is None:
+                    # Shouldn't happen (FK to msg_messages), but don't let one bad row drop the rest.
+                    _logger.warning("Claimed delivery %s references missing message %s", row.id, row.message_id)
+                    continue
+                results.append(
+                    {
+                        "delivery_status_id": row.id,
+                        "message_id": row.message_id,
+                        "channel": row.channel,
+                        "message_type": message.message_type,
+                        "priority": message.priority,
+                        "recipient_id": message.recipient_id,
+                        "content": message.content,
+                        "message_metadata": message.message_metadata,
+                        "scheduled_for": message.scheduled_for,
+                        "retry_count": message.retry_count,
+                        "max_retries": message.max_retries,
+                    }
+                )
+
+            if results:
+                _logger.info("Claimed %s deliveries for channels %s", len(results), channels)
+
+            return results
+
+        except Exception:
+            _logger.exception("Error claiming pending deliveries:")
+            # Re-raise so the enclosing UoW rolls back rather than committing a
+            # session left in a needs-rollback state.
+            raise
+
+    def record_delivery_result(
+        self,
+        delivery_status_id: int,
+        status: str,
+        error_message: str | None = None,
+        response_time_ms: int | None = None,
+        external_id: str | None = None,
+    ) -> Message | None:
+        """
+        Record the outcome of one channel's delivery attempt and roll it up to the
+        parent message's overall status.
+
+        A message can request several channels (e.g. ["telegram", "email"]); each is
+        now delivered independently by whichever consumer owns that channel (see
+        claim_pending_deliveries). The parent Message.status only becomes terminal
+        once every one of its per-channel msg_delivery_status rows is terminal:
+        DELIVERED if at least one channel succeeded, FAILED if none did. While some
+        channels are still PENDING/SENT, Message.status is left at PROCESSING so it
+        isn't mistaken for done and isn't re-claimed by the whole-message overlap
+        path (get_pending_messages_with_lock) older callers still use.
+
+        Args:
+            delivery_status_id: The msg_delivery_status row to update.
+            status: New DeliveryStatus value ("DELIVERED", "FAILED", ...).
+            error_message: Error detail when status is a failure.
+            response_time_ms: Optional delivery latency.
+            external_id: Optional provider message id.
+
+        Returns:
+            The updated parent Message, or None if the delivery row wasn't found.
+        """
+        delivery = self.get_delivery_status(delivery_status_id)
+        if not delivery:
+            _logger.warning("record_delivery_result: delivery status %s not found", delivery_status_id)
+            return None
+
+        update_data: Dict[str, Any] = {"status": status}
+        if status == DeliveryStatus.DELIVERED.value:
+            update_data["delivered_at"] = datetime.now(UTC)
+        if error_message is not None:
+            update_data["error_message"] = error_message
+        if response_time_ms is not None:
+            update_data["response_time_ms"] = response_time_ms
+        if external_id is not None:
+            update_data["external_id"] = external_id
+
+        self.update_delivery_status(delivery_status_id, update_data)
+
+        message_id = delivery.message_id
+        sibling_statuses = [d.status for d in self.get_delivery_statuses_by_message(message_id)]
+
+        terminal = {DeliveryStatus.DELIVERED.value, DeliveryStatus.FAILED.value, DeliveryStatus.BOUNCED.value}
+        if not all(s in terminal for s in sibling_statuses):
+            rollup_status = MessageStatus.PROCESSING.value
+        elif any(s == DeliveryStatus.DELIVERED.value for s in sibling_statuses):
+            rollup_status = MessageStatus.DELIVERED.value
+        else:
+            rollup_status = MessageStatus.FAILED.value
+
+        message = self.session.query(Message).filter(Message.id == message_id).first()
+        if message is None:
+            return None
+
+        message.status = rollup_status
+        message.processed_at = datetime.now(UTC)
+        if rollup_status == MessageStatus.FAILED.value and error_message:
+            message.last_error = error_message
+        self.session.flush()
+
+        return message
+
+    def record_delivery_success(
+        self,
+        delivery_status_id: int,
+        response_time_ms: int | None = None,
+        external_id: str | None = None,
+    ) -> Message | None:
+        """Convenience wrapper: record a successful per-channel delivery attempt."""
+        return self.record_delivery_result(
+            delivery_status_id,
+            DeliveryStatus.DELIVERED.value,
+            response_time_ms=response_time_ms,
+            external_id=external_id,
+        )
+
+    def record_delivery_failure(
+        self, delivery_status_id: int, error_message: str, permanent: bool = False
+    ) -> Message | None:
+        """
+        Record a failed per-channel delivery attempt.
+
+        Retries just this channel -- the same immediate-retry-on-next-poll
+        behaviour the old whole-message claim path used -- while the parent
+        message's shared retry_count/max_retries budget allows it, or marks
+        this channel terminally FAILED (rolling up the parent message's
+        status via record_delivery_result) once that budget is exhausted.
+        The retry budget stays per-message rather than per-channel, same as
+        before this method existed: one shared counter across all of a
+        message's channels.
+
+        Args:
+            delivery_status_id: The msg_delivery_status row that failed.
+            error_message: Error description.
+            permanent: Skip the retry budget and go straight to terminal FAILED
+                (e.g. a missing/invalid recipient -- retrying won't help).
+
+        Returns:
+            The (possibly updated) parent Message, or None if not found.
+        """
+        delivery = self.get_delivery_status(delivery_status_id)
+        if not delivery:
+            _logger.warning("record_delivery_failure: delivery status %s not found", delivery_status_id)
+            return None
+
+        message = self.session.query(Message).filter(Message.id == delivery.message_id).first()
+        if message is None:
+            return None
+
+        if not permanent and message.retry_count < message.max_retries:
+            self.update_delivery_status(delivery_status_id, {"status": DeliveryStatus.PENDING.value})
+            message.retry_count += 1
+            message.last_error = error_message
+            self.session.flush()
+            _logger.warning(
+                "Delivery %s (message %s) failed, retry %s/%s: %s",
+                delivery_status_id,
+                message.id,
+                message.retry_count,
+                message.max_retries,
+                error_message,
+            )
+            return message
+
+        return self.record_delivery_result(delivery_status_id, DeliveryStatus.FAILED.value, error_message=error_message)
+
     def get_delivery_statistics(self, channel: str | None = None, days: int = 30) -> Dict[str, Any]:
         """
         Get delivery statistics for a time period.
@@ -706,6 +948,7 @@ class DeliveryStatusRepository:
         """
         # This would require joining with messages table to get user_id
         # For now, return placeholder implementation
+        _ = cutoff_date  # accepted for the future real implementation, unused by the placeholder
         return {
             "user_id": user_id,
             "total_messages": 0,
@@ -1122,6 +1365,18 @@ class NotificationRepository:
     # ---------- Delivery Status Delegation ----------
     def create_delivery_status(self, status_data: Dict[str, Any]) -> MessageDeliveryStatus:
         return self.delivery_status.create_delivery_status(status_data)
+
+    def claim_pending_deliveries(self, channels: List[str], **kwargs) -> List[Dict[str, Any]]:
+        return self.delivery_status.claim_pending_deliveries(channels, **kwargs)
+
+    def record_delivery_result(self, delivery_status_id: int, status: str, **kwargs) -> Message | None:
+        return self.delivery_status.record_delivery_result(delivery_status_id, status, **kwargs)
+
+    def record_delivery_success(self, delivery_status_id: int, **kwargs) -> Message | None:
+        return self.delivery_status.record_delivery_success(delivery_status_id, **kwargs)
+
+    def record_delivery_failure(self, delivery_status_id: int, error_message: str, **kwargs) -> Message | None:
+        return self.delivery_status.record_delivery_failure(delivery_status_id, error_message, **kwargs)
 
     def get_delivery_statuses_by_message(self, message_id: int) -> List[MessageDeliveryStatus]:
         return self.delivery_status.get_delivery_statuses_by_message(message_id)
