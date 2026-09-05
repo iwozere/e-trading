@@ -7,6 +7,14 @@ structural profile, label backfill, intraday filings poll), which this module
 supersedes. All six share one script (`run_p19.py`) with different
 subcommands — P19 has no `jobs/register_jobs.py` of its own (unlike
 P20/P22), these SQL files were its only prior registration path.
+
+Structural Profile / Shadow Poll / Filings Poll all read ``watchlist.json``
+and declare ``depends_on=["P19 Intraday Watchlist Build"]`` accordingly (same
+`dependency_status.require_dependencies_or_defer` pattern P20/P22 use) —
+without it, a Watchlist Build that fails or overruns its own timeout leaves
+these three silently "succeeding" with zero names processed (`load_watchlist`
+just logs a warning and returns ``[]``), which is exactly the failure shape
+of the 2026-08-19/21 Form4/13D-G cache-starvation incident.
 """
 
 from __future__ import annotations
@@ -36,6 +44,7 @@ SPECS: List[PluginSpec] = [
         script_args=["run-once", "--mode", "shadow"],
         timeout_seconds=300,
         description="Delayed IBKR reqMktData snapshot -> shadow.sqlite. Phase 1, no alerts.",
+        depends_on=["P19 Intraday Watchlist Build"],
     ),
     PluginSpec(
         name="P19 Intraday EOD Backfill",
@@ -54,6 +63,7 @@ SPECS: List[PluginSpec] = [
         script_args=["profile-structural"],
         timeout_seconds=3600,  # live value; widened from the originally-documented 1800 after a real production timeout
         description="Reads watchlist.json (must run after Watchlist Build); EDGAR + yfinance only, no IBKR.",
+        depends_on=["P19 Intraday Watchlist Build"],
     ),
     PluginSpec(
         name="P19 Label Backfill",
@@ -72,5 +82,6 @@ SPECS: List[PluginSpec] = [
         script_args=["filings-poll"],
         timeout_seconds=600,
         description="EFTS scan of watchlist CIKs for 424B5/S-1/S-3 + 8-K 3.01/3.02, filed intraday.",
+        depends_on=["P19 Intraday Watchlist Build"],
     ),
 ]

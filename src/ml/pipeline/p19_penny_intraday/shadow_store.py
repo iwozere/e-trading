@@ -101,7 +101,10 @@ class ShadowStore:
     def __init__(self, db_path: str = DEFAULT_DB_PATH) -> None:
         self.db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(db_path)
+        # Explicit timeout (default is 5s): the schedule keeps this single-writer
+        # in practice, but a generous wait is cheap insurance against a stray
+        # "database is locked" if a run ever overlaps a slow prior one.
+        self._conn = sqlite3.connect(db_path, timeout=30.0)
         self._ensure_schema()
 
     def _ensure_schema(self) -> None:

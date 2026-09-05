@@ -85,7 +85,8 @@ class FilingsPoll:
         self._edgar = edgar or EdgarDownloader()
         self.db_path = db_path or DEFAULT_DB_PATH
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(self.db_path)
+        # Explicit timeout (default is 5s) — same reasoning as shadow_store.py.
+        self._conn = sqlite3.connect(self.db_path, timeout=30.0)
         self._ensure_schema()
         self._cik_map: Optional[Dict[str, str]] = None
 

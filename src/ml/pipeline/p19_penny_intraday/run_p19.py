@@ -21,6 +21,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.data.pipeline.dependency_status import deferred_result, require_dependencies_or_defer
 from src.ml.pipeline.p19_penny_intraday.config import P19Config
 from src.notification.logger import setup_logger
 
@@ -58,6 +59,15 @@ def main() -> int:
     sub.add_parser("filings-poll", parents=[common], help="Intraday EDGAR filings poll (spec §9, log-only)")
 
     args = parser.parse_args()
+    if args.date is not None:
+        try:
+            datetime.strptime(args.date, "%Y-%m-%d")
+        except ValueError:
+            # --date feeds straight into `Path(output_dir) / target_date / ...`
+            # (watchlist_builder.load_watchlist, ShadowStore, FilingsPoll) —
+            # reject anything that isn't a plain YYYY-MM-DD before it can reach
+            # a path join.
+            parser.error(f"--date must be YYYY-MM-DD, got {args.date!r}")
     config = P19Config.create_default()
     if args.user_id:
         config.user_id = args.user_id
@@ -74,6 +84,10 @@ def main() -> int:
         from src.ml.pipeline.p19_penny_intraday.structural.profiler import StructuralProfiler
         from src.ml.pipeline.p19_penny_intraday.watchlist_builder import load_watchlist
 
+        ready, statuses = require_dependencies_or_defer("P19 Structural Profile")
+        if not ready:
+            print(f"__SCHEDULER_RESULT__:{json.dumps(deferred_result(statuses))}")
+            return 0
         target = args.date or _today()
         entries = load_watchlist(DEFAULT_OUTPUT_DIR, target)
         profiles = StructuralProfiler(config).refresh_watchlist(entries, force=args.force)
@@ -90,6 +104,10 @@ def main() -> int:
             return _not_implemented("Phase 2", "run-once (live alerting)")
         from src.ml.pipeline.p19_penny_intraday.shadow_loop import ShadowLoop
 
+        ready, statuses = require_dependencies_or_defer("P19 Intraday Shadow Poll")
+        if not ready:
+            print(f"__SCHEDULER_RESULT__:{json.dumps(deferred_result(statuses))}")
+            return 0
         target = args.date or _today()
         summary = ShadowLoop(config, target).run_once()
         print(f"P19 shadow poll {target}: logged={summary.get('logged')} of polled={summary.get('polled')}")
@@ -113,6 +131,10 @@ def main() -> int:
     if args.cmd == "filings-poll":
         from src.ml.pipeline.p19_penny_intraday.filings_poll import FilingsPoll
 
+        ready, statuses = require_dependencies_or_defer("P19 Intraday Filings Poll")
+        if not ready:
+            print(f"__SCHEDULER_RESULT__:{json.dumps(deferred_result(statuses))}")
+            return 0
         target = args.date or _today()
         summary = FilingsPoll(output_dir=DEFAULT_OUTPUT_DIR, target_date=target).run()
         print(f"P19 filings-poll {target}: {summary.get('new_hits')} new hits across {summary.get('tickers')} tickers")

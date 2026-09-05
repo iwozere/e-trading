@@ -155,17 +155,42 @@ class StructuralProfiler:
     ) -> Tuple[StructuralProfile, bool]:
         ticker = entry.ticker
         cik = self._resolve_cik(ticker)
-        latest_filing_date = self._latest_filing_date(cik) if cik else None
+        filings, latest_filing_date = self._fetch_filings(cik) if cik else (None, None)
 
         if not force and self._cache.is_fresh(ticker, as_of, latest_filing_date):
             cached = self._cache.load(ticker)
             if cached is not None:
                 return cached, False
 
-        inputs = self._build_inputs(entry, cik, as_of, form4_df, dg_df)
+        inputs = self._build_inputs(entry, cik, as_of, form4_df, dg_df, filings=filings)
         profile = grade_ticker(inputs, self.cfg.structural_config)
         self._cache.save(profile)
         return profile, True
+
+    def _fetch_filings(self, cik: str) -> Tuple[Optional[List[Dict[str, Any]]], Optional[date]]:
+        """
+        Force-refresh this CIK's submissions and return (filings, latest_filing_date).
+
+        Called once per ticker per run, *before* the cache-freshness check, so the
+        "daily delta check" (``StructuralProfileCache.is_fresh``'s
+        ``latest_filing_date`` argument) actually sees today's filing activity
+        instead of whatever was on disk from the last force-refresh.
+        ``EdgarDownloader.download_submissions`` has no TTL of its own (§0.1) — a
+        plain (non-force) read here would just replay that same stale snapshot
+        forever, silently defeating the whole point of the delta check. The
+        submissions endpoint is small and explicitly documented as suitable for
+        daily refresh (unlike companyfacts), so this cost is paid for every
+        watchlist name every day, not just the ~1/7 actually due a full
+        re-profile. The result is threaded into ``_build_inputs`` below so a name
+        that *is* due for a refresh isn't fetched twice.
+        """
+        try:
+            filings = self._edgar.get_recent_filings(cik, force_refresh=True)
+        except Exception:
+            _logger.warning("submissions fetch failed for CIK %s (daily delta check)", cik)
+            return None, None
+        dates = [d for d in (_parse_date(f.get("filingDate", "")) for f in filings) if d is not None]
+        return filings, (max(dates) if dates else None)
 
     def _build_inputs(
         self,
@@ -174,9 +199,9 @@ class StructuralProfiler:
         as_of: date,
         form4_df: pd.DataFrame,
         dg_df: pd.DataFrame,
+        filings: Optional[List[Dict[str, Any]]],
     ) -> GradingInputs:
         company_facts = None
-        filings: Optional[List[Dict[str, Any]]] = None
         if cik is not None:
             try:
                 # force_refresh=True: EdgarDownloader's own cache has no TTL
@@ -185,10 +210,8 @@ class StructuralProfiler:
                 company_facts = self._edgar.load_company_facts(cik, force_refresh=True)
             except Exception:
                 _logger.warning("companyfacts fetch failed for %s (CIK %s)", entry.ticker, cik)
-            try:
-                filings = self._edgar.get_recent_filings(cik, force_refresh=True)
-            except Exception:
-                _logger.warning("submissions fetch failed for %s (CIK %s)", entry.ticker, cik)
+            # `filings` was already force-refreshed by `_fetch_filings` above
+            # (the daily delta check) — reused here rather than fetched again.
 
         splits = self._fetch_splits(entry.ticker)
         form4_rows = self._filter_form4(form4_df, entry.ticker)
@@ -250,14 +273,6 @@ class StructuralProfiler:
             if t and cik:
                 out[t] = str(cik)
         return out
-
-    def _latest_filing_date(self, cik: str) -> Optional[date]:
-        try:
-            filings = self._edgar.get_recent_filings(cik)
-        except Exception:
-            return None
-        dates = [d for d in (_parse_date(f.get("filingDate", "")) for f in filings) if d is not None]
-        return max(dates) if dates else None
 
     # ── Splits (yfinance, direct call — design-v2.md §3.3) ──────────────────
 
