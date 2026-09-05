@@ -5,6 +5,7 @@ Main APScheduler-based service for job scheduling and execution.
 Provides centralized scheduling with database persistence and error handling.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -428,8 +429,19 @@ class SchedulerService:
             Exception: If initialization fails
         """
         try:
-            # Create SQLAlchemy jobstore for job persistence
-            self.jobstore = SQLAlchemyJobStore(url=self.database_url)
+            # Create SQLAlchemy jobstore for job persistence.
+            # pool_pre_ping + pool_recycle: without these the underlying engine can hand
+            # APScheduler a connection Postgres already closed (idle timeout, restart,
+            # firewall), surfacing as "server closed the connection unexpectedly" on the
+            # next due-jobs poll (monitoring.txt, 2026-09-02). Same convention as
+            # src/data/db/core/database.py.
+            self.jobstore = SQLAlchemyJobStore(
+                url=self.database_url,
+                engine_options={
+                    "pool_pre_ping": True,
+                    "pool_recycle": int(os.getenv("DB_POOL_RECYCLE", "1800")),
+                },
+            )
 
             # Create async executor
             # Note: AsyncIOExecutor doesn't support max_workers parameter
@@ -1048,7 +1060,14 @@ class SchedulerService:
             return result
 
         except Exception:
-            _logger.exception("Error executing data processing job:")
+            # Collapse to one line before logging -- same reasoning as the "Script stderr"
+            # handling above: journald splits a multi-line write into a separate journal
+            # entry per newline, so _logger.exception()'s multi-line traceback gets shredded
+            # and only the content-free "Error executing data processing job:" header
+            # reliably reaches the log-monitor alert, dropping the actual exception type and
+            # message (monitoring.txt, 2026-09-02).
+            single_line_traceback = " | ".join(line for line in traceback.format_exc().splitlines() if line.strip())
+            _logger.error("Error executing data processing job: %s", single_line_traceback)
             raise
 
     def _parse_script_output(self, stdout: str) -> Dict[str, Any]:

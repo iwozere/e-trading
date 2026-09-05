@@ -30,7 +30,7 @@ if __name__ == "__main__":
     _logger.info("Found %d tickers", len(tickers))
     _logger.info("Screening by fundamental and technical criteria...")
     screener = SixStockScreener()
-    df = screener.screen_stocks(tickers)
+    df = screener.screen_stocks(tickers, suffix=".SW")
     _logger.info("Selected %d stocks", len(df))
     results_dir = PROJECT_ROOT / "results" / "screeners" / "six"
     results_dir.mkdir(parents=True, exist_ok=True)
