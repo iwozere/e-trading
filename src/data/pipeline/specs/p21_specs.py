@@ -29,6 +29,10 @@ SPECS: List[PluginSpec] = [
     # value — DST drift is a known, shared limitation across every ET-based cron
     # job in this repo, not solved here.
     PluginSpec(name="p21_monthly_rebalance", category="p21", cron="30 20 * * 1-5", script_path=f"{_SCRIPT_BASE}/run_monthly_rebalance.py"),
+    # p21_stop_execute runs 10 minutes ahead of p21_monthly_execute (both are open-time
+    # jobs) so that on the one day a month both run, monthly_execute always reads a
+    # current_positions.json with any catastrophic stop already applied — no double-sell.
+    PluginSpec(name="p21_stop_execute", category="p21", cron="35 13 * * 1-5", script_path=f"{_SCRIPT_BASE}/run_stop_execute.py"),  # 09:35 ET
     PluginSpec(name="p21_monthly_execute", category="p21", cron="45 13 * * 1-5", script_path=f"{_SCRIPT_BASE}/run_monthly_execute.py"),  # 09:45 ET
     PluginSpec(name="p21_daily_mark", category="p21", cron="30 20 * * 1-5", script_path=f"{_SCRIPT_BASE}/run_daily_mark.py"),
 ]

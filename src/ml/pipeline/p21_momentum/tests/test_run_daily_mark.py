@@ -41,6 +41,8 @@ class TestRunDailyMarkGuards(unittest.TestCase):
 
 
 class TestRunDailyMarkHappyPath(unittest.TestCase):
+    @patch("src.ml.pipeline.p21_momentum.jobs.run_daily_mark.write_pending_stops")
+    @patch("src.ml.pipeline.p21_momentum.jobs.run_daily_mark.read_pending_stops", return_value=[])
     @patch("src.ml.pipeline.p21_momentum.jobs.run_daily_mark._read_prior_cash", return_value=200_000.0)
     @patch("src.ml.pipeline.p21_momentum.jobs.run_daily_mark.write_daily_mark")
     @patch("src.ml.pipeline.p21_momentum.jobs.run_daily_mark.append_nav_row")
@@ -57,8 +59,10 @@ class TestRunDailyMarkHappyPath(unittest.TestCase):
         mock_append_nav,
         mock_write_daily_mark,
         _mock_prior_cash,
+        _mock_read_pending,
+        mock_write_pending,
     ):
-        del _mock_processed, _mock_prior_cash
+        del _mock_processed, _mock_prior_cash, _mock_read_pending
         today = date(2026, 8, 24)
         # avg_cost 100, price now 60 -> -40% < -35% catastrophic stop threshold
         mock_read_positions.return_value = [
@@ -80,6 +84,14 @@ class TestRunDailyMarkHappyPath(unittest.TestCase):
         mock_write_current.assert_called_once()
         mock_append_nav.assert_called_once()
         mock_write_daily_mark.assert_called_once()
+
+        # The flag is queued for jobs/run_stop_execute.py to act on at the next open.
+        mock_write_pending.assert_called_once()
+        (written_stops,), _ = mock_write_pending.call_args
+        self.assertEqual(len(written_stops), 1)
+        self.assertEqual(written_stops[0].ticker, "AAPL")
+        self.assertEqual(written_stops[0].flagged_date, today.isoformat())
+        self.assertEqual(written_stops[0].avg_cost, 100.0)
 
     @patch("src.ml.pipeline.p21_momentum.jobs.run_daily_mark._read_prior_cash", return_value=200_000.0)
     @patch("src.ml.pipeline.p21_momentum.jobs.run_daily_mark.write_daily_mark")

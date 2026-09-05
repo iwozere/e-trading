@@ -10,19 +10,31 @@ the spec and points back into it for anything more detailed than a paragraph, pe
 
 ## Architecture
 
-Three scheduled jobs, each idempotent and safe to re-run (spec §1, §3):
+Four scheduled jobs, each idempotent and safe to re-run (spec §1, §3):
 
 | Job | Trigger (self-guarded, daily cron) | Reads | Writes |
 |---|---|---|---|
-| `monthly_rebalance` | Last NYSE trading day of month | universe, prices, fundamentals, exclusions, earnings | `universe.json`, `signals.json`, `targets.json`, `_state/regime_history.json` |
+| `monthly_rebalance` | Last NYSE trading day of month | universe, prices, fundamentals, exclusions, earnings, `_state/pending_stops.json` (defense in depth) | `universe.json`, `signals.json`, `targets.json`, `_state/regime_history.json` |
+| `stop_execute` | Every NYSE trading day, at the open (10 min ahead of `monthly_execute`'s own open-time slot) | `_state/pending_stops.json`, opens for queued tickers only | `stop_exits.json`, `_state/ledger.jsonl`, `_state/current_positions.json`, `_state/pending_stops.json` |
 | `monthly_execute` | First NYSE trading day of month | prior `targets.json`, opens | `positions.json`, `report.md`, `_state/ledger.jsonl`, `_state/current_positions.json` |
-| `daily_mark` | Every NYSE trading day | closes, `_state/current_positions.json` | `daily_mark.json`, `_state/nav_daily.csv` |
+| `daily_mark` | Every NYSE trading day | closes, `_state/current_positions.json` | `daily_mark.json`, `_state/nav_daily.csv`, `_state/pending_stops.json` |
 
 Every job's `run()` is a thin no-op guard (idempotency + calendar check) wrapping `_run_*()`, the actual
 orchestration — separated so tests can call `_run_*()` directly with fixed dates while `run()` handles the
 "is today the right day" self-guarding (Open Decision #2 of `docs/implementation-plan.md`, resolved: the
-scheduler's cron has no native "last/first trading day of month" concept, so all three jobs run on a daily
-cron and no-op internally except on their actual trigger day).
+scheduler's cron has no native "last/first trading day of month" concept, so all four jobs run on a daily
+cron and no-op internally except on their actual trigger day — `stop_execute` no-ops whenever its queue is
+empty, which is every day but the rare one following a catastrophic-stop flag).
+
+`stop_execute` closes a gap in the original three-job design: `daily_mark` detects a catastrophic stop (spec
+§11: adj close < avg_cost * 0.65) at close, but "execute at next open" is a different time of day than
+`daily_mark`'s own run — `daily_mark` only ever queues the flag into `_state/pending_stops.json`, it never
+trades. `stop_execute` is the next-open consumer of that queue: unconditional exit (no re-check of the
+threshold), no re-entry cooldown (a stopped-out ticker can be selected again at any future rebalance purely on
+its own merits) — see `docs/implementation-plan.md`'s stop-loss design discussion for the reasoning. As a
+defense in depth against `stop_execute` itself ever failing to run (e.g. a scheduler outage spanning a full
+month), `monthly_rebalance` also unions any still-unexecuted `pending_stops.json` entries into its own
+`forced_exits` set, so the position is guaranteed out at the next rebalance even in that case.
 
 ## Data Flow
 

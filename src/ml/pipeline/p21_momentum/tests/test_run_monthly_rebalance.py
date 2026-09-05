@@ -23,6 +23,7 @@ import pandas as pd
 from src.ml.pipeline.p21_momentum.config import MIN_CONSTITUENTS
 from src.ml.pipeline.p21_momentum.data.universe import UniverseConstituent
 from src.ml.pipeline.p21_momentum.jobs import run_monthly_rebalance as job
+from src.ml.pipeline.p21_momentum.schemas import PendingStop, Position
 
 _SECTORS = [f"Sector{i}" for i in range(15)]  # 15 sectors * 30 tickers = 450, >= MIN_CONSTITUENTS
 
@@ -115,6 +116,72 @@ class TestRunMonthlyRebalanceHappyPath(unittest.TestCase):
         counts = Counter(t.sector for t in written_targets)
         for count in counts.values():
             self.assertLessEqual(count, 4)
+
+
+class TestRunMonthlyRebalancePendingStops(unittest.TestCase):
+    @patch("src.ml.pipeline.p21_momentum.jobs.run_monthly_rebalance.already_processed", return_value=False)
+    @patch("src.ml.pipeline.p21_momentum.jobs.run_monthly_rebalance.write_targets")
+    @patch("src.ml.pipeline.p21_momentum.jobs.run_monthly_rebalance.write_universe")
+    @patch("src.ml.pipeline.p21_momentum.jobs.run_monthly_rebalance.next_earnings_date", return_value=None)
+    @patch("src.ml.pipeline.p21_momentum.jobs.run_monthly_rebalance.fetch_fundamentals_cached")
+    @patch("src.ml.pipeline.p21_momentum.jobs.run_monthly_rebalance.fetch_price_panel")
+    @patch("src.ml.pipeline.p21_momentum.jobs.run_monthly_rebalance.read_pending_stops")
+    @patch("src.ml.pipeline.p21_momentum.jobs.run_monthly_rebalance.read_current_positions")
+    @patch("src.ml.pipeline.p21_momentum.jobs.run_monthly_rebalance.fetch_universe")
+    def test_unexecuted_stop_forces_exit_even_when_rank_would_retain(
+        self,
+        mock_fetch_universe,
+        mock_read_positions,
+        mock_read_pending,
+        mock_fetch_panel,
+        mock_fetch_fund,
+        _mock_next_earnings,
+        _mock_write_universe,
+        mock_write_targets,
+        _mock_already_processed,
+    ):
+        """
+        Defense in depth (Design.md): if jobs/run_stop_execute.py somehow never
+        ran between daily_mark flagging a stop and this rebalance (e.g. a
+        scheduler outage), the held ticker must still be forced out here even
+        though its own momentum rank would otherwise retain it.
+        """
+        del _mock_next_earnings, _mock_write_universe, _mock_already_processed
+        constituents = _make_universe()
+        mock_fetch_universe.return_value = constituents
+
+        # T0000 gets a strong positive drift so it ranks near the top (well
+        # inside HOLD_RANK) — it would be retained on rank alone.
+        panel = {
+            c.ticker: _make_ohlcv_df(seed=hash(c.ticker) % 1000, drift=0.003 if c.ticker == "T0000" else 0.001)
+            for c in constituents
+        }
+        panel["MTUM"] = _make_ohlcv_df(seed=9001)
+        panel["SPY"] = _make_ohlcv_df(seed=9002)
+        panel["^GSPC"] = _make_ohlcv_df(seed=9003, drift=0.0008, vol=0.01)
+        panel["^VIX"] = _make_ohlcv_df(seed=9004, drift=0.0, vol=0.05)
+        panel["^VIX"]["close"] = 15.0
+        mock_fetch_panel.return_value = panel
+
+        mock_fetch_fund.return_value = {c.ticker: {"fcf_ttm": 100.0, "net_income_ttm": 50.0} for c in constituents}
+        mock_read_positions.return_value = [
+            Position("T0000", 1.0, 100.0, "2026-06-01", 1, 1, _SECTORS[0], 0.01, 100.0)
+        ]
+        mock_read_pending.return_value = [
+            PendingStop(ticker="T0000", flagged_date="2026-08-24", price_at_flag=65.0, avg_cost=100.0)
+        ]
+
+        with TemporaryDirectory() as tmp:
+            regime_history_path = Path(tmp) / "regime_history.json"
+            with patch(
+                "src.ml.pipeline.p21_momentum.jobs.run_monthly_rebalance.REGIME_HISTORY_PATH", regime_history_path
+            ):
+                result = job.run(run_date=date(2026, 8, 31))
+
+        self.assertFalse(result.get("skipped"))
+        self.assertFalse(result.get("aborted"))
+        written_targets = mock_write_targets.call_args[0][1]
+        self.assertNotIn("T0000", {t.ticker for t in written_targets})
 
 
 if __name__ == "__main__":

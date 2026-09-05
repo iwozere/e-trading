@@ -92,6 +92,23 @@ def write_daily_mark(run_date: date, snapshot: DailyMarkSnapshot, results_dir: P
     _write_json(run_dir_for(run_date, results_dir) / "daily_mark.json", snapshot.to_dict())
 
 
+def write_stop_exits(run_date: date, exits: List[Dict[str, Any]], results_dir: Path = RESULTS_DIR) -> None:
+    """
+    Write stop_exits.json — jobs/run_stop_execute.py's per-run audit trail.
+
+    Written unconditionally, same as daily_mark.json (empty ``exits`` most
+    days) — this also doubles as the idempotency marker via
+    already_processed().
+
+    Args:
+        run_date: This run's date.
+        exits: One dict per executed catastrophic-stop exit (ticker, shares,
+            fill_price, net_usd) — empty when nothing was queued.
+    """
+    payload = {"as_of": run_date.isoformat(), "exits": exits}
+    _write_json(run_dir_for(run_date, results_dir) / "stop_exits.json", payload)
+
+
 def write_report(run_date: date, markdown: str, results_dir: Path = RESULTS_DIR) -> Path:
     """Write report.md — the monthly report (spec §12). Returns the path written."""
     path = run_dir_for(run_date, results_dir) / "report.md"

@@ -25,6 +25,7 @@ LEDGER_PATH = STATE_DIR / "ledger.jsonl"
 CURRENT_POSITIONS_PATH = STATE_DIR / "current_positions.json"
 NAV_DAILY_PATH = STATE_DIR / "nav_daily.csv"
 REGIME_HISTORY_PATH = STATE_DIR / "regime_history.json"
+PENDING_STOPS_PATH = STATE_DIR / "pending_stops.json"
 FUNDAMENTALS_CACHE_PATH = CACHE_DIR / "fundamentals.json"
 SECTORS_CACHE_PATH = CACHE_DIR / "sectors.json"
 

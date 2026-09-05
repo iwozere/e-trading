@@ -34,11 +34,16 @@ from src.ml.pipeline.p21_momentum.config import (
     STATE_DIR,
 )
 from src.ml.pipeline.p21_momentum.data.prices import fetch_price_panel
-from src.ml.pipeline.p21_momentum.execution.ledger import read_current_positions, write_current_positions
+from src.ml.pipeline.p21_momentum.execution.ledger import (
+    read_current_positions,
+    read_pending_stops,
+    write_current_positions,
+    write_pending_stops,
+)
 from src.ml.pipeline.p21_momentum.jobs.run_common import send_abort_alert, setup_run_logging
 from src.ml.pipeline.p21_momentum.quality.gates import GateOutcome, PipelineAbort, check_daily_price_change
 from src.ml.pipeline.p21_momentum.results.run_io import already_processed, append_nav_row, write_daily_mark
-from src.ml.pipeline.p21_momentum.schemas import DailyMarkSnapshot
+from src.ml.pipeline.p21_momentum.schemas import DailyMarkSnapshot, PendingStop
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -50,6 +55,7 @@ def run(
     results_dir: Path = RESULTS_DIR,
     state_dir: Path = STATE_DIR,
     current_positions_path: Optional[Path] = None,
+    pending_stops_path: Optional[Path] = None,
 ) -> Dict:
     """
     Execute one daily_mark cycle.
@@ -62,6 +68,11 @@ def run(
             pass these.
         current_positions_path: Overridable independently of state_dir;
             defaults to state_dir / "current_positions.json".
+        pending_stops_path: Overridable independently of state_dir; defaults
+            to state_dir / "pending_stops.json". A catastrophic-stop flag
+            queued here is executed at the next open by
+            jobs/run_stop_execute.py (spec: "flag EXIT_CATASTROPHIC_STOP,
+            execute at next open").
 
     Returns:
         Summary dict for __SCHEDULER_RESULT__.
@@ -76,15 +87,18 @@ def run(
         return {"skipped": True, "reason": "already_processed", "date": today.isoformat()}
 
     positions_path = current_positions_path or (state_dir / "current_positions.json")
+    pending_stops_path = pending_stops_path or (state_dir / "pending_stops.json")
     try:
-        return _run_daily_mark(today, results_dir, state_dir, positions_path)
+        return _run_daily_mark(today, results_dir, state_dir, positions_path, pending_stops_path)
     except PipelineAbort as exc:
         _logger.error("ABORT: %s", exc)
         send_abort_alert("daily_mark", exc)
         return {"aborted": True, "check": exc.check, "context": exc.context}
 
 
-def _run_daily_mark(today: date, results_dir: Path, state_dir: Path, positions_path: Path) -> Dict:
+def _run_daily_mark(
+    today: date, results_dir: Path, state_dir: Path, positions_path: Path, pending_stops_path: Path
+) -> Dict:
     positions = read_current_positions(path=positions_path)
     tickers = sorted({p.ticker for p in positions} | {PROXY_TICKER, "SPY", REGIME_INDEX_TICKER, REGIME_VOL_TICKER})
 
@@ -123,6 +137,9 @@ def _run_daily_mark(today: date, results_dir: Path, state_dir: Path, positions_p
                 "EXIT_CATASTROPHIC_STOP flagged for %s at %.2f (avg_cost %.2f)", p.ticker, price, p.avg_cost
             )
         updated_positions.append(p)
+
+    if catastrophic_stops:
+        _queue_pending_stops(catastrophic_stops, today, pending_stops_path)
 
     sleeve_market_value = sum(p.shares * close_today.get(p.ticker, p.avg_cost) for p in updated_positions)
     prior_cash = _read_prior_cash(positions_path)
@@ -168,6 +185,26 @@ def _run_daily_mark(today: date, results_dir: Path, state_dir: Path, positions_p
         "anomalies_count": len(anomalies),
         "catastrophic_stops_count": len(catastrophic_stops),
     }
+
+
+def _queue_pending_stops(catastrophic_stops: List[Dict], today: date, pending_stops_path: Path) -> None:
+    """
+    Merge today's catastrophic-stop flags into _state/pending_stops.json.
+
+    Upserts by ticker (a ticker already queued from an earlier, unexecuted
+    flag is not duplicated — its flag date/price are refreshed to today's).
+    jobs/run_stop_execute.py consumes and clears this queue at the next open.
+    """
+    existing = read_pending_stops(path=pending_stops_path)
+    by_ticker = {s.ticker: s for s in existing}
+    for cs in catastrophic_stops:
+        by_ticker[cs["ticker"]] = PendingStop(
+            ticker=cs["ticker"],
+            flagged_date=today.isoformat(),
+            price_at_flag=cs["price"],
+            avg_cost=cs["avg_cost"],
+        )
+    write_pending_stops(list(by_ticker.values()), path=pending_stops_path)
 
 
 def _read_prior_cash(path: Path) -> Optional[float]:

@@ -119,6 +119,37 @@ class LedgerEntry:
 
 
 @dataclass(slots=True)
+class PendingStop:
+    """
+    One queued catastrophic-stop exit — ``_state/pending_stops.json``.
+
+    Written by ``daily_mark`` when it flags a breach (spec: "flag
+    EXIT_CATASTROPHIC_STOP, execute at next open"), consumed and cleared by
+    ``jobs/run_stop_execute.py`` the next trading day. A mutable queue, not a
+    log — like ``current_positions.json``, this file is overwritten each time
+    it changes, never appended to.
+
+    ``price_at_flag``/``avg_cost`` are carried only for the audit trail
+    (what triggered this); the exit itself always fills at the execution
+    day's *actual* open (spec: unconditional exit, no re-check of the
+    threshold at execution time) and re-reads live share count from
+    ``current_positions.json`` rather than trusting a stale copy here.
+    """
+
+    ticker: str
+    flagged_date: str
+    price_at_flag: float
+    avg_cost: float
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "PendingStop":
+        return cls(**d)
+
+
+@dataclass(slots=True)
 class RegimeState:
     """One entry of ``_state/regime_history.json`` — appended once per month."""
 

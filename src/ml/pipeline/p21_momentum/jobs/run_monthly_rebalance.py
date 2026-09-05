@@ -36,13 +36,16 @@ from src.ml.pipeline.p21_momentum.config import (
     CURRENT_POSITIONS_PATH,
     EARNINGS_BLACKOUT_DAYS,
     EXCLUSIONS_PATH,
+    LOOKBACK_START,
     MAX_POSITION_PCT,
     NAV_TOTAL_USD,
+    PENDING_STOPS_PATH,
     PROXY_TICKER,
     REGIME_HISTORY_PATH,
     REGIME_INDEX_TICKER,
     REGIME_VOL_TICKER,
     RESULTS_DIR,
+    SKIP_RECENT,
     SLEEVE_TARGET_PCT,
     UPGRADE_CONFIRMATION_MONTHS,
 )
@@ -50,7 +53,7 @@ from src.ml.pipeline.p21_momentum.data.earnings import next_earnings_date
 from src.ml.pipeline.p21_momentum.data.exclusions import load_exclusions
 from src.ml.pipeline.p21_momentum.data.prices import fetch_fundamentals_cached, fetch_price_panel
 from src.ml.pipeline.p21_momentum.data.universe import fetch_universe, universe_to_json
-from src.ml.pipeline.p21_momentum.execution.ledger import read_current_positions
+from src.ml.pipeline.p21_momentum.execution.ledger import read_current_positions, read_pending_stops
 from src.ml.pipeline.p21_momentum.jobs.run_common import send_abort_alert, setup_run_logging
 from src.ml.pipeline.p21_momentum.quality.gates import (
     GateOutcome,
@@ -113,6 +116,7 @@ def run(
     regime_history_path: Path = REGIME_HISTORY_PATH,
     current_positions_path: Path = CURRENT_POSITIONS_PATH,
     exclusions_path: Path = EXCLUSIONS_PATH,
+    pending_stops_path: Path = PENDING_STOPS_PATH,
 ) -> Dict:
     """
     Execute one monthly_rebalance cycle.
@@ -122,9 +126,9 @@ def run(
             to date.today().
         force: Bypass the idempotency check (spec §3).
         results_dir, regime_history_path, current_positions_path,
-            exclusions_path: Overridable for tests (real determinism/
-            round-trip checks against a tmp dir instead of the real
-            results/p21_momentum/) — production callers never pass these.
+            exclusions_path, pending_stops_path: Overridable for tests (real
+            determinism/round-trip checks against a tmp dir instead of the
+            real results/p21_momentum/) — production callers never pass these.
 
     Returns:
         Summary dict for __SCHEDULER_RESULT__.
@@ -141,7 +145,9 @@ def run(
         return {"skipped": True, "reason": "already_processed", "date": signal_date.isoformat()}
 
     try:
-        return _run_rebalance(signal_date, results_dir, regime_history_path, current_positions_path, exclusions_path)
+        return _run_rebalance(
+            signal_date, results_dir, regime_history_path, current_positions_path, exclusions_path, pending_stops_path
+        )
     except PipelineAbort as exc:
         _logger.error("ABORT: %s", exc)
         send_abort_alert("monthly_rebalance", exc)
@@ -158,6 +164,7 @@ def _run_rebalance(
     regime_history_path: Path = REGIME_HISTORY_PATH,
     current_positions_path: Path = CURRENT_POSITIONS_PATH,
     exclusions_path: Path = EXCLUSIONS_PATH,
+    pending_stops_path: Path = PENDING_STOPS_PATH,
 ) -> Dict:
     gate_results = []
 
@@ -245,7 +252,15 @@ def _run_rebalance(
             continue
 
         fund = fundamentals.get(ticker, {})
-        signal_window = adj_close.iloc[-252:-21] if len(adj_close) >= 273 else adj_close
+        # Same window strategy/signal.py's compute_signal() uses for the 12-1 month
+        # lookback (LOOKBACK_START/SKIP_RECENT from config.py, not re-declared here)
+        # -- F3's gap check must evaluate the same window the signal was computed
+        # over, or the two silently drift apart on any future parameter tune.
+        signal_window = (
+            adj_close.iloc[-LOOKBACK_START:-SKIP_RECENT]
+            if len(adj_close) >= LOOKBACK_START + SKIP_RECENT
+            else adj_close
+        )
         outcome = run_filters(
             ticker=ticker,
             adj_close=adj_close,
@@ -278,6 +293,20 @@ def _run_rebalance(
             survivor_vol[ticker] = sig.vol
         elif ticker in held_tickers:
             forced_exits.add(ticker)  # failed F1/F2/F3/F5
+
+    # Defense in depth: jobs/run_stop_execute.py is the primary path for a
+    # catastrophic stop (executes at the next open, per spec §11). This only
+    # matters if that job somehow never ran between the flag and this
+    # rebalance (e.g. scheduler outage) -- in the normal case the ticker is
+    # no longer held by the time we get here and this is a no-op.
+    still_pending_stops = {s.ticker for s in read_pending_stops(path=pending_stops_path) if s.ticker in held_tickers}
+    if still_pending_stops:
+        _logger.warning(
+            "Forcing exit for %d ticker(s) with an unexecuted catastrophic stop: %s",
+            len(still_pending_stops),
+            sorted(still_pending_stops),
+        )
+    forced_exits |= still_pending_stops
 
     ranked = rank_candidates(survivors)
     for row in signal_rows:

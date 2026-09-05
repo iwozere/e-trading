@@ -12,9 +12,11 @@ from src.ml.pipeline.p21_momentum.execution.ledger import (
     read_all_ledger_entries,
     read_current_positions,
     read_ledger_entries_for_month,
+    read_pending_stops,
     write_current_positions,
+    write_pending_stops,
 )
-from src.ml.pipeline.p21_momentum.schemas import LedgerEntry, Position
+from src.ml.pipeline.p21_momentum.schemas import LedgerEntry, PendingStop, Position
 
 
 def _entry(ts: str, ticker: str = "AAPL") -> LedgerEntry:
@@ -126,6 +128,44 @@ class TestCurrentPositions(unittest.TestCase):
             result = read_current_positions(path=path)
             self.assertEqual(len(result), 1)
             self.assertEqual(result[0].ticker, "B")
+
+
+class TestPendingStops(unittest.TestCase):
+    def test_write_then_read_roundtrips(self):
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "pending_stops.json"
+            stops = [PendingStop(ticker="AAPL", flagged_date="2026-08-24", price_at_flag=60.0, avg_cost=100.0)]
+            write_pending_stops(stops, path=path)
+            result = read_pending_stops(path=path)
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0].ticker, "AAPL")
+            self.assertEqual(result[0].price_at_flag, 60.0)
+
+    def test_read_nonexistent_returns_empty(self):
+        result = read_pending_stops(path=Path("does/not/exist.json"))
+        self.assertEqual(result, [])
+
+    def test_write_overwrites_previous_content(self):
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "pending_stops.json"
+            write_pending_stops(
+                [PendingStop(ticker="AAPL", flagged_date="2026-08-24", price_at_flag=60.0, avg_cost=100.0)], path=path
+            )
+            write_pending_stops(
+                [PendingStop(ticker="MSFT", flagged_date="2026-08-25", price_at_flag=200.0, avg_cost=300.0)], path=path
+            )
+            result = read_pending_stops(path=path)
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0].ticker, "MSFT")
+
+    def test_write_empty_list_clears_queue(self):
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "pending_stops.json"
+            write_pending_stops(
+                [PendingStop(ticker="AAPL", flagged_date="2026-08-24", price_at_flag=60.0, avg_cost=100.0)], path=path
+            )
+            write_pending_stops([], path=path)
+            self.assertEqual(read_pending_stops(path=path), [])
 
 
 if __name__ == "__main__":

@@ -14,8 +14,8 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import List
 
-from src.ml.pipeline.p21_momentum.config import CURRENT_POSITIONS_PATH, LEDGER_PATH
-from src.ml.pipeline.p21_momentum.schemas import LedgerEntry, Position
+from src.ml.pipeline.p21_momentum.config import CURRENT_POSITIONS_PATH, LEDGER_PATH, PENDING_STOPS_PATH
+from src.ml.pipeline.p21_momentum.schemas import LedgerEntry, PendingStop, Position
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -129,3 +129,33 @@ def read_current_positions(path: Path = CURRENT_POSITIONS_PATH) -> List[Position
     with path.open("r", encoding="utf-8") as f:
         payload = json.load(f)
     return [Position.from_dict(p) for p in payload.get("positions", [])]
+
+
+def read_pending_stops(path: Path = PENDING_STOPS_PATH) -> List[PendingStop]:
+    """
+    Read _state/pending_stops.json.
+
+    Returns:
+        List of PendingStop, queued but not yet executed. Empty list if the
+        file does not exist yet (no stops ever flagged).
+    """
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8") as f:
+        payload = json.load(f)
+    return [PendingStop.from_dict(p) for p in payload.get("pending_stops", [])]
+
+
+def write_pending_stops(stops: List[PendingStop], path: Path = PENDING_STOPS_PATH) -> None:
+    """
+    Overwrite _state/pending_stops.json with the given queue.
+
+    Like current_positions.json, this is a mutable pointer ("what's still
+    waiting to be exited"), not a log — callers replace the full list on
+    every write (add a new flag, drop an executed/no-longer-held one).
+    """
+    payload = {"pending_stops": [s.to_dict() for s in stops]}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, sort_keys=True)
+    _logger.info("Wrote %d pending stops to %s", len(stops), path)
