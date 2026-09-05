@@ -99,3 +99,11 @@ def test_format_text_and_html_contain_picks():
     html = NotificationAgent.format_html(picks, DATE)
     assert "AAA" in text and "Alpha Inc" in text and DATE in text
     assert "AAA" in html and "<table" in html
+
+
+def test_format_html_escapes_external_data():
+    """Company name/ticker come from Yahoo/NASDAQ data — must not inject raw HTML."""
+    picks = [_cand("AAA", "B", 60, company_name="<script>alert(1)</script> Corp")]
+    html = NotificationAgent.format_html(picks, DATE)
+    assert "<script>" not in html
+    assert "&lt;script&gt;" in html

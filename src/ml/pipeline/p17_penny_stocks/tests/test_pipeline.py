@@ -55,11 +55,11 @@ def test_pipeline_init_creates_results_dir(tmp_path):
 
 
 def test_pipeline_uses_yesterday_as_default_date():
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     config = P17PipelineConfig.create_default()
     pipeline = P17Pipeline(config=config)
-    expected = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    expected = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
     assert pipeline.target_date == expected
 
 
@@ -189,6 +189,45 @@ def test_run_aborts_when_no_candidates_after_market():
     result = pipeline.run()
     assert result["success"] is False
     assert result["total_candidates"] == 0
+
+
+def test_run_excludes_tickers_that_fail_survival_filter():
+    """
+    Regression test: apply_survival_filter()'s result must actually narrow the
+    universe passed into _build_candidates(), not just be logged. See the P17
+    "Financial Survival" hard-stop in docs/pipeline-specification.md.
+    """
+    pipeline = _make_pipeline()
+
+    pipeline._universe_agent = MagicMock()
+    pipeline._universe_agent.run.return_value = pd.DataFrame(
+        [
+            {"ticker": "SURVIVOR", "price": 3.0, "market_cap": 100_000_000},
+            {"ticker": "ZOMBIE", "price": 2.0, "market_cap": 50_000_000},
+        ]
+    )
+
+    pipeline._market_agent = MagicMock()
+    pipeline._market_agent.run.return_value = ({}, {})
+    # ZOMBIE fails the cash-runway/debt-to-cash hard-stop; only SURVIVOR passes.
+    pipeline._market_agent.apply_survival_filter.return_value = ["SURVIVOR"]
+
+    pipeline._technical_agent = MagicMock()
+    pipeline._ss_agent = MagicMock()
+    pipeline._dilution_agent = MagicMock()
+    pipeline._catalyst_agent = MagicMock()
+    pipeline._scoring_agent = MagicMock()
+    pipeline._reporting_agent = MagicMock()
+    pipeline._reporting_agent.run.return_value = {}
+    pipeline._notification_agent = MagicMock()
+    pipeline._notification_agent.run.return_value = {}
+
+    result = pipeline.run()
+
+    assert result["success"] is True
+    assert result["total_candidates"] == 1
+    passed_candidates = pipeline._reporting_agent.run.call_args[0][0]
+    assert [c.ticker for c in passed_candidates] == ["SURVIVOR"]
 
 
 # ── _run_job ───────────────────────────────────────────────────────────────────

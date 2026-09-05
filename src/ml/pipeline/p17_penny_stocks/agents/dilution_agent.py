@@ -16,7 +16,7 @@ Total penalty is the SUM of all applicable penalties.
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import List, Union
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -24,6 +24,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.data.downloader.edgar_downloader import EdgarDownloader
 from src.ml.pipeline.p17_penny_stocks.config import P17ScoringConfig
 from src.ml.pipeline.p17_penny_stocks.models.candidate import Candidate
+from src.ml.pipeline.shared.edgar_cik import build_cik_map, parse_filing_date
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -84,7 +85,7 @@ class DilutionAgent:
         """
         _logger.info("Dilution agent: analysing %d candidates via EDGAR", len(candidates))
 
-        cik_map = self._build_cik_map(candidates)
+        cik_map = build_cik_map(self._edgar, [c.ticker for c in candidates])
         if not cik_map:
             _logger.warning("CIK map empty — dilution detection skipped")
             return candidates
@@ -98,7 +99,11 @@ class DilutionAgent:
             if cik is None:
                 skipped += 1
                 continue
-            self._analyse_filings(c, cik, since_shelf, force_refresh)
+            try:
+                self._analyse_filings(c, cik, since_shelf, force_refresh)
+            except Exception:
+                _logger.exception("Dilution analysis failed for %s — leaving defaults", c.ticker)
+                continue
             enriched += 1
 
         _logger.info("Dilution agent: %d analysed, %d skipped (no CIK)", enriched, skipped)
@@ -128,7 +133,7 @@ class DilutionAgent:
             date_str = str(filing.get("filingDate") or "")
             description = str(filing.get("description") or "").lower()
 
-            filing_date = self._parse_date(date_str)
+            filing_date = parse_filing_date(date_str)
             if filing_date is None:
                 continue
 
@@ -158,35 +163,3 @@ class DilutionAgent:
             c.dilution_signals = signals
             _logger.debug("%s dilution_penalty=%.0f signals=%s", c.ticker, penalty, signals)
 
-    # ── Helpers ────────────────────────────────────────────────────────────
-
-    def _build_cik_map(self, candidates: List[Candidate]) -> Dict[str, Union[int, str]]:
-        """
-        Resolve candidate tickers to CIK numbers using EDGAR company_tickers.json.
-        Returns Dict[ticker → cik].
-        """
-        try:
-            tickers = [c.ticker for c in candidates]
-            raw_map: Dict[str, Any] = self._edgar.load_company_tickers()
-            ticker_to_cik: Dict[str, Union[int, str]] = {}
-            for entry in raw_map.values():
-                t = str(entry.get("ticker", "")).upper()
-                c_str = entry.get("cik_str")
-                if t and c_str:
-                    ticker_to_cik[t] = int(c_str) if str(c_str).isdigit() else c_str
-
-            result = {t: ticker_to_cik[t] for t in tickers if t in ticker_to_cik}
-            _logger.info("CIK map: resolved %d/%d tickers", len(result), len(tickers))
-            return result
-        except Exception:
-            _logger.exception("Failed to build CIK map")
-            return {}
-
-    @staticmethod
-    def _parse_date(date_str: str) -> datetime | None:
-        for fmt in ("%Y-%m-%d", "%Y%m%d"):
-            try:
-                return datetime.strptime(date_str, fmt)
-            except ValueError:
-                continue
-        return None

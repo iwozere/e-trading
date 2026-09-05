@@ -48,6 +48,7 @@ import pandas as pd
 from src.data.downloader.edgar_downloader import EdgarDownloader
 from src.ml.pipeline.p17_penny_stocks.config import P17CatalystConfig
 from src.ml.pipeline.p17_penny_stocks.models.candidate import Candidate
+from src.ml.pipeline.shared.edgar_cik import build_cik_map, parse_filing_date
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -140,7 +141,7 @@ class CatalystAgent:
         Returns:
             Same list with catalyst fields set.
         """
-        cik_map = self._build_cik_map(candidates)
+        cik_map = build_cik_map(self._edgar, [c.ticker for c in candidates])
         if not cik_map:
             _logger.warning("CIK map empty — catalyst detection skipped")
             return candidates
@@ -161,12 +162,15 @@ class CatalystAgent:
             if cik is None:
                 skipped += 1
                 continue
-            if index_by_cik is not None:
-                rows = index_by_cik.get(_cik_key(cik), [])
-            else:
-                rows = self._fetch_edgar_rows(cik, since, force_refresh)
-            if self._score_candidate(c, rows, today):
-                flagged += 1
+            try:
+                if index_by_cik is not None:
+                    rows = index_by_cik.get(_cik_key(cik), [])
+                else:
+                    rows = self._fetch_edgar_rows(cik, since, force_refresh)
+                if self._score_candidate(c, rows, today):
+                    flagged += 1
+            except Exception:
+                _logger.exception("Catalyst analysis failed for %s — leaving defaults", c.ticker)
 
         _logger.info(
             "Catalyst agent: %d candidates with a catalyst, %d skipped (no CIK)",
@@ -189,7 +193,7 @@ class CatalystAgent:
         the caller to fall back to the per-CIK EDGAR path. Returns a (possibly
         empty) dict when at least one daily index file is present.
         """
-        index_dir = self._edgar._8k_index_dir
+        index_dir = self._edgar.eight_k_index_dir
         if not index_dir.exists():
             return None
 
@@ -215,7 +219,7 @@ class CatalystAgent:
                             {
                                 "items": str(r.get("items", "") or ""),
                                 "description": str(r.get("description", "") or ""),
-                                "filing_date": self._parse_date(str(r.get("filed_date", "") or "")),
+                                "filing_date": parse_filing_date(str(r.get("filed_date", "") or "")),
                             }
                         )
             current += timedelta(days=1)
@@ -244,7 +248,7 @@ class CatalystAgent:
                 {
                     "items": str(filing.get("items") or ""),
                     "description": str(filing.get("primaryDocDescription") or ""),
-                    "filing_date": self._parse_date(str(filing.get("filingDate") or "")),
+                    "filing_date": parse_filing_date(str(filing.get("filingDate") or "")),
                 }
             )
         return rows
@@ -337,32 +341,3 @@ class CatalystAgent:
             return 0.35
         return 0.0
 
-    # ── Helpers ────────────────────────────────────────────────────────────
-
-    def _build_cik_map(self, candidates: List[Candidate]) -> Dict[str, Union[int, str]]:
-        """Resolve candidate tickers to CIK numbers via EDGAR company_tickers.json."""
-        try:
-            tickers = [c.ticker for c in candidates]
-            raw_map: Dict[str, Any] = self._edgar.load_company_tickers()
-            ticker_to_cik: Dict[str, Union[int, str]] = {}
-            for entry in raw_map.values():
-                t = str(entry.get("ticker", "")).upper()
-                c_str = entry.get("cik_str")
-                if t and c_str:
-                    ticker_to_cik[t] = int(c_str) if str(c_str).isdigit() else c_str
-
-            result = {t: ticker_to_cik[t] for t in tickers if t in ticker_to_cik}
-            _logger.info("CIK map: resolved %d/%d tickers", len(result), len(tickers))
-            return result
-        except Exception:
-            _logger.exception("Failed to build CIK map")
-            return {}
-
-    @staticmethod
-    def _parse_date(date_str: str) -> datetime | None:
-        for fmt in ("%Y-%m-%d", "%Y%m%d"):
-            try:
-                return datetime.strptime(date_str, fmt)
-            except ValueError:
-                continue
-        return None

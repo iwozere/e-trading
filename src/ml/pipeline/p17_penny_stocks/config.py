@@ -115,6 +115,19 @@ class P17ScoringConfig:
     # Minimum score to trigger alert notification
     min_alert_score: float = 75.0
 
+    def __post_init__(self) -> None:
+        total = (
+            self.weight_momentum
+            + self.weight_volume
+            + self.weight_technical
+            + self.weight_fundamentals
+            + self.weight_catalyst
+            + self.weight_short_squeeze
+            + self.weight_accumulation
+        )
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"P17ScoringConfig sub-score weights must sum to 1.0, got {total}")
+
 
 @dataclass
 class P17CatalystConfig:

@@ -169,6 +169,11 @@ class EdgarDownloader(BaseDataDownloader):
     # BaseDataDownloader interface
     # ------------------------------------------------------------------
 
+    @property
+    def eight_k_index_dir(self) -> Path:
+        """Public accessor for the daily 8-K index cache directory (DATA_CACHE_DIR/edgar/8k/index)."""
+        return self._8k_index_dir
+
     def get_provider_name(self) -> str:
         """Return the canonical provider name."""
         return "edgar"

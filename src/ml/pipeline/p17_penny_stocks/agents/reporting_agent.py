@@ -217,8 +217,9 @@ class ReportingAgent:
         if high_dilution:
             lines += ["## ⚠ Dilution Warnings", ""]
             for c in high_dilution:
+                ticker = self._md_cell(c.ticker)
                 lines.append(
-                    f"- **{c.ticker}**: penalty={c.dilution_penalty:.0f}  signals={', '.join(c.dilution_signals)}"
+                    f"- **{ticker}**: penalty={c.dilution_penalty:.0f}  signals={', '.join(c.dilution_signals)}"
                 )
             lines.append("")
 
@@ -272,16 +273,22 @@ class ReportingAgent:
             return None
 
     @staticmethod
-    def _candidate_table(candidates: List[Candidate]) -> List[str]:
+    def _md_cell(text: str) -> str:
+        """Sanitise external-data text for a Markdown table cell (no pipes/newlines)."""
+        return text.replace("|", "/").replace("\n", " ").replace("\r", " ").strip()
+
+    @classmethod
+    def _candidate_table(cls, candidates: List[Candidate]) -> List[str]:
         header = "| Ticker | Score | Tier | Price | RVol | 20d% | SI% | Rev% | Signals |"
         sep = "|--------|-------|------|-------|------|------|-----|------|---------|"
         rows = [header, sep]
         for c in candidates:
             si = f"{c.short_interest_pct_float * 100:.0f}%" if c.short_interest_pct_float else "—"
             rev = f"{c.revenue_growth_yoy * 100:.0f}%" if c.revenue_growth_yoy else "—"
-            sig = ", ".join(c.signals[:3]) if c.signals else "—"
+            sig = cls._md_cell(", ".join(c.signals[:3])) if c.signals else "—"
+            ticker = cls._md_cell(c.ticker)
             rows.append(
-                f"| {c.ticker} | {c.final_score:.1f} | {c.tier} "
+                f"| {ticker} | {c.final_score:.1f} | {c.tier} "
                 f"| ${c.price:.2f} | {c.relative_volume:.1f}x "
                 f"| {c.price_20d_return * 100:.0f}% | {si} | {rev} | {sig} |"
             )

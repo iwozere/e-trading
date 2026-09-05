@@ -17,7 +17,7 @@ failing stage does not abort the pipeline.
 import logging
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Callable, Dict, List
@@ -69,7 +69,7 @@ class P17Pipeline:
         self.config = config or P17PipelineConfig.create_default()
 
         if target_date is None:
-            target_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+            target_date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
         self.target_date = target_date
 
         self._results_dir = Path("results") / "p17_penny_stocks" / target_date
@@ -169,16 +169,27 @@ class P17Pipeline:
         # ── Stage 2: Market data ───────────────────────────────────────────
         ohlcv: Dict = {}
         fundamentals: Dict = {}
+        # Default to the full universe so a Stage2 failure degrades gracefully
+        # (matches pre-existing behaviour) instead of silently dropping everyone.
+        survived_tickers: List[str] = list(ticker_list)
 
         def stage2() -> Dict:
-            nonlocal ohlcv, fundamentals
+            nonlocal ohlcv, fundamentals, survived_tickers
             ohlcv, fundamentals = self._market_agent.run(ticker_list, force_refresh)
 
-            # Survival filter (cash runway, debt/cash)
-            survived = self._market_agent.apply_survival_filter(ticker_list, fundamentals, self.config.filter_config)
-            return {"ohlcv_tickers": len(ohlcv), "survived_survival": len(survived)}
+            # Survival filter (cash runway, debt/cash) — hard-reject per spec
+            # §"Financial Survival"; must actually narrow the universe, not just
+            # be logged, or insolvent names keep flowing through to scoring/alerts.
+            survived_tickers = self._market_agent.apply_survival_filter(
+                ticker_list, fundamentals, self.config.filter_config
+            )
+            return {"ohlcv_tickers": len(ohlcv), "survived_survival": len(survived_tickers)}
 
         job_results["market"] = self._run_job("Stage2 Market", stage2)
+
+        # Drop tickers that failed the survival hard-stops before building candidates
+        survived_set = set(survived_tickers)
+        universe_df = universe_df.loc[universe_df["ticker"].isin(survived_set)].reset_index(drop=True)
 
         # Build Candidate objects from universe_df rows
         candidates = self._build_candidates(universe_df, fundamentals)

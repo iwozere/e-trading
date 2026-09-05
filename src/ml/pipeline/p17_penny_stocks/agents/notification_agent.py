@@ -12,6 +12,7 @@ Any failure here is logged and swallowed: notifications must never abort the
 pipeline, whose results are already written to disk by the reporting agent.
 """
 
+import html
 import sys
 from pathlib import Path
 from typing import Optional, Any, Dict, List
@@ -164,20 +165,27 @@ class NotificationAgent:
         rows = []
         for i, c in enumerate(picks, 1):
             colour = tier_badge.get(c.tier, "#5f6368")
+            # Ticker/company name/catalyst text originate from external data (Yahoo
+            # Finance, NASDAQ symbol files, EDGAR filing descriptions) — escape before
+            # interpolating into HTML that gets emailed out.
+            ticker = html.escape(c.ticker)
+            company = html.escape(c.company_name) if c.company_name else "—"
+            tier = html.escape(c.tier)
+            catalysts = html.escape(cls._pretty_catalysts(c))
             rows.append(f"""
             <tr style="border-bottom:1px solid #eee;">
               <td style="padding:8px 10px;text-align:right;color:#888;">{i}</td>
-              <td style="padding:8px 10px;font-weight:600;">{c.ticker}</td>
-              <td style="padding:8px 10px;color:#444;">{c.company_name or "—"}</td>
+              <td style="padding:8px 10px;font-weight:600;">{ticker}</td>
+              <td style="padding:8px 10px;color:#444;">{company}</td>
               <td style="padding:8px 10px;text-align:center;">
                 <span style="background:{colour};color:#fff;border-radius:4px;
-                  padding:2px 8px;font-size:12px;font-weight:600;">{c.tier}</span>
+                  padding:2px 8px;font-size:12px;font-weight:600;">{tier}</span>
               </td>
               <td style="padding:8px 10px;text-align:right;font-weight:600;">{c.final_score:.1f}</td>
               <td style="padding:8px 10px;text-align:right;">${c.price:.2f}</td>
               <td style="padding:8px 10px;text-align:right;">{c.relative_volume:.1f}x</td>
               <td style="padding:8px 10px;text-align:right;">{c.catalyst_score:.0f}</td>
-              <td style="padding:8px 10px;color:#444;font-size:13px;">{cls._pretty_catalysts(c)}</td>
+              <td style="padding:8px 10px;color:#444;font-size:13px;">{catalysts}</td>
             </tr>""")
 
         table = f"""

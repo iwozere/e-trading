@@ -64,8 +64,14 @@ class TechnicalAgent:
                 _logger.debug("No OHLCV for %s — skipping technical analysis", c.ticker)
                 skipped += 1
                 continue
-            self._enrich(c, df)
-            enriched += 1
+            try:
+                self._enrich(c, df)
+                enriched += 1
+            except Exception:
+                # One pathological ticker's OHLCV must not blank out the whole
+                # stage — leave this candidate at its default (unenriched) values.
+                _logger.exception("Technical enrichment failed for %s — leaving defaults", c.ticker)
+                skipped += 1
 
         _logger.info("Technical agent: %d enriched, %d skipped (no OHLCV)", enriched, skipped)
         return candidates

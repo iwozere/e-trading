@@ -29,7 +29,7 @@ def _cache_agent(tmp_path):
     agent._edgar = MagicMock()
     index_dir = tmp_path / "8k_index"
     index_dir.mkdir()
-    agent._edgar._8k_index_dir = index_dir
+    agent._edgar.eight_k_index_dir = index_dir
     agent._edgar.load_company_tickers.return_value = {"0": {"ticker": "TEST", "cik_str": 111}}
     return agent, index_dir
 
@@ -38,7 +38,7 @@ def _legacy_agent(tmp_path):
     """Agent whose index dir does NOT exist → falls back to per-CIK EDGAR."""
     agent = CatalystAgent(P17CatalystConfig(), tmp_path, TARGET_DATE)
     agent._edgar = MagicMock()
-    agent._edgar._8k_index_dir = tmp_path / "missing_8k_index"  # never created
+    agent._edgar.eight_k_index_dir = tmp_path / "missing_8k_index"  # never created
     agent._edgar.load_company_tickers.return_value = {"0": {"ticker": "TEST", "cik_str": 111}}
     return agent
 

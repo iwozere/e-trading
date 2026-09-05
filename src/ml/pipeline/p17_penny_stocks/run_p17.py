@@ -12,7 +12,7 @@ Usage:
 import argparse
 import json
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -88,7 +88,7 @@ def main() -> int:
             "tier_c_count": result.get("tier_c", 0),
             "explosive_count": result.get("explosive", 0),
             "results_dir": str(results_dir),
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         print(f"__SCHEDULER_RESULT__:{json.dumps(scheduler_result)}")
 
@@ -100,7 +100,7 @@ def main() -> int:
         result_err = {
             "success": False,
             "error": "Pipeline execution failed",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         print(f"__SCHEDULER_RESULT__:{json.dumps(result_err)}")
         return 1
