@@ -1,14 +1,18 @@
 """Tests for P20 Kestrel GDELT processor — utility functions."""
 
 import sys
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.ml.pipeline.p20_kestrel.sentiment import gdelt_processor
 from src.ml.pipeline.p20_kestrel.sentiment.gdelt_processor import (
     _MIN_PERIODS,
     GdeltProcessor,
+    _compute_zscores,
     _fuzzy_score,
     _normalize,
     _parse_v2tone,
@@ -103,6 +107,45 @@ def test_process_gkg_file_parses_orgs_slice(tmp_path):
     assert str(rec["date"]) == "2026-07-07"
     assert rec["avg_tone"] == 2.5
     assert rec["source_domain"] == "reuters.com"
+
+
+# ── Z-score computation ──────────────────────────────────────────────────────
+
+
+def test_compute_zscores_handles_decimal_history(monkeypatch):
+    """
+    Historical rows loaded via SQLAlchemy Numeric columns (asdecimal not yet
+    fixed, or a future regression re-introducing it) come back as
+    decimal.Decimal, not float. Regression test for the 2026-09-07 production
+    crash: pandas' .std() raised
+    ``TypeError: unsupported operand type(s) for -: 'float' and 'decimal.Decimal'``
+    when a history DataFrame held Decimal objects.
+    """
+    hist_rows = [
+        {"mentions": Decimal(n), "avg_tone": Decimal(str(t))}
+        for n, t in zip(range(1, _MIN_PERIODS + 2), [1.0 + 0.1 * i for i in range(_MIN_PERIODS + 1)])
+    ]
+    monkeypatch.setattr(gdelt_processor, "get_sentiment_history", lambda *a, **kw: hist_rows)
+
+    agg_rows = [{"ticker": "AAPL", "mentions": 5, "avg_tone": 2.0}]
+    scored = _compute_zscores(agg_rows, date(2026, 9, 6))
+
+    assert scored[0]["mention_z20"] is not None
+    assert isinstance(scored[0]["mention_z20"], float)
+    assert scored[0]["tone_z20"] is not None
+    assert isinstance(scored[0]["tone_z20"], float)
+
+
+def test_compute_zscores_warmup_below_min_periods(monkeypatch):
+    """Fewer than _MIN_PERIODS history rows leaves z-scores as None (warm-up)."""
+    hist_rows = [{"mentions": Decimal(3), "avg_tone": Decimal("1.0")}]
+    monkeypatch.setattr(gdelt_processor, "get_sentiment_history", lambda *a, **kw: hist_rows)
+
+    agg_rows = [{"ticker": "AAPL", "mentions": 5, "avg_tone": 2.0}]
+    scored = _compute_zscores(agg_rows, date(2026, 9, 6))
+
+    assert scored[0]["mention_z20"] is None
+    assert scored[0]["tone_z20"] is None
 
 
 def test_process_gkg_file_rejects_unknown_header(tmp_path):

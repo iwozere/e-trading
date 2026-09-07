@@ -35,12 +35,12 @@ class K20Universe(Base):
     exchange: Mapped[str | None] = mapped_column(Text)
     sector: Mapped[str | None] = mapped_column(Text)
     industry: Mapped[str | None] = mapped_column(Text)
-    mcap: Mapped[float | None] = mapped_column(Numeric)
-    adv_20d: Mapped[float | None] = mapped_column(Numeric)
-    revenue_yoy_growth: Mapped[float | None] = mapped_column(Numeric)
-    gross_margin: Mapped[float | None] = mapped_column(Numeric)
-    net_debt_ebitda: Mapped[float | None] = mapped_column(Numeric)
-    interest_coverage: Mapped[float | None] = mapped_column(Numeric)
+    mcap: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
+    adv_20d: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
+    revenue_yoy_growth: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
+    gross_margin: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
+    net_debt_ebitda: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
+    interest_coverage: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
     status: Mapped[str] = mapped_column(
         Text,
         nullable=False,
@@ -113,7 +113,7 @@ class K20Signal(Base):
     ticker: Mapped[str] = mapped_column(Text, primary_key=True)
     date: Mapped[date] = mapped_column(Date, primary_key=True)
     signal_type: Mapped[str] = mapped_column(Text, primary_key=True)
-    value: Mapped[float | None] = mapped_column(Numeric)
+    value: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
     sleeve: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (
@@ -133,15 +133,15 @@ class K20SentimentDaily(Base):
     ticker: Mapped[str] = mapped_column(Text, primary_key=True)
     date: Mapped[date] = mapped_column(Date, primary_key=True)
     source: Mapped[str] = mapped_column(Text, primary_key=True)
-    mentions: Mapped[float | None] = mapped_column(Numeric)
-    avg_tone: Mapped[float | None] = mapped_column(Numeric)
-    tone_std: Mapped[float | None] = mapped_column(Numeric)
-    pos_score: Mapped[float | None] = mapped_column(Numeric)
-    neg_score: Mapped[float | None] = mapped_column(Numeric)
-    bullish_ratio: Mapped[float | None] = mapped_column(Numeric)
+    mentions: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
+    avg_tone: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
+    tone_std: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
+    pos_score: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
+    neg_score: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
+    bullish_ratio: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
     top_domains: Mapped[dict | None] = mapped_column(JsonType())
-    mention_z20: Mapped[float | None] = mapped_column(Numeric)
-    tone_z20: Mapped[float | None] = mapped_column(Numeric)
+    mention_z20: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
+    tone_z20: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
 
     __table_args__ = (
         CheckConstraint(
@@ -197,7 +197,7 @@ class K20LLMRun(Base):
     model: Mapped[str | None] = mapped_column(Text)
     tokens_in: Mapped[int | None] = mapped_column(Integer)
     tokens_out: Mapped[int | None] = mapped_column(Integer)
-    cost_usd: Mapped[float | None] = mapped_column(Numeric(10, 6))
+    cost_usd: Mapped[float | None] = mapped_column(Numeric(10, 6, asdecimal=False))
     verdict: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (
@@ -215,7 +215,7 @@ class K20Watchlist(Base):
 
     ticker: Mapped[str] = mapped_column(Text, primary_key=True)
     sleeve: Mapped[str] = mapped_column(Text, primary_key=True)
-    score: Mapped[float | None] = mapped_column(Numeric)
+    score: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
     llm_verdict: Mapped[str | None] = mapped_column(Text)
     dossier_run_id: Mapped[int | None] = mapped_column(BigInteger)
     thesis_short: Mapped[str | None] = mapped_column(Text)
@@ -244,12 +244,12 @@ class K20Position(Base):
     ticker: Mapped[str] = mapped_column(Text, nullable=False)
     sleeve: Mapped[str] = mapped_column(Text, nullable=False)
     entry_date: Mapped[date | None] = mapped_column(Date)
-    entry_px: Mapped[float | None] = mapped_column(Numeric(12, 4))
-    size_pct: Mapped[float | None] = mapped_column(Numeric(5, 2))
-    stop_px: Mapped[float | None] = mapped_column(Numeric(12, 4))
-    t1_px: Mapped[float | None] = mapped_column(Numeric(12, 4))
-    t2_px: Mapped[float | None] = mapped_column(Numeric(12, 4))
-    trail_pct: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    entry_px: Mapped[float | None] = mapped_column(Numeric(12, 4, asdecimal=False))
+    size_pct: Mapped[float | None] = mapped_column(Numeric(5, 2, asdecimal=False))
+    stop_px: Mapped[float | None] = mapped_column(Numeric(12, 4, asdecimal=False))
+    t1_px: Mapped[float | None] = mapped_column(Numeric(12, 4, asdecimal=False))
+    t2_px: Mapped[float | None] = mapped_column(Numeric(12, 4, asdecimal=False))
+    trail_pct: Mapped[float | None] = mapped_column(Numeric(5, 2, asdecimal=False))
     realized_thirds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     status: Mapped[str] = mapped_column(Text, nullable=False, default="open")
     notes: Mapped[str | None] = mapped_column(Text)

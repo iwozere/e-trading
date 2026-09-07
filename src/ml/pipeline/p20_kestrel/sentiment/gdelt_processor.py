@@ -264,7 +264,13 @@ def _compute_zscores(
     for ticker in tickers:
         hist_rows = get_sentiment_history(ticker, "gdelt", start=lookback_start, end=as_of_date)
         if hist_rows:
-            history[ticker] = pd.DataFrame(hist_rows)
+            hist_df = pd.DataFrame(hist_rows)
+            # Numeric DB columns can surface as decimal.Decimal (SQLAlchemy's default
+            # for Numeric); pandas' .mean()/.std() can't mix those with the float64
+            # aggregates below, so normalize to float defensively regardless of what
+            # the history source hands back.
+            hist_df[["mentions", "avg_tone"]] = hist_df[["mentions", "avg_tone"]].astype(float)
+            history[ticker] = hist_df
 
     for row in agg_rows:
         ticker = row["ticker"]

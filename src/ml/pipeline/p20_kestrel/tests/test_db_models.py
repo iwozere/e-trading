@@ -11,6 +11,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from sqlalchemy import Numeric
+
 from src.data.db.models.model_kestrel import (
     K20AlertsLog,
     K20AliasBlocklist,
@@ -96,3 +98,30 @@ def test_k20_catalyst_columns():
     columns = {c.name for c in K20Catalyst.__table__.columns}
     for required in ("id", "ticker", "event_type", "event_date", "state"):
         assert required in columns, f"k20_catalysts missing column: {required}"
+
+
+def test_numeric_columns_decode_as_float_not_decimal():
+    """
+    Every Numeric column typed ``Mapped[float | None]`` must set asdecimal=False.
+
+    Regression test for the 2026-09-07 production crash: SQLAlchemy's Numeric
+    type defaults to returning decimal.Decimal, which then can't mix with the
+    float64 values pandas computes downstream (e.g. gdelt_processor's z-score
+    std/mean). Every model here declares these columns as float, so the DB
+    driver must be told to hand back float, not Decimal.
+    """
+    models = [
+        K20Universe,
+        K20Signal,
+        K20SentimentDaily,
+        K20Watchlist,
+        K20Position,
+        K20LLMRun,
+    ]
+    for model in models:
+        for column in model.__table__.columns:
+            if isinstance(column.type, Numeric):
+                assert column.type.asdecimal is False, (
+                    f"{model.__name__}.{column.name} is Numeric but doesn't set "
+                    "asdecimal=False — it will decode as decimal.Decimal, not float"
+                )
