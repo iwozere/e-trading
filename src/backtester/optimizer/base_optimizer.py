@@ -11,7 +11,7 @@ import sys
 import warnings
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 
 import backtrader as bt
 import numpy as np
@@ -273,7 +273,7 @@ class BaseOptimizer:
             _logger.exception("Error extracting backtest results:")
             raise
 
-    def _create_optuna_study(self, direction: str = "minimize") -> optuna.Study:
+    def _create_optuna_study(self, direction: Literal["minimize", "maximize"] = "minimize") -> optuna.Study:
         """
         Create Optuna study for optimization.
 
