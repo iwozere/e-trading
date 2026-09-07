@@ -63,6 +63,13 @@ class FeatureContext:
         """
         return self.repo.count_phase3_assets_by_therapeutic_area(company_id)
 
+    def get_trials_for_company(self, company_id: int) -> List[Dict[str, Any]]:
+        """Pass-through to `P22Repo.get_trials_for_company` — spec §4.2's Block B, read by
+        `features/block_b.py`. Same "never touch repo directly" discipline as every other
+        feature-function read; not lookahead-audited (same reasoning as
+        `get_phase3_asset_count_by_ta` — `p22_trial` is a plain upsert, not bitemporal)."""
+        return self.repo.get_trials_for_company(company_id)
+
     def get_verified_process_events(self, company_id: int) -> List[Dict[str, Any]]:
         """Pass-through to `P22Repo.get_verified_process_events`, bound to `self.as_of` — spec
         §4.7's Block G, read by `features/block_g.py`. Already lookahead-gated AND

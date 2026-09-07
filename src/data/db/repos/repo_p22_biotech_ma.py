@@ -444,6 +444,43 @@ class P22Repo:
             counts[therapeutic_area] = counts.get(therapeutic_area, 0) + 1
         return counts
 
+    def get_trials_for_company(self, company_id: int) -> List[Dict[str, Any]]:
+        """
+        Every `p22_trial` row linked (via `p22_trial.asset_id`) to any `p22_asset` owned by
+        `company_id` — the shared input for Block B's `phase_max`/`asset_count_ph2plus`/
+        `catalyst_window`/`lead_asset_poa` (spec §4.2), all of which need the company's whole
+        trial portfolio at once rather than one row at a time. Kept as one query + pure Python
+        aggregation in `features/block_b.py`, rather than several narrower COUNT/MAX queries —
+        same "dumb repo, smart feature module" split as `get_patent_expiries_for_acquirer`.
+
+        Same coverage gap as `count_phase3_assets_by_therapeutic_area`: only reaches
+        single-intervention-trial-linked assets (`docs/Tasks.md` item 8).
+
+        Returns:
+            `[{"asset_id", "therapeutic_area", "phase", "primary_completion_date", "status"}, ...]`.
+        """
+        rows = self.session.execute(
+            select(
+                P22Trial.asset_id,
+                P22Asset.therapeutic_area,
+                P22Trial.phase,
+                P22Trial.primary_completion_date,
+                P22Trial.status,
+            )
+            .join(P22Asset, P22Asset.asset_id == P22Trial.asset_id)
+            .where(P22Asset.company_id == company_id)
+        ).all()
+        return [
+            {
+                "asset_id": r.asset_id,
+                "therapeutic_area": r.therapeutic_area,
+                "phase": r.phase,
+                "primary_completion_date": r.primary_completion_date,
+                "status": r.status,
+            }
+            for r in rows
+        ]
+
     # ------------------------------------------------------------------
     # Patent expiry — acquirer side (spec §2.3, §4.1 Block A)
     # ------------------------------------------------------------------

@@ -53,6 +53,8 @@ STRATEGIC_PROCESS_PHRASES_YAML = PROJECT_ROOT / "config" / "pipeline" / "p22_str
 # design pending domain review; see that file's header. Deliberately at config/ root, not
 # config/pipeline/ — spec names it `config/activist_filers.yaml` directly (§2.6.2).
 ACTIVIST_FILERS_YAML = PROJECT_ROOT / "config" / "activist_filers.yaml"
+# Probability-of-approval base rates (spec §4.2), for features/block_b.py's lead_asset_poa.
+BASE_RATES_YAML = PROJECT_ROOT / "config" / "pipeline" / "p22_base_rates.yaml"
 
 # ---------------------------------------------------------------------------
 # ClinicalTrials.gov API v2 (spec §2.2)

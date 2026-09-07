@@ -252,6 +252,22 @@ def test_get_verified_process_events_enforces_verification_and_lookahead_gates(d
     assert verified_but_future_known_id not in visible_ids
 
 
+def test_get_trials_for_company_returns_asset_and_trial_fields(db_session) -> None:
+    """`features/block_b.py`'s shared input — one row per trial, joined to its asset's TA
+    (spec §4.2)."""
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000039", name="Block B Inc", role="target")
+    asset_id = repo.upsert_asset(company_id=company_id, name="Asset-1", therapeutic_area="oncology_solid")
+    repo.upsert_trial(nct_id="NCT00002001", asset_id=asset_id, phase="PHASE2", primary_completion_date=date(2027, 1, 1))
+
+    trials = repo.get_trials_for_company(company_id)
+
+    assert trials == [{
+        "asset_id": asset_id, "therapeutic_area": "oncology_solid", "phase": "PHASE2",
+        "primary_completion_date": date(2027, 1, 1), "status": None,
+    }]
+
+
 def test_upsert_activist_position_idempotent_on_natural_key(db_session) -> None:
     """`(company_id, filer_cik, form_type, filed_date)` is the idempotency key (spec §3.2 gives
     this table no natural unique key, same gap as p22_patent_expiry) — a re-scan of an overlapping

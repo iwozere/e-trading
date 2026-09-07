@@ -178,6 +178,18 @@ use in the code/config; this section exists so they're all in one place to walk 
     Point, JANA Partners) each resolved to multiple distinct real CIKs (affiliated
     LP/GP/co-investment entities) with no mechanical way to tell which one actually files the
     firm's 13Ds — left out rather than guessed, same discipline as item 3's acquirer-roster CIKs.
+13. **`lead_asset_poa`'s later-phase and orphan-status combination formula is underspecified** —
+    new, found 2026-09-08 building `features/block_b.py`. `p22_base_rates.yaml`'s
+    `by_therapeutic_area` figures are LOA-FROM-PHASE-1 (already conditional on being no further
+    than Phase 1); spec gives separate, TA-AGNOSTIC `phase_2_success`/`phase_3_to_filing`/
+    `filing_to_approval` rates for later stages but never says how to recompose a TA-specific
+    later-phase estimate from a TA-specific Phase-1 figure plus TA-agnostic later-stage rates.
+    `orphan_by_phase` compounds this: it's a full alternate phase-conditional rate table (its own
+    Phase I/II/III POS for orphan vs. non-orphan), not a simple multiplier, so how it's meant to
+    combine with `by_therapeutic_area` at all is unclear — asked as a genuine question, not
+    resolved by guessing. `features/block_b.lead_asset_poa` computes a real value only for a lead
+    asset still at Phase I or earlier (where `by_therapeutic_area` applies directly with no
+    composition needed) and returns `None` for anything further along, pending this decision.
 
 ## Implementation Status
 
@@ -350,12 +362,40 @@ use in the code/config; this section exists so they're all in one place to walk 
       `deal_cadence_3y`/`stock_deal_propensity` are NOT stubbed even as always-`None` functions —
       both need `p22_deal`, a table that doesn't exist until M6; a stub reading a nonexistent table
       would be pure theater (module docstring).
-- [ ] Blocks B, D, E, F (spec §4.2, §4.4, §4.5, §4.6) — not started. Block B needs real base rates
-      (item 2, mostly done) + broader `p22_trial`/`p22_asset` coverage (currently only
-      single-intervention trials link, item 8). Block D is computed from Blocks A-C's own outputs so
-      it's blocked transitively. Block E needs 8-K/DEF 14A text-parsing infrastructure that doesn't
-      exist. Block F needs 13F integration (M5/M6 scope per spec's own milestone table). Not attempted
-      this pass rather than built against fabricated/guessed inputs.
+- [x] `features/block_b.py`, 2026-09-08 — `phase_max`, `asset_count_ph2plus`, `catalyst_window`,
+      `lead_asset_poa` implemented and registered (spec §4.2), all reading
+      `FeatureContext.get_trials_for_company` (new — one query returning the company's whole
+      trial/asset portfolio, since these features need portfolio-level aggregation, not a single
+      fact lookup like Block A/C). New `ingest/base_rates_config.py` is `p22_base_rates.yaml`'s
+      first real reader — that file has been fully curated since 2026-08-31 (item 2) but had no
+      consumer until now. **"Lead asset" is a disclosed proxy**: `p22_asset.is_lead` is always
+      `None` (`asset_normalization.py`'s known gap), so the furthest-progressed asset (highest
+      phase reached) stands in for it everywhere spec says "lead asset."
+      **Real today**: `phase_max`/`asset_count_ph2plus` (only need `p22_trial`/`p22_asset`,
+      already flowing); `catalyst_window`'s ordinary forward-looking buckets (from
+      `primary_completion_date`, already normalized) — its `post_positive_0-180` bucket can never
+      fire (needs positive-readout detection this repo doesn't have, undisclosed anywhere as a
+      gap until now). `lead_asset_poa` is real ONLY for a lead asset still at Phase I or earlier —
+      new "Decisions needed" item 13 explains why later phases return `None` rather than a guessed
+      base-rate composition formula; falls back to `loa_from_phase_1_overall` (logged, per spec's
+      `base_rate_fallback` requirement) for the 9 `by_therapeutic_area` entries still `null`.
+      **Not implemented at all this pass, no stub functions**: `has_positive_ph3` (needs CT.gov
+      `hasResults` + 8-K discontinuation-announcement detection, neither built, and spec gives no
+      phrase list for the latter the way it did for `process_events.py`'s strategic-alternatives
+      detection), `pdufa_pending` (needs a PDUFA-date data source — none identified; P20 Kestrel's
+      `pdufa.bio` dependency is flagged elsewhere in this repo's memory as fragile/undocumented,
+      not assumed reusable here without its own check), `endpoint_stability` (needs
+      `endpoint_changed_midtrial`, always `None`, `trial_normalization.py`'s disclosed gap),
+      `trial_design_quality` (needs `has_active_comparator`/`uses_biomarker_selection`, both
+      always `None` — a partial 2-of-4 composite was considered and rejected: it would look like a
+      real quality score while actually encoding "we don't know" as "not present," a worse error
+      than `None`), `ev_to_risk_adjusted_npv` (needs a per-asset peak-sales/multiple assumption —
+      same character as Block A's `assumed_peak_sales_by_ta`, not yet a separate curation item
+      since no consumer exists to make concrete what "per asset" would even need).
+- [ ] Blocks D, E, F (spec §4.4, §4.5, §4.6) — not started. Block D is computed from Blocks A-C's
+      own outputs so it's blocked transitively. Block E needs 8-K/DEF 14A text-parsing
+      infrastructure that doesn't exist. Block F needs 13F integration (M5/M6 scope per spec's own
+      milestone table). Not attempted this pass rather than built against fabricated/guessed inputs.
 - [x] `p22_trial` normalization from landed CT.gov `clinicaltrials_studies` payloads, 2026-08-30 —
       `ingest/trial_normalization.py` + `jobs/run_trial_normalization.py`, registered in
       `register_jobs.py` (after Alias Matching). Field paths live-verified against a real CT.gov
@@ -746,10 +786,11 @@ use in the code/config; this section exists so they're all in one place to walk 
       phrase classification incl. the negative-checked-first and advisor-placeholder cases
       (`test_process_events.py`), Block G tiering incl. tier-precedence (`test_block_g.py`),
       13D/G header parsing incl. the multi-filer-block and single-agreeing-percentage cases
-      (`test_activist_positions.py`) — 371 tests total in the non-DB suite as of 2026-09-08 (plus
-      4 more in `src/data/downloader/tests/` for the new `EdgarDownloader.fetch_filing_document`
-      public wrapper and the `SCHEDULE 13D` form-type-prefix bug fix, outside this module's own
-      count).
+      (`test_activist_positions.py`), Block B incl. the lead-asset-proxy and base-rate-fallback
+      cases (`test_block_b.py`), `p22_base_rates.yaml` loading (`test_base_rates_config.py`) —
+      390 tests total in the non-DB suite as of 2026-09-08 (plus 4 more in
+      `src/data/downloader/tests/` for the new `EdgarDownloader.fetch_filing_document` public
+      wrapper and the `SCHEDULE 13D` form-type-prefix bug fix, outside this module's own count).
 - [ ] Real-Postgres integration tests for `P22Repo.upsert_financial_fact_bitemporal` restatement
       behavior, the price-archive round trip (`upsert_price_daily` immutability,
       `get_adjusted_close`'s lookahead guard through the repo layer), `get_latest_raw_close_as_of`
