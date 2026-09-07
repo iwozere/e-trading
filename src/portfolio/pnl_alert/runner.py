@@ -29,6 +29,17 @@ from src.portfolio.pnl_alert.price_fetcher import fetch_latest_closes
 
 _logger = setup_logger(__name__)
 
+# Hard ceiling on the best-effort insider-activity lookup. It runs in a worker
+# thread (`asyncio.to_thread`) whose own soft self-heal budget
+# (`insider_activity._WINDOW_WARMUP_BUDGET_SECONDS`) is only checked *between*
+# day-iterations — one slow day (a busy market-wide Form 4 day hit during a
+# multi-day cache gap) can blow well past it. `asyncio.wait_for` can't kill the
+# underlying thread, but it does stop *us* waiting on it, so the digest — the
+# whole point of this job — still ships instead of the scheduler's outer 300s
+# job timeout killing the entire run (2026-09-07 incident: a week-long Form 4
+# cache gap made this lookup run past 5 minutes and the alert never went out).
+_INSIDER_ACTIVITY_TIMEOUT_SECONDS = 90.0
+
 
 @dataclass
 class RunSummary:
@@ -218,12 +229,23 @@ async def run_once(
     try:
         # Synchronous (blocking file/network I/O); offload to a thread pool
         # so the scheduler's event loop is not blocked (same as prices above).
-        insider_by_ticker = await asyncio.to_thread(
-            load_insider_activity,
-            [r.symbol for r in rows],
-            edgar,
-            ran_at.date(),
+        # Bounded by _INSIDER_ACTIVITY_TIMEOUT_SECONDS so a cold/gappy cache
+        # can't stall the digest itself — see constant docstring.
+        insider_by_ticker = await asyncio.wait_for(
+            asyncio.to_thread(
+                load_insider_activity,
+                [r.symbol for r in rows],
+                edgar,
+                ran_at.date(),
+            ),
+            timeout=_INSIDER_ACTIVITY_TIMEOUT_SECONDS,
         )
+    except TimeoutError:
+        _logger.error(
+            "Insider activity lookup exceeded %.0fs; sending digest without it",
+            _INSIDER_ACTIVITY_TIMEOUT_SECONDS,
+        )
+        summary.errors.append("insider_activity_timeout")
     except Exception:
         _logger.exception("Insider activity lookup failed; sending digest without it")
         summary.errors.append("insider_activity_failed")

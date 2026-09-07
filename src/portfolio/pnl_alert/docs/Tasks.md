@@ -45,6 +45,18 @@
   feature reads from. Both loaders now skip any date >= today (UTC). The 12
   poisoned cache days (2026-08-19 through 2026-09-03) were deleted and
   self-heal on the next run.
+- **Fixed 2026-09-07**: the 2026-09-04 cache-deletion fix above left the
+  scheduled job itself unprotected against the very self-heal it depends on —
+  `insider_activity._load_form4_window`'s 60s self-heal budget is only
+  checked *between* day-iterations, so one slow day (a busy, market-wide,
+  uncached Form 4 day) can blow well past it. The 2026-09-07 23:30 UTC run
+  hit exactly that against the still-healing gap: the lookup ran past the
+  scheduler's outer 300s job timeout (`monitoring.txt` — `Job timed out after
+  300s`) and killed the whole run, so *no* digest went out even though
+  pricing/evaluation had finished in the first 6s. `runner.run_once` now wraps
+  the insider-activity lookup in `asyncio.wait_for(..., timeout=
+  _INSIDER_ACTIVITY_TIMEOUT_SECONDS)` (90s) so a stuck lookup degrades to
+  "digest without insider data" instead of taking the whole job down with it.
 
 ## Testing Requirements
 - [x] Unit tests for the pure evaluator (including `flagged` semantics)

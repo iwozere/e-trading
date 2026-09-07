@@ -1,8 +1,9 @@
 """Unit tests for `runner.run_once`."""
 
 import asyncio
+import time
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
@@ -91,6 +92,36 @@ def test_insider_activity_failure_does_not_block_digest():
 
     assert summary.notification_sent is True
     assert "insider_activity_failed" in summary.errors
+
+
+def test_insider_activity_timeout_does_not_block_digest():
+    """
+    A lookup that blows past `_INSIDER_ACTIVITY_TIMEOUT_SECONDS` (e.g. a
+    multi-day Form 4 cache gap forcing several slow live EDGAR fetches, as in
+    the 2026-09-07 incident) must not hold up the digest — the whole run is
+    otherwise done within a couple of seconds.
+    """
+    client = _fake_client()
+
+    def _slow_lookup(*_args: Any, **_kwargs: Any) -> Dict[str, Any]:
+        time.sleep(0.2)
+        return {}
+
+    with (
+        patch("src.portfolio.pnl_alert.runner.load_insider_activity", side_effect=_slow_lookup),
+        patch("src.portfolio.pnl_alert.runner._INSIDER_ACTIVITY_TIMEOUT_SECONDS", 0.01),
+    ):
+        summary = asyncio.run(
+            run_once(
+                _cfg(threshold_pct=0.05),
+                broker=_fake_broker(),
+                data_manager=_FakeDataManager(close=130.0),
+                client=client,
+            )
+        )
+
+    assert summary.notification_sent is True
+    assert "insider_activity_timeout" in summary.errors
 
 
 def test_no_holdings_exits_early_without_sending():
