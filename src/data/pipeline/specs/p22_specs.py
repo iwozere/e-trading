@@ -134,4 +134,13 @@ SPECS: List[PluginSpec] = [
         description="Block G (spec §4.7): 8-K Item 7.01/8.01 strategic-alternatives phrase detection -> review queue.",
         depends_on=["P22 Entity Resolution"],
     ),
+    PluginSpec(
+        name="P22 Activist Positions Ingest",
+        category="p22",
+        cron="30 6 * * 1-5",  # weekdays, after Process Events Ingest
+        script_path=f"{_SCRIPT_BASE}/run_activist_positions_ingest.py",
+        timeout_seconds=3600,
+        description="Block G (spec §4.7): Schedule 13D/13D-A/13G/13G-A ingest via EFTS, scoped to the P22 universe.",
+        depends_on=["P22 Entity Resolution"],
+    ),
 ]

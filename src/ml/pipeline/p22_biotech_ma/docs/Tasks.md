@@ -171,6 +171,13 @@ use in the code/config; this section exists so they're all in one place to walk 
     curated (`cash_capacity` returns `None` while it is); `pipeline_gap_by_ta` takes
     `assumed_peak_sales_by_ta` as an explicit caller-supplied parameter rather than a guessed
     constant.
+12. **`config/activist_filers.yaml` needs a domain reviewer to grow it toward spec's "~30"
+    target and disambiguate multi-CIK names** — new, found 2026-09-08. Seeded with 11
+    individually live-verified single-CIK healthcare-specialist funds (see that file's header);
+    several other well-known generalist activists (Starboard Value, Icahn Enterprises, Third
+    Point, JANA Partners) each resolved to multiple distinct real CIKs (affiliated
+    LP/GP/co-investment entities) with no mechanical way to tell which one actually files the
+    firm's 13Ds — left out rather than guessed, same discipline as item 3's acquirer-roster CIKs.
 
 ## Implementation Status
 
@@ -515,16 +522,66 @@ use in the code/config; this section exists so they're all in one place to walk 
       `tzinfo=timezone.utc`-explicit bound `get_financial_facts_as_of` already uses, with a DB
       regression test (`test_get_verified_process_events_enforces_verification_and_lookahead_gates`)
       proving a verified-but-not-yet-known row is correctly invisible.
-- [ ] **Schedule 13D/13D-A/13G ingest** (spec §2.6.2) — NOT built this pass. This is a comparably
-      large, separate ingest pipeline (its own idempotency, Item 4 "Purpose of Transaction" intent
-      classification via keyword-candidate + review queue same as above, and a NEW
-      `config/activist_filers.yaml` curation task spec says needs "~30 healthcare-specialist
-      CIKs" — a domain-curation item of the same character as item 3's acquirer roster, not yet
-      added to "Decisions needed" pending a first attempt at building the ingest itself).
-      `EdgarDownloader.download_13dg_filings` already exists and gives filing METADATA
-      (cik/entity_name/accession/filed_date/form_type) but not parsed content — `pct_of_class` and
-      Item 4 intent text both need a per-filing document fetch this pass doesn't add. Tracked here
-      as the next M5 slice, not attempted speculatively against a phrase list that doesn't exist yet.
+- [x] **Real bug found and fixed, 2026-09-08, in `EdgarDownloader.download_13dg_filings`** (a
+      shared method, not P22-only — see below): live-verified against a real 2026 QTR3 EDGAR
+      quarterly form.idx that the method's `_13DG_FORM_TYPES` allowlist (`"SC 13D"`/`"SC 13G"`
+      family) matched almost nothing real. The actual index uses `"SCHEDULE 13D"`/
+      `"SCHEDULE 13D/A"`/`"SCHEDULE 13G"`/`"SCHEDULE 13G/A"` — 14,486 real filings that quarter,
+      vs. only 4 stray legacy `"SC 13D/A"` rows using the old naming. This method had been
+      **silently returning an empty DataFrame for virtually every real 13D/G filing since it
+      shipped**, undetected because its one regression test happened to use the rare
+      "SC 13D/A"-format fixture, which coincidentally still worked. **Three OTHER production
+      pipelines call this method and were affected**: `p15_hidden_deps/p15_daily.py`,
+      `p18_institutional_flow_tracker/processors/form4_monitor.py`,
+      `p19_penny_intraday/structural/profiler.py` — none of them P22 code, found purely because
+      P22's own Block G work needed this method to actually work. Fixed via a new
+      `_13DG_FORM_TYPE_ALIASES` map (real-index string -> the short canonical form every existing
+      caller already expects, so no downstream caller needed to change), plus a new regression
+      test (`test_download_13dg_parses_the_real_schedule_prefix_form_type`) using the real prefix.
+      A second, related discovery from the same live-verification pass: `download_13dg_filings`'s
+      own docstring claim "EFTS does not index SC 13D/G filings" is ALSO only true for the wrong
+      form string — EFTS (`efts_filings_search`) DOES index them under the real `"SCHEDULE 13D"`
+      family, which is what made the more efficient ingest design below possible; that docstring
+      itself isn't corrected in this pass (out of scope — the method's own behavior, not its
+      prose, was the actionable bug) but is worth fixing next time that file is touched.
+- [x] **Schedule 13D/13D-A/13G/13G-A ingest** (spec §2.6.2), 2026-09-08 —
+      `ingest/activist_positions.py` + `jobs/run_activist_positions_ingest.py`, registered daily.
+      Uses `EdgarDownloader.efts_filings_search` (CIK-targeted, chunked at 100) with the real
+      `"SCHEDULE 13D"` family form strings against the WHOLE P22 universe's CIK list — far more
+      efficient than scanning `download_13dg_filings`'s industry-wide daily index and having to
+      fetch every single filing's document just to learn which company it's about (that index is
+      filer-centric: its own `cik` column is the FILER's CIK, not the subject company's — verified
+      live against a real filing before ruling that approach out). EFTS's `_id` field already names
+      the exact primary document (`"{accession}:primary_doc.xml"`), so no filename-guessing is
+      needed. For each candidate hit, the primary document is fetched (new public
+      `EdgarDownloader.fetch_filing_document`, added for `process_events.py` above, reused here)
+      and its SGML header parsed for the SUBJECT COMPANY's CIK (matched against the P22 universe)
+      and every FILER's CIK/name (one `p22_activist_position` row per filer, idempotent on
+      `(company_id, filer_cik, form_type, filed_date)` via new `P22Repo.upsert_activist_position`).
+      `filer_type` is populated MECHANICALLY (not a guess): `'activist'` via the new
+      `config/activist_filers.yaml` membership check, `'strategic_corporate'` via a
+      `p22_company.role in ('acquirer','both')` lookup — both real set-membership/DB checks, unlike
+      `stated_intent`. `pct_of_class` is populated from a live-verified `<percentOfClass>` XML tag
+      **only when every occurrence in the document agrees on one value** — real filings can carry
+      several DIFFERENT percentages across cover pages for different reporting persons even under
+      one nominal "FILED BY" company, and misattributing one to the wrong filer would be worse than
+      `None`. **`stated_intent` is always `None` — deliberately not attempted.** Spec says to
+      classify Item 4 (Purpose of Transaction) text via the review queue, but (a) Item 4 is dense
+      boilerplate legal prose (live-verified against a real filing demanding a CEO's removal — not
+      cleanly reducible to `passive|engagement|board_seats|sale_demand` by keyword) and (b) unlike
+      `process_events.py`'s phrase list, spec gives no candidate phrases to match against at all;
+      properly doing this also needs `review_queue.py`'s confirm dispatch to accept a multi-valued
+      classification, not just confirm/reject, which isn't built. `p22_activist_position` has no
+      `is_verified` column at all (spec's own schema) — a real SEC filing already IS the
+      verification, so every row here is written directly, no review-queue step, unlike
+      `process_events.py`'s keyword candidates.
+      **`config/activist_filers.yaml` seeded, not complete** — 11 of spec's "~30
+      healthcare-specialist CIKs" target, each individually live-verified against SEC EDGAR's own
+      company-search endpoint (a single, unambiguous CIK with real SC 13D history), not fabricated.
+      Several other well-known names (Starboard Value, Icahn Enterprises, Third Point, JANA
+      Partners) resolved to MULTIPLE distinct CIKs per name with no mechanical way to pick the
+      right one from outside — left out rather than guessed. **New "Decisions needed" item 12**
+      below: needs a domain reviewer to grow the list and disambiguate those names.
 - [ ] Incumbent-partner / option-to-acquire structures (spec §2.6.3) — NOT built, and structurally
       can't be yet: spec itself scopes this to "the top 200 companies by composite score from the
       Block A-E model," which requires M4's scoring layer to exist first. `p22_partnership_structure`
@@ -534,8 +591,9 @@ use in the code/config; this section exists so they're all in one place to walk 
 
 ### 🚀 PLANNED ENHANCEMENTS (by milestone, spec §9)
 - [ ] **M4 — Rule-based scoring:** `fit()` pairwise gates (§4.4), Phase 1 composite (§5.1).
-- [ ] **M5 — Block G remaining work:** Schedule 13D/G ingest + `activist_filers.yaml` (see IN
-      PROGRESS above), incumbent-partner structures (blocked on M4's composite ranking).
+- [ ] **M5 — Block G remaining work:** `stated_intent` classification (needs `review_queue.py`
+      support for multi-valued confirm, see above), incumbent-partner structures (blocked on M4's
+      composite ranking).
 - [ ] **M6 — Labels + backtest:** add SC 14D9 / DEFM14A / S-4 support to `EdgarDownloader` (reuse
       `efts_filings_search`, EFTS indexes these directly); hand-verified deal-label dataset with
       `deal_type` classification and reverse-merger exclusion (§2.5); walk-forward harness against
@@ -686,10 +744,12 @@ use in the code/config; this section exists so they're all in one place to walk 
       floored-at-zero/window-boundary cases (`test_block_a.py`), FMP ratios/analyst-estimates client
       incl. the 402/unexpected-shape cases (`test_fmp_client.py`), 8-K strategic-alternatives
       phrase classification incl. the negative-checked-first and advisor-placeholder cases
-      (`test_process_events.py`), Block G tiering incl. tier-precedence (`test_block_g.py`) —
-      351 tests total in the non-DB suite as of 2026-09-08 (plus 2 more in
-      `src/data/downloader/tests/test_edgar_efts_text_search.py` for the new
-      `EdgarDownloader.fetch_filing_document` public wrapper, outside this module's own count).
+      (`test_process_events.py`), Block G tiering incl. tier-precedence (`test_block_g.py`),
+      13D/G header parsing incl. the multi-filer-block and single-agreeing-percentage cases
+      (`test_activist_positions.py`) — 371 tests total in the non-DB suite as of 2026-09-08 (plus
+      4 more in `src/data/downloader/tests/` for the new `EdgarDownloader.fetch_filing_document`
+      public wrapper and the `SCHEDULE 13D` form-type-prefix bug fix, outside this module's own
+      count).
 - [ ] Real-Postgres integration tests for `P22Repo.upsert_financial_fact_bitemporal` restatement
       behavior, the price-archive round trip (`upsert_price_daily` immutability,
       `get_adjusted_close`'s lookahead guard through the repo layer), `get_latest_raw_close_as_of`

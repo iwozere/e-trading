@@ -91,7 +91,29 @@ _SHARES_FACT_CANDIDATES = [
 
 # EDGAR quarterly full-index (covers all form types including SC 13D/G which EFTS does not index)
 _EDGAR_FULL_INDEX_URL = "https://www.sec.gov/Archives/edgar/full-index/{year}/QTR{quarter}/form.gz"
-_13DG_FORM_TYPES = frozenset({"SC 13D", "SC 13G", "SC 13D/A", "SC 13G/A"})
+# Real-index form_type -> canonical short form every caller of download_13dg_filings expects
+# (its own docstring's contract, and e.g. P18's form4_monitor.py's `form_type.isin(["SC 13D/A", ...])`
+# filter). **Bug found and fixed 2026-09-08, live-verified against a real 2026 QTR3 form.idx**: the
+# quarterly index's ACTUAL form_type strings are "SCHEDULE 13D"/"SCHEDULE 13D/A"/"SCHEDULE 13G"/
+# "SCHEDULE 13G/A" — the plain "SC 13D"/"SC 13G" family this method previously matched against
+# appears on only a small number of legacy/stray filings (4 out of 14,490 in that same quarter).
+# This meant `download_13dg_filings` had been silently returning an EMPTY DataFrame for virtually
+# every real 13D/G filing since it shipped — three separate downstream consumers
+# (`p15_hidden_deps/p15_daily.py`, `p18_institutional_flow_tracker/processors/form4_monitor.py`,
+# `p19_penny_intraday/structural/profiler.py`) have been running on effectively no 13D/G data this
+# whole time. The bug went undetected because the one regression test covering this
+# (`test_download_13dg_parses_real_schema`) happened to use a fixture built from the rare "SC 13D/A"
+# variant, which coincidentally already worked.
+_13DG_FORM_TYPE_ALIASES = {
+    "SCHEDULE 13D": "SC 13D",
+    "SCHEDULE 13D/A": "SC 13D/A",
+    "SCHEDULE 13G": "SC 13G",
+    "SCHEDULE 13G/A": "SC 13G/A",
+    "SC 13D": "SC 13D",
+    "SC 13D/A": "SC 13D/A",
+    "SC 13G": "SC 13G",
+    "SC 13G/A": "SC 13G/A",
+}
 # Form 10 / 10-12B / 10-12G registration statements — the filing a company makes
 # to register the stock being distributed in a spin-off (P20 Kestrel Sleeve B2,
 # spec gap 10.2). Same EDGAR quarterly-index approach as 13D/G: verified against
@@ -854,13 +876,17 @@ class EdgarDownloader(BaseDataDownloader):
 
         records = []
         for line in idx_lines:
-            if not (line.startswith("SC 13D") or line.startswith("SC 13G")):
+            # Cheap pre-filter before the more expensive re.split below — matches both the
+            # real-world "SCHEDULE 13D"/"SCHEDULE 13G" prefix and the rare legacy "SC 13D"/"SC 13G"
+            # one (see _13DG_FORM_TYPE_ALIASES's docstring comment for why both must be checked).
+            if not (line.startswith("SC 13") or line.startswith("SCHEDULE 13")):
                 continue
             parts = re.split(r"\s{2,}", line.strip())
             if len(parts) < 5:
                 continue
-            form_type, entity_name, cik_str, filed_date, filename = parts[:5]
-            if form_type not in _13DG_FORM_TYPES or filed_date != date_str:
+            raw_form_type, entity_name, cik_str, filed_date, filename = parts[:5]
+            form_type = _13DG_FORM_TYPE_ALIASES.get(raw_form_type)
+            if form_type is None or filed_date != date_str:
                 continue
             # Accession number lives in the filename stem: edgar/data/{cik}/XXXXXXXXXX-YY-NNNNNN.txt
             acc_no = Path(filename).stem

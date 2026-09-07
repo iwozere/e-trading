@@ -252,6 +252,43 @@ def test_get_verified_process_events_enforces_verification_and_lookahead_gates(d
     assert verified_but_future_known_id not in visible_ids
 
 
+def test_upsert_activist_position_idempotent_on_natural_key(db_session) -> None:
+    """`(company_id, filer_cik, form_type, filed_date)` is the idempotency key (spec §3.2 gives
+    this table no natural unique key, same gap as p22_patent_expiry) — a re-scan of an overlapping
+    date window must not create a duplicate row."""
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000037", name="Activist Target Inc", role="target")
+
+    first_id = repo.upsert_activist_position(
+        company_id=company_id, filer_cik="0001577524", filer_name="Sarissa Capital Management",
+        filer_type="activist", form_type="SC 13D", filed_date=date(2026, 9, 1),
+        known_from=datetime(2026, 9, 1, tzinfo=timezone.utc),
+    )
+    second_id = repo.upsert_activist_position(
+        company_id=company_id, filer_cik="0001577524", filer_name="Sarissa Capital Management",
+        filer_type="activist", form_type="SC 13D", filed_date=date(2026, 9, 1),
+        known_from=datetime(2026, 9, 2, tzinfo=timezone.utc),
+    )
+
+    assert first_id == second_id
+
+
+def test_get_verified_activist_positions_lookahead_gate(db_session) -> None:
+    """Bitemporal caution (spec §4.7): 'known_from is the filing date... using the crossing date
+    would leak' — a position known only after as_of must be invisible."""
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000038", name="Activist Lookahead Inc", role="target")
+
+    repo.upsert_activist_position(
+        company_id=company_id, filer_cik="0001577524", form_type="SC 13D", filed_date=date(2026, 8, 1),
+        known_from=datetime(2026, 9, 10, tzinfo=timezone.utc),
+    )
+
+    assert repo.get_verified_activist_positions(company_id, as_of=date(2026, 9, 1)) == []
+    visible = repo.get_verified_activist_positions(company_id, as_of=date(2026, 9, 15))
+    assert len(visible) == 1
+
+
 def test_get_verified_partnership_structures_requires_is_verified(db_session) -> None:
     repo = P22Repo(db_session)
     target_id = repo.upsert_company(cik="0000000035", name="Partnership Target Inc", role="target")

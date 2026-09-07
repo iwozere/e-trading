@@ -595,6 +595,59 @@ class P22Repo:
         ).scalars().all()
         return [{c.key: getattr(r, c.key) for c in P22CorporateProcessEvent.__table__.columns} for r in rows]
 
+    def upsert_activist_position(
+        self,
+        *,
+        company_id: int,
+        filer_cik: str,
+        form_type: str,
+        filed_date: date,
+        filer_name: Optional[str] = None,
+        filer_type: Optional[str] = None,
+        pct_of_class: Optional[float] = None,
+        stated_intent: Optional[str] = None,
+        amendment_seq: Optional[int] = None,
+        known_from: Optional[datetime] = None,
+        source_url: Optional[str] = None,
+    ) -> int:
+        """
+        Insert one Schedule 13D/G position, idempotently on `(company_id, filer_cik, form_type,
+        filed_date)` — spec's own §3.2 schema gives this table no natural unique key (same gap as
+        `p22_patent_expiry`), and `ingest/activist_positions.py` may re-scan an overlapping date
+        window on consecutive daily runs. One filer files at most one of a given form type for a
+        given company on a given date, so this tuple is a safe idempotency key.
+
+        Returns:
+            The (new or pre-existing) `position_id`.
+        """
+        existing = self.session.execute(
+            select(P22ActivistPosition.position_id).where(
+                P22ActivistPosition.company_id == company_id,
+                P22ActivistPosition.filer_cik == filer_cik,
+                P22ActivistPosition.form_type == form_type,
+                P22ActivistPosition.filed_date == filed_date,
+            )
+        ).scalars().first()
+        if existing is not None:
+            return existing
+
+        row = P22ActivistPosition(
+            company_id=company_id,
+            filer_cik=filer_cik,
+            filer_name=filer_name,
+            filer_type=filer_type,
+            form_type=form_type,
+            pct_of_class=pct_of_class,
+            stated_intent=stated_intent,
+            amendment_seq=amendment_seq,
+            filed_date=filed_date,
+            known_from=known_from,
+            source_url=source_url,
+        )
+        self.session.add(row)
+        self.session.flush()
+        return row.position_id
+
     def get_verified_activist_positions(self, company_id: int, as_of: date) -> List[Dict[str, Any]]:
         """Every `p22_activist_position` row for `company_id` KNOWN as of `as_of`. No
         `is_verified` column exists on this table (spec §3.2's own schema has none; unlike process

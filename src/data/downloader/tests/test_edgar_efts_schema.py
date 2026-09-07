@@ -76,6 +76,33 @@ def test_download_13dg_parses_real_schema(tmp_path):
     assert row["form_type"] == "SC 13D/A"
 
 
+def test_download_13dg_parses_the_real_schedule_prefix_form_type(tmp_path):
+    """Regression test for a real bug found and fixed 2026-09-08: the actual EDGAR quarterly
+    form.idx uses "SCHEDULE 13D"/"SCHEDULE 13G" (with "/A" for amendments), NOT the plain
+    "SC 13D"/"SC 13G" this method previously matched against exclusively — live-verified against a
+    real 2026 QTR3 index (392 SCHEDULE 13D + 1,430 SCHEDULE 13D/A + 4,800 SCHEDULE 13G + 7,864
+    SCHEDULE 13G/A rows, vs. only 4 stray "SC 13D/A" rows using the old naming). The output
+    `form_type` is still normalized to the short "SC 13D"/"SC 13G" form every caller
+    (`p18_institutional_flow_tracker/processors/form4_monitor.py` included) already expects."""
+    dl = EdgarDownloader(cache_dir=tmp_path)
+    idx_lines = [
+        "SCHEDULE 13D     3i, LP                                                        "
+        "1841619     2024-05-15  edgar/data/1841619/0001753926-24-001299.txt",
+        "SCHEDULE 13D/A   2023 ETF Series Trust                                         "
+        "1969674     2024-05-15  edgar/data/1969674/0001542826-24-000006.txt",
+        "SCHEDULE 13G     Some Fund LP                                                  "
+        "1111111     2024-05-15  edgar/data/1111111/0001111111-24-000001.txt",
+        "SCHEDULE 13G/A   Another Fund LP                                               "
+        "2222222     2024-05-15  edgar/data/2222222/0002222222-24-000002.txt",
+    ]
+    with patch.object(dl, "_fetch_quarterly_form_idx", return_value=idx_lines):
+        df = dl.download_13dg_filings(as_of_date=date(2024, 5, 15), force=True)
+
+    assert len(df) == 4
+    assert set(df["form_type"]) == {"SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"}
+    assert df.iloc[0]["accession_number"] == "0001753926-24-001299"
+
+
 # ── Form 10 / 10-12B (spin-off registration) ────────────────────────────────
 
 

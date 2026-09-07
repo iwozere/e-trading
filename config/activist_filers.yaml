@@ -1,0 +1,36 @@
+# P22 Biotech M&A — known activist-fund CIKs (spec §2.6.2).
+#
+# Spec: "Maintain config/activist_filers.yaml — a list of CIKs for known activist funds. A 13D
+# from a healthcare-specialist crossover fund at IPO is not the same event as a 13D from an
+# activist with a campaign history, and the model must distinguish them." Target size: "~30
+# healthcare-specialist CIKs."
+#
+# **Genuinely incomplete by design, not a guess** — same discipline as p22_acquirers.yaml before
+# its 2026-08-31 curation pass. Seeded 2026-09-08 with 11 funds whose CIK was live-verified
+# against SEC EDGAR's own company-search endpoint (a single, unambiguous CIK with a real SC 13D
+# filing history) — not fabricated, but not vetted against a real "campaign history vs. crossover
+# fund" distinction either, which needs a domain reviewer, not a mechanical check. Flagged here as
+# a "Decisions needed" item in docs/Tasks.md.
+#
+# Several other well-known activist names (Starboard Value, Icahn Enterprises, Third Point, JANA
+# Partners) were checked live but resolved to MULTIPLE distinct CIKs per name (affiliated
+# entities — e.g. a fund's LP, its GP, and a co-investment vehicle each file separately) with no
+# mechanical way to pick the "primary" one from outside — left out rather than guess which
+# variant is the one that actually files 13Ds, pending a human pass through each name's full
+# EDGAR filing history.
+#
+# ingest/activist_positions.classify_filer_type reads this list as the 'activist' bucket (as
+# opposed to 'strategic_corporate', which is instead resolved mechanically via p22_company.role).
+
+activist_filer_ciks:
+  - "0001577524"  # Sarissa Capital Management (Alex Denner) — healthcare-specialist activist
+  - "0001791786"  # Elliott Investment Management — generalist activist, has taken healthcare positions
+  - "0001633313"  # Avoro Capital (formerly venBio) — healthcare specialist
+  - "0001263508"  # Baker Bros Advisors — biotech specialist, large concentrated positions
+  - "0001493215"  # RTW Investments — healthcare specialist
+  - "0001856083"  # Deep Track Capital — healthcare specialist
+  - "0001544773"  # Consonance Capital — healthcare specialist
+  - "0001534261"  # Casdin Capital — healthcare/life-sciences specialist
+  - "0001583977"  # Cormorant Asset Management — healthcare specialist
+  - "0001425738"  # Redmile Group — healthcare specialist
+  - "0001055951"  # OrbiMed Advisors — healthcare specialist

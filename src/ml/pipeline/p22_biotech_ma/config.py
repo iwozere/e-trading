@@ -49,6 +49,10 @@ BIOTECH_SIC_CODES: list[str] = [
 ACQUIRERS_YAML = PROJECT_ROOT / "config" / "pipeline" / "p22_acquirers.yaml"
 # 8-K strategic-alternatives phrase list, verbatim from spec §2.6.1 (not curated — see that file's header).
 STRATEGIC_PROCESS_PHRASES_YAML = PROJECT_ROOT / "config" / "pipeline" / "p22_strategic_process_phrases.yaml"
+# Known activist-fund CIKs (spec §2.6.2: "~30 healthcare-specialist CIKs") — curated, incomplete by
+# design pending domain review; see that file's header. Deliberately at config/ root, not
+# config/pipeline/ — spec names it `config/activist_filers.yaml` directly (§2.6.2).
+ACTIVIST_FILERS_YAML = PROJECT_ROOT / "config" / "activist_filers.yaml"
 
 # ---------------------------------------------------------------------------
 # ClinicalTrials.gov API v2 (spec §2.2)
