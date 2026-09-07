@@ -467,11 +467,75 @@ use in the code/config; this section exists so they're all in one place to walk 
       compute real (non-`None`) values whenever a company has cash and burn history on file;
       `dilution_risk`'s catalyst leg is still `None` (needs `catalyst_days_to_next`, not built).
 
+### 🔄 IN PROGRESS — M5 Block G (spec §2.6, §4.7, §5.2)
+- [x] 8-K strategic-alternatives phrase detection (spec §2.6.1), 2026-09-08 —
+      `ingest/process_events.py` + `jobs/run_process_events_ingest.py`, registered daily in
+      `p22_specs.py`. Uses `EdgarDownloader.download_8k_filings` (the universe-wide daily 8-K
+      index, previously built but never called by anything in this repo — P17's CatalystAgent
+      docstring names it as its intended reader) filtered to Item 7.01/8.01 (never 1.01, which
+      only fires once a deal is signed) and to in-universe CIKs, then phrase-matches the primary
+      document body via a NEW public `EdgarDownloader.fetch_filing_document` (thin wrapper over
+      the existing private `_fetch_filing_document`, so P22 doesn't reach into a private method of
+      a shared downloader). **Disclosed scope gap, not an oversight**: only the primary document is
+      scanned, not the EX-99.1 press-release exhibit spec also names — `download_8k_filings`'s
+      index gives one `primary_document` filename per filing, not the full exhibit list; resolving
+      that needs a second per-filing fetch not added this pass (see that module's docstring).
+      `p22_strategic_process_phrases.yaml` holds spec's own exact phrase list verbatim (not a
+      curated file needing domain review, unlike `p22_base_rates.yaml`) — the one
+      `"{ADVISOR}"`-templated phrase is handled as a two-substring match (`"engaged"` ...
+      `"as financial advisor"`), since no maintained advisor-name list exists to resolve the
+      template against.
+      Every match is a CANDIDATE, never auto-scored (spec §4.7's verification gate):
+      `P22Repo.upsert_corporate_process_event` writes it `is_verified = FALSE` (idempotent on
+      `(company_id, accession_no)` — the job has no high-water mark and will re-scan overlapping
+      windows) and a matching `p22_review_item` (`strategic_alternatives_candidate`, new reason
+      wired into `ingest/review_queue.py`'s confirm dispatch — confirm flips `is_verified = TRUE`
+      via `set_process_event_verified`, no new row created, unlike the two pre-existing reasons —
+      see that module's updated docstring for why). Negative phrases ("concluded its review...")
+      are checked FIRST, before strong/moderate, so a conclusion announcement that happens to
+      contain the substring "strategic alternatives" isn't misclassified as an open process.
+- [x] `features/block_g.py`, 2026-09-08 — `BlockG` dataclass + `build_block_g` (assembles it from
+      three verification-gated, lookahead-safe repo reads) + `apply_process_tier` (direct,
+      tested port of spec §5.2's own tiering pseudocode). Deliberately NOT a `@register_feature` —
+      spec itself frames Block G as categorically different from Blocks A-F (tiered, never folded
+      into the weighted composite), so it doesn't fit the single-float feature-function contract.
+      **Real today**: `process_state`/`process_scope`/`days_since_process_open`, the moment a
+      strategic-alternatives candidate above clears review. **Correctly defaults to "none seen"
+      today, not yet real**: everything activist/partnership-derived
+      (`has_13d_activist`/`activist_intent_max`/`activist_escalation`/`has_strategic_toehold`/
+      `strategic_toehold_pct`/`partner_structure_max`/`partner_equity_pct`/`partner_identity`) —
+      `p22_activist_position`/`p22_partnership_structure` ingest (spec §2.6.2/§2.6.3) isn't built
+      yet, tracked as the next M5 slice below, not a bug here.
+      **Real bug found and fixed while building this**: the three new `P22Repo` read methods
+      (`get_verified_process_events`/`get_verified_activist_positions`/
+      `get_verified_partnership_structures`) initially checked `is_verified` (or, for
+      `activist_position`, nothing — no such column) with NO `known_from <= as_of` lookahead
+      filter at all — exactly the gap spec §4.7 calls out by name ("this is the most likely place
+      in the system for a subtle lookahead leak"). Fixed before it ever shipped by adding the same
+      `tzinfo=timezone.utc`-explicit bound `get_financial_facts_as_of` already uses, with a DB
+      regression test (`test_get_verified_process_events_enforces_verification_and_lookahead_gates`)
+      proving a verified-but-not-yet-known row is correctly invisible.
+- [ ] **Schedule 13D/13D-A/13G ingest** (spec §2.6.2) — NOT built this pass. This is a comparably
+      large, separate ingest pipeline (its own idempotency, Item 4 "Purpose of Transaction" intent
+      classification via keyword-candidate + review queue same as above, and a NEW
+      `config/activist_filers.yaml` curation task spec says needs "~30 healthcare-specialist
+      CIKs" — a domain-curation item of the same character as item 3's acquirer roster, not yet
+      added to "Decisions needed" pending a first attempt at building the ingest itself).
+      `EdgarDownloader.download_13dg_filings` already exists and gives filing METADATA
+      (cik/entity_name/accession/filed_date/form_type) but not parsed content — `pct_of_class` and
+      Item 4 intent text both need a per-filing document fetch this pass doesn't add. Tracked here
+      as the next M5 slice, not attempted speculatively against a phrase list that doesn't exist yet.
+- [ ] Incumbent-partner / option-to-acquire structures (spec §2.6.3) — NOT built, and structurally
+      can't be yet: spec itself scopes this to "the top 200 companies by composite score from the
+      Block A-E model," which requires M4's scoring layer to exist first. `p22_partnership_structure`
+      already has its full schema + `P22Repo.upsert`/`get_verified_partnership_structures` support
+      (added this pass, for `features/block_g.py` to read once rows exist) — only the ingest and the
+      M4 ranking it depends on are missing.
+
 ### 🚀 PLANNED ENHANCEMENTS (by milestone, spec §9)
 - [ ] **M4 — Rule-based scoring:** `fit()` pairwise gates (§4.4), Phase 1 composite (§5.1).
-- [ ] **M5 — Block G:** 8-K strategic-alternatives phrase detection (reuse
-      `EdgarDownloader.efts_text_search`), Schedule 13D ingest (reuse
-      `EdgarDownloader.download_13dg_filings`), tiering logic (§5.2), verification gate (§4.7).
+- [ ] **M5 — Block G remaining work:** Schedule 13D/G ingest + `activist_filers.yaml` (see IN
+      PROGRESS above), incumbent-partner structures (blocked on M4's composite ranking).
 - [ ] **M6 — Labels + backtest:** add SC 14D9 / DEFM14A / S-4 support to `EdgarDownloader` (reuse
       `efts_filings_search`, EFTS indexes these directly); hand-verified deal-label dataset with
       `deal_type` classification and reverse-merger exclusion (§2.5); walk-forward harness against
@@ -620,13 +684,18 @@ use in the code/config; this section exists so they're all in one place to walk 
       split ratio handling (`test_price_ingest.py`), derived `market_cap` incl. the rejection-
       breakdown aggregation (`test_market_cap.py`), Block A incl. every null path and the
       floored-at-zero/window-boundary cases (`test_block_a.py`), FMP ratios/analyst-estimates client
-      incl. the 402/unexpected-shape cases (`test_fmp_client.py`) — 319 tests total in the non-DB
-      suite as of 2026-09-08.
+      incl. the 402/unexpected-shape cases (`test_fmp_client.py`), 8-K strategic-alternatives
+      phrase classification incl. the negative-checked-first and advisor-placeholder cases
+      (`test_process_events.py`), Block G tiering incl. tier-precedence (`test_block_g.py`) —
+      351 tests total in the non-DB suite as of 2026-09-08 (plus 2 more in
+      `src/data/downloader/tests/test_edgar_efts_text_search.py` for the new
+      `EdgarDownloader.fetch_filing_document` public wrapper, outside this module's own count).
 - [ ] Real-Postgres integration tests for `P22Repo.upsert_financial_fact_bitemporal` restatement
       behavior, the price-archive round trip (`upsert_price_daily` immutability,
       `get_adjusted_close`'s lookahead guard through the repo layer), `get_latest_raw_close_as_of`
       incl. the null-`known_from` exclusion case, `count_phase3_assets_by_therapeutic_area` incl. the
-      one-asset-two-trials and combined-phase cases, `upsert_trial`'s
+      one-asset-two-trials and combined-phase cases, the Block G verification/lookahead gates on
+      `get_verified_process_events`/`get_verified_partnership_structures`, `upsert_trial`'s
       keyed-on-`nct_id` update-in-place behavior, `upsert_acquirer_company`'s ticker-merge/idempotency
       behavior, `upsert_patent_expiry`'s idempotent-insert behavior, and the `upsert_asset`/
       `get_asset_by_company_and_name` round trip — present in `tests/db/test_repo_p22_bitemporal.py`

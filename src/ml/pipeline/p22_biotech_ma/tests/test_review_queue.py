@@ -83,6 +83,29 @@ def test_confirm_fuzzy_alias_item_writes_alias_with_known_from_not_now():
     )
 
 
+def test_confirm_strategic_alternatives_candidate_verifies_process_event():
+    repo = MagicMock()
+    item = {
+        "item_id": 4,
+        "item_type": "strategic_alternatives_candidate",
+        "payload": {
+            "reason": "strategic_alternatives_candidate",
+            "event_id": 99,
+            "company_id": 7,
+            "state": "disclosed_open",
+            "strength": "strong",
+            "matched_phrase": "exploring strategic alternatives",
+            "accession_no": "0001193125-24-012345",
+        },
+    }
+
+    outcome = confirm_item(item, repo, reviewed_by="alex")
+
+    repo.set_process_event_verified.assert_called_once_with(99, is_verified=True)
+    repo.resolve_review_item.assert_called_once_with(item_id=4, status="confirmed", reviewed_by="alex", note=None)
+    assert "99" in outcome
+
+
 def test_confirm_unknown_reason_raises_and_does_not_resolve():
     repo = MagicMock()
     item = {"item_id": 3, "item_type": "entity_match", "payload": {"reason": "something_new"}}
@@ -100,6 +123,7 @@ def test_reject_item_only_updates_status_no_downstream_write():
     repo.resolve_review_item.assert_called_once_with(item_id=5, status="rejected", reviewed_by="alex", note="not a match")
     repo.add_company_alias.assert_not_called()
     repo.upsert_company.assert_not_called()
+    repo.set_process_event_verified.assert_not_called()
 
 
 def test_queue_depth_report_groups_by_item_type_and_computes_age():

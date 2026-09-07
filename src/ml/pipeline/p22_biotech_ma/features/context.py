@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass(frozen=True)
@@ -62,6 +62,20 @@ class FeatureContext:
         latest known state, same as any other `p22_trial` read.
         """
         return self.repo.count_phase3_assets_by_therapeutic_area(company_id)
+
+    def get_verified_process_events(self, company_id: int) -> List[Dict[str, Any]]:
+        """Pass-through to `P22Repo.get_verified_process_events`, bound to `self.as_of` — spec
+        §4.7's Block G, read by `features/block_g.py`. Already lookahead-gated AND
+        verification-gated by the repo method itself (see that method's docstring)."""
+        return self.repo.get_verified_process_events(company_id, self.as_of)
+
+    def get_verified_activist_positions(self, company_id: int) -> List[Dict[str, Any]]:
+        """Pass-through to `P22Repo.get_verified_activist_positions`, bound to `self.as_of`."""
+        return self.repo.get_verified_activist_positions(company_id, self.as_of)
+
+    def get_verified_partnership_structures(self, company_id: int) -> List[Dict[str, Any]]:
+        """Pass-through to `P22Repo.get_verified_partnership_structures`, bound to `self.as_of`."""
+        return self.repo.get_verified_partnership_structures(company_id, self.as_of)
 
     def get_trailing_average(self, company_id: int, metric: str, periods: int = 4) -> Optional[float]:
         """

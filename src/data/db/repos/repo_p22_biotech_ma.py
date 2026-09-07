@@ -21,12 +21,15 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from src.data.db.models.model_p22_biotech_ma import (
+    P22ActivistPosition,
     P22Asset,
     P22Company,
     P22CompanyAlias,
     P22CorporateAction,
+    P22CorporateProcessEvent,
     P22FetchFailure,
     P22FinancialFact,
+    P22PartnershipStructure,
     P22PatentExpiry,
     P22PriceDaily,
     P22ReviewItem,
@@ -501,6 +504,135 @@ class P22Repo:
             select(P22PatentExpiry).where(P22PatentExpiry.acquirer_id == acquirer_id)
         ).scalars().all()
         return [{c.key: getattr(r, c.key) for c in P22PatentExpiry.__table__.columns} for r in rows]
+
+    # ------------------------------------------------------------------
+    # Block G — revealed process signals (spec §2.6, §4.7)
+    # ------------------------------------------------------------------
+
+    def upsert_corporate_process_event(
+        self,
+        *,
+        company_id: int,
+        event_date: date,
+        state: str,
+        scope: Optional[str] = None,
+        strength: Optional[str] = None,
+        advisor_name: Optional[str] = None,
+        accession_no: Optional[str] = None,
+        matched_phrase: Optional[str] = None,
+        is_verified: bool = False,
+        known_from: Optional[datetime] = None,
+        source_url: Optional[str] = None,
+    ) -> int:
+        """
+        Insert one strategic-alternatives candidate (spec §2.6.1), idempotently on
+        `(company_id, accession_no)` — `ingest/process_events.py` re-scans the SAME 8-K index
+        entries every day the ingest window overlaps (it doesn't track a high-water mark), and a
+        single 8-K should only ever produce one candidate event, not one per re-scan. Written with
+        `is_verified = FALSE` by default (spec §4.7's verification gate) — visible in the review
+        queue and dossier as "pending verification" immediately, per spec, not created only once a
+        human confirms it (contrast `P22CompanyAlias`'s fuzzy-match flow, where confirm CREATES the
+        row — Block G's candidates are pre-created so they're visible before review, matching
+        spec's own "visible... as pending verification" framing).
+
+        Returns:
+            The (new or pre-existing) `event_id`.
+        """
+        if accession_no is not None:
+            existing = self.session.execute(
+                select(P22CorporateProcessEvent.event_id).where(
+                    P22CorporateProcessEvent.company_id == company_id,
+                    P22CorporateProcessEvent.accession_no == accession_no,
+                )
+            ).scalars().first()
+            if existing is not None:
+                return existing
+
+        row = P22CorporateProcessEvent(
+            company_id=company_id,
+            event_date=event_date,
+            state=state,
+            scope=scope,
+            strength=strength,
+            advisor_name=advisor_name,
+            accession_no=accession_no,
+            matched_phrase=matched_phrase,
+            is_verified=is_verified,
+            known_from=known_from,
+            source_url=source_url,
+        )
+        self.session.add(row)
+        self.session.flush()
+        return row.event_id
+
+    def set_process_event_verified(self, event_id: int, *, is_verified: bool) -> None:
+        """Flip a `p22_corporate_process_event` row's verification gate (spec §4.7) — the
+        confirm/reject dispatch's job (`ingest/review_queue.py`), not the ingest's."""
+        self.session.execute(
+            update(P22CorporateProcessEvent)
+            .where(P22CorporateProcessEvent.event_id == event_id)
+            .values(is_verified=is_verified)
+        )
+        self.session.flush()
+
+    def get_verified_process_events(self, company_id: int, as_of: date) -> List[Dict[str, Any]]:
+        """Every `is_verified = TRUE` process event for `company_id` KNOWN as of `as_of`, most
+        recent event first — the ONLY rows `features/block_g.py` may read (spec §4.7's
+        verification gate). Also lookahead-gated on `known_from <= as_of`: spec §4.7 calls Block G
+        "the most likely place in the system for a subtle lookahead leak" — a backtest snapshot
+        taken on `as_of` must not see a process event first written to this table after `as_of`,
+        even if the event's own `event_date` (the 8-K's filing date) is earlier."""
+        as_of_end = datetime.combine(as_of, datetime.max.time(), tzinfo=timezone.utc)
+        rows = self.session.execute(
+            select(P22CorporateProcessEvent)
+            .where(
+                P22CorporateProcessEvent.company_id == company_id,
+                P22CorporateProcessEvent.is_verified.is_(True),
+                P22CorporateProcessEvent.known_from.is_not(None),
+                P22CorporateProcessEvent.known_from <= as_of_end,
+            )
+            .order_by(P22CorporateProcessEvent.event_date.desc())
+        ).scalars().all()
+        return [{c.key: getattr(r, c.key) for c in P22CorporateProcessEvent.__table__.columns} for r in rows]
+
+    def get_verified_activist_positions(self, company_id: int, as_of: date) -> List[Dict[str, Any]]:
+        """Every `p22_activist_position` row for `company_id` KNOWN as of `as_of`. No
+        `is_verified` column exists on this table (spec §3.2's own schema has none; unlike process
+        events and partnership structures, a 13D/G filing IS the verification — it's a real SEC
+        filing, not a keyword candidate) — but the `known_from <= as_of` lookahead gate still
+        applies (spec §4.7's bitemporal caution: "known_from is the filing date... using the
+        crossing date would leak," which is exactly what a missing gate here would risk). Kept as
+        a separate method (not folded into a generic getter) so `features/block_g.py` never has to
+        know which Block G table does or doesn't gate on a verification flag."""
+        as_of_end = datetime.combine(as_of, datetime.max.time(), tzinfo=timezone.utc)
+        rows = self.session.execute(
+            select(P22ActivistPosition)
+            .where(
+                P22ActivistPosition.company_id == company_id,
+                P22ActivistPosition.known_from.is_not(None),
+                P22ActivistPosition.known_from <= as_of_end,
+            )
+            .order_by(P22ActivistPosition.filed_date.desc())
+        ).scalars().all()
+        return [{c.key: getattr(r, c.key) for c in P22ActivistPosition.__table__.columns} for r in rows]
+
+    def get_verified_partnership_structures(self, company_id: int, as_of: date) -> List[Dict[str, Any]]:
+        """Every `is_verified = TRUE` partnership structure for `company_id` KNOWN as of `as_of`
+        (spec §4.7's verification gate — `entry_method = 'keyword_detected'` rows start unverified
+        same as process events; `entry_method = 'manual'` rows are written verified at entry time
+        by the human doing the entry, per spec §2.6.3's manual-queue design). Lookahead-gated the
+        same way as the other two Block G reads above."""
+        as_of_end = datetime.combine(as_of, datetime.max.time(), tzinfo=timezone.utc)
+        rows = self.session.execute(
+            select(P22PartnershipStructure)
+            .where(
+                P22PartnershipStructure.company_id == company_id,
+                P22PartnershipStructure.is_verified.is_(True),
+                P22PartnershipStructure.known_from.is_not(None),
+                P22PartnershipStructure.known_from <= as_of_end,
+            )
+        ).scalars().all()
+        return [{c.key: getattr(r, c.key) for c in P22PartnershipStructure.__table__.columns} for r in rows]
 
     # ------------------------------------------------------------------
     # Review queue (spec §3.4)

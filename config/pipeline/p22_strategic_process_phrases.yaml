@@ -1,0 +1,29 @@
+# P22 Biotech M&A — 8-K strategic-alternatives phrase list (spec §2.6.1).
+#
+# Verbatim from the spec (not a curated/business-judgment file like
+# p22_base_rates.yaml or p22_acquirers.yaml — these exact phrases are given
+# directly in pipeline-specification.md §2.6.1, so no domain review is
+# needed to use them as-is). Read directly by ingest/process_events.py at
+# ingest time (a plain phrase list, not the M4 config-loader/config_hash
+# machinery docs/Tasks.md notes is still unbuilt for config/pipeline/*.yaml).
+#
+# Phrase matching is a CANDIDATE GENERATOR, not a classifier (spec §2.6.1):
+# every hit goes to the review queue (`p22_review_item`, item_type
+# `strategic_alternatives_candidate`) and the p22_corporate_process_event
+# row it creates is written with `is_verified = FALSE` until a human
+# confirms it — see ingest/process_events.py's module docstring.
+
+strategic_process_phrases:
+  strong:                    # near-explicit sale process
+    - "exploring strategic alternatives"
+    - "review of strategic alternatives"
+    - "engaged as financial advisor"        # spec's "{ADVISOR}" placeholder collapsed to a
+                                             # substring match — see process_events.py docstring
+    - "formed a strategic committee"
+    - "evaluating a potential sale of the company"
+  moderate:                  # ambiguous — may be financing, not sale
+    - "strategic review"
+    - "exploring options to maximize shareholder value"
+  negative:                  # process concluded without a deal
+    - "concluded its review of strategic alternatives"
+    - "determined to continue as a standalone company"

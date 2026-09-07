@@ -125,4 +125,13 @@ SPECS: List[PluginSpec] = [
         description="Derives market_cap = raw_close x shares_outstanding; unblocks Block A/C (see ingest/market_cap.py).",
         depends_on=["P22 Daily Price Ingest", "P22 Financial Facts Normalization"],
     ),
+    PluginSpec(
+        name="P22 Process Events Ingest",
+        category="p22",
+        cron="15 6 * * 1-5",  # weekdays, alongside the other daily SEC/CT.gov ingest jobs
+        script_path=f"{_SCRIPT_BASE}/run_process_events_ingest.py",
+        timeout_seconds=3600,
+        description="Block G (spec §4.7): 8-K Item 7.01/8.01 strategic-alternatives phrase detection -> review queue.",
+        depends_on=["P22 Entity Resolution"],
+    ),
 ]

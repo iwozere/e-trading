@@ -42,6 +42,7 @@ import pandas as pd
 import requests
 
 from src.data.downloader.base_data_downloader import BaseDataDownloader
+from src.data.utils.atomic_write import atomic_to_csv, atomic_write_bytes
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -164,6 +165,20 @@ class EdgarDownloader(BaseDataDownloader):
         self._session = requests.Session()
         self._session.headers.update({"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"})
         self._last_request_time: float = 0.0
+
+    def _throttle(self) -> None:
+        """
+        Sleep just long enough to keep requests at least ``_MIN_REQUEST_INTERVAL``
+        apart, honoring the SEC Fair Access Policy (max 10 req/sec).
+
+        Callers still update ``self._last_request_time = time.monotonic()``
+        themselves right after issuing the request — that timestamp has to mark
+        when *that specific* request actually went out, which this method has no
+        way to know in advance.
+        """
+        elapsed = time.monotonic() - self._last_request_time
+        if elapsed < _MIN_REQUEST_INTERVAL:
+            time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
 
     # ------------------------------------------------------------------
     # BaseDataDownloader interface
@@ -534,8 +549,7 @@ class EdgarDownloader(BaseDataDownloader):
         df = pd.DataFrame(records).dropna(subset=["cik"])
         df["cik"] = df["cik"].astype(str)
 
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(dest, index=False, compression="gzip")
+        atomic_to_csv(df, dest, index=False, compression="gzip")
         _logger.info("Cached 13F index: %d filers for %d Q%d → %s", len(df), year, quarter, dest)
         return df
 
@@ -590,8 +604,7 @@ class EdgarDownloader(BaseDataDownloader):
         total_value = df["value_usd"].sum()
         df["pct_of_portfolio"] = df["value_usd"] / total_value if total_value > 0 else 0.0
 
-        quarter_dir.mkdir(parents=True, exist_ok=True)
-        df.to_csv(dest, index=False, compression="gzip")
+        atomic_to_csv(df, dest, index=False, compression="gzip")
         _logger.debug(
             "Cached 13F holdings for CIK %010d: %d positions, $%.0fM total → %s",
             cik_int,
@@ -799,8 +812,7 @@ class EdgarDownloader(BaseDataDownloader):
 
         df = pd.DataFrame(records, columns=_FORM4_COLS) if records else pd.DataFrame(columns=_FORM4_COLS)  # type: ignore[arg-type]
 
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(dest, index=False, compression="gzip")
+        atomic_to_csv(df, dest, index=False, compression="gzip")
         _logger.info("Cached %d Form 4 transactions for %s → %s", len(df), date_str, dest)
         return df
 
@@ -864,8 +876,7 @@ class EdgarDownloader(BaseDataDownloader):
 
         _13DG_COLS = ["cik", "entity_name", "accession_number", "filed_date", "form_type"]
         df = pd.DataFrame(records, columns=_13DG_COLS) if records else pd.DataFrame(columns=_13DG_COLS)  # type: ignore[arg-type]
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(dest, index=False, compression="gzip")
+        atomic_to_csv(df, dest, index=False, compression="gzip")
         _logger.info("Cached %d 13D/G filings for %s → %s", len(df), date_str, dest)
         return df
 
@@ -933,8 +944,7 @@ class EdgarDownloader(BaseDataDownloader):
 
         _FORM10_COLS = ["cik", "entity_name", "accession_number", "filed_date", "form_type"]
         df = pd.DataFrame(records, columns=_FORM10_COLS) if records else pd.DataFrame(columns=_FORM10_COLS)  # type: ignore[arg-type]
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(dest, index=False, compression="gzip")
+        atomic_to_csv(df, dest, index=False, compression="gzip")
         _logger.info("Cached %d Form 10 filings for %s → %s", len(df), date_str, dest)
         return df
 
@@ -1000,8 +1010,7 @@ class EdgarDownloader(BaseDataDownloader):
 
         _8K_COLS = ["cik", "company", "accession_number", "items", "description", "filed_date", "primary_document"]
         df = pd.DataFrame(records, columns=_8K_COLS) if records else pd.DataFrame(columns=_8K_COLS)  # type: ignore[arg-type]
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(dest, index=False, compression="gzip")
+        atomic_to_csv(df, dest, index=False, compression="gzip")
         _logger.info("Cached %d 8-K filings for %s → %s", len(df), date_str, dest)
         return df
 
@@ -1094,13 +1103,11 @@ class EdgarDownloader(BaseDataDownloader):
         if not dest.exists() or force or cache_stale:
             url = _EDGAR_FULL_INDEX_URL.format(year=year, quarter=quarter)
             _logger.info("Downloading EDGAR form index for %dQ%d ...", year, quarter)
-            elapsed = time.monotonic() - self._last_request_time
-            if elapsed < _MIN_REQUEST_INTERVAL:
-                time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+            self._throttle()
             resp = self._session.get(url, timeout=120)
             self._last_request_time = time.monotonic()
             resp.raise_for_status()
-            dest.write_bytes(resp.content)
+            atomic_write_bytes(resp.content, dest)
             _logger.info("Cached EDGAR form index → %s (%d bytes)", dest, len(resp.content))
 
         with gzip.open(dest, "rt", encoding="latin-1") as fh:
@@ -1154,10 +1161,7 @@ class EdgarDownloader(BaseDataDownloader):
             data: Dict[str, Any] = {}
             for attempt in range(3):
                 try:
-                    elapsed = time.monotonic() - self._last_request_time
-                    if elapsed < _MIN_REQUEST_INTERVAL:
-                        time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
-
+                    self._throttle()
                     resp = self._session.get(_EDGAR_EFTS_SEARCH, params=params, timeout=30)
                     self._last_request_time = time.monotonic()
                     resp.raise_for_status()
@@ -1315,6 +1319,25 @@ class EdgarDownloader(BaseDataDownloader):
                     out.append(h)
         return out
 
+    def fetch_filing_document(self, cik: Union[int, str], accession_number: str, filename: str) -> str | None:
+        """
+        Public wrapper over `_fetch_filing_document`, for callers outside this
+        module that already know which document they want (e.g. P22 Biotech
+        M&A's `download_8k_filings`-derived `primary_document` filename) —
+        as opposed to `get_auditor_name`'s in-module candidate-name guessing.
+
+        Args:
+            cik: Issuer CIK, any digit-string or int form.
+            accession_number: Accession number, dashed or not (normalised
+                here) — e.g. `"0001193125-24-012345"` or `"000119312524012345"`.
+            filename: Exact document filename within that filing's folder
+                (e.g. a `primary_document` value from `download_8k_filings`).
+
+        Returns:
+            Raw document text (HTML or XML), or `None` if the fetch failed.
+        """
+        return self._fetch_filing_document(int(cik), accession_number.replace("-", ""), filename)
+
     def _fetch_filing_document(self, cik_int: int, acc_norm: str, filename: str) -> str | None:
         """
         Fetch one specific document from a filing folder by its exact filename
@@ -1329,9 +1352,7 @@ class EdgarDownloader(BaseDataDownloader):
         url = f"{_EDGAR_ARCHIVES_BASE}/{cik_int}/{acc_norm}/{filename}"
         for attempt in range(3):
             try:
-                elapsed = time.monotonic() - self._last_request_time
-                if elapsed < _MIN_REQUEST_INTERVAL:
-                    time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+                self._throttle()
                 resp = self._session.get(url, timeout=30)
                 self._last_request_time = time.monotonic()
                 if resp.status_code == 200:
@@ -1432,10 +1453,7 @@ class EdgarDownloader(BaseDataDownloader):
             url = f"{base}/{filename}"
             for attempt in range(3):
                 try:
-                    elapsed = time.monotonic() - self._last_request_time
-                    if elapsed < _MIN_REQUEST_INTERVAL:
-                        time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
-
+                    self._throttle()
                     resp = self._session.get(url, timeout=30)
                     self._last_request_time = time.monotonic()
 
@@ -1477,9 +1495,7 @@ class EdgarDownloader(BaseDataDownloader):
                     url = f"{alt_base}/{filename}"
                     for attempt in range(3):
                         try:
-                            elapsed = time.monotonic() - self._last_request_time
-                            if elapsed < _MIN_REQUEST_INTERVAL:
-                                time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+                            self._throttle()
                             resp = self._session.get(url, timeout=30)
                             self._last_request_time = time.monotonic()
                             if resp.status_code == 200:
@@ -1511,9 +1527,7 @@ class EdgarDownloader(BaseDataDownloader):
 
             index_url = f"{_EDGAR_ARCHIVES_BASE}/{path_cik}/{acc_norm}/{acc_norm}-index.htm"
             try:
-                elapsed = time.monotonic() - self._last_request_time
-                if elapsed < _MIN_REQUEST_INTERVAL:
-                    time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+                self._throttle()
                 resp = self._session.get(index_url, timeout=30)
                 self._last_request_time = time.monotonic()
 
@@ -1526,6 +1540,11 @@ class EdgarDownloader(BaseDataDownloader):
                     ]
                     for xml_file in infotable_candidates or xml_files:
                         xml_url = f"{_EDGAR_ARCHIVES_BASE}/{path_cik}/{acc_norm}/{xml_file}"
+                        # Was previously unthrottled: infotable_candidates or
+                        # xml_files can hold several files, so without this a
+                        # burst of back-to-back requests could exceed SEC's
+                        # 10 req/sec fair-access limit.
+                        self._throttle()
                         r2 = self._session.get(xml_url, timeout=30)
                         self._last_request_time = time.monotonic()
                         if r2.status_code == 200:
@@ -1632,9 +1651,7 @@ class EdgarDownloader(BaseDataDownloader):
         Raises:
             requests.HTTPError: On non-2xx responses.
         """
-        elapsed = time.monotonic() - self._last_request_time
-        if elapsed < _MIN_REQUEST_INTERVAL:
-            time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+        self._throttle()
 
         _logger.debug("GET %s", url)
         response = self._session.get(url, timeout=30)
@@ -1643,10 +1660,15 @@ class EdgarDownloader(BaseDataDownloader):
         return response.json()
 
     def _write_json(self, data: Any, dest: Path) -> None:
-        """Write JSON data to dest, creating parent directories as needed."""
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        with dest.open("w", encoding="utf-8") as fh:
-            json.dump(data, fh)
+        """
+        Write JSON data to dest atomically, creating parent directories as needed.
+
+        Callers (ticker map, submissions, company facts) gate re-downloads on
+        this file's mtime/existence, so a writer killed mid-write must never
+        leave a truncated JSON file behind — it would then be treated as valid
+        cache forever until someone notices the read failure.
+        """
+        atomic_write_bytes(json.dumps(data).encode("utf-8"), dest)
 
 
 # ---------------------------------------------------------------------------

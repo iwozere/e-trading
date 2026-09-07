@@ -47,6 +47,8 @@ BIOTECH_SIC_CODES: list[str] = [
 ]
 # Hand-curated acquirer universe (~25 companies, spec §2.0.4) — not screened.
 ACQUIRERS_YAML = PROJECT_ROOT / "config" / "pipeline" / "p22_acquirers.yaml"
+# 8-K strategic-alternatives phrase list, verbatim from spec §2.6.1 (not curated — see that file's header).
+STRATEGIC_PROCESS_PHRASES_YAML = PROJECT_ROOT / "config" / "pipeline" / "p22_strategic_process_phrases.yaml"
 
 # ---------------------------------------------------------------------------
 # ClinicalTrials.gov API v2 (spec §2.2)

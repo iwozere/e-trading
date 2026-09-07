@@ -202,6 +202,83 @@ def test_count_phase3_assets_by_therapeutic_area(db_session) -> None:
     assert counts == {"oncology_solid": 2}  # both onc assets counted once each; neuro has no Phase III
 
 
+def test_corporate_process_event_idempotent_on_company_and_accession(db_session) -> None:
+    """`ingest/process_events.py` re-scans the same 8-K index entries on overlapping runs — a
+    second call for the same (company, accession_no) must return the existing event_id, not
+    insert a duplicate (spec §2.6.1)."""
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000033", name="Process Event Inc", role="target")
+
+    first_id = repo.upsert_corporate_process_event(
+        company_id=company_id, event_date=date(2026, 9, 1), state="disclosed_open",
+        accession_no="0001193125-26-000001", is_verified=False,
+        known_from=datetime(2026, 9, 1, 12, tzinfo=timezone.utc),
+    )
+    second_id = repo.upsert_corporate_process_event(
+        company_id=company_id, event_date=date(2026, 9, 1), state="disclosed_open",
+        accession_no="0001193125-26-000001", is_verified=False,
+        known_from=datetime(2026, 9, 2, 12, tzinfo=timezone.utc),
+    )
+
+    assert first_id == second_id
+
+
+def test_get_verified_process_events_enforces_verification_and_lookahead_gates(db_session) -> None:
+    """Only is_verified=TRUE AND known_from<=as_of rows are visible (spec §4.7's verification gate
+    + bitemporal caution — "the most likely place in the system for a subtle lookahead leak")."""
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000034", name="Verification Gate Inc", role="target")
+
+    unverified_id = repo.upsert_corporate_process_event(
+        company_id=company_id, event_date=date(2026, 8, 1), state="disclosed_open",
+        accession_no="acc-unverified", known_from=datetime(2026, 8, 1, tzinfo=timezone.utc),
+    )
+    verified_but_future_known_id = repo.upsert_corporate_process_event(
+        company_id=company_id, event_date=date(2026, 8, 5), state="disclosed_open",
+        accession_no="acc-future-known", known_from=datetime(2026, 9, 10, tzinfo=timezone.utc),
+    )
+    verified_visible_id = repo.upsert_corporate_process_event(
+        company_id=company_id, event_date=date(2026, 8, 10), state="disclosed_open",
+        accession_no="acc-visible", known_from=datetime(2026, 8, 10, tzinfo=timezone.utc),
+    )
+    repo.set_process_event_verified(verified_but_future_known_id, is_verified=True)
+    repo.set_process_event_verified(verified_visible_id, is_verified=True)
+
+    visible = repo.get_verified_process_events(company_id, as_of=date(2026, 9, 1))
+
+    visible_ids = {row["event_id"] for row in visible}
+    assert visible_ids == {verified_visible_id}
+    assert unverified_id not in visible_ids
+    assert verified_but_future_known_id not in visible_ids
+
+
+def test_get_verified_partnership_structures_requires_is_verified(db_session) -> None:
+    repo = P22Repo(db_session)
+    target_id = repo.upsert_company(cik="0000000035", name="Partnership Target Inc", role="target")
+    partner_id = repo.upsert_company(cik="0000000036", name="Partnership Partner Inc", role="acquirer")
+
+    session = db_session
+    from src.data.db.models.model_p22_biotech_ma import P22PartnershipStructure
+
+    unverified = P22PartnershipStructure(
+        company_id=target_id, partner_id=partner_id, structure_type="license_only",
+        entry_method="keyword_detected", is_verified=False,
+        known_from=datetime(2026, 8, 1, tzinfo=timezone.utc),
+    )
+    verified = P22PartnershipStructure(
+        company_id=target_id, partner_id=partner_id, structure_type="acquisition_option",
+        entry_method="manual", is_verified=True,
+        known_from=datetime(2026, 8, 1, tzinfo=timezone.utc),
+    )
+    session.add_all([unverified, verified])
+    session.flush()
+
+    result = repo.get_verified_partnership_structures(target_id, as_of=date(2026, 9, 1))
+
+    assert len(result) == 1
+    assert result[0]["structure_type"] == "acquisition_option"
+
+
 def test_list_companies_returns_id_to_name_map(db_session) -> None:
     """`list_companies` is the match target `alias_matching.resolve_aliases` reads (spec §3.3)."""
     repo = P22Repo(db_session)

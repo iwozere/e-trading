@@ -8,7 +8,7 @@ turning a human's confirm/reject decision into the actual downstream write
 (`cli/review_queue_cli.py`) so the dispatch logic is unit-testable without an
 interactive terminal or a real DB.
 
-Confirmation dispatch is keyed on `payload['reason']`, matching the two
+Confirmation dispatch is keyed on `payload['reason']`, matching the
 producers that exist so far:
 
 - `'spac_name_heuristic'` (from `entity_resolution.write_universe`) — confirm
@@ -21,10 +21,21 @@ producers that exist so far:
   payload the candidate name came from), **never** the review timestamp —
   spec §3.4: "confirmation writes back with `known_from` set to the
   underlying filing date, not the review date."
+- `'strategic_alternatives_candidate'` (from `process_events.run`, spec
+  §2.6.1/§4.7) — the candidate row (`p22_corporate_process_event`) already
+  exists, written `is_verified = FALSE` at ingest time so it's visible in
+  the dossier as "pending verification" per spec; confirm just flips
+  `is_verified = TRUE` via `set_process_event_verified` (no new row, unlike
+  the other two reasons above — see that method's docstring for why Block G
+  candidates are pre-created rather than confirm-created).
 
-A reject never writes anything beyond the review item's own status — the
-candidate is simply dropped, which is the whole point of the queue existing
-(spec §3.3: "never auto-accepted").
+A reject never writes anything beyond the review item's own status — for
+`spac_name_heuristic`/`fuzzy_alias_candidate` the candidate is simply
+dropped (spec §3.3: "never auto-accepted"); for
+`strategic_alternatives_candidate` the already-written event row is left
+`is_verified = FALSE` permanently, which is equivalent to dropped for
+scoring purposes (spec §4.7's verification gate) while still preserving the
+record of what was reviewed and rejected.
 """
 
 from __future__ import annotations
@@ -41,7 +52,7 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-_KNOWN_REASONS = frozenset({"spac_name_heuristic", "fuzzy_alias_candidate"})
+_KNOWN_REASONS = frozenset({"spac_name_heuristic", "fuzzy_alias_candidate", "strategic_alternatives_candidate"})
 
 
 class UnknownReviewItemReasonError(ValueError):
@@ -95,6 +106,12 @@ def confirm_item(item: Dict[str, Any], repo: Any, *, reviewed_by: str, note: str
         outcome = (
             f"added alias {payload['candidate_name']!r} -> company_id={payload['matched_company_id']} "
             f"(known_from={known_from.isoformat()})"
+        )
+    elif reason == "strategic_alternatives_candidate":
+        repo.set_process_event_verified(payload["event_id"], is_verified=True)
+        outcome = (
+            f"verified process event_id={payload['event_id']} for company_id={payload['company_id']} "
+            f"(state={payload['state']}, strength={payload['strength']})"
         )
     else:
         raise UnknownReviewItemReasonError(

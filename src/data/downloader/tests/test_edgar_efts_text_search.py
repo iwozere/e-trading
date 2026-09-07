@@ -127,6 +127,24 @@ def test_get_auditor_name_document_fetch_failure_returns_none(tmp_path):
         assert dl.get_auditor_name(cik="123", start_dt="2026-01-01", end_dt="2026-07-01") is None
 
 
+# ── fetch_filing_document (public wrapper, added for P22 Block G) ───────────
+
+
+def test_fetch_filing_document_normalizes_dashed_accession(tmp_path):
+    dl = EdgarDownloader(cache_dir=tmp_path)
+    with patch.object(dl, "_fetch_filing_document", return_value="<html>body</html>") as mock_fetch:
+        result = dl.fetch_filing_document(cik="123", accession_number="0001193125-24-012345", filename="doc.htm")
+
+    assert result == "<html>body</html>"
+    mock_fetch.assert_called_once_with(123, "000119312524012345", "doc.htm")
+
+
+def test_fetch_filing_document_returns_none_on_fetch_failure(tmp_path):
+    dl = EdgarDownloader(cache_dir=tmp_path)
+    with patch.object(dl, "_fetch_filing_document", return_value=None):
+        assert dl.fetch_filing_document(cik="123", accession_number="0001193125-24-012345", filename="doc.htm") is None
+
+
 # ── _extract_auditor_name (verified live during development, formalised here) ─
 
 
