@@ -643,6 +643,53 @@ class P22Repo:
         row = self.session.execute(stmt.limit(1)).scalars().first()
         return float(row) if row is not None else None
 
+    def get_latest_raw_close_as_of(
+        self, company_id: int, as_of: date, vendor: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        The most recent RAW (unadjusted) close on or before `as_of`, known on or
+        before `as_of` — i.e. the closest thing to "the price this company was
+        actually trading at, as seen by an observer standing on `as_of`."
+
+        Deliberately RAW, not `get_adjusted_close`: `ingest/market_cap.py` pairs
+        this with `shares_outstanding` (also an as-filed, unadjusted figure) to
+        derive `market_cap`, and `ingest/price_archive.py`'s module docstring
+        explains why that pairing must stay raw-on-raw — a retro-adjusted price
+        times an as-filed share count is wrong by exactly the split factor.
+
+        Args:
+            company_id: The company to look up.
+            as_of: Both the upper bound on `trade_date` and on `known_from` —
+                a price row is only visible if it was both for a trading day
+                on or before `as_of` AND already landed by `as_of` (spec §3.1's
+                lookahead guard, same discipline as `get_financial_facts_as_of`).
+            vendor: Optionally pin to one vendor; otherwise the most recent
+                qualifying row from any vendor.
+
+        Returns:
+            `{"trade_date": date, "close_raw": float, "vendor": str}`, or
+            `None` if no qualifying row exists.
+        """
+        as_of_end = datetime.combine(as_of, datetime.max.time(), tzinfo=timezone.utc)
+        stmt = select(P22PriceDaily).where(
+            P22PriceDaily.company_id == company_id,
+            P22PriceDaily.trade_date <= as_of,
+            P22PriceDaily.close_raw.is_not(None),
+            # A NULL known_from means we don't actually know when this row was
+            # learned — treated as "not yet known" (excluded), not "always
+            # visible", mirroring get_adjusted_close's known_from_date=date.max
+            # convention for corporate actions with the same gap.
+            P22PriceDaily.known_from.is_not(None),
+            P22PriceDaily.known_from <= as_of_end,
+        )
+        if vendor is not None:
+            stmt = stmt.where(P22PriceDaily.vendor == vendor)
+        stmt = stmt.order_by(P22PriceDaily.trade_date.desc()).limit(1)
+        row = self.session.execute(stmt).scalars().first()
+        if row is None or row.close_raw is None:
+            return None
+        return {"trade_date": row.trade_date, "close_raw": float(row.close_raw), "vendor": row.vendor}
+
     def get_adjusted_close(
         self,
         company_id: int,

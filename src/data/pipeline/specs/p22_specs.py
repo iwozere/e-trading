@@ -116,4 +116,13 @@ SPECS: List[PluginSpec] = [
         timeout_seconds=3600,
         description="yfinance narrow incremental daily bars — see price_ingest.py split-adjustment note.",
     ),
+    PluginSpec(
+        name="P22 Market Cap Compute",
+        category="p22",
+        cron="30 22 * * 1-5",  # after Daily Price Ingest lands today's closes
+        script_path=f"{_SCRIPT_BASE}/run_market_cap_compute.py",
+        timeout_seconds=1800,
+        description="Derives market_cap = raw_close x shares_outstanding; unblocks Block A/C (see ingest/market_cap.py).",
+        depends_on=["P22 Daily Price Ingest", "P22 Financial Facts Normalization"],
+    ),
 ]

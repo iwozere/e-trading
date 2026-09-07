@@ -57,11 +57,21 @@ use in the code/config; this section exists so they're all in one place to walk 
    deliberate choice, not a gap, since that step isn't time-boxed to a Premium month (raw zone is
    immutable) and depends on resolving the raw-vs-adjusted question above against real data first. Nor
    is a `MarketDataProvider` Protocol implementation (`ingest/vendor_market_data.py`'s
-   `NullMarketDataProvider`) — same reasoning, plus point-in-time `market_cap` may not need a
-   dedicated FMP endpoint at all: it can likely be derived as `raw_close(t) × shares_outstanding(t)`
-   from data already normalized (`financial_facts.py`'s `shares_outstanding`) once prices are landed,
-   avoiding FMP's current-snapshot-only `company_profile` endpoint (no point-in-time history) entirely
-   — a design simplification found this session, not yet built.
+   `NullMarketDataProvider`) — same reasoning.
+
+   **Narrowed 2026-09-07: FMP is now needed ONLY for delisted-ticker historical prices (M6 backtest
+   labeling), not for live Block A/C scoring.** The "point-in-time `market_cap` may not need a
+   dedicated FMP endpoint" idea above is now built: `ingest/market_cap.py` +
+   `jobs/run_market_cap_compute.py` derive `market_cap = raw_close(t) × shares_outstanding(t)` for
+   any CURRENTLY-LISTED company, using data already normalized (`price_ingest.py`'s yfinance daily
+   close + `financial_facts.py`'s `shares_outstanding`) — zero FMP dependency. Both inputs are kept
+   raw/as-filed (never split-adjusted), per `price_archive.py`'s "raw-on-raw" requirement. Registered
+   daily in `p22_specs.py`, after Daily Price Ingest + Financial Facts Normalization. This unblocks
+   Block A's `equity_capacity`/`dry_powder` (market_cap leg) and finishes Block C's
+   `enterprise_value`/`ev_to_cash`/`size_band` for every currently-listed company — see
+   `features/block_c.py`'s updated docstring. Delisted companies (acquired, no longer trading) still
+   get `None` here, same as before — that specific gap is what the FMP Premium decision is actually
+   for now, needed for M6, not M3/Block A live scoring.
 2. ~~**`config/pipeline/p22_base_rates.yaml` is ~90% incomplete**~~ — **mostly resolved 2026-08-31.**
    The actual primary source turned out to be freely available: "Clinical Development Success Rates
    and Contributing Factors 2011-2020" (BIO, QLS Advisors, Informa UK Ltd, Feb 2021) — a newer,
@@ -87,8 +97,11 @@ use in the code/config; this section exists so they're all in one place to walk 
    acquirer scale by 2010; AbbVie already has its real 2013 spinoff anchor). The loader that turns
    this file into `p22_company` roster rows (`ingest/acquirer_config.py` + `jobs/run_acquirer_load.py`)
    was already built the same day, earlier — see Implementation Status. **What's still open:** Block A
-   itself can't run yet regardless — `cash_capacity`/`equity_capacity` need real market-cap data,
-   i.e. item 1.
+   itself isn't built yet (see M3 in-progress list) — `equity_capacity`'s market-cap leg is unblocked
+   as of 2026-09-07 (item 1), but `cash_capacity` still needs EBITDA/net_debt normalized (not in
+   `FACT_TAG_MAP` yet) and `currency_quality` needs a peer-group `fwd_pe` percentile rank + a realized-
+   vol stability factor, neither built. `deal_cadence_3y`/`stock_deal_propensity` are separately
+   hard-blocked on `p22_deal` (M6), not on market data at all.
 4. ~~**`config/pipeline/p22_therapeutic_area.yaml` needs domain review against the study's taxonomy**~~
    — **done 2026-08-31**, as part of item 2's resolution (the study is now available — see item 2).
    No vocab values needed adding/removing; the mapping decision itself lives in
@@ -268,13 +281,27 @@ use in the code/config; this section exists so they're all in one place to walk 
       Requirements.md` already claimed this was "already a repo dependency" before this session; it
       was not actually installed or present in `requirements.txt` anywhere in the repo. Verified via
       `pip install` + a real `DataFrameSchema.validate()` call before trusting the claim this time.
-- [ ] Blocks A, B, D, E, F (spec §4.1, §4.2, §4.4, §4.5, §4.6) — not started. All are blocked on real
-      data this repo doesn't have normalized yet: Block A now has real patent-expiry data
-      (`p22_patent_expiry`, see below) but still needs curated acquirer entry/exit dates (item 3) +
-      market cap (item 1) + deal history (M6) + `p22_asset`/`p22_trial` population; Block B needs real
-      base rates (item 2) + `p22_trial`/`p22_asset`; Block D is computed from Blocks A-C's own outputs
-      so it's blocked transitively; Block E needs 8-K/DEF 14A text-parsing infrastructure that doesn't
-      exist; Block F needs 13F integration (M5/M6 scope per spec's own milestone table). Not attempted
+- [x] `ingest/market_cap.py` + `jobs/run_market_cap_compute.py`, 2026-09-07 — derives
+      `market_cap = raw_close(t) × shares_outstanding(t)` and writes it as an ordinary
+      `p22_financial_fact` row, resolving item 1's "may not need a dedicated FMP endpoint" idea into
+      real code. New `P22Repo.get_latest_raw_close_as_of` (DB-tested) reads the RAW, unadjusted close
+      — deliberately not `get_adjusted_close` — pairing raw price with as-filed
+      `shares_outstanding`, per `price_archive.py`'s "raw-on-raw" requirement. Registered daily in
+      `p22_specs.py` after Daily Price Ingest + Financial Facts Normalization. Uses the same
+      rejection-breakdown-`Counter` diagnostic pattern as P20's `sleeve_a.py`/`sleeve_c.py` (a
+      `_logger.warning` with the top skip reasons whenever nothing computes) so a systematic gap is
+      visible in the run summary, not a silent all-`None` funnel. Only reaches currently-listed
+      companies (no yfinance ticker for a delisted one) — see item 1's narrowed framing above.
+- [ ] Blocks A, B, D, E, F (spec §4.1, §4.2, §4.4, §4.5, §4.6) — not started. Block A's market-cap
+      dependency (item 1) is resolved as of 2026-09-07 (see above), but `cash_capacity` still needs
+      EBITDA/net_debt (not in `FACT_TAG_MAP`), `currency_quality` needs peer-group `fwd_pe` +
+      realized-vol data (not sourced anywhere), curated acquirer entry/exit dates (item 3) are
+      accepted-placeholder not researched, and `deal_cadence_3y`/`stock_deal_propensity` need deal
+      history (M6) — plus `p22_asset`/`p22_trial` population for `pipeline_gap_by_ta`. Block B needs
+      real base rates (item 2, mostly done) + broader `p22_trial`/`p22_asset` coverage (currently only
+      single-intervention trials link, item 8). Block D is computed from Blocks A-C's own outputs so
+      it's blocked transitively. Block E needs 8-K/DEF 14A text-parsing infrastructure that doesn't
+      exist. Block F needs 13F integration (M5/M6 scope per spec's own milestone table). Not attempted
       this pass rather than built against fabricated/guessed inputs.
 - [x] `p22_trial` normalization from landed CT.gov `clinicaltrials_studies` payloads, 2026-08-30 —
       `ingest/trial_normalization.py` + `jobs/run_trial_normalization.py`, registered in
@@ -544,11 +571,13 @@ use in the code/config; this section exists so they're all in one place to walk 
       incl. the live-caught multi-exact-match tie-break and skip-already-landed resumability
       (`test_fmp_backfill.py`), yfinance daily-bar parsing incl. the narrow-window-request assertion
       (`test_yfinance_client.py`), daily price/corporate-action normalization incl. forward/reverse
-      split ratio handling (`test_price_ingest.py`) — 270 tests total in the non-DB suite as of
-      2026-09-01.
+      split ratio handling (`test_price_ingest.py`), derived `market_cap` incl. the rejection-
+      breakdown aggregation (`test_market_cap.py`) — 294 tests total in the non-DB suite as of
+      2026-09-07.
 - [ ] Real-Postgres integration tests for `P22Repo.upsert_financial_fact_bitemporal` restatement
       behavior, the price-archive round trip (`upsert_price_daily` immutability,
-      `get_adjusted_close`'s lookahead guard through the repo layer), `upsert_trial`'s
+      `get_adjusted_close`'s lookahead guard through the repo layer), `get_latest_raw_close_as_of`
+      incl. the null-`known_from` exclusion case, `upsert_trial`'s
       keyed-on-`nct_id` update-in-place behavior, `upsert_acquirer_company`'s ticker-merge/idempotency
       behavior, `upsert_patent_expiry`'s idempotent-insert behavior, and the `upsert_asset`/
       `get_asset_by_company_and_name` round trip — present in `tests/db/test_repo_p22_bitemporal.py`

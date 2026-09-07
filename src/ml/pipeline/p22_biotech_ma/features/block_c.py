@@ -4,18 +4,24 @@ P22 — Block C: Financial Screen (spec §4.3, M3).
 Definitions match the spec table exactly. Every function reads through
 `FeatureContext.get_latest_fact`/`get_trailing_average`, so `None` propagates
 automatically wherever an underlying metric hasn't been normalized into
-`p22_financial_fact` yet. As of 2026-08-30: `cash_runway_months` and
-`dilution_risk`'s runway leg are real (their inputs — `cash_and_equivalents`,
-`short_term_investments`, `quarterly_opex_burn` — are all normalized by
-`ingest/financial_facts.py`); `enterprise_value`/`ev_to_cash`/`size_band`/
-`atm_capacity_pct`, and `dilution_risk`'s catalyst leg, are still `None`
-end-to-end — the former need `market_cap` (blocked on the market-data vendor
-decision, spec §2.4/§2.0.6 — see `docs/Tasks.md`), the latter needs
-CT.gov trial-completion-date extraction into a `catalyst_days_to_next` metric
-(not built). These functions are correct and unit-tested against synthetic
-fixtures now (spec §8.1: "every feature function with hand-constructed
-fixtures, including the null path"); they start returning real values the
-moment those upstream normalizers exist, with no change needed here.
+`p22_financial_fact` yet.
+
+As of 2026-09-07: every function here can return a real value.
+`cash_runway_months` and `dilution_risk`'s runway leg have been real since
+2026-08-30 (`cash_and_equivalents`/`short_term_investments`/`quarterly_opex_burn`,
+normalized by `ingest/financial_facts.py`); `enterprise_value`/`ev_to_cash`/
+`size_band` now compute for any company `ingest/market_cap.py` has produced a
+`market_cap` fact for (which is any currently-listed company with a landed
+yfinance price and a known `shares_outstanding` — no market-data vendor
+purchase needed after all, see that module's docstring). Two gaps remain,
+both needing extraction work that hasn't been built, not a vendor decision:
+`atm_capacity_pct` needs `atm_shelf_remaining` (424B5/10-Q text parsing), and
+`dilution_risk`'s catalyst leg needs `catalyst_days_to_next` (CT.gov
+trial-completion-date extraction). These functions are correct and
+unit-tested against synthetic fixtures (spec §8.1: "every feature function
+with hand-constructed fixtures, including the null path"); the two
+still-blocked ones start returning real values the moment their upstream
+normalizers exist, with no change needed here.
 """
 
 from __future__ import annotations

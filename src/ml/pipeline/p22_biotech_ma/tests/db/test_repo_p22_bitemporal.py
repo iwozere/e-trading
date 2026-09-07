@@ -143,6 +143,44 @@ def test_get_adjusted_close_applies_only_actions_known_by_as_of(db_session) -> N
     assert repo.get_adjusted_close(company_id, date(2019, 6, 1), as_of=date(2023, 6, 1)) == 100.0 / 0.05
 
 
+def test_get_latest_raw_close_as_of_returns_most_recent_qualifying_row(db_session) -> None:
+    """`ingest/market_cap.py`'s price leg: the most recent RAW close on or before `as_of`, known
+    on or before `as_of` — never the split-adjusted `get_adjusted_close` (spec §2.0.7's raw-on-raw
+    pairing requirement for market_cap)."""
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000030", name="Market Cap Inc", role="target")
+
+    repo.upsert_price_daily(
+        company_id=company_id, trade_date=date(2026, 9, 2), vendor="yfinance", close_raw=10.0,
+        known_from=datetime(2026, 9, 2, 21, tzinfo=timezone.utc),
+    )
+    repo.upsert_price_daily(
+        company_id=company_id, trade_date=date(2026, 9, 3), vendor="yfinance", close_raw=11.0,
+        known_from=datetime(2026, 9, 3, 21, tzinfo=timezone.utc),
+    )
+
+    latest = repo.get_latest_raw_close_as_of(company_id, date(2026, 9, 5))
+    assert latest == {"trade_date": date(2026, 9, 3), "close_raw": 11.0, "vendor": "yfinance"}
+
+    # A row not yet known by as_of must not be visible, even though its trade_date qualifies.
+    as_of_before_known = repo.get_latest_raw_close_as_of(company_id, date(2026, 9, 2))
+    assert as_of_before_known == {"trade_date": date(2026, 9, 2), "close_raw": 10.0, "vendor": "yfinance"}
+
+    none_yet = repo.get_latest_raw_close_as_of(company_id, date(2026, 9, 1))
+    assert none_yet is None
+
+
+def test_get_latest_raw_close_as_of_ignores_null_known_from(db_session) -> None:
+    """A row with no `known_from` on file is treated as not-yet-known, not always-visible —
+    mirroring `get_adjusted_close`'s `known_from_date=date.max` convention for the same gap."""
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000031", name="No Known From Inc", role="target")
+
+    repo.upsert_price_daily(company_id=company_id, trade_date=date(2026, 9, 2), vendor="yfinance", close_raw=10.0)
+
+    assert repo.get_latest_raw_close_as_of(company_id, date(2026, 9, 5)) is None
+
+
 def test_list_companies_returns_id_to_name_map(db_session) -> None:
     """`list_companies` is the match target `alias_matching.resolve_aliases` reads (spec §3.3)."""
     repo = P22Repo(db_session)
