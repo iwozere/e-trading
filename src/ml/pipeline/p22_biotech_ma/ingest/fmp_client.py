@@ -45,6 +45,15 @@ guessable from outside.
 Both functions reuse `FMPDataDownloader`'s own API-key resolution (env var ->
 `config.donotshare.donotshare.FMP_API_KEY` -> default), so there is exactly
 one place in the repo that decides where the key comes from.
+
+**Added 2026-09-08, for Block A's `cash_capacity`/`currency_quality`
+(spec §4.1), built ahead of an account decision the same way as the price
+methods above**: `fetch_ratios`/`fetch_analyst_estimates`. Live-verified
+against all 25 `p22_acquirers.yaml` tickers — only 3 (PFE, ABBV, JNJ) return
+real data on the current plan; the other 22, including top-5-by-revenue
+acquirers like Merck, 402. See `features/block_a.py`'s module docstring for
+why this isn't wired into a `p22_financial_fact` normalizer yet despite
+being ready.
 """
 
 from __future__ import annotations
@@ -127,6 +136,77 @@ class FMPClient:
             _logger.warning(
                 "FMP historical price for %s returned unexpected shape %s — endpoint may have changed again",
                 symbol, type(data).__name__,
+            )
+            return None
+        return data
+
+    def fetch_ratios(self, symbol: str) -> Optional[List[Dict[str, Any]]]:
+        """
+        `/stable/ratios` — financial ratios per fiscal period, including trailing
+        `priceToEarningsRatio` (spec §4.1's `currency_quality` wants FORWARD P/E,
+        which this endpoint does NOT provide directly — see `fetch_analyst_estimates`
+        for the forward-EPS leg needed to derive it).
+
+        **Live-verified 2026-09-08 against all 25 `p22_acquirers.yaml` tickers**:
+        the current account tier returns real data for only **3 of 25**
+        (PFE, ABBV, JNJ) — every other acquirer (including MRK, a top-5 pharma
+        by revenue) 402s. This is a materially narrower entitlement gap than
+        the delisted-ticker-history finding in this module's own docstring —
+        see `features/block_a.py`'s module docstring for why this isn't wired
+        into a normalizer yet.
+
+        Returns:
+            The raw response JSON (a list, one dict per fiscal period), or
+            `None` on a 402/404/failure — same "expected, not alarming"
+            handling as `fetch_historical_price_full`.
+        """
+        params = {"apikey": self._api_key, "symbol": symbol}
+        resp = get_with_retry(self._client, f"{FMP_STABLE_URL}/ratios", params=params, rate_limiter=fmp_limiter)
+        return self._handle_list_response(resp, symbol, "ratios")
+
+    def fetch_analyst_estimates(self, symbol: str, period: str = "annual") -> Optional[List[Dict[str, Any]]]:
+        """
+        `/stable/analyst-estimates` — forward consensus estimates per future
+        fiscal period, including `epsAvg` (forward EPS — pair with a current
+        price to derive forward P/E) and `ebitdaAvg` (forward EBITDA — spec
+        §4.1's `cash_capacity` names EBITDA without specifying trailing vs.
+        forward; this endpoint only has forward). `period` must be given
+        explicitly — live-verified 2026-09-08 that omitting it is a 400, not
+        a default.
+
+        Same entitlement gap as `fetch_ratios` (live-verified on the same
+        pass, same 3-of-25 result) — see that method's docstring.
+
+        Returns:
+            The raw response JSON (a list, one dict per future fiscal
+            period, nearest-first), or `None` on a 402/404/failure.
+        """
+        params = {"apikey": self._api_key, "symbol": symbol, "period": period}
+        resp = get_with_retry(
+            self._client, f"{FMP_STABLE_URL}/analyst-estimates", params=params, rate_limiter=fmp_limiter
+        )
+        return self._handle_list_response(resp, symbol, "analyst estimates")
+
+    def _handle_list_response(
+        self, resp: Optional[httpx.Response], symbol: str, label: str
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Shared response handling for the list-shaped `/stable` endpoints above."""
+        if resp is None:
+            return None
+        if resp.status_code == 402:
+            _logger.info("FMP %s for %s not covered by the current plan (402)", label, symbol)
+            return None
+        if resp.status_code == 404:
+            _logger.info("No FMP %s for %s (404)", label, symbol)
+            return None
+        if resp.status_code != 200:
+            _logger.error("FMP %s request for %s failed: status %d", label, symbol, resp.status_code)
+            return None
+        data = resp.json()
+        if not isinstance(data, list):
+            _logger.warning(
+                "FMP %s for %s returned unexpected shape %s — endpoint may have changed again",
+                label, symbol, type(data).__name__,
             )
             return None
         return data

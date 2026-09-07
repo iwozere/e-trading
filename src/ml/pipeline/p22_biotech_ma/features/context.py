@@ -51,6 +51,18 @@ class FeatureContext:
         facts = self.repo.get_financial_facts_as_of(company_id, metric, self.as_of)
         return facts[0] if facts else None
 
+    def get_phase3_asset_count_by_ta(self, company_id: int) -> Dict[str, int]:
+        """
+        Pass-through to `P22Repo.count_phase3_assets_by_therapeutic_area` — kept here (rather than
+        called directly on `ctx.repo`) so `features/block_a.py`'s `pipeline_gap_by_ta` never touches
+        the repo/SQLAlchemy layer directly, same discipline as every other feature-function read
+        (module docstring above). Not lookahead-audited like `get_latest_fact` — `p22_trial` is a
+        plain upsert keyed on `nct_id`, not bitemporal (see `P22Repo.upsert_trial`'s docstring), so
+        there is no `known_from`-gated history to filter here; this always reflects the trial's
+        latest known state, same as any other `p22_trial` read.
+        """
+        return self.repo.count_phase3_assets_by_therapeutic_area(company_id)
+
     def get_trailing_average(self, company_id: int, metric: str, periods: int = 4) -> Optional[float]:
         """
         Average of the most recent `periods` known values of `metric`, as of

@@ -71,6 +71,54 @@ def test_fetch_historical_price_full_returns_none_on_error_status():
     assert client.fetch_historical_price_full("MRNA", date(2024, 1, 1), date(2024, 1, 31)) is None
 
 
+def test_fetch_ratios_returns_raw_json_verbatim():
+    client = _client()
+    raw_payload = [{"symbol": "PFE", "priceToEarningsRatio": 18.3}]
+    client._client.get = MagicMock(return_value=_mock_response(raw_payload))
+
+    assert client.fetch_ratios("PFE") == raw_payload
+
+
+def test_fetch_ratios_returns_none_on_402():
+    """Live-verified 2026-09-08: 22 of 25 p22_acquirers.yaml tickers 402 on the current plan
+    (see module docstring) — this is the expected, common shape for most Block A acquirers today."""
+    client = _client()
+    client._client.get = MagicMock(return_value=_mock_response({}, status_code=402))
+
+    assert client.fetch_ratios("MRK") is None
+
+
+def test_fetch_ratios_returns_none_on_unexpected_shape():
+    client = _client()
+    client._client.get = MagicMock(return_value=_mock_response({"unexpected": "dict, not a list"}))
+
+    assert client.fetch_ratios("PFE") is None
+
+
+def test_fetch_analyst_estimates_returns_raw_json_verbatim():
+    client = _client()
+    raw_payload = [{"symbol": "PFE", "date": "2030-12-31", "epsAvg": 2.44, "ebitdaAvg": 23_454_021_656}]
+    client._client.get = MagicMock(return_value=_mock_response(raw_payload))
+
+    result = client.fetch_analyst_estimates("PFE", period="annual")
+
+    assert result == raw_payload
+
+
+def test_fetch_analyst_estimates_returns_none_on_402():
+    client = _client()
+    client._client.get = MagicMock(return_value=_mock_response({}, status_code=402))
+
+    assert client.fetch_analyst_estimates("AMGN", period="annual") is None
+
+
+def test_fetch_analyst_estimates_returns_none_on_error_status():
+    client = _client()
+    client._client.get = MagicMock(return_value=_mock_response({}, status_code=500))
+
+    assert client.fetch_analyst_estimates("PFE", period="annual") is None
+
+
 def test_search_company_by_name_returns_list():
     client = _client()
     client._client.get = MagicMock(return_value=_mock_response([{"symbol": "XYZ", "name": "XYZ Corp"}]))

@@ -181,6 +181,27 @@ def test_get_latest_raw_close_as_of_ignores_null_known_from(db_session) -> None:
     assert repo.get_latest_raw_close_as_of(company_id, date(2026, 9, 5)) is None
 
 
+def test_count_phase3_assets_by_therapeutic_area(db_session) -> None:
+    """`features/block_a.py`'s `pipeline_gap_by_ta` input: counts DISTINCT assets with >=1 linked
+    Phase III trial, grouped by TA — an asset with two Phase III trials counts once, and a
+    combined-phase trial ("PHASE2/PHASE3") counts as Phase III present (spec §4.1)."""
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000032", name="Pipeline Gap Inc", role="acquirer")
+
+    onc_asset_two_trials = repo.upsert_asset(company_id=company_id, name="Onc-1", therapeutic_area="oncology_solid")
+    onc_asset_combined_phase = repo.upsert_asset(company_id=company_id, name="Onc-2", therapeutic_area="oncology_solid")
+    neuro_asset_ph2_only = repo.upsert_asset(company_id=company_id, name="Neuro-1", therapeutic_area="neurology")
+
+    repo.upsert_trial(nct_id="NCT00001001", asset_id=onc_asset_two_trials, phase="PHASE3")
+    repo.upsert_trial(nct_id="NCT00001002", asset_id=onc_asset_two_trials, phase="PHASE3")  # same asset, 2nd trial
+    repo.upsert_trial(nct_id="NCT00001003", asset_id=onc_asset_combined_phase, phase="PHASE2/PHASE3")
+    repo.upsert_trial(nct_id="NCT00001004", asset_id=neuro_asset_ph2_only, phase="PHASE2")
+
+    counts = repo.count_phase3_assets_by_therapeutic_area(company_id)
+
+    assert counts == {"oncology_solid": 2}  # both onc assets counted once each; neuro has no Phase III
+
+
 def test_list_companies_returns_id_to_name_map(db_session) -> None:
     """`list_companies` is the match target `alias_matching.resolve_aliases` reads (spec §3.3)."""
     repo = P22Repo(db_session)

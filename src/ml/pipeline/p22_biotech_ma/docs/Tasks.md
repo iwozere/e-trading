@@ -141,6 +141,36 @@ use in the code/config; this section exists so they're all in one place to walk 
    imperfect, not validated against real clinical taxonomy** — any asset it classifies should be
    treated as a candidate classification pending review, not ground truth, especially before it feeds
    a real Block B computation that branches on therapeutic area.
+9. **EBITDA and forward-P/E data source for Block A** (spec §4.1's `cash_capacity`/`currency_quality`)
+   — new, found 2026-09-08 while building `features/block_a.py`. FMP's `/stable/ratios`/
+   `/analyst-estimates` endpoints would supply both (live-verified real, working responses for PFE/
+   ABBV/JNJ), but the account's current tier 402s for the other 22 of 25 `p22_acquirers.yaml`
+   tickers, including top-5-by-revenue names like Merck — a narrower and more consequential
+   entitlement gap than item 1's delisted-ticker-history finding, since it blocks live scoring for
+   the acquirer universe Block A exists to model, not just backtest labeling. `ingest/fmp_client.py`'s
+   `fetch_ratios`/`fetch_analyst_estimates` are built and live-verified, ready to normalize the
+   moment coverage is confirmed sufficient (upgrading the account, or an alternative vendor with
+   broader forward-estimates coverage for this specific universe — not assumed to be the same
+   answer as item 1's plan choice, since forward-consensus-estimates coverage and historical-price
+   depth are different products even within one vendor).
+10. **`stability_factor(trailing 12m realized vol)` has no defined formula** (spec §4.1's
+    `currency_quality = percentile_rank(fwd_pe) × stability_factor(vol)`) — new, found 2026-09-08.
+    Spec names the input and the role but never gives the function shape (unlike, say,
+    `max_dilution_tolerance = 0.15`, which spec states directly). Inventing one (e.g. `1/(1+vol)`)
+    would be exactly the kind of fabricated business logic this codebase's discipline forbids
+    elsewhere (cf. §4.2's orphan-modifier warning: "any implementation that adds a constant... is
+    wrong and must fail review"). `features/block_a.py`'s `percentile_rank` implements the OTHER
+    (unambiguous) half of `currency_quality` for real; `equity_capacity` reads `currency_quality`
+    itself as an already-computed fact, so it's ready the moment both halves exist — this decision
+    plus item 9 above are what's actually blocking it, not missing code.
+11. **`target_leverage_ratio` (Block A `cash_capacity`) and `assumed_peak_sales` per therapeutic
+    area (Block A `pipeline_gap_by_ta`) both need domain curation** — new, found 2026-09-08. Spec
+    names both inputs but gives no values for either (unlike `p22_base_rates.yaml`'s anchor figures,
+    which spec states directly) — same character as `p22_modality.yaml`'s still-open taxonomy
+    review (item 4). `features/block_a.py`'s `TARGET_LEVERAGE_RATIO` module constant is `None` until
+    curated (`cash_capacity` returns `None` while it is); `pipeline_gap_by_ta` takes
+    `assumed_peak_sales_by_ta` as an explicit caller-supplied parameter rather than a guessed
+    constant.
 
 ## Implementation Status
 
@@ -292,13 +322,29 @@ use in the code/config; this section exists so they're all in one place to walk 
       `_logger.warning` with the top skip reasons whenever nothing computes) so a systematic gap is
       visible in the run summary, not a silent all-`None` funnel. Only reaches currently-listed
       companies (no yfinance ticker for a delisted one) — see item 1's narrowed framing above.
-- [ ] Blocks A, B, D, E, F (spec §4.1, §4.2, §4.4, §4.5, §4.6) — not started. Block A's market-cap
-      dependency (item 1) is resolved as of 2026-09-07 (see above), but `cash_capacity` still needs
-      EBITDA/net_debt (not in `FACT_TAG_MAP`), `currency_quality` needs peer-group `fwd_pe` +
-      realized-vol data (not sourced anywhere), curated acquirer entry/exit dates (item 3) are
-      accepted-placeholder not researched, and `deal_cadence_3y`/`stock_deal_propensity` need deal
-      history (M6) — plus `p22_asset`/`p22_trial` population for `pipeline_gap_by_ta`. Block B needs
-      real base rates (item 2, mostly done) + broader `p22_trial`/`p22_asset` coverage (currently only
+- [x] `features/block_a.py`, 2026-09-08 — `revenue_at_risk_3y`/`_5y`, `cash_capacity`,
+      `equity_capacity`, `dry_powder` implemented and registered (spec §4.1), plus a standalone
+      `percentile_rank` utility and `pipeline_gap_by_ta` (deliberately NOT a `@register_feature` —
+      spec's own table marks it "Per TA," i.e. dict-shaped, not the single `float | None` every
+      other feature returns; see that function's docstring, same spec/infra mismatch class as
+      Block D's pairwise `fit()`). New `P22Repo.count_phase3_assets_by_therapeutic_area` (DB-tested)
+      + `FeatureContext.get_phase3_asset_count_by_ta` back `pipeline_gap_by_ta`'s count leg — real
+      today for single-intervention-trial-linked assets. **Every function is correct and unit-tested
+      against synthetic fixtures (both the real-computation and null paths, spec §8.1), but almost
+      all return `None` in production today** — same "scaffolding ahead of the blocker" pattern as
+      Block C's `market_cap` history, except Block A has more independent blockers than Block C ever
+      did: `existing_net_debt` and `market_cap` are real (already normalized), but `ebitda` and
+      `currency_quality`'s two halves (items 9-10) and `target_leverage_ratio`/`assumed_peak_sales`
+      (item 11) are all still missing, each for a different reason (vendor entitlement, undefined
+      spec formula, and un-curated business assumptions respectively) — see those items. Also built
+      `ingest/fmp_client.py`'s `fetch_ratios`/`fetch_analyst_estimates` (live-verified against all 25
+      acquirers, only 3 covered on the current plan — item 9) ahead of resolving that gap, same
+      "ready when the decision lands" precedent as the FMP historical-price work in item 1.
+      `deal_cadence_3y`/`stock_deal_propensity` are NOT stubbed even as always-`None` functions —
+      both need `p22_deal`, a table that doesn't exist until M6; a stub reading a nonexistent table
+      would be pure theater (module docstring).
+- [ ] Blocks B, D, E, F (spec §4.2, §4.4, §4.5, §4.6) — not started. Block B needs real base rates
+      (item 2, mostly done) + broader `p22_trial`/`p22_asset` coverage (currently only
       single-intervention trials link, item 8). Block D is computed from Blocks A-C's own outputs so
       it's blocked transitively. Block E needs 8-K/DEF 14A text-parsing infrastructure that doesn't
       exist. Block F needs 13F integration (M5/M6 scope per spec's own milestone table). Not attempted
@@ -572,12 +618,15 @@ use in the code/config; this section exists so they're all in one place to walk 
       (`test_fmp_backfill.py`), yfinance daily-bar parsing incl. the narrow-window-request assertion
       (`test_yfinance_client.py`), daily price/corporate-action normalization incl. forward/reverse
       split ratio handling (`test_price_ingest.py`), derived `market_cap` incl. the rejection-
-      breakdown aggregation (`test_market_cap.py`) — 294 tests total in the non-DB suite as of
-      2026-09-07.
+      breakdown aggregation (`test_market_cap.py`), Block A incl. every null path and the
+      floored-at-zero/window-boundary cases (`test_block_a.py`), FMP ratios/analyst-estimates client
+      incl. the 402/unexpected-shape cases (`test_fmp_client.py`) — 319 tests total in the non-DB
+      suite as of 2026-09-08.
 - [ ] Real-Postgres integration tests for `P22Repo.upsert_financial_fact_bitemporal` restatement
       behavior, the price-archive round trip (`upsert_price_daily` immutability,
       `get_adjusted_close`'s lookahead guard through the repo layer), `get_latest_raw_close_as_of`
-      incl. the null-`known_from` exclusion case, `upsert_trial`'s
+      incl. the null-`known_from` exclusion case, `count_phase3_assets_by_therapeutic_area` incl. the
+      one-asset-two-trials and combined-phase cases, `upsert_trial`'s
       keyed-on-`nct_id` update-in-place behavior, `upsert_acquirer_company`'s ticker-merge/idempotency
       behavior, `upsert_patent_expiry`'s idempotent-insert behavior, and the `upsert_asset`/
       `get_asset_by_company_and_name` round trip — present in `tests/db/test_repo_p22_bitemporal.py`

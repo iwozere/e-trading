@@ -408,6 +408,39 @@ class P22Repo:
             return None
         return {c.key: getattr(row, c.key) for c in P22Trial.__table__.columns}
 
+    def count_phase3_assets_by_therapeutic_area(self, company_id: int) -> Dict[str, int]:
+        """
+        Count of DISTINCT `p22_asset` rows for `company_id` with at least one linked `p22_trial`
+        whose `phase` includes Phase III, grouped by the asset's `therapeutic_area` (spec §4.1
+        Block A's `pipeline_gap_by_ta`: "count of own Phase III assets in that TA"). Counts assets,
+        not trials — an asset with several Phase III trials for the same indication counts once,
+        matching spec's breadth-not-volume framing (cf. `asset_count_ph2plus`, spec §4.2).
+
+        `phase` is CT.gov's raw, possibly-combined vocabulary (`trial_normalization.py`:
+        `"/".join(phases)`, e.g. `"PHASE2/PHASE3"`) — split on `/` and match `"PHASE3"` exactly
+        rather than a substring check, so a hypothetical future `"PHASE30"`-shaped value (CT.gov
+        has never used one, but nothing guarantees it never will) can't false-match.
+
+        Only reaches trials already linked via `p22_trial.asset_id` — currently single-intervention
+        trials only (`docs/Tasks.md` item 8); an asset whose only trials are multi-intervention and
+        therefore unlinked is invisible here, same known gap as everywhere else that reads `p22_asset`.
+        """
+        rows = self.session.execute(
+            select(P22Asset.asset_id, P22Asset.therapeutic_area, P22Trial.phase)
+            .join(P22Trial, P22Trial.asset_id == P22Asset.asset_id)
+            .where(P22Asset.company_id == company_id)
+        ).all()
+
+        phase3_asset_ta: Dict[int, str] = {}
+        for asset_id, therapeutic_area, phase in rows:
+            if phase and "PHASE3" in phase.split("/"):
+                phase3_asset_ta[asset_id] = therapeutic_area
+
+        counts: Dict[str, int] = {}
+        for therapeutic_area in phase3_asset_ta.values():
+            counts[therapeutic_area] = counts.get(therapeutic_area, 0) + 1
+        return counts
+
     # ------------------------------------------------------------------
     # Patent expiry — acquirer side (spec §2.3, §4.1 Block A)
     # ------------------------------------------------------------------
