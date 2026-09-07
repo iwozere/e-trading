@@ -55,6 +55,15 @@ SPECS: List[PluginSpec] = [
         depends_on=["P22 SEC Filings Ingest"],
     ),
     PluginSpec(
+        name="P22 Domicile Normalization",
+        category="p22",
+        cron="20 5 * * 1-5",  # after SEC Filings Ingest lands the day's submissions payloads
+        script_path=f"{_SCRIPT_BASE}/run_domicile_normalization.py",
+        timeout_seconds=900,
+        description="Block E (spec §4.5): is_foreign_domiciled from SEC submissions' business address.",
+        depends_on=["P22 SEC Filings Ingest"],
+    ),
+    PluginSpec(
         name="P22 ClinicalTrials Ingest",
         category="p22",
         cron="30 5 * * 1-5",

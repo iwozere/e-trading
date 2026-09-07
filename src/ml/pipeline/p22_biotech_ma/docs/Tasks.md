@@ -392,9 +392,34 @@ use in the code/config; this section exists so they're all in one place to walk 
       than `None`), `ev_to_risk_adjusted_npv` (needs a per-asset peak-sales/multiple assumption —
       same character as Block A's `assumed_peak_sales_by_ta`, not yet a separate curation item
       since no consumer exists to make concrete what "per asset" would even need).
-- [ ] Blocks D, E, F (spec §4.4, §4.5, §4.6) — not started. Block D is computed from Blocks A-C's
-      own outputs so it's blocked transitively. Block E needs 8-K/DEF 14A text-parsing
-      infrastructure that doesn't exist. Block F needs 13F integration (M5/M6 scope per spec's own
+- [x] `features/block_e.py`, 2026-09-08 — `is_foreign_domiciled` implemented and registered
+      (spec §4.5's only feature this pass). New `ingest/domicile_normalization.py` +
+      `jobs/run_domicile_normalization.py` normalize the already-landed `sec_submissions`
+      raw-zone payload (`sec_raw_ingest.py` lands it verbatim; nothing had read it beyond entity
+      resolution's ticker snapshot). **Live-verified 2026-09-08 that the obvious single field
+      isn't reliable**: `addresses.business.isForeignLocation` is `null` for a real, clearly-
+      foreign acquirer (Novo Nordisk A/S, Danish) despite being `1` for another
+      (AstraZeneca PLC) — EDGAR's own data is inconsistent here. Fixed by treating
+      `stateOrCountry` not being a real US state/territory postal code as an independent,
+      corroborating signal (Novo Nordisk's `"G7"` catches it even when the flag doesn't).
+      Explicitly distinct from Block A's `bloc`-tiered CFIUS gate (spec §4.4.1, acquirer-side,
+      pairwise) — this is the separate, mild, target-side friction spec §4.5 describes.
+      **Everything else in Block E is NOT attempted, no stub functions**: `has_poison_pill`,
+      `staggered_board`, `dual_class_shares`, `has_controlling_holder`, `recent_failed_process`,
+      `royalty_encumbrance` all need governance-document (DEF 14A/charter) or 8-K text-parsing
+      infrastructure that doesn't exist, and unlike `process_events.py`'s strategic-alternatives
+      phrases, spec gives no ready-made phrase list for any of the six — inventing keyword
+      heuristics without one would be fabricated business logic.
+- [ ] Blocks D, F (spec §4.4, §4.6) — not started. Block D is computed from Blocks A-C's own
+      outputs so it's blocked transitively (and, per a closer read this pass, essentially every
+      term in its `fit()` formula is currently unbuildable regardless: `ta_overlap` needs Block
+      A's `pipeline_gap_by_ta` — always `None`; `modality_capability` needs `p22_asset.modality`
+      — always `None`, `docs/Tasks.md` item 4; `geographic_fit` needs an acquirer
+      "commercial_footprint" concept not sourced anywhere; `size_feasibility` needs Block A's
+      `dry_powder` — always `None`. A `fit()` scaffold today could structurally never return
+      anything but `None` for any acquirer/target pair — a materially worse "scaffold ahead of
+      the blocker" case than even Block A, so not built this pass; revisit once at least one of
+      those four inputs is real). Block F needs 13F integration (M5/M6 scope per spec's own
       milestone table). Not attempted this pass rather than built against fabricated/guessed inputs.
 - [x] `p22_trial` normalization from landed CT.gov `clinicaltrials_studies` payloads, 2026-08-30 —
       `ingest/trial_normalization.py` + `jobs/run_trial_normalization.py`, registered in
@@ -787,10 +812,12 @@ use in the code/config; this section exists so they're all in one place to walk 
       (`test_process_events.py`), Block G tiering incl. tier-precedence (`test_block_g.py`),
       13D/G header parsing incl. the multi-filer-block and single-agreeing-percentage cases
       (`test_activist_positions.py`), Block B incl. the lead-asset-proxy and base-rate-fallback
-      cases (`test_block_b.py`), `p22_base_rates.yaml` loading (`test_base_rates_config.py`) —
-      390 tests total in the non-DB suite as of 2026-09-08 (plus 4 more in
-      `src/data/downloader/tests/` for the new `EdgarDownloader.fetch_filing_document` public
-      wrapper and the `SCHEDULE 13D` form-type-prefix bug fix, outside this module's own count).
+      cases (`test_block_b.py`), `p22_base_rates.yaml` loading (`test_base_rates_config.py`),
+      domicile extraction incl. the real isForeignLocation-vs-stateOrCountry discrepancy case
+      (`test_domicile_normalization.py`), Block E (`test_block_e.py`) — 399 tests total in the
+      non-DB suite as of 2026-09-08 (plus 4 more in `src/data/downloader/tests/` for the new
+      `EdgarDownloader.fetch_filing_document` public wrapper and the `SCHEDULE 13D`
+      form-type-prefix bug fix, outside this module's own count).
 - [ ] Real-Postgres integration tests for `P22Repo.upsert_financial_fact_bitemporal` restatement
       behavior, the price-archive round trip (`upsert_price_daily` immutability,
       `get_adjusted_close`'s lookahead guard through the repo layer), `get_latest_raw_close_as_of`
