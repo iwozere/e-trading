@@ -61,7 +61,18 @@
 
 ### 🔄 IN PROGRESS
 
-*(none)*
+- [ ] **Sleeve A / Sleeve C empty-funnel diagnosis** — production logs show `Sleeve A: N tickers, 0 passed
+      filters, 0 candidates` and `Sleeve C: N tickers → 0 top decile → 0 candidates` on **every single run**
+      since deploy (2026-07-03 for Sleeve A, confirmed unbroken through 2026-09-04 — ~45 consecutive trading
+      days, ~6,200+ tickers screened each time). Sleeve B's zeros are plausible (event-driven, naturally rare);
+      A and C are compound quantitative screens, and a persistent literal 0 for two months is far more likely a
+      data/filter bug than a genuinely empty universe. See **C13** for one confirmed contributing bug (SPY
+      regime signal). Root cause for the rest not yet found — `run()` discarded the per-ticker fail reason
+      instead of aggregating it (same class of gap as **C11**), so there was no visibility into *why*.
+      Instrumented 2026-09-07: both `sleeve_a.run()` and `sleeve_c.run()` now count rejections by category
+      (`rejection_breakdown` in the returned dict, logged as a warning whenever the funnel is empty). Next
+      step: read tonight's `p20_screen_turnaround` / `p20_momentum_rank` logs for the dominant rejection
+      reason and fix it there.
 
 ### 🚀 PLANNED ENHANCEMENTS
 
@@ -124,6 +135,21 @@ See [Code-Review-2026-07-03.md](Code-Review-2026-07-03.md) for full details.
       / `test_run_rejects_when_adv_20d_missing_everywhere` as regression guards (found 2026-08-26 solution-architect
       review — `run()` had no test coverage at all before this, only the pure helpers did, which is how it went
       unnoticed).
+- [x] **C13** — `daily_digest.py`'s regime line (`_build_regime_line`) and `sleeve_c.py`'s
+      `_regime_allows_new_entry()` both read `get_latest_signal("SPY", "price_vs_200dma")`, but SPY is an ETF
+      and P20 explicitly excludes ETFs from its stock universe (`k20_universe`) — so SPY never appears in
+      `get_active_tickers()` and is never picked up by `eod_ingest.py`'s per-ticker loop. The signal was never
+      populated. `sleeve_c.py` happens to fail *open* on `None` (defensive by design), but `daily_digest.py`
+      treated `None` as "SPY below 200DMA" and permanently reported `RISK-OFF` regardless of the real market —
+      confirmed via production logs: every single daily digest since 2026-07-03 says `RISK-OFF`, including
+      alongside VIX readings of 14–16 (a calm-market reading, not risk-off). Fixed 2026-09-07:
+      - `ingest/eod_ingest.py` — new `_ingest_spy_signal()`, called from `run()` alongside the existing VIX
+        ingestion, fetches SPY OHLCV directly (bypassing the universe) and reuses `_compute_signals_for_ticker`
+        so SPY gets the same `price_vs_200dma`/`sma_200`/etc. rows as any other ticker.
+      - `reporting/daily_digest.py` — `_build_regime_line()` now reports `Regime: UNKNOWN (no SPY signal yet)`
+        when the signal is still missing, instead of asserting a false `RISK-OFF`.
+      - Regression tests added in `test_eod_ingest.py` (`test_ingest_spy_signal_*`, `test_run_includes_spy_signal`)
+        and `test_daily_digest.py` (`test_build_digest_regime_*`).
 - [x] **C12** — Sleeve B1 (`screening/sleeve_b.py`'s `screen_b1()`) and B2 (`screen_b2()` / `get_past_spinoffs()`)
       filtered `k20_catalysts` for event types (`pdufa`/`adcom`/`fda_readout`/`clinical_readout`, `spinoff`)
       that nothing in the codebase ever wrote — `ingest/calendar_sync.py` only ever implemented the Finnhub

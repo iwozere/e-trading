@@ -100,6 +100,64 @@ def test_build_digest_warns_on_inactive_sleeve_b1_b2(monkeypatch):
     assert "gap 10.2" in result
 
 
+def test_build_digest_regime_unknown_when_spy_signal_missing(monkeypatch):
+    """
+    Regression guard: SPY is an ETF excluded from the P20 universe, so its
+    price_vs_200dma signal previously never existed, and get_latest_signal
+    returning None was silently treated as "SPY below 200DMA" -- the digest
+    claimed a permanent false RISK-OFF for the pipeline's entire life
+    (production logs show it every single day from 2026-07-03 onward,
+    including at VIX 14-16 readings inconsistent with real risk-off). Missing
+    data must read as unknown, not as a confident-but-wrong regime call.
+    """
+    import src.ml.pipeline.p20_kestrel.reporting.daily_digest as dd
+
+    monkeypatch.setattr(dd, "get_latest_signal", lambda *_: None)
+    monkeypatch.setattr(dd, "get_open_positions", lambda: [])
+    monkeypatch.setattr(dd, "get_catalysts_in_window", lambda **_: [])
+    monkeypatch.setattr(dd, "get_watchlist", lambda **_: [])
+
+    result = build_digest(date(2026, 7, 2))
+
+    assert "RISK-OFF" not in result
+    assert "RISK-ON" not in result
+    assert "UNKNOWN" in result
+
+
+def test_build_digest_regime_risk_off_when_spy_below_200dma(monkeypatch):
+    """Once the SPY signal exists and is genuinely below 200DMA, report RISK-OFF."""
+    import src.ml.pipeline.p20_kestrel.reporting.daily_digest as dd
+
+    def _fake_signal(ticker, signal_type):
+        return 0.0 if (ticker, signal_type) == ("SPY", "price_vs_200dma") else None
+
+    monkeypatch.setattr(dd, "get_latest_signal", _fake_signal)
+    monkeypatch.setattr(dd, "get_open_positions", lambda: [])
+    monkeypatch.setattr(dd, "get_catalysts_in_window", lambda **_: [])
+    monkeypatch.setattr(dd, "get_watchlist", lambda **_: [])
+
+    result = build_digest(date(2026, 7, 2))
+
+    assert "RISK-OFF" in result
+
+
+def test_build_digest_regime_risk_on_when_spy_above_200dma(monkeypatch):
+    """Once the SPY signal exists and is genuinely above 200DMA, report RISK-ON."""
+    import src.ml.pipeline.p20_kestrel.reporting.daily_digest as dd
+
+    def _fake_signal(ticker, signal_type):
+        return 1.0 if (ticker, signal_type) == ("SPY", "price_vs_200dma") else None
+
+    monkeypatch.setattr(dd, "get_latest_signal", _fake_signal)
+    monkeypatch.setattr(dd, "get_open_positions", lambda: [])
+    monkeypatch.setattr(dd, "get_catalysts_in_window", lambda **_: [])
+    monkeypatch.setattr(dd, "get_watchlist", lambda **_: [])
+
+    result = build_digest(date(2026, 7, 2))
+
+    assert "RISK-ON" in result
+
+
 def test_build_digest_silent_when_sleeve_b1_b2_available(monkeypatch):
     """Once both flags flip True, the corresponding warnings must disappear."""
     import src.ml.pipeline.p20_kestrel.reporting.daily_digest as dd

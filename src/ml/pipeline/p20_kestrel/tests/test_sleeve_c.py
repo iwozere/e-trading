@@ -124,3 +124,28 @@ def test_run_rejects_when_adv_20d_missing_everywhere(monkeypatch):
 
     assert result["rs_computed"] == 0
     assert result["candidates"] == 0
+
+
+def test_run_reports_rejection_breakdown_when_empty(monkeypatch):
+    """
+    Regression guard, same reasoning as sleeve_a.py's equivalent test: an
+    empty eligible pool must surface *why* it's empty, not just that it is.
+    'Sleeve C: N tickers -> 0 top decile -> 0 candidates' logged unchanged in
+    production every day for months regardless of which filter was actually
+    rejecting everyone.
+    """
+    import src.ml.pipeline.p20_kestrel.screening.sleeve_c as sleeve_c
+
+    sig_map = {"price_vs_50dma": 1.0, "price_vs_200dma": 1.0}  # adv_20d missing everywhere
+
+    monkeypatch.setattr(sleeve_c, "get_latest_signal", lambda *_: 1.0)
+    monkeypatch.setattr(sleeve_c, "get_active_tickers", lambda: ["AAA", "BBB"])
+    monkeypatch.setattr(sleeve_c, "get_universe_row", lambda *_: {"ticker": "TST"})
+    monkeypatch.setattr(sleeve_c, "get_signals_for_date", lambda *_: sig_map)
+    monkeypatch.setattr(sleeve_c, "upsert_signals", lambda *_: None)
+    monkeypatch.setattr(sleeve_c, "upsert_watchlist", lambda *_: None)
+
+    result = sleeve_c.run()
+
+    assert result["rs_computed"] == 0
+    assert result["rejection_breakdown"] == {"adv_below_min": 2}

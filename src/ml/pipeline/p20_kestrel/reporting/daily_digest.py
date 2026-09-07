@@ -42,12 +42,18 @@ def _build_regime_line() -> str:
     """Build the regime summary line from existing signals."""
     spy_200 = get_latest_signal("SPY", "price_vs_200dma")
     vix = get_latest_signal("VIX", "close")
+    vix_str = f"VIX {vix:.1f}" if vix is not None else "VIX n/a"
 
-    spy_above = spy_200 is not None and spy_200 > 0.5
-    vix_val = vix if vix is not None else None
+    if spy_200 is None:
+        # Fail safe, not fail "RISK-OFF": SPY is an ETF excluded from the P20
+        # universe, so this signal is only populated once eod_ingest.py's SPY
+        # ingestion has run at least once (see eod_ingest._ingest_spy_signal).
+        # Silently reporting RISK-OFF here previously meant the digest claimed
+        # a permanent false regime for the entire life of the pipeline.
+        return f"Regime: UNKNOWN (no SPY signal yet) | {vix_str}"
 
+    spy_above = spy_200 > 0.5
     regime = "RISK-ON" if spy_above else "RISK-OFF"
-    vix_str = f"VIX {vix_val:.1f}" if vix_val is not None else "VIX n/a"
     return f"Regime: {regime} | SPY/200DMA: {'above' if spy_above else 'below'} | {vix_str}"
 
 

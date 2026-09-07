@@ -8,6 +8,7 @@ Implements §4.1 hard filters and §4.2.1 interim scoring
 from __future__ import annotations
 
 import sys
+from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
@@ -202,16 +203,22 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
     tickers = get_active_tickers()
     passed_filters = 0
     candidates: List[Dict[str, Any]] = []
+    rejection_reasons: Counter[str] = Counter()
 
     for ticker in tickers:
         universe_row = get_universe_row(ticker)
         if not universe_row:
+            rejection_reasons["no_universe_row"] += 1
             continue
 
         signals: Dict[str, Any] = get_signals_for_date(ticker, target_date)
 
         fail_reason = _passes_hard_filters(universe_row, signals)
         if fail_reason:
+            # Reasons carry a per-ticker detail in parens (e.g. the actual
+            # mcap value) — bucket by the stable category before it so the
+            # breakdown below aggregates instead of listing one key per ticker.
+            rejection_reasons[fail_reason.split(" (")[0]] += 1
             continue
 
         passed_filters += 1
@@ -263,6 +270,7 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
             )
 
     candidates_sorted = sorted(candidates, key=lambda r: r["score"], reverse=True)
+    top_rejections = rejection_reasons.most_common(10)
 
     _logger.info(
         "Sleeve A: %d tickers, %d passed filters, %d candidates (score≥%d)",
@@ -271,9 +279,19 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
         len(candidates_sorted),
         SLEEVE_A_DOSSIER_THRESHOLD,
     )
+    if passed_filters == 0 and top_rejections:
+        # 0 passed filters is a legitimate (if unlikely) outcome for a narrow
+        # compound screen — but with no visibility into *why*, a broken filter
+        # (a missing signal, an unpopulated universe column) looks identical to
+        # "no fallen angels today" and can go unnoticed for months. Surface the
+        # breakdown whenever the funnel is empty so a real bug shows up as one
+        # dominant reason across nearly all tickers.
+        _logger.warning("Sleeve A: 0 candidates — rejection breakdown (top 10): %s", top_rejections)
+
     return {
         "tickers_screened": len(tickers),
         "passed_filters": passed_filters,
         "candidates": len(candidates_sorted),
         "top_candidates": [{"ticker": c["ticker"], "score": c["score"]} for c in candidates_sorted[:10]],
+        "rejection_breakdown": dict(top_rejections),
     }

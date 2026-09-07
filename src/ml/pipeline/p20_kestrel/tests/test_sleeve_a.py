@@ -1,11 +1,13 @@
 """Tests for P20 Kestrel Sleeve A scoring logic."""
 
 import sys
+from datetime import date
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+import src.ml.pipeline.p20_kestrel.screening.sleeve_a as sleeve_a
 from src.ml.pipeline.p20_kestrel.screening.sleeve_a import (
     _passes_hard_filters,
     _score_interim,
@@ -103,3 +105,51 @@ def test_score_interim_returns_components():
     assert "score_partial" in result
     assert "components" in result
     assert "interim_mode" in result
+
+
+def test_run_reports_rejection_breakdown_when_every_ticker_fails(monkeypatch):
+    """
+    Regression guard: run() must surface *why* the funnel is empty, not just
+    that it is — 0 candidates every single day since 2026-07-03 in production
+    went unnoticed for two months precisely because _passes_hard_filters()'s
+    per-ticker fail_reason was discarded (`if fail_reason: continue`) instead
+    of aggregated.
+    """
+    monkeypatch.setattr(sleeve_a, "get_active_tickers", lambda: ["AAA", "BBB"])
+    monkeypatch.setattr(sleeve_a, "get_universe_row", lambda _t: {"mcap": 100_000_000, "adv_20d": 50_000_000})
+    monkeypatch.setattr(sleeve_a, "get_signals_for_date", lambda *_: {"drawdown_from_2y_high": -0.55})
+    monkeypatch.setattr(sleeve_a, "upsert_watchlist", lambda *_: None)
+    monkeypatch.setattr(sleeve_a, "upsert_signals", lambda *_: None)
+
+    result = sleeve_a.run(date(2026, 9, 7))
+
+    assert result["passed_filters"] == 0
+    assert result["candidates"] == 0
+    # Both tickers fail on mcap ($100M < $500M floor) — the dynamic dollar
+    # amount in the raw fail_reason string must be stripped so it buckets
+    # into one category instead of one unique key per ticker.
+    assert result["rejection_breakdown"] == {"mcap_below_500M": 2}
+
+
+def test_run_rejection_breakdown_mixed_pass_and_fail(monkeypatch):
+    """A ticker that passes all filters isn't counted in the rejection breakdown."""
+    universe_rows = {
+        "GOOD": _universe(),
+        "BAD": {"mcap": 100_000_000, "adv_20d": 50_000_000},
+    }
+    signal_rows = {
+        "GOOD": _signals(),
+        "BAD": {"drawdown_from_2y_high": -0.55},
+    }
+
+    monkeypatch.setattr(sleeve_a, "get_active_tickers", lambda: ["GOOD", "BAD"])
+    monkeypatch.setattr(sleeve_a, "get_universe_row", lambda t: universe_rows[t])
+    monkeypatch.setattr(sleeve_a, "get_signals_for_date", lambda t, _d: dict(signal_rows[t]))
+    monkeypatch.setattr(sleeve_a, "get_signals", lambda *a, **k: [])
+    monkeypatch.setattr(sleeve_a, "upsert_watchlist", lambda *_: None)
+    monkeypatch.setattr(sleeve_a, "upsert_signals", lambda *_: None)
+
+    result = sleeve_a.run(date(2026, 9, 7))
+
+    assert result["passed_filters"] == 1
+    assert result["rejection_breakdown"] == {"mcap_below_500M": 1}

@@ -7,7 +7,8 @@ were numpy.float64 scalars; under numpy 2.x psycopg2 rendered them as
 InvalidSchemaName: schema "np" does not exist.
 """
 
-from datetime import date
+from datetime import date, datetime
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -15,6 +16,7 @@ import pytest
 
 pytest.importorskip("talib")
 
+from src.data.data_manager import DataManager
 from src.ml.pipeline.p20_kestrel.ingest import eod_ingest
 from src.ml.pipeline.p20_kestrel.ingest.eod_ingest import _compute_signals_for_ticker
 
@@ -74,6 +76,7 @@ def upsert_calls(monkeypatch):
     monkeypatch.setattr(eod_ingest, "finish_job_run", lambda *a, **k: None)
     monkeypatch.setattr(eod_ingest, "DataManager", _FakeDataManager)
     monkeypatch.setattr(eod_ingest, "_ingest_vix_signal", lambda target_date: [])
+    monkeypatch.setattr(eod_ingest, "_ingest_spy_signal", lambda *a, **k: [])
     return calls
 
 
@@ -175,3 +178,62 @@ def test_run_includes_vix_signal(monkeypatch, upsert_calls):
 
     assert result == {"tickers_ok": 0, "tickers_failed": 0, "signals_upserted": 1}
     assert upsert_calls == [[{"ticker": "VIX", "date": date(2026, 7, 8), "signal_type": "close", "value": 16.2}]]
+
+
+class _FakeSpyDataManager:
+    """Stand-in for DataManager exposing both get_ohlcv and get_ohlcv_batch."""
+
+    def __init__(self, ohlcv: pd.DataFrame | None = None, raise_on_get: bool = False):
+        self._ohlcv = ohlcv
+        self.raise_on_get = raise_on_get
+
+    def get_ohlcv(self, symbol, timeframe, start_date=None, end_date=None):
+        if self.raise_on_get:
+            raise RuntimeError("simulated Yahoo outage")
+        return self._ohlcv if self._ohlcv is not None else pd.DataFrame()
+
+    def get_ohlcv_batch(self, tickers, timeframe, start_date=None, end_date=None):
+        return {}
+
+
+_SPY_START = datetime(2025, 7, 8)
+_SPY_END = datetime(2026, 7, 8)
+
+
+def test_ingest_spy_signal_returns_technicals():
+    """SPY OHLCV is turned into the same signal rows as any other ticker."""
+    dm = cast(DataManager, _FakeSpyDataManager(ohlcv=_make_ohlcv()))
+
+    rows = eod_ingest._ingest_spy_signal(dm, _SPY_START, _SPY_END, date(2026, 7, 8))
+
+    assert rows, "expected signal rows for a 250-bar SPY frame"
+    assert all(r["ticker"] == "SPY" for r in rows)
+    signal_types = {r["signal_type"] for r in rows}
+    assert "price_vs_200dma" in signal_types
+
+
+def test_ingest_spy_signal_empty_when_no_data():
+    dm = cast(DataManager, _FakeSpyDataManager(ohlcv=pd.DataFrame()))
+    assert eod_ingest._ingest_spy_signal(dm, _SPY_START, _SPY_END, date(2026, 7, 8)) == []
+
+
+def test_ingest_spy_signal_empty_on_fetch_error():
+    dm = cast(DataManager, _FakeSpyDataManager(raise_on_get=True))
+    assert eod_ingest._ingest_spy_signal(dm, _SPY_START, _SPY_END, date(2026, 7, 8)) == []
+
+
+def test_run_includes_spy_signal(monkeypatch, upsert_calls):
+    """run() upserts the SPY regime signal alongside per-ticker signals."""
+    monkeypatch.setattr(eod_ingest, "get_active_tickers", lambda: [])
+    monkeypatch.setattr(
+        eod_ingest,
+        "_ingest_spy_signal",
+        lambda *a, **k: [{"ticker": "SPY", "date": date(2026, 7, 8), "signal_type": "price_vs_200dma", "value": 1.0}],
+    )
+
+    result = eod_ingest.run(as_of_date=date(2026, 7, 8))
+
+    assert result == {"tickers_ok": 0, "tickers_failed": 0, "signals_upserted": 1}
+    assert upsert_calls == [
+        [{"ticker": "SPY", "date": date(2026, 7, 8), "signal_type": "price_vs_200dma", "value": 1.0}]
+    ]

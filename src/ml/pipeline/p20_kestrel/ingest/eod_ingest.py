@@ -81,6 +81,50 @@ def _ingest_vix_signal(target_date: date) -> List[Dict[str, Any]]:
     return [{"ticker": "VIX", "date": target_date, "signal_type": "close", "value": round(value, 6)}]
 
 
+_SPY_TICKER = "SPY"
+
+
+def _ingest_spy_signal(
+    dm: DataManager,
+    start_dt: datetime,
+    end_dt: datetime,
+    target_date: date,
+) -> List[Dict[str, Any]]:
+    """
+    Compute SPY technicals (price_vs_200dma, etc.) for the market-regime filter.
+
+    SPY is an ETF, excluded from the P20 stock universe (k20_universe — see
+    "exclude ETF from p20"), so it never appears in `get_active_tickers()` and
+    is never picked up by the regular per-ticker loop below. But both
+    `daily_digest.py`'s regime line and `sleeve_c.py`'s `_regime_allows_new_entry()`
+    read `get_latest_signal("SPY", "price_vs_200dma")` expecting it to exist —
+    it never did, silently defaulting the digest to a permanent false
+    "RISK-OFF" (sleeve_c happens to fail open on the same missing signal).
+    Ingest it explicitly here, the same way VIX is ingested above.
+
+    Args:
+        dm: Shared DataManager instance.
+        start_dt: Start of the OHLCV window.
+        end_dt: End of the OHLCV window.
+        target_date: The date to attach signals to.
+
+    Returns:
+        Signal rows for SPY (close, sma_200, price_vs_200dma, etc.), or an
+        empty list if no OHLCV data is available.
+    """
+    try:
+        ohlcv = dm.get_ohlcv(_SPY_TICKER, "1d", start_date=start_dt, end_date=end_dt)
+    except Exception:
+        _logger.exception("Failed to fetch SPY OHLCV for regime signal")
+        return []
+
+    if ohlcv is None or ohlcv.empty:
+        _logger.warning("No SPY OHLCV data for %s", target_date)
+        return []
+
+    return _compute_signals_for_ticker(_SPY_TICKER, ohlcv, target_date)
+
+
 def _compute_signals_for_ticker(
     ticker: str,
     ohlcv: pd.DataFrame,
@@ -246,8 +290,9 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
         buffer.clear()
 
     try:
-        # ── Phase 0: VIX signal (index, not part of the stock universe) ───
+        # ── Phase 0: VIX + SPY signals (not part of the stock universe) ───
         buffer.extend(_ingest_vix_signal(target_date))
+        buffer.extend(_ingest_spy_signal(dm, start_dt, end_dt, target_date))
 
         # ── Phase 1: batch OHLCV download ────────────────────────────────
         try:
@@ -272,7 +317,7 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
             _EOD_COMPUTE_WORKERS,
         )
         with ThreadPoolExecutor(max_workers=_EOD_COMPUTE_WORKERS) as pool:
-            for i, (_ticker, rows, ok) in enumerate(pool.map(worker, tickers)):
+            for i, (_, rows, ok) in enumerate(pool.map(worker, tickers)):
                 if ok:
                     buffer.extend(rows)
                     tickers_ok += 1

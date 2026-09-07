@@ -11,6 +11,7 @@ Crowding overlay (§7.6): skip if crowding score > 2σ.
 from __future__ import annotations
 
 import sys
+from collections import Counter
 from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List
@@ -73,10 +74,12 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
 
     tickers = get_active_tickers()
     rs_scores: List[tuple[str, float]] = []
+    rejection_reasons: Counter[str] = Counter()
 
     for ticker in tickers:
         universe_row = get_universe_row(ticker)
         if not universe_row:
+            rejection_reasons["no_universe_row"] += 1
             continue
 
         sig_map = get_signals_for_date(ticker, target_date)
@@ -87,10 +90,12 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
         # gets rejected here before RS is ever computed.
         adv_20d = universe_row.get("adv_20d") or sig_map.get("adv_20d")
         if not adv_20d or adv_20d < SLEEVE_C_MIN_ADV_USD:
+            rejection_reasons["adv_below_min"] += 1
             continue
 
         revenue_growth = universe_row.get("revenue_yoy_growth")
         if revenue_growth is not None and revenue_growth <= 0:
+            rejection_reasons["negative_revenue_growth"] += 1
             continue
 
         # Price regime: price > 50DMA > 200DMA
@@ -99,12 +104,15 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
         sma_50 = sig_map.get("sma_50")
         sma_200 = sig_map.get("sma_200")
         if price_vs_50 < 0.5 or price_vs_200 < 0.5:
+            rejection_reasons["price_below_dma"] += 1
             continue
         if sma_50 is not None and sma_200 is not None and sma_50 <= sma_200:
+            rejection_reasons["sma50_below_sma200"] += 1
             continue
 
         rs = _compute_rs_score(sig_map)
         if rs is None:
+            rejection_reasons["rs_score_missing_returns"] += 1
             continue
 
         rs_scores.append((ticker, rs))
@@ -144,15 +152,25 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
         )
         candidates += 1
 
+    top_rejections = rejection_reasons.most_common(10)
+
     _logger.info(
         "Sleeve C: %d tickers → %d top decile → %d candidates (post-crowding)",
         len(tickers),
         len(top_decile),
         candidates,
     )
+    if not rs_scores and top_rejections:
+        # An empty eligible pool makes "top decile" trivially 0 regardless of
+        # market conditions — indistinguishable from a genuinely quiet market
+        # unless the rejection reasons are visible. See sleeve_a.py's same
+        # instrumentation for the reasoning.
+        _logger.warning("Sleeve C: 0 eligible tickers — rejection breakdown (top 10): %s", top_rejections)
+
     return {
         "tickers_screened": len(tickers),
         "rs_computed": len(rs_scores),
         "top_decile": len(top_decile),
         "candidates": candidates,
+        "rejection_breakdown": dict(top_rejections),
     }
