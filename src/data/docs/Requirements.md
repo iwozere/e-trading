@@ -69,6 +69,13 @@
 - **Registration**: [Binance](https://www.binance.com/en/my/settings/api-management)
 - **Usage**: Cryptocurrency symbols (BTCUSDT, ETHUSDT, etc.)
 
+#### Zefix API Credentials (Optional)
+- **Purpose**: Swiss company-registry search/lookup (SwissDownloader's `search_company` / `get_company_by_uid`) — SER's RSS feeds (Significant Shareholders, Management Transactions, Official Notices) need no credentials, only Zefix does
+- **Rate limit**: Not documented; polled at 1 request/second
+- **Environment variables**: `ZEFIX_USERNAME`, `ZEFIX_PASSWORD`
+- **Registration**: [Zefix PublicREST](https://www.zefix.admin.ch/ZefixPublicREST/) (free account required)
+- **Usage**: Swiss company name/UID lookups
+
 ### No API Key Required
 
 #### Yahoo Finance
@@ -80,6 +87,11 @@
 - **Purpose**: Cryptocurrency data (public endpoints)
 - **Rate limits**: 1200 requests/minute
 - **Usage**: Cryptocurrency symbols (no API key needed for basic data)
+
+#### SIX Exchange Regulation (SER) RSS Feeds
+- **Purpose**: Swiss significant-shareholder disclosures, management transactions, and official notices (`SwissDownloader`)
+- **Rate limits**: Not documented; feed TTL is 2 minutes
+- **Usage**: No registration needed — plain RSS over HTTPS
 
 ## Database Requirements
 

@@ -351,6 +351,42 @@ df = downloader.get_ohlcv("AAPL", "1m", "2023-01-01", "2023-12-31")  # Up to 10k
 fundamentals = downloader.get_fundamentals("AAPL")
 ```
 
+### Disclosure & Company-Registry Downloaders (Non-OHLCV)
+
+These downloaders don't provide price bars — `get_ohlcv()` always returns
+`None` — so they sit outside the intelligent provider-selection system above
+and are used directly. This category also covers `EdgarDownloader` (SEC
+filings), `GdeltDownloader` (news/events) and others; only the newest entry
+is documented here — see each module's own docstring for the rest.
+
+#### Swiss Market Data Downloader (`SwissDownloader`)
+
+**Best for:** Swiss-listed company disclosure filings and company-registry lookups — the
+Swiss counterpart of `EdgarDownloader`.
+
+**Capabilities:**
+- ✅ **Significant Shareholders**: Art. 120 FinfraG stake disclosures (Swiss equivalent of SEC Schedule 13D/13G), polled from SIX Exchange Regulation's RSS feed
+- ✅ **Management Transactions**: insider trades (Swiss equivalent of SEC Form 4), with action/quantity/price/total parsed out of the feed's free-text description
+- ✅ **Official Notices**: exchange notices (delistings, sanctions, etc.)
+- ✅ **Zefix Company Registry**: search-by-name and UID lookup against Switzerland's central business registry (the Swiss equivalent of EDGAR's ticker→CIK mapping)
+- ⚠️ No bulk/XBRL-style API exists for SER data (unlike EDGAR) — the RSS feeds are the only free, structured, no-auth surface, and the Significant Shareholders feed does not carry the crossed-ownership-threshold percentage (company name + link only)
+
+**Data Quality:** Feed-native text, regex-parsed for Management Transactions; company name + link only for Significant Shareholders
+**Rate Limits:** No documented limit; polled politely (1 request/second)
+**Coverage:** SIX Swiss Exchange-listed companies; Zefix covers the full Swiss commercial register
+
+```python
+from src.data.downloader.swiss_downloader import SwissDownloader
+
+downloader = SwissDownloader()  # Zefix calls need ZEFIX_USERNAME / ZEFIX_PASSWORD
+
+mgmt_txns = downloader.download_management_transactions()
+shareholders = downloader.download_significant_shareholders()
+
+company = downloader.search_company("Kardex")
+record = downloader.get_company_by_uid("CHE-106.588.217")
+```
+
 ## Cache Pipeline System
 
 The data module includes a multi-step pipeline system for efficient data processing:

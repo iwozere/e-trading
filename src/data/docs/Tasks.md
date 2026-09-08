@@ -256,6 +256,15 @@
 
 ### Completed Features
 
+#### Swiss Market Data Downloader (Q3 2026)
+- [x] **SwissDownloader** (Q3 2026)
+  - ✅ Significant Shareholders + Management Transactions + Official Notices, polled incrementally from SIX Exchange Regulation's RSS feeds, deduped by filing_id
+  - ✅ Management Transactions description regex-parsed into action/quantity/price/total/actor_role — verified 100% match rate against 198 live feed items (2026-09-07)
+  - ✅ Zefix company-registry search-by-name and UID lookup, with per-UID JSON caching
+  - ✅ 14 unit tests (`tests/test_swiss_downloader.py`), all network calls mocked
+  - ⚠️ **Known gap**: Significant Shareholders feed carries company name + link only — the actual crossed-ownership-threshold percentage lives behind a client-side SPA route (`#/shareholder-details/{id}`) whose backing JSON API hasn't been identified yet (needs live browser network-tab inspection)
+  - ⚠️ Zefix credentials (`ZEFIX_USERNAME`/`ZEFIX_PASSWORD`) require a free account registered at zefix.admin.ch — untested end-to-end pending that registration
+
 #### DataManager Facade Implementation (Q1 2025)
 - [x] **DataManager main facade** (Q1 2025)
   - ✅ Created unified `DataManager` class as main entry point for all data operations

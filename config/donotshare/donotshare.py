@@ -87,6 +87,11 @@ FRED_API_KEY=os.getenv("FRED_API_KEY")
 BACHART_API_KEY=os.getenv("BACHART_API_KEY")
 OPENFIGI_API_KEY=os.getenv("OPENFIGI_API_KEY")
 
+# Zefix (Swiss Central Business Name Index) — company registry lookups.
+# Free account required: register at https://www.zefix.admin.ch/ZefixPublicREST/
+ZEFIX_USERNAME=os.getenv("ZEFIX_USERNAME")
+ZEFIX_PASSWORD=os.getenv("ZEFIX_PASSWORD")
+
 ##################################################################
 #
 # NOTIFICATION SETTINGS
