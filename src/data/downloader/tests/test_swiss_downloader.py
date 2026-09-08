@@ -24,8 +24,52 @@ from src.data.downloader.swiss_downloader import (
     _flatten_management_transaction,
     _flatten_official_notice,
     _flatten_significant_shareholder,
+    _parse_management_transaction_rss,
     _yyyymmdd_to_iso,
 )
+
+# Trimmed but schema-faithful copies of real SER RSS responses (captured 2026-09-07).
+_MGMT_TXN_RSS_XML = """<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+<channel>
+<title>SIX Exchange Regulation | Management Transactions</title>
+<link>https://www.ser-ag.com/en/resources/notifications-market-participants/management-transactions.html</link>
+<description>Management Transactions</description>
+<item>
+<title>Kardex Holding AG</title>
+<link>https://www.ser-ag.com/en/resources/notifications-market-participants/management-transactions.html#/transaction-details/T1Q9700014</link>
+<category>Transaction</category>
+<description>Purchase of 128 securities amounting to CHF 32,103.76 (CHF 250.81 / security) by a non-executive member of the board of directors</description>
+<pubDate>Mon, 07 Sep 2026 12:00:00 +0200</pubDate>
+<guid>https://www.ser-ag.com/en/resources/notifications-market-participants/management-transactions.html#/transaction-details/T1Q9700014</guid>
+</item>
+</channel>
+</rss>"""
+
+_SIG_SHAREHOLDERS_RSS_XML = """<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+<channel>
+<title>SIX Exchange Regulation | Significant shareholders</title>
+<link>https://www.ser-ag.com/en/resources/notifications-market-participants/significant-shareholders.html</link>
+<description>Disclosure of shareholdings</description>
+<item>
+<title>ARYZTA AG</title>
+<link>https://www.ser-ag.com/en/resources/notifications-market-participants/significant-shareholders.html#/shareholder-details/ZA01-000000000SKW3</link>
+<category>Notification</category>
+<description>Disclosure of shareholdings in ARYZTA AG</description>
+<pubDate>Sat, 05 Sep 2026 12:00:00 +0200</pubDate>
+<guid>https://www.ser-ag.com/en/resources/notifications-market-participants/significant-shareholders.html#/shareholder-details/ZA01-000000000SKW3</guid>
+</item>
+</channel>
+</rss>"""
+
+
+def _rss_response(xml_text: str) -> MagicMock:
+    """Build a MagicMock standing in for a requests.Response carrying RSS bytes."""
+    resp = MagicMock()
+    resp.content = xml_text.encode("utf-8")
+    resp.raise_for_status = MagicMock()
+    return resp
 
 
 def _sheldon_response(status: str, total_count: int, item_list: list) -> MagicMock:
@@ -327,6 +371,81 @@ def test_get_company_by_uid_force_refetches(tmp_path):
         dl.get_company_by_uid("CHE-106.588.217", force=True)
 
     assert mock_request.call_count == 2
+
+
+# ------------------------------------------------------------------
+# SER published RSS feeds (kept alongside the sheldon JSON API — see
+# module docstring for the legal/stability rationale)
+# ------------------------------------------------------------------
+
+
+def test_parse_management_transaction_rss_purchase():
+    fields = _parse_management_transaction_rss(
+        "Purchase of 128 securities amounting to CHF 32,103.76 (CHF 250.81 / security) "
+        "by a non-executive member of the board of directors"
+    )
+    assert fields["action"] == "Purchase"
+    assert fields["quantity"] == "128"
+    assert fields["price_per_security_chf"] == "250.81"
+    assert fields["total_value_chf"] == "32103.76"
+    assert fields["actor_role"] == "a non-executive member of the board of directors"
+
+
+def test_parse_management_transaction_rss_unrecognized_template_returns_none_fields():
+    """A future SER template change must degrade to None fields, never raise."""
+    fields = _parse_management_transaction_rss("Some future free-text format SER hasn't used yet")
+    assert fields == {
+        "action": None,
+        "quantity": None,
+        "price_per_security_chf": None,
+        "total_value_chf": None,
+        "actor_role": None,
+    }
+
+
+def test_download_management_transactions_rss_parses_and_caches(downloader, tmp_path):
+    with patch("requests.get", return_value=_rss_response(_MGMT_TXN_RSS_XML)):
+        df = downloader.download_management_transactions_rss()
+
+    assert len(df) == 1
+    row = df.iloc[0]
+    assert row["filing_id"] == "T1Q9700014"
+    assert row["company"] == "Kardex Holding AG"
+    assert row["action"] == "Purchase"
+    assert row["quantity"] == "128"
+
+    cache_file = tmp_path / "swiss" / "ser" / "management_transactions_rss.csv"
+    assert cache_file.exists()
+
+
+def test_download_significant_shareholders_rss_caches_company_and_link(downloader, tmp_path):
+    with patch("requests.get", return_value=_rss_response(_SIG_SHAREHOLDERS_RSS_XML)):
+        df = downloader.download_significant_shareholders_rss()
+
+    assert len(df) == 1
+    row = df.iloc[0]
+    assert row["company"] == "ARYZTA AG"
+    assert row["filing_id"] == "ZA01-000000000SKW3"
+    assert "shareholder-details" in row["link"]
+
+    cache_file = tmp_path / "swiss" / "ser" / "significant_shareholders_rss.csv"
+    assert cache_file.exists()
+
+
+def test_rss_incremental_download_dedups_already_cached_items(downloader):
+    with patch("requests.get", return_value=_rss_response(_MGMT_TXN_RSS_XML)) as mock_get:
+        first = downloader.download_management_transactions_rss()
+        second = downloader.download_management_transactions_rss()
+
+    assert mock_get.call_count == 2  # feed is re-polled each call ...
+    assert len(first) == 1
+    assert len(second) == 1  # ... but no duplicate rows are appended
+
+
+def test_rss_filing_id_extracted_from_guid_fragment(downloader):
+    with patch("requests.get", return_value=_rss_response(_SIG_SHAREHOLDERS_RSS_XML)):
+        items = downloader._fetch_ser_rss_items("significant_shareholders")
+    assert items[0]["filing_id"] == "ZA01-000000000SKW3"
 
 
 # ------------------------------------------------------------------

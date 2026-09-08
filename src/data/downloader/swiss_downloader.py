@@ -26,6 +26,36 @@ against the SER RSS feed's plain-English descriptions for the same
 notification IDs (verified against 4 live notifications, 2026-09-08) — an
 unrecognized code degrades to the raw code string (logged), never raises.
 
+Two access paths exist for the SER data, kept side by side deliberately:
+
+1. **``download_*`` (default, sheldon JSON API)** — richer data (includes the
+   actual voting-rate percentages), arbitrary-date backfill, but pulled from
+   an undocumented internal endpoint never intended for third-party use.
+2. **``download_*_rss`` (SER's published RSS feeds)** — SER explicitly offers
+   these for external subscription ("With RSS news feeds, you will never
+   miss any important information" — ser-ag.com/en/services/rss.html), so
+   there is a much clearer case that third-party consumption is intended.
+   Trade-off: only a ~2-minute rolling window (no backfill), Significant
+   Shareholders carries company name + link only (no percentage), and
+   Management Transactions needs regex-parsing of free text instead of typed
+   fields.
+
+LEGAL NOTE (not legal advice): SIX's site-wide disclaimer
+(ser-ag.com/en/legal/disclaimer.html, clause 10) states "the entire content
+of the websites of SIX is protected by copyright" and prohibits
+"reproduction... transmission... or use of these websites for public or
+commercial purposes without the prior written consent of SIX" — this clause
+applies equally to data obtained via RSS or via the JSON API; robots.txt
+does not disallow either path (checked 2026-09-08). The RSS feeds have a
+much stronger implied-permission argument since SER built and advertises
+them specifically for external polling; the JSON API has none — it is
+simply what the site's own frontend happens to call. Personal,
+non-commercial research/learning use of either is low practical risk, but
+this has not been reviewed by a lawyer — anyone relying on this data for
+more than that (redistribution, a commercial product, live trading
+decisions at scale) should get their own legal advice or contact SER
+directly first.
+
 Zefix (Central Business Name Index) — Switzerland's official company
 registry (run by the Federal Office of Justice's Federal Commercial Registry
 Office / EHRA), the Swiss equivalent of EDGAR's company_tickers.json
@@ -54,11 +84,13 @@ Classes:
   Zefix company-registry lookups.
 """
 
+import re
 import sys
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
+from xml.etree import ElementTree as ET
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -128,6 +160,44 @@ _MGMT_TXN_COLS = [
     "security_description",
 ]
 _OFFICIAL_NOTICES_COLS = ["filing_id", "date", "notice_type", "contact", "title", "isin"]
+
+# SIX Exchange Regulation (SER AG) RSS feeds — explicitly published for external
+# subscription, free, no auth required. See module docstring for why these are
+# kept alongside the sheldon JSON API rather than replaced by it.
+_SER_RSS_FEEDS = {
+    "significant_shareholders": "https://www.ser-ag.com/itf-data/significant-shareholders/rss-en.xml",
+    "management_transactions": "https://www.ser-ag.com/itf-data/management-transactions/rss-en.xml",
+    "official_notices": "https://www.ser-ag.com/itf-data/official-notices/rss-en.xml",
+}
+
+# guid/link format: ".../{feed-page}.html#/{route}/{FILING_ID}" — the trailing
+# path segment is the stable per-filing identifier used for dedup.
+_RSS_FILING_ID_RE = re.compile(r"/([^/#]+)$")
+
+# Management Transactions <description> follows a fixed template, verified
+# against live feed items 2026-09-07, e.g.:
+#   "Purchase of 128 securities amounting to CHF 32,103.76 (CHF 250.81 /
+#    security) by a non-executive member of the board of directors"
+# Numbers use "," as thousands separator and "." as decimal point.
+_MGMT_TXN_RSS_PATTERN = re.compile(
+    r"^(?P<action>\w+)\s+of\s+(?P<quantity>[\d,]+)\s+securities\s+amounting\s+to\s+CHF\s+"
+    r"(?P<total_chf>[\d,]+\.\d+)\s+\(CHF\s+(?P<price_chf>[\d,]+\.\d+)\s*/\s*security\)\s+"
+    r"by\s+(?P<actor_role>.+)$"
+)
+
+_SER_RSS_COLS = ["filing_id", "company", "pub_date", "link", "description", "fetched_at"]
+_MGMT_TXN_RSS_COLS = [
+    "filing_id",
+    "company",
+    "pub_date",
+    "link",
+    "action",
+    "quantity",
+    "price_per_security_chf",
+    "total_value_chf",
+    "actor_role",
+    "fetched_at",
+]
 
 
 class SwissDownloader(BaseDataDownloader):
@@ -355,6 +425,147 @@ class SwissDownloader(BaseDataDownloader):
         return df
 
     # ------------------------------------------------------------------
+    # SIX Exchange Regulation (SER AG) — published RSS feeds (see module
+    # docstring for why these are kept alongside the sheldon JSON API above)
+    # ------------------------------------------------------------------
+
+    def _fetch_ser_rss_items(self, feed_name: str) -> List[Dict[str, str]]:
+        """
+        Fetch and parse the raw RSS items for one SER feed.
+
+        Args:
+            feed_name: Key into _SER_RSS_FEEDS.
+
+        Returns:
+            List of dicts with keys: title, link, category, description,
+            pub_date, guid, filing_id.
+        """
+        url = _SER_RSS_FEEDS[feed_name]
+        self._throttle()
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+
+        root = ET.fromstring(resp.content)
+        items = []
+        for item in root.findall("./channel/item"):
+            guid = (item.findtext("guid") or "").strip()
+            link = (item.findtext("link") or "").strip()
+            match = _RSS_FILING_ID_RE.search(guid or link)
+            items.append(
+                {
+                    "title": (item.findtext("title") or "").strip(),
+                    "link": link,
+                    "category": (item.findtext("category") or "").strip(),
+                    "description": (item.findtext("description") or "").strip(),
+                    "pub_date": (item.findtext("pubDate") or "").strip(),
+                    "guid": guid,
+                    "filing_id": match.group(1) if match else guid,
+                }
+            )
+        return items
+
+    def _download_ser_rss_feed_incremental(self, feed_name: str, columns: List[str]) -> pd.DataFrame:
+        """
+        Fetch a SER RSS feed and append any not-yet-seen items to its running cache.
+
+        Args:
+            feed_name: Key into _SER_RSS_FEEDS.
+            columns: Column order for the cached CSV (feed-specific).
+
+        Returns:
+            Full accumulated DataFrame (existing cache + any new rows).
+        """
+        dest = self._ser_dir / f"{feed_name}_rss.csv"
+        existing = pd.read_csv(dest) if dest.exists() else pd.DataFrame(columns=columns)  # type: ignore[arg-type]
+        existing_ids = set(existing["filing_id"]) if not existing.empty else set()
+
+        items = self._fetch_ser_rss_items(feed_name)
+        new_items = [it for it in items if it["filing_id"] not in existing_ids]
+        if not new_items:
+            _logger.info("No new %s RSS items (feed returned %d, all already cached)", feed_name, len(items))
+            return existing
+
+        fetched_at = datetime.now(timezone.utc).isoformat()
+        new_rows = [self._ser_rss_item_to_row(feed_name, it, fetched_at) for it in new_items]
+        new_df = pd.DataFrame(new_rows, columns=columns)  # type: ignore[arg-type]
+        combined = pd.concat([existing, new_df], ignore_index=True)
+        atomic_to_csv(combined, dest, index=False)
+        _logger.info("Cached %d new %s RSS item(s) -> %s", len(new_rows), feed_name, dest)
+        return combined
+
+    @staticmethod
+    def _ser_rss_item_to_row(feed_name: str, item: Dict[str, str], fetched_at: str) -> Dict[str, Any]:
+        """Map one raw RSS item to its feed-specific output row (mgmt transactions get parsed)."""
+        base: Dict[str, Any] = {
+            "filing_id": item["filing_id"],
+            "company": item["title"],
+            "pub_date": item["pub_date"],
+            "link": item["link"],
+            "fetched_at": fetched_at,
+        }
+        if feed_name == "management_transactions":
+            base.update(_parse_management_transaction_rss(item["description"]))
+        else:
+            base["description"] = item["description"]
+        return base
+
+    def download_significant_shareholders_rss(self) -> pd.DataFrame:
+        """
+        Download recent significant-shareholder disclosures from SER's
+        published RSS feed, appending any not-yet-cached items.
+
+        Lower legal/stability risk than ``download_significant_shareholders``
+        (see module docstring) but no crossed-ownership percentage — only
+        company name + a link to the disclosure detail page — and only a
+        ~2-minute rolling window (no historical backfill).
+
+        Cached as DATA_CACHE_DIR/swiss/ser/significant_shareholders_rss.csv.
+
+        Returns:
+            DataFrame with columns: filing_id, company, pub_date, link,
+            description, fetched_at.
+        """
+        return self._download_ser_rss_feed_incremental("significant_shareholders", _SER_RSS_COLS)
+
+    def download_management_transactions_rss(self) -> pd.DataFrame:
+        """
+        Download recent management-transaction disclosures from SER's
+        published RSS feed, appending any not-yet-cached items with
+        action/quantity/price regex-parsed out of the description text.
+
+        Lower legal/stability risk than ``download_management_transactions``
+        (see module docstring) but only a ~2-minute rolling window (no
+        historical backfill) and text-parsed rather than typed fields.
+
+        Cached as DATA_CACHE_DIR/swiss/ser/management_transactions_rss.csv.
+
+        Returns:
+            DataFrame with columns: filing_id, company, pub_date, link,
+            action, quantity, price_per_security_chf, total_value_chf,
+            actor_role, fetched_at. Any field the regex fails to match on a
+            future description-template change comes back as None rather
+            than raising.
+        """
+        return self._download_ser_rss_feed_incremental("management_transactions", _MGMT_TXN_RSS_COLS)
+
+    def download_official_notices_rss(self) -> pd.DataFrame:
+        """
+        Download recent official exchange notices from SER's published RSS
+        feed, appending any not-yet-cached items.
+
+        Lower legal/stability risk than ``download_official_notices`` (see
+        module docstring) but only a ~2-minute rolling window (no historical
+        backfill).
+
+        Cached as DATA_CACHE_DIR/swiss/ser/official_notices_rss.csv.
+
+        Returns:
+            DataFrame with columns: filing_id, company, pub_date, link,
+            description, fetched_at.
+        """
+        return self._download_ser_rss_feed_incremental("official_notices", _SER_RSS_COLS)
+
+    # ------------------------------------------------------------------
     # Zefix (Central Business Name Index) — Swiss company registry
     # ------------------------------------------------------------------
 
@@ -506,6 +717,41 @@ def _flatten_official_notice(item: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _parse_management_transaction_rss(description: str) -> Dict[str, Optional[str]]:
+    """
+    Best-effort parse of a Management Transactions RSS description into
+    structured fields. Returns all-None values (rather than raising) if the
+    description doesn't match the known template, since SER publishes no
+    formal schema for this text and the template could change silently.
+
+    Args:
+        description: Raw <description> text, e.g. "Purchase of 128 securities
+            amounting to CHF 32,103.76 (CHF 250.81 / security) by a
+            non-executive member of the board of directors".
+
+    Returns:
+        Dict with keys: action, quantity, price_per_security_chf,
+        total_value_chf, actor_role.
+    """
+    match = _MGMT_TXN_RSS_PATTERN.match(description)
+    if not match:
+        _logger.warning("Management transaction RSS description did not match known template: %r", description)
+        return {
+            "action": None,
+            "quantity": None,
+            "price_per_security_chf": None,
+            "total_value_chf": None,
+            "actor_role": None,
+        }
+    return {
+        "action": match.group("action"),
+        "quantity": match.group("quantity").replace(",", ""),
+        "price_per_security_chf": match.group("price_chf").replace(",", ""),
+        "total_value_chf": match.group("total_chf").replace(",", ""),
+        "actor_role": match.group("actor_role"),
+    }
+
+
 if __name__ == "__main__":
     import argparse
     import json as json_module
@@ -513,17 +759,26 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Download Swiss SER/Zefix data to local cache.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    _source_help = (
+        "Data source: 'sheldon' (default) is SER's richer undocumented JSON API "
+        "with full backfill; 'rss' is SER's published RSS feed (lower legal/stability "
+        "risk, only a ~2-minute rolling window, --date is ignored) — see module docstring"
+    )
+
     p_shareholders = subparsers.add_parser("significant-shareholders", help="Download for one publication date")
     p_shareholders.add_argument("--date", type=str, default=None, help="ISO date, e.g. 2026-09-07 (default: yesterday)")
     p_shareholders.add_argument("--force", action="store_true")
+    p_shareholders.add_argument("--source", choices=["sheldon", "rss"], default="sheldon", help=_source_help)
 
     p_mgmt = subparsers.add_parser("management-transactions", help="Download for one transaction date")
     p_mgmt.add_argument("--date", type=str, default=None, help="ISO date, e.g. 2026-09-07 (default: yesterday)")
     p_mgmt.add_argument("--force", action="store_true")
+    p_mgmt.add_argument("--source", choices=["sheldon", "rss"], default="sheldon", help=_source_help)
 
     p_notices = subparsers.add_parser("official-notices", help="Download for one publication date")
     p_notices.add_argument("--date", type=str, default=None, help="ISO date, e.g. 2026-09-07 (default: yesterday)")
     p_notices.add_argument("--force", action="store_true")
+    p_notices.add_argument("--source", choices=["sheldon", "rss"], default="sheldon", help=_source_help)
 
     p_search = subparsers.add_parser("zefix-search", help="Search Zefix by company name")
     p_search.add_argument("name", type=str, help="Company name or fragment")
@@ -538,13 +793,21 @@ if __name__ == "__main__":
     dl = SwissDownloader(cache_dir=args.cache_dir)
 
     if args.command in ("significant-shareholders", "management-transactions", "official-notices"):
-        as_of = datetime.strptime(args.date, "%Y-%m-%d").date() if args.date else None
-        method = {
-            "significant-shareholders": dl.download_significant_shareholders,
-            "management-transactions": dl.download_management_transactions,
-            "official-notices": dl.download_official_notices,
-        }[args.command]
-        df = method(as_of_date=as_of, force=args.force)
+        if args.source == "rss":
+            rss_method = {
+                "significant-shareholders": dl.download_significant_shareholders_rss,
+                "management-transactions": dl.download_management_transactions_rss,
+                "official-notices": dl.download_official_notices_rss,
+            }[args.command]
+            df = rss_method()
+        else:
+            as_of = datetime.strptime(args.date, "%Y-%m-%d").date() if args.date else None
+            method = {
+                "significant-shareholders": dl.download_significant_shareholders,
+                "management-transactions": dl.download_management_transactions,
+                "official-notices": dl.download_official_notices,
+            }[args.command]
+            df = method(as_of_date=as_of, force=args.force)
         print(f"__SCHEDULER_RESULT__:{json_module.dumps({'success': True, 'row_count': len(df)})}")
 
     elif args.command == "zefix-search":

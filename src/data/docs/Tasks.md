@@ -261,9 +261,11 @@
   - ✅ Significant Shareholders + Management Transactions + Official Notices, downloaded per calendar day from SIX Exchange Regulation's undocumented "sheldon" JSON API (found via browser network-tab inspection, 2026-09-08) — a real upgrade over the original RSS-feed approach: arbitrary-date backfill instead of a rolling 2-minute window, and the actual crossed-ownership-threshold voting-rate percentages included directly (previously an unsolved gap)
   - ✅ Management Transactions action/actor-role codes (`buySellIndicator`/`obligorFunctionCode`) reverse-engineered and cross-validated against 4 live notifications' RSS plain-English descriptions; unrecognized codes degrade to the raw code string (logged), never raise
   - ✅ Zefix company-registry search-by-name and UID lookup, with per-UID JSON caching
-  - ✅ 22 unit tests (`tests/test_swiss_downloader.py`), all network calls mocked; live smoke-tested against real endpoints for 2026-09-07/08
+  - ✅ Each sheldon-backed method has a `_rss` twin (`download_*_rss()`) kept alongside it, pulling from SER's officially-published RSS feeds instead — lower legal/stability risk (SER explicitly offers RSS for external subscription; the sheldon JSON API was never intended for third-party use) at the cost of only a ~2-minute rolling window and less structured data
+  - ✅ 28 unit tests (`tests/test_swiss_downloader.py`, up from 22), all network calls mocked; both sheldon and RSS paths live smoke-tested against real endpoints for 2026-09-07/08
   - ⚠️ Zefix credentials (`ZEFIX_USERNAME`/`ZEFIX_PASSWORD`): no self-service signup — request an account by emailing zefix@bj.admin.ch (confirmed via zefix.admin.ch/en/contact); untested end-to-end pending that registration
   - ⚠️ The sheldon endpoints are undocumented/internal (no official stability contract) — SER could change field names or paths without notice
+  - ⚠️ **Not legal advice**: SIX's site-wide disclaimer prohibits reproduction/use of site content for public or commercial purposes without prior written consent — applies to data from either access path. See swiss_downloader.py's module docstring LEGAL NOTE.
 
 #### DataManager Facade Implementation (Q1 2025)
 - [x] **DataManager main facade** (Q1 2025)

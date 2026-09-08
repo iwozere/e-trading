@@ -370,8 +370,9 @@ Swiss counterpart of `EdgarDownloader`.
 - ✅ **Official Notices**: exchange notices (delistings, sanctions, etc.)
 - ✅ **Zefix Company Registry**: search-by-name and UID lookup against Switzerland's central business registry (the Swiss equivalent of EDGAR's ticker→CIK mapping)
 - ⚠️ SER's three feeds are pulled from its search UI's own undocumented backing JSON API (found via browser network-tab inspection) — no official public API/schema exists (unlike EDGAR), so treat field names as best-effort and re-verify if a response shape ever changes silently
+- ✅ Each feed also has an `_rss` twin (`download_*_rss()`) pulling from SER's officially published RSS feeds instead — lower legal/stability risk since SER explicitly offers those for external subscription, at the cost of only a ~2-minute rolling window and less structured data. See the module docstring's LEGAL NOTE before relying on either beyond personal/research use.
 
-**Data Quality:** Structured JSON, typed fields (no regex/text-scraping involved)
+**Data Quality:** Structured JSON, typed fields (no regex/text-scraping involved) for the default methods; RSS twins are feed-native text (regex-parsed for Management Transactions)
 **Rate Limits:** No documented limit; polled politely (1 request/second)
 **Coverage:** SIX Swiss Exchange-listed companies; Zefix covers the full Swiss commercial register
 
@@ -383,6 +384,9 @@ downloader = SwissDownloader()  # Zefix calls need ZEFIX_USERNAME / ZEFIX_PASSWO
 
 mgmt_txns = downloader.download_management_transactions(as_of_date=date(2026, 9, 7))
 shareholders = downloader.download_significant_shareholders(as_of_date=date(2026, 9, 8))
+
+# Lower-risk RSS alternative (official published feed, no historical backfill):
+mgmt_txns_rss = downloader.download_management_transactions_rss()
 
 company = downloader.search_company("Kardex")
 record = downloader.get_company_by_uid("CHE-106.588.217")
