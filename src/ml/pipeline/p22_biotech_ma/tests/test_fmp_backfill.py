@@ -10,9 +10,12 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p22_biotech_ma.ingest import raw_zone
 from src.ml.pipeline.p22_biotech_ma.ingest.fmp_backfill import (
+    RAW_ANALYST_ESTIMATES_SOURCE,
     RAW_PRICE_SOURCE,
+    RAW_RATIOS_SOURCE,
     build_backfill_targets,
     land_historical_prices,
+    land_ratios_and_estimates,
     resolve_ticker_by_name,
 )
 from src.ml.pipeline.p22_biotech_ma.ingest.fmp_universe import TickerTarget, UnresolvedCompany
@@ -192,3 +195,123 @@ def test_land_historical_prices_force_bypasses_skip(tmp_path):
 
     assert result["landed"] == 1
     client.fetch_historical_price_full.assert_called_once()
+
+
+def test_land_historical_prices_limit_stops_early_leaving_rest_untouched(tmp_path):
+    targets = [
+        TickerTarget(company_id=i, cik=f"000{i}", ticker=f"T{i}", name=f"Co {i}") for i in range(5)
+    ]
+    client = MagicMock()
+    client.fetch_historical_price_full.return_value = [{"symbol": "T", "date": "2024-01-02", "close": 1.0}]
+
+    result = land_historical_prices(
+        targets, start_date=date(2000, 1, 1), end_date=date(2024, 1, 1), client=client, limit=2, root=tmp_path
+    )
+
+    assert result["landed"] == 2
+    assert client.fetch_historical_price_full.call_count == 2
+
+
+def test_land_historical_prices_limit_does_not_count_already_landed_skips(tmp_path):
+    """An already-landed ticker must not eat into the limit — otherwise a mostly-complete universe
+    would never make progress on its last few stragglers."""
+    raw_zone.write(
+        source=RAW_PRICE_SOURCE, entity="DONE", as_of_date=date(2024, 1, 1),
+        payload=[{"symbol": "DONE", "date": "2023-01-01", "close": 1.0}], root=tmp_path,
+    )
+    targets = [
+        TickerTarget(company_id=1, cik="0001", ticker="DONE", name="Done Co"),
+        TickerTarget(company_id=2, cik="0002", ticker="NEW", name="New Co"),
+    ]
+    client = MagicMock()
+    client.fetch_historical_price_full.return_value = [{"symbol": "NEW", "date": "2024-01-02", "close": 1.0}]
+
+    result = land_historical_prices(
+        targets, start_date=date(2000, 1, 1), end_date=date(2024, 1, 1), client=client, limit=1, root=tmp_path
+    )
+
+    assert result == {"landed": 1, "skipped_already_landed": 1, "failed": []}
+
+
+# ---------------------------------------------------------------------
+# land_ratios_and_estimates
+# ---------------------------------------------------------------------
+
+def test_land_ratios_and_estimates_writes_both_raw_zone_sources(tmp_path):
+    targets = [TickerTarget(company_id=1, cik="0001", ticker="PFE", name="Pfizer")]
+    client = MagicMock()
+    client.fetch_ratios.return_value = [{"symbol": "PFE", "priceToEarningsRatio": 18.3}]
+    client.fetch_analyst_estimates.return_value = [{"symbol": "PFE", "epsAvg": 2.4}]
+
+    result = land_ratios_and_estimates(targets, client=client, root=tmp_path)
+
+    assert result == {"landed_ratios": 1, "landed_estimates": 1, "skipped_already_landed": 0, "failed": []}
+    assert len(raw_zone.read_latest_partition(RAW_RATIOS_SOURCE, root=tmp_path)) == 1
+    assert len(raw_zone.read_latest_partition(RAW_ANALYST_ESTIMATES_SOURCE, root=tmp_path)) == 1
+
+
+def test_land_ratios_and_estimates_failed_only_when_both_endpoints_empty():
+    targets = [TickerTarget(company_id=1, cik="0001", ticker="AMGN", name="Amgen")]
+    client = MagicMock()
+    client.fetch_ratios.return_value = None  # 402, live-verified for AMGN pre-Premium
+    client.fetch_analyst_estimates.return_value = None
+
+    result = land_ratios_and_estimates(targets, client=client)
+
+    assert result["failed"] == ["AMGN"]
+    assert result["landed_ratios"] == 0
+    assert result["landed_estimates"] == 0
+
+
+def test_land_ratios_and_estimates_partial_success_not_counted_as_failed():
+    """Only one of the two endpoints returning data is still progress, not a failure."""
+    targets = [TickerTarget(company_id=1, cik="0001", ticker="X", name="X Co")]
+    client = MagicMock()
+    client.fetch_ratios.return_value = [{"symbol": "X"}]
+    client.fetch_analyst_estimates.return_value = None
+
+    result = land_ratios_and_estimates(targets, client=client)
+
+    assert result["failed"] == []
+    assert result["landed_ratios"] == 1
+    assert result["landed_estimates"] == 0
+
+
+def test_land_ratios_and_estimates_skips_only_when_both_already_landed(tmp_path):
+    raw_zone.write(source=RAW_RATIOS_SOURCE, entity="PARTIAL", as_of_date=date(2024, 1, 1), payload=[{}], root=tmp_path)
+    targets = [TickerTarget(company_id=1, cik="0001", ticker="PARTIAL", name="Partial Co")]
+    client = MagicMock()
+    client.fetch_ratios.return_value = [{"symbol": "PARTIAL"}]
+    client.fetch_analyst_estimates.return_value = [{"symbol": "PARTIAL"}]
+
+    # Only ratios landed previously (analyst-estimates missing) — must be retried, not skipped.
+    result = land_ratios_and_estimates(targets, client=client, root=tmp_path)
+
+    assert result["skipped_already_landed"] == 0
+    assert result["landed_estimates"] == 1
+    client.fetch_analyst_estimates.assert_called_once()
+
+
+def test_land_ratios_and_estimates_skips_when_both_already_landed(tmp_path):
+    raw_zone.write(source=RAW_RATIOS_SOURCE, entity="DONE", as_of_date=date(2024, 1, 1), payload=[{}], root=tmp_path)
+    raw_zone.write(source=RAW_ANALYST_ESTIMATES_SOURCE, entity="DONE", as_of_date=date(2024, 1, 1), payload=[{}], root=tmp_path)
+    targets = [TickerTarget(company_id=1, cik="0001", ticker="DONE", name="Done Co")]
+    client = MagicMock()
+
+    result = land_ratios_and_estimates(targets, client=client, root=tmp_path)
+
+    assert result["skipped_already_landed"] == 1
+    client.fetch_ratios.assert_not_called()
+    client.fetch_analyst_estimates.assert_not_called()
+
+
+def test_land_ratios_and_estimates_limit_stops_early(tmp_path):
+    targets = [TickerTarget(company_id=i, cik=f"000{i}", ticker=f"T{i}", name=f"Co {i}") for i in range(5)]
+    client = MagicMock()
+    client.fetch_ratios.return_value = [{}]
+    client.fetch_analyst_estimates.return_value = [{}]
+
+    result = land_ratios_and_estimates(targets, client=client, limit=2, root=tmp_path)
+
+    assert result["landed_ratios"] == 2
+    assert result["landed_estimates"] == 2

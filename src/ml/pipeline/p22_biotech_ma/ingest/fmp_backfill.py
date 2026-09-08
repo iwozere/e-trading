@@ -18,6 +18,19 @@ unadjusted or already split/dividend-adjusted — unverified, see
 `ingest/fmp_client.py`'s docstring) can happen calmly afterward, against
 real data, with no time pressure. Land now, normalize later.
 
+**Added 2026-09-08: `land_ratios_and_estimates`, the same land-now-normalize-
+later pattern for `/stable/ratios`/`/stable/analyst-estimates`** — Block A's
+still-blocked `ebitda`/forward-P/E (`docs/Tasks.md` items 9-10). The user
+plans to buy Premium for one month starting ~2026-09-15; at the CURRENT
+tier's observed throughput (5 req/s, well under Premium's published 750
+req/min — see `config.FMP_RATE_LIMIT_RPS`) a full universe pass across all
+three endpoints (price + ratios + estimates) is on the order of an hour, not
+a month — the month is buffer for re-runs, fixing whatever the first real
+pass surfaces, and picking up newly name-search-resolved tickers, not a
+throughput requirement. Run `cli/fmp_backfill_cli.py backfill` and
+`backfill-fundamentals` (ideally more than once over the month — both are
+fully resumable) rather than treating this as a single make-or-break session.
+
 **Ticker resolution for delisted-before-we-resolved-them companies** uses
 FMP's name-search endpoint (`ingest/fmp_client.search_company_by_name` —
 itself unverified, see that module) with **deterministic-only** matching —
@@ -53,6 +66,13 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 RAW_PRICE_SOURCE = "fmp_historical_price"
+# Added 2026-09-08, ahead of the user's planned FMP Premium purchase (~1 week out, for one
+# month) — for Block A's still-blocked ebitda/forward-P/E (docs/Tasks.md items 9-10). Live-verified
+# 2026-09-08 on the CURRENT (non-Premium) tier that these endpoints 402 for 22 of 25 acquirers —
+# `test-fundamentals` in `cli/fmp_backfill_cli.py` re-checks a handful of those specific tickers
+# first, so a real Premium key's actual entitlement is confirmed before spending a full run on it.
+RAW_RATIOS_SOURCE = "fmp_ratios"
+RAW_ANALYST_ESTIMATES_SOURCE = "fmp_analyst_estimates"
 
 
 _US_EXCHANGES = frozenset({"NASDAQ", "NYSE", "AMEX", "NYSE AMERICAN", "NYSEAMERICAN", "BATS", "CBOE"})
@@ -148,6 +168,7 @@ def land_historical_prices(
     end_date: date,
     client: Optional[FMPClient] = None,
     skip_already_landed: bool = True,
+    limit: Optional[int] = None,
     root: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """
@@ -166,6 +187,11 @@ def land_historical_prices(
             interrupt and re-run without re-spending API quota. Set `False`
             to force a re-fetch (e.g. to pick up newer data for a ticker
             landed early in the month).
+        limit: Stop after actually FETCHING this many tickers (already-landed
+            skips don't count against it) — lets a caller cap one session's
+            API spend without needing to pre-slice `targets` (which would
+            keep re-considering the same already-landed prefix every time).
+            `None` (default) fetches every not-yet-landed target.
         root: Raw-zone root override (used by tests).
 
     Returns:
@@ -182,6 +208,10 @@ def land_historical_prices(
             if skip_already_landed and raw_zone.has_any_landed(RAW_PRICE_SOURCE, target.ticker, root=root):
                 skipped += 1
                 continue
+
+            if limit is not None and landed >= limit:
+                _logger.info("Backfill limit of %d reached — stopping for this run, %d target(s) untouched", limit, len(targets) - i + 1)
+                break
 
             payload = active_client.fetch_historical_price_full(target.ticker, start_date, end_date)
             if payload is None:
@@ -204,3 +234,89 @@ def land_historical_prices(
 
     _logger.info("Backfill complete: landed=%d skipped=%d failed=%d", landed, skipped, len(failed))
     return {"landed": landed, "skipped_already_landed": skipped, "failed": failed}
+
+
+def land_ratios_and_estimates(
+    targets: List[TickerTarget],
+    *,
+    client: Optional[FMPClient] = None,
+    skip_already_landed: bool = True,
+    limit: Optional[int] = None,
+    root: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """
+    Fetch and land `/stable/ratios` + `/stable/analyst-estimates` for each target — the EBITDA
+    and forward-EPS data Block A's `cash_capacity`/`currency_quality` need (`docs/Tasks.md` items
+    9-10). Added 2026-09-08 ahead of the user's planned FMP Premium purchase: live-verified on the
+    CURRENT tier that both 402 for 22 of the 25 acquirers, so this is landing nothing useful yet —
+    ready the moment the account is upgraded, same "built ahead of the decision" precedent as
+    `land_historical_prices` itself.
+
+    A ticker counts as "already landed" only when BOTH endpoints have a prior landing — a ticker
+    that landed ratios but failed estimates (or vice versa) is retried, not silently left
+    half-complete. Same `limit`/resumability contract as `land_historical_prices`.
+
+    Returns:
+        `{"landed_ratios": int, "landed_estimates": int, "skipped_already_landed": int,
+          "failed": List[str]}` — `failed` lists tickers where BOTH endpoints came back `None`
+          (a 402/404/error for both, not just one).
+    """
+    owns_client = client is None
+    active_client = client or FMPClient()
+    landed_ratios = 0
+    landed_estimates = 0
+    skipped = 0
+    failed: List[str] = []
+    fetched_count = 0
+
+    try:
+        for i, target in enumerate(targets, 1):
+            already_landed = skip_already_landed and (
+                raw_zone.has_any_landed(RAW_RATIOS_SOURCE, target.ticker, root=root)
+                and raw_zone.has_any_landed(RAW_ANALYST_ESTIMATES_SOURCE, target.ticker, root=root)
+            )
+            if already_landed:
+                skipped += 1
+                continue
+
+            if limit is not None and fetched_count >= limit:
+                _logger.info(
+                    "Fundamentals backfill limit of %d reached — stopping for this run, %d target(s) untouched",
+                    limit, len(targets) - i + 1,
+                )
+                break
+            fetched_count += 1
+
+            ratios = active_client.fetch_ratios(target.ticker)
+            if ratios is not None:
+                raw_zone.write(source=RAW_RATIOS_SOURCE, entity=target.ticker, as_of_date=date.today(), payload=ratios, root=root)
+                landed_ratios += 1
+
+            estimates = active_client.fetch_analyst_estimates(target.ticker, period="annual")
+            if estimates is not None:
+                raw_zone.write(
+                    source=RAW_ANALYST_ESTIMATES_SOURCE, entity=target.ticker, as_of_date=date.today(),
+                    payload=estimates, root=root,
+                )
+                landed_estimates += 1
+
+            if ratios is None and estimates is None:
+                failed.append(target.ticker)
+
+            if i % 25 == 0:
+                _logger.info(
+                    "Fundamentals backfill progress: %d/%d (ratios=%d estimates=%d skipped=%d failed=%d)",
+                    i, len(targets), landed_ratios, landed_estimates, skipped, len(failed),
+                )
+    finally:
+        if owns_client:
+            active_client.close()
+
+    _logger.info(
+        "Fundamentals backfill complete: ratios=%d estimates=%d skipped=%d failed=%d",
+        landed_ratios, landed_estimates, skipped, len(failed),
+    )
+    return {
+        "landed_ratios": landed_ratios, "landed_estimates": landed_estimates,
+        "skipped_already_landed": skipped, "failed": failed,
+    }

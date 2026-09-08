@@ -72,6 +72,35 @@ use in the code/config; this section exists so they're all in one place to walk 
    `features/block_c.py`'s updated docstring. Delisted companies (acquired, no longer trading) still
    get `None` here, same as before — that specific gap is what the FMP Premium decision is actually
    for now, needed for M6, not M3/Block A live scoring.
+
+   **User's plan, confirmed 2026-09-08: buy Premium ~2026-09-15 for one month.** Also extended
+   this session, ahead of that purchase, to cover items 9-10's `ratios`/`analyst-estimates` gap
+   (Block A's `ebitda`/forward-P/E), not just the delisted-price gap — `land_ratios_and_estimates`
+   (new, `ingest/fmp_backfill.py`) + `cli/fmp_backfill_cli.py`'s new `test-fundamentals`/
+   `backfill-fundamentals` commands, same land-now-normalize-later and full-resumability pattern as
+   the price backfill. Both `land_historical_prices` and `land_ratios_and_estimates` now also take
+   an optional `limit=` (fetch-count cap that does NOT count already-landed skips against it —
+   without that distinction, capping a mostly-complete universe would make zero progress on its
+   last stragglers) for a future bounded/incremental run, though nothing calls it yet — see below
+   for why.
+
+   **Operationally, this is NOT a throughput problem** — at the current tier's already-configured
+   rate limit (`config.FMP_RATE_LIMIT_RPS = 5`, well under Premium's published 750 req/min), a full
+   pass across all three endpoints (price + ratios + estimates) for a universe of a few thousand
+   tickers is on the order of AN HOUR, not a month. The month is buffer for: confirming the account
+   upgrade actually resolved the per-symbol entitlement gate (run `test-fundamentals AMGN GILD SRPT
+   MRK` first — those are the exact tickers live-verified 402ing pre-upgrade), re-running after
+   fixing whatever a first real pass surfaces (both `fetch_historical_price_full`'s raw-vs-adjusted
+   question and `search_company_by_name`'s ticker resolution are still unverified against a real
+   Premium key), and picking up newly name-search-resolved companies — NOT because the mechanical
+   download itself needs weeks of continuous execution. Recommended runbook, in order: `test-search`
+   → `test-fundamentals` → `backfill --dry-run` → `backfill --limit 5` → `backfill` →
+   `backfill-fundamentals`, then re-run `backfill`/`backfill-fundamentals` every few days over the
+   month rather than treating either as a single make-or-break session — both are safe to Ctrl-C and
+   safe to re-run (`skip_already_landed`). Deliberately did NOT build a scheduled daily job for
+   this — the existing `cli/fmp_backfill_cli.py` design (human-run, not `jobs/run_*.py`) already
+   fits an hour-scale manual task better than a month-long automated one would, and the throughput
+   math above confirms there's no need for one.
 2. ~~**`config/pipeline/p22_base_rates.yaml` is ~90% incomplete**~~ — **mostly resolved 2026-08-31.**
    The actual primary source turned out to be freely available: "Clinical Development Success Rates
    and Contributing Factors 2011-2020" (BIO, QLS Advisors, Informa UK Ltd, Feb 2021) — a newer,
@@ -814,10 +843,11 @@ use in the code/config; this section exists so they're all in one place to walk 
       (`test_activist_positions.py`), Block B incl. the lead-asset-proxy and base-rate-fallback
       cases (`test_block_b.py`), `p22_base_rates.yaml` loading (`test_base_rates_config.py`),
       domicile extraction incl. the real isForeignLocation-vs-stateOrCountry discrepancy case
-      (`test_domicile_normalization.py`), Block E (`test_block_e.py`) — 399 tests total in the
-      non-DB suite as of 2026-09-08 (plus 4 more in `src/data/downloader/tests/` for the new
-      `EdgarDownloader.fetch_filing_document` public wrapper and the `SCHEDULE 13D`
-      form-type-prefix bug fix, outside this module's own count).
+      (`test_domicile_normalization.py`), Block E (`test_block_e.py`), `land_ratios_and_estimates`
+      incl. the limit-doesn't-count-skips and partial-success-not-a-failure cases
+      (`test_fmp_backfill.py`) — 407 tests total in the non-DB suite as of 2026-09-08 (plus 4 more
+      in `src/data/downloader/tests/` for the new `EdgarDownloader.fetch_filing_document` public
+      wrapper and the `SCHEDULE 13D` form-type-prefix bug fix, outside this module's own count).
 - [ ] Real-Postgres integration tests for `P22Repo.upsert_financial_fact_bitemporal` restatement
       behavior, the price-archive round trip (`upsert_price_daily` immutability,
       `get_adjusted_close`'s lookahead guard through the repo layer), `get_latest_raw_close_as_of`
