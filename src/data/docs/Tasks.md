@@ -258,12 +258,12 @@
 
 #### Swiss Market Data Downloader (Q3 2026)
 - [x] **SwissDownloader** (Q3 2026)
-  - ✅ Significant Shareholders + Management Transactions + Official Notices, polled incrementally from SIX Exchange Regulation's RSS feeds, deduped by filing_id
-  - ✅ Management Transactions description regex-parsed into action/quantity/price/total/actor_role — verified 100% match rate against 198 live feed items (2026-09-07)
+  - ✅ Significant Shareholders + Management Transactions + Official Notices, downloaded per calendar day from SIX Exchange Regulation's undocumented "sheldon" JSON API (found via browser network-tab inspection, 2026-09-08) — a real upgrade over the original RSS-feed approach: arbitrary-date backfill instead of a rolling 2-minute window, and the actual crossed-ownership-threshold voting-rate percentages included directly (previously an unsolved gap)
+  - ✅ Management Transactions action/actor-role codes (`buySellIndicator`/`obligorFunctionCode`) reverse-engineered and cross-validated against 4 live notifications' RSS plain-English descriptions; unrecognized codes degrade to the raw code string (logged), never raise
   - ✅ Zefix company-registry search-by-name and UID lookup, with per-UID JSON caching
-  - ✅ 14 unit tests (`tests/test_swiss_downloader.py`), all network calls mocked
-  - ⚠️ **Known gap**: Significant Shareholders feed carries company name + link only — the actual crossed-ownership-threshold percentage lives behind a client-side SPA route (`#/shareholder-details/{id}`) whose backing JSON API hasn't been identified yet (needs live browser network-tab inspection)
-  - ⚠️ Zefix credentials (`ZEFIX_USERNAME`/`ZEFIX_PASSWORD`) require a free account registered at zefix.admin.ch — untested end-to-end pending that registration
+  - ✅ 22 unit tests (`tests/test_swiss_downloader.py`), all network calls mocked; live smoke-tested against real endpoints for 2026-09-07/08
+  - ⚠️ Zefix credentials (`ZEFIX_USERNAME`/`ZEFIX_PASSWORD`): no self-service signup — request an account by emailing zefix@bj.admin.ch (confirmed via zefix.admin.ch/en/contact); untested end-to-end pending that registration
+  - ⚠️ The sheldon endpoints are undocumented/internal (no official stability contract) — SER could change field names or paths without notice
 
 #### DataManager Facade Implementation (Q1 2025)
 - [x] **DataManager main facade** (Q1 2025)

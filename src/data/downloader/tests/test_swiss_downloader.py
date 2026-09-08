@@ -1,73 +1,37 @@
 """
-Tests for SwissDownloader (SIX Exchange Regulation RSS feeds + Zefix registry).
+Tests for SwissDownloader (SIX Exchange Regulation "sheldon" JSON API + Zefix).
 
-Network calls are mocked throughout — the RSS fixtures below are trimmed but
-schema-faithful copies of real feed items captured from the live SER feeds on
-2026-09-07 (see swiss_downloader.py's module docstring), so the parsing
-assertions exercise the exact template SER actually publishes, not a
-hypothetical one.
+Network calls are mocked throughout. The significant-shareholder and
+management-transaction fixtures below are trimmed but schema-faithful copies
+of real responses captured from the live sheldon endpoints on 2026-09-08 (see
+swiss_downloader.py's module docstring) — including the DKSH Holding AG /
+Kardex Holding AG records used to cross-validate the buySellIndicator /
+obligorFunctionCode lookup tables.
 """
 
 import sys
+from datetime import date
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-import pandas as pd
 import pytest
 
-from src.data.downloader.swiss_downloader import SwissDownloader, _parse_management_transaction
-
-# Trimmed but schema-faithful copies of real SER feed responses (captured 2026-09-07).
-_MGMT_TXN_FEED_XML = """<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0">
-<channel>
-<title>SIX Exchange Regulation | Management Transactions</title>
-<link>https://www.ser-ag.com/en/resources/notifications-market-participants/management-transactions.html</link>
-<description>Management Transactions</description>
-<item>
-<title>Kardex Holding AG</title>
-<link>https://www.ser-ag.com/en/resources/notifications-market-participants/management-transactions.html#/transaction-details/T1Q9700014</link>
-<category>Transaction</category>
-<description>Purchase of 128 securities amounting to CHF 32,103.76 (CHF 250.81 / security) by a non-executive member of the board of directors</description>
-<pubDate>Mon, 07 Sep 2026 12:00:00 +0200</pubDate>
-<guid>https://www.ser-ag.com/en/resources/notifications-market-participants/management-transactions.html#/transaction-details/T1Q9700014</guid>
-</item>
-<item>
-<title>Rieter Holding AG</title>
-<link>https://www.ser-ag.com/en/resources/notifications-market-participants/management-transactions.html#/transaction-details/T1Q9700022</link>
-<category>Transaction</category>
-<description>Sale of 14,885 securities amounting to CHF 46,217.93 (CHF 3.11 / security) by an executive member of the board of directors / member of senior management</description>
-<pubDate>Mon, 07 Sep 2026 12:00:00 +0200</pubDate>
-<guid>https://www.ser-ag.com/en/resources/notifications-market-participants/management-transactions.html#/transaction-details/T1Q9700022</guid>
-</item>
-</channel>
-</rss>"""
-
-_SIG_SHAREHOLDERS_FEED_XML = """<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0">
-<channel>
-<title>SIX Exchange Regulation | Significant shareholders</title>
-<link>https://www.ser-ag.com/en/resources/notifications-market-participants/significant-shareholders.html</link>
-<description>Disclosure of shareholdings</description>
-<item>
-<title>ARYZTA AG</title>
-<link>https://www.ser-ag.com/en/resources/notifications-market-participants/significant-shareholders.html#/shareholder-details/ZA01-000000000SKW3</link>
-<category>Notification</category>
-<description>Disclosure of shareholdings in ARYZTA AG</description>
-<pubDate>Sat, 05 Sep 2026 12:00:00 +0200</pubDate>
-<guid>https://www.ser-ag.com/en/resources/notifications-market-participants/significant-shareholders.html#/shareholder-details/ZA01-000000000SKW3</guid>
-</item>
-</channel>
-</rss>"""
+from src.data.downloader.swiss_downloader import (
+    SwissDownloader,
+    _flatten_management_transaction,
+    _flatten_official_notice,
+    _flatten_significant_shareholder,
+    _yyyymmdd_to_iso,
+)
 
 
-def _rss_response(xml_text: str) -> MagicMock:
-    """Build a MagicMock standing in for a requests.Response carrying RSS bytes."""
+def _sheldon_response(status: str, total_count: int, item_list: list) -> MagicMock:
+    """Build a MagicMock standing in for a requests.Response carrying a sheldon JSON body."""
     resp = MagicMock()
-    resp.content = xml_text.encode("utf-8")
+    resp.json.return_value = {"status": status, "totalCount": total_count, "itemList": item_list}
     resp.raise_for_status = MagicMock()
     return resp
 
@@ -80,96 +44,223 @@ def downloader(tmp_path):
         yield dl
 
 
+# Real item captured 2026-09-08 (trimmed to the fields the flattener reads).
+_SIG_SHAREHOLDER_ITEM = {
+    "publication": {
+        "notificationId": "ZA01-000000000SLC9",
+        "notificationSubmitter": "DKSH Holding AG",
+        "notificationSubmitterId": "DKSH",
+        "category": "A",
+        "publicationDate": 20260908,
+        "transactionDate": 20260904,
+        "purchaseTotalVotingRate": 3.001,
+        "saleTotalVotingRate": 0.022,
+        "belowThresholdVotingRate": 0.0,
+        "triggerComment": ["The obligation to notify was triggered by an acquisition of shares."],
+    },
+    "beneficialNames": ["BlackRock, Inc."],
+    "shareholderNames": [],
+}
+
+# Real items captured 2026-09-08 — cross-validated against the RSS descriptions:
+# Kardex: "Purchase ... by a non-executive member of the board of directors"
+# Rieter: "Sale ... by an executive member of the board of directors / member of senior management"
+_KARDEX_MGMT_TXN_ITEM = {
+    "notificationId": "T1Q9700014",
+    "notificationSubmitter": "Kardex Holding AG",
+    "notificationSubmitterId": "KARDEX",
+    "ISIN": "CH0100837282",
+    "transactionDate": 20260907,
+    "buySellIndicator": "1",
+    "obligorFunctionCode": "2",
+    "transactionSize": 128.0,
+    "transactionAmountPerSecurityCHF": 250.810625,
+    "transactionAmountCHF": 32103.76,
+    "securityTypeCode": "7",
+    "securityDescription": "3 Jahre gesperrt",
+}
+_RIETER_MGMT_TXN_ITEM = {
+    "notificationId": "T1Q9700022",
+    "notificationSubmitter": "Rieter Holding AG",
+    "notificationSubmitterId": "RIETER",
+    "ISIN": "CH0003671440",
+    "transactionDate": 20260907,
+    "buySellIndicator": "2",
+    "obligorFunctionCode": "1",
+    "transactionSize": 14885.0,
+    "transactionAmountPerSecurityCHF": 3.105000335908633,
+    "transactionAmountCHF": 46217.93,
+    "securityTypeCode": "7",
+    "securityDescription": "",
+}
+
+_OFFICIAL_NOTICE_ITEM = {
+    "noticeId": 365566,
+    "date": 20260908,
+    "noticeType": "A",
+    "contact": "Zuercher Kantonalbank",
+    "title": "Rule based parameter adjustment",
+    "isin": None,
+}
+
+
 # ------------------------------------------------------------------
-# Management transaction description parsing
+# Flattening / lookup-table correctness
 # ------------------------------------------------------------------
 
 
-def test_parse_management_transaction_purchase():
-    fields = _parse_management_transaction(
-        "Purchase of 128 securities amounting to CHF 32,103.76 (CHF 250.81 / security) "
-        "by a non-executive member of the board of directors"
-    )
-    assert fields["action"] == "Purchase"
-    assert fields["quantity"] == "128"
-    assert fields["price_per_security_chf"] == "250.81"
-    assert fields["total_value_chf"] == "32103.76"
-    assert fields["actor_role"] == "a non-executive member of the board of directors"
+def test_yyyymmdd_to_iso():
+    assert _yyyymmdd_to_iso(20260907) == "2026-09-07"
 
 
-def test_parse_management_transaction_sale_with_large_quantity():
-    fields = _parse_management_transaction(
-        "Sale of 14,885 securities amounting to CHF 46,217.93 (CHF 3.11 / security) "
-        "by an executive member of the board of directors / member of senior management"
-    )
-    assert fields["action"] == "Sale"
-    assert fields["quantity"] == "14885"
-    assert fields["price_per_security_chf"] == "3.11"
-    assert fields["total_value_chf"] == "46217.93"
+def test_yyyymmdd_to_iso_handles_falsy_as_none():
+    assert _yyyymmdd_to_iso(0) is None
+    assert _yyyymmdd_to_iso(None) is None
 
 
-def test_parse_management_transaction_unrecognized_template_returns_none_fields():
-    """A future SER template change must degrade to None fields, never raise."""
-    fields = _parse_management_transaction("Some future free-text format SER hasn't used yet")
-    assert fields == {
-        "action": None,
-        "quantity": None,
-        "price_per_security_chf": None,
-        "total_value_chf": None,
-        "actor_role": None,
+def test_flatten_significant_shareholder_extracts_voting_rate():
+    row = _flatten_significant_shareholder(_SIG_SHAREHOLDER_ITEM)
+    assert row["filing_id"] == "ZA01-000000000SLC9"
+    assert row["company"] == "DKSH Holding AG"
+    assert row["publication_date"] == "2026-09-08"
+    assert row["purchase_total_voting_rate"] == 3.001
+    assert row["sale_total_voting_rate"] == 0.022
+    assert row["beneficial_names"] == "BlackRock, Inc."
+
+
+def test_flatten_management_transaction_maps_purchase_and_non_executive():
+    row = _flatten_management_transaction(_KARDEX_MGMT_TXN_ITEM)
+    assert row["action"] == "Purchase"
+    assert row["actor_role"] == "non-executive member of the board of directors"
+    assert row["quantity"] == 128.0
+    assert row["total_value_chf"] == 32103.76
+
+
+def test_flatten_management_transaction_maps_sale_and_executive():
+    row = _flatten_management_transaction(_RIETER_MGMT_TXN_ITEM)
+    assert row["action"] == "Sale"
+    assert row["actor_role"] == "executive member of the board of directors / member of senior management"
+
+
+def test_flatten_management_transaction_unknown_codes_pass_through_raw():
+    item = {**_KARDEX_MGMT_TXN_ITEM, "buySellIndicator": "9", "obligorFunctionCode": "9"}
+    row = _flatten_management_transaction(item)
+    assert row["action"] == "9"
+    assert row["actor_role"] == "9"
+
+
+def test_flatten_official_notice():
+    row = _flatten_official_notice(_OFFICIAL_NOTICE_ITEM)
+    assert row == {
+        "filing_id": 365566,
+        "date": "2026-09-08",
+        "notice_type": "A",
+        "contact": "Zuercher Kantonalbank",
+        "title": "Rule based parameter adjustment",
+        "isin": None,
     }
 
 
 # ------------------------------------------------------------------
-# SER RSS feed downloads
+# Download + per-day caching
 # ------------------------------------------------------------------
 
 
-def test_download_management_transactions_parses_and_caches(downloader, tmp_path):
-    with patch("requests.get", return_value=_rss_response(_MGMT_TXN_FEED_XML)):
-        df = downloader.download_management_transactions()
+def test_download_significant_shareholders_caches_per_day(downloader, tmp_path):
+    with patch("requests.get", return_value=_sheldon_response("Ok", 1, [_SIG_SHAREHOLDER_ITEM])) as mock_get:
+        df = downloader.download_significant_shareholders(as_of_date=date(2026, 9, 8))
+
+    assert len(df) == 1
+    assert df.iloc[0]["company"] == "DKSH Holding AG"
+    assert df.iloc[0]["purchase_total_voting_rate"] == 3.001
+
+    cache_file = tmp_path / "swiss" / "ser" / "significant_shareholders" / "2026-09-08.csv.gz"
+    assert cache_file.exists()
+
+    _, kwargs = mock_get.call_args
+    assert kwargs["params"]["fromDate"] == "20260908"
+    assert kwargs["params"]["toDate"] == "20260908"
+
+
+def test_download_management_transactions_caches_per_day(downloader, tmp_path):
+    with patch(
+        "requests.get",
+        return_value=_sheldon_response("Ok", 2, [_KARDEX_MGMT_TXN_ITEM, _RIETER_MGMT_TXN_ITEM]),
+    ):
+        df = downloader.download_management_transactions(as_of_date=date(2026, 9, 7))
 
     assert len(df) == 2
     assert set(df["filing_id"]) == {"T1Q9700014", "T1Q9700022"}
-    kardex = df[df["filing_id"] == "T1Q9700014"].iloc[0]
-    assert kardex["company"] == "Kardex Holding AG"
-    assert kardex["action"] == "Purchase"
-    assert kardex["quantity"] == "128"
 
-    cache_file = tmp_path / "swiss" / "ser" / "management_transactions.csv"
+    cache_file = tmp_path / "swiss" / "ser" / "management_transactions" / "2026-09-07.csv.gz"
     assert cache_file.exists()
-    cached = pd.read_csv(cache_file)
-    assert len(cached) == 2
 
 
-def test_download_significant_shareholders_caches_company_and_link(downloader, tmp_path):
-    with patch("requests.get", return_value=_rss_response(_SIG_SHAREHOLDERS_FEED_XML)):
-        df = downloader.download_significant_shareholders()
+def test_download_official_notices_caches_per_day(downloader, tmp_path):
+    with patch("requests.get", return_value=_sheldon_response("Ok", 1, [_OFFICIAL_NOTICE_ITEM])):
+        df = downloader.download_official_notices(as_of_date=date(2026, 9, 8))
 
     assert len(df) == 1
-    row = df.iloc[0]
-    assert row["company"] == "ARYZTA AG"
-    assert row["filing_id"] == "ZA01-000000000SKW3"
-    assert "shareholder-details" in row["link"]
-
-    cache_file = tmp_path / "swiss" / "ser" / "significant_shareholders.csv"
+    cache_file = tmp_path / "swiss" / "ser" / "official_notices" / "2026-09-08.csv.gz"
     assert cache_file.exists()
 
 
-def test_incremental_download_dedups_already_cached_items(downloader):
-    with patch("requests.get", return_value=_rss_response(_MGMT_TXN_FEED_XML)) as mock_get:
-        first = downloader.download_management_transactions()
-        second = downloader.download_management_transactions()
+def test_second_call_reads_cache_without_refetching(downloader):
+    with patch("requests.get", return_value=_sheldon_response("Ok", 1, [_SIG_SHAREHOLDER_ITEM])) as mock_get:
+        downloader.download_significant_shareholders(as_of_date=date(2026, 9, 8))
+        downloader.download_significant_shareholders(as_of_date=date(2026, 9, 8))
 
-    assert mock_get.call_count == 2  # feed is re-polled each call ...
-    assert len(first) == 2
-    assert len(second) == 2  # ... but no duplicate rows are appended
+    assert mock_get.call_count == 1  # second call hit the on-disk cache
 
 
-def test_filing_id_extracted_from_guid_fragment(downloader):
-    with patch("requests.get", return_value=_rss_response(_SIG_SHAREHOLDERS_FEED_XML)):
-        items = downloader._fetch_ser_feed_items("significant_shareholders")
-    assert items[0]["filing_id"] == "ZA01-000000000SKW3"
+def test_force_refetches_even_when_cached(downloader):
+    with patch("requests.get", return_value=_sheldon_response("Ok", 1, [_SIG_SHAREHOLDER_ITEM])) as mock_get:
+        downloader.download_significant_shareholders(as_of_date=date(2026, 9, 8))
+        downloader.download_significant_shareholders(as_of_date=date(2026, 9, 8), force=True)
+
+    assert mock_get.call_count == 2
+
+
+def test_pagination_follows_total_count(downloader):
+    """totalCount larger than one page's itemList must trigger a second page fetch."""
+    page0 = _sheldon_response("Ok", 2, [_SIG_SHAREHOLDER_ITEM])
+    page1 = _sheldon_response("Ok", 2, [_SIG_SHAREHOLDER_ITEM])
+    with patch("requests.get", side_effect=[page0, page1]) as mock_get:
+        df = downloader.download_significant_shareholders(as_of_date=date(2026, 9, 8))
+
+    assert mock_get.call_count == 2
+    assert len(df) == 2
+    calls = mock_get.call_args_list
+    assert calls[0].kwargs["params"]["pageNumber"] == 0
+    assert calls[1].kwargs["params"]["pageNumber"] == 1
+
+
+def test_no_results_returns_empty_dataframe_with_expected_columns(downloader):
+    with patch("requests.get", return_value=_sheldon_response("Ok", 0, [])):
+        df = downloader.download_management_transactions(as_of_date=date(2026, 9, 8))
+
+    assert len(df) == 0
+    assert list(df.columns) == [
+        "filing_id",
+        "company",
+        "company_id",
+        "isin",
+        "transaction_date",
+        "action",
+        "quantity",
+        "price_per_security_chf",
+        "total_value_chf",
+        "actor_role",
+        "security_type_code",
+        "security_description",
+    ]
+
+
+def test_unexpected_status_stops_without_raising(downloader):
+    with patch("requests.get", return_value=_sheldon_response("Error", 0, [])):
+        df = downloader.download_significant_shareholders(as_of_date=date(2026, 9, 8))
+
+    assert len(df) == 0
 
 
 # ------------------------------------------------------------------

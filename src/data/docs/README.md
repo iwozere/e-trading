@@ -365,23 +365,24 @@ is documented here — see each module's own docstring for the rest.
 Swiss counterpart of `EdgarDownloader`.
 
 **Capabilities:**
-- ✅ **Significant Shareholders**: Art. 120 FinfraG stake disclosures (Swiss equivalent of SEC Schedule 13D/13G), polled from SIX Exchange Regulation's RSS feed
-- ✅ **Management Transactions**: insider trades (Swiss equivalent of SEC Form 4), with action/quantity/price/total parsed out of the feed's free-text description
+- ✅ **Significant Shareholders**: Art. 120 FinfraG stake disclosures (Swiss equivalent of SEC Schedule 13D/13G), including the actual crossed-ownership-threshold voting-rate percentages, downloaded per calendar day (arbitrary-date backfill supported)
+- ✅ **Management Transactions**: insider trades (Swiss equivalent of SEC Form 4) with typed action/quantity/price/total/actor-role fields
 - ✅ **Official Notices**: exchange notices (delistings, sanctions, etc.)
 - ✅ **Zefix Company Registry**: search-by-name and UID lookup against Switzerland's central business registry (the Swiss equivalent of EDGAR's ticker→CIK mapping)
-- ⚠️ No bulk/XBRL-style API exists for SER data (unlike EDGAR) — the RSS feeds are the only free, structured, no-auth surface, and the Significant Shareholders feed does not carry the crossed-ownership-threshold percentage (company name + link only)
+- ⚠️ SER's three feeds are pulled from its search UI's own undocumented backing JSON API (found via browser network-tab inspection) — no official public API/schema exists (unlike EDGAR), so treat field names as best-effort and re-verify if a response shape ever changes silently
 
-**Data Quality:** Feed-native text, regex-parsed for Management Transactions; company name + link only for Significant Shareholders
+**Data Quality:** Structured JSON, typed fields (no regex/text-scraping involved)
 **Rate Limits:** No documented limit; polled politely (1 request/second)
 **Coverage:** SIX Swiss Exchange-listed companies; Zefix covers the full Swiss commercial register
 
 ```python
+from datetime import date
 from src.data.downloader.swiss_downloader import SwissDownloader
 
 downloader = SwissDownloader()  # Zefix calls need ZEFIX_USERNAME / ZEFIX_PASSWORD
 
-mgmt_txns = downloader.download_management_transactions()
-shareholders = downloader.download_significant_shareholders()
+mgmt_txns = downloader.download_management_transactions(as_of_date=date(2026, 9, 7))
+shareholders = downloader.download_significant_shareholders(as_of_date=date(2026, 9, 8))
 
 company = downloader.search_company("Kardex")
 record = downloader.get_company_by_uid("CHE-106.588.217")
