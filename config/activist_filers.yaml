@@ -12,12 +12,30 @@
 # fund" distinction either, which needs a domain reviewer, not a mechanical check. Flagged here as
 # a "Decisions needed" item in docs/Tasks.md.
 #
-# Several other well-known activist names (Starboard Value, Icahn Enterprises, Third Point, JANA
-# Partners) were checked live but resolved to MULTIPLE distinct CIKs per name (affiliated
-# entities — e.g. a fund's LP, its GP, and a co-investment vehicle each file separately) with no
-# mechanical way to pick the "primary" one from outside — left out rather than guess which
-# variant is the one that actually files 13Ds, pending a human pass through each name's full
-# EDGAR filing history.
+# Grown 2026-09-08, later same day: the 4 generalist-activist names originally left out for
+# resolving to multiple CIKs (Starboard Value, Icahn Enterprises, Third Point, JANA Partners) are
+# now disambiguated — live-checked EACH candidate CIK's own `data.sec.gov/submissions` filing
+# history (not just a name search) and picked the one(s) with a real, high-volume SC 13D filing
+# history as the actual activist entity, discarding name-search matches that turned out to be
+# unrelated companies these funds had filed 13Ds ABOUT (not their own filing identity) or
+# low-activity affiliates:
+#   - "Starboard Value & Opportunity Fund, LLC" (93 filings, 1 SC 13D) and "Cyxtera Technologies,
+#     Inc." (312 filings, 12 SC 13D — a portfolio company Starboard filed 13Ds about, not
+#     Starboard itself) were both discarded; "Starboard Value LP" (898 filings, 428 SC 13D) is the
+#     real operating entity.
+#   - "SiriusPoint Ltd" (874 filings, 8 SC 13D — a portfolio company, same pattern) discarded;
+#     "Third Point LLC" (828 filings, 254 SC 13D) is real.
+#   - "JANA Partners Management, LP" (80 filings, 4 SC 13D — looks like a newer/smaller successor
+#     entity) discarded in favor of "JANA PARTNERS LLC" (850 filings, 238 SC 13D).
+#   - BOTH Icahn entities kept — "Icahn Enterprises L.P." (1000 filings, 53 SC 13D) and "Icahn
+#     Enterprises Holdings L.P." (629 filings, 10 SC 13D) are both real, independently-verified
+#     Icahn-affiliated filing identities (unlike the discarded cases above, neither is an unrelated
+#     company), and Icahn 13Ds are routinely co-filed across the group's affiliated entities.
+#
+# Still genuinely incomplete — 16 of spec's "~30" target — and none of these 16 (old or new) are
+# vetted against the "campaign history vs. crossover fund" domain distinction spec asks for, only
+# against "does this CIK actually file SC 13Ds as this fund." That remains a "Decisions needed"
+# item for a domain reviewer, not resolved by this session's mechanical CIK-disambiguation pass.
 #
 # ingest/activist_positions.classify_filer_type reads this list as the 'activist' bucket (as
 # opposed to 'strategic_corporate', which is instead resolved mechanically via p22_company.role).
@@ -34,3 +52,8 @@ activist_filer_ciks:
   - "0001583977"  # Cormorant Asset Management — healthcare specialist
   - "0001425738"  # Redmile Group — healthcare specialist
   - "0001055951"  # OrbiMed Advisors — healthcare specialist
+  - "0001517137"  # Starboard Value LP — generalist activist, disambiguated 2026-09-08 (see header)
+  - "0000813762"  # Icahn Enterprises L.P. — generalist activist, disambiguated 2026-09-08
+  - "0001034563"  # Icahn Enterprises Holdings L.P. — affiliated Icahn entity, disambiguated 2026-09-08
+  - "0001040273"  # Third Point LLC — generalist activist, disambiguated 2026-09-08
+  - "0001159159"  # JANA Partners LLC — generalist activist, disambiguated 2026-09-08

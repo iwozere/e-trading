@@ -8,9 +8,22 @@
 # target.modality)` term (spec §4.4). Logged as an open decision in
 # docs/Tasks.md.
 #
+# UPDATE 2026-09-08 — added `unclassified`, NOT part of the original draft.
+# `ingest/modality_classifier.py`'s best-effort keyword classifier (built for
+# `ingest/asset_normalization.py`, mirroring `therapeutic_area_classifier.py`'s
+# exact precedent) needs a value to return when an intervention's name matches
+# none of its keyword rules. Unlike `therapeutic_area` (`NOT NULL`),
+# `p22_asset.modality` IS nullable — `NULL` would have worked mechanically —
+# but writing the explicit `unclassified` marker is more informative than a
+# bare `NULL`: it distinguishes "classification was attempted and failed" from
+# "never attempted," same reasoning as `therapeutic_area.yaml`'s identical
+# addition. Treat any asset row classified `unclassified` as needing manual
+# review before trusting it in a Block D computation that branches on modality.
+#
 # Per spec §3.5: "Changes to this file bump config_hash and require a re-score."
 
 values:
+  - unclassified             # classifier fallback, not a spec-given value — see note above
   - small_molecule
   - biologic_antibody         # mAb, bispecific, ADC payload-carrier
   - antibody_drug_conjugate

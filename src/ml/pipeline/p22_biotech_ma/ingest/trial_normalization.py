@@ -57,6 +57,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.ml.pipeline.p22_biotech_ma.ingest.asset_normalization import (
     extract_conditions,
     extract_single_intervention_name,
+    extract_single_intervention_type,
     resolve_or_create_asset,
 )
 from src.notification.logger import setup_logger
@@ -92,6 +93,7 @@ class TrialRecord:
     known_from: datetime
     single_intervention_name: Optional[str]  # set only for single-DRUG/BIOLOGICAL-intervention trials
     conditions: List[str]  # for asset therapeutic_area classification and indication text
+    single_intervention_type: Optional[str] = None  # CT.gov DRUG/BIOLOGICAL, for asset modality classification
 
 
 def _parse_ctgov_date(raw: Optional[str]) -> Optional[date]:
@@ -169,6 +171,7 @@ def extract_trial_record(study: Dict[str, Any], known_from: datetime) -> Optiona
         known_from=known_from,
         single_intervention_name=extract_single_intervention_name(study),
         conditions=extract_conditions(study),
+        single_intervention_type=extract_single_intervention_type(study),
     )
 
 
@@ -202,6 +205,7 @@ def write_trial_records(records: List[TrialRecord], repo: Any, *, company_id: Op
                 intervention_name=record.single_intervention_name,
                 conditions=record.conditions,
                 repo=repo,
+                intervention_type=record.single_intervention_type,
             )
         repo.upsert_trial(
             nct_id=record.nct_id,

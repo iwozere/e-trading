@@ -136,7 +136,8 @@ use in the code/config; this section exists so they're all in one place to walk 
    No vocab values needed adding/removing; the mapping decision itself lives in
    `p22_base_rates.yaml`'s comments. **`p22_modality.yaml` still needs domain review** — it has no
    spec-given values to start from at all, and the BIO study above is organized by disease area, not
-   modality, so it doesn't help here either. Genuinely still open.
+   modality, so it doesn't help here either. Genuinely still open — the vocab itself is unreviewed,
+   independent of the classifier now populating it (below).
 5. ~~**Financial-fact tag mapping is incomplete**~~ — **resolved 2026-08-30, later same day.** Not
    actually a business decision — it needed live verification, not domain judgment, and that's now
    done: `total_debt` (fallback chain across `LongTermDebtNoncurrent`/`LongTermDebt`/
@@ -201,12 +202,18 @@ use in the code/config; this section exists so they're all in one place to walk 
     `assumed_peak_sales_by_ta` as an explicit caller-supplied parameter rather than a guessed
     constant.
 12. **`config/activist_filers.yaml` needs a domain reviewer to grow it toward spec's "~30"
-    target and disambiguate multi-CIK names** — new, found 2026-09-08. Seeded with 11
-    individually live-verified single-CIK healthcare-specialist funds (see that file's header);
-    several other well-known generalist activists (Starboard Value, Icahn Enterprises, Third
-    Point, JANA Partners) each resolved to multiple distinct real CIKs (affiliated
-    LP/GP/co-investment entities) with no mechanical way to tell which one actually files the
-    firm's 13Ds — left out rather than guessed, same discipline as item 3's acquirer-roster CIKs.
+    target** — new, found 2026-09-08; **partially resolved later the same day.** Seeded with 11
+    individually live-verified single-CIK healthcare-specialist funds; the multi-CIK-name
+    disambiguation half of this item is now done — Starboard Value, Icahn Enterprises (both
+    entities), Third Point, and JANA Partners were resolved by checking EACH candidate CIK's own
+    real SC 13D filing-count history (not just a name search) and discarding the ones that turned
+    out to be unrelated portfolio companies these funds had filed 13Ds ABOUT, not their own filing
+    identity — see that file's header for the specific counts. 16 of ~30 now, mechanically
+    verified. **Still genuinely open, needs a domain reviewer, not resolved by this pass:** none
+    of the 16 (old or new) are vetted against spec's actual ask — "a healthcare-specialist
+    crossover fund... is not the same event as an activist with a campaign history" — only against
+    "does this CIK really file SC 13Ds as this fund," which is a different, purely mechanical
+    question from the domain judgment spec wants.
 13. **`lead_asset_poa`'s later-phase and orphan-status combination formula is underspecified** —
     new, found 2026-09-08 building `features/block_b.py`. `p22_base_rates.yaml`'s
     `by_therapeutic_area` figures are LOA-FROM-PHASE-1 (already conditional on being no further
@@ -478,6 +485,28 @@ use in the code/config; this section exists so they're all in one place to walk 
       `conditions` text, with an explicit `unclassified` fallback added to `p22_therapeutic_area.yaml`
       rather than a forced guess — disclosed as imperfect in its own docstring, not validated against
       real clinical taxonomy. New `P22Repo.upsert_asset`/`get_asset_by_company_and_name`, DB-tested.
+- [x] `ingest/modality_classifier.py`, 2026-09-08 — same role/discipline/caller as
+      `therapeutic_area_classifier.py` above, closing the other half of `resolve_or_create_asset`'s
+      "always `None`" gap: `modality` (nullable, unlike `therapeutic_area`) now gets a best-effort
+      keyword classification over the intervention's name, with the same disclosed-as-a-candidate,
+      `unclassified`-not-a-guess posture, and `unclassified` added to `p22_modality.yaml` for the
+      same informativeness reason (distinguishing "tried, no match" from "never attempted", even
+      though the column itself doesn't force it). New `extract_single_intervention_type` +
+      `TrialRecord.single_intervention_type` (defaulted, backward compatible) thread CT.gov's
+      `DRUG`/`BIOLOGICAL` type through to the classifier alongside the name (currently unused by
+      `classify_modality`'s own logic, kept for signature symmetry and future use — see that
+      module's docstring for why `type` alone is never treated as a guessed default).
+      **Two real bugs caught before shipping, both from the same root cause**: the initial keyword
+      list used literal hyphenated INN suffixes (`"-mab"`, `"-cel"`, `"-parvovec"`) that would
+      never match a real drug name — WHO's naming convention attaches these stems directly onto
+      the generic name with no hyphen (e.g. "pembrolizumab", not "pembrolizu-mab"). Caught by the
+      test suite itself failing against real drug-name fixtures, not just written correctly by
+      inspection; fixed by dropping the hyphens and live-checking each corrected keyword against a
+      real approved drug name in that category. A third, non-bug finding from the same pass: an
+      mRNA vaccine's name (e.g. "mRNA-1273") matches BOTH `vaccine` and `rna_therapeutic` keywords
+      — resolved by checking `vaccine` first (its use is the more useful categorical identity than
+      its delivery mechanism here), same order-dependent-ambiguity disclosure as
+      `therapeutic_area_classifier.py`'s "Multiple Sclerosis" example.
 - [x] FMP historical bulk-backfill infrastructure, 2026-08-31 — `ingest/fmp_client.py`,
       `ingest/fmp_universe.py`, `ingest/fmp_backfill.py`, `cli/fmp_backfill_cli.py`, new
       `raw_zone.has_any_landed()`, new `P22Repo.list_companies_full()`. Built ahead of the vendor
@@ -879,10 +908,12 @@ use in the code/config; this section exists so they're all in one place to walk 
       (`test_domicile_normalization.py`), Block E (`test_block_e.py`), `land_ratios_and_estimates`
       incl. the limit-doesn't-count-skips and partial-success-not-a-failure cases
       (`test_fmp_backfill.py`), deal-candidate detection incl. the both-sides-are-universe-members
-      and already-queued-dedup cases (`test_deal_candidates.py`) — 413 tests total in the non-DB
-      suite as of 2026-09-08 (plus 4 more in `src/data/downloader/tests/` for the new
-      `EdgarDownloader.fetch_filing_document` public wrapper and the `SCHEDULE 13D`
-      form-type-prefix bug fix, outside this module's own count).
+      and already-queued-dedup cases (`test_deal_candidates.py`), modality classification incl.
+      every corrected INN-suffix case and the mRNA-vaccine ordering ambiguity
+      (`test_modality_classifier.py`) — 431 tests total in the non-DB suite as of 2026-09-08 (plus
+      4 more in `src/data/downloader/tests/` for the new `EdgarDownloader.fetch_filing_document`
+      public wrapper and the `SCHEDULE 13D` form-type-prefix bug fix, outside this module's own
+      count).
 - [ ] Real-Postgres integration tests for `P22Repo.upsert_financial_fact_bitemporal` restatement
       behavior, the price-archive round trip (`upsert_price_daily` immutability,
       `get_adjusted_close`'s lookahead guard through the repo layer), `get_latest_raw_close_as_of`

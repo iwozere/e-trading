@@ -10,6 +10,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.ml.pipeline.p22_biotech_ma.ingest.asset_normalization import (
     extract_conditions,
     extract_single_intervention_name,
+    extract_single_intervention_type,
     resolve_or_create_asset,
 )
 
@@ -59,6 +60,18 @@ def test_extract_single_intervention_name_biological_type_counts():
     assert extract_single_intervention_name(study) == "Some mAb"
 
 
+def test_extract_single_intervention_type_single_drug():
+    assert extract_single_intervention_type(_SINGLE_INTERVENTION_STUDY) == "DRUG"
+
+
+def test_extract_single_intervention_type_none_when_multiple():
+    assert extract_single_intervention_type(_MULTI_INTERVENTION_STUDY) is None
+
+
+def test_extract_single_intervention_type_none_when_zero_drug_biological():
+    assert extract_single_intervention_type(_NO_DRUG_INTERVENTION_STUDY) is None
+
+
 def test_extract_conditions_returns_list():
     assert extract_conditions(_SINGLE_INTERVENTION_STUDY) == ["Cystic Fibrosis"]
 
@@ -83,7 +96,7 @@ def test_resolve_or_create_asset_creates_new_when_no_existing():
     assert kwargs["name"] == "VX-522 mRNA therapy"
     assert kwargs["therapeutic_area"] == "respiratory"  # cystic fibrosis -> respiratory
     assert kwargs["indication"] == "Cystic Fibrosis"
-    assert kwargs["modality"] is None
+    assert kwargs["modality"] == "rna_therapeutic"  # "mrna" keyword match, added 2026-09-08
     assert kwargs["target_protein"] is None
     assert kwargs["is_lead"] is None
 
@@ -109,4 +122,19 @@ def test_resolve_or_create_asset_unclassified_conditions_still_writes():
 
     kwargs = repo.upsert_asset.call_args.kwargs
     assert kwargs["therapeutic_area"] == "unclassified"
+    assert kwargs["modality"] == "unclassified"
     assert kwargs["indication"] is None
+
+
+def test_resolve_or_create_asset_classifies_modality_from_name():
+    repo = MagicMock()
+    repo.get_asset_by_company_and_name.return_value = None
+    repo.upsert_asset.return_value = 1
+
+    resolve_or_create_asset(
+        company_id=7, intervention_name="Trastuzumab deruxtecan", conditions=[], repo=repo,
+        intervention_type="BIOLOGICAL",
+    )
+
+    kwargs = repo.upsert_asset.call_args.kwargs
+    assert kwargs["modality"] == "antibody_drug_conjugate"  # "deruxtecan" keyword, checked before -mab

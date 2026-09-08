@@ -188,5 +188,6 @@ def test_write_trial_records_links_asset_for_single_intervention_trial():
 
     repo.upsert_asset.assert_called_once()
     assert repo.upsert_asset.call_args.kwargs["name"] == "VX-522 mRNA therapy"
+    assert repo.upsert_asset.call_args.kwargs["modality"] == "rna_therapeutic"  # threaded through, 2026-09-08
     trial_kwargs = repo.upsert_trial.call_args.kwargs
     assert trial_kwargs["asset_id"] == 123
