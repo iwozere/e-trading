@@ -683,16 +683,49 @@ use in the code/config; this section exists so they're all in one place to walk 
       (added this pass, for `features/block_g.py` to read once rows exist) — only the ingest and the
       M4 ranking it depends on are missing.
 
+### 🔄 IN PROGRESS — M6 deal-label detection (spec §2.5)
+- [x] `ingest/deal_candidates.py` + `jobs/run_deal_candidates_ingest.py`, 2026-09-08 — detection
+      ONLY, exactly matching spec's own "must be manually reviewed; automated extraction alone
+      will be too noisy for labels." Live-verified real EFTS form strings 2026-09-08: `"SC 14D9"`
+      and `"S-4"` did NOT need the same correction as Schedule 13D/G's (this session's earlier
+      `_13DG_FORM_TYPE_ALIASES` bug fix) — they're already right. Also discovered querying the
+      base form alone already returns its amendments too (`"SC 14D9"` → both `SC 14D9` and
+      `SC 14D9/A`; `"S-4"` → both `S-4` and `S-4/A`) — different from `efts_filings_search`'s
+      documented comma-list exact-match quirk, so only the 3 base forms are queried, not 6.
+      CIK-scoped against the whole P22 universe via `efts_filings_search` (same efficient pattern
+      as `activist_positions.py`), not a second SIC-code sweep — the universe is already
+      SIC-filtered at DERA-ingest time. Writes ONE `p22_review_item` (`deal_candidate`) per
+      (company, filing) match, deduped against already-pending items across daily re-runs (same
+      `already_queued` pattern as `alias_matching.py`'s dedup fix) — **never writes `p22_deal`
+      itself**. Deliberately doesn't guess which side of a transaction the matched company is on
+      (target vs. acquirer) — a hit's `ciks` may include a P22 company as either, and picking one
+      would be exactly the judgment call spec routes to hand-verification.
+      **Registered but not yet run against production** — `p22_review_item` will start
+      accumulating `deal_candidate` rows the next time this job fires; per spec, "expect 400-700
+      events" total across all of 2010-present, so the review queue's `queue_depth_report` should
+      make the true scale visible quickly once real data lands.
+- [ ] **Actually hand-verifying candidates into `p22_deal` rows is NOT built** — no CLI/confirm
+      path exists yet for turning a reviewed `deal_candidate` item into a real `p22_deal` row.
+      Deliberately not built this pass: unlike `process_events.py`/`activist_positions.py`'s
+      binary confirm, a `p22_deal` row needs MANY hand-entered fields per spec §2.5
+      (`announcement_date`, `acquirer_id`, `consideration_per_share`, `has_cvr`, `premium_1d`/
+      `premium_30d`, and especially `deal_type` with its mandatory reverse-merger/shell/liquidation/
+      asset-sale exclusions) that a generic confirm-dispatch can't safely populate from the
+      candidate's payload alone (which only has filing metadata, not parsed deal terms) — building
+      one that tried would risk exactly the "automated extraction... too noisy" spec warns against.
+      A future CLI (`cli/deal_entry_cli.py`?) for a human to read the actual filing and hand-enter
+      these fields is real, separate work, not attempted here.
+
 ### 🚀 PLANNED ENHANCEMENTS (by milestone, spec §9)
 - [ ] **M4 — Rule-based scoring:** `fit()` pairwise gates (§4.4), Phase 1 composite (§5.1).
 - [ ] **M5 — Block G remaining work:** `stated_intent` classification (needs `review_queue.py`
       support for multi-valued confirm, see above), incumbent-partner structures (blocked on M4's
       composite ranking).
-- [ ] **M6 — Labels + backtest:** add SC 14D9 / DEFM14A / S-4 support to `EdgarDownloader` (reuse
-      `efts_filings_search`, EFTS indexes these directly); hand-verified deal-label dataset with
-      `deal_type` classification and reverse-merger exclusion (§2.5); walk-forward harness against
-      all three baselines (§0.3); `cvr_policy.yaml` decision (§10, "On CVR valuation" — recommended
-      v1 convention: value CVRs at zero).
+- [ ] **M6 — Labels + backtest remaining work:** hand-verification CLI for `deal_candidate` items
+      into real `p22_deal` rows (see IN PROGRESS above) with `deal_type` classification and
+      reverse-merger exclusion (§2.5); walk-forward harness against all three baselines (§0.3);
+      `cvr_policy.yaml` decision (§10, "On CVR valuation" — recommended v1 convention: value CVRs
+      at zero — already made, see that config file, just not wired to any code yet).
 - [ ] **M7 — Return model:** `E[return | deal]`; `expected_value` becomes default ranking (§5.4).
 - [ ] **M8 — Calibrated model:** only if M6 shows lift over the naive-informed baseline.
 - [ ] **M9 — Partnership structures:** manual EX-10 enrichment, scoped to top 200 by composite.
@@ -845,9 +878,11 @@ use in the code/config; this section exists so they're all in one place to walk 
       domicile extraction incl. the real isForeignLocation-vs-stateOrCountry discrepancy case
       (`test_domicile_normalization.py`), Block E (`test_block_e.py`), `land_ratios_and_estimates`
       incl. the limit-doesn't-count-skips and partial-success-not-a-failure cases
-      (`test_fmp_backfill.py`) — 407 tests total in the non-DB suite as of 2026-09-08 (plus 4 more
-      in `src/data/downloader/tests/` for the new `EdgarDownloader.fetch_filing_document` public
-      wrapper and the `SCHEDULE 13D` form-type-prefix bug fix, outside this module's own count).
+      (`test_fmp_backfill.py`), deal-candidate detection incl. the both-sides-are-universe-members
+      and already-queued-dedup cases (`test_deal_candidates.py`) — 413 tests total in the non-DB
+      suite as of 2026-09-08 (plus 4 more in `src/data/downloader/tests/` for the new
+      `EdgarDownloader.fetch_filing_document` public wrapper and the `SCHEDULE 13D`
+      form-type-prefix bug fix, outside this module's own count).
 - [ ] Real-Postgres integration tests for `P22Repo.upsert_financial_fact_bitemporal` restatement
       behavior, the price-archive round trip (`upsert_price_daily` immutability,
       `get_adjusted_close`'s lookahead guard through the repo layer), `get_latest_raw_close_as_of`

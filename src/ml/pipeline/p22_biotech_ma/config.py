@@ -167,6 +167,14 @@ YFINANCE_LOOKBACK_DAYS: int = 7  # narrow trailing window only — see ingest/yf
 YFINANCE_REQUEST_DELAY_SECONDS: float = 0.3  # no official yfinance rate limit; considerate pacing
 
 # ---------------------------------------------------------------------------
+# Deal-label candidate detection (spec §2.5, M6), 2026-09-08
+# ---------------------------------------------------------------------------
+# Trailing window a daily scan re-checks, so a missed day self-heals on the next run (same
+# reasoning as other EFTS-based scans in this pipeline) — SC 14D9/DEFM14A/S-4 filings are rare
+# enough (spec: "expect 400-700 events" total, 2010-present) that re-scanning a week costs nothing.
+DEAL_CANDIDATE_LOOKBACK_DAYS: int = 7
+
+# ---------------------------------------------------------------------------
 # Logging / results directory
 # ---------------------------------------------------------------------------
 RESULTS_DIR = PROJECT_ROOT / "results" / "p22_biotech_ma"

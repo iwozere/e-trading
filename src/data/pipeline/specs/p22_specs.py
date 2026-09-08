@@ -152,4 +152,13 @@ SPECS: List[PluginSpec] = [
         description="Block G (spec §4.7): Schedule 13D/13D-A/13G/13G-A ingest via EFTS, scoped to the P22 universe.",
         depends_on=["P22 Entity Resolution"],
     ),
+    PluginSpec(
+        name="P22 Deal Candidates Ingest",
+        category="p22",
+        cron="45 6 * * 1-5",  # weekdays, after Activist Positions Ingest
+        script_path=f"{_SCRIPT_BASE}/run_deal_candidates_ingest.py",
+        timeout_seconds=1800,
+        description="M6 (spec §2.5): SC 14D9/DEFM14A/S-4 detection via EFTS -> review queue only, never writes p22_deal.",
+        depends_on=["P22 Entity Resolution"],
+    ),
 ]
