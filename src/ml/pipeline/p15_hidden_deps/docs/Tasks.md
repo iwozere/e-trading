@@ -2,8 +2,8 @@
 
 ## ✅ Completed
 
-- [x] **Daily bundle runner** (`p15_daily.py`) — Mon–Fri 13:00 UTC, 10 jobs
-- [x] **Weekly bundle runner** (`p15_weekly.py`) — Friday 13:30 UTC, 6 jobs
+- [x] **Daily bundle runner** (`p15_daily.py`) — Tue–Sat 13:00 UTC, 10 jobs
+- [x] **Weekly bundle runner** (`p15_weekly.py`) — Saturday 14:00 UTC, 6 jobs
 - [x] **Self-healing gap detection** — each daily job fills up to 60 days of gaps per run;
       cutoff 2010-01-01, gaps healed most-recent-first
 - [x] **Pipeline file log** — `results/p15_hidden_deps/pipeline.log` (RotatingFileHandler)

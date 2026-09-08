@@ -51,6 +51,7 @@ import pandas as pd
 import requests
 
 from src.data.downloader.base_data_downloader import BaseDataDownloader
+from src.data.utils.atomic_write import atomic_to_csv, atomic_write_bytes
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -334,11 +335,14 @@ class GdeltDownloader(BaseDataDownloader):
             _logger.warning("GKG aggregation produced no rows for %s", date.date())
             return None
 
-        self._gkg_dir.mkdir(parents=True, exist_ok=True)
-        aggregated.set_index("date").to_csv(day_file, compression="gzip")
+        # Atomic (temp + rename) writes: _range_download's skip-set is built purely
+        # from day_file's existence, so a writer killed mid-to_csv (e.g. the
+        # scheduler's hard process.kill() on a timed-out job) must never leave a
+        # truncated day_file behind — that would be skipped as "cached" forever.
+        atomic_to_csv(aggregated.set_index("date"), day_file, compression="gzip")
 
         orgs_slice = _extract_orgs_slice(raw, date)
-        orgs_slice.to_csv(orgs_file, sep="\t", index=False, compression="gzip")
+        atomic_to_csv(orgs_slice, orgs_file, sep="\t", index=False, compression="gzip")
 
         _logger.info(
             "Saved GKG %s: %d theme-rows → %s; %d org-articles → %s",
@@ -453,8 +457,9 @@ class GdeltDownloader(BaseDataDownloader):
             _logger.warning("Events aggregation produced no rows for %s", date.date())
             return None
 
-        self._events_dir.mkdir(parents=True, exist_ok=True)
-        aggregated.set_index("date").to_csv(day_file, compression="gzip")
+        # Atomic write — see download_gkg_day for why (existence-only skip logic
+        # in _range_download must never see a truncated file as "cached").
+        atomic_to_csv(aggregated.set_index("date"), day_file, compression="gzip")
         _logger.info("Saved Events %s: %d event-code rows → %s", date.date(), len(aggregated), day_file)
         return day_file
 
@@ -993,9 +998,10 @@ class Gdelt1Downloader(BaseDataDownloader):
         with zipfile.ZipFile(io.BytesIO(content)) as z:
             csv_bytes = z.read(z.namelist()[0])
 
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        with gzip.open(dest, "wb") as f:
-            f.write(csv_bytes)
+        # Atomic write — dest.exists() above is this class's own watermark check,
+        # so a writer killed mid-write must never leave a truncated .gz behind
+        # (it would then be treated as permanently cached).
+        atomic_write_bytes(gzip.compress(csv_bytes), dest)
         _logger.info("Saved GKG 1.0 %s (%d bytes) → %s", date.date(), len(csv_bytes), dest)
         return dest
 

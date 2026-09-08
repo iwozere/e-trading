@@ -36,6 +36,7 @@ import pandas as pd
 import requests
 
 from src.data.downloader.base_data_downloader import BaseDataDownloader
+from src.data.utils.atomic_write import atomic_to_csv
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -219,8 +220,9 @@ class CboeDownloader(BaseDataDownloader):
         combined = combined[available_output].sort_index()
         combined.index.name = "date"
 
-        self._cboe_dir.mkdir(parents=True, exist_ok=True)
-        combined.to_csv(self._cboe_file, compression="gzip")
+        # Atomic write so a reader never observes a partially-written file if this
+        # process is killed mid-write (e.g. the scheduler's timeout kill).
+        atomic_to_csv(combined, self._cboe_file, compression="gzip")
 
         _logger.info(
             "Saved CBOE putcall: %d rows × %d cols, %s → %s → %s",

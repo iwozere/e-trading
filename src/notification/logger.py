@@ -107,6 +107,25 @@ class SensitiveDataFilter(logging.Filter):
                 record.args = None
         except Exception:
             pass
+        # Mask exception tracebacks too. logging.Formatter appends exc_info's
+        # formatted text (which embeds str(exception) — e.g. a requests.HTTPError
+        # whose message is "... for url: <url-with-api_key-in-query-string>")
+        # *after* filters have already run and *without* re-checking them, so
+        # the masking above never touches it. Pre-render and mask it here into
+        # record.exc_text — Formatter.format() only calls formatException() when
+        # exc_text is still falsy, so a pre-populated value short-circuits it.
+        if record.exc_info:
+            try:
+                exc_text = logging.Formatter().formatException(record.exc_info)
+                record.exc_text = self._mask_sensitive_data(exc_text)
+            except Exception:
+                pass
+        stack_info = getattr(record, "stack_info", None)
+        if isinstance(stack_info, str):
+            try:
+                record.stack_info = self._mask_sensitive_data(stack_info)
+            except Exception:
+                pass
         return True
 
     def _mask_sensitive_data(self, text: str) -> str:
@@ -378,6 +397,7 @@ def _create_file_handlers(pid_suffix: str = ""):
         return base_path
 
     _level = getattr(logging, _LOG_LEVEL_NAME, logging.INFO)
+    _mask_filter = SensitiveDataFilter()
 
     # Create file handler for main app log
     file_handler = RotatingFileHandler(
@@ -389,6 +409,7 @@ def _create_file_handlers(pid_suffix: str = ""):
             "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
         )
     )
+    file_handler.addFilter(_mask_filter)
     handlers.append(file_handler)
 
     # Create trade log handler
@@ -401,6 +422,7 @@ def _create_file_handlers(pid_suffix: str = ""):
             "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
         )
     )
+    trade_handler.addFilter(_mask_filter)
     handlers.append(trade_handler)
 
     # Create order log handler
@@ -413,6 +435,7 @@ def _create_file_handlers(pid_suffix: str = ""):
             "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
         )
     )
+    order_handler.addFilter(_mask_filter)
     handlers.append(order_handler)
 
     # Create error log handler
@@ -425,6 +448,7 @@ def _create_file_handlers(pid_suffix: str = ""):
             "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
         )
     )
+    error_handler.addFilter(_mask_filter)
     handlers.append(error_handler)
 
     return handlers

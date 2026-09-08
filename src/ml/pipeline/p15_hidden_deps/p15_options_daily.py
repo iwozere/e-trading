@@ -49,6 +49,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from config.donotshare.donotshare import DATA_CACHE_DIR as _cache_root
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from src.data.utils.atomic_write import atomic_to_csv
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -185,7 +186,7 @@ def _options_append_summary(
     else:
         combined = new_row
 
-    combined.to_csv(path, compression="gzip")
+    atomic_to_csv(combined, path, compression="gzip")
 
 
 # ---------------------------------------------------------------------------
@@ -228,8 +229,7 @@ def _process_ticker(
             _logger.debug("options: %s — no chain data", ticker)
             return {"ticker": ticker, "status": "empty"}
 
-        chain_path.parent.mkdir(parents=True, exist_ok=True)
-        chain_df.to_csv(chain_path, index=False, compression="gzip")
+        atomic_to_csv(chain_df, chain_path, index=False, compression="gzip")
 
         summary = dl.compute_options_summary(chain_df)
         summary["date"] = pd.Timestamp(date_str)

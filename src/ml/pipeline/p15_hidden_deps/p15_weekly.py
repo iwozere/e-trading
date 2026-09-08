@@ -5,7 +5,12 @@ Runs all heavy / full-rebuild downloaders for the P15 signal research pipeline.
 Replaces individual per-downloader Friday DB job entries with a single run.
 
 Scheduled via public.job_schedules:
-    cron: 30 13 * * 5   (Friday 13:30 UTC, 30 min after the daily bundle)
+    cron: 0 14 * * 6   (Saturday 14:00 UTC, 1h after the daily bundle's Saturday
+                        run — see specs/p15_specs.py for the live-DB source of
+                        truth. NOTE: this previously read "30 13 * * 5" (Friday
+                        13:30 UTC) here — that was stale docs, not the deployed
+                        schedule; a Friday run would fire during market hours,
+                        before Friday's own close is complete.)
 
 Jobs executed (in order, failures are isolated):
     1. aaii              — AAII investor sentiment full download (XLS, ~1 MB)
@@ -24,7 +29,7 @@ import time
 from datetime import UTC, datetime
 from io import StringIO
 from pathlib import Path
-from typing import Any, Callable, Dict, List, cast
+from typing import Any, Callable, Dict, List
 
 import pandas as pd
 import requests

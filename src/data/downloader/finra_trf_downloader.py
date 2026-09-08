@@ -14,6 +14,7 @@ Can optionally merge with yfinance volume data for validation.
 """
 
 import sys
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import List
@@ -27,6 +28,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from config.donotshare.donotshare import DATA_CACHE_DIR, FINRA_API_CLIENT, FINRA_API_SECRET
+from src.data.utils.atomic_write import atomic_to_csv
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -42,6 +44,19 @@ class FinraTRFDownloader:
     FINRA_AUTH_URL = "https://ews.fip.finra.org/fip/rest/ews/oauth2/access_token?grant_type=client_credentials"
     FINRA_GROUP = "otcmarket"
     FINRA_DATASET = "regShoDaily"  # Using daily short sale volume dataset
+
+    # 2026-09-08 incident (monitoring.txt): three independent processes (the
+    # scheduled "FINRA TRF Daily Download" job, plus EMPS3's own two internal
+    # calls a few seconds apart) all requested a fresh token for the same
+    # FINRA_API_CLIENT within ~10s of each other and *all* got 400 Bad Request
+    # from this endpoint; an isolated request 2+ hours later with the same
+    # credentials succeeded immediately. That points to FINRA's identity
+    # platform rejecting near-simultaneous client_credentials requests for the
+    # same client_id rather than a bad/expired credential — unlike a "this
+    # request is malformed" 400, so (unlike most 4xx elsewhere in this
+    # codebase) it's worth a few spaced-out retries here.
+    _TOKEN_REQUEST_MAX_ATTEMPTS = 3
+    _TOKEN_REQUEST_BACKOFF_SECONDS = 5.0
 
     @property
     def finra_url(self) -> str:
@@ -122,25 +137,42 @@ class FinraTRFDownloader:
 
         _logger.info("Requesting new access token from FINRA")
 
-        try:
-            # Use Basic Auth with Client ID and Secret
-            response = requests.post(self.FINRA_AUTH_URL, auth=(FINRA_API_CLIENT or "", FINRA_API_SECRET or ""), timeout=30)
-            response.raise_for_status()
+        last_exc: requests.RequestException | None = None
+        for attempt in range(1, self._TOKEN_REQUEST_MAX_ATTEMPTS + 1):
+            try:
+                # Use Basic Auth with Client ID and Secret
+                response = requests.post(
+                    self.FINRA_AUTH_URL, auth=(FINRA_API_CLIENT or "", FINRA_API_SECRET or ""), timeout=30
+                )
+                response.raise_for_status()
 
-            token_data = response.json()
-            access_token: str = token_data["access_token"]
-            self._access_token = access_token
+                token_data = response.json()
+                access_token: str = token_data["access_token"]
+                self._access_token = access_token
 
-            # Cache token for 30 minutes (or use expires_in from response)
-            expires_in = int(token_data.get("expires_in", 1800))  # Default 30 minutes
-            self._token_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in - 60)
+                # Cache token for 30 minutes (or use expires_in from response)
+                expires_in = int(token_data.get("expires_in", 1800))  # Default 30 minutes
+                self._token_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in - 60)
 
-            _logger.info("Successfully obtained access token (expires in %s seconds)", expires_in)
-            return access_token
+                _logger.info("Successfully obtained access token (expires in %s seconds)", expires_in)
+                return access_token
 
-        except requests.RequestException as e:
-            _logger.error("Failed to obtain access token: %s", str(e))
-            raise
+            except requests.RequestException as e:
+                last_exc = e
+                if attempt < self._TOKEN_REQUEST_MAX_ATTEMPTS:
+                    wait = self._TOKEN_REQUEST_BACKOFF_SECONDS * attempt
+                    _logger.warning(
+                        "FINRA token request attempt %d/%d failed (%s) — retrying in %.0fs",
+                        attempt,
+                        self._TOKEN_REQUEST_MAX_ATTEMPTS,
+                        e,
+                        wait,
+                    )
+                    time.sleep(wait)
+
+        _logger.error("Failed to obtain access token after %d attempts: %s", self._TOKEN_REQUEST_MAX_ATTEMPTS, last_exc)
+        assert last_exc is not None
+        raise last_exc
 
     def download_trf_data(self) -> pd.DataFrame:
         """
@@ -412,8 +444,10 @@ class FinraTRFDownloader:
             save_df["date"] = pd.to_datetime(save_df["date"])
             date_str = self.date.strftime("%Y-%m-%d")
             out_path = self._cache_dir / f"{date_str}.csv.gz"
-            self._cache_dir.mkdir(parents=True, exist_ok=True)
-            save_df.set_index("date").to_csv(out_path, compression="gzip")
+            # Atomic write — _dated_csv_watermark (p15_daily.py) treats this file's
+            # mere existence as "cached", so a truncated write (e.g. killed by the
+            # scheduler's timeout) must never be left behind as a permanent gap.
+            atomic_to_csv(save_df.set_index("date"), out_path, compression="gzip")
             _logger.info("Saved TRF data to %s", out_path)
 
             return result_df

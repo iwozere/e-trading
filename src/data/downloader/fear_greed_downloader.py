@@ -41,6 +41,7 @@ import pandas as pd
 import requests
 
 from src.data.downloader.base_data_downloader import BaseDataDownloader
+from src.data.utils.atomic_write import atomic_to_csv
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -263,8 +264,9 @@ class FearGreedDownloader(BaseDataDownloader):
                 .set_index("date")
             )
 
-            self._fg_dir.mkdir(parents=True, exist_ok=True)
-            df.to_csv(self._fg_file, compression="gzip")
+            # Atomic write so a reader (or the daily incremental job re-reading
+            # this same file to append) never observes a partially-written file.
+            atomic_to_csv(df, self._fg_file, compression="gzip")
 
             _logger.info(
                 "Saved Fear & Greed (%s): %d rows, %s → %s",

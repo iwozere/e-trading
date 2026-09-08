@@ -7,7 +7,13 @@ backfills up to _GAP_CAP_DAYS calendar days per run, so transient failures
 repair themselves automatically over the following nights.
 
 Scheduled via public.job_schedules:
-    cron: 0 13 * * 1-5   (Mon–Fri 13:00 UTC — all previous-day data is complete)
+    cron: 0 13 * * 2-6   (Tue–Sat 13:00 UTC — one weekday after each Mon–Fri
+                          session, since the job always fetches "yesterday" and
+                          nothing runs on Sunday to pick up Saturday's no-op;
+                          see specs/p15_specs.py for the live-DB source of truth.
+                          NOTE: this previously read "1-5" (Mon–Fri) here — that
+                          was stale docs, not the deployed schedule; a Mon–Fri
+                          cron would never fetch Friday's data at all.)
 
 Jobs executed (in order, failures are isolated):
     1. yfinance_prices    — Full OHLCV for all 57 P15 tickers via DataManager;
@@ -75,6 +81,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from config.donotshare.donotshare import DATA_CACHE_DIR as _cache_root
+from src.data.utils.atomic_write import atomic_to_csv
 from src.data.downloader.cboe_downloader import CboeDownloader
 from src.data.downloader.edgar_downloader import EdgarDownloader, EftsUnavailableError
 from src.data.downloader.fear_greed_downloader import FearGreedDownloader
@@ -237,22 +244,23 @@ def _gdelt_watermark(gdelt_dir: Path, suffix: str) -> _Date | None:
     return max(dates) if dates else None
 
 
-def _trf_watermark(trf_dir: Path) -> _Date | None:
+def _dated_csv_watermark(cache_dir: Path) -> _Date | None:
     """
-    Return the most recent trading date cached in trf_dir.
+    Return the most recent date cached in a per-day YYYY-MM-DD.csv.gz directory.
 
-    Scans for YYYY-MM-DD.csv.gz filenames and returns the maximum date found.
+    Shared by every gap-fill job that caches one file per calendar day under this
+    naming scheme (FINRA TRF, EDGAR Form 4, EDGAR SC 13D/G).
 
     Args:
-        trf_dir: Directory containing per-day YYYY-MM-DD.csv.gz files.
+        cache_dir: Directory containing per-day YYYY-MM-DD.csv.gz files.
 
     Returns:
         Most recent date present, or None if the directory is absent or empty.
     """
-    if not trf_dir.exists():
+    if not cache_dir.exists():
         return None
     dates = []
-    for f in trf_dir.glob("????-??-??.csv.gz"):
+    for f in cache_dir.glob("????-??-??.csv.gz"):
         try:
             dates.append(_Date.fromisoformat(f.name.removesuffix(".csv.gz")))
         except ValueError:
@@ -714,7 +722,7 @@ def _options_append_summary(putcall_dir: Path, ticker: str, row: Dict[str, Any])
     else:
         combined = new_row
 
-    combined.to_csv(path, compression="gzip")
+    atomic_to_csv(combined, path, compression="gzip")
 
 
 def _job_options_putcall(yesterday: _Date) -> Dict[str, Any] | None:
@@ -760,8 +768,7 @@ def _job_options_putcall(yesterday: _Date) -> Dict[str, Any] | None:
             time.sleep(0.3)
             continue
 
-        chain_path.parent.mkdir(parents=True, exist_ok=True)
-        chain_df.to_csv(chain_path, index=False, compression="gzip")
+        atomic_to_csv(chain_df, chain_path, index=False, compression="gzip")
 
         summary = dl.compute_options_summary(chain_df)
         summary["date"] = pd.Timestamp(yesterday)
@@ -931,25 +938,35 @@ def _job_edgar_form4(yesterday: _Date) -> Dict[str, Any] | None:
         yesterday: Most recent date to fill up to (inclusive).
 
     Returns:
-        Dict with rows (total rows) and days_downloaded.
+        Dict with rows (total rows), days_downloaded, and days_failed. A day whose
+        download raises is logged and skipped rather than aborting the whole
+        window, so one transient failure can't permanently stall the watermark on
+        that same date (see edgar_8k_index's docstring for why this matters).
     """
     edgar = EdgarDownloader()
-    watermark = _trf_watermark(edgar._form4_dir)
+    watermark = _dated_csv_watermark(edgar._form4_dir)
     start, end = _gap_window(watermark, _EDGAR_FORM4_START, yesterday)
     _logger.info("edgar_form4: %s → %s (watermark=%s)", start, end, watermark)
 
     total_rows = 0
     days_downloaded = 0
+    days_failed = 0
     current = start
     while current <= end:
         if current.weekday() < 5:
-            df = edgar.download_form4_filings(as_of_date=current)
-            if df is not None and not df.empty:
-                total_rows += len(df)
+            try:
+                df = edgar.download_form4_filings(as_of_date=current)
+                if df is not None and not df.empty:
+                    total_rows += len(df)
                 days_downloaded += 1
+            except Exception:
+                days_failed += 1
+                _logger.warning(
+                    "edgar_form4: failed for %s — skipping; will retry on the next run", current, exc_info=True
+                )
         current += timedelta(days=1)
 
-    return {"rows": total_rows, "days_downloaded": days_downloaded}
+    return {"rows": total_rows, "days_downloaded": days_downloaded, "days_failed": days_failed}
 
 
 def _job_edgar_13dg(yesterday: _Date) -> Dict[str, Any] | None:
@@ -963,25 +980,35 @@ def _job_edgar_13dg(yesterday: _Date) -> Dict[str, Any] | None:
         yesterday: Most recent date to fill up to (inclusive).
 
     Returns:
-        Dict with rows (total rows) and days_downloaded.
+        Dict with rows (total rows), days_downloaded, and days_failed. A day whose
+        download raises is logged and skipped rather than aborting the whole
+        window, so one transient failure can't permanently stall the watermark on
+        that same date (see edgar_8k_index's docstring for why this matters).
     """
     edgar = EdgarDownloader()
-    watermark = _trf_watermark(edgar._13dg_dir)
+    watermark = _dated_csv_watermark(edgar._13dg_dir)
     start, end = _gap_window(watermark, _EDGAR_13DG_START, yesterday)
     _logger.info("edgar_13dg: %s → %s (watermark=%s)", start, end, watermark)
 
     total_rows = 0
     days_downloaded = 0
+    days_failed = 0
     current = start
     while current <= end:
         if current.weekday() < 5:
-            df = edgar.download_13dg_filings(as_of_date=current)
-            if df is not None and not df.empty:
-                total_rows += len(df)
+            try:
+                df = edgar.download_13dg_filings(as_of_date=current)
+                if df is not None and not df.empty:
+                    total_rows += len(df)
                 days_downloaded += 1
+            except Exception:
+                days_failed += 1
+                _logger.warning(
+                    "edgar_13dg: failed for %s — skipping; will retry on the next run", current, exc_info=True
+                )
         current += timedelta(days=1)
 
-    return {"rows": total_rows, "days_downloaded": days_downloaded}
+    return {"rows": total_rows, "days_downloaded": days_downloaded, "days_failed": days_failed}
 
 
 def _job_p18_13f_index_seed(today: _Date) -> Dict[str, Any] | None:
@@ -1087,27 +1114,38 @@ def _job_finra_trf(yesterday: _Date) -> Dict[str, Any] | None:
         yesterday: UTC date to fill up to (inclusive).
 
     Returns:
-        Dict with rows (total rows across all days) and days_downloaded.
+        Dict with rows (total rows across all days), days_downloaded, and
+        days_failed. A day whose download raises (FinraTRFDownloader.run()
+        re-raises on error) is logged and skipped rather than aborting the whole
+        window, so one transient failure can't permanently stall the watermark on
+        that same date (see edgar_8k_index's docstring for why this matters).
     """
 
     trf_cache_dir = Path(_cache_root) / "trf"
-    watermark = _trf_watermark(trf_cache_dir)
+    watermark = _dated_csv_watermark(trf_cache_dir)
     start, end = _gap_window(watermark, _FINRA_TRF_START, yesterday)
     _logger.info("finra_trf: %s → %s (watermark=%s)", start, end, watermark)
 
     total_rows = 0
     days_downloaded = 0
+    days_failed = 0
     current = start
     while current <= end:
         if current.weekday() < 5:  # Mon–Fri only
-            dl = FinraTRFDownloader(date=current.strftime("%Y-%m-%d"), fetch_yfinance_data=False)
-            df = dl.run()
-            if df is not None and not df.empty:
-                total_rows += len(df)
+            try:
+                dl = FinraTRFDownloader(date=current.strftime("%Y-%m-%d"), fetch_yfinance_data=False)
+                df = dl.run()
+                if df is not None and not df.empty:
+                    total_rows += len(df)
                 days_downloaded += 1
+            except Exception:
+                days_failed += 1
+                _logger.warning(
+                    "finra_trf: failed for %s — skipping; will retry on the next run", current, exc_info=True
+                )
         current += timedelta(days=1)
 
-    return {"rows": total_rows, "days_downloaded": days_downloaded}
+    return {"rows": total_rows, "days_downloaded": days_downloaded, "days_failed": days_failed}
 
 
 def _job_index_changes(yesterday: _Date) -> Dict[str, Any] | None:
