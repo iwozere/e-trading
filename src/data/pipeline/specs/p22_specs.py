@@ -142,6 +142,12 @@ SPECS: List[PluginSpec] = [
         timeout_seconds=3600,
         description="Block G (spec §4.7): 8-K Item 7.01/8.01 strategic-alternatives phrase detection -> review queue.",
         depends_on=["P22 Entity Resolution"],
+        extra_task_params={
+            "notification_rules": {"conditions": [
+                {"check_field": "candidates_written", "operator": ">", "threshold": 0, "channels": ["email", "telegram"],
+                 "comment": "Email + Telegram when a new strategic-alternatives candidate is queued for review"},
+            ]},
+        },
     ),
     PluginSpec(
         name="P22 Activist Positions Ingest",
@@ -151,6 +157,12 @@ SPECS: List[PluginSpec] = [
         timeout_seconds=3600,
         description="Block G (spec §4.7): Schedule 13D/13D-A/13G/13G-A ingest via EFTS, scoped to the P22 universe.",
         depends_on=["P22 Entity Resolution"],
+        extra_task_params={
+            "notification_rules": {"conditions": [
+                {"check_field": "positions_written", "operator": ">", "threshold": 0, "channels": ["email", "telegram"],
+                 "comment": "Email + Telegram when a new activist position is recorded against the P22 universe"},
+            ]},
+        },
     ),
     PluginSpec(
         name="P22 Deal Candidates Ingest",
@@ -160,5 +172,11 @@ SPECS: List[PluginSpec] = [
         timeout_seconds=1800,
         description="M6 (spec §2.5): SC 14D9/DEFM14A/S-4 detection via EFTS -> review queue only, never writes p22_deal.",
         depends_on=["P22 Entity Resolution"],
+        extra_task_params={
+            "notification_rules": {"conditions": [
+                {"check_field": "candidates_queued", "operator": ">", "threshold": 0, "channels": ["email", "telegram"],
+                 "comment": "Email + Telegram when a new M&A deal candidate is queued for review"},
+            ]},
+        },
     ),
 ]

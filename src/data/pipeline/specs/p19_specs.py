@@ -64,6 +64,14 @@ SPECS: List[PluginSpec] = [
         timeout_seconds=3600,  # live value; widened from the originally-documented 1800 after a real production timeout
         description="Reads watchlist.json (must run after Watchlist Build); EDGAR + yfinance only, no IBKR.",
         depends_on=["P19 Intraday Watchlist Build"],
+        extra_task_params={
+            "notification_rules": {"conditions": [
+                {"check_field": "grade_a_count", "operator": ">", "threshold": 0, "channels": ["telegram"],
+                 "comment": "Telegram when any name grades A (elite structural profile)"},
+                {"check_field": "grade_a_count", "operator": ">", "threshold": 2, "channels": ["email", "telegram"],
+                 "comment": "Email + Telegram when 3+ names grade A"},
+            ]},
+        },
     ),
     PluginSpec(
         name="P19 Label Backfill",
@@ -83,5 +91,11 @@ SPECS: List[PluginSpec] = [
         timeout_seconds=600,
         description="EFTS scan of watchlist CIKs for 424B5/S-1/S-3 + 8-K 3.01/3.02, filed intraday.",
         depends_on=["P19 Intraday Watchlist Build"],
+        extra_task_params={
+            "notification_rules": {"conditions": [
+                {"check_field": "new_hits", "operator": ">", "threshold": 0, "channels": ["email", "telegram"],
+                 "comment": "Email + Telegram when a new dilutive/material filing is spotted intraday"},
+            ]},
+        },
     ),
 ]

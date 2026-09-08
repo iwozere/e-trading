@@ -94,7 +94,15 @@ def main() -> int:
         by_grade: dict[str, int] = {}
         for p in profiles.values():
             by_grade[p.grade] = by_grade.get(p.grade, 0) + 1
-        summary = {"date": target, "count": len(profiles), "by_grade": by_grade}
+        # Flat top-level count (not nested under by_grade) so the scheduler's
+        # notification_rules -- which only read flat script_result fields -- can
+        # alert on new elite (grade A) names without a nested-field lookup.
+        summary = {
+            "date": target,
+            "count": len(profiles),
+            "by_grade": by_grade,
+            "grade_a_count": by_grade.get("A", 0),
+        }
         print(f"P19 structural profile {target}: {summary['count']} names {by_grade}")
         print(f"__SCHEDULER_RESULT__:{json.dumps(summary)}")
         return 0

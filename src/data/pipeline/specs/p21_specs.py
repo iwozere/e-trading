@@ -28,11 +28,59 @@ SPECS: List[PluginSpec] = [
     # 16:30 ET == 20:30 UTC (EST) / 21:30 UTC (EDT); scheduled at the winter-time
     # value — DST drift is a known, shared limitation across every ET-based cron
     # job in this repo, not solved here.
-    PluginSpec(name="p21_monthly_rebalance", category="p21", cron="30 20 * * 1-5", script_path=f"{_SCRIPT_BASE}/run_monthly_rebalance.py"),
+    PluginSpec(
+        name="p21_monthly_rebalance",
+        category="p21",
+        cron="30 20 * * 1-5",
+        script_path=f"{_SCRIPT_BASE}/run_monthly_rebalance.py",
+        extra_task_params={
+            "notification_rules": {"conditions": [
+                {"check_field": "targets_count", "operator": ">", "threshold": 0, "channels": ["email", "telegram"],
+                 "comment": "Email + Telegram when a new monthly rebalance plan is produced"},
+            ]},
+        },
+    ),
     # p21_stop_execute runs 10 minutes ahead of p21_monthly_execute (both are open-time
     # jobs) so that on the one day a month both run, monthly_execute always reads a
     # current_positions.json with any catastrophic stop already applied — no double-sell.
-    PluginSpec(name="p21_stop_execute", category="p21", cron="35 13 * * 1-5", script_path=f"{_SCRIPT_BASE}/run_stop_execute.py"),  # 09:35 ET
-    PluginSpec(name="p21_monthly_execute", category="p21", cron="45 13 * * 1-5", script_path=f"{_SCRIPT_BASE}/run_monthly_execute.py"),  # 09:45 ET
-    PluginSpec(name="p21_daily_mark", category="p21", cron="30 20 * * 1-5", script_path=f"{_SCRIPT_BASE}/run_daily_mark.py"),
+    PluginSpec(
+        name="p21_stop_execute",
+        category="p21",
+        cron="35 13 * * 1-5",  # 09:35 ET
+        script_path=f"{_SCRIPT_BASE}/run_stop_execute.py",
+        extra_task_params={
+            "notification_rules": {"conditions": [
+                {"check_field": "exits_count", "operator": ">", "threshold": 0, "channels": ["email", "telegram"],
+                 "comment": "Email + Telegram when a stop-loss actually executes"},
+            ]},
+        },
+    ),
+    PluginSpec(
+        name="p21_monthly_execute",
+        category="p21",
+        cron="45 13 * * 1-5",  # 09:45 ET
+        script_path=f"{_SCRIPT_BASE}/run_monthly_execute.py",
+        extra_task_params={
+            "notification_rules": {"conditions": [
+                {"check_field": "trades_count", "operator": ">", "threshold": 0, "channels": ["email", "telegram"],
+                 "comment": "Email + Telegram when the monthly rebalance actually trades"},
+                {"check_field": "warn_insufficient_cash", "operator": ">", "threshold": 0, "channels": ["email", "telegram"],
+                 "comment": "Email + Telegram when execution warns of insufficient cash"},
+            ]},
+        },
+    ),
+    PluginSpec(
+        name="p21_daily_mark",
+        category="p21",
+        cron="30 20 * * 1-5",
+        script_path=f"{_SCRIPT_BASE}/run_daily_mark.py",
+        extra_task_params={
+            "notification_rules": {"conditions": [
+                {"check_field": "catastrophic_stops_count", "operator": ">", "threshold": 0, "channels": ["email", "telegram"],
+                 "comment": "Email + Telegram when a position is flagged for a catastrophic stop (executes next open)"},
+                {"check_field": "anomalies_count", "operator": ">", "threshold": 0, "channels": ["telegram"],
+                 "comment": "Telegram when the daily mark finds position anomalies"},
+            ]},
+        },
+    ),
 ]

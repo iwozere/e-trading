@@ -91,7 +91,12 @@ def _load_config_from_env() -> Dict[str, Any]:
     # Provider settings
     config["providers"] = {
         "stocktwits": os.getenv("SENTIMENT_STOCKTWITS_ENABLED", "true").lower() == "true",
-        "reddit": os.getenv("SENTIMENT_REDDIT_ENABLED", "true").lower() == "true",
+        # Default OFF (2026-09-08): Reddit API credentials are invalid/revoked and app
+        # registration isn't available to us, so every call 401s. ApeWisdom (unauthenticated
+        # Reddit-mention aggregator, see DEFAULT_CONFIG below) already covers the same
+        # retail/WSB-mentions signal class -- set this to "true" only if Reddit API access
+        # is restored.
+        "reddit": os.getenv("SENTIMENT_REDDIT_ENABLED", "false").lower() == "true",
         "discord": os.getenv("SENTIMENT_DISCORD_ENABLED", "true").lower() == "true",
         "twitter": os.getenv("SENTIMENT_TWITTER_ENABLED", "false").lower() == "true",
         "finnhub": os.getenv("SENTIMENT_FINNHUB_ENABLED", "true").lower() == "true",
@@ -157,7 +162,11 @@ def _load_config_from_env() -> Dict[str, Any]:
 DEFAULT_CONFIG = {
     "providers": {
         "stocktwits": True,
-        "reddit": True,
+        # Disabled 2026-09-08: Reddit API credentials are invalid/revoked (every call 401s)
+        # and we can't get API access restored. ApeWisdom below already covers the same
+        # retail/WSB-mentions signal without auth -- flip back to True only if Reddit API
+        # access is restored.
+        "reddit": False,
         "news": True,
         "trends": True,
         "discord": True,
@@ -938,12 +947,10 @@ async def collect_sentiment_batch(
                                     tech_messages.extend(res)
 
                             if tech_messages:
-                                (
-                                    tech_hf_sentiment,
-                                    _tech_positive_ratio,
-                                    _tech_bot_pct,
-                                    _tech_virality,
-                                ) = await _process_messages_with_hf(
+                                # Only the sentiment score is used for tech_discourse -- positive_ratio/bot_pct/
+                                # virality from the shared helper are retail-schema fields (spec §1.2) with no
+                                # tech_discourse counterpart, so they're discarded here rather than bound.
+                                tech_hf_sentiment, *_ = await _process_messages_with_hf(
                                     tech_messages,
                                     manager,
                                     heuristic_config,
