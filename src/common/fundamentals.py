@@ -95,53 +95,26 @@ async def get_fundamentals_unified(
         "sources": {},
     }
 
-    # If DataManager returned combined fundamentals, map known fields
+    # If DataManager returned combined fundamentals, map matching fields directly.
+    #
+    # combine_snapshots() (fundamentals_combiner.py) builds `combined` from each
+    # provider's raw payload normalized via Fundamentals.__dict__ (data_manager.py
+    # ._normalize_fundamentals_data), so it is a FLAT dict keyed by the same
+    # snake_case names as this module's own `Fundamentals` dataclass — never a
+    # nested {"profile": {...}, "ratios": {...}, "metrics": {...}} structure.
+    # Reading it as nested left `profile` == {} for every ticker, so this block
+    # silently never set market_cap (or company_name, current_price, and most
+    # other fields) even when DataManager._enrich_combined_fundamentals_output
+    # had already gone out of its way to repair combined["market_cap"] upstream
+    # (confirmed root cause of P20 Kestrel Sleeve A/C's empty-funnel bug —
+    # 98%+ of tickers rejected on mcap_missing since deploy).
     if isinstance(combined, dict) and combined:
-        # DataManager returns nested structure with 'profile', 'ratios', 'metrics' sections
-        profile = combined.get("profile", {})
-        ratios = combined.get("ratios", {})
-        metrics = combined.get("metrics", {})
-
-        # Map fields from profile section
-        if profile:
-            fundamental_data["ticker"] = profile.get("symbol") or combined.get("symbol")
-            fundamental_data["company_name"] = profile.get("companyName")
-            fundamental_data["current_price"] = profile.get("price")
-            fundamental_data["market_cap"] = profile.get("marketCap")
-            fundamental_data["beta"] = profile.get("beta")
-            fundamental_data["sector"] = profile.get("sector")
-            fundamental_data["industry"] = profile.get("industry")
-            fundamental_data["country"] = profile.get("country")
-            fundamental_data["exchange"] = profile.get("exchange")
-            fundamental_data["currency"] = profile.get("currency")
-            fundamental_data["dividend_yield"] = profile.get("lastDividend")
-
-        # Map fields from ratios section
-        if ratios:
-            fundamental_data["pe_ratio"] = ratios.get("priceEarningsRatio")
-            fundamental_data["price_to_book"] = ratios.get("priceToBookRatio")
-            fundamental_data["debt_to_equity"] = ratios.get("debtEquityRatio")
-            fundamental_data["current_ratio"] = ratios.get("currentRatio")
-            fundamental_data["quick_ratio"] = ratios.get("quickRatio")
-            fundamental_data["return_on_equity"] = ratios.get("returnOnEquity")
-            fundamental_data["return_on_assets"] = ratios.get("returnOnAssets")
-            fundamental_data["operating_margin"] = ratios.get("operatingProfitMargin")
-            fundamental_data["profit_margin"] = ratios.get("netProfitMargin")
-            fundamental_data["peg_ratio"] = ratios.get("priceEarningsToGrowthRatio")
-            fundamental_data["price_to_sales"] = ratios.get("priceToSalesRatio")
-            fundamental_data["payout_ratio"] = ratios.get("payoutRatio")
-
-        # Map fields from metrics section
-        if metrics:
-            fundamental_data["revenue"] = metrics.get("revenue")
-            fundamental_data["revenue_growth"] = metrics.get("revenueGrowth")
-            fundamental_data["net_income"] = metrics.get("netIncome")
-            fundamental_data["net_income_growth"] = metrics.get("netIncomeGrowth")
-            fundamental_data["earnings_per_share"] = metrics.get("netIncomePerShare")
-            fundamental_data["free_cash_flow"] = metrics.get("freeCashFlow")
-            fundamental_data["enterprise_value"] = metrics.get("enterpriseValue")
-            fundamental_data["enterprise_value_to_ebitda"] = metrics.get("enterpriseValueOverEBITDA")
-            fundamental_data["shares_outstanding"] = metrics.get("sharesOutstanding")
+        for key in fundamental_data:
+            if key in ("sources", "data_source", "last_updated"):
+                continue
+            value = combined.get(key)
+            if value is not None:
+                fundamental_data[key] = value
 
         # Store metadata
         metadata = combined.get("_metadata", {})
@@ -150,29 +123,21 @@ async def get_fundamentals_unified(
             fundamental_data["last_updated"] = metadata.get("combination_timestamp")
     # If DataManager had no data, fundamental_data will remain with default None values
 
-    # Enrich with traditional fundamentals if still missing key metadata
+    # Enrich with traditional fundamentals (per-provider raw fetch + priority
+    # merge in get_fundamentals() below) for any field still missing after the
+    # DataManager-combined pass above — covers every canonical field, not a
+    # hand-picked subset, so a field like market_cap that combined data lacked
+    # (e.g. a fully cold cache) still gets filled instead of staying None.
     try:
         traditional_fundamentals = get_fundamentals(ticker, provider)
         if traditional_fundamentals:
-            for key in [
-                "company_name",
-                "current_price",
-                "sector",
-                "industry",
-                "country",
-                "exchange",
-                "currency",
-                "earnings_per_share",
-                "revenue",
-                "net_income",
-                "beta",
-                "shares_outstanding",
-                "float_shares",
-                "short_ratio",
-                "enterprise_value_to_ebitda",
-            ]:
+            for key in fundamental_data:
+                if key in ("sources", "data_source", "last_updated"):
+                    continue
+                if fundamental_data.get(key) is not None:
+                    continue
                 val = getattr(traditional_fundamentals, key, None)
-                if val is not None and fundamental_data.get(key) is None:
+                if val is not None:
                     fundamental_data[key] = val
     except Exception:
         # Ignore failures; we already have best-effort data
