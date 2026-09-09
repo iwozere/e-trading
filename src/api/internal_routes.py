@@ -2,6 +2,7 @@
 
 import hmac
 import json
+import re
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -17,6 +18,12 @@ router = APIRouter(prefix="/internal", tags=["internal"])
 
 _LOCALHOST = {"127.0.0.1", "::1"}
 _TOKEN_HEADER = "X-Internal-Token"
+
+# Vector's `final_shape` transform already prefixes alert.text with "[type/source] "
+# (see docs/monitoring-setup.md). Strip that off before re-wrapping in "[Monitoring/...]"
+# below, otherwise the source shows up twice, e.g.
+# "[Monitoring/session-1.scope] [systemd/session-1.scope] Read error ...".
+_SOURCE_PREFIX_RE = re.compile(r"^\[[^\]]+\]\s*")
 
 
 def _check_internal_access(request: Request) -> None:
@@ -68,8 +75,10 @@ async def receive_log_alert(request: Request) -> dict:
         return {"ok": True, "warning": "no admin users found"}
 
     # Build a subject that shows the source and the first meaningful part of the error line.
-    # alert.text format from Vector: "[systemd/service] ERROR: ..."
+    # alert.text format from Vector: "[systemd/service] ERROR: ..." — strip that leading
+    # "[type/source]" tag so it isn't shown twice alongside our own "[Monitoring/source]".
     first_line = alert.text.splitlines()[0] if alert.text else alert.source
+    first_line = _SOURCE_PREFIX_RE.sub("", first_line, count=1)
     subject = f"[Monitoring/{alert.source}] {first_line[:120]}"
 
     svc = NotificationService()

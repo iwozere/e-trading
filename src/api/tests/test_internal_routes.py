@@ -68,6 +68,36 @@ async def test_log_alert_no_telegram_admins_skips_delivery():
 
 
 @pytest.mark.asyncio
+async def test_log_alert_subject_does_not_duplicate_source_prefix():
+    """
+    Regression: Vector already prefixes alert.text with "[type/source] " (see
+    docs/monitoring-setup.md's final_shape transform). The subject built here must
+    strip that off before adding its own "[Monitoring/source]" tag, otherwise the
+    source is shown twice, e.g. "[Monitoring/session-1.scope] [systemd/session-1.scope]
+    Read error ...".
+    """
+    request = _make_request(
+        {"text": "[systemd/session-1.scope] Read error from remote host 1.2.3.4", "source": "session-1.scope"}
+    )
+
+    with (
+        patch("src.api.internal_routes.settings.internal_api_token", ""),
+        patch("src.api.internal_routes.telegram_service") as mock_telegram_service,
+        patch("src.api.internal_routes.NotificationService") as mock_notification_service,
+    ):
+        mock_telegram_service.get_admin_user_ids.return_value = ["111"]
+        mock_svc = mock_notification_service.return_value
+
+        await receive_log_alert(request)
+
+    queued = mock_svc.create_message.call_args[0][0]
+    subject = queued["content"]["title"]
+    assert subject == "[Monitoring/session-1.scope] Read error from remote host 1.2.3.4"
+    # Original, unstripped text is still preserved in the message body.
+    assert queued["content"]["message"] == "[systemd/session-1.scope] Read error from remote host 1.2.3.4"
+
+
+@pytest.mark.asyncio
 async def test_log_alert_rejects_non_localhost():
     request = _make_request({"text": "ERROR: boom", "source": "foo.service"}, host="203.0.113.1")
 

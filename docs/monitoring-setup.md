@@ -241,7 +241,22 @@ source = '''
     .source_name = string!(.container_name)
   } else {
     .source_type = "systemd"
-    .source_name = string(._SYSTEMD_UNIT) ?? string(.SYSLOG_IDENTIFIER) ?? "unknown"
+    unit = string(._SYSTEMD_UNIT) ?? ""
+    ident = string(.SYSLOG_IDENTIFIER) ?? ""
+    # Transient login/session scopes (e.g. "session-1.scope" for an SSH login) don't
+    # name the program that actually logged the line — only the ephemeral cgroup PAM
+    # created for the session. Prefer the syslog identifier there and keep the scope
+    # as context, e.g. "sshd (session-1.scope)" instead of the bare, uninformative
+    # "session-1.scope".
+    if ends_with(unit, ".scope") && ident != "" {
+      .source_name = ident + " (" + unit + ")"
+    } else if unit != "" {
+      .source_name = unit
+    } else if ident != "" {
+      .source_name = ident
+    } else {
+      .source_name = "unknown"
+    }
   }
   .message = string(.MESSAGE) ?? string!(.message)
   . = { "source_type": .source_type, "source_name": .source_name, "message": .message }
