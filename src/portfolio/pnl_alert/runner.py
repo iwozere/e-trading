@@ -30,14 +30,17 @@ from src.portfolio.pnl_alert.price_fetcher import fetch_latest_closes
 _logger = setup_logger(__name__)
 
 # Hard ceiling on the best-effort insider-activity lookup. It runs in a worker
-# thread (`asyncio.to_thread`) whose own soft self-heal budget
-# (`insider_activity._WINDOW_WARMUP_BUDGET_SECONDS`) is only checked *between*
-# day-iterations — one slow day (a busy market-wide Form 4 day hit during a
-# multi-day cache gap) can blow well past it. `asyncio.wait_for` can't kill the
-# underlying thread, but it does stop *us* waiting on it, so the digest — the
-# whole point of this job — still ships instead of the scheduler's outer 300s
-# job timeout killing the entire run (2026-09-07 incident: a week-long Form 4
-# cache gap made this lookup run past 5 minutes and the alert never went out).
+# thread (`asyncio.to_thread`). `insider_activity.load_insider_activity` reads
+# the shared Form 4 cache only (no live EDGAR fetch — see its module
+# docstring), so this should only ever bite on an unexpectedly slow/hung
+# filesystem; kept as a defensive ceiling rather than a real steady-state
+# concern. (Prior to 2026-09-09 this path *did* self-heal a missing day with a
+# live EDGAR call with no per-day bound of its own — one busy filing day could
+# run past 5 minutes — see the 2026-09-07/09-08 incidents this constant used
+# to guard against. That self-heal was removed; see insider_activity.py.)
+# `asyncio.wait_for` can't kill the underlying thread, but it does stop *us*
+# waiting on it, so the digest — the whole point of this job — still ships
+# instead of stalling on this lookup.
 _INSIDER_ACTIVITY_TIMEOUT_SECONDS = 90.0
 
 

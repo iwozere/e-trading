@@ -205,3 +205,72 @@ def test_download_form4_filings_caches_buy_codes_end_to_end(tmp_path):
 
     cached = pd.read_csv(cache_file, compression="gzip")
     assert cached.iloc[0]["transaction_code"] == "P"
+
+
+def test_allow_network_false_skips_live_fetch_on_cache_miss(tmp_path):
+    """
+    Regression: pnl_alert's insider_activity.py must never trigger a live
+    EDGAR call on its digest-send path (2026-09-08 incident — a single heavy
+    day took 6m22s). allow_network=False must return empty and touch neither
+    _efts_search nor _fetch_filing_xml, and must not write a cache file.
+    """
+    dl = EdgarDownloader(cache_dir=tmp_path)
+    with (
+        patch.object(dl, "_efts_search") as mock_search,
+        patch.object(dl, "_fetch_filing_xml") as mock_fetch,
+    ):
+        df = dl.download_form4_filings(as_of_date=date(2026, 8, 19), allow_network=False)
+
+    assert df.empty
+    mock_search.assert_not_called()
+    mock_fetch.assert_not_called()
+    assert not (tmp_path / "edgar" / "13f" / "form4" / "2026-08-19.csv.gz").exists()
+
+
+def test_allow_network_false_still_reads_an_existing_cache(tmp_path):
+    """allow_network only governs the cache-miss path; a cached day is read as normal."""
+    dl = EdgarDownloader(cache_dir=tmp_path)
+    hit = {
+        "_id": "0002001011-24-000052:edgardoc.xml",
+        "_source": {"ciks": ["0001649903", "0000886163"], "adsh": "0002001011-24-000052"},
+    }
+    xml = _doc(_txn_xml("P", shares="5000", price="2.10"))
+    with (
+        patch.object(dl, "_efts_search", return_value=[hit]),
+        patch.object(dl, "_fetch_filing_xml", return_value=xml),
+    ):
+        dl.download_form4_filings(as_of_date=date(2026, 8, 18))  # populate the cache
+
+    with patch.object(dl, "_efts_search") as mock_search:
+        df = dl.download_form4_filings(as_of_date=date(2026, 8, 18), allow_network=False)
+
+    mock_search.assert_not_called()
+    assert len(df) == 1
+
+
+def test_max_seconds_stops_early_and_does_not_cache_partial_day(tmp_path):
+    """
+    Regression: a single heavy filing day (a real one ran 1006 transactions /
+    6m22s on 2026-08-26) must not be allowed to run unbounded, and a truncated
+    fetch must NOT be cached — it has to stay a cache miss so a later call can
+    complete it, instead of permanently caching an incomplete day.
+    """
+    dl = EdgarDownloader(cache_dir=tmp_path)
+    hits = [
+        {"_id": f"000200101{i}-24-000052:edgardoc.xml", "_source": {"ciks": ["1"], "adsh": f"000200101{i}-24-000052"}}
+        for i in range(5)
+    ]
+    xml = _doc(_txn_xml("P"))
+
+    with (
+        patch.object(dl, "_efts_search", return_value=hits),
+        patch.object(dl, "_fetch_filing_xml", return_value=xml) as mock_fetch,
+        patch.object(dl, "_throttle"),
+        # Budget exhausted before the loop even starts its first iteration.
+        patch("src.data.downloader.edgar_downloader.time.monotonic", side_effect=[0.0, 100.0]),
+    ):
+        df = dl.download_form4_filings(as_of_date=date(2026, 8, 26), max_seconds=90.0)
+
+    mock_fetch.assert_not_called()
+    assert df.empty
+    assert not (tmp_path / "edgar" / "13f" / "form4" / "2026-08-26.csv.gz").exists()

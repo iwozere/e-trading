@@ -57,6 +57,15 @@ _DG_LOOKBACK_DAYS = 183
 # actual profiling loop.
 _WINDOW_WARMUP_BUDGET_SECONDS = 300.0
 
+# The window-level budget above bounds the *whole* backfill walk, but a single
+# unusually heavy filing day can still exceed it on its own (a real one ran
+# 1006 Form 4 transactions / 6m22s on 2026-08-26 — see EdgarDownloader.
+# download_form4_filings' max_seconds docstring) and starve every other day in
+# the window. Cap each individual day's live fetch too, so one heavy day
+# degrades to "this day is incomplete, retry later" instead of consuming the
+# whole run's budget and blocking older days from being attempted at all.
+_SINGLE_DAY_FETCH_BUDGET_SECONDS = 90.0
+
 _ANNUAL_FORMS = ("10-K", "10-K/A", "20-F", "20-F/A")
 _INTERIM_FORMS = ("10-Q", "10-Q/A", "6-K")
 _FPI_FORMS = frozenset({"20-F", "20-F/A", "6-K"})
@@ -332,8 +341,12 @@ class StructuralProfiler:
                 try:
                     # force=False reads the on-disk cache written by the daily
                     # P15/P18 job; only a genuinely missing day triggers a
-                    # (self-healing) live EDGAR call.
-                    day_df = self._edgar.download_form4_filings(as_of_date=d, force=False)
+                    # (self-healing) live EDGAR call, bounded per-day by
+                    # max_seconds so one heavy day can't blow the whole
+                    # window's budget by itself (see constant docstring above).
+                    day_df = self._edgar.download_form4_filings(
+                        as_of_date=d, force=False, max_seconds=_SINGLE_DAY_FETCH_BUDGET_SECONDS
+                    )
                     if day_df is not None and not day_df.empty:
                         frames.append(day_df)
                 except Exception:

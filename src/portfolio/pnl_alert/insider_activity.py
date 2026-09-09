@@ -3,9 +3,15 @@ Insider activity (Form 4).
 
 Pulls the trailing N days of insider (Form 4) transactions for the caller's
 currently held tickers out of the shared EDGAR daily cache maintained by
-P18's daily scan (``edgar/13f/form4/{date}.csv.gz``) — no new EDGAR network
-surface for the steady-state case, the same reuse pattern P19's structural
-profiler uses (``structural/profiler.py``'s ``_load_form4_window``).
+P18's daily scan (``edgar/13f/form4/{date}.csv.gz``) — cache-only, no EDGAR
+network surface at all. A missing day is silently skipped rather than fetched
+live: this runs on the PnL digest's send path, and a live EDGAR fetch has no
+bound on a single day (a real one ran 1006 transactions / 6m22s on
+2026-08-26 — see 2026-09-08's "Insider activity lookup exceeded 90s"
+incident), so it must never gate the digest going out. Keeping the cache warm
+is P18's daily scan's job (and P19's ``structural/profiler.py``'s
+``_load_form4_window``, which does still self-heal but caps its own per-day
+fetch time).
 """
 
 import time
@@ -24,10 +30,10 @@ _logger = setup_logger(__name__)
 # view without digging up ancient, no-longer-actionable transactions.
 DEFAULT_LOOKBACK_DAYS = 30
 
-# Bounds how long a cold/gappy cache is allowed to self-heal inline during a
-# single run (same hazard P19's structural profiler guards against — see
-# _WINDOW_WARMUP_BUDGET_SECONDS there). In steady state P18's own daily scan
-# keeps this window fully cached, so this only matters after an outage.
+# Defensive-only: this loop is now pure cache reads (no live EDGAR fetch — see
+# module docstring), so 30 small gzip reads should never come close to this.
+# Kept as a guard against an unexpectedly slow/hung filesystem rather than a
+# real steady-state concern.
 _WINDOW_WARMUP_BUDGET_SECONDS = 60.0
 
 
@@ -115,10 +121,20 @@ def _load_form4_window(
                 )
                 break
             try:
-                # force=False reads the on-disk cache written by P18's daily
-                # scan; only a genuinely missing day triggers a (self-healing)
-                # live EDGAR call.
-                day_df = edgar.download_form4_filings(as_of_date=d, force=False)
+                # allow_network=False: read only the on-disk cache written by
+                # P18's daily scan. This *used* to self-heal a missing day with
+                # a live EDGAR call, but a single unusually heavy filing day
+                # (a real one ran 1006 transactions / 6m22s on 2026-08-26) has
+                # no bound of its own, blows straight through this function's
+                # outer time budget below, and — because runner.py's
+                # asyncio.wait_for can't actually cancel the underlying thread
+                # — still finishes minutes later while every *older* gap day
+                # in the window is left unattempted. A missing day here just
+                # means "no insider data for that day this run"; P18's own
+                # daily scan (and now P19's structural profiler, which caps
+                # its own per-day fetch — see its max_seconds usage) are what
+                # keep the shared cache warm, not this latency-sensitive path.
+                day_df = edgar.download_form4_filings(as_of_date=d, force=False, allow_network=False)
                 if day_df is not None and not day_df.empty:
                     frames.append(day_df)
             except Exception:

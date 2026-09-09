@@ -123,6 +123,24 @@ def test_no_activity_omits_ticker_from_result():
     assert result == {}
 
 
+def test_never_allows_a_live_edgar_fetch():
+    """
+    Regression: this runs on the PnL digest's send path and must never block on
+    a live EDGAR call — a single unusually heavy filing day has no bound of its
+    own and can run for minutes (2026-09-08 incident: 1006 transactions took
+    6m22s), starving every older day in the window. A missing cache day must be
+    silently skipped, never fetched live — see the module docstring.
+    """
+    edgar = MagicMock()
+    edgar.download_form4_filings.return_value = pd.DataFrame()
+
+    load_insider_activity(["NVDA"], edgar=edgar, as_of=AS_OF, lookback_days=3)
+
+    assert edgar.download_form4_filings.call_args_list
+    for call in edgar.download_form4_filings.call_args_list:
+        assert call.kwargs["allow_network"] is False
+
+
 def test_form4_read_failure_for_one_day_does_not_abort_the_window():
     edgar = MagicMock()
     edgar.download_form4_filings.side_effect = Exception("boom")

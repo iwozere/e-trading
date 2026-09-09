@@ -772,6 +772,8 @@ class EdgarDownloader(BaseDataDownloader):
         self,
         as_of_date: date | None = None,
         force: bool = False,
+        allow_network: bool = True,
+        max_seconds: float | None = None,
     ) -> pd.DataFrame:
         """
         Download and parse Form 4 insider transaction filings for a given date.
@@ -789,6 +791,21 @@ class EdgarDownloader(BaseDataDownloader):
             as_of_date: Filing date to fetch. Defaults to yesterday (markets are
                         closed when the pipeline runs at 07:00 UTC).
             force: Re-download even if cached.
+            allow_network: If False, a cache miss returns an empty DataFrame
+                instead of hitting EDGAR — for callers on a latency-sensitive
+                path (e.g. a user-facing digest) that must never block on a
+                live fetch and would rather skip a day than stall (see
+                ``src/portfolio/pnl_alert/insider_activity.py``, which reads
+                cache-only for exactly this reason).
+            max_seconds: Wall-clock budget for fetching this one day's filing
+                documents. Each filing is fetched serially (SEC's fair-access
+                policy caps requests at 10/sec — see ``_MIN_REQUEST_INTERVAL``),
+                so a single unusually heavy filing day (a real one ran 1006
+                transactions / 6m22s on 2026-08-26) has no bound otherwise. If
+                the budget is hit, the fetch stops and returns what it has
+                *without caching it* — a truncated day must stay a cache miss
+                so a later call (or a bigger budget) can complete it, instead of
+                permanently caching an incomplete day. None means no bound.
 
         Returns:
             DataFrame with columns: ticker, issuer_cik, insider_name, transaction_code,
@@ -804,11 +821,29 @@ class EdgarDownloader(BaseDataDownloader):
             _logger.info("Form 4 filings for %s already cached at %s", date_str, dest)
             return pd.read_csv(dest, compression="gzip")
 
+        if not allow_network:
+            _logger.debug("Form 4 filings for %s not cached and allow_network=False — skipping", date_str)
+            return pd.DataFrame(columns=_FORM4_COLS)  # type: ignore[arg-type]
+
         _logger.info("Downloading Form 4 filings for %s ...", date_str)
         hits = self._efts_search(forms="4", start_dt=date_str, end_dt=date_str)
 
         records = []
-        for hit in hits:
+        fetch_start = time.monotonic()
+        truncated = False
+        for i, hit in enumerate(hits):
+            if max_seconds is not None and time.monotonic() - fetch_start > max_seconds:
+                _logger.warning(
+                    "Form 4 fetch for %s exceeded its %.0fs per-day budget after %d/%d filing(s) "
+                    "— stopping early without caching (stays a cache miss for a later retry)",
+                    date_str,
+                    max_seconds,
+                    i,
+                    len(hits),
+                )
+                truncated = True
+                break
+
             src = hit.get("_source", {})
             acc = str(src.get("adsh", ""))
             if not acc:
@@ -833,6 +868,9 @@ class EdgarDownloader(BaseDataDownloader):
                 records.append(row)
 
         df = pd.DataFrame(records, columns=_FORM4_COLS) if records else pd.DataFrame(columns=_FORM4_COLS)  # type: ignore[arg-type]
+
+        if truncated:
+            return df
 
         atomic_to_csv(df, dest, index=False, compression="gzip")
         _logger.info("Cached %d Form 4 transactions for %s → %s", len(df), date_str, dest)
