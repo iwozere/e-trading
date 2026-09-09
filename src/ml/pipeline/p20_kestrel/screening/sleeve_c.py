@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import sys
 from collections import Counter
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -60,12 +60,22 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
     Run Sleeve C momentum screen.
 
     Args:
-        as_of_date: Date to run (defaults to today).
+        as_of_date: Date to run (defaults to the last completed trading day —
+            see the target_date comment below for why this isn't "today").
 
     Returns:
         Summary dict.
     """
-    target_date = as_of_date or date.today()
+    # Match eod_ingest.py's own default ("yesterday", not "today" — it runs at
+    # 20:00 UTC, right at the close, before today's candle is finalized). This
+    # screen reads eod-derived signals (adv_20d, price_vs_50dma, sma_50/200,
+    # return_3m/6m) via get_signals_for_date(), an exact date match — defaulting
+    # to "today" here meant every lookup targeted a date eod_ingest never wrote
+    # a row for, on any run, ever. Confirmed via prod logs: eod_ingest logs
+    # "Running EOD ingest for 2026-09-07" while a same-day screen run logged
+    # target_date 2026-09-08 — a permanent one-day miss that surfaced as 100%
+    # of tickers failing the very first eod-derived filter (adv_below_min).
+    target_date = as_of_date or (date.today() - timedelta(days=1))
     _logger.info("Sleeve C screen for %s", target_date)
 
     if not _regime_allows_new_entry():

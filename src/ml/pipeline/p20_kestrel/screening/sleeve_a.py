@@ -192,12 +192,26 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
     Run the Sleeve A weekly screen and upsert results to watchlist.
 
     Args:
-        as_of_date: Date to run screen for (defaults to today).
+        as_of_date: Date to run screen for (defaults to the last completed
+            trading day — see the target_date comment below for why this
+            isn't "today").
 
     Returns:
         Summary dict.
     """
-    target_date = as_of_date or date.today()
+    # Match eod_ingest.py's own default ("yesterday", not "today" — it runs at
+    # 20:00 UTC, right at the close, before today's candle is finalized). This
+    # screen reads eod-derived signals (drawdown_from_2y_high, price_vs_50dma,
+    # sma_50_rising) via get_signals_for_date(), an exact date match —
+    # defaulting to "today" here meant every lookup targeted a date eod_ingest
+    # never wrote a row for, on any run, ever. Confirmed via prod logs:
+    # eod_ingest logs "Running EOD ingest for 2026-09-07" while a same-day
+    # screen run logged target_date 2026-09-08 — a permanent one-day miss.
+    # It was masked here (unlike sleeve_c.py, where it was the visible 100%
+    # adv_below_min) because mcap_missing was rejecting nearly every ticker
+    # before the drawdown check was ever reached — fixing that bug alone would
+    # have just swapped mcap_missing for drawdown_missing at 0 candidates.
+    target_date = as_of_date or (date.today() - timedelta(days=1))
     _logger.info("Sleeve A screen for %s (interim_mode=%s)", target_date, not REVISIONS_FEED_AVAILABLE)
 
     tickers = get_active_tickers()

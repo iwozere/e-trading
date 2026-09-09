@@ -1,7 +1,7 @@
 """Tests for P20 Kestrel Sleeve A scoring logic."""
 
 import sys
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
@@ -153,3 +153,33 @@ def test_run_rejection_breakdown_mixed_pass_and_fail(monkeypatch):
 
     assert result["passed_filters"] == 1
     assert result["rejection_breakdown"] == {"mcap_below_500M": 1}
+
+
+def test_run_defaults_to_yesterday_not_today(monkeypatch):
+    """
+    Regression guard: run() with no as_of_date must target the same trading
+    day eod_ingest.py just wrote (yesterday, by eod_ingest's own default),
+    not today. eod_ingest runs right at the close (20:00 UTC) and defaults to
+    date.today() - 1 day for that reason; get_signals_for_date() is an exact
+    date match, so defaulting sleeve_a to today() meant every EOD-derived
+    signal lookup (drawdown_from_2y_high, price_vs_50dma, sma_50_rising)
+    targeted a date that was never written — confirmed via prod logs where
+    eod_ingest logged "for 2026-09-07" while the same-day screen run logged
+    target_date 2026-09-08. This was masked by the mcap_missing bug (fixed
+    separately) rejecting tickers before this check was ever reached.
+    """
+    queried_dates: list[date] = []
+
+    def _capture(_ticker: str, on_date: date) -> dict:
+        queried_dates.append(on_date)
+        return {}
+
+    monkeypatch.setattr(sleeve_a, "get_active_tickers", lambda: ["AAA"])
+    monkeypatch.setattr(sleeve_a, "get_universe_row", lambda _t: _universe())
+    monkeypatch.setattr(sleeve_a, "get_signals_for_date", _capture)
+    monkeypatch.setattr(sleeve_a, "upsert_watchlist", lambda *_: None)
+    monkeypatch.setattr(sleeve_a, "upsert_signals", lambda *_: None)
+
+    sleeve_a.run()
+
+    assert queried_dates == [date.today() - timedelta(days=1)]

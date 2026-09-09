@@ -1,6 +1,7 @@
 """Tests for P20 Kestrel Sleeve C (Momentum) logic."""
 
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
@@ -98,6 +99,38 @@ def test_run_falls_back_to_signal_adv_20d(monkeypatch):
     assert result["rs_computed"] == 1
     assert result["candidates"] == 1
     assert upserted_watchlist and upserted_watchlist[0]["ticker"] == "TST"
+
+
+def test_run_defaults_to_yesterday_not_today(monkeypatch):
+    """
+    Regression guard: run() with no as_of_date must target the same trading
+    day eod_ingest.py just wrote (yesterday, by eod_ingest's own default),
+    not today. eod_ingest runs right at the close (20:00 UTC) and defaults to
+    date.today() - 1 day for that reason; get_signals_for_date() is an exact
+    date match, so defaulting sleeve_c to today() meant every EOD-derived
+    signal lookup (adv_20d, price_vs_50dma, sma_50/200, return_3m/6m)
+    targeted a date that was never written — the confirmed cause of Sleeve
+    C's literal 100% adv_below_min rejection rate on every run since deploy
+    (2026-07-03 through at least 2026-09-08).
+    """
+    import src.ml.pipeline.p20_kestrel.screening.sleeve_c as sleeve_c
+
+    queried_dates: list[date] = []
+
+    def _capture(_ticker: str, on_date: date) -> dict:
+        queried_dates.append(on_date)
+        return {}
+
+    monkeypatch.setattr(sleeve_c, "get_latest_signal", lambda *_: 1.0)  # regime open
+    monkeypatch.setattr(sleeve_c, "get_active_tickers", lambda: ["AAA"])
+    monkeypatch.setattr(sleeve_c, "get_universe_row", lambda *_: {"ticker": "AAA"})
+    monkeypatch.setattr(sleeve_c, "get_signals_for_date", _capture)
+    monkeypatch.setattr(sleeve_c, "upsert_signals", lambda *_: None)
+    monkeypatch.setattr(sleeve_c, "upsert_watchlist", lambda *_: None)
+
+    sleeve_c.run()
+
+    assert queried_dates == [date.today() - timedelta(days=1)]
 
 
 def test_run_rejects_when_adv_20d_missing_everywhere(monkeypatch):
