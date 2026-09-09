@@ -14,8 +14,10 @@ filter, and deduplicate error logs, forwarding alerts through the existing notif
 - Delivers alerts via the existing Telegram notification channel
 
 **What gets deployed:**
-- One new internal FastAPI route added to `trading-api.service` (`src/api/internal_routes.py`)
-- `trading-api.service` deployed and enabled on the Pi (currently not configured there)
+- One new internal FastAPI route added to `trading-webui.service` (`src/api/internal_routes.py`)
+  — this is the existing "FastAPI backend + React frontend (unified)" unit on port 5003 (see
+  `docs/HLA/deployment.md`'s service table), not a separate service; picking up the route just
+  needs a `git pull` + `sudo systemctl restart trading-webui.service` on the Pi.
 - Vector (single Rust binary, ~15–30 MB RAM) running as a systemd service
 
 ---
@@ -30,7 +32,7 @@ Docker containers             ──┘                                         
                                                                                                           │
                                                                                            POST /internal/log-alert
                                                                                                           │
-                                                                                           trading-api.service
+                                                                                           trading-webui.service
                                                                                                           │
                                                                                            PostgreSQL msg_messages
                                                                                                           │
@@ -222,7 +224,7 @@ Replace the contents of `/etc/vector/vector.toml`:
 [sources.journald]
 type = "journald"
 # Monitors all systemd units. To restrict to specific services:
-# units = ["trading-api.service", "nginx.service", "postgresql.service"]
+# units = ["trading-webui.service", "nginx.service", "postgresql.service"]
 
 [sources.docker]
 type = "docker_logs"
@@ -403,7 +405,7 @@ In `/etc/vector/vector.toml`:
 ```toml
 [sources.journald]
 type = "journald"
-units = ["trading-api.service", "notification-bot.service", "nginx.service"]
+units = ["trading-webui.service", "notification-bot.service", "nginx.service"]
 
 [sources.docker]
 type = "docker_logs"
@@ -440,7 +442,7 @@ condition = 'match(string!(.message), r"(?i)(error|exception|critical|traceback|
 | Vector not starting | `sudo journalctl -u vector -n 50` |
 | No alerts arriving | `sudo journalctl -u vector -f` — look for HTTP 4xx/5xx or connection errors |
 | `403 Forbidden` from endpoint | Either Vector is not connecting from 127.0.0.1 (check `uri`) or `X-Internal-Token` header is missing/wrong (check `[sinks.notify.request.headers]` vs `.env`) |
-| `Connection refused` on port 5003 | `trading-api.service` is not running — `sudo systemctl status trading-api` |
+| `Connection refused` on port 5003 | `trading-webui.service` is not running — `sudo systemctl status trading-webui` |
 | Endpoint returns 500 | `recipient_id` is invalid — verify user ID in `users` table |
 | Journald access denied | `sudo usermod -a -G systemd-journal vector && sudo systemctl restart vector` |
 | Docker logs not appearing | `sudo usermod -a -G docker vector && sudo systemctl restart vector` |
