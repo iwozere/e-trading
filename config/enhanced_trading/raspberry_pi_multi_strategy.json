@@ -11,66 +11,64 @@
     "monitoring_enabled": true,
     "log_level": "INFO"
   },
-  
+
   "strategies": [
     {
       "bot_id": "rsi_atr_btc_paper",
       "id": "rsi_atr_btc_paper",
       "name": "RSI+ATR BTC Paper Trading",
       "enabled": true,
-      "modules": {
-        "broker": {
-          "type": "binance",
-          "trading_mode": "paper",
-          "name": "rsi_atr_btc_paper_broker",
-          "cash": 5000.0,
-          "paper_trading_config": {
-            "mode": "realistic",
-            "commission_rate": 0.001,
-            "slippage_model": "linear",
-            "latency_simulation": true,
-            "partial_fill_probability": 0.1
-          }
-        },
-        "strategy": {
-          "type": "CustomStrategy",
-          "parameters": {
-            "entry_logic": {
-              "name": "RSIBBVolumeEntryMixin",
-              "params": {
-                "e_rsi_period": 14,
-                "e_rsi_oversold": 30,
-                "e_bb_period": 20,
-                "e_bb_dev": 2.0,
-                "e_vol_ma_period": 20,
-                "e_min_volume_ratio": 1.1,
-                "e_use_bb_touch": true
-              }
-            },
-            "exit_logic": {
-              "name": "ATRExitMixin",
-              "params": {
-                "x_atr_period": 14,
-                "x_sl_multiplier": 1.5
-              }
+      "broker": {
+        "type": "binance",
+        "trading_mode": "paper",
+        "name": "rsi_atr_btc_paper_broker",
+        "cash": 5000.0,
+        "paper_trading_config": {
+          "mode": "realistic",
+          "commission_rate": 0.001,
+          "slippage_model": "linear",
+          "latency_simulation": true,
+          "partial_fill_probability": 0.1
+        }
+      },
+      "strategy": {
+        "type": "CustomStrategy",
+        "parameters": {
+          "entry_logic": {
+            "name": "RSIBBVolumeEntryMixin",
+            "params": {
+              "e_rsi_period": 14,
+              "e_rsi_oversold": 30,
+              "e_bb_period": 20,
+              "e_bb_dev": 2.0,
+              "e_vol_ma_period": 20,
+              "e_min_volume_ratio": 1.1,
+              "e_use_bb_touch": true
+            }
+          },
+          "exit_logic": {
+            "name": "ATRExitMixin",
+            "params": {
+              "x_atr_period": 14,
+              "x_sl_multiplier": 1.5
             }
           }
-        },
-        "risk_management": {
-          "max_position_size_usd": 1000.0,
-          "stop_loss_pct": 3.0,
-          "take_profit_pct": 6.0,
-          "max_daily_loss": 200.0,
-          "max_daily_trades": 5,
-          "max_portfolio_risk": 0.05
-        },
-        "notifications": {
-          "telegram_enabled": true,
-          "email_enabled": false,
-          "performance_summaries": "daily",
-          "risk_alerts": true,
-          "error_notifications": true
         }
+      },
+      "risk_management": {
+        "max_position_size_usd": 1000.0,
+        "stop_loss_pct": 3.0,
+        "take_profit_pct": 6.0,
+        "max_daily_loss": 200.0,
+        "max_daily_trades": 5,
+        "max_portfolio_risk": 0.05
+      },
+      "notifications": {
+        "telegram_enabled": true,
+        "email_enabled": false,
+        "performance_summaries": "daily",
+        "risk_alerts": true,
+        "error_notifications": true
       },
       "overrides": {
         "symbol": "BTCUSDT",
@@ -86,58 +84,56 @@
         "max_positions": 1
       }
     },
-    
+
     {
       "bot_id": "rsi_atr_btc_live",
       "id": "rsi_atr_btc_live",
       "name": "RSI+ATR BTC Live Trading",
       "enabled": false,
-      "modules": {
-        "broker": {
-          "type": "binance",
-          "trading_mode": "live",
-          "name": "rsi_atr_btc_live_broker",
-          "cash": 1000.0
-        },
-        "strategy": {
-          "type": "CustomStrategy",
-          "parameters": {
-            "entry_logic": {
-              "name": "RSIBBVolumeEntryMixin",
-              "params": {
-                "e_rsi_period": 14,
-                "e_rsi_oversold": 25,
-                "e_bb_period": 20,
-                "e_bb_dev": 2.0,
-                "e_vol_ma_period": 20,
-                "e_min_volume_ratio": 1.2,
-                "e_use_bb_touch": true
-              }
-            },
-            "exit_logic": {
-              "name": "ATRExitMixin",
-              "params": {
-                "x_atr_period": 14,
-                "x_sl_multiplier": 2.0
-              }
+      "broker": {
+        "type": "binance",
+        "trading_mode": "live",
+        "name": "rsi_atr_btc_live_broker",
+        "cash": 1000.0
+      },
+      "strategy": {
+        "type": "CustomStrategy",
+        "parameters": {
+          "entry_logic": {
+            "name": "RSIBBVolumeEntryMixin",
+            "params": {
+              "e_rsi_period": 14,
+              "e_rsi_oversold": 25,
+              "e_bb_period": 20,
+              "e_bb_dev": 2.0,
+              "e_vol_ma_period": 20,
+              "e_min_volume_ratio": 1.2,
+              "e_use_bb_touch": true
+            }
+          },
+          "exit_logic": {
+            "name": "ATRExitMixin",
+            "params": {
+              "x_atr_period": 14,
+              "x_sl_multiplier": 2.0
             }
           }
-        },
-        "risk_management": {
-          "max_position_size_usd": 200.0,
-          "stop_loss_pct": 2.0,
-          "take_profit_pct": 4.0,
-          "max_daily_loss": 50.0,
-          "max_daily_trades": 3,
-          "max_portfolio_risk": 0.05
-        },
-        "notifications": {
-          "telegram_enabled": true,
-          "email_enabled": true,
-          "performance_summaries": "daily",
-          "risk_alerts": true,
-          "error_notifications": true
         }
+      },
+      "risk_management": {
+        "max_position_size_usd": 200.0,
+        "stop_loss_pct": 2.0,
+        "take_profit_pct": 4.0,
+        "max_daily_loss": 50.0,
+        "max_daily_trades": 3,
+        "max_portfolio_risk": 0.05
+      },
+      "notifications": {
+        "telegram_enabled": true,
+        "email_enabled": true,
+        "performance_summaries": "daily",
+        "risk_alerts": true,
+        "error_notifications": true
       },
       "overrides": {
         "symbol": "BTCUSDT",
@@ -153,66 +149,64 @@
         "max_positions": 1
       }
     },
-    
+
     {
       "bot_id": "bb_rsi_eth_paper",
       "id": "bb_rsi_eth_paper",
       "name": "BB+RSI ETH Paper Trading",
       "enabled": true,
-      "modules": {
-        "broker": {
-          "type": "binance",
-          "trading_mode": "paper",
-          "name": "bb_rsi_eth_paper_broker",
-          "cash": 3000.0,
-          "paper_trading_config": {
-            "mode": "realistic",
-            "commission_rate": 0.001,
-            "slippage_model": "linear",
-            "latency_simulation": true,
-            "partial_fill_probability": 0.12
-          }
-        },
-        "strategy": {
-          "type": "CustomStrategy",
-          "parameters": {
-            "entry_logic": {
-              "name": "RSIOrBBEntryMixin",
-              "params": {
-                "e_rsi_period": 14,
-                "e_rsi_oversold": 30,
-                "e_bb_period": 20,
-                "e_bb_dev": 2.0,
-                "e_cooldown_bars": 3
-              }
-            },
-            "exit_logic": {
-              "name": "RSIBBExitMixin",
-              "params": {
-                "x_rsi_period": 14,
-                "x_rsi_overbought": 70,
-                "x_bb_period": 20,
-                "x_bb_dev": 2.0,
-                "x_use_bb_touch": true
-              }
+      "broker": {
+        "type": "binance",
+        "trading_mode": "paper",
+        "name": "bb_rsi_eth_paper_broker",
+        "cash": 3000.0,
+        "paper_trading_config": {
+          "mode": "realistic",
+          "commission_rate": 0.001,
+          "slippage_model": "linear",
+          "latency_simulation": true,
+          "partial_fill_probability": 0.12
+        }
+      },
+      "strategy": {
+        "type": "CustomStrategy",
+        "parameters": {
+          "entry_logic": {
+            "name": "RSIOrBBEntryMixin",
+            "params": {
+              "e_rsi_period": 14,
+              "e_rsi_oversold": 30,
+              "e_bb_period": 20,
+              "e_bb_dev": 2.0,
+              "e_cooldown_bars": 3
+            }
+          },
+          "exit_logic": {
+            "name": "RSIBBExitMixin",
+            "params": {
+              "x_rsi_period": 14,
+              "x_rsi_overbought": 70,
+              "x_bb_period": 20,
+              "x_bb_dev": 2.0,
+              "x_use_bb_touch": true
             }
           }
-        },
-        "risk_management": {
-          "max_position_size_usd": 800.0,
-          "stop_loss_pct": 2.5,
-          "take_profit_pct": 5.0,
-          "max_daily_loss": 150.0,
-          "max_daily_trades": 4,
-          "max_portfolio_risk": 0.05
-        },
-        "notifications": {
-          "telegram_enabled": true,
-          "email_enabled": false,
-          "performance_summaries": "daily",
-          "risk_alerts": true,
-          "error_notifications": true
         }
+      },
+      "risk_management": {
+        "max_position_size_usd": 800.0,
+        "stop_loss_pct": 2.5,
+        "take_profit_pct": 5.0,
+        "max_daily_loss": 150.0,
+        "max_daily_trades": 4,
+        "max_portfolio_risk": 0.05
+      },
+      "notifications": {
+        "telegram_enabled": true,
+        "email_enabled": false,
+        "performance_summaries": "daily",
+        "risk_alerts": true,
+        "error_notifications": true
       },
       "overrides": {
         "symbol": "ETHUSDT",
@@ -228,62 +222,60 @@
         "max_positions": 1
       }
     },
-    
+
     {
       "bot_id": "macd_atr_ada_paper",
       "id": "macd_atr_ada_paper",
       "name": "MACD+ATR ADA Paper Trading",
       "enabled": true,
-      "modules": {
-        "broker": {
-          "type": "binance",
-          "trading_mode": "paper",
-          "name": "macd_atr_ada_paper_broker",
-          "cash": 2000.0,
-          "paper_trading_config": {
-            "mode": "realistic",
-            "commission_rate": 0.001,
-            "slippage_model": "sqrt",
-            "latency_simulation": true,
-            "partial_fill_probability": 0.15
-          }
-        },
-        "strategy": {
-          "type": "CustomStrategy",
-          "parameters": {
-            "entry_logic": {
-              "name": "MACDEntryMixin",
-              "params": {
-                "e_macd_fast": 12,
-                "e_macd_slow": 26,
-                "e_macd_signal": 9,
-                "e_min_histogram": 0.001
-              }
-            },
-            "exit_logic": {
-              "name": "ATRExitMixin",
-              "params": {
-                "x_atr_period": 14,
-                "x_sl_multiplier": 1.8
-              }
+      "broker": {
+        "type": "binance",
+        "trading_mode": "paper",
+        "name": "macd_atr_ada_paper_broker",
+        "cash": 2000.0,
+        "paper_trading_config": {
+          "mode": "realistic",
+          "commission_rate": 0.001,
+          "slippage_model": "sqrt",
+          "latency_simulation": true,
+          "partial_fill_probability": 0.15
+        }
+      },
+      "strategy": {
+        "type": "CustomStrategy",
+        "parameters": {
+          "entry_logic": {
+            "name": "MACDEntryMixin",
+            "params": {
+              "e_macd_fast": 12,
+              "e_macd_slow": 26,
+              "e_macd_signal": 9,
+              "e_min_histogram": 0.001
+            }
+          },
+          "exit_logic": {
+            "name": "ATRExitMixin",
+            "params": {
+              "x_atr_period": 14,
+              "x_sl_multiplier": 1.8
             }
           }
-        },
-        "risk_management": {
-          "max_position_size_usd": 500.0,
-          "stop_loss_pct": 4.0,
-          "take_profit_pct": 8.0,
-          "max_daily_loss": 100.0,
-          "max_daily_trades": 3,
-          "max_portfolio_risk": 0.05
-        },
-        "notifications": {
-          "telegram_enabled": true,
-          "email_enabled": false,
-          "performance_summaries": "daily",
-          "risk_alerts": true,
-          "error_notifications": true
         }
+      },
+      "risk_management": {
+        "max_position_size_usd": 500.0,
+        "stop_loss_pct": 4.0,
+        "take_profit_pct": 8.0,
+        "max_daily_loss": 100.0,
+        "max_daily_trades": 3,
+        "max_portfolio_risk": 0.05
+      },
+      "notifications": {
+        "telegram_enabled": true,
+        "email_enabled": false,
+        "performance_summaries": "daily",
+        "risk_alerts": true,
+        "error_notifications": true
       },
       "overrides": {
         "symbol": "ADAUSDT",
@@ -300,7 +292,7 @@
       }
     }
   ],
-  
+
   "global_settings": {
     "notifications": {
       "system_notifications": true,
