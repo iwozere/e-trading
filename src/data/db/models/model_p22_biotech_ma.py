@@ -466,7 +466,7 @@ class P22ReviewItem(Base):
     __table_args__ = (
         CheckConstraint(
             "item_type IN ('entity_match','process_event','activist_intent',"
-            "'partnership_structure','deal_type')",
+            "'partnership_structure','deal_type','deal_candidate')",
             name="ck_p22_review_item_type",
         ),
         CheckConstraint(
