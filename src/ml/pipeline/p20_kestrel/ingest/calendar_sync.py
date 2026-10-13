@@ -64,8 +64,22 @@ def _fetch_finnhub_earnings(ticker: str, api_key: str) -> List[Dict[str, Any]]:
         return []
 
 
-def _fire_countdown_alert(catalyst: Dict[str, Any], days_out: int) -> None:
-    """Fire a push alert for T-10 or T-3 catalyst countdown."""
+# Shown as a legend at the bottom of the combined countdown digest so the
+# event_type abbreviations (which come straight from k20_catalysts / pdufa.bio
+# category names) don't need to be looked up elsewhere.
+_EVENT_TYPE_LEGEND = {
+    "pdufa": (
+        "PDUFA date -- the FDA's statutory target date to decide (approve or issue a "
+        "Complete Response Letter) on a drug application."
+    ),
+    "adcom": ("FDA Advisory Committee meeting -- outside experts vote/recommend ahead of a PDUFA decision."),
+    "clinical_readout": ("Clinical trial data readout -- topline or interim trial results become public."),
+    "earnings": "Scheduled quarterly/annual earnings release.",
+}
+
+
+def _record_countdown_alert(catalyst: Dict[str, Any], days_out: int) -> Dict[str, Any]:
+    """Log a T-10 or T-3 catalyst countdown alert and return it for digest delivery."""
     trigger = f"catalyst_t{days_out}"
     payload = {
         "ticker": catalyst["ticker"],
@@ -87,20 +101,38 @@ def _fire_countdown_alert(catalyst: Dict[str, Any], days_out: int) -> None:
         payload=payload,
         channel="push",
     )
+    return payload
+
+
+def _send_countdown_digest(alerts: List[Dict[str, Any]]) -> None:
+    """Send every fired countdown alert as a single combined push/email, fail-soft."""
+    if not alerts:
+        return
+
+    lines = [
+        f"T-{a['days_out']} countdown: {a['ticker']} {a['event_type']} on {a['event_date']}" for a in alerts
+    ]
+    event_types = sorted({a["event_type"] for a in alerts if a["event_type"] in _EVENT_TYPE_LEGEND})
+    legend_lines = [f"  {event_type}: {_EVENT_TYPE_LEGEND[event_type]}" for event_type in event_types]
+
+    body = "\n".join(lines)
+    if legend_lines:
+        body += "\n\nLegend:\n" + "\n".join(legend_lines)
+
     send_push(
-        title=f"Kestrel: {catalyst['ticker']} {catalyst['event_type']} in {days_out}d",
-        message=(
-            f"T-{days_out} countdown: {catalyst['ticker']} {catalyst['event_type']} on {catalyst.get('event_date')}"
-        ),
+        title=f"Kestrel: {len(alerts)} catalyst countdown alert{'s' if len(alerts) != 1 else ''}",
+        message=body,
     )
 
 
-def _check_idempotent_countdown(catalyst: Dict[str, Any], today: date) -> None:
+def _check_idempotent_countdown(catalyst: Dict[str, Any], today: date, alerts: List[Dict[str, Any]]) -> None:
     """
     Check if T-10 or T-3 countdown alert should fire for this catalyst.
 
     Only fires when the column is NULL (never fired or reset by date change).
-    Stamps the alert column after firing.
+    Stamps the alert column after firing and appends it to `alerts` for the
+    combined digest send -- individual catalysts no longer get their own
+    push/email.
     """
     event_date = catalyst.get("event_date")
     if not event_date:
@@ -112,11 +144,11 @@ def _check_idempotent_countdown(catalyst: Dict[str, Any], today: date) -> None:
     days_out = (event_date - today).days
 
     if days_out <= 10 and catalyst.get("t10_alerted_at") is None:
-        _fire_countdown_alert(catalyst, 10)
+        alerts.append(_record_countdown_alert(catalyst, 10))
         stamp_catalyst_alert(catalyst["id"], "t10_alerted_at")
 
     if days_out <= 3 and catalyst.get("t3_alerted_at") is None:
-        _fire_countdown_alert(catalyst, 3)
+        alerts.append(_record_countdown_alert(catalyst, 3))
         stamp_catalyst_alert(catalyst["id"], "t3_alerted_at")
 
 
@@ -168,18 +200,18 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
                     )
                     catalysts_upserted += 1
 
-        # Fire countdown alerts for all upcoming catalysts
-        alerts_fired = 0
+        # Fire countdown alerts for all upcoming catalysts, combined into one digest
+        alerts_fired: List[Dict[str, Any]] = []
         upcoming = get_all_upcoming_catalysts(days_ahead=15)
         for c in upcoming:
             if c.get("state") == "upcoming":
-                _check_idempotent_countdown(c, target_date)
-                alerts_fired += 1
+                _check_idempotent_countdown(c, target_date, alerts_fired)
+        _send_countdown_digest(alerts_fired)
 
         summary = {
             "tickers_synced": len(tickers),
             "catalysts_upserted": catalysts_upserted,
-            "countdown_checks": alerts_fired,
+            "countdown_checks": len(alerts_fired),
         }
         finish_job_run(_JOB_NAME, target_date, status="ok", rows_out=catalysts_upserted)
         return summary
