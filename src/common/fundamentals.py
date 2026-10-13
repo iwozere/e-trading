@@ -19,9 +19,7 @@ PROVIDER_CODES = ["fmp", "yf", "av", "fh", "td", "pg", "bnc", "cg"]
 _FUNDAMENTALS_FIELDS = frozenset(f.name for f in fields(Fundamentals))
 
 
-async def get_fundamentals_unified(
-    ticker: str, provider: str | None = None, force_refresh: bool = False, **kwargs
-) -> Fundamentals:
+async def get_fundamentals_unified(ticker: str, provider: str | None = None, force_refresh: bool = False) -> Fundamentals:
     """
     Get fundamentals using the unified indicator service.
     This is the new recommended approach.
@@ -30,7 +28,6 @@ async def get_fundamentals_unified(
         ticker: Stock ticker symbol
         provider: Data provider code (optional)
         force_refresh: If True, bypass cache and fetch fresh data (default: False)
-        **kwargs: Additional arguments
 
     Returns:
         Fundamentals object with company fundamental data

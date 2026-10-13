@@ -253,14 +253,15 @@ class TestCommonFundamentals(unittest.TestCase):
         mock_fh_downloader = MagicMock()
         mock_fh_downloader.get_fundamentals.return_value = self.mock_fh_data
 
-        # Mock factory to return different downloaders for different calls
-        mock_factory.create_downloader.side_effect = [
-            mock_yf_downloader,  # yf
-            mock_av_downloader,  # av (will fail)
-            mock_fh_downloader,  # fh
-            None,  # td (no downloader)
-            None,  # pg (no downloader)
-        ]
+        # Map by provider code rather than call order — PROVIDER_CODES has
+        # grown (fmp now comes first), and a positional side_effect list
+        # silently handed the yf mock to whichever provider was tried first.
+        downloaders = {
+            "yf": mock_yf_downloader,
+            "av": mock_av_downloader,  # will fail
+            "fh": mock_fh_downloader,
+        }
+        mock_factory.create_downloader.side_effect = lambda code, **_kw: downloaders.get(code)
 
         result = get_fundamentals(self.test_symbol)
         assert result is not None
