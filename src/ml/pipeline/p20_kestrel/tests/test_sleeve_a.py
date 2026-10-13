@@ -19,6 +19,7 @@ def _universe(mcap=5_000_000_000, adv=50_000_000, **kw):
         "ticker": "TST",
         "mcap": mcap,
         "adv_20d": adv,
+        "net_debt": kw.get("net_debt", 1_000_000_000),
         "net_debt_ebitda": kw.get("net_debt_ebitda", 2.0),
         "interest_coverage": kw.get("interest_coverage", 5.0),
         "revenue_yoy_growth": kw.get("revenue_yoy_growth", 0.05),
@@ -31,7 +32,6 @@ def _signals(drawdown=-0.55, **kw):
         "drawdown_from_2y_high": drawdown,
         "price_vs_50dma": kw.get("price_vs_50dma", 1.0),
         "sma_50_rising": kw.get("sma_50_rising", 0),
-        "net_cash": kw.get("net_cash", None),
         "insider_buy_value_90d": kw.get("insider_buy_value_90d", 5_000_000),
         "form4_buy_count_90d": kw.get("form4_buy_count_90d", 3),
         "crowding_score": kw.get("crowding_score", 0.3),
@@ -64,17 +64,52 @@ def test_fails_adv_too_low():
 
 
 def test_passes_net_cash():
-    """Net cash satisfies balance-sheet filter."""
-    row = _universe(net_debt_ebitda=None, interest_coverage=None)
-    sigs = _signals(net_cash=1_000_000)
-    assert _passes_hard_filters(row, sigs) is None
+    """Net cash (net_debt <= 0) satisfies the balance-sheet filter even with no ratio."""
+    row = _universe(net_debt=-50_000_000, net_debt_ebitda=None, interest_coverage=None)
+    assert _passes_hard_filters(row, _signals()) is None
 
 
 def test_fails_balance_sheet_all_bad():
     """Fails when no balance-sheet pass criterion is met."""
     row = _universe(net_debt_ebitda=5.0, interest_coverage=1.5)
-    sigs = _signals(net_cash=None)
-    assert _passes_hard_filters(row, sigs) is not None
+    assert _passes_hard_filters(row, _signals()) == "balance_sheet_too_weak"
+
+
+def test_fails_balance_sheet_when_all_inputs_missing():
+    """Unknown balance sheet is not treated as healthy."""
+    row = _universe(net_debt=None, net_debt_ebitda=None, interest_coverage=None)
+    assert _passes_hard_filters(row, _signals()) == "balance_sheet_too_weak"
+
+
+def test_passes_balance_sheet_on_ratio_without_coverage():
+    """
+    Regression guard for prod's real data shape: Yahoo supplies no interest
+    coverage, so net_debt_ebitda alone must be able to carry the filter.
+    """
+    row = _universe(net_debt_ebitda=2.5, interest_coverage=None)
+    assert _passes_hard_filters(row, _signals()) is None
+
+
+def test_score_balance_sheet_missing_inputs_earn_nothing():
+    """Missing balance-sheet inputs score 0, not the top tier."""
+    row = _universe(net_debt=None, net_debt_ebitda=None, interest_coverage=None)
+    result = _score_interim(_signals(), row)
+    assert result["components"]["balance_sheet"] == 0.0
+
+
+def test_score_balance_sheet_net_cash_earns_full_points():
+    """Net cash earns the full 15 balance-sheet points."""
+    row = _universe(net_debt=-1.0, net_debt_ebitda=None, interest_coverage=None)
+    result = _score_interim(_signals(), row)
+    assert result["components"]["balance_sheet"] == 15.0
+
+
+def test_score_balance_sheet_tiers_on_ratio():
+    """net_debt_ebitda maps onto the 15/10/5/0 tiers."""
+    expected = {0.5: 15.0, 1.5: 10.0, 2.5: 5.0, 3.5: 0.0}
+    for ratio, pts in expected.items():
+        row = _universe(net_debt_ebitda=ratio, interest_coverage=None)
+        assert _score_interim(_signals(), row)["components"]["balance_sheet"] == pts
 
 
 def test_score_interim_with_insider_buys():

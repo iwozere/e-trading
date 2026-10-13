@@ -39,6 +39,7 @@ class K20Universe(Base):
     adv_20d: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
     revenue_yoy_growth: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
     gross_margin: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
+    net_debt: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))  # total_debt - total_cash; <= 0 is net cash
     net_debt_ebitda: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
     interest_coverage: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
     status: Mapped[str] = mapped_column(

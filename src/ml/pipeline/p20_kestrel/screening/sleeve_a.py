@@ -45,6 +45,20 @@ _REVENUE_YOY_MIN = -0.15
 _GROSS_MARGIN_MIN = 0.0
 
 
+def _has_net_cash(universe_row: Dict[str, Any]) -> bool:
+    """
+    Return True when the ticker holds more cash than debt.
+
+    Args:
+        universe_row: Row from k20_universe.
+
+    Returns:
+        True if `net_debt` is known and <= 0.
+    """
+    net_debt = universe_row.get("net_debt")
+    return net_debt is not None and net_debt <= 0
+
+
 def _passes_hard_filters(
     universe_row: Dict[str, Any],
     signals: Dict[str, Any],
@@ -84,9 +98,8 @@ def _passes_hard_filters(
     if gross_margin is not None and gross_margin <= _GROSS_MARGIN_MIN:
         return f"negative_gross_margin ({gross_margin:.1%})"
 
-    has_net_cash = signals.get("net_cash", 0) or 0
     net_debt_ok = (
-        bool(has_net_cash)
+        _has_net_cash(universe_row)
         or (net_debt_ebitda is not None and net_debt_ebitda < _NET_DEBT_EBITDA_MAX)
         or (interest_coverage is not None and interest_coverage > _INTEREST_COVERAGE_MIN)
     )
@@ -103,12 +116,14 @@ def _passes_hard_filters(
     return None
 
 
-def _score_interim(signals: Dict[str, Any]) -> Dict[str, Any]:
+def _score_interim(signals: Dict[str, Any], universe_row: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """
     Compute §4.2.1 interim score without revisions feed.
 
     Args:
         signals: Dict of signal_type → value for the ticker.
+        universe_row: Row from k20_universe — source of the balance-sheet
+            inputs (net_debt, net_debt_ebitda, interest_coverage).
 
     Returns:
         Dict with score, score_partial, components.
@@ -123,15 +138,24 @@ def _score_interim(signals: Dict[str, Any]) -> Dict[str, Any]:
         components["insider"] = round(insider_pts, 1)
         score_partial += insider_pts
 
-    # Balance sheet / financial health (15 pts)
-    net_debt_ebitda = signals.get("net_debt_ebitda_signal") or 0.0
-    interest_cov = signals.get("interest_coverage_signal") or 0.0
+    # Balance sheet / financial health (15 pts). Missing inputs earn nothing —
+    # these used to be read from signals no job ever wrote, defaulting to 0.0,
+    # which counted as "net debt/EBITDA < 1" and gave every ticker full marks.
+    row = universe_row or {}
+    net_debt_ebitda = row.get("net_debt_ebitda")
+    interest_cov = row.get("interest_coverage")
+
+    def _bs_tier(max_ratio: float, min_coverage: float) -> bool:
+        return (net_debt_ebitda is not None and net_debt_ebitda < max_ratio) or (
+            interest_cov is not None and interest_cov > min_coverage
+        )
+
     bs_pts = 0.0
-    if net_debt_ebitda < 1.0 or interest_cov > 8.0:
+    if _has_net_cash(row) or _bs_tier(1.0, 8.0):
         bs_pts = 15.0
-    elif net_debt_ebitda < 2.0 or interest_cov > 6.0:
+    elif _bs_tier(2.0, 6.0):
         bs_pts = 10.0
-    elif net_debt_ebitda < 3.0 or interest_cov > 4.0:
+    elif _bs_tier(3.0, 4.0):
         bs_pts = 5.0
     components["balance_sheet"] = bs_pts
     score_partial += bs_pts
@@ -247,7 +271,7 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
         )
         signals["insider_buy_value_90d"] = sum(float(r["value"] or 0) for r in insider_rows)
 
-        score_info = _score_interim(signals)
+        score_info = _score_interim(signals, universe_row)
 
         upsert_watchlist(
             {

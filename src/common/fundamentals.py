@@ -6,6 +6,7 @@ Usage:
     fundamentals = get_fundamentals('AAPL', provider='yf')
 """
 
+from dataclasses import fields
 from typing import Any
 
 from src.data.data_manager import get_data_manager
@@ -14,6 +15,8 @@ from src.model.schemas import Fundamentals as SchemasFundamentals
 from src.model.telegram_bot import Fundamentals
 
 PROVIDER_CODES = ["fmp", "yf", "av", "fh", "td", "pg", "bnc", "cg"]
+
+_FUNDAMENTALS_FIELDS = frozenset(f.name for f in fields(Fundamentals))
 
 
 async def get_fundamentals_unified(
@@ -90,6 +93,9 @@ async def get_fundamentals_unified(
         "price_to_sales": None,
         "enterprise_value": None,
         "enterprise_value_to_ebitda": None,
+        "gross_margin": None,
+        "total_cash": None,
+        "total_debt": None,
         "data_source": None,
         "last_updated": None,
         "sources": {},
@@ -163,7 +169,11 @@ def get_fundamentals(ticker: str, provider: str | None = None, **kwargs) -> Fund
         if isinstance(result, (Fundamentals, SchemasFundamentals)):
             # Convert schemas.Fundamentals to telegram_bot.Fundamentals if needed
             if isinstance(result, SchemasFundamentals):
-                return Fundamentals(**result.__dict__)
+                # schemas.Fundamentals carries extra fields (symbol, avg_volume,
+                # quote_type, ...) telegram_bot.Fundamentals doesn't accept —
+                # passing them through raised TypeError, which
+                # get_fundamentals_unified's enrichment pass silently swallowed.
+                return Fundamentals(**{k: v for k, v in result.__dict__.items() if k in _FUNDAMENTALS_FIELDS})
             return result
         # Otherwise, try to normalize
         return normalize_fundamentals({prov: result})

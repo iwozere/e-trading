@@ -117,6 +117,49 @@ def _fetch_fundamentals_for_ticker(ticker: str) -> Any | None:
         return None
 
 
+def _derive_balance_sheet_fields(fund: Any) -> Dict[str, float | None]:
+    """
+    Map a `Fundamentals` object onto the k20_universe balance-sheet columns.
+
+    `Fundamentals` has no `net_debt_ebitda` / `interest_coverage` /
+    `revenue_yoy_growth` attributes — reading those names directly returned
+    None for every ticker, so Sleeve A's balance-sheet filter rejected 100% of
+    the tickers that reached it. Derive what Yahoo actually provides instead:
+
+    - net_debt = total_debt - total_cash (<= 0 means net cash)
+    - EBITDA = enterprise_value / EV-to-EBITDA, only when both are positive
+      (a ratio against negative EBITDA is meaningless, so it stays None)
+    - interest_coverage: Yahoo's info payload has no EBIT or interest-expense
+      field, so it stays None; net cash or net_debt_ebitda carry the filter.
+
+    Args:
+        fund: Fundamentals object from `get_fundamentals_unified`.
+
+    Returns:
+        Dict with revenue_yoy_growth, gross_margin, net_debt, net_debt_ebitda
+        and interest_coverage (each None when not derivable).
+    """
+    total_debt = getattr(fund, "total_debt", None)
+    total_cash = getattr(fund, "total_cash", None)
+    net_debt: float | None = None
+    if total_debt is not None and total_cash is not None:
+        net_debt = float(total_debt) - float(total_cash)
+
+    net_debt_ebitda: float | None = None
+    ev = getattr(fund, "enterprise_value", None)
+    ev_to_ebitda = getattr(fund, "enterprise_value_to_ebitda", None)
+    if net_debt is not None and ev and ev_to_ebitda and ev > 0 and ev_to_ebitda > 0:
+        net_debt_ebitda = net_debt / (float(ev) / float(ev_to_ebitda))
+
+    return {
+        "revenue_yoy_growth": getattr(fund, "revenue_growth", None),
+        "gross_margin": getattr(fund, "gross_margin", None),
+        "net_debt": net_debt,
+        "net_debt_ebitda": net_debt_ebitda,
+        "interest_coverage": None,
+    }
+
+
 _RETRY_COOLDOWN_SECONDS = 300  # 5-minute global wait before the retry pass
 
 
@@ -260,15 +303,8 @@ def run() -> Dict[str, Any]:
         }
 
         if fund is not None:
-            universe_row.update(
-                {
-                    "revenue_yoy_growth": getattr(fund, "revenue_yoy_growth", None),
-                    "gross_margin": getattr(fund, "gross_margin", None),
-                    "net_debt_ebitda": getattr(fund, "net_debt_ebitda", None),
-                    "interest_coverage": getattr(fund, "interest_coverage", None),
-                    "mcap": getattr(fund, "market_cap", None) or mcap,
-                }
-            )
+            universe_row.update(_derive_balance_sheet_fields(fund))
+            universe_row["mcap"] = getattr(fund, "market_cap", None) or mcap
 
         buffer.append(universe_row)
         if len(buffer) >= _UPSERT_CHUNK_SIZE:

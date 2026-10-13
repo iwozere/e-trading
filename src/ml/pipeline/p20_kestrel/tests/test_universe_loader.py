@@ -10,6 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p20_kestrel.ingest import universe_loader
+from src.model.telegram_bot import Fundamentals
 
 
 def _fake_csv_df(tickers: list[str]) -> pd.DataFrame:
@@ -73,3 +74,45 @@ def test_run_partial_failure_keeps_earlier_chunks_persisted(monkeypatch, upsert_
     # The first full chunk (AAA, BBB) was flushed before the failure at ticker index 3.
     assert len(upsert_calls) == 1
     assert [row["ticker"] for row in upsert_calls[0]] == ["AAA", "BBB"]
+
+
+def test_derive_balance_sheet_fields_from_yahoo_fields():
+    """
+    Regression guard: Fundamentals has no net_debt_ebitda / interest_coverage /
+    revenue_yoy_growth attributes, so reading them by name returned None for
+    every ticker. They must be derived from the fields Yahoo actually fills.
+    """
+    fund = Fundamentals(
+        revenue_growth=0.08,
+        gross_margin=0.45,
+        total_debt=600.0,
+        total_cash=100.0,
+        enterprise_value=2_000.0,
+        enterprise_value_to_ebitda=10.0,  # EBITDA = 200
+    )
+
+    fields = universe_loader._derive_balance_sheet_fields(fund)
+
+    assert fields["revenue_yoy_growth"] == 0.08
+    assert fields["gross_margin"] == 0.45
+    assert fields["net_debt"] == 500.0
+    assert fields["net_debt_ebitda"] == pytest.approx(2.5)
+    assert fields["interest_coverage"] is None
+
+
+def test_derive_balance_sheet_fields_net_cash_negative_ebitda():
+    """Net cash is still recorded when EBITDA is negative (no meaningful ratio)."""
+    fund = Fundamentals(total_debt=10.0, total_cash=90.0, enterprise_value=500.0, enterprise_value_to_ebitda=-4.0)
+
+    fields = universe_loader._derive_balance_sheet_fields(fund)
+
+    assert fields["net_debt"] == -80.0
+    assert fields["net_debt_ebitda"] is None
+
+
+def test_derive_balance_sheet_fields_all_missing():
+    """No cash/debt data leaves every derived field None."""
+    fields = universe_loader._derive_balance_sheet_fields(Fundamentals())
+
+    assert fields["net_debt"] is None
+    assert fields["net_debt_ebitda"] is None

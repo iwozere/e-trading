@@ -50,6 +50,9 @@ class Fundamentals:
     price_to_sales: float | None = None
     enterprise_value: float | None = None
     enterprise_value_to_ebitda: float | None = None
+    gross_margin: float | None = None
+    total_cash: float | None = None
+    total_debt: float | None = None
     # Data source information
     data_source: str | None = None
     last_updated: str | None = None

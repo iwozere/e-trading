@@ -73,6 +73,13 @@
       (`rejection_breakdown` in the returned dict, logged as a warning whenever the funnel is empty). Next
       step: read tonight's `p20_screen_turnaround` / `p20_momentum_rank` logs for the dominant rejection
       reason and fix it there.
+      **2026-10-13 — third Sleeve A bug fixed:** `balance_sheet_too_weak` rejected ~100% of tickers that reached
+      it. `universe_loader.py` read `net_debt_ebitda`/`interest_coverage`/`revenue_yoy_growth` off
+      `Fundamentals`, which has none of those fields (always None), and nothing ever wrote the `net_cash`
+      signal. Now derived from Yahoo's `totalDebt`/`totalCash`/EV/`enterpriseToEbitda` (new
+      `k20_universe.net_debt` column, migration 008); `interest_coverage` stays None (Yahoo has no
+      EBIT/interest field). Scoring's balance-sheet component had the mirror bug (missing → full 15 pts) — fixed.
+      Gross-margin and revenue-growth filters were also silently skipped (None) and are now live.
 
 ### 🚀 PLANNED ENHANCEMENTS
 

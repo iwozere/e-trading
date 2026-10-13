@@ -201,6 +201,34 @@ class TestCommonFundamentals(unittest.TestCase):
         self.assertIs(result, mock_fundamentals)
 
     @patch("src.common.fundamentals.DataDownloaderFactory")
+    def test_get_fundamentals_converts_schemas_fundamentals_with_extra_fields(self, mock_factory):
+        """
+        schemas.Fundamentals (what the Yahoo downloader returns) carries fields
+        telegram_bot.Fundamentals lacks; conversion must drop them, not raise
+        TypeError, and must keep the balance-sheet fields both classes share.
+        """
+        from src.model.schemas import Fundamentals as SchemasFundamentals
+
+        mock_downloader = MagicMock()
+        mock_downloader.get_fundamentals.return_value = SchemasFundamentals(
+            symbol="AAPL",
+            ticker="AAPL",
+            avg_volume=1_000_000.0,
+            gross_margin=0.45,
+            total_cash=100.0,
+            total_debt=600.0,
+        )
+        mock_factory.create_downloader.return_value = mock_downloader
+
+        result = get_fundamentals(self.test_symbol, provider="yf")
+
+        self.assertIsInstance(result, Fundamentals)
+        self.assertEqual(result.ticker, "AAPL")
+        self.assertEqual(result.gross_margin, 0.45)
+        self.assertEqual(result.total_cash, 100.0)
+        self.assertEqual(result.total_debt, 600.0)
+
+    @patch("src.common.fundamentals.DataDownloaderFactory")
     def test_get_fundamentals_unknown_provider(self, mock_factory):
         """Test get_fundamentals with unknown provider."""
         mock_factory.create_downloader.return_value = None
