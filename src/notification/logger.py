@@ -575,6 +575,24 @@ def get_multiprocessing_logger(name: str, level: int = logging.DEBUG, external_q
     return logger
 
 
+def _ancestor_file_handler_names(logger: logging.Logger) -> set[str]:
+    """
+    Collect file paths of RotatingFileHandlers that a logger's records already reach via propagation.
+
+    Args:
+        logger: Logger whose ancestor chain to inspect (the logger's own handlers are excluded).
+
+    Returns:
+        Set of handler baseFilename values found on propagating ancestors.
+    """
+    names: set[str] = set()
+    current: logging.Logger = logger
+    while current.propagate and isinstance(current.parent, logging.Logger):
+        current = current.parent
+        names.update(h.baseFilename for h in current.handlers if isinstance(h, RotatingFileHandler))
+    return names
+
+
 class ContextAwareLogger:
     """
     A logger that can inherit logging context from its parent.
@@ -599,6 +617,10 @@ class ContextAwareLogger:
         """
         parent_logger = logging.getLogger(parent_name)
         existing_filenames = {h.baseFilename for h in self.logger.handlers if isinstance(h, RotatingFileHandler)}
+        # A handler already on an ancestor (e.g. the module logger for a
+        # f"{__name__}.ClassName" logger) is reached via propagation; adding it here
+        # too would write every record twice.
+        existing_filenames |= _ancestor_file_handler_names(self.logger)
         for handler in parent_logger.handlers:
             if isinstance(handler, RotatingFileHandler):
                 if handler.baseFilename not in existing_filenames:

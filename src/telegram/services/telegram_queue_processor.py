@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import BufferedInputFile
 
 from src.data.db.services.users_service import users_service
@@ -30,6 +30,15 @@ from src.notification.service.message_queue_client import get_message_queue_clie
 
 # No module-level _logger here -- every log call in this file goes through
 # self._logger (setup_logger(f"{__name__}.TelegramQueueProcessor")) instead.
+
+# TelegramBadRequest descriptions meaning the recipient can never be reached, so
+# retrying only burns the retry budget (e.g. an admin placeholder recipient_id that
+# falls through to being used as a raw chat ID).
+_PERMANENT_BAD_REQUEST_MARKERS = ("chat not found", "user is deactivated", "peer_id_invalid")
+
+# TelegramBadRequest description when message text is not valid Telegram HTML
+# (e.g. a literal "<message>" in log-alert text).
+_PARSE_ENTITIES_MARKER = "can't parse entities"
 
 
 class TelegramQueueProcessor:
@@ -146,6 +155,7 @@ class TelegramQueueProcessor:
         message_id = message["message_id"]
         self._logger.info("Processing delivery %s (message %s)", delivery_status_id, message_id)
 
+        telegram_chat_id: int | None = None
         try:
             # Extract telegram-specific data
             telegram_chat_id = self._extract_telegram_chat_id(message)
@@ -175,12 +185,7 @@ class TelegramQueueProcessor:
                 await self._send_with_attachments(telegram_chat_id, message_text, attachments, reply_to_message_id)
             else:
                 # Send text only
-                await self.bot.send_message(
-                    chat_id=telegram_chat_id,
-                    text=message_text,
-                    reply_to_message_id=reply_to_message_id,
-                    parse_mode="HTML",
-                )
+                await self._send_text_message(telegram_chat_id, message_text, reply_to_message_id)
 
             # Mark as delivered
             self._message_queue_client.record_delivery_success(delivery_status_id)
@@ -189,8 +194,16 @@ class TelegramQueueProcessor:
         except (TelegramAPIError, TelegramBadRequest) as e:
             # Telegram API error
             error_msg = f"Telegram API error: {str(e)}"
-            self._logger.error("Delivery %s (message %s): %s", delivery_status_id, message_id, error_msg)
-            self._message_queue_client.record_delivery_failure(delivery_status_id, error_msg)
+            permanent = self._is_permanent_telegram_error(e)
+            self._logger.error(
+                "Delivery %s (message %s, chat %s): %s%s",
+                delivery_status_id,
+                message_id,
+                telegram_chat_id,
+                error_msg,
+                " (permanent, not retrying)" if permanent else "",
+            )
+            self._message_queue_client.record_delivery_failure(delivery_status_id, error_msg, permanent=permanent)
 
         except Exception as e:
             # Other errors
@@ -334,9 +347,49 @@ class TelegramQueueProcessor:
 
         # If there's still text and no attachments were sent, send as text message
         if text:
+            await self._send_text_message(chat_id, text, reply_to_message_id)
+
+    async def _send_text_message(self, chat_id: int, text: str, reply_to_message_id: int | None = None) -> None:
+        """
+        Send a text message as HTML, falling back to plain text if Telegram rejects the markup.
+
+        Message producers embed arbitrary text (log lines, user input) without escaping,
+        so a stray "<tag>" would otherwise fail the delivery outright.
+
+        Args:
+            chat_id: Telegram chat ID
+            text: Message text (HTML)
+            reply_to_message_id: Optional message ID to reply to
+        """
+        try:
             await self.bot.send_message(
                 chat_id=chat_id, text=text, reply_to_message_id=reply_to_message_id, parse_mode="HTML"
             )
+        except TelegramBadRequest as e:
+            if _PARSE_ENTITIES_MARKER not in str(e).lower():
+                raise
+            self._logger.warning("HTML rejected for chat %s (%s); resending as plain text", chat_id, e)
+            await self.bot.send_message(
+                chat_id=chat_id, text=text, reply_to_message_id=reply_to_message_id, parse_mode=None
+            )
+
+    @staticmethod
+    def _is_permanent_telegram_error(error: TelegramAPIError) -> bool:
+        """
+        Decide whether a Telegram API error means retrying the delivery cannot succeed.
+
+        Args:
+            error: Error raised by aiogram while sending
+
+        Returns:
+            True if the recipient is unreachable (bot blocked, chat missing, user deactivated)
+        """
+        if isinstance(error, TelegramForbiddenError):
+            return True
+        if isinstance(error, TelegramBadRequest):
+            description = str(error).lower()
+            return any(marker in description for marker in _PERMANENT_BAD_REQUEST_MARKERS)
+        return False
 
     async def _process_attachment(self, filename: str, attachment_data: Any) -> BufferedInputFile | None:
         """

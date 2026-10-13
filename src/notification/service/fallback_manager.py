@@ -433,8 +433,14 @@ class FallbackManager:
                 self._logger.debug("Channel %s is disabled", channel_name)
                 return False
 
-            # Allow delivery if channel is healthy or degraded
-            is_available = channel_status.overall_status in [HealthStatus.HEALTHY, HealthStatus.DEGRADED]
+            # Allow delivery if channel is healthy or degraded. UNKNOWN (no health check has
+            # completed yet, e.g. right after startup) is treated like missing status info --
+            # otherwise every delivery claimed before the first check fails outright.
+            is_available = channel_status.overall_status in [
+                HealthStatus.HEALTHY,
+                HealthStatus.DEGRADED,
+                HealthStatus.UNKNOWN,
+            ]
 
             self._logger.debug("Channel %s availability: %s", channel_name, is_available)
             return is_available
