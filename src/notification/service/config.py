@@ -36,7 +36,7 @@ class DatabaseConfig(BaseSettings):
     """Database configuration."""
 
     url: str = Field(
-        default="postgresql://localhost/trading",  # Default PostgreSQL URL
+        default="postgresql+psycopg2://localhost/trading",  # Default PostgreSQL URL
         description="Database connection URL",
     )
     pool_size: int = Field(default=10, description="Database connection pool size")

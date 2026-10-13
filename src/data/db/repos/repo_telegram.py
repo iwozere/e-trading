@@ -102,8 +102,8 @@ class BroadcastRepo:
         # Total recipients and successful deliveries
         recipients_q = select(func.sum(TelegramBroadcastLog.total_count), func.sum(TelegramBroadcastLog.success_count))
         result = self.s.execute(recipients_q).first()
-        total_recipients = result[0] if result and result[0] else 0
-        successful_deliveries = result[1] if result and result[1] else 0
+        total_recipients: int = (result[0] or 0) if result else 0
+        successful_deliveries: int = (result[1] or 0) if result else 0
 
         # Recent activity (last 24 hours)
         yesterday = datetime.now(UTC) - timedelta(days=1)

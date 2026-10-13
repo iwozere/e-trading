@@ -9,7 +9,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List
 
-from sqlalchemy import and_, asc, cast, desc, or_, text
+from sqlalchemy import and_, cast, or_, text
 from sqlalchemy.dialects.postgresql import ARRAY, TEXT
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -127,9 +127,9 @@ class MessageRepository:
         # Apply ordering
         order_field = getattr(Message, order_by, Message.created_at)
         if order_desc:
-            query = query.order_by(desc(order_field))
+            query = query.order_by(order_field.desc())
         else:
-            query = query.order_by(asc(order_field))
+            query = query.order_by(order_field.asc())
 
         return query.offset(offset).limit(limit).all()
 
@@ -195,7 +195,7 @@ class MessageRepository:
             "CASE priority WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'NORMAL' THEN 3 WHEN 'LOW' THEN 4 END"
         )
 
-        return query.order_by(priority_order, asc(Message.scheduled_for)).limit(limit).all()
+        return query.order_by(priority_order, Message.scheduled_for.asc()).limit(limit).all()
 
     def get_failed_messages_for_retry(
         self, current_time: datetime, retry_delay_minutes: int = 5, limit: int = 50, channels: List[str] | None = None
@@ -226,7 +226,7 @@ class MessageRepository:
             query = query.filter(Message.channels.overlap(cast(channels, ARRAY(TEXT))))
 
         return (
-            query.order_by(asc(Message.processed_at))
+            query.order_by(Message.processed_at.asc())
             .limit(limit)
             .all()
         )
@@ -549,7 +549,7 @@ class DeliveryStatusRepository:
         return (
             self.session.query(MessageDeliveryStatus)
             .filter(MessageDeliveryStatus.message_id == message_id)
-            .order_by(desc(MessageDeliveryStatus.created_at))
+            .order_by(MessageDeliveryStatus.created_at.desc())
             .all()
         )
 
@@ -1233,7 +1233,7 @@ class ChannelConfigRepository:
         if enabled_only:
             query = query.filter(ChannelConfig.enabled)
 
-        return query.order_by(asc(ChannelConfig.channel)).all()
+        return query.order_by(ChannelConfig.channel.asc()).all()
 
     def update_channel_config(self, channel: str, update_data: Dict[str, Any]) -> ChannelConfig | None:
         """

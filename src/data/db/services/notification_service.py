@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
 
-from sqlalchemy import Text, cast, desc, func, or_
+from sqlalchemy import Text, cast, func, or_
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -187,7 +187,7 @@ class NotificationService(BaseDBService):
 
         total = query.with_entities(func.count(Message.id)).scalar() or 0
 
-        messages = query.order_by(desc(Message.created_at)).offset(offset).limit(limit).all()
+        messages = query.order_by(Message.created_at.desc()).offset(offset).limit(limit).all()
 
         items = [
             {

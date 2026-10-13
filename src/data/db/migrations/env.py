@@ -22,6 +22,7 @@ import src.data.db.models.model_trading  # noqa: F401,E402
 import src.data.db.models.model_users  # noqa: F401,E402
 import src.data.db.models.model_webui  # noqa: F401,E402
 from src.data.db.core.base import Base  # noqa: E402
+from src.data.db.core.db_url import normalize_db_url  # noqa: E402
 
 # this is the Alembic Config object, which provides access to the values within
 # the .ini file in use.
@@ -43,17 +44,17 @@ def _get_db_url() -> str:
     # Prefer explicit env var, then ini value, then code config
     env_url = os.getenv("ALEMBIC_DB_URL") or os.getenv("DATABASE_URL")
     if env_url:
-        return env_url.replace("postgres://", "postgresql://")
+        return normalize_db_url(env_url)
 
     ini_url = config.get_main_option("sqlalchemy.url")
     if ini_url and "driver://" not in ini_url:
-        return ini_url.replace("postgres://", "postgresql://")
+        return normalize_db_url(ini_url)
 
     # Fallback to code config if available
     try:
         from config.donotshare.donotshare import DB_URL  # type: ignore
 
-        return DB_URL.replace("postgres://", "postgresql://")
+        return normalize_db_url(DB_URL)
     except Exception:
         # Last resort, return ini placeholder which will fail loudly if used
         return ini_url or ""

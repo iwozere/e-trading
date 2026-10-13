@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from config.donotshare.donotshare import DB_URL as CONFIG_DB_URL
 from config.donotshare.donotshare import SQL_ECHO as CONFIG_SQL_ECHO
 from src.data.db.core.base import Base
+from src.data.db.core.db_url import normalize_db_url
 
 # --- psycopg2 numpy scalar adapters -------------------------------------------
 # psycopg2 binds float/int subclasses via repr(); numpy 2.x changed scalar reprs
@@ -35,7 +36,7 @@ except ImportError:
 
 # Use PostgreSQL by default, fallback to SQLite if needed
 # Environment variable DB_URL can override this
-DB_URL = os.getenv("DB_URL", CONFIG_DB_URL)
+DB_URL = normalize_db_url(os.getenv("DB_URL", CONFIG_DB_URL))
 
 # SQL query logging — disabled by default; enable only in development via SQL_ECHO=1 env var.
 # Never enable in production: exposes bound values (PII) in logs.
@@ -70,7 +71,7 @@ def make_engine(url: str | None = None, *, echo: bool | None = None) -> Engine:
       ``DB_POOL_RECYCLE``                        ``1800`` Recycle connections after N seconds
       =========================================  =======  ========================
     """
-    url = url or DB_URL
+    url = normalize_db_url(url or DB_URL)
     echo = SQL_ECHO if echo is None else echo
 
     connect_args: dict = {}

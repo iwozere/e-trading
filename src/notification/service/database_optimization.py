@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from typing import cast as typing_cast
 
-from sqlalchemy import Index, and_, asc, case, cast, desc, func, inspect, or_, text
+from sqlalchemy import Index, and_, case, cast, func, inspect, or_, text
 from sqlalchemy.dialects.postgresql import ARRAY, TEXT, insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -125,9 +125,9 @@ class OptimizedMessageRepository(MessageRepository):
         # Apply ordering
         order_field = getattr(Message, order_by, Message.created_at)
         if order_desc:
-            query = query.order_by(desc(order_field))
+            query = query.order_by(order_field.desc())
         else:
-            query = query.order_by(asc(order_field))
+            query = query.order_by(order_field.asc())
 
         return query.offset(offset).limit(limit).all()
 
@@ -286,8 +286,8 @@ class OptimizedMessageRepository(MessageRepository):
         return (
             query.order_by(
                 priority_case,
-                asc(Message.scheduled_for),
-                asc(Message.id),  # Tie-breaker for consistent ordering
+                Message.scheduled_for.asc(),
+                Message.id.asc(),  # Tie-breaker for consistent ordering
             )
             .limit(limit)
             .all()
@@ -443,7 +443,7 @@ class OptimizedMessageRepository(MessageRepository):
             query = query.filter(Message.channels.overlap(cast(channels, ARRAY(TEXT))))
 
         return (
-            query.order_by(asc(Message.processed_at))
+            query.order_by(Message.processed_at.asc())
             .limit(limit)
             .all()
         )
@@ -726,8 +726,8 @@ class OptimizedDeliveryStatusRepository(DeliveryStatusRepository):
         # Apply ordering and pagination
         deliveries = (
             query.order_by(
-                desc(MessageDeliveryStatus.created_at),
-                desc(MessageDeliveryStatus.id),  # Tie-breaker
+                MessageDeliveryStatus.created_at.desc(),
+                MessageDeliveryStatus.id.desc(),  # Tie-breaker
             )
             .offset(offset)
             .limit(limit)
