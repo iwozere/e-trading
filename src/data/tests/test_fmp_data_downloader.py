@@ -217,30 +217,30 @@ def test_ohlcv_retrieval_mock():
     api_key = "test_api_key"
     downloader = FMPDataDownloader(api_key=api_key)
 
-    # Mock OHLCV response
-    mock_ohlcv = {
-        "symbol": "AAPL",
-        "historical": [
-            {
-                "date": "2024-01-15",
-                "open": 150.0,
-                "high": 152.0,
-                "low": 149.0,
-                "close": 151.0,
-                "adjClose": 151.0,
-                "volume": 50000000,
-            },
-            {
-                "date": "2024-01-16",
-                "open": 151.0,
-                "high": 153.0,
-                "low": 150.0,
-                "close": 152.0,
-                "adjClose": 152.0,
-                "volume": 48000000,
-            },
-        ],
-    }
+    # Mock OHLCV response: `historical-price-eod/full` (the live replacement for
+    # the dead `historical-price-full`) returns a bare list, not a
+    # {"historical": [...]} wrapper, and has no `adjClose` field — see
+    # src/ml/pipeline/p22_biotech_ma/ingest/fmp_client.py's module docstring.
+    mock_ohlcv = [
+        {
+            "symbol": "AAPL",
+            "date": "2024-01-15",
+            "open": 150.0,
+            "high": 152.0,
+            "low": 149.0,
+            "close": 151.0,
+            "volume": 50000000,
+        },
+        {
+            "symbol": "AAPL",
+            "date": "2024-01-16",
+            "open": 151.0,
+            "high": 153.0,
+            "low": 150.0,
+            "close": 152.0,
+            "volume": 48000000,
+        },
+    ]
 
     start_date = datetime(2024, 1, 15)
     end_date = datetime(2024, 1, 16)
@@ -248,18 +248,23 @@ def test_ohlcv_retrieval_mock():
     with patch("requests.get") as mock_get:
         mock_get.return_value.json.return_value = mock_ohlcv
         mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.status_code = 200
         try:
             df = downloader.get_ohlcv("AAPL", "1d", start_date, end_date)
             assert df is not None
+            assert len(df) == 2
+            called_url = mock_get.call_args.args[0]
+            assert called_url == f"{downloader.stable_url}/historical-price-eod/full"
             print("✅ OHLCV data retrieved for AAPL")
             print(f"   Shape: {df.shape}")
             print(f"   Columns: {list(df.columns)}")
-            print(f"   Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
+            print(f"   Date range: {df.index.min()} to {df.index.max()}")
             print("   Sample data:")
             print(df.head())
 
         except Exception as e:
             print(f"❌ OHLCV retrieval test failed: {e}")
+            raise
 
 
 def test_interval_conversion():

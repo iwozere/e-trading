@@ -82,8 +82,13 @@ class FMPDataDownloader(BaseDataDownloader):
 
             # Build URL
             if fmp_interval == "1day":
-                # Daily data endpoint
-                url = f"{self.stable_url}/historical-price-full"
+                # Daily data endpoint. `/historical-price-full` is dead (404 as of
+                # 2026-08-31, confirmed live against MRNA — see
+                # src/ml/pipeline/p22_biotech_ma/ingest/fmp_client.py's module
+                # docstring). `/historical-price-eod/full` is the live replacement;
+                # like the intraday endpoint below, it returns a bare list, not a
+                # {"historical": [...]} wrapper — see the parsing below.
+                url = f"{self.stable_url}/historical-price-eod/full"
                 params: Dict[str, Any] = {"apikey": self.api_key, "from": start_str, "to": end_str, "symbol": symbol}
             else:
                 # Intraday data endpoint
@@ -112,19 +117,18 @@ class FMPDataDownloader(BaseDataDownloader):
 
             data = response.json()
 
-            # Parse response based on endpoint
-            if fmp_interval == "1day":
-                # Daily data structure: {"historical": [...]}
-                if "historical" not in data:
-                    _logger.warning("No historical data found for %s", symbol)
-                    return None
+            # Both the daily (`historical-price-eod/full`) and intraday
+            # (`historical-chart/<interval>`) endpoints return a bare list of bars,
+            # not a {"historical": [...]} wrapper. Older FMP docs/responses used
+            # the wrapper for the now-dead `/historical-price-full`; keep accepting
+            # it too in case a cached/mocked fixture still uses that shape.
+            if isinstance(data, dict) and "historical" in data:
                 historical_data = data["historical"]
-            else:
-                # Intraday data structure: [...] (direct array)
-                if not isinstance(data, list):
-                    _logger.warning("No intraday data found for %s", symbol)
-                    return None
+            elif isinstance(data, list):
                 historical_data = data
+            else:
+                _logger.warning("Unexpected response shape for %s %s", symbol, interval)
+                return None
 
             if not historical_data:
                 _logger.warning("No data returned for %s %s", symbol, interval)
