@@ -1,7 +1,3 @@
-[Monitoring/scheduler.service] [systemd/scheduler.service] 2026-08-29 09:30:05,772 - [PID 1329976] - ERROR - HTTP Error 404: {"quoteSummary":{"result
+[Monitoring/trading-webui.service] 2026-09-09 21:39:53,562 - [PID 4147713] - ERROR - Strategy factory hydration failed: Unsupported configuration format: '
 
-[systemd/scheduler.service] 2026-08-29 09:30:05,772 - [PID 1329976] - ERROR - HTTP Error 404: {"quoteSummary":{"result
----
-[Monitoring/vector.service] [systemd/vector.service] 2026-08-29T07:46:13.499984Z ERROR source{component_kind="source" component_id=journald componen
-
-[systemd/vector.service] 2026-08-29T07:46:13.499984Z ERROR source{component_kind="source" component_id=journald component_type=journald}: vector::internal_events::journald: Invalid record from journald, discarding. error=Error("invalid number", line: 1, column: 2) text=-- cursor: s=39b9acb3888a421cadc60555345473fb;i=1ac2b70;b=b66f7e613f974dc99421acc1a50263c3;m=114a86f2b84;t=65a2ac2e6a18e;x=df940f96eb54eea error_type="parser_failed" stage="processing"
+[systemd/trading-webui.service] 2026-09-09 21:39:53,562 - [PID 4147713] - ERROR - Strategy factory hydration failed: Unsupported configuration format: 'modules' is not allowed. Use flat top-level keys: broker, strategy, risk_management, notifications, data, trading

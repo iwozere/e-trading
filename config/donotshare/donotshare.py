@@ -11,7 +11,7 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 
 
 # Data cache directory
-DATA_CACHE_DIR = os.getenv("DATA_CACHE_DIR", "c:/data-cache")
+DATA_CACHE_DIR = os.getenv("DATA_CACHE_DIR", "d:/data-cache")
 
 # Database configuration
 #DB_PATH = "db/trading.db"  # Keep for backward compatibility
