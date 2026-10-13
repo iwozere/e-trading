@@ -26,11 +26,6 @@ from src.data.db.models.model_notification import (
 from src.data.db.repos.repo_system_health import SystemHealthRepository
 from src.notification.channels.base import ChannelHealth, ChannelHealthStatus
 from src.notification.logger import setup_logger
-from src.notification.service.database_optimization import (
-    OptimizedDeliveryStatusRepository,
-    OptimizedMessageRepository,
-    OptimizedRateLimitRepository,
-)
 
 _logger = setup_logger(__name__)
 
@@ -1314,11 +1309,21 @@ class NotificationRepository:
         """
         self.session = session
 
+        self.messages: MessageRepository
+        self.delivery_status: DeliveryStatusRepository
+        self.rate_limits: RateLimitRepository
         if use_optimized:
+            # Deferred import: database_optimization subclasses the repositories defined in this module.
+            from src.notification.service.database_optimization import (
+                OptimizedDeliveryStatusRepository,
+                OptimizedMessageRepository,
+                OptimizedRateLimitRepository,
+            )
+
             # Use optimized implementations for better performance
-            self.messages: MessageRepository = OptimizedMessageRepository(session)  # type: ignore
-            self.delivery_status: DeliveryStatusRepository = OptimizedDeliveryStatusRepository(session)  # type: ignore
-            self.rate_limits: RateLimitRepository = OptimizedRateLimitRepository(session)  # type: ignore
+            self.messages = OptimizedMessageRepository(session)
+            self.delivery_status = OptimizedDeliveryStatusRepository(session)
+            self.rate_limits = OptimizedRateLimitRepository(session)
             # Keep standard implementations for these
             self.channel_configs = ChannelConfigRepository(session)
         else:
@@ -1382,14 +1387,14 @@ class NotificationRepository:
         return self.delivery_status.get_delivery_statuses_by_message(message_id)
 
     def update_delivery_status(self, status_id: int, update_data: Dict[str, Any]) -> MessageDeliveryStatus | None:
-        return self.delivery_status.update_delivery_status(status_id, update_data)  # type: ignore
+        return self.delivery_status.update_delivery_status(status_id, update_data)
 
     def get_delivery_statistics(self, **kwargs) -> Dict[str, Any]:
         return self.delivery_status.get_delivery_statistics(**kwargs)
 
     # ---------- Rate Limit Delegation ----------
     def check_and_consume_token(self, user_id: str, channel: str, default_config: Dict[str, Any]) -> bool:
-        return self.rate_limits.check_and_consume_token(user_id, channel, default_config)  # type: ignore
+        return self.rate_limits.check_and_consume_token(user_id, channel, default_config)
 
     # ---------- Channel Health (System Health Delegation) ----------
     def list_channel_health(self) -> List[ChannelHealth]:

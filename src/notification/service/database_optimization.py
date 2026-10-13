@@ -23,12 +23,13 @@ from src.data.db.models.model_notification import (
     MessageStatus,
     RateLimit,
 )
+from src.data.db.repos.repo_notification import DeliveryStatusRepository, MessageRepository, RateLimitRepository
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
 
-class OptimizedMessageRepository:
+class OptimizedMessageRepository(MessageRepository):
     """Optimized repository for message operations with performance improvements."""
 
     def __init__(self, session: Session):
@@ -601,8 +602,14 @@ class OptimizedMessageRepository:
             return 0
 
 
-class OptimizedDeliveryStatusRepository:
-    """Optimized repository for delivery status operations."""
+class OptimizedDeliveryStatusRepository(DeliveryStatusRepository):
+    """
+    Optimized repository for delivery status operations.
+
+    Subclasses DeliveryStatusRepository so any method not overridden here (e.g.
+    claim_pending_deliveries) falls through to the standard implementation instead
+    of raising AttributeError when NotificationRepository swaps this class in.
+    """
 
     def __init__(self, session: Session):
         """
@@ -1048,7 +1055,7 @@ class OptimizedDeliveryStatusRepository:
         }
 
 
-class OptimizedRateLimitRepository:
+class OptimizedRateLimitRepository(RateLimitRepository):
     """Optimized repository for rate limit operations."""
 
     def __init__(self, session: Session):
