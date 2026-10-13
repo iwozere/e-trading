@@ -148,3 +148,59 @@ def test_no_fpi_names_no_flag(tmp_path):
     s = sr.report(db, "2026-06-29")
     assert s.get("fpi_count", 0) == 0
     assert not any("are FPIs" in f for f in s["flags"])
+
+
+# ── --hits: T1+ momentum hits table ─────────────────────────────────────────
+
+
+def _poll(ticker, hh, mm, **kw):
+    return IntradaySignal(ticker=ticker, ts=datetime(2026, 6, 29, hh, mm, tzinfo=UTC), **kw)
+
+
+def test_hits_missing_db(tmp_path):
+    assert sr.hits(str(tmp_path / "nope.sqlite"))["error"] == "no shadow store yet"
+
+
+def test_hits_aggregates_per_ticker_and_skips_t0(tmp_path):
+    db = str(tmp_path / "s.sqlite")
+    ShadowStore(db).append_many(
+        "2026-06-29",
+        [
+            _poll("AAA", 14, 0, momentum_tier="T0", momentum_score=10.0, price=1.0, pct_from_open=0.05),
+            _poll("AAA", 14, 15, momentum_tier="T1", momentum_score=30.0, price=1.2, pct_from_open=0.25, rvol_so_far=6.0),
+            _poll("AAA", 14, 30, momentum_tier="T3", momentum_score=90.0, price=1.5, pct_from_open=0.50, rvol_so_far=9.0),
+            _poll("BBB", 15, 0, momentum_tier="T2", momentum_score=50.0, price=2.0, pct_from_open=-0.35),
+            _poll("CCC", 15, 0, momentum_tier="T0", momentum_score=5.0),
+        ],
+    )
+    h = sr.hits(db, "2026-06-29")
+    assert [x["ticker"] for x in h["hits"]] == ["AAA", "BBB"]  # T3 before T2; CCC never hit
+    aaa = h["hits"][0]
+    assert aaa["first_hit_et"] == "10:15"  # 14:15 UTC in June = EDT
+    assert aaa["first_hit_price"] == 1.2
+    assert aaa["peak_tier"] == "T3" and aaa["peak_score"] == 90.0
+    assert aaa["max_move"] == 0.50 and aaa["peak_rvol"] == 9.0
+    assert h["hits"][1]["max_move"] == -0.35  # drops are hits too; sign kept
+
+
+def test_hits_defaults_to_latest_date(tmp_path):
+    db = str(tmp_path / "s.sqlite")
+    st = ShadowStore(db)
+    st.append("2026-06-26", _sig("OLD", momentum_tier="T1", momentum_score=30.0))
+    st.append("2026-06-29", _sig("NEW", momentum_tier="T1", momentum_score=30.0))
+    h = sr.hits(db)
+    assert h["date"] == "2026-06-29" and [x["ticker"] for x in h["hits"]] == ["NEW"]
+
+
+def test_format_hits_table_and_empty(tmp_path):
+    db = str(tmp_path / "s.sqlite")
+    ShadowStore(db).append_many(
+        "2026-06-29",
+        [
+            _sig("AAA", momentum_tier="T2", momentum_score=55.0, price=1.0, pct_from_open=-0.30),
+            _sig("ZZZ", momentum_tier="T0"),
+        ],
+    )
+    text = sr.format_hits(sr.hits(db, "2026-06-29"))
+    assert "1 name(s)" in text and "AAA" in text and "-30%" in text and "ZZZ" not in text
+    assert "no names crossed T1" in sr.format_hits({"db": db, "date": "2026-06-30", "hits": []})

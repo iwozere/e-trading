@@ -57,6 +57,10 @@ python src/ml/pipeline/p19_penny_intraday/run_p19.py run-once --mode shadow
 python src/ml/pipeline/p19_penny_intraday/run_p19.py eod-backfill
 python src/ml/pipeline/p19_penny_intraday/run_p19.py label-backfill       # T+10
 python src/ml/pipeline/p19_penny_intraday/run_p19.py filings-poll        # intraday, spec §9
+
+# Shadow store: QA summary, or the day's simulated hits (momentum tier T1+) with outcome labels
+python -m src.ml.pipeline.p19_penny_intraday.shadow_report [--date YYYY-MM-DD] [--all]
+python -m src.ml.pipeline.p19_penny_intraday.shadow_report --hits [--date YYYY-MM-DD] [--all]
 ```
 
 ## Integration

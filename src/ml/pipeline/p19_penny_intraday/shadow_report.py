@@ -5,12 +5,15 @@ Read-only summary of the shadow store (``results/p19_penny_intraday/shadow.sqlit
 so the multi-week collection phase is observable — and so the same tool seeds the
 Phase-4 threshold calibration. Reports per-day row counts and coverage, RVOL and
 %-from-open distributions, EOD-fill rate, and **sanity flags** (notably the volume
-lot-size check).
+lot-size check). With ``--hits`` it instead lists the day's simulated triggers
+(names that reached momentum tier T1+) with their outcome labels.
 
 Usage:
     python -m src.ml.pipeline.p19_penny_intraday.shadow_report            # latest day
     python -m src.ml.pipeline.p19_penny_intraday.shadow_report --date 2026-06-29
     python -m src.ml.pipeline.p19_penny_intraday.shadow_report --all      # every day
+    python -m src.ml.pipeline.p19_penny_intraday.shadow_report --hits     # latest day's T1+ hits
+    python -m src.ml.pipeline.p19_penny_intraday.shadow_report --hits --all
 """
 
 import argparse
@@ -19,11 +22,12 @@ import sqlite3
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.ml.pipeline.p19_penny_intraday.metrics import _TRIGGER_TIERS, _to_et_hhmm
 from src.ml.pipeline.p19_penny_intraday.shadow_store import DEFAULT_DB_PATH
 
 
@@ -214,12 +218,119 @@ def format_report(s: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+_HIT_COLUMNS = (
+    "ticker, ts, momentum_tier, momentum_score, price, pct_from_open, rvol_so_far, fresh_catalyst, "
+    "structural_grade, eod_close, close_retention, mfe_from_alert, mae_from_alert, ret_t1, ret_t5"
+)
+
+
+def hits(db_path: str = DEFAULT_DB_PATH, date: Optional[str] = None) -> Dict[str, Any]:
+    """
+    List the names that crossed the simulated trigger (momentum tier T1+) on one date.
+
+    ``trigger_reason`` is never set in Phase 1.5, so ``momentum_tier`` is the hit
+    marker (same rule as ``metrics.compute_same_day_labels``). One entry per ticker:
+    first-hit time/price, peak tier/score, the largest |%-from-open| move (signed —
+    drops trigger too), peak RVOL, and the per-ticker-day outcome labels.
+
+    Args:
+        db_path: Shadow store path.
+        date: Trading date YYYY-MM-DD; default is the latest date in the store.
+
+    Returns:
+        ``{"db", "date", "hits": [...]}`` or ``{"db", "error"}`` if the store is missing.
+    """
+    if not os.path.exists(db_path):
+        return {"db": db_path, "error": "no shadow store yet"}
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        target = date or conn.execute("SELECT MAX(date) FROM shadow_log").fetchone()[0]
+        placeholders = ",".join("?" for _ in _TRIGGER_TIERS)
+        rows = conn.execute(
+            f"SELECT {_HIT_COLUMNS} FROM shadow_log WHERE date = ? AND momentum_tier IN ({placeholders}) "
+            "ORDER BY ticker, ts",
+            (target, *sorted(_TRIGGER_TIERS)),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    by_ticker: Dict[str, Dict[str, Any]] = {}
+    for r in rows:
+        (ticker, ts, tier, score, price, pct, rvol, catalyst, grade, eod_close, retention, mfe, mae, t1, t5) = r
+        hit = by_ticker.get(ticker)
+        if hit is None:
+            hit = by_ticker[ticker] = {
+                "ticker": ticker,
+                "first_hit_et": _to_et_hhmm(ts),
+                "first_hit_price": price,
+                "peak_tier": tier,
+                "peak_score": score,
+                "max_move": pct,
+                "peak_rvol": rvol,
+                "fresh_catalyst": bool(catalyst),
+                "structural_grade": grade or "",
+                "eod_close": eod_close,
+                "close_retention": retention,
+                "mfe_from_alert": mfe,
+                "mae_from_alert": mae,
+                "ret_t1": t1,
+                "ret_t5": t5,
+            }
+            continue
+        if tier > hit["peak_tier"]:  # "T1" < "T2" < "T3" lexically
+            hit["peak_tier"] = tier
+        hit["peak_score"] = max(hit["peak_score"] or 0.0, score or 0.0)
+        if pct is not None and (hit["max_move"] is None or abs(pct) > abs(hit["max_move"])):
+            hit["max_move"] = pct
+        hit["peak_rvol"] = max(hit["peak_rvol"] or 0.0, rvol or 0.0)
+        hit["fresh_catalyst"] = hit["fresh_catalyst"] or bool(catalyst)
+
+    ordered = sorted(by_ticker.values(), key=lambda h: (h["peak_tier"], h["peak_score"] or 0.0), reverse=True)
+    return {"db": db_path, "date": target, "hits": ordered}
+
+
+def _fmt_pct(v: Optional[float]) -> str:
+    return "-" if v is None else f"{v * 100:+.0f}%"
+
+
+def _fmt_num(v: Optional[float], spec: str) -> str:
+    return "-" if v is None else format(v, spec)
+
+
+def format_hits(h: Dict[str, Any]) -> str:
+    """Render ``hits()`` output as a fixed-width table (times in ET)."""
+    if h.get("error"):
+        return f"P19 hits: {h['error']} ({h['db']})"
+    lines = [f"=== P19 hits (momentum tier T1+) — {h.get('date')} ===  {len(h['hits'])} name(s)"]
+    if not h["hits"]:
+        lines.append("(no names crossed T1)")
+        return "\n".join(lines)
+    header = (
+        f"{'ticker':<7}{'1st ET':>7}{'tier':>5}{'score':>6}{'@price':>9}{'move':>7}{'rvol':>8}{'cat':>4}"
+        f"{'grd':>4}{'eod':>9}{'ret%':>7}{'mfe':>6}{'mae':>6}{'t+1':>6}{'t+5':>6}"
+    )
+    lines += [header, "-" * len(header)]
+    for x in h["hits"]:
+        lines.append(
+            f"{x['ticker']:<7}{x['first_hit_et'] or '-':>7}{x['peak_tier']:>5}{_fmt_num(x['peak_score'], '.0f'):>6}"
+            f"{_fmt_num(x['first_hit_price'], '.3f'):>9}{_fmt_pct(x['max_move']):>7}"
+            f"{_fmt_num(x['peak_rvol'], '.1f'):>8}{'Y' if x['fresh_catalyst'] else '':>4}"
+            f"{x['structural_grade'] or '-':>4}{_fmt_num(x['eod_close'], '.3f'):>9}"
+            f"{_fmt_num(x['close_retention'], '.2f'):>7}{_fmt_pct(x['mfe_from_alert']):>6}"
+            f"{_fmt_pct(x['mae_from_alert']):>6}{_fmt_pct(x['ret_t1']):>6}{_fmt_pct(x['ret_t5']):>6}"
+        )
+    lines.append("move = largest |%-from-open| (signed); ret% = close_retention; mfe/mae from first-hit price")
+    return "\n".join(lines)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="P19 shadow-data QA report")
     ap.add_argument("--db", default=DEFAULT_DB_PATH)
     ap.add_argument("--date", default=None, help="Trading date YYYY-MM-DD (default: latest)")
     ap.add_argument("--all", action="store_true", help="Report every collected day")
+    ap.add_argument("--hits", action="store_true", help="List T1+ momentum hits instead of the QA summary")
     args = ap.parse_args()
+    render = (lambda d: format_hits(hits(args.db, d))) if args.hits else (lambda d: format_report(report(args.db, d)))
 
     if args.all:
         if not os.path.exists(args.db):
@@ -229,11 +340,11 @@ def main() -> int:
         dates = [r[0] for r in conn.execute("SELECT DISTINCT date FROM shadow_log ORDER BY date")]
         conn.close()
         for d in dates:
-            print(format_report(report(args.db, d)))
+            print(render(d))
             print()
         return 0
 
-    print(format_report(report(args.db, args.date)))
+    print(render(args.date))
     return 0
 
 
