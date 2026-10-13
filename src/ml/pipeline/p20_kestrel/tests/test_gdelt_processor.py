@@ -157,3 +157,55 @@ def test_process_gkg_file_rejects_unknown_header(tmp_path):
         f.write("date,theme,article_count,avg_tone\n2026-07-07,ECON_X,5,1.0\n")
     p = _processor_with_alias("AAPL", "Apple Inc")
     assert p.process_gkg_file(path) == []
+
+
+# ── Fuzzy matching ───────────────────────────────────────────────────────────
+
+
+def _brute_force_fuzzy(aliases, norm):
+    """Reference implementation: the original full scan over every alias key."""
+    best_score = 0.0
+    best_ticker = None
+    for key, alias_rows in aliases.items():
+        if abs(len(key) - len(norm)) > 5:
+            continue
+        score = _fuzzy_score(norm, key)
+        if score >= gdelt_processor._FUZZY_THRESHOLD and score > best_score:
+            best_score = score
+            best_ticker = str(alias_rows[0]["ticker"])
+    return best_ticker
+
+
+def test_fuzzy_match_equivalent_to_brute_force_scan():
+    """Indexed/pruned fuzzy matching returns exactly what the full scan returns."""
+    import random
+
+    rng = random.Random(42)
+    alphabet = "abcdefghijklmnop "
+    p = GdeltProcessor()
+    for i in range(400):
+        key = "".join(rng.choice(alphabet) for _ in range(rng.randint(4, 30))).strip()
+        p._aliases.setdefault(key, []).append({"ticker": f"T{i}"})
+    p._aliases.setdefault("microsoft corporation", []).append({"ticker": "MSFT"})
+    p._aliases.setdefault("microsoft corporatio", []).append({"ticker": "MSFT2"})  # tie-break by order
+
+    keys = list(p._aliases)
+    queries = ["microsoft corporaton", "microsoft corporatin", "zzz", ""]
+    for key in keys[:200]:
+        chars = list(key)
+        chars[rng.randrange(len(chars))] = rng.choice(alphabet)  # one-char mutation
+        queries.append("".join(chars))
+    for q in queries:
+        assert p._fuzzy_match(q) == _brute_force_fuzzy(p._aliases, q), q
+
+
+def test_match_org_memoizes_fuzzy_lookups(monkeypatch):
+    """Repeated unmatched org names hit the fuzzy scan only once."""
+    p = _processor_with_alias("MSFT", "Microsoft Corporation")
+    calls = []
+    real = p._fuzzy_match
+    monkeypatch.setattr(p, "_fuzzy_match", lambda norm: calls.append(norm) or real(norm))
+    for _ in range(3):
+        assert p._match_org("Microsoft Corporaton", "") == "MSFT"
+        assert p._match_org("Unknown Org", "") is None
+    assert calls == ["microsoft corporaton", "unknown org"]

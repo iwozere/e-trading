@@ -43,6 +43,7 @@ _JOB_NAME = "gdelt_process"
 _P15_GKG_DIR = DATA_CACHE_PATH / "gdelt" / "gkg"
 _MIN_PERIODS = 15  # warm-up rule: z-score requires at least 15 days of history
 _FUZZY_THRESHOLD = 0.93
+_FUZZY_MAX_LEN_DIFF = 5
 
 # Slim orgs-slice format written by GdeltDownloader (YYYYMMDD.gkg-orgs.csv.gz):
 # tab-separated with header row — date, source, themes, orgs, tone.
@@ -86,6 +87,10 @@ class GdeltProcessor:
     def __init__(self) -> None:
         self._aliases: Dict[str, List[Dict[str, Any]]] = {}  # normalized_alias → [alias_rows]
         self._blocklist: Dict[str, str] = {}  # alias → match_policy
+        # Fuzzy-match index, built lazily from _aliases: key length → [(insertion_idx, ticker, matcher)].
+        # Each matcher holds the alias as seq2, so its b2j/fullbcount tables are built once, not per org.
+        self._fuzzy_index: Dict[int, List[Tuple[int, str, SequenceMatcher]]] | None = None
+        self._fuzzy_cache: Dict[str, str | None] = {}  # normalized org → fuzzy-matched ticker
 
     def load_alias_table(self) -> None:
         """Load aliases and blocklist from DB into memory."""
@@ -97,6 +102,8 @@ class GdeltProcessor:
 
         blocklist_rows = get_blocklist()
         self._blocklist = {str(r["alias"]): str(r["match_policy"]) for r in blocklist_rows}
+        self._fuzzy_index = None
+        self._fuzzy_cache = {}
         _logger.info(
             "Alias table loaded: %d normalized keys, %d blocklist entries",
             len(self._aliases),
@@ -130,16 +137,52 @@ class GdeltProcessor:
                     return None
             return ticker
 
-        # Fuzzy second pass
+        # Fuzzy second pass — GKG org names repeat heavily within a day, so memoize per name
+        if norm not in self._fuzzy_cache:
+            self._fuzzy_cache[norm] = self._fuzzy_match(norm)
+        return self._fuzzy_cache[norm]
+
+    def _build_fuzzy_index(self) -> Dict[int, List[Tuple[int, str, SequenceMatcher]]]:
+        """Bucket alias keys by length, each with a reusable SequenceMatcher (alias as seq2)."""
+        index: Dict[int, List[Tuple[int, str, SequenceMatcher]]] = {}
+        for idx, (key, alias_rows) in enumerate(self._aliases.items()):
+            matcher = SequenceMatcher(None, "", key)
+            index.setdefault(len(key), []).append((idx, str(alias_rows[0]["ticker"]), matcher))
+        return index
+
+    def _fuzzy_match(self, norm: str) -> str | None:
+        """
+        Find the best alias with similarity >= _FUZZY_THRESHOLD.
+
+        Equivalent to scanning every alias in insertion order with ``_fuzzy_score(norm, key)``
+        and keeping the first strictly-best hit, but only visits aliases within
+        _FUZZY_MAX_LEN_DIFF characters and rejects most candidates via the cheap
+        real_quick_ratio()/quick_ratio() upper bounds before the expensive ratio().
+
+        Args:
+            norm: Normalized organization name.
+
+        Returns:
+            Best-matching ticker, or None.
+        """
+        if self._fuzzy_index is None:
+            self._fuzzy_index = self._build_fuzzy_index()
+
         best_score = 0.0
+        best_idx = -1
         best_ticker: str | None = None
-        for key, alias_rows in self._aliases.items():
-            if abs(len(key) - len(norm)) > 5:
-                continue
-            score = _fuzzy_score(norm, key)
-            if score >= _FUZZY_THRESHOLD and score > best_score:
-                best_score = score
-                best_ticker = str(alias_rows[0]["ticker"])
+        for length in range(len(norm) - _FUZZY_MAX_LEN_DIFF, len(norm) + _FUZZY_MAX_LEN_DIFF + 1):
+            for idx, ticker, matcher in self._fuzzy_index.get(length, ()):
+                matcher.set_seq1(norm)
+                if matcher.real_quick_ratio() < _FUZZY_THRESHOLD or matcher.quick_ratio() < _FUZZY_THRESHOLD:
+                    continue
+                score = matcher.ratio()
+                if score < _FUZZY_THRESHOLD:
+                    continue
+                if score > best_score or (score == best_score and idx < best_idx):
+                    best_score = score
+                    best_idx = idx
+                    best_ticker = ticker
 
         return best_ticker
 
