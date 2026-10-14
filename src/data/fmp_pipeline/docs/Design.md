@@ -16,7 +16,7 @@ src/data/fmp_pipeline/
   adjust/                adjust(), yfinance_to_raw()            [done — WP-7]
   probe/                 free-key probe                         [done — WP-1]
   client/ manifest/      async client, SQLite task manifest     [WP-2]
-  tests/mock_server.py   offline FMP simulator                  [WP-3]
+  tests/mock_server.py   offline FMP simulator                  [done — WP-3]
   planner/ archive/      task planning, raw jsonl.gz archive    [WP-4, WP-5]
   builders/              archive -> Parquet vintage             [WP-6]
   datamanager_adapter/   FmpStore -> IncrementStore -> legacy   [WP-8]
@@ -41,6 +41,12 @@ split known at download time, including ones after the window (D15). Dividends a
 response classifier), `free_probe.py` (seven dependent stages; see the module docstring), `analysis.py` (pure
 derivations: dividend basis, split ratios, ticker reuse) and `report.py` (Markdown report and synthetic
 fixtures). The report keeps hand-written text above an `AUTO-GENERATED` marker.
+
+**`tests/mock_server.py`** is a threaded stdlib `http.server` mock of `/stable`. Defaults reproduce the
+probe's observations (401 JSON, 402 plain text, 404 `[]`, newest-first lists, `adj*` field names on the raw
+endpoint, bad `from` ignored, gzip + chunked with no `Content-Length`). Unobserved behaviour is a `MockConfig`
+knob, never a hard-coded guess. `Fault`s script 429/5xx/error-body/slow responses per endpoint and symbol.
+Values are deterministic synthetic prices, so tests can assert exact rows.
 
 ### Error handling
 - `adjust()` raises `ValueError` on contradictory or impossible inputs rather than repairing them (D11, D16).
