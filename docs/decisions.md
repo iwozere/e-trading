@@ -74,6 +74,13 @@ Full evidence: `docs/fmp_probe_report.md`.
 | D41 | Configuration is `config/fmp/fmp.yaml` (spec App. B) with the universe rules under `fmp.universe` instead of a separate `config/universe.yaml`. Every key has a default in `planner/config.py`; unknown keys are errors. | The repository `.gitignore` only un-ignores `config/*/*.yaml`. One file keeps the owner's edits in one place; strict keys catch typos that would otherwise silently fall back to a default. |
 | D42 | The projection counts finished tasks with their **real** bytes (follow-up pages and halves included) and the rest with catalogue estimates: bytes per row measured by the probe (F10) where it saw the endpoint, otherwise assumed and marked `*` in `budget_plan.md`. Disk need = remaining wire bytes × 1.25 (one gzip member per response) + 12 GB vintage + 10 GB build temp (spec §6.8). | Re-running `fmp plan` after each phase turns the projection into measurements without extra work; the report says plainly which totals still rest on assumptions. |
 
+## `fmp run`, `fmp status`, `fmp retry-failed` (2026-10-14)
+
+| ID | Decision | Why |
+|---|---|---|
+| D43 | `fmp run` executes **one block at a time** in spec §6.3.5 order (`block = priority // 100`), each with its own `Downloader` sharing one `BandwidthGuard`; the first run-level stop ends the run. `--phase N` runs one block (with a warning if earlier blocks still have pending tasks), `--tier T` runs one intraday tier, `--max-gb G` adds a per-run limit to the rolling-window hard stop. Before each block, free space on the archive volume must cover the last plan's projected remaining wire bytes of the blocks still in scope × `archive_overhead` + 20% (`plan_remaining_bytes` in the manifest's `meta`); a dump never planned without `--dry-run` is refused. Windows sleep is suppressed for the whole run (`SetThreadExecutionState`). The run does **not** re-plan by itself: it ends by telling the owner to re-run `fmp plan`, which writes the tasks that were waiting on the new data (D36). Exit codes: 0 done, 1 stopped, 2 usage/lock/not planned, 3 disk. | Block-at-a-time makes the strict order and the per-phase disk check (spec §6.8) explicit instead of relying only on priority sort. Keeping planning a separate, explicit step means every change to the manifest's task list is visible in a fresh `budget_plan.md` before it is downloaded. |
+| D44 | Opening a `Manifest` reverts `running` tasks to `pending` only for the dump's writer; `fmp status` opens it with `recover=False` and without the lock. | Otherwise checking status during a live run would put in-flight tasks back to `pending`, and they would be fetched twice. |
+
 ## Dependencies
 
 No new third-party dependency so far: WP-1 and WP-7 use `httpx`, `numpy` and `pandas`. All three are in

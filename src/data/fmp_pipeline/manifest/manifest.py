@@ -127,13 +127,15 @@ def _now() -> datetime:
 class Manifest:
     """The task manifest of one dump, backed by one SQLite file."""
 
-    def __init__(self, path: Path, dump_id: str) -> None:
+    def __init__(self, path: Path, dump_id: str, recover: bool = True) -> None:
         """
         Open (or create) the manifest and revert interrupted ``running`` tasks to ``pending``.
 
         Args:
             path: ``manifest.sqlite`` location; parent directories are created.
             dump_id: Vintage id (e.g. ``2026-10``); every task belongs to exactly one dump.
+            recover: Revert ``running`` tasks to ``pending``. Only the dump's writer (holding the dump lock) may do
+                this; a reader such as ``fmp status`` passes ``False`` so it never disturbs a live run.
         """
         path.parent.mkdir(parents=True, exist_ok=True)
         self.path = path
@@ -143,7 +145,7 @@ class Manifest:
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("PRAGMA synchronous=FULL")
         self._db.executescript(_SCHEMA)
-        self.recovered = self.reset_running()
+        self.recovered = self.reset_running() if recover else 0
 
     def close(self) -> None:
         """Close the connection."""
@@ -195,22 +197,28 @@ class Manifest:
 
     # --- execution -------------------------------------------------------------------------------------------
 
-    def claim(self, limit: int = 1, max_priority: Optional[int] = None) -> list[Task]:
+    def claim(self, limit: int = 1, max_priority: Optional[int] = None, min_priority: Optional[int] = None,
+              tier: Optional[str] = None) -> list[Task]:
         """
         Atomically move the highest-priority ``pending`` tasks to ``running`` and increment their attempts.
 
         Args:
             limit: Maximum number of tasks.
             max_priority: If given, only tasks with ``priority <= max_priority`` are claimed.
+            min_priority: If given, only tasks with ``priority >= min_priority`` are claimed.
+            tier: If given, only tasks of this tier are claimed.
 
         Returns:
             The claimed tasks, lowest ``priority`` first (ties by ``task_id``); empty when nothing is pending.
         """
-        ceiling = max_priority if max_priority is not None else 2**62
+        sql = "SELECT * FROM tasks WHERE status='pending' AND dump_id=? AND priority BETWEEN ? AND ?"
+        args: list[Any] = [self.dump_id, min_priority if min_priority is not None else -(2**62),
+                           max_priority if max_priority is not None else 2**62]
+        if tier is not None:
+            sql += " AND tier=?"
+            args.append(tier)
         with self._tx() as db:
-            rows = db.execute(
-                "SELECT * FROM tasks WHERE status='pending' AND dump_id=? AND priority<=?"
-                " ORDER BY priority, task_id LIMIT ?", (self.dump_id, ceiling, limit)).fetchall()
+            rows = db.execute(sql + " ORDER BY priority, task_id LIMIT ?", (*args, limit)).fetchall()
             db.executemany("UPDATE tasks SET status='running', attempts=attempts+1 WHERE task_id=?",
                            [(r["task_id"],) for r in rows])
         return [Task(r["task_id"], r["dump_id"], r["endpoint"], r["symbol"], json.loads(r["params_json"]),
@@ -327,6 +335,12 @@ class Manifest:
             "SELECT priority, tier, status, COUNT(*), COALESCE(SUM(bytes_wire), 0), COALESCE(SUM(bytes_decoded), 0)"
             " FROM tasks WHERE dump_id=? GROUP BY priority, tier, status", (self.dump_id,))]
 
+    def failures(self, limit: int = 10) -> list[tuple[str, Optional[str], str]]:
+        """Return up to ``limit`` ``(endpoint, symbol, error)`` of ``failed`` tasks, most recent first."""
+        return [(r[0], r[1], r[2] or "") for r in self._db.execute(
+            "SELECT endpoint, symbol, error FROM tasks WHERE dump_id=? AND status='failed'"
+            " ORDER BY fetched_at DESC LIMIT ?", (self.dump_id, limit))]
+
     def pending_symbols(self) -> set[str]:
         """Return the symbols that still have ``pending`` tasks."""
         return {r[0] for r in self._db.execute(
@@ -376,6 +390,12 @@ class Manifest:
         stored = self.meta(key)
         assert stored is not None
         return stored
+
+    def meta_set(self, key: str, value: str) -> None:
+        """Store (or replace) a per-dump value."""
+        with self._tx() as db:
+            db.execute("INSERT INTO meta(dump_id, key, value) VALUES (?, ?, ?) ON CONFLICT(dump_id, key)"
+                       " DO UPDATE SET value=excluded.value", (self.dump_id, key, value))
 
     def update_bounds(self, symbol: str, first: date, last: date) -> None:
         """Widen the recorded first/last daily bar dates of ``symbol`` to include ``first`` … ``last``."""

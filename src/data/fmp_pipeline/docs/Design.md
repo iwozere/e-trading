@@ -79,6 +79,11 @@ delisted before active, and for intraday the tier order. `windowing.py` keeps al
 task ids survive re-planning (D37). `follow_ups.FollowUps` is the `Downloader`'s `Reviewer`: next page while a page
 is non-empty, daily bounds into the manifest, truncated intraday windows relabelled and halved (D38, D39).
 
+**`executor.py`** — `DumpExecutor.run` loops over the blocks of a `RunScope`, checks disk space against the plan's
+projection, and runs one `Downloader` per block (archive sink, `FollowUps` reviewer, shared guard with the
+optional `--max-gb` limit) until done or the first run-level stop (D43). `status.py` renders progress from
+`Manifest.totals()` and reads the manifest without recovering `running` tasks (D44).
+
 ### Error handling
 - `adjust()` raises `ValueError` on contradictory or impossible inputs rather than repairing them (D11, D16).
 - The probe treats budget exhaustion as "skip and continue" (cached calls still resolve) and a quota message as
@@ -110,7 +115,7 @@ yfinance (auto_adjust=False, actions) --> yfinance_to_raw --> raw bars (+ raw-ba
 ```
 
 ## Design Decisions
-See `docs/decisions.md` (D12–D42). The ones shaping this module most:
+See `docs/decisions.md` (D12–D44). The ones shaping this module most:
 - D13: restate `C_prev` on the ex-date's share basis. A dividend on a split date is otherwise wrong by the ratio.
 - D19/D20: FMP `dividend` is raw; `non-split-adjusted` carries **raw** prices under `adj*` field names.
 - D24: the probe client is deliberately separate from the WP-2 production client.

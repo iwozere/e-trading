@@ -6,7 +6,7 @@ symbols) into an immutable Parquet "vintage", plus read-time adjustment and a yf
 specification: `docs/FMP_DATA_PIPELINE_SPEC-2.md`; build plan: `docs/FMP_DATA_PIPELINE_IMPLEMENTATION_PLAN.md`.
 
 **Status (2026-10-14):** WP-1 (free-key probe), WP-7 (`adjust()`), WP-3 (mock server), WP-2 (client, manifest,
-downloader), WP-5 (raw archive) and WP-4 (planner, `fmp plan`) are done. Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
+downloader), WP-5 (raw archive), WP-4 (planner, `fmp plan`) and `fmp run` / `status` / `retry-failed` are done. Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
 FMP Premium before gate G1.
 
 ## Features
@@ -23,7 +23,9 @@ FMP Premium before gate G1.
 - `planner/` — `fmp plan`: fetches the universe lists, assembles the universe (spec §7.2, `universe_report.md`),
   generates tasks in spec §6.3.5 order with tiers A–E, and projects bandwidth (wire and decoded) and disk need
   into `budget_plan.md`. `FollowUps` is the run-time reviewer for paging and intraday truncation.
-- `cli.py` — the `fmp` command line (`probe-free`, `plan`).
+- `executor.py` — `fmp run`: the planned tasks block by block in spec order, with a disk check per block, an
+  optional per-run byte limit and Windows sleep suppression (`power.py`). `status.py` — `fmp status`.
+- `cli.py` — the `fmp` command line (`probe-free`, `plan`, `run`, `status`, `retry-failed`).
 - `tests/mock_server.py` — offline mock of FMP `/stable` (spec §6.7) for the downloader test suite:
   `with MockFmpServer(MockConfig(...)) as fmp: client.get(fmp.base_url + "profile", ...)`.
 
@@ -59,7 +61,15 @@ task is deferred (D36).
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli plan --dry-run   # reports only (fetches the universe lists)
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli plan             # also writes the tasks to the manifest
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli plan --offline   # re-plan from the archive, no calls
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli run              # all blocks in order (or --phase N / --tier T)
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli run --max-gb 5   # stop this run after 5 GB
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli status           # safe while a run is going
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli retry-failed     # re-queue failed tasks
 ```
+
+A typical dump: `plan` → `run` → `plan` (profiles resolve the universe) → `run` → `plan` (intraday windows from
+the daily bars) → `run`, until `budget_plan.md` shows no deferred tasks. Exit codes: 0 done, 1 stopped (quota,
+auth, bandwidth, archive), 2 usage/lock/not planned, 3 not enough disk.
 
 Run the probe (PowerShell, project root):
 

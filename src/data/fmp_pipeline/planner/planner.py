@@ -17,6 +17,7 @@ date window, so it must not drift between plans (task ids would change).
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
@@ -42,6 +43,17 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 INSERT_BATCH = 20_000
+#: Manifest meta key: ``{block: {"wire": bytes, "decoded": bytes}}`` still to fetch, as projected by the last
+#: non-dry-run plan (``fmp run`` checks disk space with it, ``fmp status`` estimates time).
+REMAINING_KEY = "plan_remaining_bytes"
+
+
+def planned_remaining(manifest: Manifest) -> Optional[dict[int, tuple[int, int]]]:
+    """Return ``{block: (wire, decoded)}`` projected by the last plan, or ``None`` if the dump was never planned."""
+    stored = manifest.meta(REMAINING_KEY)
+    if stored is None:
+        return None
+    return {int(block): (int(v["wire"]), int(v["decoded"])) for block, v in json.loads(stored).items()}
 
 
 @dataclass(frozen=True)
@@ -144,6 +156,9 @@ class Planner:
         if not dry_run:
             dropped = self.manifest.pending_symbols() - set(universe.securities)
             skipped = self.manifest.skip_symbols(sorted(dropped), "excluded from the universe by fmp plan")
+            remaining = {str(block): {"wire": int(b.wire), "decoded": int(b.decoded)}
+                         for block, b in projection.blocks.items()}
+            self.manifest.meta_set(REMAINING_KEY, json.dumps(remaining, sort_keys=True))
 
         used_wire, used_decoded = self.manifest.bandwidth_used(self.config.bandwidth.window_days)
         need = disk_need(projection, self.config.archive_overhead, self.config.vintage_gb, self.config.build_temp_gb)

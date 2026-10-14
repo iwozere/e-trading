@@ -27,13 +27,14 @@ only after every Phase 1 item below is done.
       projection + schedule + disk need in `budget_plan.md`, per-dump writer lock; dry run against the mock and
       the free key (2026-10-14)
 - [x] `docs/decisions.md` D36–D42
+- [x] `fmp run` (`executor.py`: block-by-block in spec order, `--phase`/`--tier`/`--max-gb`, disk check per block
+      from the plan's projection, `power.keep_awake`), `fmp status` (`status.py`, read-only), `fmp retry-failed`;
+      D43–D44 (2026-10-14)
 
 ### 🔄 IN PROGRESS
 - [ ] `docs/datamanager_integration.md` — write up plan §1 with the full legacy-caller list (G1 item)
 
 ### 🚀 PLANNED ENHANCEMENTS
-- [ ] `fmp run` CLI: `Downloader` + `RawArchive` + `FollowUps` under the dump lock, `--phase`/`--tier` as
-      priority ranges, `ensure_free_space` before each phase, `SetThreadExecutionState` sleep suppression (plan §9.3)
 - [ ] WP-6 builder: per-endpoint field mapping (D20), int/float casting, nullable `declarationDate`, future
       `delistedDate`s (F13), non-US exchange filter
 - [ ] WP-8 DataManager adapter + golden-output snapshot of the 797 cached symbols
@@ -46,7 +47,9 @@ only after every Phase 1 item below is done.
       paid probe if 1h depth is per-symbol and much shorter than daily.
 - [ ] `fmp plan` reads every profile file back from the archive on each run (~30k small files); cache resolved
       attributes in the manifest if that becomes slow.
-- [ ] Structured JSON-lines logging and the once-a-minute progress summary / `fmp status` (spec §13).
+- [ ] Structured JSON-lines logging and the once-a-minute progress summary during `fmp run` (spec §13);
+      `fmp status` exists.
+- [ ] Optional `fmp run --replan`: re-plan offline after blocks 0 and 3 so one command can run a whole dump.
 - [ ] `probe_client` is synchronous and single-purpose by design (D24); do not reuse it for the bulk download.
 
 ## Known Issues
@@ -70,6 +73,8 @@ only after every Phase 1 item below is done.
 - [x] Planner tests: windowing grids, config loader, universe rules and tiers, generator order and deferrals,
       projection/schedule, follow-ups through the real `Downloader`, plan → run → re-plan cycle, CLI and lock
       — package total 354 tests; planner modules 97–100%
+- [x] Executor/status/retry tests (block order, tier scope, `--max-gb`, disk refusal, unplanned dump, status
+      reader during a live run, CLI exit codes, sleep suppression) — package total 365 tests, 99%
 
 ## Documentation Updates
 - [ ] `docs/storage_schema.md`, `docs/runbook.md` (WP-6, Phase 5)

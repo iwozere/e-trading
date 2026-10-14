@@ -64,16 +64,23 @@ class BandwidthGuard:
     window_days: int = 30
     refresh_s: float = 60.0
     clock: Callable[[], float] = time.monotonic
+    run_limit_bytes: Optional[int] = None
     _used: Optional[int] = field(default=None, init=False, repr=False)
     _synced_at: float = field(default=0.0, init=False, repr=False)
+    run_used: int = field(default=0, init=False)
 
     def add(self, bytes_wire: int, bytes_decoded: int) -> None:
         """Account for one response between database syncs."""
+        counted = bytes_wire if self.basis == "wire" else bytes_decoded
+        self.run_used += counted
         if self._used is not None:
-            self._used += bytes_wire if self.basis == "wire" else bytes_decoded
+            self._used += counted
 
     def exceeded(self, manifest: Manifest) -> Optional[str]:
-        """Return a stop message if the limit is reached, else ``None``."""
+        """Return a stop message if the window limit or the per-run limit (``fmp run --max-gb``) is reached."""
+        if self.run_limit_bytes is not None and self.run_used >= self.run_limit_bytes:
+            return (f"this run used {self.run_used / GB:.2f} GB ({self.basis}), reaching its --max-gb limit of "
+                    f"{self.run_limit_bytes / GB:.2f} GB")
         if self._used is None or self.clock() - self._synced_at >= self.refresh_s:
             wire, decoded = manifest.bandwidth_used(self.window_days)
             self._used = wire if self.basis == "wire" else decoded
@@ -107,6 +114,8 @@ class Downloader:
         guard: Optional[BandwidthGuard] = None,
         reviewer: Optional[Reviewer] = None,
         max_priority: Optional[int] = None,
+        min_priority: Optional[int] = None,
+        tier: Optional[str] = None,
     ) -> None:
         """
         Args:
@@ -118,6 +127,8 @@ class Downloader:
             guard: Bandwidth hard stop; defaults to 0.90 × 50 GB decoded over 30 days.
             reviewer: Called with every final response before the sink; see ``Reviewer``.
             max_priority: Only claim tasks up to this priority (``fmp plan`` fetches its source lists this way).
+            min_priority: Only claim tasks from this priority on (``fmp run`` works one block at a time).
+            tier: Only claim tasks of this tier (``fmp run --tier``).
         """
         self._manifest = manifest
         self._client = client
@@ -126,6 +137,8 @@ class Downloader:
         self._guard = guard or BandwidthGuard()
         self._reviewer = reviewer
         self._max_priority = max_priority
+        self._min_priority = min_priority
+        self._tier = tier
         self._stop: Optional[str] = None
         self._summary = RunSummary()
         client.on_bytes = self._on_bytes
@@ -155,7 +168,7 @@ class Downloader:
             if reason is not None:
                 self._halt("bandwidth", reason)
                 return
-            claimed = self._manifest.claim(1, self._max_priority)
+            claimed = self._manifest.claim(1, self._max_priority, self._min_priority, self._tier)
             if not claimed:
                 return
             await self._process(worker_id, claimed[0])
