@@ -1,5 +1,6 @@
 """
-Atomic file writes that survive Windows antivirus and indexers (spec §13, plan §9.3).
+Atomic file writes that survive Windows antivirus and indexers (spec §13, plan §9.3), and the free-disk check
+(spec §6.8).
 
 On Windows, ``os.replace`` fails with ``PermissionError`` while another process (Defender, the search indexer,
 a backup tool) briefly holds the target open. The replace is retried with backoff instead of failing the run.
@@ -8,10 +9,12 @@ a backup tool) briefly holds the target open. The replace is retried with backof
 from __future__ import annotations
 
 import os
+import shutil
 import time
 from collections.abc import Callable
 from pathlib import Path
 
+from src.data.fmp_pipeline.errors import InsufficientDiskSpace
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -70,3 +73,30 @@ def atomic_write_bytes(path: Path, data: bytes) -> None:
         replace_with_retry(tmp, path)
     finally:
         tmp.unlink(missing_ok=True)
+
+
+def ensure_free_space(path: Path, need_bytes: int, margin: float = 0.20) -> int:
+    """
+    Fail early if the volume holding ``path`` has less than ``need_bytes × (1 + margin)`` free (spec §6.8).
+
+    Args:
+        path: Any existing path on the volume (the nearest existing parent is used if ``path`` does not exist).
+        need_bytes: Bytes the phase expects to write.
+        margin: Safety margin on top of ``need_bytes`` (spec: 20%).
+
+    Returns:
+        The free bytes on the volume.
+
+    Raises:
+        InsufficientDiskSpace: If free space is below the requirement.
+    """
+    probe = path
+    while not probe.exists() and probe != probe.parent:
+        probe = probe.parent
+    free = shutil.disk_usage(probe).free
+    required = int(need_bytes * (1 + margin))
+    if free < required:
+        raise InsufficientDiskSpace(
+            f"{probe}: {free / 1024**3:.1f} GB free, need {required / 1024**3:.1f} GB "
+            f"({need_bytes / 1024**3:.1f} GB + {margin:.0%} margin)")
+    return free

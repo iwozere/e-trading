@@ -53,6 +53,15 @@ Full evidence: `docs/fmp_probe_report.md`.
 | D30 | The bandwidth guard counts **every attempt** (retries and error bodies included), checks before each claim, and re-syncs its total from `bandwidth_log` every 60 s (in-memory additions between). Basis `decoded` until the paid probe proves FMP counts wire bytes. | Every byte FMP sends counts against the cap. A SUM over a month of `bandwidth_log` before each of ~10 claims/s would be wasteful. |
 | D31 | Added a `run_events` table (start, stop reason, quota time) to the manifest. | Spec §6.2 requires "record the time" of a quota stop; a dedicated table keeps `tasks` per spec. |
 
+## WP-5 — raw archive (2026-10-14)
+
+| ID | Decision | Why |
+|---|---|---|
+| D32 | Symbols that differ only by case are told apart by a rule on the symbol alone: a file name containing a lower-case letter gets `~` + the first 8 hex digits of the symbol's sha256 (`abc` → `abc~<hash>`, `ABC` → `ABC`). `find_case_collisions` stays as a plan-time assertion. Encoding is reversible and canonical (`decode_symbol` rejects anything `encode_symbol` would not produce). | The plan's "plan-time detector that disambiguates colliding symbols" makes a file name depend on the rest of the universe, so a symbol added in a later dump would rename an existing file. The rule-based suffix never changes a name, and the 32-bit hash leaves only a theoretical collision, which the assertion catches. |
+| D33 | Every append is one gzip member written with a single `write`, then fsynced. The first append to a file in each process streams the file's members and truncates a torn tail (bytes after the last member whose CRC and length check out). Later appends trust the length the writer itself recorded. | The spec requires "writes are atomic"; an append to a shared file cannot be made atomic by rename. A torn tail can only come from an interrupted write, whose task was never marked done (D28), so dropping it loses nothing. Scanning only on first touch costs one decompression per resumed file, not per append. |
+| D34 | A missing archive root, free space below 2 GB (checked every 30 s) or any write error raises `ArchiveUnavailable`. The runner returns the task to `pending` and stops with reason `archive`. The archive never recreates a missing root. | Spec §13: if the archive path disappears mid-run, the run must pause and resume cleanly. Failing tasks one by one would mark the rest of the dump `failed`; recreating the root would silently write to the wrong volume. |
+| D35 | Every final response is archived, not only successes (402s, error bodies, network errors with an empty body). `body` is the parsed JSON (re-serialized compactly); a non-JSON body goes to `body_text`. The `sha256` in the line and in the manifest is of the response bytes as received. | Spec §6.6 line format. Failures are evidence for `fmp verify` and the paid probe; the builder filters on `classification`. Hashing the received bytes lets the manifest be cross-checked against the archive without depending on JSON formatting. |
+
 ## Dependencies
 
 No new third-party dependency so far: WP-1 and WP-7 use `httpx`, `numpy` and `pandas`. All three are in

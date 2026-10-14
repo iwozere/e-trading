@@ -18,7 +18,8 @@ src/data/fmp_pipeline/
   client/ manifest/      async client, SQLite task manifest     [done — WP-2]
   runner.py              Downloader worker pool                 [done — WP-2]
   tests/mock_server.py   offline FMP simulator                  [done — WP-3]
-  planner/ archive/      task planning, raw jsonl.gz archive    [WP-4, WP-5]
+  archive/               raw jsonl.gz archive (the sink)        [done — WP-5]
+  planner/               task planning, byte projection         [WP-4]
   builders/              archive -> Parquet vintage             [WP-6]
   datamanager_adapter/   FmpStore -> IncrementStore -> legacy   [WP-8]
   increments/            yfinance layer                         [WP-9]
@@ -58,13 +59,23 @@ that got a response reports `(wire, decoded)` bytes through `on_bytes`.
 `running` in one transaction; reopening reverts `running` to `pending`. `task_id` hashing makes planning idempotent.
 
 **`runner.py`** — `Downloader` runs N workers: guard check → claim → fetch → sink → `complete`. Sink-then-manifest
-gives at-least-once delivery (D28). Run-level stops (quota, auth, bandwidth) release the in-flight task and are
-logged to `run_events`.
+gives at-least-once delivery (D28). Run-level stops (quota, auth, bandwidth, archive) release the in-flight task
+and are logged to `run_events`.
+
+**`archive/`** — `RawArchive` is the production sink. Each response becomes one JSON line, compressed as its own
+gzip member and appended to `raw/<dump_id>/<endpoint>/<encoded symbol>.jsonl.gz`, then fsynced. `reader.py`
+streams members with `zlib` (one decompressor per member, so member boundaries are exact), which is how a torn
+tail is found and how the builder reads the archive; `latest_successful` keeps the newest `ok`/`ok_empty` line per
+request (endpoint + canonical params). `symbol_path.py` makes file names Windows-safe and reversible:
+percent-encoding, a `_` prefix for device names (`CON`, `NUL`, `COM1`…), and a hash suffix for lower-case symbols
+so `ABC` and `abc` never share a file on NTFS (D32).
 
 ### Error handling
 - `adjust()` raises `ValueError` on contradictory or impossible inputs rather than repairing them (D11, D16).
 - The probe treats budget exhaustion as "skip and continue" (cached calls still resolve) and a quota message as
   "stop now". Transient errors (429, 5xx, transport) are not cached, so a re-run retries them.
+- The archive turns every write problem (root gone, < 2 GB free, `OSError`) into `ArchiveUnavailable`; the runner
+  pauses instead of failing tasks (D34). A partial member left by a crash is truncated on the next append (D33).
 
 ## Data Flow
 ```
@@ -74,15 +85,23 @@ FMP /stable --(apikey header)--> ProbeClient --> DATA_CACHE_DIR/fmp-data/probe-f
                      FreeProbe stages -> ProbeRun -> report.py -> docs/fmp_probe_report.md
                                                              \-> tests/fixtures/*.json (synthetic)
 
+manifest (pending) --claim--> FmpClient --FetchResult--> RawArchive.append --sha256--> manifest (ok/...)
+                                     |                         |
+                                     v                         v
+                              bandwidth_log        raw/<dump_id>/<endpoint>/<symbol>.jsonl.gz
+                                                               |
+                                                   reader.latest_successful --> builder (WP-6)
+
 raw bars + splits + dividends(amount = FMP `dividend`) --> adjust(mode) --> adjusted OHLCV
 yfinance (auto_adjust=False, actions) --> yfinance_to_raw --> raw bars (+ raw-basis dividends)
 ```
 
 ## Design Decisions
-See `docs/decisions.md` (D12–D24). The ones shaping this module most:
+See `docs/decisions.md` (D12–D35). The ones shaping this module most:
 - D13: restate `C_prev` on the ex-date's share basis. A dividend on a split date is otherwise wrong by the ratio.
 - D19/D20: FMP `dividend` is raw; `non-split-adjusted` carries **raw** prices under `adj*` field names.
 - D24: the probe client is deliberately separate from the WP-2 production client.
+- D28/D33: sink-then-manifest plus torn-tail repair make kill-and-resume lose nothing and corrupt nothing.
 
 ## Integration Patterns
 - The API key is resolved only through `src.config.provider_config.get_api_key`.

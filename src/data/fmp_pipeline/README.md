@@ -5,8 +5,8 @@ One-off, resumable download of FMP Premium history (raw prices, corporate events
 symbols) into an immutable Parquet "vintage", plus read-time adjustment and a yfinance increment layer. Full
 specification: `docs/FMP_DATA_PIPELINE_SPEC-2.md`; build plan: `docs/FMP_DATA_PIPELINE_IMPLEMENTATION_PLAN.md`.
 
-**Status (2026-10-14):** WP-1 (free-key probe), WP-7 (`adjust()`), WP-3 (mock server) and WP-2 (client, manifest,
-downloader) are done. Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
+**Status (2026-10-14):** WP-1 (free-key probe), WP-7 (`adjust()`), WP-3 (mock server), WP-2 (client, manifest,
+downloader) and WP-5 (raw archive) are done. Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
 FMP Premium before gate G1.
 
 ## Features
@@ -17,6 +17,9 @@ FMP Premium before gate G1.
   `docs/fmp_probe_report.md` and synthetic test fixtures.
 - `client/`, `manifest/`, `runner.py` — async FMP client (retries, circuit breaker, byte counting), SQLite task
   manifest and the resumable `Downloader` worker pool with quota/auth/bandwidth stops (spec §6.2–§6.4).
+- `archive/` — append-only raw archive `raw/<dump_id>/<endpoint>/<symbol>.jsonl.gz` (spec §6.6): `RawArchive` is
+  the `Downloader` sink, `reader.iter_records` / `latest_successful` read it back, `symbol_path` makes symbols
+  Windows-safe file names.
 - `cli.py` — the `fmp` command line (`probe-free` so far).
 - `tests/mock_server.py` — offline mock of FMP `/stable` (spec §6.7) for the downloader test suite:
   `with MockFmpServer(MockConfig(...)) as fmp: client.get(fmp.base_url + "profile", ...)`.
@@ -32,6 +35,18 @@ raw = pd.DataFrame({"close": [400.0, 101.0]}, index=pd.to_datetime(["2020-08-28"
 splits = pd.DataFrame({"date": ["2020-08-31"], "numerator": [4], "denominator": [1]})
 dividends = pd.DataFrame({"date": ["2020-08-31"], "amount": [0.205]})  # raw basis of the ex-date (FMP `dividend`)
 adjusted = adjust(raw, splits, dividends, mode="total")
+```
+
+Archive downloads and read them back:
+
+```python
+from src.data.fmp_pipeline.archive.archive import RawArchive
+from src.data.fmp_pipeline.archive.reader import iter_records, latest_successful
+from src.data.fmp_pipeline.runner import Downloader
+
+archive = RawArchive(data_root / "raw", "2026-10")
+summary = await Downloader(manifest, client, sink=archive).run()   # stop_reason "archive" if the drive vanishes
+latest = latest_successful(iter_records(archive.path_for("splits", "AAPL")))
 ```
 
 Run the probe (PowerShell, project root):

@@ -12,6 +12,8 @@ Run-level stops, each recorded in ``run_events`` and leaving unfinished tasks ``
 - ``AuthAbort``: every recent request was 401/403.
 - Bandwidth: before each claim, if the rolling-window bytes reach ``safety × cap`` (default 0.90 × 50 GB,
   counted on ``decoded`` bytes until the paid probe proves the cap counts wire bytes; spec §6.3), stop cleanly.
+- ``ArchiveUnavailable`` from the sink: the archive drive vanished, filled up or failed. The task goes back to
+  ``pending`` (its response is fetched again next run) instead of every remaining task failing (spec §13).
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ from dataclasses import dataclass, field
 from typing import Literal, Optional, Union
 
 from src.data.fmp_pipeline.client.fmp_client import FetchResult, FmpClient
-from src.data.fmp_pipeline.errors import AuthAbort, QuotaExhausted
+from src.data.fmp_pipeline.errors import ArchiveUnavailable, AuthAbort, QuotaExhausted
 from src.data.fmp_pipeline.manifest.manifest import Manifest, Task
 from src.notification.logger import setup_logger
 
@@ -127,7 +129,7 @@ class Downloader:
         Process pending tasks until none are left or a run-level stop occurs.
 
         Returns:
-            Counts and the stop reason (``done``, ``quota``, ``auth``, ``bandwidth``).
+            Counts and the stop reason (``done``, ``quota``, ``auth``, ``bandwidth``, ``archive``).
         """
         self._manifest.log_event("run_start", f"workers={self._workers} recovered={self._manifest.recovered}")
         await asyncio.gather(*(self._worker(i) for i in range(self._workers)))
@@ -167,6 +169,10 @@ class Downloader:
         try:
             stored = self._sink(task, result)
             sha256 = await stored if inspect.isawaitable(stored) else stored
+        except ArchiveUnavailable as exc:
+            self._manifest.release(task)
+            self._halt("archive", str(exc))
+            return
         except Exception as exc:  # noqa: BLE001 - a sink failure must fail this task, not the whole run
             _logger.exception("Worker %d: sink failed for %s %s", worker_id, task.endpoint, task.symbol)
             self._manifest.fail(task, f"sink error: {exc}")

@@ -13,3 +13,11 @@ class AuthAbort(Exception):
 
 class BandwidthCapReached(Exception):
     """The rolling-window bandwidth used has reached the configured safety fraction of the cap (spec §6.3)."""
+
+
+class ArchiveUnavailable(Exception):
+    """The raw archive cannot be written (path gone, disk full, I/O error). Pause the run; nothing is lost."""
+
+
+class InsufficientDiskSpace(Exception):
+    """Free space on a volume is below what a phase needs plus its safety margin (spec §6.8)."""

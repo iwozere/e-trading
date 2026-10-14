@@ -12,10 +12,14 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Optional
 
 import pytest
 
+from src.data.fmp_pipeline.archive.archive import RawArchive
+from src.data.fmp_pipeline.archive.reader import iter_records, latest_successful
 from src.data.fmp_pipeline.client.fmp_client import FetchResult
+from src.data.fmp_pipeline.errors import ArchiveUnavailable
 from src.data.fmp_pipeline.manifest.manifest import Manifest, Task, TaskSpec
 from src.data.fmp_pipeline.runner import BandwidthGuard, Downloader, sha256_sink
 from src.data.fmp_pipeline.tests.helpers import FakeSleep, make_client
@@ -173,16 +177,18 @@ def _assert_at_least_once(manifest: Manifest, sink_file: Path, in_flight: int) -
     assert len(lines) - len(ids) <= in_flight
 
 
-def test_kill_and_resume_across_processes(tmp_path: Path):
+@pytest.mark.parametrize("with_archive", [False, True])
+def test_kill_and_resume_across_processes(tmp_path: Path, with_archive: bool):
     path = tmp_path / "manifest.sqlite"
     sink_file = tmp_path / "sink.txt"
+    raw_root: Optional[Path] = tmp_path / "raw" if with_archive else None
     with Manifest(path, DUMP_ID) as manifest:
         manifest.add_tasks(_price_tasks([f"K{i:03d}" for i in range(120)]))
 
     env = {**os.environ, "PYTHONPATH": str(PROJECT_ROOT)}
-    child = subprocess.Popen([sys.executable, "-m", "src.data.fmp_pipeline.tests.kill_resume_child", str(path),
-                              str(sink_file)], cwd=PROJECT_ROOT, env=env, stdout=subprocess.DEVNULL,
-                             stderr=subprocess.PIPE)
+    args = [str(path), str(sink_file)] + ([str(raw_root)] if raw_root is not None else [])
+    child = subprocess.Popen([sys.executable, "-m", "src.data.fmp_pipeline.tests.kill_resume_child", *args],
+                             cwd=PROJECT_ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     try:
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline and child.poll() is None:
@@ -200,9 +206,55 @@ def test_kill_and_resume_across_processes(tmp_path: Path):
         with MockFmpServer() as fmp, Manifest(path, DUMP_ID) as manifest:
             counts_before = manifest.counts()
             assert counts_before.get("pending", 0) > 0 and "running" not in counts_before
+            archive = RawArchive(raw_root, DUMP_ID) if raw_root is not None else None
             async with make_client(fmp, FakeSleep()) as client:
-                summary = await Downloader(manifest, client, sink=file_sink(sink_file), workers=4).run()
+                summary = await Downloader(manifest, client, sink=file_sink(sink_file, archive), workers=4).run()
             assert summary.stop_reason == "done" and manifest.counts() == {"ok": 120}
             _assert_at_least_once(manifest, sink_file, in_flight=4)
+            if archive is not None:
+                _assert_archive_complete(manifest, archive)
 
     asyncio.run(resume())
+
+
+def _assert_archive_complete(manifest: Manifest, archive: RawArchive) -> None:
+    """Every file reads strictly end to end, and every ok task's newest line matches the manifest's sha256."""
+    records = [r for f in sorted(archive.dump_dir.rglob("*.jsonl.gz")) for r in iter_records(f)]
+    by_task = {r["task_id"]: r for r in latest_successful(records).values()}
+    for tid in _ids(manifest, "ok"):
+        row = manifest.task(tid)
+        assert row is not None and by_task[tid]["sha256"] == row["sha256"]
+
+
+@pytest.mark.asyncio
+async def test_archive_is_the_sink(tmp_path: Path):
+    config = MockConfig(restricted_symbols={"R1"})
+    with MockFmpServer(config) as fmp, Manifest(tmp_path / "m.sqlite", "d") as manifest:
+        manifest.add_tasks(_price_tasks(["A1", "A2", "R1"]) + [TaskSpec("delisted-companies", None, {"page": 0})])
+        archive = RawArchive(tmp_path / "raw", "d")
+        async with make_client(fmp, FakeSleep()) as client:
+            summary = await Downloader(manifest, client, sink=archive, workers=2).run()
+        assert summary.stop_reason == "done" and archive.appended == 4
+        _assert_archive_complete(manifest, archive)
+        [restricted] = iter_records(archive.path_for(PRICE, "R1"))
+        assert restricted["http_status"] == 402 and restricted["body_text"]
+
+
+@pytest.mark.asyncio
+async def test_archive_unavailable_pauses_the_run(tmp_path: Path):
+    calls = 0
+
+    def sink(task: Task, result: FetchResult) -> str:
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise ArchiveUnavailable("archive root D:/fmp-data/raw is not available")
+        return sha256_sink(task, result)
+
+    with MockFmpServer() as fmp, Manifest(tmp_path / "m.sqlite", "d") as manifest:
+        manifest.add_tasks(_price_tasks([f"S{i}" for i in range(10)]))
+        async with make_client(fmp, FakeSleep()) as client:
+            summary = await Downloader(manifest, client, sink=sink, workers=1).run()
+        assert summary.stop_reason == "archive"
+        assert manifest.counts() == {"ok": 2, "pending": 8}  # nothing marked failed
+        assert any(e[1] == "stop_archive" for e in manifest.events())
