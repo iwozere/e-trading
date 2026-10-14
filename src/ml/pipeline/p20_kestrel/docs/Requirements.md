@@ -24,7 +24,7 @@
 
 - **Anthropic API** — LLM calls (claude-haiku-4-5, claude-sonnet-4-6)
 - **AlphaVantage** — News sentiment (20 calls/day quota)
-- **StockTwits** — `/api/2/streams/symbol/{ticker}.json` (rate: 2.1s delay; full browser User-Agent required — Cloudflare 403s a bare `Mozilla/5.0`; 600s budget per run)
+- **StockTwits** — `/api/2/streams/symbol/{ticker}.json` (rate: 2.1s delay; via a curl_cffi Chrome-impersonating session — Cloudflare fingerprints TLS and 403s plain `requests` from the Pi; 600s budget per run)
 - **Reddit** — OAuth2, r/stocks r/investing r/wallstreetbets
 - **ApeWisdom** — `https://apewisdom.io/api/v1.0/filter/all-stocks/page/{n}` (all ~10 pages, ~1,000 tickers)
 - **Wikipedia pageviews** — Wikimedia REST API (official, keyless; User-Agent with contact required); ticker → article via Wikidata SPARQL + MediaWiki search, cached in `DATA_CACHE_DIR/wikipedia/`

@@ -15,9 +15,12 @@ history, so each source must report a comparable *daily* volume every day:
   watchlist tickers absent from a complete table get an explicit 0 so quiet days
   enter the history.
 
-StockTwits sits behind Cloudflare, which answers a bare ``Mozilla/5.0`` User-Agent
-with a 403 challenge page; a full browser User-Agent passes. A block or rate limit
-stops StockTwits for the rest of the run instead of failing every ticker.
+StockTwits sits behind Cloudflare, which fingerprints the TLS handshake: plain
+``requests`` got a 403 challenge page on the Pi (Python 3.14 / its OpenSSL) even with
+a full browser User-Agent, while the same code passed on Windows. Requests therefore
+go through a curl_cffi session impersonating Chrome (as the Yahoo downloader does).
+A block or rate limit stops StockTwits for the rest of the run instead of failing
+every ticker.
 """
 
 from __future__ import annotations
@@ -33,6 +36,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import requests
+from curl_cffi import requests as curl_requests
 
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
 from src.notification.logger import setup_logger
@@ -50,9 +54,8 @@ _STOCKTWITS_URL = "https://api.stocktwits.com/api/2/streams/symbol/{ticker}.json
 _APEWISDOM_URL = "https://apewisdom.io/api/v1.0/filter/all-stocks/page/{page}"
 _REDDIT_TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
 _REDDIT_SEARCH_URL = "https://oauth.reddit.com/r/{sub}/search.json"
-_BROWSER_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36"
-)
+# Impersonation sets a TLS fingerprint and matching headers; don't override the User-Agent.
+_STOCKTWITS_IMPERSONATE = "chrome"
 _STOCKTWITS_DELAY = 2.1  # seconds between calls
 _STOCKTWITS_BLOCK_THRESHOLD = 5  # consecutive 403/5xx/network failures → blocked, stop for this run
 # Stop StockTwits before the scheduler's 900s timeout; the rotation below spreads the cut across days.
@@ -89,12 +92,12 @@ def _daily_mentions(messages: List[Dict[str, Any]], now: datetime) -> float:
     return round(len(times) * 24 / span_hours, 1)
 
 
-def _fetch_stocktwits(session: requests.Session, ticker: str) -> Optional[Dict[str, Any]]:
+def _fetch_stocktwits(session: curl_requests.Session, ticker: str) -> Optional[Dict[str, Any]]:
     """
     Fetch the StockTwits public stream for a ticker.
 
     Args:
-        session: HTTP session carrying the browser User-Agent.
+        session: curl_cffi session impersonating a browser.
         ticker: Ticker symbol.
 
     Returns:
@@ -106,7 +109,7 @@ def _fetch_stocktwits(session: requests.Session, ticker: str) -> Optional[Dict[s
     """
     try:
         resp = session.get(_STOCKTWITS_URL.format(ticker=ticker), timeout=10)
-    except requests.RequestException as exc:
+    except curl_requests.exceptions.RequestException as exc:
         raise _StockTwitsUnavailable(f"network error: {exc}") from exc
     if resp.status_code == 429 or resp.status_code == 403 or resp.status_code >= 500:
         raise _StockTwitsUnavailable(f"HTTP {resp.status_code}")
@@ -270,8 +273,7 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
         consecutive_failures = 0
         started = time.monotonic()
 
-        with requests.Session() as session:
-            session.headers.update({"User-Agent": _BROWSER_USER_AGENT})
+        with curl_requests.Session(impersonate=_STOCKTWITS_IMPERSONATE) as session:
             for ticker in _rotated(tickers, target_date):
                 if stocktwits_stop is None and time.monotonic() - started > _STOCKTWITS_BUDGET_S:
                     stocktwits_stop = f"time budget {_STOCKTWITS_BUDGET_S}s reached"

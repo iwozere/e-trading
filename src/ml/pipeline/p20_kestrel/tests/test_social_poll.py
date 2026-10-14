@@ -5,6 +5,7 @@ from typing import Any, cast
 
 import pytest
 import requests
+from curl_cffi import requests as curl_requests
 
 from src.ml.pipeline.p20_kestrel.sentiment import social_poll as poll
 
@@ -43,8 +44,8 @@ class _FakeSession:
         return False
 
 
-def _as_session(fake: _FakeSession) -> requests.Session:
-    return cast(requests.Session, cast(Any, fake))
+def _as_session(fake: _FakeSession) -> curl_requests.Session:
+    return cast(curl_requests.Session, cast(Any, fake))
 
 
 def _messages(*hours_ago, sentiment=None):
@@ -156,7 +157,7 @@ def _db(monkeypatch):
 
 def test_run_writes_zero_apewisdom_rows_for_unlisted_tickers(_db, monkeypatch):
     monkeypatch.setattr(poll, "_fetch_apewisdom", lambda: {"AAPL": 12})
-    monkeypatch.setattr(poll.requests, "Session", lambda: _FakeSession(lambda url: _FakeResponse(200, {"messages": []})))
+    monkeypatch.setattr(poll.curl_requests, "Session", lambda impersonate: _FakeSession(lambda url: _FakeResponse(200, {"messages": []})))
 
     result = poll.run(date(2026, 10, 14))
 
@@ -168,7 +169,7 @@ def test_run_writes_zero_apewisdom_rows_for_unlisted_tickers(_db, monkeypatch):
 
 def test_run_skips_apewisdom_rows_when_table_unavailable(_db, monkeypatch):
     monkeypatch.setattr(poll, "_fetch_apewisdom", lambda: None)
-    monkeypatch.setattr(poll.requests, "Session", lambda: _FakeSession(lambda url: _FakeResponse(200, {"messages": []})))
+    monkeypatch.setattr(poll.curl_requests, "Session", lambda impersonate: _FakeSession(lambda url: _FakeResponse(200, {"messages": []})))
 
     poll.run(date(2026, 10, 14))
 
@@ -179,7 +180,7 @@ def test_run_stops_stocktwits_when_blocked(_db, monkeypatch):
     monkeypatch.setattr(poll, "_STOCKTWITS_BLOCK_THRESHOLD", 2)
     monkeypatch.setattr(poll, "_fetch_apewisdom", lambda: {})
     session = _FakeSession(lambda url: _FakeResponse(403))
-    monkeypatch.setattr(poll.requests, "Session", lambda: session)
+    monkeypatch.setattr(poll.curl_requests, "Session", lambda impersonate: session)
 
     result = poll.run(date(2026, 10, 14))
 
@@ -191,7 +192,7 @@ def test_run_stops_stocktwits_when_blocked(_db, monkeypatch):
 def test_run_stops_stocktwits_on_first_rate_limit(_db, monkeypatch):
     monkeypatch.setattr(poll, "_fetch_apewisdom", lambda: {})
     session = _FakeSession(lambda url: _FakeResponse(429))
-    monkeypatch.setattr(poll.requests, "Session", lambda: session)
+    monkeypatch.setattr(poll.curl_requests, "Session", lambda impersonate: session)
 
     poll.run(date(2026, 10, 14))
 
