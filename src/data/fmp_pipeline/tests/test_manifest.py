@@ -135,3 +135,55 @@ def test_api_key_never_stored(manifest: Manifest, tmp_path: Path):
     manifest.close()
     raw = b"".join(p.read_bytes() for p in tmp_path.iterdir())
     assert b"apikey" not in raw
+
+
+def test_claim_respects_max_priority(manifest: Manifest):
+    manifest.add_tasks([TaskSpec("a", None, {}, 0), TaskSpec("b", None, {}, 300)])
+    assert [t.endpoint for t in manifest.claim(5, max_priority=0)] == ["a"]
+    assert manifest.claim(5, max_priority=0) == []
+    assert [t.endpoint for t in manifest.claim(5)] == ["b"]
+
+
+def test_meta_is_set_once_per_dump(manifest: Manifest, tmp_path: Path):
+    assert manifest.meta("as_of") is None
+    assert manifest.meta_setdefault("as_of", "2026-10-14") == "2026-10-14"
+    assert manifest.meta_setdefault("as_of", "2027-01-01") == "2026-10-14"
+    with Manifest(tmp_path / "manifest.sqlite", "other") as other:
+        assert other.meta("as_of") is None
+
+
+def test_bounds_only_widen(manifest: Manifest):
+    from datetime import date
+
+    manifest.update_bounds("AAA", date(2020, 1, 2), date(2020, 12, 31))
+    manifest.update_bounds("AAA", date(2021, 1, 4), date(2024, 6, 3))
+    manifest.update_bounds("AAA", date(2010, 1, 4), date(2011, 1, 3))
+    assert manifest.bounds() == {"AAA": (date(2010, 1, 4), date(2024, 6, 3))}
+
+
+def test_planner_queries(manifest: Manifest):
+    manifest.add_tasks([TaskSpec("p", "A", {"w": 1}, 301), TaskSpec("p", "A", {"w": 2}, 301),
+                        TaskSpec("p", "B", {"w": 1}, 302, "C"), TaskSpec("q", None, {}, 0)])
+    for task in manifest.claim(10):
+        if (task.symbol, task.params) != ("A", {"w": 2}):
+            manifest.complete(task, _result("ok"))
+        else:
+            manifest.release(task)
+    assert manifest.symbols_finished("p") == {"B"}
+    assert len(manifest.finished_ids()) == 3
+    assert manifest.pending_symbols() == {"A"}
+    assert sorted(manifest.totals()) == [(0, None, "ok", 1, 10, 20), (301, None, "ok", 1, 10, 20),
+                                         (301, None, "pending", 1, 0, 0), (302, "C", "ok", 1, 10, 20)]
+    assert {r["endpoint"] for r in manifest.task_rows(["q"])} == {"q"} and len(manifest.task_rows()) == 4
+    assert manifest.skip_symbols(["A", "Z"], "dropped") == 1
+    assert manifest.counts() == {"ok": 3, "skipped": 1}
+    assert manifest.symbols_finished("p") == {"A", "B"}
+
+
+def test_possibly_truncated_is_a_final_status(manifest: Manifest):
+    manifest.add_tasks([TaskSpec("historical-chart/1hour", "A", {"from": "2026-01-05", "to": "2026-01-30"})])
+    [task] = manifest.claim()
+    assert manifest.complete(task, _result("possibly_truncated", error="possibly truncated")) == "possibly_truncated"
+    row = manifest.task(task.task_id)
+    assert row is not None and row["error"] == "possibly truncated"
+    assert manifest.finished_ids() == {task.task_id}

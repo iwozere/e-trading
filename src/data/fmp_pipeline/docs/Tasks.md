@@ -21,12 +21,19 @@ only after every Phase 1 item below is done.
       `ArchiveUnavailable` pauses the run), streaming reader + `latest_successful`, Windows-safe reversible symbol
       names (device names, case suffix, NTFS round-trip test), `ensure_free_space`; kill test repeated with the
       archive as the sink (2026-10-14)
+- [x] WP-4 planner (`planner/`) + `fmp plan [--dry-run] [--offline]`: bootstrap lists via the downloader,
+      universe assembly + `universe_report.md`, tiers A–E, task generation in §6.3.5 order (delisted first),
+      fixed-grid daily/intraday windows, run-time paging and intraday truncation follow-ups, wire/decoded
+      projection + schedule + disk need in `budget_plan.md`, per-dump writer lock; dry run against the mock and
+      the free key (2026-10-14)
+- [x] `docs/decisions.md` D36–D42
 
 ### 🔄 IN PROGRESS
 - [ ] `docs/datamanager_integration.md` — write up plan §1 with the full legacy-caller list (G1 item)
 
 ### 🚀 PLANNED ENHANCEMENTS
-- [ ] WP-4 planner + `fmp plan --dry-run` (byte projections from probe F10: ~25 B/row wire, ~171 B/row decoded)
+- [ ] `fmp run` CLI: `Downloader` + `RawArchive` + `FollowUps` under the dump lock, `--phase`/`--tier` as
+      priority ranges, `ensure_free_space` before each phase, `SetThreadExecutionState` sleep suppression (plan §9.3)
 - [ ] WP-6 builder: per-endpoint field mapping (D20), int/float casting, nullable `declarationDate`, future
       `delistedDate`s (F13), non-US exchange filter
 - [ ] WP-8 DataManager adapter + golden-output snapshot of the 797 cached symbols
@@ -35,8 +42,10 @@ only after every Phase 1 item below is done.
 - [ ] Phase 2 `fmp probe-paid` covering the eight deferred items in `docs/fmp_probe_report.md`
 
 ## Technical Debt
-- [ ] `fmp run` CLI command (with Windows `SetThreadExecutionState` sleep suppression, plan §9.3) — lands with
-      WP-4. Needs a per-dump lock file so two runs never append to the same archive (single writer).
+- [ ] Bisect-forward for the first intraday window (spec §6.5.4) deliberately not built (D39); revisit after the
+      paid probe if 1h depth is per-symbol and much shorter than daily.
+- [ ] `fmp plan` reads every profile file back from the archive on each run (~30k small files); cache resolved
+      attributes in the manifest if that becomes slow.
 - [ ] Structured JSON-lines logging and the once-a-minute progress summary / `fmp status` (spec §13).
 - [ ] `probe_client` is synchronous and single-purpose by design (D24); do not reuse it for the bulk download.
 
@@ -46,6 +55,11 @@ only after every Phase 1 item below is done.
   `fmp probe-paid` results.
 - The free key cannot distinguish an invalid symbol from a non-entitled one (probe F6).
 - Ticker-reuse behaviour (§4.2.8) is unexamined: the free key restricts `symbol-change` and paging.
+- Field names of `stock-list`, `actively-trading-list`, `etf-list`, `symbol-change` and the constituent lists are
+  unverified (402 on the free key); `planner/universe.py` accepts the common spellings. Check
+  `universe_report.md` after the first paid `fmp plan`, including the "Exchanges seen" table.
+- The probe-derived `profile` fixture has every boolean set (ETF, fund and ADR at once); tests that need a plain
+  stock inject their own profile through `MockConfig.extra_fixtures`.
 
 ## Testing Requirements
 - [x] Unit tests for `adjust()`, `yfinance_to_raw()`, probe client/analysis/report (85 tests)
@@ -53,6 +67,9 @@ only after every Phase 1 item below is done.
 - [x] Client, manifest and runner tests incl. kill-and-resume and bandwidth stop — package total 181 tests, 99%
 - [x] Archive and symbol-encoding tests (torn tails, CRC damage, chunk-spanning members, low disk, vanished root,
       write rollback, NTFS round trip) — package total 275 tests, 99%
+- [x] Planner tests: windowing grids, config loader, universe rules and tiers, generator order and deferrals,
+      projection/schedule, follow-ups through the real `Downloader`, plan → run → re-plan cycle, CLI and lock
+      — package total 354 tests; planner modules 97–100%
 
 ## Documentation Updates
 - [ ] `docs/storage_schema.md`, `docs/runbook.md` (WP-6, Phase 5)

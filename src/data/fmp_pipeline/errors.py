@@ -21,3 +21,7 @@ class ArchiveUnavailable(Exception):
 
 class InsufficientDiskSpace(Exception):
     """Free space on a volume is below what a phase needs plus its safety margin (spec §6.8)."""
+
+
+class DumpLocked(Exception):
+    """Another ``fmp`` process holds the dump's lock; the raw archive allows a single writer."""

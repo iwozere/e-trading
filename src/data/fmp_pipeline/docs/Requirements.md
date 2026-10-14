@@ -4,6 +4,7 @@
 - `pandas` >= 3.0.3, `numpy` >= 2.3.2 — `adjust/` (already in `requirements.txt`)
 - `httpx` >= 0.28.1 — `probe/`, `client/` (in `requirements.txt`)
 - `sqlite3` (stdlib) — `manifest/`; `gzip`, `zlib` (stdlib) — `archive/`
+- `PyYAML` >= 6.0.3 — `planner/config.py` (in `requirements.txt`)
 - Tests: `pytest-asyncio` (in `requirements-dev.txt`)
 - Planned (plan §9.2): `pyarrow`, `duckdb` (owner decision Q6), `tzdata`, optionally `orjson`, split into
   `requirements-fmp-reader.txt` (Pi) and `requirements-fmp-pipeline.txt` (laptop).
@@ -23,7 +24,8 @@
 - Writer: Windows 11 laptop. Probe cache is a few MB. The full dump needs ~30–47 GB under `data_root` (spec §6.8).
 - The raw archive pauses the run below 2 GB free; `fsutil.ensure_free_space` (need + 20%) is the per-phase check
   that `fmp plan`/`run`/`build` call.
-- One writer per dump: `RawArchive` is not safe for two processes appending to the same `dump_id`.
+- One writer per dump: `RawArchive` is not safe for two processes appending to the same `dump_id`; the CLI holds
+  an OS lock on `<data_root>/locks/<dump_id>.lock` (D40).
 - Reader: Raspberry Pi 5 (aarch64), `reader` profile only.
 
 ## Security Requirements

@@ -4,12 +4,15 @@ SQLite task manifest (spec §6.2): the single source of truth for what has been 
 - One row per atomic request; ``task_id = sha1(dump_id|endpoint|symbol|canonical_params)``, so re-planning the
   same work is a no-op (``INSERT OR IGNORE``).
 - Status machine: ``pending`` → ``running`` → ``ok`` | ``ok_empty`` | ``plan_restricted`` | ``api_error`` |
-  ``failed``; ``skipped`` is set by the planner. On open, ``running`` rows revert to ``pending``: a run killed
-  mid-request simply redoes that request.
+  ``failed`` | ``possibly_truncated``; ``skipped`` is set by the planner. ``possibly_truncated`` is an intraday window
+  that hit the row cap; its two halves are planned instead (spec §6.5). On open, ``running`` rows revert to
+  ``pending``: a run killed mid-request simply redoes that request.
 - Durability: WAL journal with ``synchronous=FULL``, one transaction per state change. SQLite's own journal gives
   the crash atomicity the spec asks for; the temp-file + fsync + rename rule applies to the plain files the archive
   writes (``fsutil.atomic_write_bytes``), not to the database.
 - ``bandwidth_log`` records every response's wire and decoded bytes for the rolling 30-day cap (spec §6.3).
+- ``meta`` holds per-dump settings that must not change between plans (the ``as_of`` date); ``symbol_bounds``
+  the first and last daily bar seen per symbol, which bounds the intraday windows (spec §6.5).
 
 The API key never appears here: ``params_json`` holds only query parameters.
 """
@@ -22,14 +25,15 @@ import sqlite3
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
 from src.data.fmp_pipeline.client.fmp_client import FetchResult
 
-STATUSES = ("pending", "running", "ok", "ok_empty", "api_error", "plan_restricted", "failed", "skipped")
-FINAL_STATUSES = ("ok", "ok_empty", "api_error", "plan_restricted", "failed", "skipped")
+STATUSES = ("pending", "running", "ok", "ok_empty", "api_error", "plan_restricted", "failed", "skipped",
+            "possibly_truncated")
+FINAL_STATUSES = ("ok", "ok_empty", "api_error", "plan_restricted", "failed", "skipped", "possibly_truncated")
 
 #: Final classification of a FetchResult -> manifest status.
 STATUS_BY_CLASSIFICATION = {
@@ -42,6 +46,7 @@ STATUS_BY_CLASSIFICATION = {
     "rate_limited": "failed",
     "server_error": "failed",
     "network_error": "failed",
+    "possibly_truncated": "possibly_truncated",
 }
 
 _SCHEMA = """
@@ -67,6 +72,10 @@ CREATE INDEX IF NOT EXISTS ix_tasks_queue ON tasks(status, priority, task_id);
 CREATE TABLE IF NOT EXISTS bandwidth_log(ts TEXT NOT NULL, bytes_wire INTEGER NOT NULL, bytes_decoded INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_bandwidth_ts ON bandwidth_log(ts);
 CREATE TABLE IF NOT EXISTS run_events(ts TEXT NOT NULL, event TEXT NOT NULL, detail TEXT NULL);
+CREATE TABLE IF NOT EXISTS meta(dump_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
+                                PRIMARY KEY(dump_id, key));
+CREATE TABLE IF NOT EXISTS symbol_bounds(dump_id TEXT NOT NULL, symbol TEXT NOT NULL, first_date TEXT NOT NULL,
+                                         last_date TEXT NOT NULL, PRIMARY KEY(dump_id, symbol));
 """
 
 
@@ -186,20 +195,22 @@ class Manifest:
 
     # --- execution -------------------------------------------------------------------------------------------
 
-    def claim(self, limit: int = 1) -> list[Task]:
+    def claim(self, limit: int = 1, max_priority: Optional[int] = None) -> list[Task]:
         """
         Atomically move the highest-priority ``pending`` tasks to ``running`` and increment their attempts.
 
         Args:
             limit: Maximum number of tasks.
+            max_priority: If given, only tasks with ``priority <= max_priority`` are claimed.
 
         Returns:
             The claimed tasks, lowest ``priority`` first (ties by ``task_id``); empty when nothing is pending.
         """
+        ceiling = max_priority if max_priority is not None else 2**62
         with self._tx() as db:
             rows = db.execute(
-                "SELECT * FROM tasks WHERE status='pending' AND dump_id=? ORDER BY priority, task_id LIMIT ?",
-                (self.dump_id, limit)).fetchall()
+                "SELECT * FROM tasks WHERE status='pending' AND dump_id=? AND priority<=?"
+                " ORDER BY priority, task_id LIMIT ?", (self.dump_id, ceiling, limit)).fetchall()
             db.executemany("UPDATE tasks SET status='running', attempts=attempts+1 WHERE task_id=?",
                            [(r["task_id"],) for r in rows])
         return [Task(r["task_id"], r["dump_id"], r["endpoint"], r["symbol"], json.loads(r["params_json"]),
@@ -286,3 +297,96 @@ class Manifest:
         """Return one task row as a dict, or ``None``."""
         row = self._db.execute("SELECT * FROM tasks WHERE task_id=?", (task_id_,)).fetchone()
         return dict(row) if row is not None else None
+
+    def task_rows(self, endpoints: Optional[Iterable[str]] = None) -> list[dict[str, Any]]:
+        """
+        Return this dump's task rows as dicts, optionally only for some endpoints.
+
+        Args:
+            endpoints: Endpoint names to include; ``None`` means all.
+
+        Returns:
+            Rows ordered by priority, then ``task_id``.
+        """
+        sql, args = "SELECT * FROM tasks WHERE dump_id=?", [self.dump_id]
+        if endpoints is not None:
+            names = list(endpoints)
+            sql += f" AND endpoint IN ({','.join('?' * len(names))})"
+            args.extend(names)
+        return [dict(r) for r in self._db.execute(sql + " ORDER BY priority, task_id", args)]
+
+    def finished_ids(self) -> set[str]:
+        """Return the ids of this dump's tasks in a final status."""
+        marks = ",".join("?" * len(FINAL_STATUSES))
+        return {r[0] for r in self._db.execute(
+            f"SELECT task_id FROM tasks WHERE dump_id=? AND status IN ({marks})", (self.dump_id, *FINAL_STATUSES))}
+
+    def totals(self) -> list[tuple[int, Optional[str], str, int, int, int]]:
+        """Return ``(priority, tier, status, tasks, bytes_wire, bytes_decoded)`` groups for this dump."""
+        return [(r[0], r[1], r[2], r[3], r[4], r[5]) for r in self._db.execute(
+            "SELECT priority, tier, status, COUNT(*), COALESCE(SUM(bytes_wire), 0), COALESCE(SUM(bytes_decoded), 0)"
+            " FROM tasks WHERE dump_id=? GROUP BY priority, tier, status", (self.dump_id,))]
+
+    def pending_symbols(self) -> set[str]:
+        """Return the symbols that still have ``pending`` tasks."""
+        return {r[0] for r in self._db.execute(
+            "SELECT DISTINCT symbol FROM tasks WHERE dump_id=? AND status='pending' AND symbol IS NOT NULL",
+            (self.dump_id,))}
+
+    def skip_symbols(self, symbols: Iterable[str], reason: str) -> int:
+        """
+        Mark the ``pending`` tasks of ``symbols`` as ``skipped`` (the planner dropped them from the universe).
+
+        Args:
+            symbols: Symbols to skip.
+            reason: Stored in ``error``.
+
+        Returns:
+            Number of tasks skipped.
+        """
+        rows = [(reason, self.dump_id, s) for s in symbols]
+        with self._tx() as db:
+            before = db.total_changes
+            db.executemany("UPDATE tasks SET status='skipped', error=? WHERE dump_id=? AND symbol=? AND"
+                           " status='pending'", rows)
+            return db.total_changes - before
+
+    def symbols_finished(self, endpoint: str) -> set[str]:
+        """Return the symbols whose ``endpoint`` tasks (at least one) are all in a final status."""
+        marks = ",".join("?" * len(FINAL_STATUSES))
+        return {r[0] for r in self._db.execute(
+            f"SELECT symbol FROM tasks WHERE dump_id=? AND endpoint=? AND symbol IS NOT NULL GROUP BY symbol"
+            f" HAVING SUM(status NOT IN ({marks}))=0", (self.dump_id, endpoint, *FINAL_STATUSES))}
+
+    # --- per-dump metadata -----------------------------------------------------------------------------------
+
+    def meta(self, key: str) -> Optional[str]:
+        """Return a stored per-dump value, or ``None``."""
+        row = self._db.execute("SELECT value FROM meta WHERE dump_id=? AND key=?", (self.dump_id, key)).fetchone()
+        return str(row[0]) if row is not None else None
+
+    def meta_setdefault(self, key: str, value: str) -> str:
+        """
+        Store ``value`` under ``key`` unless a value is already stored; return the stored value.
+
+        Used for settings that are part of task identity (``as_of``): the first plan fixes them for the dump.
+        """
+        with self._tx() as db:
+            db.execute("INSERT OR IGNORE INTO meta(dump_id, key, value) VALUES (?, ?, ?)", (self.dump_id, key, value))
+        stored = self.meta(key)
+        assert stored is not None
+        return stored
+
+    def update_bounds(self, symbol: str, first: date, last: date) -> None:
+        """Widen the recorded first/last daily bar dates of ``symbol`` to include ``first`` … ``last``."""
+        with self._tx() as db:
+            db.execute(
+                "INSERT INTO symbol_bounds(dump_id, symbol, first_date, last_date) VALUES (?, ?, ?, ?)"
+                " ON CONFLICT(dump_id, symbol) DO UPDATE SET first_date=MIN(first_date, excluded.first_date),"
+                " last_date=MAX(last_date, excluded.last_date)",
+                (self.dump_id, symbol, first.isoformat(), last.isoformat()))
+
+    def bounds(self) -> dict[str, tuple[date, date]]:
+        """Return ``{symbol: (first daily bar date, last daily bar date)}`` for this dump."""
+        return {r[0]: (date.fromisoformat(r[1]), date.fromisoformat(r[2])) for r in self._db.execute(
+            "SELECT symbol, first_date, last_date FROM symbol_bounds WHERE dump_id=?", (self.dump_id,))}

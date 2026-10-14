@@ -12,6 +12,8 @@ from src.data.fmp_pipeline import fsutil
 from src.data.fmp_pipeline.client.circuit_breaker import CircuitBreaker
 from src.data.fmp_pipeline.client.fmp_client import FmpClient, parse_retry_after, validate_params
 from src.data.fmp_pipeline.client.rate_limiter import AsyncRateLimiter
+from src.data.fmp_pipeline.errors import DumpLocked
+from src.data.fmp_pipeline.fsutil import exclusive_lock, existing_parent, free_bytes
 
 
 class FakeClock:
@@ -171,3 +173,24 @@ def test_atomic_write_cleans_temp_on_failure(tmp_path: Path, monkeypatch: pytest
     with pytest.raises(PermissionError):
         fsutil.atomic_write_bytes(tmp_path / "f", b"data")
     assert list(tmp_path.iterdir()) == []
+
+
+def test_exclusive_lock_rejects_a_second_holder_and_releases(tmp_path: Path):
+    lock = tmp_path / "locks" / "d.lock"
+    with exclusive_lock(lock):
+        with pytest.raises(DumpLocked, match="held by another fmp process"):
+            with exclusive_lock(lock):
+                pass  # pragma: no cover - never entered
+    with exclusive_lock(lock):  # released on exit, reusable
+        assert lock.exists()
+
+
+def test_free_bytes_walks_up_to_an_existing_parent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    assert free_bytes(tmp_path / "not" / "yet" / "there") == free_bytes(tmp_path)
+    assert existing_parent(tmp_path / "a" / "b") == tmp_path
+
+    def broken(_: Path) -> None:
+        raise OSError("drive gone")
+
+    monkeypatch.setattr(fsutil.shutil, "disk_usage", broken)
+    assert free_bytes(tmp_path) is None

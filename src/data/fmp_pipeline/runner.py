@@ -2,9 +2,11 @@
 Resumable download loop (spec §6.2–§6.4): workers claim tasks from the manifest, fetch them, hand every
 response to a sink, then record the outcome.
 
-Order per task is **sink first, then manifest**. A crash between the two re-fetches the task on the next run, so
-the sink can see a response twice but never loses one. The raw archive (WP-5) is append-only and its reader
-keeps the newest line per request, which makes duplicates harmless (spec §6.6).
+Order per task is **review, follow-ups, sink, then manifest**. A ``Reviewer`` (the planner's paging and intraday
+truncation rules) may relabel the result and plan follow-up tasks; those are inserted before the task is completed,
+so a crash can only re-plan them (idempotent), never lose them. A crash between sink and manifest re-fetches the task
+on the next run, so the sink can see a response twice but never loses one. The raw archive (WP-5) is append-only
+and its reader keeps the newest line per request, which makes duplicates harmless (spec §6.6).
 
 Run-level stops, each recorded in ``run_events`` and leaving unfinished tasks ``pending``:
 
@@ -28,13 +30,15 @@ from typing import Literal, Optional, Union
 
 from src.data.fmp_pipeline.client.fmp_client import FetchResult, FmpClient
 from src.data.fmp_pipeline.errors import ArchiveUnavailable, AuthAbort, QuotaExhausted
-from src.data.fmp_pipeline.manifest.manifest import Manifest, Task
+from src.data.fmp_pipeline.manifest.manifest import Manifest, Task, TaskSpec
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
 #: Receives every final response. Returns the stored body's sha256 (or ``None``); may be sync or async.
 Sink = Callable[[Task, FetchResult], Union[Optional[str], Awaitable[Optional[str]]]]
+#: Inspects a final response before it is stored: returns the (possibly relabelled) result and follow-up tasks.
+Reviewer = Callable[[Task, FetchResult], tuple[FetchResult, list[TaskSpec]]]
 BandwidthBasis = Literal["wire", "decoded"]
 GB = 1024**3
 
@@ -101,6 +105,8 @@ class Downloader:
         sink: Sink = sha256_sink,
         workers: int = 12,
         guard: Optional[BandwidthGuard] = None,
+        reviewer: Optional[Reviewer] = None,
+        max_priority: Optional[int] = None,
     ) -> None:
         """
         Args:
@@ -110,12 +116,16 @@ class Downloader:
             sink: Called with every final response before the manifest records it.
             workers: Concurrent workers (spec: 8–16).
             guard: Bandwidth hard stop; defaults to 0.90 × 50 GB decoded over 30 days.
+            reviewer: Called with every final response before the sink; see ``Reviewer``.
+            max_priority: Only claim tasks up to this priority (``fmp plan`` fetches its source lists this way).
         """
         self._manifest = manifest
         self._client = client
         self._sink = sink
         self._workers = workers
         self._guard = guard or BandwidthGuard()
+        self._reviewer = reviewer
+        self._max_priority = max_priority
         self._stop: Optional[str] = None
         self._summary = RunSummary()
         client.on_bytes = self._on_bytes
@@ -145,7 +155,7 @@ class Downloader:
             if reason is not None:
                 self._halt("bandwidth", reason)
                 return
-            claimed = self._manifest.claim(1)
+            claimed = self._manifest.claim(1, self._max_priority)
             if not claimed:
                 return
             await self._process(worker_id, claimed[0])
@@ -166,6 +176,10 @@ class Downloader:
             self._count("failed")
             return
 
+        if self._reviewer is not None:
+            result, follow_ups = self._reviewer(task, result)
+            if follow_ups:
+                self._manifest.add_tasks(follow_ups)
         try:
             stored = self._sink(task, result)
             sha256 = await stored if inspect.isawaitable(stored) else stored

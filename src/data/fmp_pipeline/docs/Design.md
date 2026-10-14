@@ -19,7 +19,7 @@ src/data/fmp_pipeline/
   runner.py              Downloader worker pool                 [done — WP-2]
   tests/mock_server.py   offline FMP simulator                  [done — WP-3]
   archive/               raw jsonl.gz archive (the sink)        [done — WP-5]
-  planner/               task planning, byte projection         [WP-4]
+  planner/               universe, task planning, projection    [done — WP-4]
   builders/              archive -> Parquet vintage             [WP-6]
   datamanager_adapter/   FmpStore -> IncrementStore -> legacy   [WP-8]
   increments/            yfinance layer                         [WP-9]
@@ -70,6 +70,15 @@ request (endpoint + canonical params). `symbol_path.py` makes file names Windows
 percent-encoding, a `_` prefix for device names (`CON`, `NUL`, `COM1`…), and a hash suffix for lower-case symbols
 so `ABC` and `abc` never share a file on NTFS (D32).
 
+**`planner/`** — `Planner.fetch_sources` downloads the bootstrap lists through the normal `Downloader` (priority 0,
+`max_priority=0`). `Planner.plan` reads them and finished profiles back from the archive, `universe.py` assembles
+and tiers the universe, `generate.py` yields every task with a size estimate (or a deferral reason), `projection.py`
+sums done (real bytes) and remaining (estimates) per block and tier and schedules months under both counting
+hypotheses, and `report.py` renders the two reports. Task priority is `block * 100 + sub`: bootstrap 0, then
+delisted before active, and for intraday the tier order. `windowing.py` keeps all date windows on fixed grids so
+task ids survive re-planning (D37). `follow_ups.FollowUps` is the `Downloader`'s `Reviewer`: next page while a page
+is non-empty, daily bounds into the manifest, truncated intraday windows relabelled and halved (D38, D39).
+
 ### Error handling
 - `adjust()` raises `ValueError` on contradictory or impossible inputs rather than repairing them (D11, D16).
 - The probe treats budget exhaustion as "skip and continue" (cached calls still resolve) and a quota message as
@@ -92,16 +101,22 @@ manifest (pending) --claim--> FmpClient --FetchResult--> RawArchive.append --sha
                                                                |
                                                    reader.latest_successful --> builder (WP-6)
 
+fmp plan: bootstrap lists --Downloader(max_priority=0)--> archive --> universe --> generate --> manifest
+                                                                        \--> budget_plan.md, universe_report.md
+fmp run:   Downloader --reviewer FollowUps--> next page / window halves / symbol_bounds --> next fmp plan
+
 raw bars + splits + dividends(amount = FMP `dividend`) --> adjust(mode) --> adjusted OHLCV
 yfinance (auto_adjust=False, actions) --> yfinance_to_raw --> raw bars (+ raw-basis dividends)
 ```
 
 ## Design Decisions
-See `docs/decisions.md` (D12–D35). The ones shaping this module most:
+See `docs/decisions.md` (D12–D42). The ones shaping this module most:
 - D13: restate `C_prev` on the ex-date's share basis. A dividend on a split date is otherwise wrong by the ratio.
 - D19/D20: FMP `dividend` is raw; `non-split-adjusted` carries **raw** prices under `adj*` field names.
 - D24: the probe client is deliberately separate from the WP-2 production client.
 - D28/D33: sink-then-manifest plus torn-tail repair make kill-and-resume lose nothing and corrupt nothing.
+- D36/D37: planning is iterative (decide only what the data allows) and windows sit on fixed grids, so re-running
+  `fmp plan` is always safe and never duplicates work.
 
 ## Integration Patterns
 - The API key is resolved only through `src.config.provider_config.get_api_key`.

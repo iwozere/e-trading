@@ -111,6 +111,9 @@ class MockConfig:
     quota_after: Optional[int] = None
     send_content_length: bool = False
     gzip_enabled: bool = True
+    #: Bodies for endpoints the free key could not show (``stock-list``, constituents, …), keyed by endpoint;
+    #: they override fixture files. Field names there are a [VERIFY] item until the paid probe.
+    extra_fixtures: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -192,6 +195,7 @@ class MockFmpServer:
             path.stem.replace("__", "/"): json.loads(path.read_text(encoding="utf-8"))
             for path in fixtures_dir.glob("*.json") if not path.name.startswith("_")
         }
+        self._fixtures.update(self.config.extra_fixtures)
         self._httpd: Optional[ThreadingHTTPServer] = None
         self._thread: Optional[threading.Thread] = None
 

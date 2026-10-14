@@ -6,7 +6,7 @@ symbols) into an immutable Parquet "vintage", plus read-time adjustment and a yf
 specification: `docs/FMP_DATA_PIPELINE_SPEC-2.md`; build plan: `docs/FMP_DATA_PIPELINE_IMPLEMENTATION_PLAN.md`.
 
 **Status (2026-10-14):** WP-1 (free-key probe), WP-7 (`adjust()`), WP-3 (mock server), WP-2 (client, manifest,
-downloader) and WP-5 (raw archive) are done. Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
+downloader), WP-5 (raw archive) and WP-4 (planner, `fmp plan`) are done. Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
 FMP Premium before gate G1.
 
 ## Features
@@ -20,7 +20,10 @@ FMP Premium before gate G1.
 - `archive/` — append-only raw archive `raw/<dump_id>/<endpoint>/<symbol>.jsonl.gz` (spec §6.6): `RawArchive` is
   the `Downloader` sink, `reader.iter_records` / `latest_successful` read it back, `symbol_path` makes symbols
   Windows-safe file names.
-- `cli.py` — the `fmp` command line (`probe-free` so far).
+- `planner/` — `fmp plan`: fetches the universe lists, assembles the universe (spec §7.2, `universe_report.md`),
+  generates tasks in spec §6.3.5 order with tiers A–E, and projects bandwidth (wire and decoded) and disk need
+  into `budget_plan.md`. `FollowUps` is the run-time reviewer for paging and intraday truncation.
+- `cli.py` — the `fmp` command line (`probe-free`, `plan`).
 - `tests/mock_server.py` — offline mock of FMP `/stable` (spec §6.7) for the downloader test suite:
   `with MockFmpServer(MockConfig(...)) as fmp: client.get(fmp.base_url + "profile", ...)`.
 
@@ -49,6 +52,15 @@ summary = await Downloader(manifest, client, sink=archive).run()   # stop_reason
 latest = latest_successful(iter_records(archive.path_for("splits", "AAPL")))
 ```
 
+Plan a dump (PowerShell, project root). Planning is iterative: re-run it after each `fmp run` phase until no
+task is deferred (D36).
+
+```powershell
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli plan --dry-run   # reports only (fetches the universe lists)
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli plan             # also writes the tasks to the manifest
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli plan --offline   # re-plan from the archive, no calls
+```
+
 Run the probe (PowerShell, project root):
 
 ```powershell
@@ -65,6 +77,9 @@ Run the probe (PowerShell, project root):
 ## Configuration
 - `FMP_API_KEY` (environment variable or `config/donotshare/donotshare.py`). Sent only as the `apikey` request
   header, never in a URL.
+- `config/fmp/fmp.yaml` — dump id, priorities, history start, bandwidth cap, intraday settings (`max_rows` comes
+  from the paid probe), universe rules. All keys optional; see `planner/config.py`.
+- Under `data_root`: `raw/<dump_id>/` archive, `manifests/<dump_id>.sqlite`, `reports/<dump_id>/`, `locks/`.
 - Probe cache and call ledger: `DATA_CACHE_DIR/fmp-data/probe-free/`. Never commit anything from `data_root` (D5).
 
 ## Related Documentation

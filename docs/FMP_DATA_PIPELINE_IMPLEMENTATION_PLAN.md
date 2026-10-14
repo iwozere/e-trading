@@ -4,7 +4,7 @@
 **Based on:** `docs/FMP_DATA_PIPELINE_SPEC-2.md` v1.1 (2026-10-11)
 **Status:** Phase 0a recon **done** (section 1). **WP-1 and WP-7 done 2026-10-14**: `src/data/fmp_pipeline/`
 exists with `adjust/` and `probe/`; results in `docs/fmp_probe_report.md` and `docs/decisions.md` (D13–D24).
-**WP-3 mock server, WP-2 client/manifest/downloader and WP-5 raw archive done** (D25–D35). Next: WP-4 planner
+**WP-3 mock server, WP-2 client/manifest/downloader, WP-5 raw archive and WP-4 planner (`fmp plan`) done** (D25–D42). Next: `fmp run`, then WP-6 builder
 (section 10). Section 1 refutes two spec assumptions and must be read before
 any further code is written.
 
@@ -433,7 +433,7 @@ WP-1 probe-free          ──┤
 - [ ] `docs/decisions.md` — D12 (Finding A) and Q1–Q6 as recorded decisions
 - [ ] Downloader green against the mock server: resume-after-kill, retry/backoff, circuit breaker,
       plan-restricted, quota-exhausted stop, bandwidth hard stop
-- [ ] `fmp plan --dry-run` output against both the mock and the free key: task counts and byte projections
+- [x] `fmp plan --dry-run` output against both the mock and the free key: task counts and byte projections
       per block and tier, both counting hypotheses
 - [ ] `adjust()` and `yfinance_to_raw()` passing the §8.3 vectors on synthetic data
 - [ ] Golden-output regression snapshot captured for the 797 cached symbols, adapter disabled → zero diffs
