@@ -2,7 +2,9 @@
 
 ## Python Dependencies
 - `pandas` >= 3.0.3, `numpy` >= 2.3.2 — `adjust/` (already in `requirements.txt`)
-- `httpx` >= 0.28.1 — `probe/` (in `requirements.txt`)
+- `httpx` >= 0.28.1 — `probe/`, `client/` (in `requirements.txt`)
+- `sqlite3` (stdlib) — `manifest/`
+- Tests: `pytest-asyncio` (in `requirements-dev.txt`)
 - Planned (plan §9.2): `pyarrow`, `duckdb` (owner decision Q6), `tzdata`, optionally `orjson`, split into
   `requirements-fmp-reader.txt` (Pi) and `requirements-fmp-pipeline.txt` (laptop).
 

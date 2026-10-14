@@ -9,8 +9,9 @@ Call-budgeted, disk-cached FMP client for the free-key probe (spec §4.2, plan W
   repeated runs can never exceed it in total.
 - Cached bodies stay under ``data_root`` and are never committed (D5).
 
-This is deliberately a small synchronous client. The production async client with retries, circuit breaker and
-bandwidth accounting is WP-2.
+This is deliberately a small synchronous client (D24). The production async client with retries, circuit breaker
+and bandwidth accounting is ``client/fmp_client.py``; ``classify``/``row_count`` live in ``client/classify.py`` and
+are re-exported here.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from typing import Any, Literal, Optional
 
 import httpx
 
+from src.data.fmp_pipeline.client.classify import classify, row_count
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -34,6 +36,7 @@ BASE_URL = "https://financialmodelingprep.com/stable/"
 INVALID_PROBE_KEY = "invalid-probe-key-000000"
 _DROPPED_HEADERS = {"set-cookie", "cookie", "authorization", "apikey"}
 _TRANSIENT = {"rate_limited", "server_error"}
+__all__ = ["BudgetExhausted", "ProbeClient", "ProbeResponse", "QuotaExhausted", "classify", "row_count"]
 
 AuthMode = Literal["header", "invalid"]
 
@@ -69,60 +72,6 @@ class ProbeResponse:
             return json.loads(self.body)
         except ValueError:
             return None
-
-
-def classify(status: int, body: Any, text: str) -> str:
-    """
-    Classify an FMP response.
-
-    Args:
-        status: HTTP status code.
-        body: Parsed JSON body, or ``None`` if the body is not JSON.
-        text: Raw body text.
-
-    Returns:
-        One of ``ok``, ``ok_empty``, ``plan_restricted``, ``quota_exhausted``, ``unauthorized``, ``not_found``,
-        ``rate_limited``, ``server_error``, ``api_error``.
-    """
-    lowered = text.lower()
-    if "limit reach" in lowered:
-        return "quota_exhausted"
-    if status == 401:
-        return "unauthorized"
-    if status in (402, 403) or (status >= 400 and ("subscription" in lowered or "premium" in lowered)):
-        return "plan_restricted"
-    if status == 404:
-        return "not_found"
-    if status == 429:
-        return "rate_limited"
-    if status >= 500:
-        return "server_error"
-    if status >= 400:
-        return "api_error"
-    if isinstance(body, dict) and ("Error Message" in body or "error" in body):
-        message = str(body.get("Error Message", body.get("error", ""))).lower()
-        if "subscription" in message or "premium" in message or "plan" in message:
-            return "plan_restricted"
-        if "invalid api key" in message:
-            return "unauthorized"
-        return "api_error"
-    if body is None:
-        return "ok_empty" if not text.strip() else "api_error"
-    if body in ([], {}):
-        return "ok_empty"
-    return "ok"
-
-
-def row_count(body: Any) -> int:
-    """Return the number of records in a parsed body: list length, a wrapped list's length, or 1 for an object."""
-    if isinstance(body, list):
-        return len(body)
-    if isinstance(body, dict):
-        for key in ("historical", "data", "results"):
-            if isinstance(body.get(key), list):
-                return len(body[key])
-        return 1 if body else 0
-    return 0
 
 
 class ProbeClient:

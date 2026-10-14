@@ -15,7 +15,8 @@ src/data/fmp_pipeline/
   cli.py                 fmp <command>                          [probe-free only]
   adjust/                adjust(), yfinance_to_raw()            [done — WP-7]
   probe/                 free-key probe                         [done — WP-1]
-  client/ manifest/      async client, SQLite task manifest     [WP-2]
+  client/ manifest/      async client, SQLite task manifest     [done — WP-2]
+  runner.py              Downloader worker pool                 [done — WP-2]
   tests/mock_server.py   offline FMP simulator                  [done — WP-3]
   planner/ archive/      task planning, raw jsonl.gz archive    [WP-4, WP-5]
   builders/              archive -> Parquet vintage             [WP-6]
@@ -47,6 +48,18 @@ probe's observations (401 JSON, 402 plain text, 404 `[]`, newest-first lists, `a
 endpoint, bad `from` ignored, gzip + chunked with no `Content-Length`). Unobserved behaviour is a `MockConfig`
 knob, never a hard-coded guess. `Fault`s script 429/5xx/error-body/slow responses per endpoint and symbol.
 Values are deterministic synthetic prices, so tests can assert exact rows.
+
+**`client/`** — `FmpClient.fetch` loops: breaker wait → rate-limiter slot → one streamed GET → classify. Quota
+raises at once; 401/403 streaks raise `AuthAbort`; `rate_limited`/`server_error`/`network_error` back off
+(`base·2^(n-1)` ±50 % jitter, at least `Retry-After`) up to 6 attempts; everything else is final. Every attempt
+that got a response reports `(wire, decoded)` bytes through `on_bytes`.
+
+**`manifest/`** — SQLite (WAL, `synchronous=FULL`). `claim()` moves the lowest-priority-number `pending` rows to
+`running` in one transaction; reopening reverts `running` to `pending`. `task_id` hashing makes planning idempotent.
+
+**`runner.py`** — `Downloader` runs N workers: guard check → claim → fetch → sink → `complete`. Sink-then-manifest
+gives at-least-once delivery (D28). Run-level stops (quota, auth, bandwidth) release the in-flight task and are
+logged to `run_events`.
 
 ### Error handling
 - `adjust()` raises `ValueError` on contradictory or impossible inputs rather than repairing them (D11, D16).

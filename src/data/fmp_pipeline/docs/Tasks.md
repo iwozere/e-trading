@@ -13,12 +13,15 @@ only after every Phase 1 item below is done.
 - [x] `docs/decisions.md` with D12–D24 and Q1–Q6
 - [x] WP-3 mock FMP server (`tests/mock_server.py`): auth, 402 text bodies, paging, faults (429 + Retry-After,
       5xx bursts, 200 error body, slow), intraday row cap, gzip chunked / Content-Length, quota (2026-10-14)
+- [x] WP-2 async `FmpClient` (header auth, gzip, wire/decoded byte counting, retries with jitter + Retry-After,
+      circuit breaker, auth abort, date validation), no-burst `AsyncRateLimiter`, SQLite `Manifest`
+      (spec §6.2 schema + `run_events`), `Downloader` worker pool with quota/auth/bandwidth stops, `fsutil`
+      atomic writes; kill-and-resume proven in-process and across a real process kill (2026-10-14)
 
 ### 🔄 IN PROGRESS
 - [ ] `docs/datamanager_integration.md` — write up plan §1 with the full legacy-caller list (G1 item)
 
 ### 🚀 PLANNED ENHANCEMENTS
-- [ ] WP-2 async client, token bucket, retry/circuit breaker, SQLite manifest; promote `probe_client.classify`
 - [ ] WP-4 planner + `fmp plan --dry-run` (byte projections from probe F10: ~25 B/row wire, ~171 B/row decoded)
 - [ ] WP-5 raw archive + Windows-safe symbol encoding
 - [ ] WP-6 builder: per-endpoint field mapping (D20), int/float casting, nullable `declarationDate`, future
@@ -29,6 +32,9 @@ only after every Phase 1 item below is done.
 - [ ] Phase 2 `fmp probe-paid` covering the eight deferred items in `docs/fmp_probe_report.md`
 
 ## Technical Debt
+- [ ] `fmp run` CLI command (with Windows `SetThreadExecutionState` sleep suppression, plan §9.3) — lands with
+      WP-4/WP-5, once the planner and the archive sink exist.
+- [ ] Structured JSON-lines logging and the once-a-minute progress summary / `fmp status` (spec §13).
 - [ ] `probe_client` is synchronous and single-purpose by design (D24); do not reuse it for the bulk download.
 
 ## Known Issues
@@ -41,7 +47,7 @@ only after every Phase 1 item below is done.
 ## Testing Requirements
 - [x] Unit tests for `adjust()`, `yfinance_to_raw()`, probe client/analysis/report (85 tests)
 - [x] Mock server tests (29) — whole package 114 tests, 99% coverage
-- [ ] Kill-and-resume and bandwidth-stop integration tests against the mock server (WP-2)
+- [x] Client, manifest and runner tests incl. kill-and-resume and bandwidth stop — package total 181 tests, 99%
 
 ## Documentation Updates
 - [ ] `docs/storage_schema.md`, `docs/runbook.md` (WP-6, Phase 5)

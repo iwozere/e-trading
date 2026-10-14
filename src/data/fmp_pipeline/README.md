@@ -5,8 +5,9 @@ One-off, resumable download of FMP Premium history (raw prices, corporate events
 symbols) into an immutable Parquet "vintage", plus read-time adjustment and a yfinance increment layer. Full
 specification: `docs/FMP_DATA_PIPELINE_SPEC-2.md`; build plan: `docs/FMP_DATA_PIPELINE_IMPLEMENTATION_PLAN.md`.
 
-**Status (2026-10-14):** WP-1 (free-key probe), WP-7 (`adjust()`) and WP-3 (mock server) are done. Everything
-else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy FMP Premium before gate G1.
+**Status (2026-10-14):** WP-1 (free-key probe), WP-7 (`adjust()`), WP-3 (mock server) and WP-2 (client, manifest,
+downloader) are done. Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
+FMP Premium before gate G1.
 
 ## Features
 - `adjust/` — pure, vectorized `adjust(prices_raw, splits, dividends, mode)` with `mode` in `raw`/`split`/`total`
@@ -14,6 +15,8 @@ else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy FM
   adjusted series to ≤ 2.5e-5 (probe F4).
 - `probe/` — `fmp probe-free`: budgeted (≤ 200 calls), cached, idempotent free-key probe that writes
   `docs/fmp_probe_report.md` and synthetic test fixtures.
+- `client/`, `manifest/`, `runner.py` — async FMP client (retries, circuit breaker, byte counting), SQLite task
+  manifest and the resumable `Downloader` worker pool with quota/auth/bandwidth stops (spec §6.2–§6.4).
 - `cli.py` — the `fmp` command line (`probe-free` so far).
 - `tests/mock_server.py` — offline mock of FMP `/stable` (spec §6.7) for the downloader test suite:
   `with MockFmpServer(MockConfig(...)) as fmp: client.get(fmp.base_url + "profile", ...)`.

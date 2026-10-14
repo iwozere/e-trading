@@ -4,7 +4,8 @@
 **Based on:** `docs/FMP_DATA_PIPELINE_SPEC-2.md` v1.1 (2026-10-11)
 **Status:** Phase 0a recon **done** (section 1). **WP-1 and WP-7 done 2026-10-14**: `src/data/fmp_pipeline/`
 exists with `adjust/` and `probe/`; results in `docs/fmp_probe_report.md` and `docs/decisions.md` (D13–D24).
-**WP-3 mock server done** (`src/data/fmp_pipeline/tests/mock_server.py`). Next: WP-2 (section 10). Section 1 refutes two spec assumptions and must be read before
+**WP-3 mock server and WP-2 client/manifest/downloader done** (D25–D31). Next: WP-5 archive and WP-4 planner
+(section 10). Section 1 refutes two spec assumptions and must be read before
 any further code is written.
 
 ---
