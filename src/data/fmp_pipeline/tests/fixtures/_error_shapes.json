@@ -1,0 +1,16 @@
+{
+  "not_found": {
+    "body": [],
+    "status": 404
+  },
+  "plan_restricted": {
+    "body": "Premium Query Parameter: 'Special Endpoint : This value set for 'symbol' is not available under your current subscription please visit our subscription page to upgrade your plan at https://financialmodelingprep.com/",
+    "status": 402
+  },
+  "unauthorized": {
+    "body": {
+      "Error Message": "Invalid API KEY. Feel free to create a Free API Key or visit https://site.financialmodelingprep.com/faqs?search=why-is-my-api-key-invalid for more information."
+    },
+    "status": 401
+  }
+}

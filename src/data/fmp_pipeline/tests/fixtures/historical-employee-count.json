@@ -1,0 +1,24 @@
+[
+  {
+    "symbol": "SYNTH0",
+    "cik": "1.5",
+    "acceptanceTime": "2001-02-05 09:30:00",
+    "periodOfReport": "2001-02-05",
+    "companyName": "SYNTH0",
+    "formType": "SYNTH0",
+    "filingDate": "2001-02-05",
+    "employeeCount": 100,
+    "source": "SYNTH0"
+  },
+  {
+    "symbol": "SYNTH1",
+    "cik": "1.5",
+    "acceptanceTime": "2001-02-05 09:30:00",
+    "periodOfReport": "2001-02-05",
+    "companyName": "SYNTH1",
+    "formType": "SYNTH1",
+    "filingDate": "2001-02-05",
+    "employeeCount": 101,
+    "source": "SYNTH1"
+  }
+]

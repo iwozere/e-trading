@@ -1,0 +1,20 @@
+[
+  {
+    "symbol": "SYNTH0",
+    "date": "2001-02-05",
+    "adjOpen": 10.5,
+    "adjHigh": 10.5,
+    "adjLow": 10.5,
+    "adjClose": 10.5,
+    "volume": 100
+  },
+  {
+    "symbol": "SYNTH1",
+    "date": "2001-02-05",
+    "adjOpen": 11.5,
+    "adjHigh": 11.5,
+    "adjLow": 11.5,
+    "adjClose": 11.5,
+    "volume": 101
+  }
+]

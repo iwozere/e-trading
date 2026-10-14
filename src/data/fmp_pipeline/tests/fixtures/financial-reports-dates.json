@@ -1,0 +1,16 @@
+[
+  {
+    "symbol": "SYNTH0",
+    "fiscalYear": 100,
+    "period": "SYNTH0",
+    "linkJson": "SYNTH0",
+    "linkXlsx": "SYNTH0"
+  },
+  {
+    "symbol": "SYNTH1",
+    "fiscalYear": 101,
+    "period": "SYNTH1",
+    "linkJson": "SYNTH1",
+    "linkXlsx": "SYNTH1"
+  }
+]

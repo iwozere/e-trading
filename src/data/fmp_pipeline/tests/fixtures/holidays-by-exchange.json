@@ -1,0 +1,20 @@
+[
+  {
+    "exchange": "SYNTH0",
+    "date": "2001-02-05",
+    "name": "SYNTH0",
+    "isClosed": true,
+    "adjOpenTime": null,
+    "adjCloseTime": "SYNTH0",
+    "isFullyClosed": true
+  },
+  {
+    "exchange": "SYNTH1",
+    "date": "2001-02-05",
+    "name": "SYNTH1",
+    "isClosed": false,
+    "adjOpenTime": null,
+    "adjCloseTime": "SYNTH1",
+    "isFullyClosed": false
+  }
+]

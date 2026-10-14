@@ -1,0 +1,18 @@
+[
+  {
+    "exchange": "SYNTH0",
+    "name": "SYNTH0",
+    "openingHour": "SYNTH0",
+    "closingHour": "SYNTH0",
+    "timezone": "SYNTH0",
+    "isMarketOpen": true
+  },
+  {
+    "exchange": "SYNTH1",
+    "name": "SYNTH1",
+    "openingHour": "SYNTH1",
+    "closingHour": "SYNTH1",
+    "timezone": "SYNTH1",
+    "isMarketOpen": false
+  }
+]

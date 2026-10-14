@@ -1,0 +1,26 @@
+[
+  {
+    "symbol": "SYNTH0",
+    "reportedCurrency": "SYNTH0",
+    "fiscalYear": "2001",
+    "period": "SYNTH0",
+    "date": "2001-02-05",
+    "averagePPE": 10.5,
+    "maintenanceCapex": 100,
+    "ownersEarnings": 100,
+    "growthCapex": 100,
+    "ownersEarningsPerShare": 10.5
+  },
+  {
+    "symbol": "SYNTH1",
+    "reportedCurrency": "SYNTH1",
+    "fiscalYear": "2001",
+    "period": "SYNTH1",
+    "date": "2001-02-05",
+    "averagePPE": 11.5,
+    "maintenanceCapex": 101,
+    "ownersEarnings": 101,
+    "growthCapex": 101,
+    "ownersEarningsPerShare": 11.5
+  }
+]

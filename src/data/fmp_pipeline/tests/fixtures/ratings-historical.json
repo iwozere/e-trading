@@ -1,0 +1,26 @@
+[
+  {
+    "symbol": "SYNTH0",
+    "date": "2001-02-05",
+    "rating": "SYNTH0",
+    "overallScore": 100,
+    "discountedCashFlowScore": 100,
+    "returnOnEquityScore": 100,
+    "returnOnAssetsScore": 100,
+    "debtToEquityScore": 100,
+    "priceToEarningsScore": 100,
+    "priceToBookScore": 100
+  },
+  {
+    "symbol": "SYNTH1",
+    "date": "2001-02-05",
+    "rating": "SYNTH1",
+    "overallScore": 101,
+    "discountedCashFlowScore": 101,
+    "returnOnEquityScore": 101,
+    "returnOnAssetsScore": 101,
+    "debtToEquityScore": 101,
+    "priceToEarningsScore": 101,
+    "priceToBookScore": 101
+  }
+]

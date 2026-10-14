@@ -1,0 +1,20 @@
+[
+  {
+    "symbol": "SYNTH0",
+    "date": "2001-02-05",
+    "analystRatingsStrongBuy": 100,
+    "analystRatingsBuy": 100,
+    "analystRatingsHold": 100,
+    "analystRatingsSell": 100,
+    "analystRatingsStrongSell": 100
+  },
+  {
+    "symbol": "SYNTH1",
+    "date": "2001-02-05",
+    "analystRatingsStrongBuy": 101,
+    "analystRatingsBuy": 101,
+    "analystRatingsHold": 101,
+    "analystRatingsSell": 101,
+    "analystRatingsStrongSell": 101
+  }
+]

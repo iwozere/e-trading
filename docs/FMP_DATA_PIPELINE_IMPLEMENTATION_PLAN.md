@@ -2,8 +2,10 @@
 
 **Date:** 2026-10-13
 **Based on:** `docs/FMP_DATA_PIPELINE_SPEC-2.md` v1.1 (2026-10-11)
-**Status:** Not started — no `fmp_pipeline` package exists. Phase 0a recon is **done** and is reported in
-section 1 below; it refutes two spec assumptions and must be read before any code is written.
+**Status:** Phase 0a recon **done** (section 1). **WP-1 and WP-7 done 2026-10-14**: `src/data/fmp_pipeline/`
+exists with `adjust/` and `probe/`; results in `docs/fmp_probe_report.md` and `docs/decisions.md` (D13–D24).
+Next: WP-3 mock server, then WP-2 (section 10). Section 1 refutes two spec assumptions and must be read before
+any further code is written.
 
 ---
 

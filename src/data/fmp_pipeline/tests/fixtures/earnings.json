@@ -1,0 +1,20 @@
+[
+  {
+    "symbol": "SYNTH0",
+    "date": "2001-02-05",
+    "epsActual": 10.5,
+    "epsEstimated": 10.5,
+    "revenueActual": 100,
+    "revenueEstimated": 100,
+    "lastUpdated": "2001-02-05"
+  },
+  {
+    "symbol": "SYNTH1",
+    "date": "2001-02-05",
+    "epsActual": 11.5,
+    "epsEstimated": 11.5,
+    "revenueActual": 101,
+    "revenueEstimated": 101,
+    "lastUpdated": "2001-02-05"
+  }
+]

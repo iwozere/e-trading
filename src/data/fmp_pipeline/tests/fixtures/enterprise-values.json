@@ -1,0 +1,22 @@
+[
+  {
+    "symbol": "SYNTH0",
+    "date": "2001-02-05",
+    "stockPrice": 10.5,
+    "numberOfShares": 100,
+    "marketCapitalization": 100,
+    "minusCashAndCashEquivalents": 100,
+    "addTotalDebt": 100,
+    "enterpriseValue": 100
+  },
+  {
+    "symbol": "SYNTH1",
+    "date": "2001-02-05",
+    "stockPrice": 11.5,
+    "numberOfShares": 101,
+    "marketCapitalization": 101,
+    "minusCashAndCashEquivalents": 101,
+    "addTotalDebt": 101,
+    "enterpriseValue": 101
+  }
+]

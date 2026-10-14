@@ -1,0 +1,14 @@
+[
+  {
+    "country": "SYNTH0",
+    "continent": "SYNTH0",
+    "countryRiskPremium": 10.5,
+    "totalEquityRiskPremium": 10.5
+  },
+  {
+    "country": "SYNTH1",
+    "continent": "SYNTH1",
+    "countryRiskPremium": 11.5,
+    "totalEquityRiskPremium": 11.5
+  }
+]

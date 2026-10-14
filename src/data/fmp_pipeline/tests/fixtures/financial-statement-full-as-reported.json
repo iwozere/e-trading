@@ -1,0 +1,18 @@
+[
+  {
+    "symbol": "SYNTH0",
+    "fiscalYear": 100,
+    "period": "SYNTH0",
+    "reportedCurrency": "SYNTH0",
+    "date": "2001-02-05",
+    "data": {}
+  },
+  {
+    "symbol": "SYNTH1",
+    "fiscalYear": 101,
+    "period": "SYNTH1",
+    "reportedCurrency": "SYNTH1",
+    "date": "2001-02-05",
+    "data": {}
+  }
+]

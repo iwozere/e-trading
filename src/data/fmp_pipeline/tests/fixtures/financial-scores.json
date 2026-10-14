@@ -1,0 +1,28 @@
+[
+  {
+    "symbol": "SYNTH0",
+    "reportedCurrency": "SYNTH0",
+    "altmanZScore": 10.5,
+    "piotroskiScore": 100,
+    "workingCapital": 100,
+    "totalAssets": 100,
+    "retainedEarnings": 100,
+    "ebit": 100,
+    "marketCap": 100,
+    "totalLiabilities": 100,
+    "revenue": 100
+  },
+  {
+    "symbol": "SYNTH1",
+    "reportedCurrency": "SYNTH1",
+    "altmanZScore": 11.5,
+    "piotroskiScore": 101,
+    "workingCapital": 101,
+    "totalAssets": 101,
+    "retainedEarnings": 101,
+    "ebit": 101,
+    "marketCap": 101,
+    "totalLiabilities": 101,
+    "revenue": 101
+  }
+]

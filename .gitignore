@@ -100,6 +100,8 @@ logs/
 !src/web_ui/frontend/dist
 
 !src/common/alerts/schemas/*.json
+# Synthetic FMP fixtures (fake values only; real FMP responses stay under DATA_CACHE_DIR, spec D5)
+!src/data/fmp_pipeline/tests/fixtures/*.json
 
 *.pt
 *.pth
