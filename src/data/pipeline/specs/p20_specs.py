@@ -228,8 +228,9 @@ SPECS: List[PluginSpec] = [
         description="3000+ tickers, single-threaded fundamentals fetch; chunked upserts survive a timeout.",
     ),
     PluginSpec(
-        name="P20 Trends Poll", category="p20", cron="0 3 * * 1-5",
-        script_path=f"{_SCRIPT_BASE}/run_trends_watchlist.py", timeout_seconds=1800,
+        name="P20 Wikipedia Pageviews", category="p20", cron="0 3 * * 1-5",
+        script_path=f"{_SCRIPT_BASE}/run_wiki_pageviews.py", timeout_seconds=900,
+        description="Replaced 'P20 Trends Poll' (pytrends) 2026-10-14; disable that old row by hand — the registry never deletes.",
     ),
     PluginSpec(
         name="P20 Weekly Report", category="p20", cron="0 17 * * 0",

@@ -146,7 +146,7 @@ class K20SentimentDaily(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "source IN ('gdelt','stocktwits','reddit','apewisdom','trends','av_news')",
+            "source IN ('gdelt','stocktwits','reddit','apewisdom','trends','av_news','wikipedia')",
             name="ck_k20_sentiment_source",
         ),
         Index("idx_k20_sentiment_ticker_date", "ticker", "date"),

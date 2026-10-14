@@ -17,7 +17,7 @@
 - [x] `sentiment/alias_builder.py` — Company alias table + legal-name normalization
 - [x] `sentiment/gdelt_processor.py` — GKG z-score pipeline with fuzzy matching
 - [x] `sentiment/social_poll.py` — StockTwits/Reddit/ApeWisdom with rate limiting
-- [x] `sentiment/trends_poll.py` — Google Trends with jitter and 429 abort
+- [x] `sentiment/wiki_pageviews_poll.py` — Wikipedia pageviews (replaced `trends_poll.py`/pytrends 2026-10-14: pytrends was never installed in prod, so it wrote 0 rows while sleeping 30–60s per batch until the grown watchlist hit the 1800s timeout)
 - [x] `sentiment/av_budgeted.py` — AlphaVantage priority queue with daily quota
 - [x] `sentiment/sentiment_aggregator.py` — §7.6 crowding score
 - [x] `screening/sleeve_a.py` — Hard filters + interim scoring (§4.2.1)
@@ -188,7 +188,7 @@ See [Code-Review-2026-07-03.md](Code-Review-2026-07-03.md) for full details.
 ## Known Issues
 
 - GDELT GKG alias fuzzy matching at 0.93 threshold may miss 2-char ticker typos
-- Trends poll has no persistent state for anchor-term calibration
+- Wikipedia article resolution covers ~57% of the watchlist from tickers alone (more with alias-table legal names); unresolved tickers simply have no `wiki` component
 - `EdgarDownloader.download_form4_filings()` downloads ALL form 4s for a date — large payload on busy days
 - ~~Hardcoded `R:/data-cache` paths in 4 modules~~ — fixed 2026-07-03 (C1)
 - **Direct Reddit API (H2) is blocked at the platform level, not a code bug** — Reddit's Aug-2025 "Responsible

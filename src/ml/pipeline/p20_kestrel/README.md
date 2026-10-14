@@ -14,7 +14,7 @@ P20 Kestrel is a three-sleeve trading intelligence pipeline that screens, scores
 
 | Time  | Cadence       | Job                           |
 |-------|---------------|-------------------------------|
-| 03:00 | Mon–Fri       | Google Trends poll            |
+| 03:00 | Mon–Fri       | Wikipedia pageviews poll      |
 | 05:00 | Monday        | Weekly maintenance            |
 | 05:30 | Mon–Fri       | GDELT GKG early download       |
 | 06:00 | Mon–Fri       | Data health check             |
@@ -148,7 +148,8 @@ p20_kestrel/
 │   ├── alias_builder.py   # Company alias table (GDELT matching)
 │   ├── gdelt_processor.py # GKG z-score pipeline
 │   ├── social_poll.py     # StockTwits / Reddit / ApeWisdom
-│   ├── trends_poll.py     # Google Trends
+│   ├── wiki_pageviews_poll.py   # Wikipedia pageviews (retail attention)
+│   ├── wiki_article_resolver.py # ticker → Wikipedia article (Wikidata + verified search, cached)
 │   ├── av_budgeted.py     # AlphaVantage news (budget-capped)
 │   └── sentiment_aggregator.py  # §7.6 crowding score
 ├── screening/

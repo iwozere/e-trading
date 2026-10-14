@@ -71,12 +71,9 @@ ACTIVISTS_JSON = PROJECT_ROOT / "config" / "pipeline" / "activists.json"
 STALENESS_DAYS: dict[str, int] = {
     "social": 3,  # stocktwits / reddit / apewisdom
     "gdelt": 2,
-    "trends": 10,
+    "wiki": 3,  # wikipedia pageviews (daily; upstream lags ~1 day)
     "av_news": 3,
 }
-
-# Google Trends anchor term (fixed; rescaling baseline uses this same term).
-TRENDS_ANCHOR_TERM = "stock market"
 
 # Alpha Vantage daily quota (free tier: 25; 5 reserved for retries).
 AV_DAILY_QUOTA: int = 20

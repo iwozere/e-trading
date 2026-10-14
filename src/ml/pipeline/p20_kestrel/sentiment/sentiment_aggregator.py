@@ -47,7 +47,7 @@ def _z_from_history(
     """
     Compute a rolling z-score of `mentions` from 30 days of history.
 
-    Pollers (social_poll, trends_poll) store raw mentions only; the z-score
+    Pollers (social_poll, wiki_pageviews_poll) store raw mentions only; the z-score
     is derived here at aggregation time. gdelt rows carry a precomputed
     mention_z20 and never reach this path.
 
@@ -81,7 +81,7 @@ def _usable_mention_z(
     Return the freshness-checked mention z-score for a (ticker, source) pair.
 
     Uses the stored mention_z20 when present (gdelt); otherwise derives it
-    from history (social/trends sources store raw mentions only).
+    from history (social/wikipedia sources store raw mentions only).
     """
     row = get_latest_sentiment(ticker, source)
     if not row:
@@ -118,7 +118,7 @@ def _compute_crowding_for_ticker(
     components: Dict[str, float | None] = {
         "social": None,
         "gdelt": None,
-        "trends": None,
+        "wiki": None,
     }
 
     # social = max(stocktwits_mention_z, reddit_mention_z, apewisdom_mention_z)
@@ -132,7 +132,7 @@ def _compute_crowding_for_ticker(
         components["social"] = max(social_z_values)
 
     components["gdelt"] = _usable_mention_z(ticker, "gdelt", "gdelt", as_of_date)
-    components["trends"] = _usable_mention_z(ticker, "trends", "trends", as_of_date)
+    components["wiki"] = _usable_mention_z(ticker, "wikipedia", "wiki", as_of_date)
 
     usable = {k: v for k, v in components.items() if v is not None}
     crowding: float | None = None
@@ -144,7 +144,7 @@ def _compute_crowding_for_ticker(
         "components_used": sorted(usable.keys()),
         "z_social": components["social"],
         "z_gdelt": components["gdelt"],
-        "z_trends": components["trends"],
+        "z_wiki": components["wiki"],
     }
 
 
@@ -189,7 +189,7 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
                 nulls += 1
 
             # Store z-components as individual signals for audit
-            for z_key, z_col in [("z_social", "z_social"), ("z_gdelt", "z_gdelt"), ("z_trends", "z_trends")]:
+            for z_key, z_col in [("z_social", "z_social"), ("z_gdelt", "z_gdelt"), ("z_wiki", "z_wiki")]:
                 z_val = agg.get(z_key)
                 if z_val is not None:
                     signal_rows.append(

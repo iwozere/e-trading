@@ -22,7 +22,7 @@ StockTwits     ─→  social_poll        ─→  k20_sentiment_daily
 Reddit         ─→  social_poll        ─→  k20_sentiment_daily
 ApeWisdom      ─→  social_poll        ─→  k20_sentiment_daily
 AlphaVantage   ─→  av_budgeted        ─→  k20_sentiment_daily
-Google Trends  ─→  trends_poll        ─→  k20_signals
+Wikipedia      ─→  wiki_pageviews_poll ─→  k20_signals
 All above      ─→  sentiment_agg      ─→  k20_signals (crowding)
 
 k20_universe
@@ -52,7 +52,7 @@ k20_*          ─→  weekly_report      ─→  Notification push
 - Alias table built weekly by `alias_builder.py` using legal-name normalization + async fundamentals
 - GDELT GKG processed with exact + fuzzy (≥0.93 SequenceMatcher) matching and blocklist
 - Crowding score = mean of usable z-scores (≥2 sources required, else fail-open)
-- Staleness policy per source: GDELT=2d, Social=3d, Trends=10d, AV=2d
+- Staleness policy per source: GDELT=2d, Social=3d, Wikipedia=3d, AV=2d
 
 **Scoring (§4.2.1 interim mode)**
 - When `REVISIONS_FEED_AVAILABLE=False`: `score = round(partial_score × 100 / 70)`

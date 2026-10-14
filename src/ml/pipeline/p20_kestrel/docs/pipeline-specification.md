@@ -56,7 +56,7 @@ Research and monitoring pipeline, not an execution system.
 3. **Process at ingest, not at query**; heavy transforms live in batch jobs, queries hit small aggregates.
 4. **Budget-aware connectors** with an enforced `k20_request_budget` allocator.
 5. **Idempotent, resumable jobs** with run-state in `k20_job_runs`; full audit trail.
-6. **Stale-data guards**; degraded feeds are flagged, never silently used (see §7.6 for the trends fallback).
+6. **Stale-data guards**; degraded feeds are flagged, never silently used (see §7.6 for the crowding fallback).
 7. **Sentiment is an overlay, not a source of ideas.**
 8. **Namespace isolation:** every P20 table, job, and metric is `k20_`-prefixed; P20 never writes to P15/P17/P18 tables.
 
@@ -92,7 +92,7 @@ k20_signals(ticker text, date date, signal_type text, value numeric, sleeve text
 
 k20_sentiment_daily(                                   -- #2 reconciled with §7.2
   ticker text, date date,
-  source text CHECK (source IN ('gdelt','stocktwits','reddit','apewisdom','trends','av_news')),
+  source text CHECK (source IN ('gdelt','stocktwits','reddit','apewisdom','trends','av_news','wikipedia')),
   mentions numeric,            -- semantics per source, see §3.2
   avg_tone numeric,            -- NULL where source has no tone
   tone_std numeric,            -- GDELT only (§7.2 step 3)
@@ -153,7 +153,7 @@ k20_alerts_log(ts timestamptz, ticker text, trigger text, payload jsonb, channel
 | stocktwits | message count | NULL | bull/(bull+bear) tagged msgs | NULL |
 | reddit | post mention count | NULL | NULL | NULL |
 | apewisdom | mention count (cross-check) | NULL | NULL | NULL |
-| trends | anchor-normalized interest (0–100 rescaled) | NULL | NULL | NULL |
+| wikipedia | daily user pageviews of the company's enwiki article | NULL | NULL | NULL |
 | av_news | article count | AV sentiment aggregates | NULL | NULL |
 
 ---
@@ -219,7 +219,7 @@ RS = 0.5·(3m pct) + 0.5·(6m pct); eligible: top decile, price > 50DMA > 200DMA
 |---|---|---|---|
 | GDELT GKG (+events for macro flags) | free, already downloading (P15) | backbone: news attention & tone, full universe | daily, §7.2 |
 | Fear & Greed, CBOE put/call | free, ingested | regime context lines | daily (existing) |
-| Google Trends (pytrends) | free, unofficial, throttled | retail attention, watchlist-scale | weekly, §7.3 |
+| Wikipedia pageviews (Wikimedia REST) | free, official, no key | retail attention, watchlist-scale | daily, §7.3 |
 | StockTwits public symbol streams | unofficial endpoints readable with polite limits; may break | msg volume + bull/bear tags, watchlist | daily, ≤1 req/2s |
 | Reddit OAuth free tier | ~60–100 q/min per client, personal use | r/wsb + r/stocks mentions | daily |
 | ApeWisdom | fully free, no key | Reddit cross-check / fallback | daily, 1 req |
@@ -245,9 +245,11 @@ Raw-file retention 14 days (P15 policy); aggregated rows kept forever; weekly pr
 - **One-time `gdelt_backfill` job (Phase 3):** GDELT's public archive allows fetching historical GKG beyond P15's 14-day retention. Backfill **60 days** of GKG for the current universe before enabling signals — primes the 20-day baselines with margin and gives immediate usable z-scores.
 - **Warm-up rule (defense in depth):** z-scores are computed only with `min_periods = 15` days of history for that (ticker, source); otherwise stored as NULL. Digest renders NULL as `warming up (d/20)` and no sentiment bonus/penalty is applied to scores. This also covers newly listed tickers and any future source additions.
 
-### 7.3 Google Trends via pytrends
+### 7.3 Wikipedia pageviews (replaced Google Trends 2026-10-14)
 
-Unchanged from v1.1: `"<TICKER> stock"` query form; anchor term in every ≤5-term batch with rescale `norm_i = raw_i × (anchor_ref / anchor_batch)`; 30–60s jittered sleeps, abort on repeated 429 and retry next day; weekly 12-month window for baselines; watchlist-scale (~13 requests / 50 tickers). Failure degrades gracefully per §7.6.
+Originally Google Trends via pytrends (`"<TICKER> stock"` vs an anchor term, 30–60s jittered sleeps). Replaced 2026-10-14: pytrends was never installed in production (the job wrote 0 rows for its whole life), is archived upstream, and Google 429s it by default.
+
+Now `wiki_pageviews_poll`: daily user pageviews of each ticker's English Wikipedia article from the Wikimedia REST API, re-fetching the last 35 days per ticker each run (one request per ticker) so a new ticker's z-score is usable on its first run and missed runs self-heal; interior zero-view days are filled with 0. Ticker → article resolution (`wiki_article_resolver`): Wikidata US-listing ticker statements, then full-text search verified against the infobox `traded_as` field (US exchange templates only), then an exact legal-name title match; every weaker hit is rejected if the article's own infobox contradicts it. Results (including misses) are cached 30 days; transient lookup failures are never cached. Failure degrades gracefully per §7.6.
 
 ### 7.4 Social polling (watchlist-scale, daily)
 
@@ -265,16 +267,16 @@ Implemented in `sentiment_aggregator.py`, not prose:
 components = {
   'social':  z_social,        # max(stocktwits, reddit, apewisdom) z
   'gdelt':   mention_z20,
-  'trends':  z_trends,
+  'wiki':    z_wiki,          # wikipedia pageviews z
 }
-STALENESS_DAYS = {'social': 3, 'gdelt': 2, 'trends': 10}
+STALENESS_DAYS = {'social': 3, 'gdelt': 2, 'wiki': 3}
 usable = {k: v for k, v in components.items()
           if v is not NULL and age_days(k, ticker) <= STALENESS_DAYS[k]}
 crowding = mean(usable.values())          # equal weights over usable set
 row.components_used = list(usable.keys()) # audit column on the aggregate row
 ```
 
-Rules: if `trends` exceeds 10-day staleness (pytrends broken/blocked) it drops out silently from the score but **loudly** from the digest — `data_health` emits one line "trends stale since <date>". If fewer than 2 components are usable for a ticker, crowding is NULL and the Sleeve C crowding gate does not fire (fail-open for blocking, fail-closed for bonuses: attention-vacuum bonus also requires ≥2 usable components).
+Rules: if `wiki` exceeds 3-day staleness (pageviews API down) it drops out silently from the score but **loudly** from the digest — `data_health` emits one line "wiki stale since <date>". If fewer than 2 components are usable for a ticker, crowding is NULL and the Sleeve C crowding gate does not fire (fail-open for blocking, fail-closed for bonuses: attention-vacuum bonus also requires ≥2 usable components).
 
 ---
 
@@ -387,7 +389,7 @@ Fallback input path: a watched YAML file (`positions.yml`) ingested by `risk_che
 | `screen_turnaround` | Weekly Sun 10:00 | Sleeve A screen (§4.2/4.2.1) |
 | `screen_spinoffs` | Weekly Sun 11:00 | SpinCo monitor |
 | `llm_dossiers` | Weekly Sun 12:00 | dossiers for score ≥ 60 |
-| `trends_watchlist` | Weekly Sat 09:00 | pytrends batched pull |
+| `wiki_pageviews` | Mon–Fri 03:00 UTC | Wikipedia pageviews, 35-day backfill per ticker |
 | `alias_refresh` | Weekly Sun 09:00 | aliases + blocklist review sample |
 | `weekly_report` | Weekly Sun 18:00 | performance + calibration + spend |
 | `data_health` | Daily 07:00 | freshness checks, budget usage, staleness lines |
@@ -418,7 +420,7 @@ av_sentiment_budgeted ────────────────┘
 | 4 | Sleeve A screen in interim mode (§4.2.1) + Form 4/13D parsers; revisions feed (10.1) when sourced |
 | 5 | LLM layer: 8-K classifier first, then dossiers; budget tracking |
 | 6 | Sleeve B calendars + idempotent T-minus + spin-off monitor |
-| 7 | Social polling + pytrends + crowding overlay (§7.6) |
+| 7 | Social polling + Wikipedia pageviews + crowding overlay (§7.6) |
 | 8 | Weekly reporting, calibration, NYSE/AMEX extension |
 | 9 (opt.) | Backtests, options data |
 

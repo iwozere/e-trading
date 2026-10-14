@@ -5,7 +5,6 @@
 - `anthropic` >= 0.25 — LLM API client
 - `pandas` >= 2.0 — Data processing
 - `sqlalchemy` >= 2.0 — Database ORM
-- `pytrends` >= 4.9 — Google Trends API
 - `requests` >= 2.31 — HTTP calls (StockTwits, Reddit, ApeWisdom, FMP, Finnhub)
 - `praw` >= 7.7 — Reddit OAuth (optional, falls back to requests)
 - `pyyaml` >= 6.0 — YAML position file fallback (optional)
@@ -28,7 +27,7 @@
 - **StockTwits** — `/api/v2/streams/symbol/{ticker}.json` (rate: 2.1s delay)
 - **Reddit** — OAuth2, r/stocks r/investing r/wallstreetbets
 - **ApeWisdom** — `https://apewisdom.io/api/v1.0/filter/all-stocks/page/1`
-- **Google Trends** — pytrends with 30–60s jitter per batch
+- **Wikipedia pageviews** — Wikimedia REST API (official, keyless; User-Agent with contact required); ticker → article via Wikidata SPARQL + MediaWiki search, cached in `DATA_CACHE_DIR/wikipedia/`
 - **EDGAR** — GKG files, Form 4, 8-K, 13D/G, 10-K/Q via EdgarDownloader
 - **Nasdaq** — Tickers CSV at path configured by `NASDAQ_TICKERS_CSV`
 - **FMP** (`/stable/analyst-estimates`, `/stable/grades`) and **Finnhub**
@@ -41,7 +40,6 @@
 
 - `SCHEDULER_SYSTEM_USER_ID` — user_id for job_schedules rows (default: 1)
 - `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USERNAME`, `REDDIT_PASSWORD`
-- `TRENDS_ANCHOR_TERM` — baseline term for Google Trends normalization (default: "stock market")
 - `FMP_API_KEY`, `FINNHUB_API_KEY` — required by `revisions_ingest.py`; job is
   skipped (logged) if either is unset
 

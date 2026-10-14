@@ -25,7 +25,7 @@
   Phase 4 — Sentiment (morning chain, pre-digest)
   python src/ml/pipeline/p20_kestrel/jobs/run_gdelt_process.py
   python src/ml/pipeline/p20_kestrel/jobs/run_social_poll.py
-  python src/ml/pipeline/p20_kestrel/jobs/run_trends_watchlist.py
+  python src/ml/pipeline/p20_kestrel/jobs/run_wiki_pageviews.py
   python src/ml/pipeline/p20_kestrel/jobs/run_av_sentiment.py
   python src/ml/pipeline/p20_kestrel/jobs/run_sentiment_aggregate.py
 
