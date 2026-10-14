@@ -16,12 +16,12 @@ from typing import Optional
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.data.fmp_pipeline.archive.archive import RawArchive
-from src.data.fmp_pipeline.client.fmp_client import FetchResult
-from src.data.fmp_pipeline.manifest.manifest import Manifest, Task
-from src.data.fmp_pipeline.runner import Downloader
-from src.data.fmp_pipeline.tests.helpers import FakeSleep, make_client
-from src.data.fmp_pipeline.tests.mock_server import Fault, MockFmpServer
+from src.data.fmp_pipeline.archive.archive import RawArchive  # noqa: E402
+from src.data.fmp_pipeline.client.fmp_client import FetchResult  # noqa: E402
+from src.data.fmp_pipeline.manifest.manifest import Manifest, Task  # noqa: E402
+from src.data.fmp_pipeline.runner import Downloader  # noqa: E402
+from src.data.fmp_pipeline.tests.helpers import FakeSleep, make_client  # noqa: E402
+from src.data.fmp_pipeline.tests.mock_server import Fault, MockFmpServer  # noqa: E402
 
 DUMP_ID = "kill-test"
 

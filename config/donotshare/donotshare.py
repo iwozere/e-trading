@@ -2,10 +2,10 @@ import os
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
-
-from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 
@@ -14,27 +14,28 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 DATA_CACHE_DIR = os.getenv("DATA_CACHE_DIR", "d:/data-cache")
 
 # Database configuration
-#DB_PATH = "db/trading.db"  # Keep for backward compatibility
+# DB_PATH = "db/trading.db"  # Keep for backward compatibility
 
 # PostgreSQL configuration
 POSTGRES_HOST = "localhost"  # Add host configuration
 POSTGRES_PORT = 5432
 POSTGRES_USER = os.getenv("POSTGRES_USER", "trading_admin")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
-POSTGRES_DATABASE = os.getenv("POSTGRES_DATABASE", "trading") # Add database name
+POSTGRES_DATABASE = os.getenv("POSTGRES_DATABASE", "trading")  # Add database name
 
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
 # Database URL - PostgreSQL connection string
-DB_URL = f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DATABASE}?sslmode=disable"
+DB_URL = (f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}"
+          f"/{POSTGRES_DATABASE}?sslmode=disable")
 
-TEST_DB_URL="postgresql+psycopg2://test_user:test_password@localhost:5432/e_trading_test"
+TEST_DB_URL = "postgresql+psycopg2://test_user:test_password@localhost:5432/e_trading_test"
 
 # 0 - off, 1 - log SQL queries into the log files
 SQL_ECHO = False
 
-TRADING_WEBGUI_PORT=5002
-TRADING_API_PORT=5003
+TRADING_WEBGUI_PORT = 5002
+TRADING_API_PORT = 5003
 
 ##################################################################
 #
@@ -51,8 +52,8 @@ BINANCE_SECRET = os.getenv("BINANCE_SECRET")
 BINANCE_PAPER_KEY = os.getenv("BINANCE_PAPER_KEY")
 BINANCE_PAPER_SECRET = os.getenv("BINANCE_PAPER_SECRET")
 
-BINANCE_FUTURES_PAPER_KEY=os.getenv("BINANCE_FUTURES_PAPER_KEY")
-BINANCE_FUTURES_PAPER_SECRET=os.getenv("BINANCE_FUTURES_PAPER_SECRET")
+BINANCE_FUTURES_PAPER_KEY = os.getenv("BINANCE_FUTURES_PAPER_KEY")
+BINANCE_FUTURES_PAPER_SECRET = os.getenv("BINANCE_FUTURES_PAPER_SECRET")
 
 
 IBKR_HOST = os.getenv("IBKR_HOST")
@@ -73,40 +74,40 @@ IBKR_FLEX_QUERY_ID = os.getenv("IBKR_FLEX_QUERY_ID")
 IBKR_LIVE_STOP_GUARD_CLIENT_ID = os.getenv("IBKR_LIVE_STOP_GUARD_CLIENT_ID")
 
 
-ALPHA_VANTAGE_API_KEY=os.getenv("ALPHA_VANTAGE_API_KEY")
-FINNHUB_API_KEY=os.getenv("FINNHUB_API_KEY")
-TWELVE_DATA_API_KEY=os.getenv("TWELVE_DATA_API_KEY")
-POLYGON_API_KEY=os.getenv("POLYGON_API_KEY")
-FMP_API_KEY=os.getenv("FMP_API_KEY")
-TIINGO_API_KEY=os.getenv("TIINGO_API_KEY")
-FINRA_API_CLIENT=os.getenv("FINRA_API_CLIENT")
-FINRA_API_SECRET=os.getenv("FINRA_API_SECRET")
-EODHD_API_KEY=os.getenv("EODHD_API_KEY")
-TRADIER_API_KEY=os.getenv("TRADIER_API_KEY")
-FRED_API_KEY=os.getenv("FRED_API_KEY")
-BACHART_API_KEY=os.getenv("BACHART_API_KEY")
-OPENFIGI_API_KEY=os.getenv("OPENFIGI_API_KEY")
+ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
+FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
+TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY")
+POLYGON_API_KEY = os.getenv("POLYGON_API_KEY")
+FMP_API_KEY = os.getenv("FMP_API_KEY")
+TIINGO_API_KEY = os.getenv("TIINGO_API_KEY")
+FINRA_API_CLIENT = os.getenv("FINRA_API_CLIENT")
+FINRA_API_SECRET = os.getenv("FINRA_API_SECRET")
+EODHD_API_KEY = os.getenv("EODHD_API_KEY")
+TRADIER_API_KEY = os.getenv("TRADIER_API_KEY")
+FRED_API_KEY = os.getenv("FRED_API_KEY")
+BACHART_API_KEY = os.getenv("BACHART_API_KEY")
+OPENFIGI_API_KEY = os.getenv("OPENFIGI_API_KEY")
 
 # Zefix (Swiss Central Business Name Index) — company registry lookups.
 # Free account required: register at https://www.zefix.admin.ch/ZefixPublicREST/
-ZEFIX_USERNAME=os.getenv("ZEFIX_USERNAME")
-ZEFIX_PASSWORD=os.getenv("ZEFIX_PASSWORD")
+ZEFIX_USERNAME = os.getenv("ZEFIX_USERNAME")
+ZEFIX_PASSWORD = os.getenv("ZEFIX_PASSWORD")
 
 ##################################################################
 #
 # NOTIFICATION SETTINGS
 #
 ##################################################################
-SMTP_SERVER=os.getenv("SMTP_SERVER")
-SMTP_PORT=os.getenv("SMTP_PORT")
-SMTP_USER=os.getenv("SMTP_USER")
-SMTP_PASSWORD=os.getenv("SMTP_PASSWORD")
+SMTP_SERVER = os.getenv("SMTP_SERVER")
+SMTP_PORT = os.getenv("SMTP_PORT")
+SMTP_USER = os.getenv("SMTP_USER")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 # DEPRECATED: No longer needed - admin notifications now use HTTP API to send to admin users
 # This can be removed from environment variables
-#TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+# TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 
 ##################################################################
