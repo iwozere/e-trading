@@ -24,9 +24,9 @@
 
 - **Anthropic API** — LLM calls (claude-haiku-4-5, claude-sonnet-4-6)
 - **AlphaVantage** — News sentiment (20 calls/day quota)
-- **StockTwits** — `/api/v2/streams/symbol/{ticker}.json` (rate: 2.1s delay)
+- **StockTwits** — `/api/2/streams/symbol/{ticker}.json` (rate: 2.1s delay; full browser User-Agent required — Cloudflare 403s a bare `Mozilla/5.0`; 600s budget per run)
 - **Reddit** — OAuth2, r/stocks r/investing r/wallstreetbets
-- **ApeWisdom** — `https://apewisdom.io/api/v1.0/filter/all-stocks/page/1`
+- **ApeWisdom** — `https://apewisdom.io/api/v1.0/filter/all-stocks/page/{n}` (all ~10 pages, ~1,000 tickers)
 - **Wikipedia pageviews** — Wikimedia REST API (official, keyless; User-Agent with contact required); ticker → article via Wikidata SPARQL + MediaWiki search, cached in `DATA_CACHE_DIR/wikipedia/`
 - **EDGAR** — GKG files, Form 4, 8-K, 13D/G, 10-K/Q via EdgarDownloader
 - **Nasdaq** — Tickers CSV at path configured by `NASDAQ_TICKERS_CSV`
@@ -39,7 +39,7 @@
 ## Environment Variables
 
 - `SCHEDULER_SYSTEM_USER_ID` — user_id for job_schedules rows (default: 1)
-- `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USERNAME`, `REDDIT_PASSWORD`
+- `REDDIT_API_KEY`, `REDDIT_API_SECRET`, `REDDIT_USER_AGENT` — optional; unset or the `.env.example` placeholder `xxx` means Reddit is skipped (ApeWisdom covers Reddit mentions)
 - `FMP_API_KEY`, `FINNHUB_API_KEY` — required by `revisions_ingest.py`; job is
   skipped (logged) if either is unset
 

@@ -150,9 +150,9 @@ k20_alerts_log(ts timestamptz, ticker text, trigger text, payload jsonb, channel
 | source | mentions | avg_tone / tone_std / pos / neg | bullish_ratio | top_domains |
 |---|---|---|---|---|
 | gdelt | article count | from V2Tone | NULL | populated (audit) |
-| stocktwits | message count | NULL | bull/(bull+bear) tagged msgs | NULL |
+| stocktwits | messages per 24h (exact if the 30-message page reaches past 24h, else extrapolated from its span) | NULL | bull/(bull+bear) tagged msgs of the last 24h | NULL |
 | reddit | post mention count | NULL | NULL | NULL |
-| apewisdom | mention count (cross-check) | NULL | NULL | NULL |
+| apewisdom | 24h mention count; 0 for watchlist tickers absent from the complete table | NULL | NULL | NULL |
 | wikipedia | daily user pageviews of the company's enwiki article | NULL | NULL | NULL |
 | av_news | article count | AV sentiment aggregates | NULL | NULL |
 

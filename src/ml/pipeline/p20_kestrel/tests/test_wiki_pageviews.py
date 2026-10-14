@@ -71,40 +71,92 @@ def _no_sleep(monkeypatch):
          "PYPL", True),
         # foreign listing sharing the ticker (real Almirall infobox shape)
         ("{{Infobox company\n| traded_as        = {{BMAD|ES0157097017|ALM}}\n| ISIN = x\n}}", "ALM", False),
+        # template alias (real Ubiquiti infobox shape)
+        ("{{Infobox company\n| traded_as = {{Unbulleted list|class=nowrap|{{New York Stock Exchange|UI}}|"
+         "[[Russell 1000]] component}}\n| founded = 2003\n}}", "UI", True),
+        # former listing is not a current one
+        ("{{Infobox company\n| traded_as = {{NYSE was|P}} (2011-2019)\n}}", "P", False),
     ],
 )
 def test_traded_as_has_ticker(wikitext, ticker, expected):
     assert resolver._traded_as_has_ticker(wikitext, ticker) is expected
 
 
+@pytest.mark.parametrize(
+    "wikitext, expected",
+    [
+        # foreign issuer listing only its home exchange (real Novo Nordisk shape) → no evidence against NVO
+        ("{{Infobox company\n| traded_as = {{ubl|class=nowrap|{{OMX|CSE1158|NOVO B}}|[[OMX Copenhagen 25]]}}\n}}", True),
+        ("{{Infobox company\n| founded = 1923\n}}", True),
+        ("{{Infobox company\n| traded_as = {{NYSE|NVO}}\n}}", True),
+        ("{{Infobox company\n| traded_as = {{NASDAQ was|GALE}}\n}}", False),  # only a former US listing
+        ("{{Infobox company\n| traded_as = {{NYSE|NOVX}}\n}}", False),  # a different current US ticker
+    ],
+)
+def test_not_contradicted(wikitext, expected):
+    assert resolver._not_contradicted(wikitext, "NVO") is expected
+
+
 def test_normalize_name_strips_legal_suffixes():
     assert resolver._normalize_name("Energy Fuels Inc.") == resolver._normalize_name("Energy Fuels Inc")
     assert resolver._normalize_name("On (company)") == "on"
+    assert resolver._normalize_name("NOVO NORDISK A/S") == resolver._normalize_name("Novo Nordisk")
+    assert resolver._normalize_name("Sea Limited") == resolver._normalize_name("Sea Ltd")
 
 
-def test_wikidata_skips_ambiguous_and_contradicted_tickers():
-    bindings = [
-        {"ticker": {"value": "AAPL"}, "article": {"value": "https://en.wikipedia.org/wiki/Apple_Inc."}},
-        {"ticker": {"value": "SE"}, "article": {"value": "https://en.wikipedia.org/wiki/Sea_Ltd"}},
-        {"ticker": {"value": "SE"}, "article": {"value": "https://en.wikipedia.org/wiki/Spectra_Energy"}},
-        {"ticker": {"value": "T"}, "article": {"value": "https://en.wikipedia.org/wiki/AT%26T"}},
-        {"ticker": {"value": "P"}, "article": {"value": "https://en.wikipedia.org/wiki/Pandora_(service)"}},
-    ]
-    wikitexts = {
-        "Apple Inc.": "{{Infobox company\n| traded_as = {{NASDAQ|AAPL}}\n}}",
-        "AT&T": "{{Infobox company\n| founded = 1983\n}}",  # no traded_as → not contradicted
-        "Pandora (service)": "{{Infobox company\n| traded_as = {{NYSE was|P}} (2011-2019)\n}}",  # stale listing
-    }
-
+def _wikidata_handler(bindings, wikitexts):
     def handler(url, params):
         if url == resolver._WIKIDATA_SPARQL:
             return _FakeResponse(200, {"results": {"bindings": bindings}})
         pages = [{"title": t, "revisions": [{"slots": {"main": {"content": c}}}]} for t, c in wikitexts.items()]
         return _FakeResponse(200, {"query": {"pages": pages}})
 
-    result = resolver._resolve_via_wikidata(_as_session(_FakeSession(handler)), ["AAPL", "SE", "T", "P"])
+    return handler
 
-    assert result == ({"AAPL": "Apple Inc.", "T": "AT&T"}, set())
+
+def _binding(ticker, slug):
+    return {"ticker": {"value": ticker}, "article": {"value": f"https://en.wikipedia.org/wiki/{slug}"}}
+
+
+def test_wikidata_skips_contradicted_tickers_but_accepts_foreign_only_listing():
+    bindings = [
+        _binding("AAPL", "Apple_Inc."),
+        _binding("T", "AT%26T"),
+        _binding("P", "Pandora_(service)"),
+        _binding("DV", "Covista"),
+        _binding("NVO", "Novo_(company)"),
+    ]
+    wikitexts = {
+        "Apple Inc.": "{{Infobox company\n| traded_as = {{NASDAQ|AAPL}}\n}}",
+        "AT&T": "{{Infobox company\n| founded = 1983\n}}",  # no traded_as → not contradicted
+        "Pandora (service)": "{{Infobox company\n| traded_as = {{NYSE was|P}} (2011-2019)\n}}",  # stale listing
+        "Covista": "{{Infobox company\n| traded_as = {{ubl|{{NYSE|CVSA}}|[[S&P 600]] component}}\n}}",  # renamed
+        # ADR issuer listing only its home market (real Novo infobox shape)
+        "Novo (company)": "{{Infobox company\n| traded_as = {{ubl|class=nowrap|{{OMX|CSE1158|NOVO B}}}}\n}}",
+    }
+
+    result = resolver._resolve_via_wikidata(_as_session(_FakeSession(_wikidata_handler(bindings, wikitexts))),
+                                            ["AAPL", "T", "P", "DV", "NVO"])
+
+    assert result == ({"AAPL": "Apple Inc.", "T": "AT&T", "NVO": "Novo (company)"}, set())
+
+
+def test_wikidata_ambiguous_ticker_needs_exactly_one_current_listing():
+    bindings = [
+        _binding("SE", "Sea_Ltd"), _binding("SE", "Spectra_Energy"),
+        _binding("XX", "Alpha_Corp"), _binding("XX", "Beta_Corp"),
+    ]
+    wikitexts = {
+        "Sea Ltd": "{{Infobox company\n| traded_as = {{NYSE|SE}}\n}}",
+        "Spectra Energy": "{{Infobox company\n| traded_as = {{NYSE was|SE}}\n}}",
+        "Alpha Corp": "{{Infobox company\n| founded = 1990\n}}",  # not contradicted, but not proof either
+        "Beta Corp": "{{Infobox company\n| founded = 1991\n}}",
+    }
+
+    result = resolver._resolve_via_wikidata(_as_session(_FakeSession(_wikidata_handler(bindings, wikitexts))),
+                                            ["SE", "XX"])
+
+    assert result == ({"SE": "Sea Ltd"}, set())
 
 
 def test_search_fallback_accepts_only_infobox_verified_candidate():
@@ -141,12 +193,73 @@ def test_search_fallback_uses_exact_name_title_when_infobox_lacks_ticker():
     assert resolver._resolve_via_search(_as_session(_FakeSession(handler)), "UUUU", None) is None
 
 
+def _search_handler(pages):
+    def handler(url, params):
+        if params.get("list") == "search":
+            return _FakeResponse(200, {"query": {"search": [{"title": t} for t in pages]}})
+        return _FakeResponse(
+            200,
+            {"query": {"pages": [{"title": t, "revisions": [{"slots": {"main": {"content": c}}}]} for t, c in pages.items()]}},
+        )
+
+    return handler
+
+
+def test_search_fallback_name_settles_parent_and_subsidiary():
+    pages = {
+        "Garena": "{{Infobox company\n| traded_as = {{NYSE|SE}}\n}}",
+        "Sea Ltd": "{{Infobox company\n| traded_as = {{NYSE|SE}}\n}}",
+    }
+    session = _as_session(_FakeSession(_search_handler(pages)))
+
+    assert resolver._resolve_via_search(session, "SE", "Sea Limited") == "Sea Ltd"
+    assert resolver._resolve_via_search(session, "SE", None) is None
+
+
+def test_search_fallback_name_match_accepts_foreign_issuer_without_us_listing():
+    pages = {
+        "Novo Nordisk": "{{Infobox company\n| traded_as = {{ubl|{{OMX|CSE1158|NOVO B}}}}\n}}",
+        "Novo Nordisk Foundation": "{{Infobox organization\n| founded = 1989\n}}",
+    }
+    session = _as_session(_FakeSession(_search_handler(pages)))
+
+    assert resolver._resolve_via_search(session, "NVO", "NOVO NORDISK A/S") == "Novo Nordisk"
+
+    # A name match whose infobox shows a *different* current US ticker is still rejected.
+    pages["Novo Nordisk"] = "{{Infobox company\n| traded_as = {{NYSE|NOVX}}\n}}"
+    assert resolver._resolve_via_search(session, "NVO", "NOVO NORDISK A/S") is None
+
+
+def test_resolve_articles_retries_misses_from_older_resolver_version(tmp_path, monkeypatch):
+    cache_path = tmp_path / "ticker_articles.json"
+    now = datetime.now(timezone.utc).isoformat()
+    cache_path.write_text(json.dumps({
+        "UI": {"title": None, "resolved_at": now},  # pre-versioning miss
+        "AAPL": {"title": "Apple Inc.", "resolved_at": now},  # hits stay valid across versions
+        "ZZZZ": {"title": None, "resolved_at": now, "version": resolver._RESOLVER_VERSION},
+    }))
+    asked = []
+
+    def wikidata(session, tickers):
+        asked.extend(tickers)
+        return {"UI": "Ubiquiti"}, set()
+
+    monkeypatch.setattr(resolver, "_resolve_via_wikidata", wikidata)
+    monkeypatch.setattr(resolver.requests, "Session", lambda: _FakeSession(lambda u, p: _FakeResponse()))
+
+    result = resolver.resolve_articles(["UI", "AAPL", "ZZZZ"], cache_path=cache_path)
+
+    assert asked == ["UI"]
+    assert result == {"UI": "Ubiquiti", "AAPL": "Apple Inc.", "ZZZZ": None}
+    assert json.loads(cache_path.read_text())["UI"]["version"] == resolver._RESOLVER_VERSION
+
+
 def test_resolve_articles_uses_fresh_cache_without_network(tmp_path, monkeypatch):
     cache_path = tmp_path / "ticker_articles.json"
     now = datetime.now(timezone.utc).isoformat()
     cache_path.write_text(json.dumps({
         "AAPL": {"title": "Apple Inc.", "resolved_at": now},
-        "ZZZZ": {"title": None, "resolved_at": now},
+        "ZZZZ": {"title": None, "resolved_at": now, "version": resolver._RESOLVER_VERSION},
     }))
     monkeypatch.setattr(resolver.requests, "Session", lambda: pytest.fail("network used despite fresh cache"))
 

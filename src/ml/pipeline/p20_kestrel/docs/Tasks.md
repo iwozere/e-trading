@@ -17,6 +17,8 @@
 - [x] `sentiment/alias_builder.py` — Company alias table + legal-name normalization
 - [x] `sentiment/gdelt_processor.py` — GKG z-score pipeline with fuzzy matching
 - [x] `sentiment/social_poll.py` — StockTwits/Reddit/ApeWisdom with rate limiting
+  - 2026-10-14 fixes: StockTwits had failed for every ticker (Cloudflare 403 on the bare `Mozilla/5.0` UA, swallowed at DEBUG) and, when it worked, stored the page size (30) instead of a daily volume; ApeWisdom read only page 1 and never wrote zero days, biasing its z-score history; `xxx` placeholder Reddit creds caused a daily 401 warning. Now: browser UA, 24h volume estimate, block/429 circuit breaker, 600s StockTwits budget with date-rotated order, full ApeWisdom table with zero-fill, placeholder creds treated as unset
+  - `wiki_article_resolver` 2026-10-14: `{{New York Stock Exchange|…}}` alias (UI), ambiguous Wikidata tickers settled by a current infobox listing (SE), foreign-only `traded_as` no longer a contradiction (NVO → Novo (company)); `_RESOLVER_VERSION` re-resolves cached misses after rule changes
 - [x] `sentiment/wiki_pageviews_poll.py` — Wikipedia pageviews (replaced `trends_poll.py`/pytrends 2026-10-14: pytrends was never installed in prod, so it wrote 0 rows while sleeping 30–60s per batch until the grown watchlist hit the 1800s timeout)
 - [x] `sentiment/av_budgeted.py` — AlphaVantage priority queue with daily quota
 - [x] `sentiment/sentiment_aggregator.py` — §7.6 crowding score
