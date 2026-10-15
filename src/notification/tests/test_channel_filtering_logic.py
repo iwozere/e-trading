@@ -24,30 +24,14 @@ def test_get_pending_messages_with_channels():
     # Verify filtering
     # We expect multiple filter calls:
     # 1. status == PENDING and scheduled_for <= now
-    # 2. or_(*[Message.channels.contains([ch]) for ch in channels])
+    # 2. Message.channels.overlap(channels)
 
     filter_calls = mock_query.filter.call_args_list
     assert len(filter_calls) >= 2
 
-    # Check if any filter call involves the channel filtering
-    # This is a bit tricky to verify exactly due to SQLAlchemy's expression objects,
-    # but we can check if 'or_' was used or if the parameter was list-like
-    channel_filter_applied = False
-    for call in filter_calls:
-        args = call[0]
-        if len(args) > 0:
-            arg_str = str(args[0])
-            if "channels @> ARRAY" in arg_str or "ANY" in arg_str or "OR" in arg_str:
-                channel_filter_applied = True
-                break
-
-    # Since we are using or_(*channel_filters), we expect it to be present
-    # In my implementation:
-    # channel_filters = [Message.channels.contains([ch]) for ch in channels]
-    # query = query.filter(or_(*channel_filters))
-
-    # Let's just verify the method was called without making it too fragile
-    assert mock_query.filter.called
+    # Channel filtering is an array-overlap (Message.channels.overlap(...)), rendered as "&&".
+    channel_filter_applied = any(call.args and "&&" in str(call.args[0]) for call in filter_calls)
+    assert channel_filter_applied
 
 
 def test_get_pending_messages_with_lock_channels():
@@ -72,7 +56,7 @@ def test_get_pending_messages_with_lock_channels():
     params = args[1]
 
     # Check if SQL contains the channel filtering logic
-    assert "AND channels && :channels" in sql_text
+    assert "AND channels && CAST(:channels AS TEXT[])" in sql_text
     assert params["channels"] == channels
     assert params["lock_instance_id"] == "test_inst"
 
@@ -215,3 +199,34 @@ def test_record_delivery_failure_retries_then_marks_permanently_failed():
     updated = repo.record_delivery_failure(101, "unresolvable recipient", permanent=True)
     assert updated is not None
     assert updated.status == "FAILED"
+
+
+def _repo_with_existing_deliveries(existing: list[MessageDeliveryStatus]) -> tuple[DeliveryStatusRepository, MagicMock]:
+    mock_session = MagicMock()
+    mock_session.query.return_value.filter.return_value.order_by.return_value.all.return_value = existing
+    return DeliveryStatusRepository(mock_session), mock_session
+
+
+def test_ensure_pending_deliveries_creates_one_row_per_channel():
+    """Every enqueue path relies on this: per-channel consumers only claim delivery rows."""
+    repo, session = _repo_with_existing_deliveries([])
+
+    created = repo.ensure_pending_deliveries(77, ["telegram", "email", "email"])
+
+    assert [(d.message_id, d.channel, d.status) for d in created] == [
+        (77, "telegram", "PENDING"),
+        (77, "email", "PENDING"),
+    ]
+    assert session.add.call_count == 2
+
+
+def test_ensure_pending_deliveries_skips_channels_that_already_have_a_row():
+    """A channel that already has a row (e.g. created by the DB on insert) must not get a second one."""
+    repo, session = _repo_with_existing_deliveries(
+        [MessageDeliveryStatus(id=9, message_id=77, channel="telegram", status="PENDING")]
+    )
+
+    created = repo.ensure_pending_deliveries(77, ["telegram", "email"])
+
+    assert [d.channel for d in created] == ["email"]
+    session.add.assert_called_once()

@@ -120,7 +120,7 @@ class MessageQueue:
 
     def __init__(self):
         """Initialize the message queue."""
-        self._logger = setup_logger(f"{__name__}.MessageQueue")
+        self._logger = _logger
 
     def enqueue(
         self,
@@ -161,6 +161,8 @@ class MessageQueue:
             with db_service.uow() as r:
                 message = r.notifications.messages.create_message(db_message_data)
                 message_id = message.id
+                # Per-channel consumers (notification-bot, telegram bot) only claim delivery rows.
+                r.notifications.ensure_pending_deliveries(message_id, db_message_data.get("channels") or [])
 
             self._logger.info(
                 "Message %s enqueued with priority %s, scheduled for %s", message_id, priority.value, scheduled_for

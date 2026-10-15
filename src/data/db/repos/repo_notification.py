@@ -524,6 +524,34 @@ class DeliveryStatusRepository:
             _logger.exception("Failed to create delivery status:")
             raise
 
+    def ensure_pending_deliveries(self, message_id: int, channels: List[str]) -> List[MessageDeliveryStatus]:
+        """
+        Make sure the message has one msg_delivery_status row per requested channel.
+
+        Per-channel consumers (claim_pending_deliveries) only ever see a message through
+        these rows, so every enqueue path must create them. Idempotent: channels that
+        already have a row (from an earlier call, or created by the database itself on
+        insert) are left alone, so no channel ends up with two rows and is delivered twice.
+
+        Args:
+            message_id: The msg_messages row the deliveries belong to.
+            channels: Channel names the message was queued for.
+
+        Returns:
+            The newly created rows (empty if every channel already had one).
+        """
+        existing = {d.channel for d in self.get_delivery_statuses_by_message(message_id)}
+        created = []
+        for channel in dict.fromkeys(channels):
+            if channel in existing:
+                continue
+            created.append(
+                self.create_delivery_status(
+                    {"message_id": message_id, "channel": channel, "status": DeliveryStatus.PENDING.value}
+                )
+            )
+        return created
+
     def get_delivery_status(self, status_id: int) -> MessageDeliveryStatus | None:
         """
         Get a delivery status by ID.
@@ -1370,6 +1398,9 @@ class NotificationRepository:
     # ---------- Delivery Status Delegation ----------
     def create_delivery_status(self, status_data: Dict[str, Any]) -> MessageDeliveryStatus:
         return self.delivery_status.create_delivery_status(status_data)
+
+    def ensure_pending_deliveries(self, message_id: int, channels: List[str]) -> List[MessageDeliveryStatus]:
+        return self.delivery_status.ensure_pending_deliveries(message_id, channels)
 
     def claim_pending_deliveries(self, channels: List[str], **kwargs) -> List[Dict[str, Any]]:
         return self.delivery_status.claim_pending_deliveries(channels, **kwargs)

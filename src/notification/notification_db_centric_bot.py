@@ -344,7 +344,8 @@ async def startup():
     from src.notification.service.processor import message_processor as mp
 
     message_processor = mp
-    await message_processor.start()
+    # Delivery goes exclusively through MessagePoller's per-channel claim loop below.
+    await message_processor.start(message_queue_workers=False)
     _logger.info("Message processor started")
 
     # Start health monitor for channel monitoring
@@ -370,8 +371,6 @@ async def startup():
 
 async def shutdown():
     """Application shutdown."""
-    global message_poller, message_processor, health_reporter
-
     _logger.info("Shutting down Notification Service...")
 
     # Stop health monitor
@@ -401,7 +400,7 @@ def setup_signal_handlers(stop_event: asyncio.Event):
     main() coroutine can reach its finally block and run shutdown().
     """
 
-    def signal_handler(signum, _frame):
+    def signal_handler(signum, _):
         _logger.info("Received signal %s, initiating shutdown...", signum)
         stop_event.set()
 

@@ -60,8 +60,8 @@ class PluginLoader:
             for module_info in pkgutil.iter_modules([str(package_path)]):
                 module_name = module_info.name
 
-                # Skip base modules and private modules
-                if module_name in ["base", "loader", "__init__"] or module_name.startswith("_"):
+                # Skip base modules, non-plugin helpers (config = validation utilities) and private modules
+                if module_name in ["base", "loader", "config", "__init__"] or module_name.startswith("_"):
                     continue
 
                 plugins.append(f"src.notification.channels.{module_name}")
@@ -265,7 +265,7 @@ class PluginLoader:
         """
         return self._loaded_plugins.copy()
 
-    def validate_plugin(self, channel_class: Type[NotificationChannel]) -> List[str]:
+    def validate_plugin(self, channel_class: type) -> List[str]:
         """
         Validate a channel plugin implementation.
 

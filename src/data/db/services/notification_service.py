@@ -20,9 +20,6 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.data.db.models.model_notification import Message, MessageDeliveryStatus, MessageStatus
 from src.data.db.services.base_service import BaseDBService, handle_db_error, with_uow
 from src.notification.channels.base import ChannelHealth, DeliveryStatus
-from src.notification.logger import setup_logger
-
-_logger = setup_logger(__name__)
 
 
 class NotificationService(BaseDBService):
@@ -62,14 +59,7 @@ class NotificationService(BaseDBService):
         message = self.repos.notifications.create_message(message_data)
 
         # Create delivery status records for each channel
-        for channel in message_data["channels"]:
-            delivery_data = {
-                "message_id": message.id,
-                "channel": channel,
-                "status": DeliveryStatus.PENDING.value,
-                "created_at": datetime.now(UTC),
-            }
-            self.repos.notifications.create_delivery_status(delivery_data)
+        self.repos.notifications.ensure_pending_deliveries(message.id, message_data["channels"])
 
         self._logger.info("Created message %s with %d delivery channels", message.id, len(message_data["channels"]))
         return message

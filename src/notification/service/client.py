@@ -12,7 +12,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-import aiohttp# Add project root to path if needed (P3.3 Fix)
+import aiohttp
+
+# Add project root to path if needed (P3.3 Fix)
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -152,7 +154,8 @@ class NotificationServiceClient:
         the notification service directly, as part of the database-centric architecture.
 
         Args:
-            service_url: Base URL of the Main API service. If None, checks NOTIFICATION_SERVICE_URL env var or defaults to localhost.
+            service_url: Base URL of the Main API service. If None, checks NOTIFICATION_SERVICE_URL env var
+                or defaults to localhost.
             base_url: Deprecated parameter for backward compatibility
             timeout: Request timeout in seconds
             max_retries: Maximum number of retry attempts
@@ -433,6 +436,8 @@ class NotificationServiceClient:
 
                 # Create the message in database
                 message = message_repo.create_message(db_message_data)
+                # Per-channel consumers (notification-bot, telegram bot) only claim delivery rows.
+                uow.notifications.ensure_pending_deliveries(message.id, db_message_data["channels"])
                 _logger.info("Created notification message %s directly in database via fallback", message.id)
                 # Commit is handled automatically by the UOW context manager
 

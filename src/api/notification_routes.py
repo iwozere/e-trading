@@ -159,7 +159,10 @@ async def notification_routes_health():
             "database": "connected",
             "routes": "operational",
             "total_messages": message_count,
-            "note": "This endpoint is deprecated. Use /api/health/notification for service health or /api/health/channels for comprehensive monitoring.",
+            "note": (
+                "This endpoint is deprecated. Use /api/health/notification for service health "
+                "or /api/health/channels for comprehensive monitoring."
+            ),
         }
 
     except Exception as e:
@@ -176,16 +179,13 @@ async def notification_routes_health():
 # Channel endpoints
 
 
-@router.get("/channels/health")
-async def get_channels_health(current_user: User = Depends(get_current_user)):
+@router.get("/channels/health", dependencies=[Depends(get_current_user)])
+async def get_channels_health():
     """
     Get health status for all notification channels.
 
     DEPRECATED: This endpoint has been moved to /api/health/channels
     Use the unified health check system for comprehensive channel ownership and queue monitoring.
-
-    Args:
-        current_user: Current authenticated user
 
     Returns:
         Channel health information with deprecation notice
@@ -202,7 +202,10 @@ async def get_channels_health(current_user: User = Depends(get_current_user)):
         return {
             "channels_health": channels_health,
             "timestamp": datetime.now(UTC).isoformat(),
-            "note": "This endpoint is deprecated. Use /api/health/channels for comprehensive channel ownership and queue monitoring (Telegram Bot + Notification Service).",
+            "note": (
+                "This endpoint is deprecated. Use /api/health/channels for comprehensive channel ownership "
+                "and queue monitoring (Telegram Bot + Notification Service)."
+            ),
         }
 
     except Exception:
@@ -210,13 +213,10 @@ async def get_channels_health(current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Failed to get channels health")
 
 
-@router.get("/channels")
-async def list_notification_channels(current_user: User = Depends(get_current_user)):
+@router.get("/channels", dependencies=[Depends(get_current_user)])
+async def list_notification_channels():
     """
     List available notification channels.
-
-    Args:
-        current_user: Current authenticated user
 
     Returns:
         List of available channels with configuration
@@ -267,9 +267,9 @@ async def list_notification_channels(current_user: User = Depends(get_current_us
 # Statistics endpoints
 
 
-@router.get("/stats", response_model=NotificationStats)
+@router.get("/stats", response_model=NotificationStats, dependencies=[Depends(get_current_user)])
 async def get_notification_statistics(
-    channel: str | None = None, days: int = 30, current_user: User = Depends(get_current_user)
+    channel: str | None = None, days: int = 30
 ):
     """
     Get notification delivery statistics.
@@ -277,7 +277,6 @@ async def get_notification_statistics(
     Args:
         channel: Filter by channel (optional)
         days: Number of days to analyze
-        current_user: Current authenticated user
 
     Returns:
         Notification statistics
@@ -332,12 +331,11 @@ async def get_notification_statistics(
 # Analytics endpoints (consolidated from notification service)
 
 
-@router.get("/analytics/delivery-rates")
+@router.get("/analytics/delivery-rates", dependencies=[Depends(get_current_user)])
 async def get_delivery_rates_analytics(
     channel: str | None = None,
     user_id: str | None = None,
     days: int = 30,
-    current_user: User = Depends(get_current_user),
 ):
     """
     Get comprehensive delivery rate analytics.
@@ -346,7 +344,6 @@ async def get_delivery_rates_analytics(
         channel: Filter by specific channel
         user_id: Filter by specific user
         days: Number of days to analyze
-        current_user: Current authenticated user
 
     Returns:
         Delivery rate analytics with channel and user breakdowns
@@ -365,9 +362,9 @@ async def get_delivery_rates_analytics(
         raise HTTPException(status_code=500, detail="Failed to get delivery rates analytics")
 
 
-@router.get("/analytics/response-times")
+@router.get("/analytics/response-times", dependencies=[Depends(get_current_user)])
 async def get_response_time_analytics(
-    channel: str | None = None, days: int = 30, current_user: User = Depends(get_current_user)
+    channel: str | None = None, days: int = 30
 ):
     """
     Get detailed response time analytics.
@@ -375,7 +372,6 @@ async def get_response_time_analytics(
     Args:
         channel: Filter by specific channel
         days: Number of days to analyze
-        current_user: Current authenticated user
 
     Returns:
         Response time statistics and percentiles
@@ -394,12 +390,11 @@ async def get_response_time_analytics(
         raise HTTPException(status_code=500, detail="Failed to get response time analytics")
 
 
-@router.get("/analytics/trends")
+@router.get("/analytics/trends", dependencies=[Depends(get_current_user)])
 async def get_trend_analytics(
     metric: str = "success_rate",
     channel: str | None = None,
     days: int = 30,
-    current_user: User = Depends(get_current_user),
 ):
     """
     Get trend analysis for notification metrics.
@@ -408,7 +403,6 @@ async def get_trend_analytics(
         metric: Metric to analyze (success_rate, response_time, message_count)
         channel: Filter by specific channel
         days: Number of days to analyze
-        current_user: Current authenticated user
 
     Returns:
         Trend analysis with direction, strength, and time series data
@@ -434,12 +428,11 @@ async def get_trend_analytics(
         raise HTTPException(status_code=500, detail="Failed to get trend analytics")
 
 
-@router.get("/analytics/aggregated")
+@router.get("/analytics/aggregated", dependencies=[Depends(get_current_user)])
 async def get_aggregated_analytics(
     granularity: str = "daily",
     channel: str | None = None,
     days: int = 30,
-    current_user: User = Depends(get_current_user),
 ):
     """
     Get time-aggregated notification statistics.
@@ -448,7 +441,6 @@ async def get_aggregated_analytics(
         granularity: Time granularity (hourly, daily, weekly, monthly)
         channel: Filter by specific channel
         days: Number of days to analyze
-        current_user: Current authenticated user
 
     Returns:
         Time-aggregated statistics with summary metrics
@@ -481,14 +473,13 @@ async def get_aggregated_analytics(
         raise HTTPException(status_code=500, detail="Failed to get aggregated analytics")
 
 
-@router.get("/analytics/channel-comparison")
-async def get_channel_performance_comparison(days: int = 30, current_user: User = Depends(get_current_user)):
+@router.get("/analytics/channel-comparison", dependencies=[Depends(get_current_user)])
+async def get_channel_performance_comparison(days: int = 30):
     """
     Get performance comparison across all notification channels.
 
     Args:
         days: Number of days to analyze
-        current_user: Current authenticated user
 
     Returns:
         Channel performance comparison with rankings and scores
@@ -554,13 +545,10 @@ async def cleanup_old_notifications(days_to_keep: int = 30, current_user: User =
         raise HTTPException(status_code=500, detail="Failed to cleanup notifications")
 
 
-@router.get("/admin/processor/stats")
-async def get_processor_statistics(current_user: User = Depends(require_trader_or_admin)):
+@router.get("/admin/processor/stats", dependencies=[Depends(require_trader_or_admin)])
+async def get_processor_statistics():
     """
     Get message processor statistics from database.
-
-    Args:
-        current_user: Current authenticated user (admin required)
 
     Returns:
         Processor statistics and performance metrics
@@ -740,6 +728,8 @@ async def create_notification(notification: NotificationCreate, current_user: Us
 
         with db_service.uow() as uow:
             db_message = uow.notifications.messages.create_message(message_data)
+            # Per-channel consumers (notification-bot, telegram bot) only claim delivery rows.
+            uow.notifications.ensure_pending_deliveries(db_message.id, enabled_channels)
             uow.s.commit()
 
         _logger.info(
@@ -765,7 +755,7 @@ async def create_notification(notification: NotificationCreate, current_user: Us
         raise HTTPException(status_code=500, detail="Failed to create notification")
 
 
-@router.get("", response_model=List[NotificationResponse])
+@router.get("", response_model=List[NotificationResponse], dependencies=[Depends(get_current_user)])
 async def list_notifications(
     status: str | None = None,
     priority: str | None = None,
@@ -773,7 +763,6 @@ async def list_notifications(
     message_type: str | None = None,
     limit: int = 100,
     offset: int = 0,
-    current_user: User = Depends(get_current_user),
 ):
     """
     List notifications with optional filtering.
@@ -785,7 +774,6 @@ async def list_notifications(
         message_type: Filter by message type
         limit: Maximum number of results
         offset: Number of results to skip
-        current_user: Current authenticated user
 
     Returns:
         List of notifications
@@ -845,7 +833,7 @@ async def list_notifications(
         raise HTTPException(status_code=500, detail="Failed to list notifications")
 
 
-@router.get("/messages/search")
+@router.get("/messages/search", dependencies=[Depends(require_trader_or_admin)])
 async def search_messages(
     recipient_id: str | None = None,
     search: str | None = None,
@@ -856,7 +844,6 @@ async def search_messages(
     days: int = 30,
     limit: int = 100,
     offset: int = 0,
-    current_user: User = Depends(require_trader_or_admin),
 ):
     """
     Search sent notification messages for the admin UI.
@@ -875,7 +862,6 @@ async def search_messages(
         days: Look-back window when start_date is omitted.
         limit: Maximum number of results (capped at 1000).
         offset: Number of results to skip.
-        current_user: Current authenticated user (trader or admin required).
 
     Returns:
         Paginated result with total count and matching messages.
@@ -903,14 +889,13 @@ async def search_messages(
         raise HTTPException(status_code=500, detail="Failed to search messages")
 
 
-@router.get("/{message_id}", response_model=NotificationResponse)
-async def get_notification_status(message_id: int, current_user: User = Depends(get_current_user)):
+@router.get("/{message_id}", response_model=NotificationResponse, dependencies=[Depends(get_current_user)])
+async def get_notification_status(message_id: int):
     """
     Get notification status and details.
 
     Args:
         message_id: Message ID
-        current_user: Current authenticated user
 
     Returns:
         Notification details and status
@@ -943,14 +928,17 @@ async def get_notification_status(message_id: int, current_user: User = Depends(
         raise HTTPException(status_code=500, detail="Failed to get notification status")
 
 
-@router.get("/{message_id}/delivery", response_model=List[DeliveryStatusResponse])
-async def get_notification_delivery_status(message_id: int, current_user: User = Depends(get_current_user)):
+@router.get(
+    "/{message_id}/delivery",
+    response_model=List[DeliveryStatusResponse],
+    dependencies=[Depends(get_current_user)],
+)
+async def get_notification_delivery_status(message_id: int):
     """
     Get delivery status for all channels of a notification.
 
     Args:
         message_id: Message ID
-        current_user: Current authenticated user
 
     Returns:
         List of delivery statuses per channel

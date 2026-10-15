@@ -113,8 +113,19 @@ class MessageProcessor:
             "Message processor initialized: max_workers=%s, batch_size=%s", self.max_workers, self.batch_size
         )
 
-    async def start(self):
-        """Start the message processor."""
+    async def start(self, message_queue_workers: bool = True):
+        """
+        Start the message processor.
+
+        Args:
+            message_queue_workers: Start the whole-message dequeue workers (high/normal
+                priority and retry). Consumers that deliver through per-channel
+                ``process_claimed_delivery`` must pass False: those workers would also pick up
+                any message that includes one of this instance's channels and try *every*
+                channel on it, competing with the claim loop and logging "Channel instance
+                not available" for channels owned by another service (monitoring.txt,
+                2026-10-13 "Channel instance not available: telegram").
+        """
         if self._running:
             self._logger.warning("Message processor is already running")
             return
@@ -129,9 +140,10 @@ class MessageProcessor:
         await self._initialize_channel_instances()
 
         # Start worker tasks
-        self._worker_tasks.add(asyncio.create_task(self._high_priority_worker()))
-        self._worker_tasks.add(asyncio.create_task(self._normal_priority_worker()))
-        self._worker_tasks.add(asyncio.create_task(self._retry_worker()))
+        if message_queue_workers:
+            self._worker_tasks.add(asyncio.create_task(self._high_priority_worker()))
+            self._worker_tasks.add(asyncio.create_task(self._normal_priority_worker()))
+            self._worker_tasks.add(asyncio.create_task(self._retry_worker()))
         self._worker_tasks.add(asyncio.create_task(self._fallback_retry_worker()))
         self._worker_tasks.add(asyncio.create_task(self._cleanup_worker()))
 
@@ -435,7 +447,7 @@ class MessageProcessor:
             # Process messages concurrently
             tasks = []
             for message in messages:
-                task = asyncio.create_task(self._process_single_message(message, is_high_priority, is_retry))
+                task = asyncio.create_task(self._process_single_message(message, is_retry))
                 tasks.append(task)
 
             # Wait for all messages to complete with timeout
@@ -476,15 +488,12 @@ class MessageProcessor:
             for message in messages:
                 self.queue.mark_failed(message.id, f"Batch processing error: {str(e)}")
 
-    async def _process_single_message(
-        self, message: QueuedMessage, is_high_priority: bool = False, is_retry: bool = False
-    ) -> ProcessingResult:
+    async def _process_single_message(self, message: QueuedMessage, is_retry: bool = False) -> ProcessingResult:
         """
         Process a single message with fallback support.
 
         Args:
             message: Message to process
-            is_high_priority: Whether this is a high priority message
             is_retry: Whether this is a retry message
 
         Returns:
@@ -915,7 +924,8 @@ class MessageProcessor:
             )
 
             processing_time_ms = int((time.time() - start_time) * 1000)
-            error_message = (failed_message.failure_details if failed_message else "Delivery failed") or "Delivery failed"
+            error_message = failed_message.failure_details if failed_message else None
+            error_message = error_message or "Delivery failed"
 
             db_service = get_database_service()
             with db_service.uow() as uow:
@@ -984,7 +994,7 @@ message_processor = MessageProcessor()
 def setup_signal_handlers():
     """Set up signal handlers for graceful shutdown."""
 
-    def signal_handler(signum, _frame):
+    def signal_handler(signum, _):
         _logger.info("Received signal %s, initiating shutdown...", signum)
         if message_processor.is_running:
             asyncio.create_task(message_processor.shutdown())
