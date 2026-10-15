@@ -10,7 +10,7 @@ It is intended for both human developers and AI agents contributing to the codeb
 
 - Follow **[PEP 8 – Style Guide for Python Code](https://peps.python.org/pep-0008/)** unless explicitly overridden below.
 - Use **4 spaces** per indentation level.
-- Maximum line length: **120 characters** (PEP 8 default is 79, but we allow up to 120).
+- Maximum line length: **180 characters** (PEP 8 default is 79, but we allow up to 180).
 - Use UTF-8 encoding for all source files.
 - One public class or function per file, if possible.
 

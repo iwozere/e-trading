@@ -1,7 +1,9 @@
 """
 Data downloader implementation for Yahoo Finance, fetching historical market data for analysis and backtesting.
 
-This module provides the YahooDataDownloader class for downloading historical OHLCV (Open, High, Low, Close, Volume) data from Yahoo Finance. It supports fetching, saving, loading, and updating data for single or multiple symbols, and is suitable for both research and production trading workflows.
+This module provides the YahooDataDownloader class for downloading historical OHLCV (Open, High, Low, Close,
+Volume) data from Yahoo Finance. It supports fetching, saving, loading, and updating data for single or multiple
+symbols, and is suitable for both research and production trading workflows.
 
 Main Features:
 - Download historical data for any stock or ticker from Yahoo Finance
@@ -25,7 +27,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union, cast
+from typing import Any, Dict, List, Optional, cast
 import pandas as pd
 import yfinance as yf
 from curl_cffi import requests as curl_requests

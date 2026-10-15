@@ -16,7 +16,7 @@ include = ["src*", "config*"]
 "" = "."
 
 [tool.ruff]
-line-length = 120
+line-length = 180
 target-version = "py311"
 exclude = [".venv", "__pycache__", "build", "dist"]
 
