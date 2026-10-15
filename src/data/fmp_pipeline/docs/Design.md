@@ -108,6 +108,12 @@ timeframe groups the alive securities by window start, fetches batches through
 the overlap, appends only bars after the last stored one (flagged in context), records new events, and writes
 `_meta.json`. `IncrementStore` (``store.py``) owns the files and is the adapter's `IncrementSource`. D56–D60.
 
+**`validators/`** — ``framework.py`` (registry, `CheckResult`, `ValidationContext` with the lazily computed price
+scan and the seeded sample, `run_checks`, report rendering), ``scan.py`` (one pass over every price file, NYSE
+calendar), the checks in ``checks_prices.py``, ``checks_events.py``, ``checks_reference.py`` and
+``checks_pipeline.py`` (order in ``checks.py``), ``checksums.py`` (`sha256sum -c` files, gzip test, backup
+check), ``coverage.py`` and ``verify.py`` (the spec §14 checklist). D61–D65.
+
 ### Error handling
 - `adjust()` raises `ValueError` on contradictory or impossible inputs rather than repairing them (D11, D16).
 - The probe treats budget exhaustion as "skip and continue" (cached calls still resolve) and a quota message as
@@ -139,7 +145,7 @@ yfinance (auto_adjust=False, actions) --> yfinance_to_raw --> raw bars (+ raw-ba
 ```
 
 ## Design Decisions
-See `docs/decisions.md` (D12–D60). The ones shaping this module most:
+See `docs/decisions.md` (D12–D65). The ones shaping this module most:
 - D13: restate `C_prev` on the ex-date's share basis. A dividend on a split date is otherwise wrong by the ratio.
 - D19/D20: FMP `dividend` is raw; `non-split-adjusted` carries **raw** prices under `adj*` field names.
 - D24: the probe client is deliberately separate from the WP-2 production client.

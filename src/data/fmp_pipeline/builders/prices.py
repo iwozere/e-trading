@@ -245,27 +245,29 @@ class PriceBuilder:
         """Write every security's daily file; fills ``first_price_date``/``last_price_date``."""
         stats = PriceStats()
         for symbol, records in iter_symbol_records(self.dump_dir, DAILY_ENDPOINT):
-            bars = parse_daily(records, stats)
-            if not self._segments(symbol):
-                stats.unresolved_symbols += 1
-                continue
-            for security, part in self._split(symbol, bars, stats):
-                if len(part) == 0:
-                    continue
-                sid = security.security_id
-                flags, jumps = compute_flags(part.dates, part.o, part.h, part.low, part.c, part.v, self.config.flags,
-                                             daily=True, split_dates=self.split_dates.get(sid),
-                                             dividend_dates=self.dividend_dates.get(sid))
-                for jump in jumps:
-                    self.jump_rows.append((symbol, sid, str(part.dates[jump.index]), round(jump.implied_ratio, 6),
-                                           jump.matched_ratio))
-                security.first_price_date = part.dates[0].astype(date)
-                security.last_price_date = part.dates[-1].astype(date)
-                self._write(bucket_path("1d_raw", sid), daily_table(sid, part, flags, self.vintage), sid, stats,
-                            flags)
-                daily_flagged = int((flags != 0).sum())
-                self.flagged_by_security[sid] = (daily_flagged, len(part))
+            self.build_daily_symbol(symbol, records, stats)
         return stats
+
+    def build_daily_symbol(self, symbol: str, records: list[dict[str, Any]], stats: PriceStats) -> None:
+        """Write the daily file(s) of one symbol (one per segment); also used by V-REPRO to rebuild a subset."""
+        bars = parse_daily(records, stats)
+        if not self._segments(symbol):
+            stats.unresolved_symbols += 1
+            return
+        for security, part in self._split(symbol, bars, stats):
+            if len(part) == 0:
+                continue
+            sid = security.security_id
+            flags, jumps = compute_flags(part.dates, part.o, part.h, part.low, part.c, part.v, self.config.flags,
+                                         daily=True, split_dates=self.split_dates.get(sid),
+                                         dividend_dates=self.dividend_dates.get(sid))
+            for jump in jumps:
+                self.jump_rows.append((symbol, sid, str(part.dates[jump.index]), round(jump.implied_ratio, 6),
+                                       jump.matched_ratio))
+            security.first_price_date = part.dates[0].astype(date)
+            security.last_price_date = part.dates[-1].astype(date)
+            self._write(bucket_path("1d_raw", sid), daily_table(sid, part, flags, self.vintage), sid, stats, flags)
+            self.flagged_by_security[sid] = (int((flags != 0).sum()), len(part))
 
     def build_intraday(self, interval: str) -> Optional[PriceStats]:
         """Write every security's intraday file of ``interval``; ``None`` if nothing of it is archived."""

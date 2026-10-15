@@ -41,6 +41,17 @@ DIVIDENDS = TableSpec("events/dividends", ("dividends",), per_symbol=True,
                               Field("frequency", "frequency")),
                       dedup=("symbol", "ex_date"))
 
+SPLITS_SCHEMA = pa.schema([pa.field("security_id", pa.int64()), pa.field("symbol", pa.string()),
+                           pa.field("date", pa.date32()), pa.field("numerator", pa.float64()),
+                           pa.field("denominator", pa.float64()), pa.field("ratio", pa.float64()),
+                           pa.field("source", pa.string()), pa.field(EXTRA, pa.string())])
+DIVIDENDS_SCHEMA = pa.schema([pa.field("security_id", pa.int64()), pa.field("symbol", pa.string()),
+                              pa.field("ex_date", pa.date32()), pa.field("record_date", pa.date32()),
+                              pa.field("payment_date", pa.date32()), pa.field("declaration_date", pa.date32()),
+                              pa.field("amount_raw", pa.float64()), pa.field("amount_split_adjusted", pa.float64()),
+                              pa.field("frequency", pa.string()), pa.field("source", pa.string()),
+                              pa.field(EXTRA, pa.string())])
+
 
 @dataclass
 class EventsResult:
@@ -92,11 +103,7 @@ def build_events(dump_dir: Path, out_dir: Path, resolver: Resolver, settings: Pa
             result.invalid_ratios += 1
         elif row["security_id"] is not None and row["date"] is not None:
             split_dates[row["security_id"]].append(row["date"])
-    splits_schema = pa.schema([pa.field("security_id", pa.int64()), pa.field("symbol", pa.string()),
-                               pa.field("date", pa.date32()), pa.field("numerator", pa.float64()),
-                               pa.field("denominator", pa.float64()), pa.field("ratio", pa.float64()),
-                               pa.field("source", pa.string()), pa.field(EXTRA, pa.string())])
-    splits_builder.stats.rows = write_table(out_dir / SPLITS.path, _table(splits, splits_schema), settings)
+    splits_builder.stats.rows = write_table(out_dir / SPLITS.path, _table(splits, SPLITS_SCHEMA), settings)
     result.stats[SPLITS.path] = splits_builder.stats
 
     dividends_builder = RecordTableBuilder(DIVIDENDS, dump_dir, resolver, settings)
@@ -105,13 +112,7 @@ def build_events(dump_dir: Path, out_dir: Path, resolver: Resolver, settings: Pa
         row["source"] = SOURCE
         if row["security_id"] is not None and row["ex_date"] is not None:
             dividend_dates[row["security_id"]].append(row["ex_date"])
-    dividends_schema = pa.schema([pa.field("security_id", pa.int64()), pa.field("symbol", pa.string()),
-                                  pa.field("ex_date", pa.date32()), pa.field("record_date", pa.date32()),
-                                  pa.field("payment_date", pa.date32()), pa.field("declaration_date", pa.date32()),
-                                  pa.field("amount_raw", pa.float64()), pa.field("amount_split_adjusted", pa.float64()),
-                                  pa.field("frequency", pa.string()), pa.field("source", pa.string()),
-                                  pa.field(EXTRA, pa.string())])
-    dividends_builder.stats.rows = write_table(out_dir / DIVIDENDS.path, _table(dividends, dividends_schema), settings)
+    dividends_builder.stats.rows = write_table(out_dir / DIVIDENDS.path, _table(dividends, DIVIDENDS_SCHEMA), settings)
     result.stats[DIVIDENDS.path] = dividends_builder.stats
 
     result.split_dates = {sid: _dates(v) for sid, v in split_dates.items()}

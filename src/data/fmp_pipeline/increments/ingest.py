@@ -50,7 +50,7 @@ from src.data.fmp_pipeline.builders.prices import Bars, daily_table, intraday_ta
 from src.data.fmp_pipeline.datamanager_adapter.fmp_store import AmbiguousSymbol, FmpStore, SecurityInfo
 from src.data.fmp_pipeline.fsutil import exclusive_lock
 from src.data.fmp_pipeline.increments.store import EVENTS_SCHEMA, INGESTED_AT, SOURCE, IncrementStore, utc_now
-from src.data.fmp_pipeline.planner.config import FlagConfig, PlanConfig
+from src.data.fmp_pipeline.planner.config import FlagConfig, PlanConfig, build_config_from_dict
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -89,11 +89,8 @@ def check_writer(writer_host: str, hostname: Optional[str] = None) -> str:
 
 def _flag_config(store: FmpStore) -> FlagConfig:
     """The flag thresholds the vintage was built with, so increments are flagged the same way."""
-    stored = store.build_info.get("build_config", {}).get("flags")
-    if isinstance(stored, dict):
-        values: dict[str, Any] = {k: tuple(v) if isinstance(v, list) else v for k, v in stored.items()}
-        return FlagConfig(**values)
-    return FlagConfig()
+    stored = store.build_info.get("build_config")
+    return build_config_from_dict(stored).flags if isinstance(stored, dict) else FlagConfig()
 
 
 def default_fetch() -> Fetch:

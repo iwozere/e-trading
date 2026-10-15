@@ -202,6 +202,15 @@ def _merge(base: Any, overrides: dict[str, Any], where: str) -> Any:
     return replace(base, **changes)
 
 
+def build_config_from_dict(data: dict[str, Any]) -> BuildConfig:
+    """
+    Rebuild a ``BuildConfig`` from its ``asdict`` form (as stored in a vintage's ``build_info.json``).
+
+    Lists become tuples; unknown keys raise ``ValueError`` like the YAML loader.
+    """
+    return _merge(BuildConfig(), dict(data), "build_info.build_config.")
+
+
 def load_config(path: Optional[Path] = None) -> PlanConfig:
     """
     Load the planner configuration.

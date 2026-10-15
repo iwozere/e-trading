@@ -1,6 +1,6 @@
 """
 ``fmp`` command-line entry point (spec §6.1): ``probe-free``, ``plan``, ``run``, ``status``, ``retry-failed``,
-``build``, ``golden``, ``ingest-increments``.
+``build``, ``golden``, ``ingest-increments``, ``validate``, ``verify``.
 
 Usage (PowerShell, from the project root)::
 
@@ -14,6 +14,8 @@ Usage (PowerShell, from the project root)::
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli build [--no-switch]
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli golden capture|compare
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli ingest-increments [--timeframes 1d 1h] [--symbols ...]
+    .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli validate [--sample N] [--checks V-OHLC ...]
+    .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli verify --final --backup E:\\fmp-backup [--confirm-postponed]
 
 Exit codes: 0 done, 1 stopped (quota, auth, bandwidth, archive) or build rejected by structural validation,
 2 usage, lock or not planned, 3 not enough disk space.
@@ -250,6 +252,14 @@ def _build(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _validation_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--config", type=Path, default=None, help="Default: config/fmp/fmp.yaml")
+    parser.add_argument("--data-root", type=Path, default=None, help="Default: DATA_CACHE_DIR/fmp-data")
+    parser.add_argument("--sample", type=int, default=100, help="Random symbols for cross-source checks")
+    parser.add_argument("--cache-dir", type=Path, default=None,
+                        help="Legacy yfinance cache root (DATA_CACHE_DIR) for V-YF-XCHECK; omitted = skipped")
+
+
 def _golden(args: argparse.Namespace) -> int:
     from src.data.data_manager import DataManager
     from src.data.fmp_pipeline.datamanager_adapter.golden import (
@@ -301,6 +311,42 @@ def _ingest_increments(args: argparse.Namespace) -> int:
         _logger.error("%s", exc)
         return EXIT_USAGE
     return EXIT_OK if report.stop_reason == "done" else EXIT_STOPPED
+
+
+def _validate(args: argparse.Namespace) -> int:
+    from src.data.fmp_pipeline.validators.framework import ValidationContext, run_checks
+    from src.data.fmp_pipeline.validators.verify import write_reports
+
+    config = load_config(args.config)
+    data_root = args.data_root or default_data_root()
+    try:
+        ctx = ValidationContext(data_root, config, args.sample, legacy_cache_dir=args.cache_dir)
+        report = run_checks(ctx, args.checks)
+    except (FileNotFoundError, ValueError) as exc:
+        _logger.error("%s", exc)
+        return EXIT_USAGE
+    paths = write_reports(ctx, report)
+    _logger.info("Validation of %s: %s. Reports: %s", report.vintage, report.summary(), ", ".join(map(str, paths)))
+    return EXIT_STOPPED if report.failed else EXIT_OK
+
+
+def _verify(args: argparse.Namespace) -> int:
+    from src.data.fmp_pipeline.validators.verify import FinalVerifier
+
+    if not args.final:
+        _logger.error("Only `fmp verify --final` exists (spec §14)")
+        return EXIT_USAGE
+    config = load_config(args.config)
+    data_root = args.data_root or default_data_root()
+    try:
+        verifier = FinalVerifier(data_root, config, args.backup, args.confirm_postponed, args.cache_dir, args.sample)
+        lock = data_root / "locks" / f"{verifier.ctx.store.vintage}.lock"
+        with exclusive_lock(lock), keep_awake():
+            items, _ = verifier.run()
+    except (FileNotFoundError, DumpLocked) as exc:
+        _logger.error("%s", exc)
+        return EXIT_USAGE
+    return EXIT_OK if all(item.ok for item in items) else EXIT_STOPPED
 
 
 def _dump_options(parser: argparse.ArgumentParser) -> None:
@@ -380,6 +426,20 @@ def main(argv: Optional[list[str]] = None) -> int:
     ingest.add_argument("--symbols", nargs="*", default=None, help="Only these symbols (default: every alive one)")
     ingest.add_argument("--limit", type=int, default=None, help="At most this many securities (trial runs)")
     ingest.set_defaults(handler=_ingest_increments)
+
+    validate = commands.add_parser("validate", help="Run the spec §11 validation suite on the active vintage")
+    _validation_options(validate)
+    validate.add_argument("--checks", nargs="+", default=None, help="Only these check IDs (e.g. V-OHLC V-CAL)")
+    validate.set_defaults(handler=_validate)
+
+    verify = commands.add_parser("verify", help="Gate G3 checklist; prints READY TO CANCEL when everything holds")
+    _validation_options(verify)
+    verify.add_argument("--final", action="store_true", help="Run the spec §14 checklist")
+    verify.add_argument("--backup", type=Path, default=None,
+                        help="Root of the backup copy (raw/, vintages/, checksums/ as under data_root)")
+    verify.add_argument("--confirm-postponed", action="store_true",
+                        help="Confirm that blocks not downloaded are intentionally postponed or abandoned")
+    verify.set_defaults(handler=_verify)
 
     args = parser.parse_args(argv)
     return int(args.handler(args))

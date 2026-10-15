@@ -45,13 +45,18 @@ only after every Phase 1 item below is done.
       `increment_seq`, the adapter's increment source), `IncrementIngester` (strictly-after appends, overlap
       verification, split-gap safe conversion, 1h 730-day guard, flags at the seam, configured single writer,
       rate-limit stop), `fmp ingest-increments`, disabled `FMP Increments Ingest` job; D56–D60 (2026-10-15)
+- [x] WP-A validators (`validators/`): all 23 spec §11 checks with IDs and severities, one shared price scan, NYSE
+      calendar, `validation_report.md/.json`, `coverage_report.md`, `fmp validate`; `fmp verify --final` with the
+      7-item spec §14 checklist, `ARCHIVE.sha256`/`VINTAGE.sha256`, gzip test, backup check, read-only archive,
+      READY TO CANCEL; D61–D65 (2026-10-15)
 
 ### 🔄 IN PROGRESS
 
 ### 🚀 PLANNED ENHANCEMENTS
 - [ ] Drift report when the next vintage arrives and archiving of the increments it covers (spec §10.3)
 - [ ] `fmp publish` / sync of vintage and increments to readers (spec §10.4, Phase 5)
-- [ ] WP-A validators, `fmp verify --final`
+- [ ] Phase 4: run `fmp validate` on the real vintage; calibrate flag thresholds and the WARN levels on it
+- [ ] `docs/storage_schema.md` and `docs/runbook.md` (spec §13, Phase 5)
 - [ ] Phase 2 `fmp probe-paid` covering the eight deferred items in `docs/fmp_probe_report.md`
 
 ## Technical Debt
@@ -109,6 +114,10 @@ only after every Phase 1 item below is done.
       adapter, overlap verification without overwrite, idempotent re-run, 730-day guard, rate-limit stop and
       resume, symbol selection, lock, CLI) — package total 433 tests, 99%; plus 2 `get_unadjusted_history` tests in
       `src/data/tests/test_yahoo_unadjusted_history.py`
+- [x] Validator tests: whole suite on a mock-built dump, each check's failure mode (corrupt price files, missing
+      sessions with tier escalation, hourly misalignment, split/dividend outliers, legacy cross-check, recon offset,
+      filings before period end, open tasks, torn archive, changed rebuild hashes, crashing check), checksums,
+      verify with and without a backup, read-only marking, CLI — package total 450 tests, 98%
 
 ## Documentation Updates
 - [ ] `docs/storage_schema.md` (vintage tables and columns, `_extra`, flags, `security_id` rules; partly in

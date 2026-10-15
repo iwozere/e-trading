@@ -7,7 +7,9 @@ specification: `docs/FMP_DATA_PIPELINE_SPEC-2.md`; build plan: `docs/FMP_DATA_PI
 
 **Status (2026-10-15):** WP-1 (free-key probe), WP-7 (`adjust()`), WP-3 (mock server), WP-2 (client, manifest,
 downloader), WP-5 (raw archive), WP-4 (planner, `fmp plan`), `fmp run` / `status` / `retry-failed`, WP-6
-(builder, `fmp build`), WP-8 (DataManager adapter, off by default) and WP-9 (yfinance increments) are done. Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
+(builder, `fmp build`), WP-8 (DataManager adapter, off by default), WP-9 (yfinance increments) and WP-A
+(validators, `fmp validate`, `fmp verify --final`) are done: Phase 1 is complete except for the probe-report audit
+(see Tasks). Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
 FMP Premium before gate G1.
 
 ## Features
@@ -36,8 +38,11 @@ FMP Premium before gate G1.
   `get_ohlcv` over the legacy cache. See `docs/datamanager_integration.md`.
 - `increments/` — `fmp ingest-increments`: extends the vintage with yfinance bars and events, converted to
   **raw** (spec §10), only on the configured writer host; the adapter appends them after the vintage's last bar.
+- `validators/` — `fmp validate`: the 23 checks of spec §11 → `validation_report.md/.json`,
+  `coverage_report.md`; `fmp verify --final`: the gate-G3 checklist (checksums, backup check, read-only archive,
+  READY TO CANCEL).
 - `cli.py` — the `fmp` command line (`probe-free`, `plan`, `run`, `status`, `retry-failed`, `build`, `golden`,
-  `ingest-increments`).
+  `ingest-increments`, `validate`, `verify`).
 - `tests/mock_server.py` — offline mock of FMP `/stable` (spec §6.7) for the downloader test suite:
   `with MockFmpServer(MockConfig(...)) as fmp: client.get(fmp.base_url + "profile", ...)`.
 
@@ -82,7 +87,13 @@ task is deferred (D36).
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli golden capture     # hash get_ohlcv over the legacy cache
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli golden compare     # exit 1 on any difference
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli ingest-increments --symbols AAPL --timeframes 1d  # writer only
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli validate --cache-dir D:\data-cache   # exit 1 on any FAIL
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli verify --final --backup E:\fmp-backup --confirm-postponed
 ```
+
+`verify --final` first writes `checksums/<dump_id>/ARCHIVE.sha256` and `VINTAGE.sha256`; copy `raw/<dump_id>`,
+`vintages/<dump_id>` and `checksums/<dump_id>` to the backup volume (same layout) and run it again with `--backup`.
+Only when it prints READY TO CANCEL is the FMP subscription cancelled.
 
 Read through the DataManager once a vintage is built (after setting `fmp.adapter.enabled: true`):
 
