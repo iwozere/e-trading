@@ -27,7 +27,7 @@ types-tqdm
 # run cleanly in this one environment (no split-brain).
 pandas-stubs
 # Optional runtime deps imported by active code (redis/zstandard/pyarrow
-# caching, san data, onnx model export, slowapi rate limiting). Present so
+# caching, duckdb FMP reads, san data, onnx model export, slowapi rate limiting). Present so
 # the checkers resolve the imports in the type-check environment, which
 # installs only this file (not requirements-webui.txt / requirements-full.txt).
 # bcrypt is a real runtime dep and lives in requirements.txt (pulled in via -r
@@ -35,6 +35,7 @@ pandas-stubs
 redis
 zstandard
 pyarrow
+duckdb  # FMP adapter bulk reads (src/data/fmp_pipeline, imported lazily)
 san
 onnxruntime
 onnxconverter-common

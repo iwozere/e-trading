@@ -35,12 +35,15 @@ only after every Phase 1 item below is done.
       intraday Parquet per security with the five flags and `missing_splits_candidates.csv`, every other endpoint
       as a lossless record table (`_extra`), structural validation, temp dir + atomic `current.txt` switch,
       `build_info.json` with per-file sha256; plan → run → build chain on the mock; D45–D49 (2026-10-15)
+- [x] WP-8 DataManager adapter (`datamanager_adapter/`): `FmpStore` (vintage reader, symbol resolution, DuckDB
+      bulk read), `FmpOhlcvAdapter` (fmp_first, legacy = total, opt-in source/flags/exclude_suspect/as_of,
+      adjusted-history LRU keyed by vintage + events hash), `IncrementSource` interface for WP-9, off-by-default
+      hook in `DataManager`; `docs/datamanager_integration.md`; `fmp golden capture|compare` with a clean
+      baseline over 1,294 cached series; D50–D55 (2026-10-15)
 
 ### 🔄 IN PROGRESS
-- [ ] `docs/datamanager_integration.md` — write up plan §1 with the full legacy-caller list (G1 item)
 
 ### 🚀 PLANNED ENHANCEMENTS
-- [ ] WP-8 DataManager adapter + golden-output snapshot of the 797 cached symbols
 - [ ] WP-9 yfinance increments (needs a narrow `auto_adjust=False` method on `YahooDataDownloader`)
 - [ ] WP-A validators, `fmp verify --final`
 - [ ] Phase 2 `fmp probe-paid` covering the eight deferred items in `docs/fmp_probe_report.md`
@@ -58,6 +61,10 @@ only after every Phase 1 item below is done.
       decisions.md; `STALE` for 1h (35 bars) is a guess.
 - [ ] Turn on `build.segment_reused_tickers` only after the paid probe answers §4.2 item 8 (D46).
 - [ ] Optional consolidated yearly price partitions if DuckDB globbing over ~30k files is slow (spec §7.1).
+- [ ] `adjust()` spends ~14 ms per security normalizing tiny event tables (pandas overhead); a numpy fast path
+      would make large `get_ohlcv_batch` calls several times faster.
+- [ ] Adapter stays off for live jobs until WP-9 increments: without them a request past the vintage's last bar
+      returns only the vintage's bars.
 
 ## Known Issues
 - Mock assumptions not yet verifiable (free key): quota body shape, Premium page-size cap, intraday row cap
@@ -87,6 +94,10 @@ only after every Phase 1 item below is done.
 - [x] Builder tests: every flag with synthetic hits and near misses, id registry stability, segmentation on/off,
       rename chains, lossless record tables, window drops, DST conversion, clipping, structural validation,
       rejected builds, byte-identical rebuild, mock plan → run → build, CLI — package total 404 tests, 99%
+- [x] Adapter tests on a real built vintage (resolution incl. separator swap, history and reuse, legacy = total =
+      `adjust()`, contract dtypes, inclusive ranges, opt-in columns, intraday local dates, increments union and
+      cache invalidation, batch = single reads, factory), DataManager hook tests, golden snapshot tests —
+      package total 423 tests, 99%
 
 ## Documentation Updates
 - [ ] `docs/storage_schema.md` (vintage tables and columns, `_extra`, flags, `security_id` rules; partly in

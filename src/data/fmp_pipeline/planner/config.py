@@ -94,6 +94,21 @@ class BuildConfig:
 
 
 @dataclass(frozen=True)
+class AdapterConfig:
+    """
+    The DataManager adapter (spec §9, plan WP-8). Off by default: turning it on is a deliberate act.
+
+    ``data_root`` empty means ``DATA_CACHE_DIR/fmp-data``.
+    """
+
+    enabled: bool = False
+    data_root: str = ""
+    policy: str = "fmp_first"
+    timeframes: tuple[str, ...] = ("1d", "1h")
+    cache_entries: int = 256
+
+
+@dataclass(frozen=True)
 class PlanConfig:
     """Everything ``fmp plan`` needs."""
 
@@ -123,6 +138,7 @@ class PlanConfig:
     intraday: IntradayConfig = field(default_factory=IntradayConfig)
     universe: UniverseConfig = field(default_factory=UniverseConfig)
     build: BuildConfig = field(default_factory=BuildConfig)
+    adapter: AdapterConfig = field(default_factory=AdapterConfig)
 
 
 def _coerce(target: Any, value: Any) -> Any:
@@ -190,6 +206,8 @@ def load_config(path: Optional[Path] = None) -> PlanConfig:
     config = _merge(PlanConfig(), section, "fmp.")
     if config.bandwidth.basis not in ("wire", "decoded"):
         raise ValueError("fmp.bandwidth.basis must be 'wire' or 'decoded'")
+    if config.adapter.policy != "fmp_first":
+        raise ValueError("fmp.adapter.policy must be 'fmp_first' (the only policy, spec §9.2)")
     if config.build.intraday_label not in ("start", "end"):
         raise ValueError("fmp.build.intraday_label must be 'start' or 'end'")
     return config

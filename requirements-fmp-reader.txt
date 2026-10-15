@@ -1,6 +1,7 @@
 # FMP pipeline, reader profile (Raspberry Pi 5, aarch64): read vintages and adjust prices.
-# Plan §9.2 / docs/decisions.md "Dependencies". duckdb is added with WP-8 (DataManager adapter).
+# Plan §9.2 / docs/decisions.md "Dependencies". Install on any machine that enables fmp.adapter.
 numpy>=2.3.2
 pandas>=3.0.3
 pyarrow>=25.0.1
 tzdata>=2025.2
+duckdb>=1.5.6

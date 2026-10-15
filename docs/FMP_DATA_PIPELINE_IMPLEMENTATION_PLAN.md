@@ -4,7 +4,7 @@
 **Based on:** `docs/FMP_DATA_PIPELINE_SPEC-2.md` v1.1 (2026-10-11)
 **Status:** Phase 0a recon **done** (section 1). **WP-1 and WP-7 done 2026-10-14**: `src/data/fmp_pipeline/`
 exists with `adjust/` and `probe/`; results in `docs/fmp_probe_report.md` and `docs/decisions.md` (D13–D24).
-**WP-3 mock server, WP-2 client/manifest/downloader, WP-5 raw archive, WP-4 planner (`fmp plan`) `fmp run`/`status`/`retry-failed` and WP-6 builder (`fmp build`) done** (D25–D49). Next: WP-8 adapter / WP-9 increments
+**WP-3 mock server, WP-2 client/manifest/downloader, WP-5 raw archive, WP-4 planner (`fmp plan`) `fmp run`/`status`/`retry-failed`, WP-6 builder (`fmp build`) and WP-8 DataManager adapter done** (D25–D55). Next: WP-9 increments, WP-A validators
 (section 10). Section 1 refutes two spec assumptions and must be read before
 any further code is written.
 
@@ -429,14 +429,15 @@ WP-1 probe-free          ──┤
 
 - [ ] `docs/fmp_probe_report.md` — every §3/§5 `[VERIFY]` item confirmed, refuted, or explicitly marked
       "requires paid probe"; ≤200 calls used
-- [ ] `docs/datamanager_integration.md` — section 1 of this plan, written up, with the full legacy-caller list
+- [x] `docs/datamanager_integration.md` — section 1 of this plan, written up, with the full legacy-caller list
 - [ ] `docs/decisions.md` — D12 (Finding A) and Q1–Q6 as recorded decisions
 - [ ] Downloader green against the mock server: resume-after-kill, retry/backoff, circuit breaker,
       plan-restricted, quota-exhausted stop, bandwidth hard stop
 - [x] `fmp plan --dry-run` output against both the mock and the free key: task counts and byte projections
       per block and tier, both counting hypotheses
 - [ ] `adjust()` and `yfinance_to_raw()` passing the §8.3 vectors on synthetic data
-- [ ] Golden-output regression snapshot captured for the 797 cached symbols, adapter disabled → zero diffs
+- [x] Golden-output regression snapshot captured for the 797 cached symbols, adapter disabled → zero diffs
+      (1,294 series, 2026-10-15)
 - [ ] ≥85% coverage on adjust / manifest / planner / windowing; ruff + pyright + mypy clean via
       `scripts/typecheck.py`
 - [ ] Open-questions list for the owner

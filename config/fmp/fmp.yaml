@@ -34,5 +34,9 @@ fmp:
     intraday_tz: America/New_York  # zone of FMP's intraday `date` strings [VERIFY in the paid probe, spec §8.4]
     intraday_label: start          # start | end: what the timestamp labels [VERIFY]
     segment_reused_tickers: false  # true only after the paid probe shows merged series for reused tickers (D46)
+  adapter:                       # DataManager reads from the FMP vintage (docs/datamanager_integration.md)
+    enabled: false               # keep false until WP-9 increments exist for live jobs (D50)
+    data_root: ""                # "" = DATA_CACHE_DIR/fmp-data
+    timeframes: [1d, 1h]         # served from FMP when the vintage has them; others stay on the legacy cache
   reconciliation_size: 300
   reconciliation_fixed: [AAPL, MSFT, TSLA, AMZN, NVDA, GOOGL, JPM, XOM, KO, T, GE, BRK-B]

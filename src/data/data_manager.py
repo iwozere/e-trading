@@ -24,7 +24,7 @@ Some call sites reset_index locally or use ``coerce_ohlcv_timestamp_column`` whe
 
 import os
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Dict, List, TypeGuard, cast
 
 import pandas as pd
@@ -110,6 +110,8 @@ class DataManager:
         self.rate_limiters: dict[Any, Any] = {}
         self._rate_limited_providers: set[Any] = set()  # Session-level blacklist (legacy)
         self._provider_cooldowns: dict[Any, Any] = {}  # Temporary cooldowns: {provider_name: expiration_time}
+        # FMP vintage adapter (src/data/fmp_pipeline, spec §9): None unless enabled in config/fmp/fmp.yaml.
+        self.fmp_adapter = _load_fmp_adapter()
 
         # Initialize rate limiters for each provider
         self._initialize_rate_limiters()
@@ -157,10 +159,31 @@ class DataManager:
 
     @retry_on_exception(max_attempts=3, base_delay=1.0)
     def get_ohlcv(
-        self, symbol: str, timeframe: str, start_date: datetime, end_date: datetime, force_refresh: bool = False
+        self,
+        symbol: str,
+        timeframe: str,
+        start_date: datetime,
+        end_date: datetime,
+        force_refresh: bool = False,
+        *,
+        adjust: str = "legacy",
+        include_source: bool = False,
+        include_flags: bool = False,
+        exclude_suspect: bool = False,
+        as_of: date | None = None,
     ) -> pd.DataFrame:
         """
         Retrieve historical OHLCV data with caching, gap detection, and provider selection.
+
+        When the FMP adapter is enabled (``fmp.adapter.enabled`` in ``config/fmp/fmp.yaml``; off by default),
+        symbols the active FMP vintage serves are answered from it first (spec §9.2, policy ``fmp_first``);
+        everything else, and every request with ``force_refresh``, takes the unchanged legacy path below.
+
+        The keyword-only options need the FMP vintage (the legacy cache holds total-adjusted prices only):
+        ``adjust`` is ``"legacy"`` (default; = ``"total"``, what the legacy files hold), ``"raw"``, ``"split"`` or
+        ``"total"``; ``include_flags`` adds the suspect-data bitmask, ``exclude_suspect`` drops flagged bars,
+        ``as_of`` disambiguates a reused or renamed symbol. ``include_source`` adds a ``source`` column on both
+        paths (``"fmp"``/``"yfinance"`` or ``"legacy"``).
 
         This method implements the main data retrieval flow:
         1. Load whatever cache exists for the requested range
@@ -180,7 +203,8 @@ class DataManager:
             columns ``open`` … ``volume``. Cache-only, download-only, and merged paths share this shape.
 
         Raises:
-            ValueError: If invalid parameters provided
+            ValueError: If invalid parameters provided, or an FMP-only option is used for a symbol the FMP
+                vintage does not serve (``AmbiguousSymbol``, a ``ValueError``, if the symbol is ambiguous there)
             RuntimeError: If no suitable provider found or data retrieval fails
         """
         # Validate inputs
@@ -190,6 +214,33 @@ class DataManager:
         if not symbol or not timeframe:
             raise ValueError("symbol and timeframe are required")
 
+        if self.fmp_adapter is not None and not force_refresh:
+            fmp_data = self.fmp_adapter.get_ohlcv(
+                symbol, timeframe, start_date, end_date, adjust, include_source, include_flags, exclude_suspect, as_of
+            )
+            if fmp_data is not None:
+                _logger.info(
+                    "Served %s %s from FMP vintage %s: %d rows",
+                    symbol,
+                    timeframe,
+                    self.fmp_adapter.vintage,
+                    len(fmp_data),
+                )
+                return fmp_data
+
+        if adjust != "legacy" or include_flags or exclude_suspect:
+            raise ValueError(
+                f"adjust={adjust!r}, include_flags and exclude_suspect need the FMP vintage, which does not serve "
+                f"{symbol} {timeframe}; the legacy cache holds total-adjusted prices only"
+            )
+
+        result = self._get_ohlcv_legacy(symbol, timeframe, start_date, end_date, force_refresh)
+        return result.assign(source="legacy") if include_source else result
+
+    def _get_ohlcv_legacy(
+        self, symbol: str, timeframe: str, start_date: datetime, end_date: datetime, force_refresh: bool
+    ) -> pd.DataFrame:
+        """The legacy ``get_ohlcv`` flow: cache, gap detection, provider failover (behaviour unchanged)."""
         _logger.info("Requesting data for %s %s from %s to %s", symbol, timeframe, start_date, end_date)
 
         # --- Step 1: Load cache and detect gaps ---
@@ -325,6 +376,9 @@ class DataManager:
         """
         Retrieve historical OHLCV data for multiple symbols, utilizing cache where possible.
 
+        With the FMP adapter enabled, the symbols the FMP vintage serves are read from it in one query (spec
+        §9.5); the rest take the legacy path below. ``force_refresh`` always takes the legacy path.
+
         This method optimizes for batch retrieval (like daily pipeline runs). It checks the
         UnifiedCache for each symbol. If a symbol is missing data, it calculates the required
         delta date range, groups all missing symbols, and downloads them in a single batch
@@ -342,6 +396,21 @@ class DataManager:
             (tz-naive ``DatetimeIndex``; columns ``open`` … ``volume``). Cache hits return the
             same shape as freshly merged downloads. See ``src.data.ohlcv_contract``.
         """
+        if self.fmp_adapter is None or force_refresh:
+            return self._get_ohlcv_batch_legacy(symbols, timeframe, start_date, end_date, force_refresh)
+        served = self.fmp_adapter.get_ohlcv_batch(symbols, timeframe, start_date, end_date)
+        rest = [s for s in symbols if s not in served]
+        legacy = self._get_ohlcv_batch_legacy(rest, timeframe, start_date, end_date, force_refresh) if rest else {}
+        _logger.info(
+            "Batch: %d symbols from FMP vintage %s, %d via legacy", len(served), self.fmp_adapter.vintage, len(rest)
+        )
+        merged = {**legacy, **served}
+        return {s: merged[s] for s in dict.fromkeys(symbols) if s in merged}
+
+    def _get_ohlcv_batch_legacy(
+        self, symbols: List[str], timeframe: str, start_date: datetime, end_date: datetime, force_refresh: bool
+    ) -> Dict[str, pd.DataFrame]:
+        """The legacy ``get_ohlcv_batch`` flow (behaviour unchanged)."""
         results = {}
         missing_ranges: dict[Any, Any] = {}  # {symbol: (missing_start, end_date)}
 
@@ -2359,6 +2428,22 @@ class DataManager:
             self.cache.clear_all()
 
         _logger.info("Cache cleared for %s %s", symbol or "all", timeframe or "all timeframes")
+
+
+def _load_fmp_adapter() -> Any:
+    """
+    Return the FMP vintage adapter, or ``None`` (disabled, the default, or unusable).
+
+    Imported lazily and guarded: the FMP pipeline's dependencies (pyarrow, duckdb) are only needed when the
+    adapter is enabled, and nothing in it may stop a DataManager from starting.
+    """
+    try:
+        from src.data.fmp_pipeline.datamanager_adapter.factory import load_adapter
+
+        return load_adapter()
+    except Exception:
+        _logger.exception("FMP adapter could not be loaded; continuing without it")
+        return None
 
 
 # Convenience functions for easy access

@@ -93,6 +93,15 @@ reuse segmentation, symbol history, `resolve(symbol, date)`) → `build_events` 
 (``validate.py``) → `build_info.json`, registry save, directory swap, `current.txt`. Parquet writing is in
 ``parquet_io.py`` (fixed settings, no timestamps in the files, so rebuilds are byte-identical). D45–D49.
 
+**`datamanager_adapter/`** — `FmpStore` (``fmp_store.py``) opens the vintage `current.txt` names, loads
+securities and symbol history, and reads prices per security, events per security or for many at once, and many
+securities' daily bars with one DuckDB query. `FmpOhlcvAdapter` (``adapter.py``) resolves the request, appends
+`IncrementSource` bars (``increments.py``; `NoIncrements` until WP-9), unions events (FMP wins), applies
+`adjust()` (hourly bars by exchange-local date with daily `C_prev`), caches the adjusted full history in an LRU
+and slices the request. ``factory.py`` builds it from `fmp.adapter` or returns `None`; `DataManager` calls it
+first and falls back to `_get_ohlcv_legacy`. ``golden.py`` hashes `get_ohlcv` offline for the regression check.
+D50–D55, `docs/datamanager_integration.md`.
+
 ### Error handling
 - `adjust()` raises `ValueError` on contradictory or impossible inputs rather than repairing them (D11, D16).
 - The probe treats budget exhaustion as "skip and continue" (cached calls still resolve) and a quota message as
@@ -124,7 +133,7 @@ yfinance (auto_adjust=False, actions) --> yfinance_to_raw --> raw bars (+ raw-ba
 ```
 
 ## Design Decisions
-See `docs/decisions.md` (D12–D49). The ones shaping this module most:
+See `docs/decisions.md` (D12–D55). The ones shaping this module most:
 - D13: restate `C_prev` on the ex-date's share basis. A dividend on a split date is otherwise wrong by the ratio.
 - D19/D20: FMP `dividend` is raw; `non-split-adjusted` carries **raw** prices under `adj*` field names.
 - D24: the probe client is deliberately separate from the WP-2 production client.
@@ -133,6 +142,8 @@ See `docs/decisions.md` (D12–D49). The ones shaping this module most:
   `fmp plan` is always safe and never duplicates work.
 - D46/D48: `security_id`s come from an append-only registry saved only after a validated build, and a vintage
   becomes active only by a directory swap followed by `current.txt`, so a failed build changes nothing.
+- D50/D54: the adapter sits in front of an unchanged legacy path, is off by default, and the golden snapshot
+  proves the legacy output byte-identical (1,294 series, 0 diffs).
 
 ## Integration Patterns
 - The API key is resolved only through `src.config.provider_config.get_api_key`.

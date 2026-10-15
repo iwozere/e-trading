@@ -6,8 +6,8 @@ symbols) into an immutable Parquet "vintage", plus read-time adjustment and a yf
 specification: `docs/FMP_DATA_PIPELINE_SPEC-2.md`; build plan: `docs/FMP_DATA_PIPELINE_IMPLEMENTATION_PLAN.md`.
 
 **Status (2026-10-15):** WP-1 (free-key probe), WP-7 (`adjust()`), WP-3 (mock server), WP-2 (client, manifest,
-downloader), WP-5 (raw archive), WP-4 (planner, `fmp plan`), `fmp run` / `status` / `retry-failed` and WP-6
-(builder, `fmp build`) are done. Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
+downloader), WP-5 (raw archive), WP-4 (planner, `fmp plan`), `fmp run` / `status` / `retry-failed`, WP-6
+(builder, `fmp build`) and WP-8 (DataManager adapter, off by default) are done. Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
 FMP Premium before gate G1.
 
 ## Features
@@ -30,7 +30,11 @@ FMP Premium before gate G1.
   ids (`security_ids.json`), symbol history, splits/dividends, raw daily/intraday prices per security with the
   suspect-data `flags` bitmask, every other endpoint as a lossless table (`_extra`), `_meta/build_info.json`.
   Switches `current.txt` only after structural validation passes.
-- `cli.py` — the `fmp` command line (`probe-free`, `plan`, `run`, `status`, `retry-failed`, `build`).
+- `datamanager_adapter/` — serves `DataManager.get_ohlcv` from the active vintage when `fmp.adapter.enabled` is
+  true (off by default): `FmpStore`, `FmpOhlcvAdapter` (`adjust="legacy"` = `total`, opt-in `raw`/`split`,
+  `flags`, `source`, `exclude_suspect`, `as_of`), and `fmp golden` — the offline regression snapshot of
+  `get_ohlcv` over the legacy cache. See `docs/datamanager_integration.md`.
+- `cli.py` — the `fmp` command line (`probe-free`, `plan`, `run`, `status`, `retry-failed`, `build`, `golden`).
 - `tests/mock_server.py` — offline mock of FMP `/stable` (spec §6.7) for the downloader test suite:
   `with MockFmpServer(MockConfig(...)) as fmp: client.get(fmp.base_url + "profile", ...)`.
 
@@ -72,6 +76,20 @@ task is deferred (D36).
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli retry-failed     # re-queue failed tasks
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli build            # vintage from the archive, no network
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli build --no-switch  # build + validate, keep current.txt
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli golden capture     # hash get_ohlcv over the legacy cache
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli golden compare     # exit 1 on any difference
+```
+
+Read through the DataManager once a vintage is built (after setting `fmp.adapter.enabled: true`):
+
+```python
+from datetime import datetime
+
+from src.data.data_manager import get_data_manager
+
+dm = get_data_manager()
+legacy_like = dm.get_ohlcv("AAPL", "1d", datetime(2020, 1, 1), datetime(2020, 12, 31))  # total-adjusted
+raw = dm.get_ohlcv("AAPL", "1d", datetime(2020, 1, 1), datetime(2020, 12, 31), adjust="raw", include_flags=True)
 ```
 
 `fmp build` writes `reports/<dump_id>/missing_splits_candidates.csv` (probable missing splits, for review; nothing

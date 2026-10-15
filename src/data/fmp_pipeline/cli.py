@@ -1,6 +1,6 @@
 """
 ``fmp`` command-line entry point (spec §6.1): ``probe-free``, ``plan``, ``run``, ``status``, ``retry-failed``,
-``build``.
+``build``, ``golden``.
 
 Usage (PowerShell, from the project root)::
 
@@ -12,6 +12,7 @@ Usage (PowerShell, from the project root)::
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli status
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli retry-failed
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli build [--no-switch]
+    .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli golden capture|compare
 
 Exit codes: 0 done, 1 stopped (quota, auth, bandwidth, archive) or build rejected by structural validation,
 2 usage, lock or not planned, 3 not enough disk space.
@@ -58,11 +59,16 @@ DEFAULT_REPORT = PROJECT_ROOT / "docs" / "fmp_probe_report.md"
 DEFAULT_FIXTURES = PROJECT_ROOT / "src" / "data" / "fmp_pipeline" / "tests" / "fixtures"
 
 
-def default_data_root() -> Path:
-    """Return ``DATA_CACHE_DIR/fmp-data`` (owner decision Q2)."""
+def data_cache_dir() -> Path:
+    """Return ``DATA_CACHE_DIR`` (the legacy cache root)."""
     from config.donotshare.donotshare import DATA_CACHE_DIR
 
-    return Path(DATA_CACHE_DIR) / "fmp-data"
+    return Path(DATA_CACHE_DIR)
+
+
+def default_data_root() -> Path:
+    """Return ``DATA_CACHE_DIR/fmp-data`` (owner decision Q2)."""
+    return data_cache_dir() / "fmp-data"
 
 
 def _probe_free(args: argparse.Namespace) -> int:
@@ -243,6 +249,45 @@ def _build(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _golden(args: argparse.Namespace) -> int:
+    from src.data.data_manager import DataManager
+    from src.data.fmp_pipeline.datamanager_adapter.golden import (
+        Snapshot,
+        cached_series,
+        capture,
+        compare,
+        offline_fetch,
+    )
+
+    cache_dir = args.cache_dir or data_cache_dir()
+    path = args.snapshot or (args.data_root or default_data_root()) / "reports" / "golden" / "ohlcv_hashes.json"
+    if args.action == "compare" and not path.exists():
+        _logger.error("No baseline snapshot at %s; run `fmp golden capture` first", path)
+        return EXIT_USAGE
+    pairs = cached_series(cache_dir / "ohlcv")
+    if args.symbols:
+        wanted = set(args.symbols)
+        pairs = [p for p in pairs if p[0] in wanted]
+    data_manager = DataManager(str(cache_dir))
+    meta = {"cache_dir": str(cache_dir), "series": len(pairs),
+            "fmp_adapter": getattr(data_manager, "fmp_adapter", None) is not None}
+    _logger.info("Hashing get_ohlcv for %d cached series (offline)", len(pairs))
+    snapshot = capture(pairs, offline_fetch(data_manager), meta)
+    if args.action == "capture":
+        snapshot.save(path)
+        errors = sum(1 for e in snapshot.entries.values() if "error" in e)
+        _logger.info("Golden snapshot of %d series (%d raise) written to %s", len(snapshot.entries), errors, path)
+        return EXIT_OK
+    result = compare(Snapshot.load(path), snapshot)
+    latest = path.with_name(path.stem + "_latest.json")
+    snapshot.save(latest)
+    _logger.info("Golden compare: %d same, %d changed, %d missing, %d added (this run saved to %s)",
+                 result.same, len(result.changed), len(result.missing), len(result.added), latest)
+    for key in (result.changed + result.missing + result.added)[:50]:
+        _logger.warning("Differs: %s", key)
+    return EXIT_OK if result.clean else EXIT_STOPPED
+
+
 def _dump_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config", type=Path, default=None, help="Default: config/fmp/fmp.yaml")
     parser.add_argument("--dump-id", default=None, help="Overrides fmp.dump_id from the config")
@@ -300,6 +345,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     _dump_options(build)
     build.add_argument("--no-switch", action="store_true", help="Build and validate, but leave current.txt alone")
     build.set_defaults(handler=_build)
+
+    golden = commands.add_parser("golden", help="Hash DataManager.get_ohlcv over the legacy cache (offline) and "
+                                                "compare with a baseline (WP-8 regression check)")
+    golden.add_argument("action", choices=("capture", "compare"))
+    golden.add_argument("--snapshot", type=Path, default=None,
+                        help="Default: <data_root>/reports/golden/ohlcv_hashes.json")
+    golden.add_argument("--cache-dir", type=Path, default=None, help="Default: DATA_CACHE_DIR")
+    golden.add_argument("--data-root", type=Path, default=None, help="Default: DATA_CACHE_DIR/fmp-data")
+    golden.add_argument("--symbols", nargs="*", default=None, help="Only these symbols")
+    golden.set_defaults(handler=_golden)
 
     args = parser.parse_args(argv)
     return int(args.handler(args))
