@@ -43,7 +43,7 @@ SPECS: List[PluginSpec] = [
         category="provider",
         cron="0 12 * * 4",  # Thursday — AAII publishes weekly, every Thursday (see aaii_downloader.py docstring)
         script_path="src/data/downloader/aaii_downloader.py",
-        script_args=["download"],
+        script_args=["download", "--force"],  # download() is a no-op once the cache exists unless forced
         timeout_seconds=300,
         description="No incremental API — each run replaces the whole cache. No existing caller anywhere in src/.",
     ),
