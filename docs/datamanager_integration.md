@@ -1,8 +1,8 @@
 # DataManager integration of the FMP vintage
 
 Spec §9 (`docs/FMP_DATA_PIPELINE_SPEC-2.md`), plan §1.4 and WP-8 (`docs/FMP_DATA_PIPELINE_IMPLEMENTATION_PLAN.md`),
-decisions D12 and D50–D55 (`docs/decisions.md`). Status 2026-10-15: adapter built, **off by default**; golden
-regression snapshot captured and clean.
+decisions D12, D50–D55 and D56–D60 (`docs/decisions.md`). Status 2026-10-15: adapter and yfinance increment layer
+built, adapter **off by default**; golden regression snapshot captured and clean.
 
 ## 1. The DataManager as it is (Phase 0a recon, refreshed 2026-10-15)
 
@@ -35,7 +35,7 @@ DataManager.get_ohlcv(symbol, tf, start, end, force_refresh=False, *, adjust="le
   └─ FmpOhlcvAdapter.get_ohlcv(...)            src/data/fmp_pipeline/datamanager_adapter/adapter.py
         ├─ FmpStore.resolve(symbol, as_of)     fmp_store.py — vintage named by current.txt
         │     unknown symbol, timeframe not served, or no price file for it ─► None ─► legacy path
-        ├─ raw bars (vintage) + increment bars strictly after the last one (IncrementSource, WP-9)
+        ├─ raw bars (vintage) + increment bars strictly after the last one (IncrementStore, WP-9)
         ├─ events: vintage ∪ increments, deduplicated by date, FMP wins
         └─ adjust(raw, splits, dividends, mode)   (legacy → total) ─► contract frame
 ```
@@ -84,9 +84,25 @@ DataManager.get_ohlcv(symbol, tf, start, end, force_refresh=False, *, adjust="le
    ```
 4. Re-run the golden snapshot (§5) and review every changed series: only symbols the vintage serves may differ.
 
-**Until WP-9 (increments) lands, keep it off for live jobs.** Without increments a request past the vintage's
-last bar returns only what the vintage has; today's bar would be missing for every FMP-served symbol. It is safe
-for backtests that end before the vintage date.
+**Live jobs need current increments.** The adapter appends `<data_root>/increments/` (WP-9) after the vintage's
+last bar, so turn it on for live jobs only on a machine where `fmp ingest-increments` runs (the writer host,
+D57) or where increments are synced to from it. Without them a request past the vintage's last bar returns only
+what the vintage has. Backtests that end before the vintage date are always safe.
+
+### Keeping increments current (spec §10.2.7)
+
+On the writer host only (`fmp.increments.writer_host`), daily after the US close. The repository's scheduler has
+the job registered but **disabled** (`FMP Increments Ingest` in `src/data/pipeline/specs/fmp_specs.py`, 23:00 UTC
+Mon–Fri); enable its `job_schedules` row on that machine. A plain cron equivalent:
+
+```
+# m  h  dom mon dow  command   (UTC; the Pi's checkout)
+  0  23  *   *  1-5  cd /opt/e-trading && .venv/bin/python -m src.data.fmp_pipeline.cli ingest-increments
+```
+
+Exit codes: 0 done, 1 stopped by Yahoo throttling (the next run resumes), 2 not the writer, locked or no vintage.
+Run at least every 12 months: yfinance keeps about 730 days of hourly bars, and the run logs an error from 700
+days of hourly gap on.
 
 ## 4. Measured performance (synthetic vintage, writer laptop, 2026-10-15)
 
@@ -167,7 +183,8 @@ Regenerate: `git grep -lE "DataManager\(|get_data_manager\(" -- src scripts`.
 
 ## 7. Open items
 
-- WP-9 increments (`IncrementSource` over `increments/`), then the adapter can serve live jobs.
+- `fmp publish` / sync of vintage and increments from the writer to readers (Phase 5), and the drift report
+  when the next vintage arrives (spec §10.3).
 - Verify `yf_symbol` against the legacy cache directory names after the first real build (class-share separator
   is still a paid-probe item, F12).
 - 1h is served only once the vintage has `1h_raw` files, i.e. after the paid probe sets `intraday.max_rows`.

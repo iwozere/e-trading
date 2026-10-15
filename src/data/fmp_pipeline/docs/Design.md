@@ -102,6 +102,12 @@ and slices the request. ``factory.py`` builds it from `fmp.adapter` or returns `
 first and falls back to `_get_ohlcv_legacy`. ``golden.py`` hashes `get_ohlcv` offline for the regression check.
 D50–D55, `docs/datamanager_integration.md`.
 
+**`increments/`** — `IncrementIngester.run` (``ingest.py``) checks the writer host, takes the lock, then per
+timeframe groups the alive securities by window start, fetches batches through
+`YahooDataDownloader.get_unadjusted_history`, converts each frame with `to_raw_bars` (`yfinance_to_raw`), verifies
+the overlap, appends only bars after the last stored one (flagged in context), records new events, and writes
+`_meta.json`. `IncrementStore` (``store.py``) owns the files and is the adapter's `IncrementSource`. D56–D60.
+
 ### Error handling
 - `adjust()` raises `ValueError` on contradictory or impossible inputs rather than repairing them (D11, D16).
 - The probe treats budget exhaustion as "skip and continue" (cached calls still resolve) and a quota message as
@@ -133,7 +139,7 @@ yfinance (auto_adjust=False, actions) --> yfinance_to_raw --> raw bars (+ raw-ba
 ```
 
 ## Design Decisions
-See `docs/decisions.md` (D12–D55). The ones shaping this module most:
+See `docs/decisions.md` (D12–D60). The ones shaping this module most:
 - D13: restate `C_prev` on the ex-date's share basis. A dividend on a split date is otherwise wrong by the ratio.
 - D19/D20: FMP `dividend` is raw; `non-split-adjusted` carries **raw** prices under `adj*` field names.
 - D24: the probe client is deliberately separate from the WP-2 production client.

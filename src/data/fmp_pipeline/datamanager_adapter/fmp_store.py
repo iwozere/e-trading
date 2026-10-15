@@ -48,6 +48,14 @@ class SecurityInfo:
     last_price_date: Optional[date]
     valid_from: Optional[date]
     valid_to: Optional[date]
+    yf_symbol: Optional[str] = None
+    is_actively_trading: Optional[bool] = None
+    delisted_date: Optional[date] = None
+
+    @property
+    def alive(self) -> bool:
+        """Still trading as far as the vintage knows: no delisting date and not marked inactive."""
+        return self.delisted_date is None and self.is_actively_trading is not False and self.valid_to is None
 
     def covers(self, when: date) -> bool:
         """True if ``when`` lies in the security's validity range (segments of a reused ticker)."""
@@ -106,10 +114,11 @@ class FmpStore:
 
     def _load_reference(self) -> None:
         columns = ["security_id", "symbol", "yf_symbol", "first_price_date", "last_price_date", "valid_from",
-                   "valid_to"]
+                   "valid_to", "is_actively_trading", "delisted_date"]
         for row in pq.read_table(self.dir / SECURITIES, columns=columns).to_pylist():
             info = SecurityInfo(int(row["security_id"]), row["symbol"], _date(row["first_price_date"]),
-                                _date(row["last_price_date"]), _date(row["valid_from"]), _date(row["valid_to"]))
+                                _date(row["last_price_date"]), _date(row["valid_from"]), _date(row["valid_to"]),
+                                row["yf_symbol"], row["is_actively_trading"], _date(row["delisted_date"]))
             self._securities[info.security_id] = info
             for name in {row["symbol"], row["yf_symbol"]} - {None}:
                 self._by_symbol.setdefault(name, []).append(info.security_id)
@@ -122,6 +131,16 @@ class FmpStore:
     def security(self, security_id: int) -> SecurityInfo:
         """Return a security by id."""
         return self._securities[security_id]
+
+    def securities(self) -> list[SecurityInfo]:
+        """Return every security of the vintage, by id."""
+        return [self._securities[sid] for sid in sorted(self._securities)]
+
+    @property
+    def as_of(self) -> Optional[date]:
+        """The dump date the vintage was built for (``build_info.json``), if recorded."""
+        value = self.build_info.get("as_of")
+        return date.fromisoformat(value) if isinstance(value, str) else None
 
     def resolve(self, symbol: str, as_of: Optional[date] = None) -> Optional[SecurityInfo]:
         """

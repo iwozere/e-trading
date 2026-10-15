@@ -109,6 +109,27 @@ class AdapterConfig:
 
 
 @dataclass(frozen=True)
+class IncrementsConfig:
+    """
+    The yfinance increment layer (spec §10, plan WP-9).
+
+    ``writer_host`` must name the one machine allowed to ingest (owner decision Q4: the Pi); ingestion refuses to
+    run anywhere else, and while it is empty.
+    """
+
+    writer_host: str = ""
+    timeframes: tuple[str, ...] = ("1d", "1h")
+    overlap_days: int = 5
+    verify_tolerance: float = 0.02
+    batch_size: int = 50
+    pause_s: float = 2.0
+    rate_limit_wait_s: float = 60.0
+    intraday_warn_days: int = 700
+    intraday_max_days: int = 729
+    flag_context_bars: int = 60
+
+
+@dataclass(frozen=True)
 class PlanConfig:
     """Everything ``fmp plan`` needs."""
 
@@ -139,6 +160,7 @@ class PlanConfig:
     universe: UniverseConfig = field(default_factory=UniverseConfig)
     build: BuildConfig = field(default_factory=BuildConfig)
     adapter: AdapterConfig = field(default_factory=AdapterConfig)
+    increments: IncrementsConfig = field(default_factory=IncrementsConfig)
 
 
 def _coerce(target: Any, value: Any) -> Any:

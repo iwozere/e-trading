@@ -456,6 +456,65 @@ class YahooDataDownloader(BaseDataDownloader):
             _logger.info("Falling back to individual downloads")
             return self._fallback_individual_downloads(symbols, interval, start_date, end_date)
 
+    def get_unadjusted_history(
+        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
+    ) -> Dict[str, pd.DataFrame]:
+        """
+        Download prices **without** auto-adjustment, with splits and dividends (FMP increment layer, spec §10.2.2).
+
+        A narrow method on purpose: ``get_ohlcv``/``get_ohlcv_batch`` keep ``auto_adjust=True`` for the legacy
+        cache (Finding A). The frames are returned as yfinance delivers them — ``Open``, ``High``, ``Low``,
+        ``Close``, ``Adj Close``, ``Volume``, ``Dividends``, ``Stock Splits`` on a tz-aware exchange-time index —
+        because the caller un-adjusts the prices with exactly these actions.
+
+        Args:
+            symbols: yfinance symbols.
+            interval: ``1d`` or an intraday interval (``1h``: yfinance serves about the last 730 days).
+            start_date: First day (inclusive).
+            end_date: Last day (exclusive, as in yfinance).
+
+        Returns:
+            ``{symbol: frame}`` for the symbols that returned at least one bar.
+
+        Raises:
+            YFRateLimitError: When Yahoo throttles; the caller decides how long to wait.
+        """
+        if not symbols:
+            return {}
+        try:
+            batch = yf.download(
+                symbols,
+                start=start_date,
+                end=end_date,
+                interval=interval,
+                auto_adjust=False,
+                actions=True,
+                group_by="ticker",
+                multi_level_index=True,
+                ignore_tz=False,
+                threads=False,
+                progress=False,
+                session=_get_rotated_session(),
+            )
+        except YFRateLimitError:
+            raise
+        except Exception:
+            _logger.exception("Unadjusted batch download failed for %d symbols", len(symbols))
+            return {}
+        if batch is None or batch.empty:
+            return {}
+        results: Dict[str, pd.DataFrame] = {}
+        tickers = set(batch.columns.get_level_values(0))
+        for symbol in symbols:
+            if symbol not in tickers:
+                continue
+            frame = cast(pd.DataFrame, batch[symbol])
+            prices = [c for c in ("Open", "High", "Low", "Close") if c in frame.columns]
+            frame = frame.dropna(how="all", subset=prices)
+            if not frame.empty:
+                results[symbol] = frame
+        return results
+
     def _fallback_individual_downloads(
         self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
     ) -> Dict[str, pd.DataFrame]:

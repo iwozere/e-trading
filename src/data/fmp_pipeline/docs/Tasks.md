@@ -40,11 +40,17 @@ only after every Phase 1 item below is done.
       adjusted-history LRU keyed by vintage + events hash), `IncrementSource` interface for WP-9, off-by-default
       hook in `DataManager`; `docs/datamanager_integration.md`; `fmp golden capture|compare` with a clean
       baseline over 1,294 cached series; D50–D55 (2026-10-15)
+- [x] WP-9 yfinance increments (`increments/`): `YahooDataDownloader.get_unadjusted_history` (narrow
+      `auto_adjust=False` + actions method), `IncrementStore` (per-security raw files, events, `_meta.json` with
+      `increment_seq`, the adapter's increment source), `IncrementIngester` (strictly-after appends, overlap
+      verification, split-gap safe conversion, 1h 730-day guard, flags at the seam, configured single writer,
+      rate-limit stop), `fmp ingest-increments`, disabled `FMP Increments Ingest` job; D56–D60 (2026-10-15)
 
 ### 🔄 IN PROGRESS
 
 ### 🚀 PLANNED ENHANCEMENTS
-- [ ] WP-9 yfinance increments (needs a narrow `auto_adjust=False` method on `YahooDataDownloader`)
+- [ ] Drift report when the next vintage arrives and archiving of the increments it covers (spec §10.3)
+- [ ] `fmp publish` / sync of vintage and increments to readers (spec §10.4, Phase 5)
 - [ ] WP-A validators, `fmp verify --final`
 - [ ] Phase 2 `fmp probe-paid` covering the eight deferred items in `docs/fmp_probe_report.md`
 
@@ -63,8 +69,9 @@ only after every Phase 1 item below is done.
 - [ ] Optional consolidated yearly price partitions if DuckDB globbing over ~30k files is slow (spec §7.1).
 - [ ] `adjust()` spends ~14 ms per security normalizing tiny event tables (pandas overhead); a numpy fast path
       would make large `get_ohlcv_batch` calls several times faster.
-- [ ] Adapter stays off for live jobs until WP-9 increments: without them a request past the vintage's last bar
-      returns only the vintage's bars.
+- [ ] Enable the adapter for live jobs only where increments are current (writer host or synced reader).
+- [ ] First real `ingest-increments` on the Pi: check run time for ~30k securities (batches of 50, 2 s pause)
+      and Yahoo throttling, then tune `batch_size`/`pause_s`.
 
 ## Known Issues
 - Mock assumptions not yet verifiable (free key): quota body shape, Premium page-size cap, intraday row cap
@@ -98,6 +105,10 @@ only after every Phase 1 item below is done.
       `adjust()`, contract dtypes, inclusive ranges, opt-in columns, intraday local dates, increments union and
       cache invalidation, batch = single reads, factory), DataManager hook tests, golden snapshot tests —
       package total 423 tests, 99%
+- [x] Increment tests (writer check, split-gap conversion daily and hourly, strictly-after appends through the
+      adapter, overlap verification without overwrite, idempotent re-run, 730-day guard, rate-limit stop and
+      resume, symbol selection, lock, CLI) — package total 433 tests, 99%; plus 2 `get_unadjusted_history` tests in
+      `src/data/tests/test_yahoo_unadjusted_history.py`
 
 ## Documentation Updates
 - [ ] `docs/storage_schema.md` (vintage tables and columns, `_extra`, flags, `security_id` rules; partly in

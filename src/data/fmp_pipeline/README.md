@@ -7,7 +7,7 @@ specification: `docs/FMP_DATA_PIPELINE_SPEC-2.md`; build plan: `docs/FMP_DATA_PI
 
 **Status (2026-10-15):** WP-1 (free-key probe), WP-7 (`adjust()`), WP-3 (mock server), WP-2 (client, manifest,
 downloader), WP-5 (raw archive), WP-4 (planner, `fmp plan`), `fmp run` / `status` / `retry-failed`, WP-6
-(builder, `fmp build`) and WP-8 (DataManager adapter, off by default) are done. Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
+(builder, `fmp build`), WP-8 (DataManager adapter, off by default) and WP-9 (yfinance increments) are done. Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
 FMP Premium before gate G1.
 
 ## Features
@@ -34,7 +34,10 @@ FMP Premium before gate G1.
   true (off by default): `FmpStore`, `FmpOhlcvAdapter` (`adjust="legacy"` = `total`, opt-in `raw`/`split`,
   `flags`, `source`, `exclude_suspect`, `as_of`), and `fmp golden` — the offline regression snapshot of
   `get_ohlcv` over the legacy cache. See `docs/datamanager_integration.md`.
-- `cli.py` — the `fmp` command line (`probe-free`, `plan`, `run`, `status`, `retry-failed`, `build`, `golden`).
+- `increments/` — `fmp ingest-increments`: extends the vintage with yfinance bars and events, converted to
+  **raw** (spec §10), only on the configured writer host; the adapter appends them after the vintage's last bar.
+- `cli.py` — the `fmp` command line (`probe-free`, `plan`, `run`, `status`, `retry-failed`, `build`, `golden`,
+  `ingest-increments`).
 - `tests/mock_server.py` — offline mock of FMP `/stable` (spec §6.7) for the downloader test suite:
   `with MockFmpServer(MockConfig(...)) as fmp: client.get(fmp.base_url + "profile", ...)`.
 
@@ -78,6 +81,7 @@ task is deferred (D36).
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli build --no-switch  # build + validate, keep current.txt
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli golden capture     # hash get_ohlcv over the legacy cache
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli golden compare     # exit 1 on any difference
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli ingest-increments --symbols AAPL --timeframes 1d  # writer only
 ```
 
 Read through the DataManager once a vintage is built (after setting `fmp.adapter.enabled: true`):

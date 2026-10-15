@@ -14,6 +14,7 @@ from typing import Optional
 
 from src.data.fmp_pipeline.datamanager_adapter.adapter import FmpOhlcvAdapter
 from src.data.fmp_pipeline.datamanager_adapter.fmp_store import FmpStore
+from src.data.fmp_pipeline.increments.store import IncrementStore
 from src.data.fmp_pipeline.planner.config import load_config
 from src.notification.logger import setup_logger
 
@@ -49,5 +50,8 @@ def load_adapter(config_path: Optional[Path] = None) -> Optional[FmpOhlcvAdapter
     except (OSError, ValueError) as exc:
         _logger.error("FMP adapter enabled but no usable vintage under %s, adapter off: %s", data_root, exc)
         return None
-    _logger.info("FMP adapter on: vintage %s, timeframes %s", store.vintage, ", ".join(settings.timeframes))
-    return FmpOhlcvAdapter(store, timeframes=settings.timeframes, cache_entries=settings.cache_entries)
+    # Always attached: an empty or not-yet-created increment layer simply returns no bars.
+    increments = IncrementStore(data_root)
+    _logger.info("FMP adapter on: vintage %s, timeframes %s, increments %s", store.vintage,
+                 ", ".join(settings.timeframes), "present" if increments.root.is_dir() else "none yet")
+    return FmpOhlcvAdapter(store, increments, timeframes=settings.timeframes, cache_entries=settings.cache_entries)

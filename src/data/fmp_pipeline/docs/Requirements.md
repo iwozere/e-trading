@@ -17,7 +17,9 @@
 - `src.notification.logger` — `setup_logger`.
 - `src.data.data_manager` — hooks the adapter in front of the legacy flow (`_load_fmp_adapter`, D50); the golden
   snapshot drives `DataManager.get_ohlcv` offline.
-- Planned: `src.data.downloader.yahoo_data_downloader` (WP-9 increments), `src.data.pipeline` (job registration).
+- `src.data.downloader.yahoo_data_downloader` — `get_unadjusted_history` (WP-9; the only yfinance access).
+- `src.data.pipeline` — the disabled `FMP Increments Ingest` job (`specs/fmp_specs.py`).
+- `yfinance` (already in `requirements.txt`) — via the downloader; `yfinance.exceptions.YFRateLimitError`.
 
 ## External Services
 - Financial Modeling Prep `/stable` API. Free key now (probe, ≤ 200 calls); Premium for one month after gate G1.

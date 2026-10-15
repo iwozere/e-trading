@@ -163,23 +163,23 @@ def _volume(v: np.ndarray) -> pa.Array:
     return pa.array(np.where(mask, 0, np.round(v)).astype(np.int64), mask=mask)
 
 
-def daily_table(security_id: int, bars: Bars, flags: np.ndarray, vintage: str) -> pa.Table:
-    """Arrow table of ``prices_1d_raw`` for one security."""
+def daily_table(security_id: int, bars: Bars, flags: np.ndarray, vintage: str, source: str = SOURCE) -> pa.Table:
+    """Arrow table of ``prices_1d_raw`` for one security (``source`` is ``yfinance`` for increments)."""
     n = len(bars)
     return pa.table([pa.array(np.full(n, security_id, dtype=np.int64)), pa.array(bars.key, pa.date32()),
                      pa.array(bars.o), pa.array(bars.h), pa.array(bars.low), pa.array(bars.c), _volume(bars.v),
-                     pa.array(flags, pa.int32()), pa.array([SOURCE] * n, pa.string()),
+                     pa.array(flags, pa.int32()), pa.array([source] * n, pa.string()),
                      pa.array([vintage] * n, pa.string())], schema=DAILY_SCHEMA)
 
 
-def intraday_table(security_id: int, bars: Bars, flags: np.ndarray, vintage: str) -> pa.Table:
+def intraday_table(security_id: int, bars: Bars, flags: np.ndarray, vintage: str, source: str = SOURCE) -> pa.Table:
     """Arrow table of ``prices_1h_raw`` (or another interval) for one security."""
     n = len(bars)
     return pa.table([pa.array(np.full(n, security_id, dtype=np.int64)),
                      pa.array(bars.key, pa.timestamp("us")).cast(pa.timestamp("us", tz="UTC")),
                      pa.array(bars.dates, pa.date32()), pa.array(bars.o), pa.array(bars.h), pa.array(bars.low),
                      pa.array(bars.c), _volume(bars.v), pa.array(flags, pa.int32()),
-                     pa.array([SOURCE] * n, pa.string()), pa.array([vintage] * n, pa.string())],
+                     pa.array([source] * n, pa.string()), pa.array([vintage] * n, pa.string())],
                     schema=INTRADAY_SCHEMA)
 
 

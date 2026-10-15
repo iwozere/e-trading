@@ -1,6 +1,6 @@
 """
 ``fmp`` command-line entry point (spec §6.1): ``probe-free``, ``plan``, ``run``, ``status``, ``retry-failed``,
-``build``, ``golden``.
+``build``, ``golden``, ``ingest-increments``.
 
 Usage (PowerShell, from the project root)::
 
@@ -13,6 +13,7 @@ Usage (PowerShell, from the project root)::
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli retry-failed
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli build [--no-switch]
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli golden capture|compare
+    .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli ingest-increments [--timeframes 1d 1h] [--symbols ...]
 
 Exit codes: 0 done, 1 stopped (quota, auth, bandwidth, archive) or build rejected by structural validation,
 2 usage, lock or not planned, 3 not enough disk space.
@@ -288,6 +289,20 @@ def _golden(args: argparse.Namespace) -> int:
     return EXIT_OK if result.clean else EXIT_STOPPED
 
 
+def _ingest_increments(args: argparse.Namespace) -> int:
+    from src.data.fmp_pipeline.increments.ingest import IncrementIngester, NotTheWriter
+
+    config = load_config(args.config)
+    data_root = args.data_root or default_data_root()
+    try:
+        ingester = IncrementIngester(data_root, config)
+        report = ingester.run(args.symbols, args.timeframes, args.limit)
+    except (NotTheWriter, DumpLocked, FileNotFoundError) as exc:
+        _logger.error("%s", exc)
+        return EXIT_USAGE
+    return EXIT_OK if report.stop_reason == "done" else EXIT_STOPPED
+
+
 def _dump_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config", type=Path, default=None, help="Default: config/fmp/fmp.yaml")
     parser.add_argument("--dump-id", default=None, help="Overrides fmp.dump_id from the config")
@@ -355,6 +370,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     golden.add_argument("--data-root", type=Path, default=None, help="Default: DATA_CACHE_DIR/fmp-data")
     golden.add_argument("--symbols", nargs="*", default=None, help="Only these symbols")
     golden.set_defaults(handler=_golden)
+
+    ingest = commands.add_parser("ingest-increments",
+                                 help="Extend the active vintage with raw yfinance bars and events (spec §10; "
+                                      "only on fmp.increments.writer_host)")
+    ingest.add_argument("--config", type=Path, default=None, help="Default: config/fmp/fmp.yaml")
+    ingest.add_argument("--data-root", type=Path, default=None, help="Default: DATA_CACHE_DIR/fmp-data")
+    ingest.add_argument("--timeframes", nargs="+", default=["1d", "1h"], choices=("1d", "1h"))
+    ingest.add_argument("--symbols", nargs="*", default=None, help="Only these symbols (default: every alive one)")
+    ingest.add_argument("--limit", type=int, default=None, help="At most this many securities (trial runs)")
+    ingest.set_defaults(handler=_ingest_increments)
 
     args = parser.parse_args(argv)
     return int(args.handler(args))

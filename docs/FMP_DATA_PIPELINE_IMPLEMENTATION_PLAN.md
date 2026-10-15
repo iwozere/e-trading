@@ -4,7 +4,7 @@
 **Based on:** `docs/FMP_DATA_PIPELINE_SPEC-2.md` v1.1 (2026-10-11)
 **Status:** Phase 0a recon **done** (section 1). **WP-1 and WP-7 done 2026-10-14**: `src/data/fmp_pipeline/`
 exists with `adjust/` and `probe/`; results in `docs/fmp_probe_report.md` and `docs/decisions.md` (D13–D24).
-**WP-3 mock server, WP-2 client/manifest/downloader, WP-5 raw archive, WP-4 planner (`fmp plan`) `fmp run`/`status`/`retry-failed`, WP-6 builder (`fmp build`) and WP-8 DataManager adapter done** (D25–D55). Next: WP-9 increments, WP-A validators
+**WP-3 mock server, WP-2 client/manifest/downloader, WP-5 raw archive, WP-4 planner (`fmp plan`) `fmp run`/`status`/`retry-failed`, WP-6 builder (`fmp build`), WP-8 DataManager adapter and WP-9 increments done** (D25–D60). Next: WP-A validators (`fmp validate`, `fmp verify`)
 (section 10). Section 1 refutes two spec assumptions and must be read before
 any further code is written.
 

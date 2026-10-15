@@ -38,5 +38,10 @@ fmp:
     enabled: false               # keep false until WP-9 increments exist for live jobs (D50)
     data_root: ""                # "" = DATA_CACHE_DIR/fmp-data
     timeframes: [1d, 1h]         # served from FMP when the vintage has them; others stay on the legacy cache
+  increments:                    # yfinance increment layer (spec §10, D56–D60)
+    writer_host: ""              # host name of the ONE machine that ingests (owner decision Q4: the Pi); empty = nobody
+    timeframes: [1d, 1h]
+    overlap_days: 5              # re-downloaded only to verify stored bars, never to overwrite them
+    verify_tolerance: 0.02       # overlap close differences above this are reported
   reconciliation_size: 300
   reconciliation_fixed: [AAPL, MSFT, TSLA, AMZN, NVDA, GOOGL, JPM, XOM, KO, T, GE, BRK-B]

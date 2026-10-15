@@ -32,6 +32,7 @@ from typing import Dict, List
 
 from src.data.pipeline.base_plugin import PluginSpec
 from src.data.pipeline.specs.core_specs import SPECS as _CORE_SPECS
+from src.data.pipeline.specs.fmp_specs import SPECS as _FMP_SPECS
 from src.data.pipeline.specs.p05_specs import SPECS as _P05_SPECS
 from src.data.pipeline.specs.p10_specs import SPECS as _P10_SPECS
 from src.data.pipeline.specs.p15_specs import SPECS as _P15_SPECS
@@ -47,6 +48,7 @@ from src.data.pipeline.specs.strategy_pack_specs import SPECS as _STRATEGY_PACK_
 
 _GROUPS: List[List[PluginSpec]] = [
     _CORE_SPECS,
+    _FMP_SPECS,
     _P05_SPECS,
     _P10_SPECS,
     _P15_SPECS,
