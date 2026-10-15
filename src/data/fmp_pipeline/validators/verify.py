@@ -5,8 +5,8 @@ cancels the FMP subscription.
 1. V-COMPLETE passes and the plan's skips are listed (``budget_plan.md`` exists).
 2. No FAIL validator; every WARN is in the report.
 3. ``ARCHIVE.sha256`` and ``VINTAGE.sha256`` written (``sha256sum -c`` format, with file count and bytes); every
-   gzip member decompressed; the copy on the backup volume (``--backup``, mirroring the ``data_root`` layout)
-   matches; then the raw archive is made read-only; free disk space is adequate.
+   gzip member decompressed; the copy on the backup volume (``--backup``: a packed ``fmp backup`` or a plain copy
+   mirroring the ``data_root`` layout) matches; then the raw archive is made read-only; free disk space is adequate.
 4. The reconciliation sample and the V-ADJ-RECON result exist.
 5. V-REPRO passes.
 6. The adapter's backward-compatibility and new-source tests pass.
@@ -26,6 +26,7 @@ from typing import Optional
 from src.data.fmp_pipeline.fsutil import atomic_write_bytes, free_bytes
 from src.data.fmp_pipeline.planner.config import PROJECT_ROOT, PlanConfig
 from src.data.fmp_pipeline.planner.planner import planned_remaining
+from src.data.fmp_pipeline.transfer.packing import MANIFEST, verify_packed
 from src.data.fmp_pipeline.validators.checks_events import RECON_TABLE
 from src.data.fmp_pipeline.validators.checksums import (
     ARCHIVE_FILE,
@@ -174,6 +175,11 @@ class FinalVerifier:
 
     def _backup_errors(self, dump: str) -> list[str]:
         assert self.backup is not None
+        packed = self.backup / dump
+        if (packed / MANIFEST).exists():  # written by `fmp backup`: check every tar member, no unpacking
+            originals_dir = checksum_dir(self.data_root, dump)
+            return ([f"backup raw: {e}" for e in verify_packed(packed, "raw", originals_dir / ARCHIVE_FILE)]
+                    + [f"backup vintage: {e}" for e in verify_packed(packed, "vintage", originals_dir / VINTAGE_FILE)])
         originals = read_summary(checksum_dir(self.data_root, dump))
         copied = checksum_dir(self.backup, dump)
         errors = []

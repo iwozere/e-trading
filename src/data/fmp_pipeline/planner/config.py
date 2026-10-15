@@ -130,6 +130,20 @@ class IncrementsConfig:
 
 
 @dataclass(frozen=True)
+class SnapshotConfig:
+    """``fmp snapshot-universe`` sources (spec §12.1, free, no FMP key); every URL can be replaced in the YAML."""
+
+    nasdaq_listed_url: str = "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt"
+    other_listed_url: str = "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
+    sp500_url: str = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
+    nasdaq100_url: str = "https://en.wikipedia.org/wiki/List_of_NASDAQ-100_companies"
+    dow_url: str = "https://en.wikipedia.org/wiki/List_of_Dow_Jones_Industrial_Average_companies"
+    #: Wikimedia's policy requires a contact in the User-Agent (403 without one); the public repository URL serves.
+    user_agent: str = "e-trading-fmp-snapshot/1.0 (https://github.com/iwozere/e-trading)"
+    max_last_downloads: int = 500
+
+
+@dataclass(frozen=True)
 class PlanConfig:
     """Everything ``fmp plan`` needs."""
 
@@ -161,6 +175,7 @@ class PlanConfig:
     build: BuildConfig = field(default_factory=BuildConfig)
     adapter: AdapterConfig = field(default_factory=AdapterConfig)
     increments: IncrementsConfig = field(default_factory=IncrementsConfig)
+    snapshots: SnapshotConfig = field(default_factory=SnapshotConfig)
     #: Apply the settings measured by ``fmp probe-paid`` (and ``fmp calibrate-usage``) over this file's values.
     use_probe_results: bool = True
 

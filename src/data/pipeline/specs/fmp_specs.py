@@ -1,7 +1,7 @@
 """
 FMP historical data pipeline jobs — plugin specs (``src/data/fmp_pipeline``, spec §10.2.7).
 
-Registered **disabled**: the increment ingestion only makes sense on the one increment writer
+Both registered **disabled**. The increment ingestion only makes sense on the one increment writer
 (``fmp.increments.writer_host``, owner decision Q4: the Pi) once a vintage has been published there. Enable it in
 ``job_schedules`` on that machine only; the command itself refuses to run on any other host.
 """
@@ -23,5 +23,16 @@ SPECS: List[PluginSpec] = [
         timeout_seconds=6 * 3600,
         enabled=False,
         description="Extend the active FMP vintage with raw yfinance bars and events (writer host only)",
+    ),
+    PluginSpec(
+        name="FMP Universe Snapshot",
+        category="fmp",
+        # 1st of each month, 23:30 UTC (spec §12.1 recommends monthly). Needs no FMP key.
+        cron="30 23 1 * *",
+        script_path="src/data/fmp_pipeline/cli.py",
+        script_args=["snapshot-universe"],
+        timeout_seconds=2 * 3600,
+        enabled=False,
+        description="Store the US symbol directories and index lists, diff them, last-download removed symbols",
     ),
 ]

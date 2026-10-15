@@ -39,7 +39,7 @@ from src.data.fmp_pipeline.builders.prices import DAILY_ENDPOINT, PriceBuilder, 
 from src.data.fmp_pipeline.builders.records import build_tables
 from src.data.fmp_pipeline.builders.tables import INTRADAY_PREFIX, TABLES, covered_endpoints
 from src.data.fmp_pipeline.builders.validate import SECURITIES, validate_structure
-from src.data.fmp_pipeline.fsutil import atomic_write_bytes, replace_with_retry
+from src.data.fmp_pipeline.fsutil import atomic_write_bytes, replace_with_retry, swap_directory
 from src.data.fmp_pipeline.planner.config import PROJECT_ROOT, PlanConfig
 from src.data.fmp_pipeline.planner.planner import read_profiles, read_sources
 from src.data.fmp_pipeline.planner.universe import assemble_universe
@@ -270,14 +270,7 @@ class VintageBuilder:
     def _activate(self, tmp: Path) -> Path:
         """Replace ``vintages/<dump_id>/`` with the validated build."""
         final = self.vintages / self.dump_id
-        old = self.vintages / f".{self.dump_id}.old"
-        if old.exists():
-            shutil.rmtree(old)
-        if final.exists():
-            replace_with_retry(final, old)
-        replace_with_retry(tmp, final)
-        if old.exists():
-            shutil.rmtree(old)
+        swap_directory(tmp, final)
         return final
 
     def _reports(self, missing_splits: bytes, identity: IdentityResult) -> None:

@@ -53,13 +53,14 @@ only after every Phase 1 item below is done.
       depth, intraday split adjustment, lists, page caps, calendar windows, indicator names, ticker reuse →
       `docs/fmp_paid_probe_report.md` + `probe_results.json` applied by every command) and
       `fmp calibrate-usage --dashboard-gb X`; D66–D68 (2026-10-15)
+- [x] `fmp snapshot-universe` (free sources verified live, checksums, diff, last yfinance download of removed
+      symbols, disabled monthly job), `fmp backup`/`publish`/`sync` (packed tars, member-level verification at
+      the destination, READY-last, local swap then `current.txt`), drift report in `fmp build` and
+      `fmp archive-increments`; D69–D73 (2026-10-15)
 
 ### 🔄 IN PROGRESS
 
 ### 🚀 PLANNED ENHANCEMENTS
-- [ ] Drift report when the next vintage arrives and archiving of the increments it covers (spec §10.3)
-- [ ] `fmp publish` / sync of vintage and increments to readers (spec §10.4, Phase 5)
-- [ ] `fmp snapshot-universe` (spec §12.1, no FMP key), `fmp backup`, `fmp publish`, `fmp sync` (spec §6.1, §14)
 - [ ] Phase 4: run `fmp validate` on the real vintage; calibrate flag thresholds and the WARN levels on it
 - [ ] `docs/storage_schema.md` and `docs/runbook.md` (spec §13, Phase 5)
 

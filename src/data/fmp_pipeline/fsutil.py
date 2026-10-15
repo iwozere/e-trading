@@ -56,6 +56,25 @@ def replace_with_retry(
             delay *= 2
 
 
+def swap_directory(new: Path, final: Path) -> None:
+    """
+    Replace directory ``final`` with ``new`` by renames: the old one is moved aside, ``new`` renamed in, the old
+    one removed. A reader sees the old or the new tree, never a mix (vintage activation, ``fmp sync``).
+
+    Args:
+        new: The complete replacement (on the same volume as ``final``).
+        final: The directory to replace (need not exist).
+    """
+    old = final.with_name(f".{final.name}.old")
+    if old.exists():
+        shutil.rmtree(old)
+    if final.exists():
+        replace_with_retry(final, old)
+    replace_with_retry(new, final)
+    if old.exists():
+        shutil.rmtree(old)
+
+
 def atomic_write_bytes(path: Path, data: bytes) -> None:
     """
     Write ``data`` to ``path`` atomically: temp file in the same directory, fsync, then replace.

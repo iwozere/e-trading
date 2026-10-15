@@ -1,7 +1,8 @@
 """
 ``fmp`` command-line entry point (spec §6.1): ``probe-free``, ``plan``, ``run``, ``status``, ``retry-failed``,
 ``build``, ``golden``, ``ingest-increments``, ``validate``, ``verify``,
-``probe-paid``, ``calibrate-usage``.
+``probe-paid``, ``calibrate-usage``, ``snapshot-universe``, ``backup``,
+``publish``, ``sync``, ``archive-increments``.
 
 Usage (PowerShell, from the project root)::
 
@@ -18,6 +19,10 @@ Usage (PowerShell, from the project root)::
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli golden capture|compare
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli ingest-increments [--timeframes 1d 1h] [--symbols ...]
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli validate [--sample N] [--checks V-OHLC ...]
+    .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli snapshot-universe   # monthly, no FMP key needed
+    .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli backup --to \\\\nas\\fmp-backup
+    .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli publish --to R:\\fmp-handoff [--increments]
+    python -m src.data.fmp_pipeline.cli sync --from /mnt/handoff        # on the reader (Pi)
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli verify --final --backup E:\\fmp-backup [--confirm-postponed]
 
 Exit codes: 0 done, 1 stopped (quota, auth, bandwidth, archive) or build rejected by structural validation,
@@ -36,7 +41,7 @@ import sys
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -255,6 +260,7 @@ def _build(args: argparse.Namespace) -> int:
     except BuildFailed as exc:
         _logger.error("Build rejected, current vintage unchanged: %s", exc)
         return EXIT_STOPPED
+    _drift_after_build(paths.data_root, result)
     _logger.info("Vintage %s built at %s: %d securities (%d identity-uncertain), %d daily bars in %d files, "
                  "%d output files%s; unbuilt endpoints: %s", config.dump_id, result.vintage_dir, result.securities,
                  result.uncertain, result.daily.bars, result.daily.securities, len(result.outputs),
@@ -401,6 +407,91 @@ def _calibrate_usage(args: argparse.Namespace) -> int:
     return EXIT_OK if result.basis else EXIT_STOPPED
 
 
+def _snapshot_universe(args: argparse.Namespace) -> int:
+    from src.data.fmp_pipeline.snapshots.universe import UniverseSnapshot
+
+    data_root = args.data_root or default_data_root()
+    config = _config(args, data_root)
+    report = UniverseSnapshot(data_root, config.snapshots, download_removed=not args.no_download).run()
+    _logger.info("Snapshot written to %s", report.directory)
+    return EXIT_STOPPED if report.errors else EXIT_OK
+
+
+def _backup(args: argparse.Namespace) -> int:
+    from src.data.fmp_pipeline.transfer.commands import backup
+
+    config, paths = _setup(args)
+    try:
+        with exclusive_lock(paths.lock), keep_awake():
+            result = backup(paths.data_root, config.dump_id, args.to)
+    except (FileNotFoundError, DumpLocked) as exc:
+        _logger.error("%s", exc)
+        return EXIT_USAGE
+    for error in result.errors[:20]:
+        _logger.error("Backup check: %s", error)
+    return EXIT_STOPPED if result.errors else EXIT_OK
+
+
+def _publish(args: argparse.Namespace) -> int:
+    from src.data.fmp_pipeline.transfer.commands import publish
+
+    config, paths = _setup(args)
+    try:
+        with exclusive_lock(paths.lock), keep_awake():
+            result = publish(paths.data_root, config.dump_id, args.to, args.increments)
+    except (FileNotFoundError, DumpLocked) as exc:
+        _logger.error("%s", exc)
+        return EXIT_USAGE
+    for error in result.errors[:20]:
+        _logger.error("Publish check: %s", error)
+    return EXIT_STOPPED if result.errors else EXIT_OK
+
+
+def _sync(args: argparse.Namespace) -> int:
+    from src.data.fmp_pipeline.transfer.commands import sync
+
+    data_root = args.data_root or default_data_root()
+    try:
+        with exclusive_lock(data_root / "locks" / "sync.lock"):
+            result = sync(data_root, getattr(args, "from"), args.dump_id, args.increments, not args.no_switch)
+    except (FileNotFoundError, DumpLocked) as exc:
+        _logger.error("%s", exc)
+        return EXIT_USAGE
+    for error in result.errors[:20]:
+        _logger.error("Sync check: %s", error)
+    return EXIT_STOPPED if result.errors else EXIT_OK
+
+
+def _drift_after_build(data_root: Path, result: Any) -> None:
+    """Spec §10.3: after switching to a new vintage, report how far the earlier increments drifted from it."""
+    from src.data.fmp_pipeline.datamanager_adapter.fmp_store import FmpStore
+    from src.data.fmp_pipeline.increments.drift import drift_report, has_earlier_increments
+
+    dump_id = result.vintage_dir.name
+    if not result.switched or not has_earlier_increments(data_root, dump_id):
+        return
+    md, _ = drift_report(data_root, FmpStore(data_root, dump_id)).write(data_root / "reports" / dump_id)
+    _logger.info("Drift of the earlier increments against %s: %s (then run `fmp archive-increments` on the "
+                 "increment writer)", dump_id, md)
+
+
+def _archive_increments(args: argparse.Namespace) -> int:
+    from src.data.fmp_pipeline.increments.drift import archive_increments
+    from src.data.fmp_pipeline.increments.ingest import NotTheWriter, check_writer
+
+    data_root = args.data_root or default_data_root()
+    config = _config(args, data_root)
+    try:
+        check_writer(config.increments.writer_host)
+        with exclusive_lock(data_root / "locks" / "increments.lock"):
+            result = archive_increments(data_root)
+    except (NotTheWriter, DumpLocked, FileNotFoundError) as exc:
+        _logger.error("%s", exc)
+        return EXIT_USAGE
+    _logger.info("Archived %d bars and %d events from %d files", result.bars, result.events, result.files)
+    return EXIT_OK
+
+
 def _dump_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config", type=Path, default=None, help="Default: config/fmp/fmp.yaml")
     parser.add_argument("--dump-id", default=None, help="Overrides fmp.dump_id from the config")
@@ -443,6 +534,40 @@ def main(argv: Optional[list[str]] = None) -> int:
     calibrate.add_argument("--window-days", type=int, default=30)
     calibrate.add_argument("--data-root", type=Path, default=None, help="Default: DATA_CACHE_DIR/fmp-data")
     calibrate.set_defaults(handler=_calibrate_usage)
+
+    snapshot = commands.add_parser("snapshot-universe", help="Store today's US symbol directories and index lists "
+                                                             "(spec §12.1; no FMP key) and diff them")
+    snapshot.add_argument("--config", type=Path, default=None, help="Default: config/fmp/fmp.yaml")
+    snapshot.add_argument("--data-root", type=Path, default=None, help="Default: DATA_CACHE_DIR/fmp-data")
+    snapshot.add_argument("--no-download", action="store_true",
+                          help="Skip the last yfinance download for removed symbols")
+    snapshot.set_defaults(handler=_snapshot_universe)
+
+    backup = commands.add_parser("backup", help="Pack the raw archive and vintage onto a backup volume and verify "
+                                                "the copy there (spec §14)")
+    _dump_options(backup)
+    backup.add_argument("--to", type=Path, required=True, help="Backup root (NAS share, USB disk)")
+    backup.set_defaults(handler=_backup)
+
+    publish = commands.add_parser("publish", help="Stage the vintage (and increments) for readers; READY when verified")
+    _dump_options(publish)
+    publish.add_argument("--to", type=Path, required=True, help="Hand-off root (owner decision Q3'': R:)")
+    publish.add_argument("--increments", action="store_true", help="Also publish the increment layer")
+    publish.set_defaults(handler=_publish)
+
+    sync = commands.add_parser("sync", help="On a reader: install the newest READY publication and switch current.txt")
+    sync.add_argument("--from", type=Path, required=True, help="Hand-off root that holds publish/")
+    sync.add_argument("--data-root", type=Path, default=None, help="Default: DATA_CACHE_DIR/fmp-data")
+    sync.add_argument("--dump-id", default=None, help="A specific publication (default: the newest READY one)")
+    sync.add_argument("--increments", action="store_true", help="Also replace the local increment layer")
+    sync.add_argument("--no-switch", action="store_true", help="Install but leave current.txt alone")
+    sync.set_defaults(handler=_sync)
+
+    retire = commands.add_parser("archive-increments", help="Move increments the active vintage now covers to "
+                                                            "increments/archive/ (spec §10.3; writer host only)")
+    retire.add_argument("--config", type=Path, default=None, help="Default: config/fmp/fmp.yaml")
+    retire.add_argument("--data-root", type=Path, default=None, help="Default: DATA_CACHE_DIR/fmp-data")
+    retire.set_defaults(handler=_archive_increments)
 
     plan = commands.add_parser("plan", help="Fetch universe lists, plan tasks, project bandwidth -> budget_plan.md")
     plan.add_argument("--dry-run", action="store_true", help="Write the reports but add no tasks to the manifest")

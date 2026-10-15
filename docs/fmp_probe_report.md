@@ -160,9 +160,9 @@ Spec §4.3 asks Phase 1 to build everything in §6–§12 and §14. These **are 
 |---|---|---|
 | `fmp probe-paid` | §4.4, §6.1 | **Built 2026-10-15** (D66–D68): answers every "Requires paid probe" item above in one unattended run; `fmp plan` applies its settings |
 | `fmp calibrate-usage --dashboard-gb X` | App. A Q2 | **Built 2026-10-15**: decides wire vs decoded counting once a few GB were fetched |
-| `fmp snapshot-universe` | §12.1 | Survivorship protection after cancellation (no FMP key needed) |
-| `fmp backup`, `fmp publish`, `fmp sync` | §6.1, §14 | Pack and copy to the NAS and the Pi; `verify --final` already checks a manual copy |
-| Drift report and archiving of old increments | §10.3 | Needed when the next vintage arrives |
+| `fmp snapshot-universe` | §12.1 | **Built 2026-10-15** (D69–D71), sources verified live |
+| `fmp backup`, `fmp publish`, `fmp sync` | §6.1, §14 | **Built 2026-10-15** (D72) |
+| Drift report and archiving of old increments | §10.3 | **Built 2026-10-15** (D73): in `fmp build` and `fmp archive-increments` |
 | `docs/storage_schema.md`, `docs/runbook.md` | §9.3, §12.2, §13 | Owner documentation |
 
 

@@ -9,8 +9,8 @@ specification: `docs/FMP_DATA_PIPELINE_SPEC-2.md`; build plan: `docs/FMP_DATA_PI
 downloader), WP-5 (raw archive), WP-4 (planner, `fmp plan`), `fmp run` / `status` / `retry-failed`, WP-6
 (builder, `fmp build`), WP-8 (DataManager adapter, off by default), WP-9 (yfinance increments) and WP-A
 (validators, `fmp validate`, `fmp verify --final`) are done, and the probe report's `[VERIFY]` items are audited.
-`fmp probe-paid` and `fmp calibrate-usage` are built. Still missing from spec §6.1: `fmp snapshot-universe`,
-`fmp backup`/`publish`/`sync` and the drift report (see Tasks). Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
+`fmp probe-paid`, `fmp calibrate-usage`, `fmp snapshot-universe`, `fmp backup`/`publish`/`sync`, the drift report
+and `fmp archive-increments` are built: every command of spec §6.1 exists. Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
 FMP Premium before gate G1.
 
 ## Features
@@ -45,8 +45,14 @@ FMP Premium before gate G1.
 - `probe/` — `fmp probe-free` (Phase 0b) and `fmp probe-paid` (Phase 2: everything the free key could not answer;
   writes `docs/fmp_paid_probe_report.md` and `probe_results.json`, whose settings every command applies);
   `fmp calibrate-usage --dashboard-gb X` settles whether the 50 GB cap counts wire or decoded bytes.
+- `snapshots/` — `fmp snapshot-universe`: monthly, no FMP key; US symbol directories and index lists with checksums,
+  a diff against the last snapshot, and one last yfinance download of every removed symbol.
+- `transfer/` — `fmp backup` (packed, verified copy on the NAS/USB), `fmp publish` (hand-off folder, `READY` when
+  verified) and `fmp sync` (reader installs and switches `current.txt`).
+- `increments/drift.py` — the drift report `fmp build` writes for a new vintage, and `fmp archive-increments`.
 - `cli.py` — the `fmp` command line (`probe-free`, `probe-paid`, `calibrate-usage`, `plan`, `run`, `status`,
-  `retry-failed`, `build`, `golden`, `ingest-increments`, `validate`, `verify`).
+  `retry-failed`, `build`, `golden`, `ingest-increments`, `archive-increments`, `validate`, `verify`,
+  `snapshot-universe`, `backup`, `publish`, `sync`).
 - `tests/mock_server.py` — offline mock of FMP `/stable` (spec §6.7) for the downloader test suite:
   `with MockFmpServer(MockConfig(...)) as fmp: client.get(fmp.base_url + "profile", ...)`.
 
@@ -100,6 +106,10 @@ task is deferred (D36).
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli ingest-increments --symbols AAPL --timeframes 1d  # writer only
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli validate --cache-dir D:\data-cache   # exit 1 on any FAIL
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli verify --final --backup E:\fmp-backup --confirm-postponed
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli snapshot-universe        # monthly; no FMP key
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli backup --to E:\fmp-backup  # packed + verified there
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli publish --to R:\fmp-handoff
+python -m src.data.fmp_pipeline.cli sync --from /path/to/fmp-handoff            # on the Pi
 ```
 
 `verify --final` first writes `checksums/<dump_id>/ARCHIVE.sha256` and `VINTAGE.sha256`; copy `raw/<dump_id>`,

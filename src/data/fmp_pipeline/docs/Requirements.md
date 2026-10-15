@@ -8,6 +8,7 @@
 - `pyarrow` >= 25.0.1 — `builders/` (Parquet), `tzdata` — zoneinfo rules for intraday time on Windows
 - `duckdb` >= 1.5.6 — `datamanager_adapter/fmp_store.bulk_daily` (imported lazily; owner decision Q6, D55)
 - `pandas_market_calendars` >= 5.4.0 — `validators/scan.py` NYSE sessions and early closes (in `requirements.txt`)
+- `lxml` >= 5.0 — `snapshots/universe.py` index tables via `pandas.read_html` (in `requirements-fmp-reader.txt`)
 - `pytest` — V-ADJ-UNIT and `verify --final` item 6 run test modules in a subprocess (dev environment)
 - Tests: `pytest-asyncio` (in `requirements-dev.txt`)
 - Profiles (plan §9.2): `requirements-fmp-reader.txt` (Pi: numpy, pandas, pyarrow, tzdata) and
@@ -24,6 +25,8 @@
 - `yfinance` (already in `requirements.txt`) — via the downloader; `yfinance.exceptions.YFRateLimitError`.
 
 ## External Services
+- Free, no key (`fmp snapshot-universe`): nasdaqtrader.com symbol directories, the GitHub
+  `datasets/s-and-p-500-companies` CSV, Wikipedia (identifying User-Agent required, D69).
 - Financial Modeling Prep `/stable` API. Free key now (probe, ≤ 200 calls); Premium for one month after gate G1.
   Free key: 250 calls/day, per-symbol entitlement list, 500 MB/30 days. Premium: 750 calls/min, 50 GB/30 days.
 
