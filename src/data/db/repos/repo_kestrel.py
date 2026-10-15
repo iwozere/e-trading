@@ -134,9 +134,17 @@ class KestrelRepo:
     # ------------------------------------------------------------------
 
     def upsert_sentiment(self, rows: List[Dict[str, Any]]) -> int:
-        """Upsert sentiment rows (PK: ticker, date, source). Returns row count."""
+        """
+        Upsert sentiment rows (PK: ticker, date, source). Returns row count.
+
+        Rows may carry different column subsets (e.g. StockTwits sets ``bullish_ratio``, ApeWisdom does
+        not); a multi-row VALUES insert needs identical keys, so missing columns are padded with None —
+        the same NULL an omitted column would get, since none of these columns has a default.
+        """
         if not rows:
             return 0
+        keys = {k for row in rows for k in row}
+        rows = [{k: row.get(k) for k in keys} for row in rows]
         update_cols = [
             "mentions",
             "avg_tone",
