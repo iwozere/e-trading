@@ -84,6 +84,15 @@ projection, and runs one `Downloader` per block (archive sink, `FollowUps` revie
 optional `--max-gb` limit) until done or the first run-level stop (D43). `status.py` renders progress from
 `Manifest.totals()` and reads the manifest without recovering `running` tasks (D44).
 
+**`builders/`** — `VintageBuilder.build` (``builder.py``): universe from the archive (same rules as the planner,
+`read_sources`/`read_profiles`) → `IdentityBuilder` (``identity.py``: ids from the append-only `IdRegistry`,
+reuse segmentation, symbol history, `resolve(symbol, date)`) → `build_events` (``events.py``) → `PriceBuilder`
+(``prices.py``: per symbol, newest response per request key, window check, one bar per date, clipping to segments,
+`compute_flags` from ``flags.py``, one Parquet file per security) → securities and history → the generic
+`RecordTableBuilder` (``records.py``) for every `TableSpec` in ``tables.py`` → `validate_structure`
+(``validate.py``) → `build_info.json`, registry save, directory swap, `current.txt`. Parquet writing is in
+``parquet_io.py`` (fixed settings, no timestamps in the files, so rebuilds are byte-identical). D45–D49.
+
 ### Error handling
 - `adjust()` raises `ValueError` on contradictory or impossible inputs rather than repairing them (D11, D16).
 - The probe treats budget exhaustion as "skip and continue" (cached calls still resolve) and a quota message as
@@ -115,13 +124,15 @@ yfinance (auto_adjust=False, actions) --> yfinance_to_raw --> raw bars (+ raw-ba
 ```
 
 ## Design Decisions
-See `docs/decisions.md` (D12–D44). The ones shaping this module most:
+See `docs/decisions.md` (D12–D49). The ones shaping this module most:
 - D13: restate `C_prev` on the ex-date's share basis. A dividend on a split date is otherwise wrong by the ratio.
 - D19/D20: FMP `dividend` is raw; `non-split-adjusted` carries **raw** prices under `adj*` field names.
 - D24: the probe client is deliberately separate from the WP-2 production client.
 - D28/D33: sink-then-manifest plus torn-tail repair make kill-and-resume lose nothing and corrupt nothing.
 - D36/D37: planning is iterative (decide only what the data allows) and windows sit on fixed grids, so re-running
   `fmp plan` is always safe and never duplicates work.
+- D46/D48: `security_id`s come from an append-only registry saved only after a validated build, and a vintage
+  becomes active only by a directory swap followed by `current.txt`, so a failed build changes nothing.
 
 ## Integration Patterns
 - The API key is resolved only through `src.config.provider_config.get_api_key`.

@@ -18,15 +18,15 @@ date window, so it must not drift between plans (task ids would change).
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
 from src.data.fmp_pipeline.archive.archive import SUFFIX, RawArchive
-from src.data.fmp_pipeline.archive.reader import SUCCESS_CLASSIFICATIONS, iter_records, latest_successful
-from src.data.fmp_pipeline.archive.symbol_path import decode_symbol, endpoint_dir
+from src.data.fmp_pipeline.archive.lists import first_row, latest_records, merged_pages, symbol_files
+from src.data.fmp_pipeline.archive.reader import SUCCESS_CLASSIFICATIONS
+from src.data.fmp_pipeline.archive.symbol_path import NO_SYMBOL, endpoint_dir
 from src.data.fmp_pipeline.client.fmp_client import FmpClient
 from src.data.fmp_pipeline.fsutil import atomic_write_bytes, free_bytes
 from src.data.fmp_pipeline.manifest.manifest import Manifest, TaskSpec, task_id
@@ -182,50 +182,59 @@ class Planner:
 
     # --- reading back from the archive -----------------------------------------------------------------------
 
-    def _records(self, path: Path) -> Iterable[dict[str, Any]]:
-        return iter_records(path, strict=False) if path.exists() else ()
-
     def _read_sources(self) -> tuple[dict[str, Optional[list[Any]]], dict[str, str]]:
         """Return ``{endpoint: all pages' rows or None}`` and a status text per bootstrap endpoint."""
-        rows_by_endpoint: dict[str, list[str]] = {}
-        for row in self.manifest.task_rows([e.endpoint for e in BOOTSTRAP]):
-            rows_by_endpoint.setdefault(row["endpoint"], []).append(row["status"])
-        sources: dict[str, Optional[list[Any]]] = {}
-        status: dict[str, str] = {}
-        for entry in BOOTSTRAP:
-            statuses = rows_by_endpoint.get(entry.endpoint, [])
-            latest = latest_successful(self._records(self.archive.path_for(entry.endpoint, None)))
-            pages = sorted(latest.values(), key=lambda r: int(r["request"]["params"].get("page", 0)))
-            body: Optional[list[Any]] = None
-            previous: Any = None
-            for record in pages:
-                part = record.get("body")
-                if body is not None and part == previous:
-                    continue  # an endpoint that ignores `page` repeats itself (see FollowUps)
-                previous = part
-                body = (body or []) + (part if isinstance(part, list) else [part] if isinstance(part, dict) else [])
-            sources[entry.endpoint] = body
-            status[entry.endpoint] = _source_status(statuses)
-        return sources, status
+        return read_sources(self.archive.dump_dir, self.manifest)
 
     def _read_profiles(self) -> dict[str, Optional[dict[str, Any]]]:
         """Return ``{symbol: profile row or None}`` for every symbol whose profile task is finished."""
-        finished = self.manifest.symbols_finished("profile")
-        profiles: dict[str, Optional[dict[str, Any]]] = dict.fromkeys(finished)
-        folder = self.archive.dump_dir / endpoint_dir("profile")
-        for path in sorted(folder.glob("*" + SUFFIX)) if folder.exists() else []:
-            try:
-                symbol = decode_symbol(path.name[: -len(SUFFIX)])
-            except ValueError:
-                _logger.warning("Ignoring archive file with a non-canonical name: %s", path)
-                continue
-            if symbol is None or symbol not in profiles:
-                continue
-            for record in latest_successful(self._records(path)).values():
-                body = record.get("body")
-                row = body[0] if isinstance(body, list) and body else body
-                profiles[symbol] = row if isinstance(row, dict) and row else None
-        return profiles
+        return read_profiles(self.archive.dump_dir, self.manifest.symbols_finished("profile"))
+
+
+def read_sources(dump_dir: Path, manifest: Optional[Manifest] = None
+                 ) -> tuple[dict[str, Optional[list[Any]]], dict[str, str]]:
+    """
+    Read every bootstrap list back from the archive.
+
+    Args:
+        dump_dir: ``<raw_root>/<dump_id>``.
+        manifest: Used only for the status text per list; without it the status says what the archive holds.
+
+    Returns:
+        ``({endpoint: all pages' rows, or None if nothing successful is archived}, {endpoint: status text})``.
+    """
+    statuses: dict[str, list[str]] = {}
+    if manifest is not None:
+        for row in manifest.task_rows([e.endpoint for e in BOOTSTRAP]):
+            statuses.setdefault(row["endpoint"], []).append(row["status"])
+    sources: dict[str, Optional[list[Any]]] = {}
+    status: dict[str, str] = {}
+    for entry in BOOTSTRAP:
+        rows, used = merged_pages(dump_dir / endpoint_dir(entry.endpoint) / (NO_SYMBOL + SUFFIX))
+        sources[entry.endpoint] = rows
+        status[entry.endpoint] = (_source_status(statuses.get(entry.endpoint, [])) if manifest is not None
+                                  else f"{len(used)} archived responses")
+    return sources, status
+
+
+def read_profiles(dump_dir: Path, finished: Optional[set[str]] = None) -> dict[str, Optional[dict[str, Any]]]:
+    """
+    Read the newest successful ``profile`` of each symbol from the archive.
+
+    Args:
+        dump_dir: ``<raw_root>/<dump_id>``.
+        finished: Only these symbols (all of them present in the result, ``None`` when nothing usable was
+            archived); ``None`` means every archived profile file.
+
+    Returns:
+        ``{symbol: profile row or None}``.
+    """
+    profiles: dict[str, Optional[dict[str, Any]]] = dict.fromkeys(finished) if finished is not None else {}
+    for entry in symbol_files(dump_dir, "profile"):
+        if finished is not None and entry.symbol not in finished:
+            continue
+        profiles[entry.symbol] = first_row(latest_records(entry.path))
+    return profiles
 
 
 def _source_status(statuses: list[str]) -> str:

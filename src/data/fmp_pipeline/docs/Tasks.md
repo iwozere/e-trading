@@ -30,13 +30,16 @@ only after every Phase 1 item below is done.
 - [x] `fmp run` (`executor.py`: block-by-block in spec order, `--phase`/`--tier`/`--max-gb`, disk check per block
       from the plan's projection, `power.keep_awake`), `fmp status` (`status.py`, read-only), `fmp retry-failed`;
       D43–D44 (2026-10-14)
+- [x] WP-6 builder (`builders/`) + `fmp build [--no-switch]`: universe and stable `security_id`s
+      (`security_ids.json`, reuse segmentation behind a flag, symbol history), splits/dividends, raw daily and
+      intraday Parquet per security with the five flags and `missing_splits_candidates.csv`, every other endpoint
+      as a lossless record table (`_extra`), structural validation, temp dir + atomic `current.txt` switch,
+      `build_info.json` with per-file sha256; plan → run → build chain on the mock; D45–D49 (2026-10-15)
 
 ### 🔄 IN PROGRESS
 - [ ] `docs/datamanager_integration.md` — write up plan §1 with the full legacy-caller list (G1 item)
 
 ### 🚀 PLANNED ENHANCEMENTS
-- [ ] WP-6 builder: per-endpoint field mapping (D20), int/float casting, nullable `declarationDate`, future
-      `delistedDate`s (F13), non-US exchange filter
 - [ ] WP-8 DataManager adapter + golden-output snapshot of the 797 cached symbols
 - [ ] WP-9 yfinance increments (needs a narrow `auto_adjust=False` method on `YahooDataDownloader`)
 - [ ] WP-A validators, `fmp verify --final`
@@ -51,6 +54,10 @@ only after every Phase 1 item below is done.
       `fmp status` exists.
 - [ ] Optional `fmp run --replan`: re-plan offline after blocks 0 and 3 so one command can run a whole dump.
 - [ ] `probe_client` is synchronous and single-purpose by design (D24); do not reuse it for the bulk download.
+- [ ] Flag thresholds (D45) are the spec defaults: calibrate on a sample of the real dump and record in
+      decisions.md; `STALE` for 1h (35 bars) is a guess.
+- [ ] Turn on `build.segment_reused_tickers` only after the paid probe answers §4.2 item 8 (D46).
+- [ ] Optional consolidated yearly price partitions if DuckDB globbing over ~30k files is slow (spec §7.1).
 
 ## Known Issues
 - Mock assumptions not yet verifiable (free key): quota body shape, Premium page-size cap, intraday row cap
@@ -61,6 +68,8 @@ only after every Phase 1 item below is done.
 - Field names of `stock-list`, `actively-trading-list`, `etf-list`, `symbol-change` and the constituent lists are
   unverified (402 on the free key); `planner/universe.py` accepts the common spellings. Check
   `universe_report.md` after the first paid `fmp plan`, including the "Exchanges seen" table.
+- Intraday time zone and bar label (`build.intraday_tz`, `build.intraday_label`) are assumptions until the paid
+  probe's DST-week check (spec §8.4).
 - The probe-derived `profile` fixture has every boolean set (ETF, fund and ADR at once); tests that need a plain
   stock inject their own profile through `MockConfig.extra_fixtures`.
 
@@ -75,6 +84,10 @@ only after every Phase 1 item below is done.
       — package total 354 tests; planner modules 97–100%
 - [x] Executor/status/retry tests (block order, tier scope, `--max-gb`, disk refusal, unplanned dump, status
       reader during a live run, CLI exit codes, sleep suppression) — package total 365 tests, 99%
+- [x] Builder tests: every flag with synthetic hits and near misses, id registry stability, segmentation on/off,
+      rename chains, lossless record tables, window drops, DST conversion, clipping, structural validation,
+      rejected builds, byte-identical rebuild, mock plan → run → build, CLI — package total 404 tests, 99%
 
 ## Documentation Updates
-- [ ] `docs/storage_schema.md`, `docs/runbook.md` (WP-6, Phase 5)
+- [ ] `docs/storage_schema.md` (vintage tables and columns, `_extra`, flags, `security_id` rules; partly in
+      `builders/` docstrings now), `docs/runbook.md` (Phase 5)

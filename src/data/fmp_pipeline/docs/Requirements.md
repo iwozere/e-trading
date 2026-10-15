@@ -5,9 +5,10 @@
 - `httpx` >= 0.28.1 — `probe/`, `client/` (in `requirements.txt`)
 - `sqlite3` (stdlib) — `manifest/`; `gzip`, `zlib` (stdlib) — `archive/`
 - `PyYAML` >= 6.0.3 — `planner/config.py` (in `requirements.txt`)
+- `pyarrow` >= 25.0.1 — `builders/` (Parquet), `tzdata` — zoneinfo rules for intraday time on Windows
 - Tests: `pytest-asyncio` (in `requirements-dev.txt`)
-- Planned (plan §9.2): `pyarrow`, `duckdb` (owner decision Q6), `tzdata`, optionally `orjson`, split into
-  `requirements-fmp-reader.txt` (Pi) and `requirements-fmp-pipeline.txt` (laptop).
+- Profiles (plan §9.2): `requirements-fmp-reader.txt` (Pi: numpy, pandas, pyarrow, tzdata) and
+  `requirements-fmp-pipeline.txt` (laptop: reader + httpx, PyYAML). `duckdb` (Q6) joins the reader with WP-8.
 
 ## External Dependencies
 - `src.config.provider_config` — FMP API key resolution (env var, then `donotshare`).
@@ -36,4 +37,6 @@
 
 ## Performance Requirements
 - `adjust()` is vectorized (`numpy.searchsorted` + suffix products): O((bars + events) log events).
-- Spec §13 targets (builder, Pi reads) apply from WP-6/WP-8 on.
+- `fmp build` holds one security's bars at a time; the events tables and the securities list (~100k rows) are the
+  only whole tables in memory. Record tables stream in batches of `build.batch_rows` (50k). Spec §13: < 4 GB RSS.
+- Pi read targets (spec §9.5) apply from WP-8 on.

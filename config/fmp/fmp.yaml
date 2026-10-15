@@ -30,5 +30,9 @@ fmp:
     # Normalized codes (upper case, no spaces/dashes/dots). Check universe_report.md "Exchanges seen" after the
     # first paid plan and add any US venue FMP spells differently.
     include_exchanges: [NASDAQ, NYSE, AMEX, NYSEAMERICAN, NYSEARCA, ARCA, BATS, CBOE, CBOEBZX]
+  build:                         # fmp build (spec §7); full list of keys in planner/config.py BuildConfig
+    intraday_tz: America/New_York  # zone of FMP's intraday `date` strings [VERIFY in the paid probe, spec §8.4]
+    intraday_label: start          # start | end: what the timestamp labels [VERIFY]
+    segment_reused_tickers: false  # true only after the paid probe shows merged series for reused tickers (D46)
   reconciliation_size: 300
   reconciliation_fixed: [AAPL, MSFT, TSLA, AMZN, NVDA, GOOGL, JPM, XOM, KO, T, GE, BRK-B]

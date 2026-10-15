@@ -1,5 +1,6 @@
 """
-``fmp`` command-line entry point (spec §6.1): ``probe-free``, ``plan``, ``run``, ``status``, ``retry-failed``.
+``fmp`` command-line entry point (spec §6.1): ``probe-free``, ``plan``, ``run``, ``status``, ``retry-failed``,
+``build``.
 
 Usage (PowerShell, from the project root)::
 
@@ -10,12 +11,14 @@ Usage (PowerShell, from the project root)::
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli run [--phase N] [--tier T] [--max-gb G]
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli status
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli retry-failed
+    .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli build [--no-switch]
 
-Exit codes: 0 done, 1 stopped (quota, auth, bandwidth, archive), 2 usage, lock or not planned,
-3 not enough disk space.
+Exit codes: 0 done, 1 stopped (quota, auth, bandwidth, archive) or build rejected by structural validation,
+2 usage, lock or not planned, 3 not enough disk space.
 
 Layout under ``data_root`` (``DATA_CACHE_DIR/fmp-data``): ``raw/<dump_id>/`` archive, ``manifests/<dump_id>.sqlite``,
-``reports/<dump_id>/`` plan reports, ``locks/<dump_id>.lock`` (one writer per dump).
+``reports/<dump_id>/`` plan and build reports, ``locks/<dump_id>.lock`` (one writer per dump), ``vintages/<dump_id>/``
+Parquet vintages, ``current.txt`` (active vintage) and ``security_ids.json`` (stable id registry).
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.fmp_pipeline.archive.archive import RawArchive  # noqa: E402
+from src.data.fmp_pipeline.builders.builder import BuildFailed, VintageBuilder  # noqa: E402
 from src.data.fmp_pipeline.client.fmp_client import FmpClient  # noqa: E402
 from src.data.fmp_pipeline.client.rate_limiter import AsyncRateLimiter  # noqa: E402
 from src.data.fmp_pipeline.errors import DumpLocked, InsufficientDiskSpace  # noqa: E402
@@ -85,6 +89,7 @@ class DumpPaths:
             data_root: Pipeline data root.
             dump_id: Dump id.
         """
+        self.data_root = data_root
         self.raw_root = data_root / "raw"
         self.manifest = data_root / "manifests" / f"{dump_id}.sqlite"
         self.reports = data_root / "reports" / dump_id
@@ -212,6 +217,32 @@ def _retry_failed(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _build(args: argparse.Namespace) -> int:
+    config, paths = _setup(args)
+    if not paths.manifest.exists():
+        _logger.error("No manifest for dump %s at %s; run `fmp plan` first", config.dump_id, paths.manifest)
+        return EXIT_USAGE
+    with Manifest(paths.manifest, config.dump_id, recover=False) as manifest:
+        as_of = manifest.meta("as_of")
+    if as_of is None:
+        _logger.error("Dump %s was never planned (no as_of); run `fmp plan` first", config.dump_id)
+        return EXIT_USAGE
+    try:
+        with exclusive_lock(paths.lock), keep_awake():
+            result = VintageBuilder(paths.data_root, config, date.fromisoformat(as_of)).build(switch=not args.no_switch)
+    except (DumpLocked, FileNotFoundError) as exc:
+        _logger.error("%s", exc)
+        return EXIT_USAGE
+    except BuildFailed as exc:
+        _logger.error("Build rejected, current vintage unchanged: %s", exc)
+        return EXIT_STOPPED
+    _logger.info("Vintage %s built at %s: %d securities (%d identity-uncertain), %d daily bars in %d files, "
+                 "%d output files%s; unbuilt endpoints: %s", config.dump_id, result.vintage_dir, result.securities,
+                 result.uncertain, result.daily.bars, result.daily.securities, len(result.outputs),
+                 ", current.txt switched" if result.switched else "", ", ".join(result.unbuilt) or "none")
+    return EXIT_OK
+
+
 def _dump_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config", type=Path, default=None, help="Default: config/fmp/fmp.yaml")
     parser.add_argument("--dump-id", default=None, help="Overrides fmp.dump_id from the config")
@@ -264,6 +295,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     retry = commands.add_parser("retry-failed", help="Re-queue failed tasks for the next `fmp run`")
     _dump_options(retry)
     retry.set_defaults(handler=_retry_failed)
+
+    build = commands.add_parser("build", help="Build the Parquet vintage from the raw archive (no network)")
+    _dump_options(build)
+    build.add_argument("--no-switch", action="store_true", help="Build and validate, but leave current.txt alone")
+    build.set_defaults(handler=_build)
 
     args = parser.parse_args(argv)
     return int(args.handler(args))

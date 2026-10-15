@@ -1,0 +1,4 @@
+# FMP pipeline, writer profile (Windows laptop): probe, plan, run, build. Plan §9.2.
+-r requirements-fmp-reader.txt
+httpx>=0.28.1
+PyYAML>=6.0.3

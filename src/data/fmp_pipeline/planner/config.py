@@ -1,5 +1,5 @@
 """
-Planner configuration (spec Appendix B, §6.3, §6.5, §7.2), loaded from ``config/fmp/fmp.yaml``.
+Pipeline configuration (spec Appendix B, §6.3, §6.5, §7.2, §7.5), loaded from ``config/fmp/fmp.yaml``.
 
 Every field has a default, so a missing file or a missing key falls back to the spec's values. Numbers the paid
 probe has not measured yet (intraday row cap, bars per day, intraday bytes per row) default to ``None`` or to an
@@ -64,6 +64,36 @@ class UniverseConfig:
 
 
 @dataclass(frozen=True)
+class FlagConfig:
+    """Suspect-data flag thresholds (spec §7.5). Defaults are the spec's; calibrate and record in decisions.md."""
+
+    spike_min_return: float = 0.35
+    spike_z: float = 8.0
+    spike_lookback: int = 60
+    spike_min_history: int = 20
+    spike_revert_ratio: float = 0.5
+    event_window: int = 2
+    jump_ratios: tuple[float, ...] = (2.0, 3.0, 4.0, 5.0, 10.0, 1.5, 0.5, 1 / 3, 0.25, 0.2, 0.1, 2 / 3)
+    jump_tolerance: float = 0.03
+    stale_bars_daily: int = 5
+    stale_bars_intraday: int = 35
+
+
+@dataclass(frozen=True)
+class BuildConfig:
+    """``fmp build`` settings (spec §7). Intraday time zone and label are [VERIFY] by the paid probe (§8.4)."""
+
+    intraday_tz: str = "America/New_York"
+    intraday_label: str = "start"
+    segment_reused_tickers: bool = False
+    zstd_level: int = 6
+    row_group_rows: int = 100_000
+    batch_rows: int = 50_000
+    schema_sample_files: int = 500
+    flags: FlagConfig = field(default_factory=FlagConfig)
+
+
+@dataclass(frozen=True)
 class PlanConfig:
     """Everything ``fmp plan`` needs."""
 
@@ -92,6 +122,7 @@ class PlanConfig:
     bandwidth: BandwidthConfig = field(default_factory=BandwidthConfig)
     intraday: IntradayConfig = field(default_factory=IntradayConfig)
     universe: UniverseConfig = field(default_factory=UniverseConfig)
+    build: BuildConfig = field(default_factory=BuildConfig)
 
 
 def _coerce(target: Any, value: Any) -> Any:
@@ -159,4 +190,6 @@ def load_config(path: Optional[Path] = None) -> PlanConfig:
     config = _merge(PlanConfig(), section, "fmp.")
     if config.bandwidth.basis not in ("wire", "decoded"):
         raise ValueError("fmp.bandwidth.basis must be 'wire' or 'decoded'")
+    if config.build.intraday_label not in ("start", "end"):
+        raise ValueError("fmp.build.intraday_label must be 'start' or 'end'")
     return config

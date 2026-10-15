@@ -5,8 +5,9 @@ One-off, resumable download of FMP Premium history (raw prices, corporate events
 symbols) into an immutable Parquet "vintage", plus read-time adjustment and a yfinance increment layer. Full
 specification: `docs/FMP_DATA_PIPELINE_SPEC-2.md`; build plan: `docs/FMP_DATA_PIPELINE_IMPLEMENTATION_PLAN.md`.
 
-**Status (2026-10-14):** WP-1 (free-key probe), WP-7 (`adjust()`), WP-3 (mock server), WP-2 (client, manifest,
-downloader), WP-5 (raw archive), WP-4 (planner, `fmp plan`) and `fmp run` / `status` / `retry-failed` are done. Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
+**Status (2026-10-15):** WP-1 (free-key probe), WP-7 (`adjust()`), WP-3 (mock server), WP-2 (client, manifest,
+downloader), WP-5 (raw archive), WP-4 (planner, `fmp plan`), `fmp run` / `status` / `retry-failed` and WP-6
+(builder, `fmp build`) are done. Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
 FMP Premium before gate G1.
 
 ## Features
@@ -25,7 +26,11 @@ FMP Premium before gate G1.
   into `budget_plan.md`. `FollowUps` is the run-time reviewer for paging and intraday truncation.
 - `executor.py` — `fmp run`: the planned tasks block by block in spec order, with a disk check per block, an
   optional per-run byte limit and Windows sleep suppression (`power.py`). `status.py` — `fmp status`.
-- `cli.py` — the `fmp` command line (`probe-free`, `plan`, `run`, `status`, `retry-failed`).
+- `builders/` — `fmp build`: archive → Parquet vintage `vintages/<dump_id>/` (spec §7): securities with stable
+  ids (`security_ids.json`), symbol history, splits/dividends, raw daily/intraday prices per security with the
+  suspect-data `flags` bitmask, every other endpoint as a lossless table (`_extra`), `_meta/build_info.json`.
+  Switches `current.txt` only after structural validation passes.
+- `cli.py` — the `fmp` command line (`probe-free`, `plan`, `run`, `status`, `retry-failed`, `build`).
 - `tests/mock_server.py` — offline mock of FMP `/stable` (spec §6.7) for the downloader test suite:
   `with MockFmpServer(MockConfig(...)) as fmp: client.get(fmp.base_url + "profile", ...)`.
 
@@ -65,7 +70,13 @@ task is deferred (D36).
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli run --max-gb 5   # stop this run after 5 GB
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli status           # safe while a run is going
 .venv\Scripts\python.exe -m src.data.fmp_pipeline.cli retry-failed     # re-queue failed tasks
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli build            # vintage from the archive, no network
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli build --no-switch  # build + validate, keep current.txt
 ```
+
+`fmp build` writes `reports/<dump_id>/missing_splits_candidates.csv` (probable missing splits, for review; nothing
+is inserted) and `identity_uncertain.csv` (suspected ticker reuse, renames with duplicate history). Exit code 1
+means the build was rejected by structural validation and left in `vintages/.<dump_id>.rejected/`.
 
 A typical dump: `plan` → `run` → `plan` (profiles resolve the universe) → `run` → `plan` (intraday windows from
 the daily bars) → `run`, until `budget_plan.md` shows no deferred tasks. Exit codes: 0 done, 1 stopped (quota,
