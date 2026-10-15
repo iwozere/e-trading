@@ -271,3 +271,23 @@ def test_spec_aapl_dividend_2020_08_07():
     assert out["close"].iloc[0] == pytest.approx(455.61 / 4 * df)
     assert out["close"].iloc[1] == pytest.approx(444.45 / 4)
     assert out["close"].iloc[3] == pytest.approx(129.04)
+
+
+def test_event_dates_of_any_dtype_are_floored_to_midnight():
+    expected = np.array(["1965-03-01", "2024-01-04"], dtype="datetime64[ns]")
+    for column in (["1965-03-01 15:30", "2024-01-04 00:00"],
+                   pd.to_datetime(["1965-03-01 15:30", "2024-01-04 00:00"]),
+                   pd.to_datetime(["1965-03-01 15:30", "2024-01-04 00:00"]).tz_localize("America/New_York")):
+        events = normalize_splits(pd.DataFrame({"date": column, "numerator": [2, 3], "denominator": [1, 1]}))
+        assert (events.dates == expected).all() and list(events.ratios) == [2.0, 3.0]
+    index = pd.DatetimeIndex(["1965-03-01 09:30", "1965-03-01 23:59", "2024-01-04 00:00"])
+    assert (bar_dates(index) == np.array(["1965-03-01", "1965-03-01", "2024-01-04"], dtype="datetime64[ns]")).all()
+
+
+def test_normalized_events_are_sorted_and_deduplicated():
+    splits = normalize_splits(_splits(("2024-03-01", 2, 1), ("2020-01-02", 4, 1), ("2024-03-01", 2, 1)))
+    assert list(pd.to_datetime(splits.dates).date.astype(str)) == ["2020-01-02", "2024-03-01"]
+    assert list(splits.ratios) == [4.0, 2.0]
+    dividends = normalize_dividends(_dividends(("2024-03-01", 0.5), ("2020-01-02", 0.1), ("2024-03-01", 0.2),
+                                               ("2024-03-01", 0.5)))
+    assert list(dividends.amounts) == [0.1, 0.2, 0.5] and len(dividends.dates) == 3

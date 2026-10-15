@@ -182,6 +182,11 @@ def test_cli_run_status_and_retry(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         with Manifest(manifest_path, "c") as manifest:
             assert "pending" not in manifest.counts()
             assert any(e[1] == "retry_failed" for e in manifest.events())
+    logs = sorted((tmp_path / "logs" / "c").glob("run-*.jsonl"))
+    records = [json.loads(line) for path in logs for line in path.read_text(encoding="utf-8").splitlines()]
+    events = {r["event"] for r in records}
+    assert logs and {"run_start", "block_start", "request", "progress", "run_stop", "stop"} <= events
+    assert any(r["event"] == "progress" and r["final"] for r in records)
 
 
 def test_cli_run_without_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

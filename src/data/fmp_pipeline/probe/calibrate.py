@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -68,7 +69,9 @@ def local_usage(data_root: Path, window_days: int = 30, now: Optional[datetime] 
     wire = decoded = missing = 0
     sources = []
     for manifest in sorted((data_root / "manifests").glob("*.sqlite")) if (data_root / "manifests").is_dir() else []:
-        with sqlite3.connect(f"file:{manifest.as_posix()}?mode=ro", uri=True) as db:
+        # closing(): a sqlite3 connection used as a context manager only commits, it is not closed (an open
+        # handle keeps the file locked on Windows).
+        with closing(sqlite3.connect(f"file:{manifest.as_posix()}?mode=ro", uri=True)) as db:
             row = db.execute("SELECT COALESCE(SUM(bytes_wire), 0), COALESCE(SUM(bytes_decoded), 0) "
                              "FROM bandwidth_log WHERE ts >= ?", (cutoff,)).fetchone()
         wire, decoded = wire + int(row[0]), decoded + int(row[1])

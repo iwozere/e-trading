@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import json
+import warnings
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -169,6 +171,18 @@ def test_local_usage_reads_manifests_and_ledgers(tmp_path: Path):
     assert (usage.wire, usage.decoded, usage.ledger_lines_without_decoded) == (115, 770, 1)
     assert usage.sources == ("d.sqlite", "probe-paid/ledger.jsonl")
     assert local_usage(tmp_path / "empty", 30, now).wire == 0
+
+
+def test_local_usage_closes_the_manifest_connection(tmp_path: Path):
+    with Manifest(tmp_path / "manifests" / "d.sqlite", "d") as manifest:
+        manifest.record_bandwidth(1, 7)
+    gc.collect()  # objects other tests leaked must not be blamed on this call
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", ResourceWarning)
+        local_usage(tmp_path)
+        gc.collect()
+    assert not [w for w in caught if issubclass(w.category, ResourceWarning) and "sqlite3.Connection" in str(w.message)]
+    (tmp_path / "manifests" / "d.sqlite").unlink()  # no handle left open (Windows would refuse)
 
 
 # --- the whole probe against the mock --------------------------------------------------------------------------

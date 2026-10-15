@@ -31,6 +31,7 @@ from typing import Literal, Optional, Union
 from src.data.fmp_pipeline.client.fmp_client import FetchResult, FmpClient
 from src.data.fmp_pipeline.errors import ArchiveUnavailable, AuthAbort, QuotaExhausted
 from src.data.fmp_pipeline.manifest.manifest import Manifest, Task, TaskSpec
+from src.data.fmp_pipeline.run_log import RunLog
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -116,6 +117,7 @@ class Downloader:
         max_priority: Optional[int] = None,
         min_priority: Optional[int] = None,
         tier: Optional[str] = None,
+        run_log: Optional[RunLog] = None,
     ) -> None:
         """
         Args:
@@ -129,6 +131,8 @@ class Downloader:
             max_priority: Only claim tasks up to this priority (``fmp plan`` fetches its source lists this way).
             min_priority: Only claim tasks from this priority on (``fmp run`` works one block at a time).
             tier: Only claim tasks of this tier (``fmp run --tier``).
+            run_log: Structured run log (spec §13): a record per finished task and a progress summary every
+                ``run_log.interval_s`` seconds while the run lasts.
         """
         self._manifest = manifest
         self._client = client
@@ -141,6 +145,7 @@ class Downloader:
         self._tier = tier
         self._stop: Optional[str] = None
         self._summary = RunSummary()
+        self._run_log = run_log
         client.on_bytes = self._on_bytes
 
     def _on_bytes(self, bytes_wire: int, bytes_decoded: int) -> None:
@@ -155,12 +160,24 @@ class Downloader:
             Counts and the stop reason (``done``, ``quota``, ``auth``, ``bandwidth``, ``archive``).
         """
         self._manifest.log_event("run_start", f"workers={self._workers} recovered={self._manifest.recovered}")
-        await asyncio.gather(*(self._worker(i) for i in range(self._workers)))
+        ticker = asyncio.create_task(self._ticker()) if self._run_log is not None else None
+        try:
+            await asyncio.gather(*(self._worker(i) for i in range(self._workers)))
+        finally:
+            if ticker is not None:
+                ticker.cancel()
         self._summary.stop_reason = self._stop or "done"
         self._manifest.log_event("run_stop", self._summary.stop_reason)
         _logger.info("Download run stopped (%s): %d tasks, %s", self._summary.stop_reason, self._summary.processed,
                      self._summary.by_status)
         return self._summary
+
+    async def _ticker(self) -> None:
+        """Write a progress summary every ``interval_s`` seconds, also while no task finishes (a stalled run)."""
+        assert self._run_log is not None
+        while True:
+            await asyncio.sleep(self._run_log.interval_s)
+            self._run_log.progress(self._manifest, self._guard)
 
     async def _worker(self, worker_id: int) -> None:
         while self._stop is None:
@@ -174,6 +191,7 @@ class Downloader:
             await self._process(worker_id, claimed[0])
 
     async def _process(self, worker_id: int, task: Task) -> None:
+        started = time.monotonic()
         try:
             result = await self._client.fetch(task.endpoint, task.request_params)
         except QuotaExhausted as exc:
@@ -186,7 +204,7 @@ class Downloader:
             return
         except ValueError as exc:
             self._manifest.fail(task, f"invalid request: {exc}")
-            self._count("failed")
+            self._finish(worker_id, task, "failed", started, error=f"invalid request: {exc}")
             return
 
         if self._reviewer is not None:
@@ -203,16 +221,22 @@ class Downloader:
         except Exception as exc:  # noqa: BLE001 - a sink failure must fail this task, not the whole run
             _logger.exception("Worker %d: sink failed for %s %s", worker_id, task.endpoint, task.symbol)
             self._manifest.fail(task, f"sink error: {exc}")
-            self._count("failed")
+            self._finish(worker_id, task, "failed", started, result, f"sink error: {exc}")
             return
-        self._count(self._manifest.complete(task, result, sha256))
+        self._finish(worker_id, task, self._manifest.complete(task, result, sha256), started, result)
 
-    def _count(self, status: str) -> None:
+    def _finish(self, worker_id: int, task: Task, status: str, started: float,
+                result: Optional[FetchResult] = None, error: str = "") -> None:
+        """Count a finished task and log it to the run log."""
         self._summary.processed += 1
         self._summary.by_status[status] = self._summary.by_status.get(status, 0) + 1
+        if self._run_log is not None:
+            self._run_log.request(worker_id, task, status, time.monotonic() - started, result, error)
 
     def _halt(self, reason: str, detail: str) -> None:
         if self._stop is None:
             self._stop = reason
             self._manifest.log_event(f"stop_{reason}", detail)
+            if self._run_log is not None:
+                self._run_log.write("stop", reason=reason, detail=detail)
             _logger.error("Stopping download run: %s", detail)

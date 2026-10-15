@@ -97,6 +97,18 @@ fmp status                    # progress, rolling 30-day GB against the cap, ETA
 fmp retry-failed              # re-queue failed/retryable tasks, then run again
 ```
 
+Every run prints a progress line once a minute: tasks done, requests per minute, pending tasks, ETA, and
+bandwidth against the hard stop. It also writes `logs\<dump_id>\run-<UTC start>.jsonl`: one JSON record per
+request (endpoint, symbol, status, rows, bytes, duration, error) plus the progress records. To see what failed,
+for example:
+
+```powershell
+$root = "d:\data-cache\fmp-data"   # your data_root
+Get-Content (Get-ChildItem $root\logs\2026-10\run-*.jsonl | Select-Object -Last 1) |
+  ConvertFrom-Json | Where-Object { $_.event -eq "request" -and $_.status -ne "ok" } |
+  Group-Object endpoint, status | Sort-Object Count -Descending
+```
+
 - **Interrupted** (crash, restart, Ctrl+C): run the same command again. The manifest resumes, and nothing is
   duplicated or lost.
 - **Stops on its own** (exit 1), each with a clear log message:

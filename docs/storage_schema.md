@@ -24,6 +24,7 @@ the laptop. `--data-root` overrides it, and so does `fmp.adapter.data_root` for 
   reports/<dump_id>/                           plan, build, validation and drift reports
   checksums/<dump_id>/                         ARCHIVE.sha256, VINTAGE.sha256 (sha256sum -c format)
   probe-free/, probe-paid/                     cached probe responses and ledgers (laptop only)
+  logs/<dump_id>/run-<UTC start>.jsonl         fmp run: one JSON record per request + minute progress (laptop only)
   locks/                                       one-writer locks (dump, increments, sync)
 ```
 

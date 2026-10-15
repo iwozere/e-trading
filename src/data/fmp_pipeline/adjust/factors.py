@@ -19,6 +19,10 @@ Two clarifications of §8.2 made here (recorded in ``docs/decisions.md``):
 
 Comparisons are made on calendar dates (the bar timestamp normalized to midnight, wall-clock time for
 tz-aware indexes), so the same code serves daily and intraday bars.
+
+Everything below works on numpy arrays: event tables hold a handful of rows, and pandas' per-call overhead
+(frame construction, ``normalize`` with frequency inference, ``drop_duplicates``) used to cost ~10 ms per
+security, most of a whole-history read.
 """
 
 from __future__ import annotations
@@ -66,7 +70,32 @@ def bar_dates(index: pd.Index) -> np.ndarray:
         raise TypeError(f"expected a DatetimeIndex, got {type(index).__name__}")
     if index.tz is not None:
         index = index.tz_localize(None)
-    return index.normalize().to_numpy(dtype="datetime64[ns]")
+    return _midnight(index.to_numpy(dtype="datetime64[ns]"))
+
+
+def _midnight(values: np.ndarray) -> np.ndarray:
+    """Floor ``datetime64`` values to midnight (numpy floors toward the past, also before 1970)."""
+    return values.astype("datetime64[D]").astype("datetime64[ns]")
+
+
+def _event_dates(column: pd.Series) -> np.ndarray:
+    """An event table's ``date`` column as tz-naive midnight ``datetime64[ns]`` values."""
+    values = column.to_numpy()
+    if values.dtype.kind != "M":
+        converted = pd.to_datetime(column)
+        if isinstance(converted.dtype, pd.DatetimeTZDtype):
+            converted = converted.dt.tz_localize(None)
+        values = converted.to_numpy(dtype="datetime64[ns]")
+    return _midnight(values.astype("datetime64[ns]"))
+
+
+def _unique_rows(dates: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Sort by ``(date, value)`` and collapse exact duplicate rows."""
+    order = np.lexsort((values, dates))
+    dates, values = dates[order], values[order]
+    keep = np.ones(len(dates), dtype=bool)
+    keep[1:] = (dates[1:] != dates[:-1]) | (values[1:] != values[:-1])
+    return dates[keep], values[keep]
 
 
 def normalize_splits(splits: Optional[pd.DataFrame]) -> SplitEvents:
@@ -85,20 +114,17 @@ def normalize_splits(splits: Optional[pd.DataFrame]) -> SplitEvents:
     if splits is None or splits.empty:
         return SplitEvents(np.array([], dtype="datetime64[ns]"), np.array([], dtype=float))
     _require_columns(splits, SPLIT_COLUMNS, "splits")
-    frame = pd.DataFrame(
-        {
-            "date": pd.to_datetime(splits["date"]).dt.normalize(),
-            "ratio": splits["numerator"].astype(float) / splits["denominator"].astype(float),
-        }
-    )
-    bad = frame[~np.isfinite(frame["ratio"]) | (frame["ratio"] <= 0)]
-    if not bad.empty:
-        raise ValueError(f"invalid split ratio on {list(bad['date'].dt.date)}")
-    frame = frame.drop_duplicates().sort_values("date", kind="stable")
-    conflicts = frame[frame["date"].duplicated(keep=False)]
-    if not conflicts.empty:
-        raise ValueError(f"conflicting split ratios on {sorted(set(conflicts['date'].dt.date))}")
-    return SplitEvents(frame["date"].to_numpy(dtype="datetime64[ns]"), frame["ratio"].to_numpy(dtype=float))
+    dates = _event_dates(splits["date"])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratios = splits["numerator"].to_numpy(dtype=float) / splits["denominator"].to_numpy(dtype=float)
+    bad = ~np.isfinite(ratios) | (ratios <= 0)
+    if bad.any():
+        raise ValueError(f"invalid split ratio on {list(pd.to_datetime(dates[bad]).date)}")
+    dates, ratios = _unique_rows(dates, ratios)
+    same_day = dates[1:] == dates[:-1]
+    if same_day.any():
+        raise ValueError(f"conflicting split ratios on {sorted(set(pd.to_datetime(dates[1:][same_day]).date))}")
+    return SplitEvents(dates, ratios)
 
 
 def normalize_dividends(dividends: Optional[pd.DataFrame]) -> DividendEvents:
@@ -120,17 +146,12 @@ def normalize_dividends(dividends: Optional[pd.DataFrame]) -> DividendEvents:
     if dividends is None or dividends.empty:
         return DividendEvents(np.array([], dtype="datetime64[ns]"), np.array([], dtype=float))
     _require_columns(dividends, DIVIDEND_COLUMNS, "dividends")
-    frame = pd.DataFrame(
-        {
-            "date": pd.to_datetime(dividends["date"]).dt.normalize(),
-            "amount": dividends["amount"].astype(float),
-        }
-    )
-    bad = frame[~np.isfinite(frame["amount"]) | (frame["amount"] < 0)]
-    if not bad.empty:
-        raise ValueError(f"invalid dividend amount on {list(bad['date'].dt.date)}")
-    frame = frame.drop_duplicates().sort_values("date", kind="stable")
-    return DividendEvents(frame["date"].to_numpy(dtype="datetime64[ns]"), frame["amount"].to_numpy(dtype=float))
+    dates = _event_dates(dividends["date"])
+    amounts = dividends["amount"].to_numpy(dtype=float)
+    bad = ~np.isfinite(amounts) | (amounts < 0)
+    if bad.any():
+        raise ValueError(f"invalid dividend amount on {list(pd.to_datetime(dates[bad]).date)}")
+    return DividendEvents(*_unique_rows(dates, amounts))
 
 
 def split_adj_factor(dates: np.ndarray, splits: SplitEvents) -> np.ndarray:
@@ -216,13 +237,28 @@ def adjustment_factors(
     Raises:
         ValueError: If the index is not ascending, or on invalid events (see the normalizers).
     """
+    split_factor, div_factor = factor_arrays(prices_raw, splits, dividends, reference_closes)
+    return pd.DataFrame({"split_factor": split_factor, "div_factor": div_factor}, index=prices_raw.index)
+
+
+def factor_arrays(
+    prices_raw: pd.DataFrame,
+    splits: Optional[pd.DataFrame] = None,
+    dividends: Optional[pd.DataFrame] = None,
+    reference_closes: Optional[pd.Series] = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    ``adjustment_factors`` as two float arrays ``(split_factor, div_factor)`` aligned with ``prices_raw``.
+
+    Same arguments, rules and errors; ``adjust()`` uses this form to avoid building a frame.
+    """
     if not prices_raw.index.is_monotonic_increasing:
         raise ValueError("prices_raw index must be sorted ascending")
     dates = bar_dates(prices_raw.index)
     split_events = normalize_splits(splits)
     dividend_events = normalize_dividends(dividends)
     if len(dates) == 0:
-        return pd.DataFrame({"split_factor": [], "div_factor": []}, index=prices_raw.index, dtype=float)
+        return np.array([], dtype=float), np.array([], dtype=float)
 
     last = dates[-1]
     keep = split_events.dates <= last
@@ -231,19 +267,13 @@ def adjustment_factors(
     dividend_events = DividendEvents(dividend_events.dates[keep], dividend_events.amounts[keep])
 
     if reference_closes is not None:
-        ref = reference_closes.sort_index()
+        ref = reference_closes if reference_closes.index.is_monotonic_increasing else reference_closes.sort_index()
         close_dates, closes = bar_dates(ref.index), ref.to_numpy(dtype=float)
     else:
         close_dates, closes = dates, prices_raw["close"].to_numpy(dtype=float)
 
     df_per_event = dividend_factors(split_events, dividend_events, close_dates, closes)
-    return pd.DataFrame(
-        {
-            "split_factor": split_adj_factor(dates, split_events),
-            "div_factor": _suffix_product_after(dates, dividend_events.dates, df_per_event),
-        },
-        index=prices_raw.index,
-    )
+    return split_adj_factor(dates, split_events), _suffix_product_after(dates, dividend_events.dates, df_per_event)
 
 
 def _suffix_product_after(dates: np.ndarray, event_dates: np.ndarray, event_factors: np.ndarray) -> np.ndarray:

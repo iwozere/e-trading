@@ -25,6 +25,7 @@ from src.data.fmp_pipeline.planner.config import PlanConfig
 from src.data.fmp_pipeline.planner.follow_ups import FollowUps
 from src.data.fmp_pipeline.planner.planner import bandwidth_guard, planned_remaining
 from src.data.fmp_pipeline.planner.universe import TIERS
+from src.data.fmp_pipeline.run_log import RunLog
 from src.data.fmp_pipeline.runner import GB, Downloader, RunSummary
 from src.notification.logger import setup_logger
 
@@ -124,13 +125,14 @@ class DumpExecutor:
         need = int(sum(projected.get(b, 0) for b in blocks) * self.config.archive_overhead)
         return ensure_free_space(self.archive.raw_root, need)
 
-    async def run(self, client: FmpClient, scope: RunScope) -> RunReport:
+    async def run(self, client: FmpClient, scope: RunScope, run_log: Optional[RunLog] = None) -> RunReport:
         """
         Run every block in scope, in order, until done or a run-level stop.
 
         Args:
             client: FMP client (its ``on_bytes`` hook is taken over by each block's ``Downloader``).
             scope: Blocks and tier to run.
+            run_log: Structured run log (spec §13); ``fmp run`` always passes one.
 
         Returns:
             Per-block summaries and the stop reason.
@@ -143,19 +145,27 @@ class DumpExecutor:
         blocks = scope.blocks()
         self._warn_on_skipped_order(blocks)
         reviewer = FollowUps(self.manifest, self.config)
+        if run_log is not None:
+            run_log.write("run_start", blocks=blocks, tier=scope.tier, workers=self.workers,
+                          basis=self.guard.basis, run_limit_bytes=self.guard.run_limit_bytes)
         for i, block in enumerate(blocks):
             free = self.check_disk(blocks[i:])
             _logger.info("Block %d (%s): starting, %.1f GB free on the archive volume", block, BLOCKS[block],
                          free / GB)
+            if run_log is not None:
+                run_log.write("block_start", block=block, name=BLOCKS[block], free_bytes=free)
             downloader = Downloader(self.manifest, client, sink=self.archive, workers=self.workers, guard=self.guard,
                                     reviewer=reviewer, min_priority=block * 100, max_priority=block * 100 + 99,
-                                    tier=scope.tier)
+                                    tier=scope.tier, run_log=run_log)
             summary = await downloader.run()
             report.blocks[block] = summary
             if summary.stop_reason != "done":
                 report.stop_reason = summary.stop_reason
                 break
         report.run_bytes = self.guard.run_used
+        if run_log is not None:
+            run_log.progress(self.manifest, self.guard, final=True)
+            run_log.write("run_stop", reason=report.stop_reason, processed=report.processed, run_bytes=report.run_bytes)
         _logger.info("Run stopped (%s): %d tasks, %.2f GB (%s) this run", report.stop_reason, report.processed,
                      report.run_bytes / GB, self.config.bandwidth.basis)
         return report

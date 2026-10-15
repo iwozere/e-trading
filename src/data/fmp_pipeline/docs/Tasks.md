@@ -57,6 +57,11 @@ only after every Phase 1 item below is done.
       symbols, disabled monthly job), `fmp backup`/`publish`/`sync` (packed tars, member-level verification at
       the destination, READY-last, local swap then `current.txt`), drift report in `fmp build` and
       `fmp archive-increments`; D69–D73 (2026-10-15)
+- [x] JSON-lines run log of `fmp run` with a per-request record and a progress summary every minute (also while
+      stalled), `logs/<dump_id>/run-*.jsonl`; numpy fast path in `adjust()` (~5× faster); D74–D75 (2026-10-15)
+- [x] Flaky-test hunt: 10 full runs green (plain, coverage, 6 parallel workers) plus 4 more with ResourceWarnings
+      on. Found and fixed a leaked SQLite connection in `calibrate.local_usage` (`with sqlite3.connect()` commits
+      but never closes; an open handle locks the file on Windows), with a regression test (2026-10-15)
 - [x] `docs/storage_schema.md` (layout, every table and column, flags, increments, snapshots, read semantics for
       backtests) and `docs/runbook.md` (purchase to cancellation, routine, 2029 repeat dump, troubleshooting)
       (2026-10-15)
@@ -71,16 +76,12 @@ only after every Phase 1 item below is done.
       paid probe if 1h depth is per-symbol and much shorter than daily.
 - [ ] `fmp plan` reads every profile file back from the archive on each run (~30k small files); cache resolved
       attributes in the manifest if that becomes slow.
-- [ ] Structured JSON-lines logging and the once-a-minute progress summary during `fmp run` (spec §13);
-      `fmp status` exists.
 - [ ] Optional `fmp run --replan`: re-plan offline after blocks 0 and 3 so one command can run a whole dump.
 - [ ] `probe_client` is synchronous and single-purpose by design (D24); do not reuse it for the bulk download.
 - [ ] Flag thresholds (D45) are the spec defaults: calibrate on a sample of the real dump and record in
       decisions.md; `STALE` for 1h (35 bars) is a guess.
 - [ ] Turn on `build.segment_reused_tickers` only after the paid probe answers §4.2 item 8 (D46).
 - [ ] Optional consolidated yearly price partitions if DuckDB globbing over ~30k files is slow (spec §7.1).
-- [ ] `adjust()` spends ~14 ms per security normalizing tiny event tables (pandas overhead); a numpy fast path
-      would make large `get_ohlcv_batch` calls several times faster.
 - [ ] Enable the adapter for live jobs only where increments are current (writer host or synced reader).
 - [ ] First real `ingest-increments` on the Pi: check run time for ~30k securities (batches of 50, 2 s pause)
       and Yahoo throttling, then tune `batch_size`/`pause_s`.

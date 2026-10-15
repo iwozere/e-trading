@@ -82,7 +82,9 @@ is non-empty, daily bounds into the manifest, truncated intraday windows relabel
 **`executor.py`** — `DumpExecutor.run` loops over the blocks of a `RunScope`, checks disk space against the plan's
 projection, and runs one `Downloader` per block (archive sink, `FollowUps` reviewer, shared guard with the
 optional `--max-gb` limit) until done or the first run-level stop (D43). `status.py` renders progress from
-`Manifest.totals()` and reads the manifest without recovering `running` tasks (D44).
+`Manifest.totals()` and reads the manifest without recovering `running` tasks (D44). `run_log.py` (D74): the
+executor and every `Downloader` write to one `RunLog`; a ticker task in `Downloader.run` writes the minute
+summary, `_finish` the per-request record.
 
 **`builders/`** — `VintageBuilder.build` (``builder.py``): universe from the archive (same rules as the planner,
 `read_sources`/`read_profiles`) → `IdentityBuilder` (``identity.py``: ids from the append-only `IdRegistry`,

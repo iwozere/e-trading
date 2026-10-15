@@ -58,6 +58,7 @@ from src.data.fmp_pipeline.planner.config import PlanConfig, load_config  # noqa
 from src.data.fmp_pipeline.planner.planner import Planner  # noqa: E402
 from src.data.fmp_pipeline.planner.projection import GB  # noqa: E402
 from src.data.fmp_pipeline.power import keep_awake  # noqa: E402
+from src.data.fmp_pipeline.run_log import RunLog, run_log_path  # noqa: E402
 from src.data.fmp_pipeline.probe.free_probe import FreeProbe  # noqa: E402
 from src.data.fmp_pipeline.probe.probe_client import ProbeClient  # noqa: E402
 from src.data.fmp_pipeline.probe.report import render_report, write_fixtures, write_report  # noqa: E402
@@ -175,9 +176,10 @@ def _plan(args: argparse.Namespace) -> int:
     return EXIT_OK if stop_reason == "done" else EXIT_STOPPED
 
 
-async def _execute(executor: DumpExecutor, api_key: str, config: PlanConfig, scope: RunScope) -> RunReport:
+async def _execute(executor: DumpExecutor, api_key: str, config: PlanConfig, scope: RunScope,
+                   run_log: Optional[RunLog] = None) -> RunReport:
     async with _client(api_key, config) as client:
-        return await executor.run(client, scope)
+        return await executor.run(client, scope, run_log)
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -198,7 +200,12 @@ def _run(args: argparse.Namespace) -> int:
         with exclusive_lock(paths.lock), Manifest(paths.manifest, config.dump_id) as manifest, keep_awake():
             executor = DumpExecutor(manifest, RawArchive(paths.raw_root, config.dump_id), config,
                                     max_gb=args.max_gb, workers=args.workers)
-            report = asyncio.run(_execute(executor, api_key, config, scope))
+            run_log = RunLog(run_log_path(paths.data_root, config.dump_id), config.dump_id)
+            _logger.info("Structured run log: %s (progress every minute)", run_log.path)
+            try:
+                report = asyncio.run(_execute(executor, api_key, config, scope, run_log))
+            finally:
+                run_log.close()
             _logger.info("Status after the run:\n%s", render_status(manifest, config))
     except DumpLocked as exc:
         _logger.error("%s", exc)

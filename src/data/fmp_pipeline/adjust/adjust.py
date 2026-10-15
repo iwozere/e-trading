@@ -11,7 +11,7 @@ from typing import Literal, Optional
 
 import pandas as pd
 
-from src.data.fmp_pipeline.adjust.factors import adjustment_factors
+from src.data.fmp_pipeline.adjust.factors import factor_arrays
 
 AdjustMode = Literal["raw", "split", "total"]
 PRICE_COLUMNS = ("open", "high", "low", "close")
@@ -55,14 +55,12 @@ def adjust(
     if mode == "raw" or prices_raw.empty:
         return out
 
-    factors = adjustment_factors(prices_raw, splits, dividends, reference_closes)
-    price_factor = factors["split_factor"]
-    if mode == "total":
-        price_factor = price_factor * factors["div_factor"]
+    split_factor, div_factor = factor_arrays(prices_raw, splits, dividends, reference_closes)
+    price_factor = split_factor * div_factor if mode == "total" else split_factor
 
     for column in PRICE_COLUMNS:
         if column in out.columns:
-            out[column] = out[column].astype(float) * price_factor
+            out[column] = out[column].to_numpy(dtype=float) * price_factor
     if "volume" in out.columns:
-        out["volume"] = out["volume"].astype(float) / factors["split_factor"]
+        out["volume"] = out["volume"].to_numpy(dtype=float) / split_factor
     return out

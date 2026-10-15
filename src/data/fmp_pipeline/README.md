@@ -29,6 +29,8 @@ FMP Premium before gate G1.
   into `budget_plan.md`. `FollowUps` is the run-time reviewer for paging and intraday truncation.
 - `executor.py` — `fmp run`: the planned tasks block by block in spec order, with a disk check per block, an
   optional per-run byte limit and Windows sleep suppression (`power.py`). `status.py` — `fmp status`.
+  `run_log.py` — the JSON-lines run log (`logs/<dump_id>/run-*.jsonl`): one record per request, progress every
+  minute.
 - `builders/` — `fmp build`: archive → Parquet vintage `vintages/<dump_id>/` (spec §7): securities with stable
   ids (`security_ids.json`), symbol history, splits/dividends, raw daily/intraday prices per security with the
   suspect-data `flags` bitmask, every other endpoint as a lossless table (`_extra`), `_meta/build_info.json`.
