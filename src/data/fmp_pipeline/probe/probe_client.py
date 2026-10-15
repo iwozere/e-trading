@@ -202,7 +202,7 @@ class ProbeClient:
         fetched_at = datetime.now(timezone.utc).isoformat()
         with self._ledger.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps({"at": fetched_at, "endpoint": endpoint, "params": params, "auth": auth,
-                                 "status": status, "bytes_wire": bytes_wire}) + "\n")
+                                 "status": status, "bytes_wire": bytes_wire, "bytes_decoded": bytes_decoded}) + "\n")
         _logger.info("Probe %s %s -> %s %s (%d bytes wire, %d decoded)", endpoint, params, status, classification,
                      bytes_wire, bytes_decoded)
         return ProbeResponse(endpoint, params, auth, status, classification, headers, bytes_wire, bytes_decoded,

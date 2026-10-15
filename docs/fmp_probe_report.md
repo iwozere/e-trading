@@ -158,8 +158,8 @@ Spec §4.3 asks Phase 1 to build everything in §6–§12 and §14. These **are 
 
 | Command or piece | Spec | Why it matters before or after purchase |
 |---|---|---|
-| `fmp probe-paid` | §4.4, §6.1 | **Needed before purchase.** It must be a single command that produces `docs/fmp_paid_probe_report.md` and lets `fmp plan` produce `budget_plan.md` without the agent: it answers everything marked "Requires paid probe" above, including `intraday.max_rows` |
-| `fmp calibrate-usage --dashboard-gb X` | App. A Q2 | Decides wire vs decoded counting, so first week of the month |
+| `fmp probe-paid` | §4.4, §6.1 | **Built 2026-10-15** (D66–D68): answers every "Requires paid probe" item above in one unattended run; `fmp plan` applies its settings |
+| `fmp calibrate-usage --dashboard-gb X` | App. A Q2 | **Built 2026-10-15**: decides wire vs decoded counting once a few GB were fetched |
 | `fmp snapshot-universe` | §12.1 | Survivorship protection after cancellation (no FMP key needed) |
 | `fmp backup`, `fmp publish`, `fmp sync` | §6.1, §14 | Pack and copy to the NAS and the Pi; `verify --final` already checks a manual copy |
 | Drift report and archiving of old increments | §10.3 | Needed when the next vintage arrives |

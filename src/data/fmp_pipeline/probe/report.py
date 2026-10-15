@@ -219,19 +219,21 @@ def render_report(run: ProbeRun, calls_used: int, budget: int) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def write_report(path: Path, body: str) -> None:
+def write_report(path: Path, body: str, marker: str = AUTO_MARKER, title: str = "FMP free-key probe report") -> None:
     """
-    Write the report, keeping any hand-written text above ``AUTO_MARKER`` in an existing file.
+    Write the report, keeping any hand-written text above ``marker`` in an existing file.
 
     Args:
         path: Report path.
-        body: Output of ``render_report``.
+        body: The generated part; it must start with ``marker``.
+        marker: The line separating hand-written text from the generated part.
+        title: Heading of a new file.
     """
-    header = "# FMP free-key probe report\n\nHand-written findings go above the marker.\n\n"
+    header = f"# {title}\n\nHand-written findings go above the marker.\n\n"
     if path.exists():
         existing = path.read_text(encoding="utf-8")
-        if AUTO_MARKER in existing:
-            header = existing.split(AUTO_MARKER, 1)[0]
+        if marker in existing:
+            header = existing.split(marker, 1)[0]
     path.write_text(header + body, encoding="utf-8")
 
 

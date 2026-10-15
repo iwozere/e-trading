@@ -9,8 +9,8 @@ specification: `docs/FMP_DATA_PIPELINE_SPEC-2.md`; build plan: `docs/FMP_DATA_PI
 downloader), WP-5 (raw archive), WP-4 (planner, `fmp plan`), `fmp run` / `status` / `retry-failed`, WP-6
 (builder, `fmp build`), WP-8 (DataManager adapter, off by default), WP-9 (yfinance increments) and WP-A
 (validators, `fmp validate`, `fmp verify --final`) are done, and the probe report's `[VERIFY]` items are audited.
-Still missing from spec §6.1: `fmp probe-paid` (needed before buying Premium), `fmp calibrate-usage`,
-`fmp snapshot-universe`, `fmp backup`/`publish`/`sync` and the drift report (see Tasks). Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
+`fmp probe-paid` and `fmp calibrate-usage` are built. Still missing from spec §6.1: `fmp snapshot-universe`,
+`fmp backup`/`publish`/`sync` and the drift report (see Tasks). Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
 FMP Premium before gate G1.
 
 ## Features
@@ -42,8 +42,11 @@ FMP Premium before gate G1.
 - `validators/` — `fmp validate`: the 23 checks of spec §11 → `validation_report.md/.json`,
   `coverage_report.md`; `fmp verify --final`: the gate-G3 checklist (checksums, backup check, read-only archive,
   READY TO CANCEL).
-- `cli.py` — the `fmp` command line (`probe-free`, `plan`, `run`, `status`, `retry-failed`, `build`, `golden`,
-  `ingest-increments`, `validate`, `verify`).
+- `probe/` — `fmp probe-free` (Phase 0b) and `fmp probe-paid` (Phase 2: everything the free key could not answer;
+  writes `docs/fmp_paid_probe_report.md` and `probe_results.json`, whose settings every command applies);
+  `fmp calibrate-usage --dashboard-gb X` settles whether the 50 GB cap counts wire or decoded bytes.
+- `cli.py` — the `fmp` command line (`probe-free`, `probe-paid`, `calibrate-usage`, `plan`, `run`, `status`,
+  `retry-failed`, `build`, `golden`, `ingest-increments`, `validate`, `verify`).
 - `tests/mock_server.py` — offline mock of FMP `/stable` (spec §6.7) for the downloader test suite:
   `with MockFmpServer(MockConfig(...)) as fmp: client.get(fmp.base_url + "profile", ...)`.
 
@@ -70,6 +73,13 @@ from src.data.fmp_pipeline.runner import Downloader
 archive = RawArchive(data_root / "raw", "2026-10")
 summary = await Downloader(manifest, client, sink=archive).run()   # stop_reason "archive" if the drive vanishes
 latest = latest_successful(iter_records(archive.path_for("splits", "AAPL")))
+```
+
+Right after buying Premium (PowerShell, project root), before the first `fmp plan`:
+
+```powershell
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli probe-paid                      # ~100 calls, a few MB
+.venv\Scripts\python.exe -m src.data.fmp_pipeline.cli calibrate-usage --dashboard-gb 4.1  # later, after a few GB
 ```
 
 Plan a dump (PowerShell, project root). Planning is iterative: re-run it after each `fmp run` phase until no

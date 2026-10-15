@@ -161,6 +161,8 @@ class PlanConfig:
     build: BuildConfig = field(default_factory=BuildConfig)
     adapter: AdapterConfig = field(default_factory=AdapterConfig)
     increments: IncrementsConfig = field(default_factory=IncrementsConfig)
+    #: Apply the settings measured by ``fmp probe-paid`` (and ``fmp calibrate-usage``) over this file's values.
+    use_probe_results: bool = True
 
 
 def _coerce(target: Any, value: Any) -> Any:
@@ -200,6 +202,21 @@ def _merge(base: Any, overrides: dict[str, Any], where: str) -> Any:
             except ValueError as exc:
                 raise ValueError(f"{where}{key}: {exc}") from exc
     return replace(base, **changes)
+
+
+def merge_settings(config: PlanConfig, overrides: dict[str, Any], where: str) -> PlanConfig:
+    """
+    Return ``config`` with a partial ``fmp:``-shaped mapping applied, validated like the YAML file.
+
+    Args:
+        config: Base configuration.
+        overrides: Partial mapping (nested sections as dicts).
+        where: Prefix for error messages.
+
+    Raises:
+        ValueError: Unknown keys or wrongly typed values.
+    """
+    return _merge(config, overrides, where)
 
 
 def build_config_from_dict(data: dict[str, Any]) -> BuildConfig:

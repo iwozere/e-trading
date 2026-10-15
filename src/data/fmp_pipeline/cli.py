@@ -1,11 +1,14 @@
 """
 ``fmp`` command-line entry point (spec §6.1): ``probe-free``, ``plan``, ``run``, ``status``, ``retry-failed``,
-``build``, ``golden``, ``ingest-increments``, ``validate``, ``verify``.
+``build``, ``golden``, ``ingest-increments``, ``validate``, ``verify``,
+``probe-paid``, ``calibrate-usage``.
 
 Usage (PowerShell, from the project root)::
 
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli probe-free
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli probe-free --offline   # rebuild report from cache
+    .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli probe-paid        # Phase 2, right after buying Premium (one unattended command)
+    .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli calibrate-usage --dashboard-gb 3.2   # wire vs decoded bandwidth basis
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli plan --dry-run   # budget_plan.md, no new tasks
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli plan --offline   # re-plan from the archive only
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli run [--phase N] [--tier T] [--max-gb G]
@@ -53,6 +56,7 @@ from src.data.fmp_pipeline.power import keep_awake  # noqa: E402
 from src.data.fmp_pipeline.probe.free_probe import FreeProbe  # noqa: E402
 from src.data.fmp_pipeline.probe.probe_client import ProbeClient  # noqa: E402
 from src.data.fmp_pipeline.probe.report import render_report, write_fixtures, write_report  # noqa: E402
+from src.data.fmp_pipeline.probe.results import apply_probe_results  # noqa: E402
 from src.data.fmp_pipeline.status import render_status  # noqa: E402
 from src.notification.logger import setup_logger  # noqa: E402
 
@@ -109,11 +113,17 @@ class DumpPaths:
 EXIT_OK, EXIT_STOPPED, EXIT_USAGE, EXIT_DISK = 0, 1, 2, 3
 
 
+def _config(args: argparse.Namespace, data_root: Path) -> PlanConfig:
+    """``config/fmp/fmp.yaml`` with the paid-probe results applied (spec §4.4)."""
+    return apply_probe_results(load_config(args.config), data_root)
+
+
 def _setup(args: argparse.Namespace) -> tuple[PlanConfig, DumpPaths]:
-    config = load_config(args.config)
+    data_root = args.data_root or default_data_root()
+    config = _config(args, data_root)
     if args.dump_id:
         config = replace(config, dump_id=args.dump_id)
-    return config, DumpPaths(args.data_root or default_data_root(), config.dump_id)
+    return config, DumpPaths(data_root, config.dump_id)
 
 
 def _api_key() -> Optional[str]:
@@ -302,8 +312,8 @@ def _golden(args: argparse.Namespace) -> int:
 def _ingest_increments(args: argparse.Namespace) -> int:
     from src.data.fmp_pipeline.increments.ingest import IncrementIngester, NotTheWriter
 
-    config = load_config(args.config)
     data_root = args.data_root or default_data_root()
+    config = _config(args, data_root)
     try:
         ingester = IncrementIngester(data_root, config)
         report = ingester.run(args.symbols, args.timeframes, args.limit)
@@ -317,8 +327,8 @@ def _validate(args: argparse.Namespace) -> int:
     from src.data.fmp_pipeline.validators.framework import ValidationContext, run_checks
     from src.data.fmp_pipeline.validators.verify import write_reports
 
-    config = load_config(args.config)
     data_root = args.data_root or default_data_root()
+    config = _config(args, data_root)
     try:
         ctx = ValidationContext(data_root, config, args.sample, legacy_cache_dir=args.cache_dir)
         report = run_checks(ctx, args.checks)
@@ -336,8 +346,8 @@ def _verify(args: argparse.Namespace) -> int:
     if not args.final:
         _logger.error("Only `fmp verify --final` exists (spec §14)")
         return EXIT_USAGE
-    config = load_config(args.config)
     data_root = args.data_root or default_data_root()
+    config = _config(args, data_root)
     try:
         verifier = FinalVerifier(data_root, config, args.backup, args.confirm_postponed, args.cache_dir, args.sample)
         lock = data_root / "locks" / f"{verifier.ctx.store.vintage}.lock"
@@ -347,6 +357,48 @@ def _verify(args: argparse.Namespace) -> int:
         _logger.error("%s", exc)
         return EXIT_USAGE
     return EXIT_OK if all(item.ok for item in items) else EXIT_STOPPED
+
+
+DEFAULT_PAID_REPORT = PROJECT_ROOT / "docs" / "fmp_paid_probe_report.md"
+
+
+def _probe_paid(args: argparse.Namespace) -> int:
+    from src.data.fmp_pipeline.probe.paid_probe import PaidProbe
+    from src.data.fmp_pipeline.probe.paid_report import MARKER, TITLE, render_paid_report
+    from src.data.fmp_pipeline.probe.results import PROBE_DIR, write_results
+
+    data_root = args.data_root or default_data_root()
+    api_key = None if args.offline else _api_key()
+    if not args.offline and not api_key:
+        _logger.error("FMP_API_KEY is not set (the Premium key); use --offline to rebuild from the cache")
+        return EXIT_USAGE
+    with ProbeClient(api_key, data_root / PROBE_DIR, budget=args.budget, offline=args.offline) as client:
+        run = PaidProbe(client).run()
+        calls_used = client.calls_used
+    write_report(args.report, render_paid_report(run, calls_used, args.budget), MARKER, TITLE)
+    path = write_results(data_root, run.findings, run.findings.settings, calls_used)
+    _logger.info("Paid probe done: %d calls of %d; report %s; settings %s -> %s", calls_used, args.budget,
+                 args.report, run.findings.settings, path)
+    for note in run.findings.notes:
+        _logger.warning("Paid probe: %s", note)
+    return EXIT_STOPPED if run.stopped else EXIT_OK
+
+
+def _calibrate_usage(args: argparse.Namespace) -> int:
+    from src.data.fmp_pipeline.probe.calibrate import calibrate, local_usage
+    from src.data.fmp_pipeline.probe.results import write_calibration
+
+    data_root = args.data_root or default_data_root()
+    usage = local_usage(data_root, args.window_days)
+    try:
+        result = calibrate(args.dashboard_gb, usage)
+    except ValueError as exc:
+        _logger.error("%s", exc)
+        return EXIT_USAGE
+    write_calibration(data_root, {**vars(result), "window_days": args.window_days, "sources": usage.sources},
+                      result.basis)
+    (_logger.info if result.basis else _logger.warning)("Bandwidth calibration: %s", result.message)
+    return EXIT_OK if result.basis else EXIT_STOPPED
 
 
 def _dump_options(parser: argparse.ArgumentParser) -> None:
@@ -375,6 +427,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     probe.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     probe.add_argument("--fixtures", type=Path, default=DEFAULT_FIXTURES)
     probe.set_defaults(handler=_probe_free)
+
+    paid = commands.add_parser("probe-paid", help="Phase 2 paid probe (spec §4.4) -> docs/fmp_paid_probe_report.md "
+                                                  "and the settings fmp plan uses")
+    paid.add_argument("--budget", type=int, default=300, help="Max live calls across all runs (default 300)")
+    paid.add_argument("--offline", action="store_true", help="Use cached responses only; make no calls")
+    paid.add_argument("--data-root", type=Path, default=None, help="Default: DATA_CACHE_DIR/fmp-data")
+    paid.add_argument("--report", type=Path, default=DEFAULT_PAID_REPORT)
+    paid.set_defaults(handler=_probe_paid)
+
+    calibrate = commands.add_parser("calibrate-usage", help="Compare the FMP dashboard's bandwidth with local "
+                                                            "counters to settle wire vs decoded (Appendix A Q2)")
+    calibrate.add_argument("--dashboard-gb", type=float, required=True,
+                           help="'Bandwidth used' for the trailing window, read from the FMP dashboard")
+    calibrate.add_argument("--window-days", type=int, default=30)
+    calibrate.add_argument("--data-root", type=Path, default=None, help="Default: DATA_CACHE_DIR/fmp-data")
+    calibrate.set_defaults(handler=_calibrate_usage)
 
     plan = commands.add_parser("plan", help="Fetch universe lists, plan tasks, project bandwidth -> budget_plan.md")
     plan.add_argument("--dry-run", action="store_true", help="Write the reports but add no tasks to the manifest")

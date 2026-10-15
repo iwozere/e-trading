@@ -114,6 +114,12 @@ calendar), the checks in ``checks_prices.py``, ``checks_events.py``, ``checks_re
 ``checks_pipeline.py`` (order in ``checks.py``), ``checksums.py`` (`sha256sum -c` files, gzip test, backup
 check), ``coverage.py`` and ``verify.py`` (the spec §14 checklist). D61–D65.
 
+**`probe/` (paid)** — `PaidProbe` (``paid_probe.py``) runs adaptive stages through the cached `ProbeClient`;
+``paid_analysis.py`` holds the pure rules (convention fitting, row cap and truncation side, split verdict, window
+completeness, reuse verdict); ``paid_report.py`` renders the report; ``results.py`` stores findings and settings and
+`apply_probe_results` overlays them on the YAML config in every CLI command; ``calibrate.py`` decides the
+bandwidth basis. D66–D68.
+
 ### Error handling
 - `adjust()` raises `ValueError` on contradictory or impossible inputs rather than repairing them (D11, D16).
 - The probe treats budget exhaustion as "skip and continue" (cached calls still resolve) and a quota message as
@@ -145,7 +151,7 @@ yfinance (auto_adjust=False, actions) --> yfinance_to_raw --> raw bars (+ raw-ba
 ```
 
 ## Design Decisions
-See `docs/decisions.md` (D12–D65). The ones shaping this module most:
+See `docs/decisions.md` (D12–D68). The ones shaping this module most:
 - D13: restate `C_prev` on the ex-date's share basis. A dividend on a split date is otherwise wrong by the ratio.
 - D19/D20: FMP `dividend` is raw; `non-split-adjusted` carries **raw** prices under `adj*` field names.
 - D24: the probe client is deliberately separate from the WP-2 production client.
