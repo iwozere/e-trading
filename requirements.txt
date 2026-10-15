@@ -42,6 +42,7 @@ tqdm >=4.67.1
 watchdog >=6.0.0
 websocket_client >=0.40.0
 xgboost >=3.0.4
+xlrd>=2.0.1  # legacy .xls reader for pd.read_excel(engine="xlrd") in src/data/downloader/aaii_downloader.py; openpyxl only handles .xlsx
 yfinance>=0.2.64
 curl_cffi>=0.16.0  # browser TLS impersonation: yfinance sessions + P20 StockTwits (Cloudflare fingerprints TLS)
 pandas_market_calendars>=5.4.0  # P21 momentum — NYSE (XNYS) trading calendar, see src/ml/pipeline/p21_momentum/calendar.py
