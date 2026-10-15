@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import datetime, timedelta, timezone
 
 import pytest
+from apscheduler.triggers.cron import CronTrigger
 
 from src.data.pipeline.base_plugin import PluginValidationError
 from src.data.pipeline.registry import PLUGIN_REGISTRY, get_by_category, get_by_name, list_categories
+from src.scheduler.scheduler_service import crontab_weekday_to_apscheduler
 
 
 def test_registry_not_empty():
@@ -60,3 +63,47 @@ def test_list_categories_includes_known_groups():
 def test_category_crons_are_nonempty_strings(category):
     for spec in get_by_category(category):
         assert isinstance(spec.cron, str) and spec.cron.strip()
+
+
+def _fire_times_on(cron: str, day: datetime) -> set[datetime]:
+    """All fire times of `cron` within the UTC calendar day starting at `day`."""
+    # Built the way scheduler_service does (crontab weekday numbering, not from_crontab's 0=Monday).
+    # start_date pinned to `day`: the default ("now") would skip a past `day` entirely.
+    minute, hour, dom, month, dow = cron.split()
+    trigger = CronTrigger(
+        minute=minute,
+        hour=hour,
+        day=dom,
+        month=month,
+        day_of_week=crontab_weekday_to_apscheduler(dow),
+        timezone=timezone.utc,
+        start_date=day,
+    )
+    end = day + timedelta(days=1)
+    times: set[datetime] = set()
+    current = trigger.get_next_fire_time(None, day)
+    while current is not None and current < end:
+        times.add(current)
+        current = trigger.get_next_fire_time(current, current + timedelta(seconds=1))
+    return times
+
+
+def test_dependents_never_fire_with_their_dependency():
+    """A job must not share a fire time with a job it depends_on.
+
+    Both start together, the dependent's dependency check sees the upstream run
+    still 'running' and defers that slot -- e.g. P19 Shadow Poll vs Watchlist Build
+    at 13:00 UTC (monitoring.txt, 2026-10-14).
+    """
+    monday = datetime(2026, 10, 12, tzinfo=timezone.utc)
+    collisions = []
+    for spec in PLUGIN_REGISTRY:
+        for dep_name in spec.depends_on:
+            dep = get_by_name(dep_name)
+            if dep is None:
+                continue
+            shared = _fire_times_on(spec.cron, monday) & _fire_times_on(dep.cron, monday)
+            if shared:
+                first = min(shared).strftime("%H:%M")
+                collisions.append(f"{spec.name} and {dep.name} both fire at {first} UTC")
+    assert collisions == [], "\n".join(collisions)

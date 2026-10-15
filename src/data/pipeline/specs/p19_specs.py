@@ -30,7 +30,9 @@ SPECS: List[PluginSpec] = [
     PluginSpec(
         name="P19 Intraday Watchlist Build",
         category="p19",
-        cron="0 13 * * 1-5",
+        # 12:50, not 13:00: Shadow Poll / Filings Poll also fire at 13:00 and their dependency check
+        # would see this build still "running" and defer that first slot every day.
+        cron="50 12 * * 1-5",
         script_path=_SCRIPT,
         script_args=["build-watchlist"],
         timeout_seconds=600,
