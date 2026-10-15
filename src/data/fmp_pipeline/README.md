@@ -161,4 +161,5 @@ Run the probe (PowerShell, project root):
 - [Requirements](docs/Requirements.md) - Technical requirements
 - [Design](docs/Design.md) - Architecture and design
 - [Tasks](docs/Tasks.md) - Implementation roadmap
-- `docs/decisions.md`, `docs/fmp_probe_report.md` (repository level)
+- `docs/runbook.md` (owner steps: purchase, download, G3, routine, repeat dump), `docs/storage_schema.md` (tables,
+  columns and read semantics), `docs/decisions.md`, `docs/fmp_probe_report.md` (repository level)

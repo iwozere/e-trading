@@ -57,12 +57,14 @@ only after every Phase 1 item below is done.
       symbols, disabled monthly job), `fmp backup`/`publish`/`sync` (packed tars, member-level verification at
       the destination, READY-last, local swap then `current.txt`), drift report in `fmp build` and
       `fmp archive-increments`; D69–D73 (2026-10-15)
+- [x] `docs/storage_schema.md` (layout, every table and column, flags, increments, snapshots, read semantics for
+      backtests) and `docs/runbook.md` (purchase to cancellation, routine, 2029 repeat dump, troubleshooting)
+      (2026-10-15)
 
 ### 🔄 IN PROGRESS
 
 ### 🚀 PLANNED ENHANCEMENTS
 - [ ] Phase 4: run `fmp validate` on the real vintage; calibrate flag thresholds and the WARN levels on it
-- [ ] `docs/storage_schema.md` and `docs/runbook.md` (spec §13, Phase 5)
 
 ## Technical Debt
 - [ ] Bisect-forward for the first intraday window (spec §6.5.4) deliberately not built (D39); revisit after the
@@ -125,5 +127,5 @@ only after every Phase 1 item below is done.
       verify with and without a backup, read-only marking, CLI — package total 450 tests, 98%
 
 ## Documentation Updates
-- [ ] `docs/storage_schema.md` (vintage tables and columns, `_extra`, flags, `security_id` rules; partly in
-      `builders/` docstrings now), `docs/runbook.md` (Phase 5)
+- [ ] Fill measured numbers into `docs/storage_schema.md` / `docs/runbook.md` after the paid probe (intraday
+      convention, bandwidth basis) and the first real build (sizes, read times)
