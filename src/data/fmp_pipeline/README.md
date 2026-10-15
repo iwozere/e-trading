@@ -8,8 +8,9 @@ specification: `docs/FMP_DATA_PIPELINE_SPEC-2.md`; build plan: `docs/FMP_DATA_PI
 **Status (2026-10-15):** WP-1 (free-key probe), WP-7 (`adjust()`), WP-3 (mock server), WP-2 (client, manifest,
 downloader), WP-5 (raw archive), WP-4 (planner, `fmp plan`), `fmp run` / `status` / `retry-failed`, WP-6
 (builder, `fmp build`), WP-8 (DataManager adapter, off by default), WP-9 (yfinance increments) and WP-A
-(validators, `fmp validate`, `fmp verify --final`) are done: Phase 1 is complete except for the probe-report audit
-(see Tasks). Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
+(validators, `fmp validate`, `fmp verify --final`) are done, and the probe report's `[VERIFY]` items are audited.
+Still missing from spec §6.1: `fmp probe-paid` (needed before buying Premium), `fmp calibrate-usage`,
+`fmp snapshot-universe`, `fmp backup`/`publish`/`sync` and the drift report (see Tasks). Everything else in Phase 1 is still to build; see [Tasks](docs/Tasks.md). Do **not** buy
 FMP Premium before gate G1.
 
 ## Features

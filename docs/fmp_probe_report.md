@@ -64,6 +64,108 @@ These cannot be answered on the free key and must be in `fmp probe-paid`:
 - Synthetic fixtures for all 35 endpoints that returned data, plus `_error_shapes.json`, are in
   `src/data/fmp_pipeline/tests/fixtures/` (fake values, real field names and types).
 
+## [VERIFY] audit for gate G1 (2026-10-15)
+
+Every `[VERIFY]` item of spec §3 and §5 (plus the related Appendix A questions, Appendix C values and §4.2 probe
+purposes) with its status: **Confirmed**, **Refuted**, or **Requires paid probe**. Free-tier values that the free
+key cannot exercise without wasting the budget, and that do not matter once Premium is bought, are marked
+*n/a (free tier)*. Evidence refers to findings F1–F13 above and the generated sections below. No extra calls were
+made for this audit (still 119 / 200).
+
+### §3 plan table
+
+| Item | Free (Basic) | Premium |
+|---|---|---|
+| Price | n/a | **Requires owner check** on the pricing page at checkout (not observable through the API) |
+| Rate limit | n/a (free tier): 119 calls in one day never hit a limit; no rate-limit headers exist (F11) | **Requires paid probe** (750/min; the client is configured at 600/min = 80%) |
+| History depth | **Refuted** as a hard limit: 5 years is only the default window; explicit 2014/2015 windows return data (F8) | **Requires paid probe** (30+ years) |
+| Coverage | **Refuted**: not "~90 sample symbols" but a per-symbol entitlement list (Finding C; sweep below) | **Requires paid probe** (US/UK/Canada; delisted symbols, Appendix A Q4) |
+| Intraday charts | **Confirmed** not included: `historical-chart/1hour` and `5min` → 402 | **Requires paid probe** (intervals served, §3 unknown 1) |
+| Bulk/batch endpoints | **Confirmed** not included: `eod-bulk` → 402 "Restricted Endpoint" | **Requires paid probe** (expected not included) |
+| Bandwidth cap | n/a (free tier): the probe used < 1 MB of 500 MB | **Requires paid probe** (50 GB, and its basis, §3 unknown 4) |
+
+### §3 critical unknowns
+
+| # | Unknown | Status |
+|---|---|---|
+| 1 | Intraday intervals served | **Requires paid probe** (all intraday is 402 on the free key) |
+| 2 | Depth of `1hour` history | **Requires paid probe** |
+| 3 | Row cap and maximum window per intraday request | **Requires paid probe** (sets `intraday.max_rows`; no intraday task is planned before it, D36) |
+| 4 | Bandwidth cap on wire or decoded bytes | **Requires paid probe** (worth ~7×: 25 vs 171 B/row daily, F10); planning uses `decoded` until then |
+| 5 | All US exchanges, delisted symbols in prices, constituent endpoints | **Requires paid probe** (constituents 402; TWTR returned `[]` for 2025, which proves nothing) |
+| 6 | Intraday split-adjusted? `nonadjusted` parameter? | **Requires paid probe** |
+| 7 | Bar label, time zone, extended hours | **Requires paid probe** (`build.intraday_tz`/`intraday_label` are assumptions until then, spec §8.4) |
+
+### §5 endpoint `[VERIFY]` items
+
+| Item | Status |
+|---|---|
+| `from`/`to` parameter names on price endpoints | **Confirmed** (F7); an unparseable `from` is silently ignored, so the client validates dates itself |
+| `from`/`to` on `treasury-rates` | **Confirmed**, but a 1-year request returned only 2025-10-02 … 12-31: the window is capped. Maximum window **requires paid probe** (the planner uses 90-day calendar windows) |
+| `from`/`to` on the calendars (`splits-`, `dividends-`, `earnings-`, `ipos-`, `economic-`) | **Requires paid probe** (402) |
+| `limit` on statement endpoints | **Confirmed** (`period=quarter, limit=2` → 2 rows, F9) |
+| `delisted-companies` maximum page size | Free key: **Confirmed** capped at 100 (`limit=1000` → 100 rows). Premium: **Requires paid probe** |
+| `delisted-companies` paging | **Requires paid probe** (page 1 is 402 on the free key); the planner pages until an empty page (D38) |
+| `symbol-change` paging | **Requires paid probe** (402); the planner stops on an empty or repeated page (D38) |
+| Index prices (`^GSPC`, `^IXIC`, `^DJI`, `^VIX`, `^RUT`) on Premium | **Requires paid probe** (402 here); `index-list` **confirms** the `^` prefix (F12) |
+| `historical-chart/1hour` availability, depth, row cap | **Requires paid probe** (= §3 unknowns 1–3) |
+| `historical-market-capitalization` date range | **Requires paid probe** (402) |
+| `shares-float-all` paging | **Confirmed**: page 1 → 200 `[]`, so the empty-page terminator works |
+
+### Spec §6.3 and Appendix C
+
+| Item | Status |
+|---|---|
+| 50 GB per trailing 30 days, and its counting basis | **Requires paid probe** (`fmp calibrate-usage --dashboard-gb X` compares the dashboard with local counters; not built yet, see below) |
+| 750 requests/min | **Requires paid probe** |
+| 7 hourly bars per full day | **Requires paid probe** (V-INTRADAY-ALIGN checks it on the real data) |
+
+### Appendix A questions
+
+| # | Question | Status |
+|---|---|---|
+| 1 | Intraday intervals, start date, row cap | **Requires paid probe** |
+| 2 | Bandwidth basis | **Requires paid probe** |
+| 3 | Which dividend field is raw | **Confirmed**: `dividend` (F1) |
+| 4 | Delisted symbols in `non-split-adjusted`; exchanges | **Requires paid probe** |
+| 5 | Constituent endpoints and index prices on the plan | **Requires paid probe** |
+| 6 | Calendar `from`/`to` and maximum window | **Requires paid probe** |
+| 7 | Exchange code strings; class-share symbols | Exchange codes: **Confirmed** in part: `delisted-companies` page 0 uses `NASDAQ`, `NYSE`, `AMEX`, `OTC` and foreign codes (`LSE`, `JPX`, `FSX`, `WSE`, `TWO`, `TSXV`, `CNQ`, `SAU`, `SIX`, `OSL`, `STO`); `profile` uses `NASDAQ`. Arca/BATS spellings and class shares (`BRK-B` vs `BRK.B`, F12) **require paid probe** |
+| 8 | What legacy `close` represents | **Confirmed** (Phase 0a, Finding A): split **and** dividend adjusted (D12) |
+| 9 | Intraday time zone, label, extended hours | **Requires paid probe** |
+| 10 | Reused tickers: merged or separate series | **Requires paid probe**: no candidates in page 0, `symbol-change` restricted; segmentation stays off (D46) |
+| 11 | US/Eastern and 09:30 first bar across DST weeks | **Requires paid probe** |
+
+### §4.2 probe purposes
+
+| # | Purpose | Status |
+|---|---|---|
+| 1 | Exact JSON schema of every §5 endpoint | **Confirmed** for the 35 endpoints the free key serves (schemas below; synthetic fixtures in `tests/fixtures/`); the 27 restricted ones **require paid probe** |
+| 2 | Bytes per row, wire and decoded | **Confirmed** for every served endpoint (sweep below, F10) |
+| 3 | Pagination | **Confirmed** for `shares-float-all`; the rest **require paid probe** (restricted beyond page 0) |
+| 4 | Error shapes | **Confirmed**: plan-restricted, invalid key, empty result, unknown endpoint (F5, F6). **Requires paid probe** (or a real quota stop): the exhausted-quota body (the mock assumes `Limit Reach`) and an HTTP-200 error body (never observed; the classifier handles it) |
+| 5 | Dividend basis (AAPL 0.82 on 2020-08-07) | **Confirmed** (F1) |
+| 6 | The three daily endpoints across AAPL/NVDA splits | **Confirmed** (F2, F4) |
+| 7 | Intraday schema on the free key | **Confirmed** unavailable → Phase 2 |
+| 8 | Ticker reuse examples | **Requires paid probe** (no candidates reachable) |
+
+Also open for the paid probe: `economic-indicators` returned `[]` for `name=GDP`, so the accepted names need
+checking.
+
+### Open questions and missing Phase 1 commands for G1
+
+Spec §4.3 asks Phase 1 to build everything in §6–§12 and §14. These **are not built yet**:
+
+| Command or piece | Spec | Why it matters before or after purchase |
+|---|---|---|
+| `fmp probe-paid` | §4.4, §6.1 | **Needed before purchase.** It must be a single command that produces `docs/fmp_paid_probe_report.md` and lets `fmp plan` produce `budget_plan.md` without the agent: it answers everything marked "Requires paid probe" above, including `intraday.max_rows` |
+| `fmp calibrate-usage --dashboard-gb X` | App. A Q2 | Decides wire vs decoded counting, so first week of the month |
+| `fmp snapshot-universe` | §12.1 | Survivorship protection after cancellation (no FMP key needed) |
+| `fmp backup`, `fmp publish`, `fmp sync` | §6.1, §14 | Pack and copy to the NAS and the Pi; `verify --final` already checks a manual copy |
+| Drift report and archiving of old increments | §10.3 | Needed when the next vintage arrives |
+| `docs/storage_schema.md`, `docs/runbook.md` | §9.3, §12.2, §13 | Owner documentation |
+
+
 <!-- AUTO-GENERATED BELOW by `fmp probe-free`; everything after this line is overwritten -->
 
 Generated 2026-10-14 19:03 UTC. Live calls used in total: **119 / 200** (0 live in the last run, 0 skipped). Primary symbol: **AAPL**.

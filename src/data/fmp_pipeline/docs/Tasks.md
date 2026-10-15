@@ -55,9 +55,13 @@ only after every Phase 1 item below is done.
 ### 🚀 PLANNED ENHANCEMENTS
 - [ ] Drift report when the next vintage arrives and archiving of the increments it covers (spec §10.3)
 - [ ] `fmp publish` / sync of vintage and increments to readers (spec §10.4, Phase 5)
+- [ ] **`fmp probe-paid`** (spec §4.4, §6.1; G1): one unattended command for Phase 2 that answers every "Requires
+      paid probe" item in `docs/fmp_probe_report.md` and writes `docs/fmp_paid_probe_report.md` plus the settings
+      `fmp plan` needs (`intraday.max_rows`, `bars_per_day`, intraday time zone and label, page sizes)
+- [ ] `fmp calibrate-usage --dashboard-gb X` (Appendix A Q2): settle the wire vs decoded bandwidth basis
+- [ ] `fmp snapshot-universe` (spec §12.1, no FMP key), `fmp backup`, `fmp publish`, `fmp sync` (spec §6.1, §14)
 - [ ] Phase 4: run `fmp validate` on the real vintage; calibrate flag thresholds and the WARN levels on it
 - [ ] `docs/storage_schema.md` and `docs/runbook.md` (spec §13, Phase 5)
-- [ ] Phase 2 `fmp probe-paid` covering the eight deferred items in `docs/fmp_probe_report.md`
 
 ## Technical Debt
 - [ ] Bisect-forward for the first intraday window (spec §6.5.4) deliberately not built (D39); revisit after the
