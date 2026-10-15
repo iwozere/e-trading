@@ -1,13 +1,13 @@
-import os
 import sys
 import unittest
 from datetime import datetime, timedelta
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-# Ensure the src directory is in the path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.data.data_manager import DataManager, RateLimitException
+from src.data.data_manager import DataManager, RateLimitException  # noqa: E402
 
 
 class TestDataManagerRateLimits(unittest.TestCase):
@@ -43,27 +43,30 @@ class TestDataManagerRateLimits(unittest.TestCase):
             self.assertFalse(self.dm._is_provider_on_cooldown(provider))
             self.assertNotIn(provider, self.dm._provider_cooldowns)
 
-    def test_rate_limit_sets_cooldown(self):
-        """Test that RateLimitException in data fetch sets a temporary cooldown."""
+    def test_rate_limit_skips_to_retry_pass(self):
+        """A RateLimitException gives up on the provider at once: no retries, no wait, no cooldown.
+
+        Since 168f2c0 the caller collects rate-limited tickers and re-attempts them together after a global
+        cooldown, so this method must neither sleep nor block the provider for the remaining tickers.
+        """
         symbol = "AAPL"
         providers = ["yahoo"]
 
-        # Mock the downloader and _fetch_with_timeout to raise RateLimitException
         self.dm._validate_single_provider_availability = MagicMock(return_value=True)
         self.dm.provider_selector.downloaders = {"yahoo": MagicMock()}
 
-        with patch.object(self.dm, "_fetch_with_timeout") as mock_fetch:
+        with patch.object(self.dm, "_fetch_with_timeout") as mock_fetch, patch.object(
+            self.dm, "_sleep_with_jitter"
+        ) as mock_sleep:
             # RateLimitException takes url as first argument
             mock_fetch.side_effect = RateLimitException("https://api.yahoo.com/fundamentals", retry_after=60)
 
-            # Should not raise exception, but return empty data and set cooldown
             result = self.dm._fetch_fundamentals_from_providers(symbol, providers)
 
             self.assertEqual(result, {})
-            self.assertTrue(self.dm._is_provider_on_cooldown("yahoo"))
-            # Initial cooldown for a single failure should be 60s (based on our implementation)
-            exp_time = self.dm._provider_cooldowns["yahoo"]
-            self.assertLessEqual((exp_time - datetime.now()).total_seconds(), 60)
+            self.assertEqual(mock_fetch.call_count, 1)
+            mock_sleep.assert_not_called()
+            self.assertFalse(self.dm._is_provider_on_cooldown("yahoo"))
 
     def test_filter_compatible_providers_respects_cooldown(self):
         """Test that _filter_compatible_providers skips providers on cooldown."""

@@ -31,20 +31,19 @@ import pandas as pd
 
 from src.data.cache.fundamentals_cache import get_fundamentals_cache
 from src.data.cache.fundamentals_combiner import get_fundamentals_combiner
+from src.data.cache.unified_cache import UnifiedCache
 from src.data.downloader.binance_data_downloader import BinanceDataDownloader
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from src.data.feed.base_live_data_feed import BaseLiveDataFeed
+from src.data.feed.binance_live_feed import BinanceLiveDataFeed
+from src.data.feed.coingecko_live_feed import CoinGeckoLiveDataFeed
+from src.data.feed.yahoo_live_feed import YahooLiveDataFeed
+from src.data.provider_selector import ProviderSelector
+from src.data.utils.rate_limiting import RateLimiter
+from src.data.utils.retry import retry_on_exception
 from src.error_handling.exceptions import NetworkException, RateLimitException
-
-
-class TimeoutException(Exception):
-    """Exception raised when requests timeout."""
-
-    pass
-
-
 from src.notification.logger import setup_logger
 
-# Initialize logger
 _logger = setup_logger(__name__)
 
 # Import cache directory from donotshare configuration. The per-provider API key constants
@@ -57,22 +56,10 @@ except ImportError:
     # Fallback to environment variable if donotshare is not available
     DATA_CACHE_DIR = os.getenv("DATA_CACHE_DIR", "c:/data-cache")  # Fallback if import fails
 
-# Import cache and utilities
-from src.data.cache.unified_cache import UnifiedCache
 
-# Import downloaders
-# Import live feeds
-from src.data.feed.base_live_data_feed import BaseLiveDataFeed
-from src.data.feed.binance_live_feed import BinanceLiveDataFeed
-from src.data.feed.coingecko_live_feed import CoinGeckoLiveDataFeed
-from src.data.feed.yahoo_live_feed import YahooLiveDataFeed
-from src.data.utils.rate_limiting import RateLimiter
-from src.data.utils.retry import retry_on_exception
+class TimeoutException(Exception):
+    """Exception raised when requests timeout."""
 
-_logger = setup_logger(__name__)
-
-
-from src.data.provider_selector import ProviderSelector  # noqa: F401
 
 # Gap-detection tolerance, expressed as a multiple of one bar's duration, below which a
 # missing stretch of cached data is treated as an expected non-trading window (not a real
@@ -497,8 +484,9 @@ class DataManager:
                 _logger.info("Batch downloading %d symbols from %s to %s", len(batch_symbols), b_start, b_end)
                 batch_df = yahoo_dl.get_ohlcv_batch(batch_symbols, timeframe, b_start, b_end)
 
-                # Yahoo returns MultiIndex if > 1 symbol, or single index if 1 symbol, but get_ohlcv_batch normalizes
-                # it internally and returns a joined dataframe with 'ticker' column, OR a dict depending on implementation.
+                # Yahoo returns MultiIndex if > 1 symbol, or single index if 1 symbol, but get_ohlcv_batch
+                # normalizes it internally and returns a joined dataframe with 'ticker' column, OR a dict depending
+                # on implementation.
                 # NOTE: We know YahooDataDownloader.get_ohlcv_batch currently returns a combined flat DataFrame
                 # if group_by='ticker' wasn't unpacked. Let's unpack it correctly.
 
@@ -507,7 +495,8 @@ class DataManager:
                 else:
                     # If it's a flat df with a generic multi-index
                     raise NotImplementedError(
-                        "Expected YahooDataDownloader.get_ohlcv_batch to return a dict, need to adapt if returns DataFrame"
+                        "Expected YahooDataDownloader.get_ohlcv_batch to return a dict, "
+                        "need to adapt if returns DataFrame"
                     )
 
                 for sym, df_data in raw_dict.items():
@@ -2009,12 +1998,16 @@ class DataManager:
             del signum, frame  # required by signal.signal()'s callback signature; unused
             raise TimeoutException(f"Request timed out after {timeout} seconds")
 
-        # Set up timeout handling (Unix-like systems, main thread only)
+        # Set up timeout handling (Unix-like systems, main thread only). SIGALRM and alarm() do not exist on
+        # Windows, so they are looked up rather than referenced (no platform-specific type ignores needed).
+        sigalrm = getattr(signal, "SIGALRM", None)
+        alarm = getattr(signal, "alarm", None)
+        old_handler: Any = None
         sigalrm_set = False
-        if hasattr(signal, "SIGALRM") and threading.current_thread() is threading.main_thread():
+        if sigalrm is not None and alarm is not None and threading.current_thread() is threading.main_thread():
             try:
-                old_handler = signal.signal(signal.SIGALRM, timeout_handler)  # pyright: ignore[reportAttributeAccessIssue]  # hasattr-guarded
-                signal.alarm(int(timeout))  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue]  # hasattr-guarded
+                old_handler = signal.signal(sigalrm, timeout_handler)
+                alarm(int(timeout))
                 sigalrm_set = True
             except ValueError:
                 pass
@@ -2029,10 +2022,10 @@ class DataManager:
 
         finally:
             # Clean up timeout handling
-            if sigalrm_set:
+            if sigalrm_set and sigalrm is not None and alarm is not None:
                 try:
-                    signal.alarm(0)  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue]  # hasattr-guarded
-                    signal.signal(signal.SIGALRM, old_handler)  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue]  # hasattr-guarded
+                    alarm(0)
+                    signal.signal(sigalrm, old_handler)
                 except ValueError:
                     pass
 
