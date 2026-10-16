@@ -1,10 +1,15 @@
 """Unit tests for src.common.asyncio_compat."""
 
 import asyncio
+import subprocess
+import sys
 import threading
 import unittest
+from pathlib import Path
 
 from src.common.asyncio_compat import ensure_event_loop
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 class TestEnsureEventLoop(unittest.TestCase):
@@ -55,6 +60,29 @@ class TestEnsureEventLoop(unittest.TestCase):
         thread.join()
 
         self.assertTrue(result["unchanged"], "ensure_event_loop() must not replace an already-set loop")
+
+    def test_loop_dropped_by_asyncio_run_is_not_leaked(self):
+        """A fresh interpreter that calls ensure_event_loop() and then asyncio.run() reports no unclosed loop."""
+        code = (
+            "import asyncio, gc\n"
+            "from src.common.asyncio_compat import ensure_event_loop\n"
+            "ensure_event_loop()\n"
+            "async def noop():\n"
+            "    return None\n"
+            "asyncio.run(noop())\n"
+            "gc.collect()\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-X", "dev", "-W", "always::ResourceWarning", "-c", code],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("unclosed event loop", result.stderr)
+        self.assertNotIn("There is no current event loop", result.stderr)
 
 
 if __name__ == "__main__":

@@ -300,7 +300,9 @@ LOG_CONFIG: Dict[str, Any] = {
             "propagate": False,
         },
     },
-    "root": {"handlers": ["console", "file"], "level": "DEBUG"},
+    # error_file must be attached somewhere: dictConfig opens the file of every configured handler, and an unused
+    # handler is garbage-collected at once with its file still open (ResourceWarning, app_errors.log never written).
+    "root": {"handlers": ["console", "file", "error_file"], "level": "DEBUG"},
 }
 
 # --- PATCH LOG_CONFIG for UTF-8 encoding, env-driven log levels, and child-process filenames ---

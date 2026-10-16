@@ -7,6 +7,13 @@ This document outlines all current tasks, future enhancements, and maintenance a
 
 ### Recently Completed
 
+#### Close the main-thread event loop created by `ensure_event_loop()`
+**Status**: Completed ✅ (2026-10-16)
+
+**Description**: On Python 3.12/3.13 the `asyncio.get_event_loop()` probe in `ensure_event_loop()` silently created a main-thread loop (with a DeprecationWarning) that nobody closed; the next `asyncio.run()` swapped in its own loop and then unset it, dropping the first one (`ResourceWarning: unclosed event loop`). The main-thread loop, created explicitly (3.14) or implicitly (3.12/3.13), is now kept referenced and closed at exit, and the DeprecationWarning is suppressed. Worker-thread loops are deliberately left alone: closing one during thread teardown makes `ProactorEventLoop.close()` call `threading.current_thread()`, which registers a `_DummyThread` that is never removed.
+
+**Tests**: `tests/test_asyncio_compat.py::test_loop_dropped_by_asyncio_run_is_not_leaked`
+
 #### Python 3.14 asyncio compatibility shim
 **Status**: Completed ✅
 

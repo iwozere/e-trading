@@ -98,7 +98,7 @@ LOG_CONFIG = {
         "telegram_*": {...},        # Telegram bot loggers
     },
     "root": {
-        "handlers": ["console", "file"],
+        "handlers": ["console", "file", "error_file"],  # error_file attached since 2026-10-16; before that app_errors.log stayed empty
         "level": "DEBUG"
     }
 }
