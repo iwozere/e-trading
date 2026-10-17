@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import numpy as np
 import pytest
 
 from src.data.fmp_pipeline.planner.windowing import (
     EPOCH,
+    _weekday_at,
+    _weekday_index,
     intraday_window_days,
     intraday_windows,
     is_possibly_truncated,
@@ -24,6 +27,18 @@ def test_weekdays_counts_inclusive_and_handles_empty_ranges():
     assert weekdays(date(2026, 10, 14), date(2026, 10, 14)) == 1
     assert weekdays(date(2026, 10, 15), date(2026, 10, 14)) == 0
     assert trading_days(date(2025, 1, 1), date(2025, 12, 31)) == pytest.approx(252, abs=1)
+
+
+def test_weekday_arithmetic_matches_numpy_business_days():
+    """The integer weekday maths must reproduce numpy's grid exactly, or re-plans would change task ids."""
+    day, end = date(1985, 1, 1), date(2030, 12, 31)
+    while day <= end:
+        if day >= EPOCH:  # before it numpy's negative count is offset by a day; no window starts that early
+            index = int(np.busday_count(EPOCH, day))
+            assert _weekday_index(day) == index
+            assert _weekday_at(index) == date.fromisoformat(str(np.busday_offset(EPOCH, index, roll="forward")))
+        assert weekdays(day, day + timedelta(days=11)) == int(np.busday_count(day, day + timedelta(days=12)))
+        day += timedelta(days=1)
 
 
 def test_year_windows_follow_a_fixed_calendar_grid():

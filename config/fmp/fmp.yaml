@@ -30,6 +30,10 @@ fmp:
     # Normalized codes (upper case, no spaces/dashes/dots). Check universe_report.md "Exchanges seen" after the
     # first paid plan and add any US venue FMP spells differently.
     include_exchanges: [NASDAQ, NYSE, AMEX, NYSEAMERICAN, NYSEARCA, ARCA, BATS, CBOE, CBOEBZX]
+    # Index prices (^GSPC, ^IXIC, ^DJI, ^VIX, ^RUT) are plan_restricted on Premium (paid probe 2026-10-17): the
+    # owner takes them from yfinance, so they are left out of tier A and of the universe.
+    tier_a: [SPY, QQQ, IWM, DIA, XLB, XLC, XLE, XLF, XLI, XLK, XLP, XLRE, XLU, XLV, XLY]
+    indices: []
   build:                         # fmp build (spec §7); full list of keys in planner/config.py BuildConfig
     intraday_tz: America/New_York  # zone of FMP's intraday `date` strings [VERIFY in the paid probe, spec §8.4]
     intraday_label: start          # start | end: what the timestamp labels [VERIFY]

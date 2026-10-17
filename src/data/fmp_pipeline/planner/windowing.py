@@ -18,9 +18,7 @@ import math
 from datetime import date, timedelta
 from typing import Optional
 
-import numpy as np
-
-EPOCH = date(1990, 1, 1)
+EPOCH = date(1990, 1, 1)  # a Monday
 #: Trading days per weekday: about 252 sessions in 261 weekdays (US holidays).
 TRADING_PER_WEEKDAY = 252 / 261
 
@@ -31,7 +29,7 @@ def weekdays(start: date, end: date) -> int:
     """Return the number of Monday–Friday dates in ``start`` … ``end`` inclusive (0 if ``end < start``)."""
     if end < start:
         return 0
-    return int(np.busday_count(start, end + timedelta(days=1)))
+    return _weekday_index(end + timedelta(days=1)) - _weekday_index(start)
 
 
 def trading_days(start: date, end: date) -> float:
@@ -72,11 +70,15 @@ def intraday_window_days(max_rows: int, bars_per_day: int, safety_factor: float 
 
 
 def _weekday_index(day: date) -> int:
-    return int(np.busday_count(EPOCH, day))
+    """Weekdays in ``EPOCH`` … ``day`` exclusive (negative before ``EPOCH``); integer maths, as ``EPOCH`` is a Monday."""
+    weeks, rest = divmod((day - EPOCH).days, 7)
+    return weeks * 5 + min(rest, 5)
 
 
 def _weekday_at(index: int) -> date:
-    return date.fromisoformat(str(np.busday_offset(EPOCH, index, roll="forward")))
+    """The weekday with ``_weekday_index`` equal to ``index``."""
+    weeks, rest = divmod(index, 5)
+    return EPOCH + timedelta(days=weeks * 7 + rest)
 
 
 def intraday_windows(first: date, last: date, as_of: date, days: int) -> list[Window]:
