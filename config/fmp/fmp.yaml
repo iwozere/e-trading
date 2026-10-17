@@ -4,17 +4,18 @@
 fmp:
   dump_id: "2026-10"
   base_url: https://financialmodelingprep.com/stable/
-  rate_limit_per_min: 600        # 80% of Premium's 750 [VERIFY on the paid plan]
-  workers: 12
+  rate_limit_per_min: 2400       # 80% of Ultimate's 3,000 (owner upgraded Premium -> Ultimate 2026-10-17)
+  workers: 32                    # 12 workers sustained ~595/min against the 600 limit; 2,400/min needs more in flight
   priorities: [P0, P1]           # add P2 only if the budget allows (spec §5)
   daily_from: 2000-01-01
   daily_window_years: 5          # one daily request per symbol and 5-year window (D37)
   page_size: 100                 # free key caps limit at 100; raise after the paid probe
   bandwidth:
-    cap_gb: 50
+    cap_gb: 150                  # Ultimate (Premium 50); trailing 30 days
     safety: 0.90
-    basis: decoded               # 'wire' only after the paid probe proves the cap counts compressed bytes
+    basis: decoded               # 2026-10-17 dashboard: FMP counts ~0.75 decoded bytes, 5-9x the wire bytes (D77)
     window_days: 30
+    scale: 1.0                   # dashboard bytes per local byte; `fmp calibrate-usage` writes the measured value
   intraday:
     interval: 5min               # owner 2026-10-17: try 5min first; probe-paid also measures 1hour as the fallback (D76)
     tiers: [A, B, C, D, E]

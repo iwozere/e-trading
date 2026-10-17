@@ -81,12 +81,13 @@ def write_results(data_root: Path, findings: Any, settings: dict[str, Any], call
     return path
 
 
-def write_calibration(data_root: Path, calibration: dict[str, Any], basis: Optional[str]) -> Path:
-    """Record a ``calibrate-usage`` result; a decided ``basis`` becomes ``settings.bandwidth.basis``."""
+def write_calibration(data_root: Path, calibration: dict[str, Any], basis: Optional[str],
+                      scale: Optional[float] = None) -> Path:
+    """Record a ``calibrate-usage`` result; a decided ``basis`` (and ``scale``) becomes ``settings.bandwidth``."""
     payload = read_results(data_root) or {"settings": {}}
     payload["calibration"] = _plain(calibration)
     if basis is not None:
-        payload.setdefault("settings", {})["bandwidth"] = {"basis": basis}
+        payload.setdefault("settings", {})["bandwidth"] = {"basis": basis, **({"scale": scale} if scale else {})}
     path = results_path(data_root)
     atomic_write_bytes(path, json.dumps(payload, indent=1, sort_keys=True).encode("utf-8"))
     return path

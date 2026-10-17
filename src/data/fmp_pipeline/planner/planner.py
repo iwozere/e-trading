@@ -72,7 +72,7 @@ def bandwidth_guard(config: PlanConfig) -> BandwidthGuard:
     """Return the run's bandwidth hard stop built from the configuration."""
     bw = config.bandwidth
     return BandwidthGuard(cap_bytes=int(bw.cap_gb * GB), safety=bw.safety, basis=bw.basis,  # type: ignore[arg-type]
-                          window_days=bw.window_days)
+                          window_days=bw.window_days, scale=bw.scale)
 
 
 class Planner:

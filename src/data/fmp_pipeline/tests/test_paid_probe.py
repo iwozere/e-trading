@@ -15,7 +15,7 @@ import pytest
 
 from src.data.fmp_pipeline import cli
 from src.data.fmp_pipeline.manifest.manifest import Manifest
-from src.data.fmp_pipeline.planner.config import IntradayConfig, PlanConfig, load_config
+from src.data.fmp_pipeline.planner.config import BandwidthConfig, IntradayConfig, PlanConfig, load_config
 from src.data.fmp_pipeline.probe.calibrate import GB, LocalUsage, calibrate, local_usage
 from src.data.fmp_pipeline.probe.paid_analysis import (
     RowCapProbe,
@@ -205,6 +205,26 @@ def test_calibration_verdicts():
     assert calibrate(1.0, LocalUsage(0, 0, ())).basis is None
     with pytest.raises(ValueError):
         calibrate(0, usage)
+
+
+def test_calibration_records_the_dashboard_ratio(tmp_path: Path):
+    usage = LocalUsage(int(1.0 * GB), int(7.0 * GB), ("m.sqlite",))
+    fmp_style = calibrate(5.25, usage)  # what the 2026-10 dashboard does: ~0.75 of the decoded bytes
+    assert (fmp_style.basis, fmp_style.scale) == ("decoded", 0.75) and "0.75 per byte" in fmp_style.message
+    assert calibrate(1.05, usage).scale == 1.05
+    lagging = calibrate(0.004, LocalUsage(int(0.05 * GB), int(0.1 * GB), ()))  # the meter showed 4 MB
+    assert lagging.basis is None and lagging.scale is None and "at least 0.5 GB" in lagging.message
+    write_calibration(tmp_path, vars(fmp_style), fmp_style.basis, fmp_style.scale)
+    applied = apply_probe_results(PlanConfig(bandwidth=BandwidthConfig(cap_gb=150)), tmp_path).bandwidth
+    assert (applied.basis, applied.scale) == ("decoded", 0.75)
+    assert applied.limit_bytes == pytest.approx(0.9 * 150 * GB / 0.75)
+
+
+def test_config_rejects_a_non_positive_scale(tmp_path: Path):
+    config = tmp_path / "fmp.yaml"
+    config.write_text("fmp:\n  bandwidth:\n    scale: 0\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="fmp.bandwidth.scale"):
+        load_config(config)
 
 
 def test_local_usage_reads_manifests_and_ledgers(tmp_path: Path):

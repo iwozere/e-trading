@@ -49,7 +49,7 @@ _HEADER = ("| {0} | Done | Planned | Deferred | Done wire GB | Done decoded GB |
 
 def render_budget_plan(projection: Projection, universe: Universe, config: PlanConfig, ctx: PlanContext) -> str:
     """Return ``budget_plan.md``."""
-    budget = config.bandwidth.safety * config.bandwidth.cap_gb * GB
+    budget = config.bandwidth.limit_bytes
     intraday = config.intraday
     lines = [
         f"# FMP budget plan — dump `{ctx.dump_id}`",
@@ -72,7 +72,9 @@ def render_budget_plan(projection: Projection, universe: Universe, config: PlanC
         + f", {intraday.session_bars} bars/day, {intraday.decoded_bytes_per_row:g} B/row decoded and "
           f"{intraday.wire_bytes_per_row:g} B/row wire (assumed). Tiers: {', '.join(intraday.tiers)}.",
         f"- Bandwidth cap: {config.bandwidth.cap_gb:g} GB per {config.bandwidth.window_days} days, hard stop at "
-        f"{config.bandwidth.safety:.0%} = **{_gb(budget)} GB**, counted on `{config.bandwidth.basis}` bytes. Used in "
+        f"{config.bandwidth.safety:.0%} = **{_gb(budget)} GB**, counted on `{config.bandwidth.basis}` bytes"
+        + (f" (FMP counts {config.bandwidth.scale:g} bytes per local byte)" if config.bandwidth.scale != 1 else "")
+        + ". Used in "
         f"the current window: {_gb(ctx.used_wire)} GB wire, {_gb(ctx.used_decoded)} GB decoded.",
         "",
         "## Projection per block (spec §6.3.5 order)",

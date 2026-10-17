@@ -129,7 +129,7 @@ class RunLog:
         pending = counts.get("pending", 0) + counts.get("running", 0)
         wire, decoded = manifest.bandwidth_used(guard.window_days)
         used = wire if guard.basis == "wire" else decoded
-        limit = guard.safety * guard.cap_bytes
+        limit = guard.limit_bytes
         rate = done / elapsed_min
         eta_h = pending / rate / 60 if rate > 0 else None
         fields: dict[str, Any] = {

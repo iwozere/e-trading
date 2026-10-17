@@ -116,6 +116,16 @@ async def test_bandwidth_guard_on_wire_basis(tmp_path: Path):
         assert BandwidthGuard(cap_bytes=100_000, safety=0.9, basis="decoded").exceeded(manifest) is None
 
 
+def test_bandwidth_guard_scales_local_bytes_to_what_fmp_counts(tmp_path: Path):
+    with Manifest(tmp_path / "m.sqlite", "d") as manifest:
+        manifest.record_bandwidth(0, 10_000)
+        # 10,000 local bytes are 7,500 FMP bytes at scale 0.75: under 90% of a 10,000 cap, unlike unscaled.
+        assert BandwidthGuard(cap_bytes=10_000, safety=0.9, basis="decoded", scale=0.75).exceeded(manifest) is None
+        assert BandwidthGuard(cap_bytes=10_000, safety=0.9, basis="decoded").exceeded(manifest)
+        message = BandwidthGuard(cap_bytes=10_000, safety=0.9, basis="decoded", scale=1.25).exceeded(manifest)
+        assert message is not None and "1.25 dashboard bytes per local byte" in message
+
+
 @pytest.mark.asyncio
 async def test_sink_failure_fails_only_that_task_and_async_sinks_work(tmp_path: Path):
     sunk: list[str] = []

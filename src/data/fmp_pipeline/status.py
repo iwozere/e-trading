@@ -47,7 +47,7 @@ def render_status(manifest: Manifest, config: PlanConfig) -> str:
 
     wire, decoded = manifest.bandwidth_used(config.bandwidth.window_days)
     used = wire if config.bandwidth.basis == "wire" else decoded
-    limit = config.bandwidth.safety * config.bandwidth.cap_gb * GB
+    limit = config.bandwidth.limit_bytes
     lines += ["", f"Bandwidth, last {config.bandwidth.window_days} days: {wire / GB:.2f} GB wire, "
                   f"{decoded / GB:.2f} GB decoded; hard stop at {limit / GB:.2f} GB {config.bandwidth.basis} "
                   f"({used / limit:.0%} used)."]

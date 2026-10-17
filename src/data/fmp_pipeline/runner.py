@@ -66,6 +66,7 @@ class BandwidthGuard:
     refresh_s: float = 60.0
     clock: Callable[[], float] = time.monotonic
     run_limit_bytes: Optional[int] = None
+    scale: float = 1.0
     _used: Optional[int] = field(default=None, init=False, repr=False)
     _synced_at: float = field(default=0.0, init=False, repr=False)
     run_used: int = field(default=0, init=False)
@@ -87,11 +88,16 @@ class BandwidthGuard:
             self._used = wire if self.basis == "wire" else decoded
             self._synced_at = self.clock()
         used = self._used
-        limit = self.safety * self.cap_bytes
-        if used >= limit:
+        if used >= self.limit_bytes:
+            scaled = f" at {self.scale:g} dashboard bytes per local byte" if self.scale != 1 else ""
             return (f"bandwidth {used / GB:.2f} GB ({self.basis}, {self.window_days}d) reached "
-                    f"{self.safety:.0%} of the {self.cap_bytes / GB:.0f} GB cap")
+                    f"{self.safety:.0%} of the {self.cap_bytes / GB:.0f} GB cap{scaled}")
         return None
+
+    @property
+    def limit_bytes(self) -> float:
+        """The window hard stop in locally counted ``basis`` bytes: ``safety × cap / scale``."""
+        return self.safety * self.cap_bytes / self.scale
 
 
 @dataclass

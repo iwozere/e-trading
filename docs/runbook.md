@@ -125,8 +125,11 @@ Get-Content (Get-ChildItem $root\logs\2026-10\run-*.jsonl | Select-Object -Last 
 
   At the cap, wait for the window to roll, or decide on a second month.
 - **After the first few GB**, read the bandwidth figure on the FMP dashboard and run
-  `fmp calibrate-usage --dashboard-gb 3.2`. If the figure matches compressed bytes, the basis switches to
-  `wire` and about 7× more fits (probe F10). If the result is not clear-cut, nothing changes.
+  `fmp calibrate-usage --dashboard-gb 3.2`. It records which bytes FMP counts and the ratio to ours
+  (`bandwidth.scale`), so the hard stop matches FMP's meter. In 2026-10 FMP counted about 0.75 × our decoded
+  bytes (D77). The meter lags: below 0.5 GB, or if the result is not clear-cut, nothing changes.
+- **After a plan upgrade**, set `bandwidth.cap_gb`, `rate_limit_per_min` (80% of the plan's) and `workers` in
+  `fmp.yaml`; they apply from the next `fmp run`. Re-run `fmp probe-paid` if the new plan may serve more.
 
 ## 4. Build and validate (Phase 4)
 

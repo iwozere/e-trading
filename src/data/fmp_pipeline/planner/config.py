@@ -25,16 +25,28 @@ DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "fmp" / "fmp.yaml"
 INTRADAY_MINUTES = {"1min": 1, "5min": 5, "15min": 15, "30min": 30, "1hour": 60, "4hour": 240}
 #: Minutes of a full regular NYSE session (09:30–16:00 ET).
 SESSION_MINUTES = 390
+GB = 1024**3
 
 
 @dataclass(frozen=True)
 class BandwidthConfig:
-    """The rolling bandwidth cap (spec §6.3.4)."""
+    """
+    The rolling bandwidth cap (spec §6.3.4).
+
+    ``scale`` is how many bytes FMP's dashboard counts per locally counted ``basis`` byte (``fmp calibrate-usage``
+    measures it; FMP counted ~0.75 decoded bytes in 2026-10, D77). The hard stop is ``limit_bytes`` local bytes.
+    """
 
     cap_gb: float = 50.0
     safety: float = 0.90
     basis: str = "decoded"
     window_days: int = 30
+    scale: float = 1.0
+
+    @property
+    def limit_bytes(self) -> float:
+        """The hard stop in locally counted ``basis`` bytes: ``safety × cap / scale``."""
+        return self.safety * self.cap_gb * GB / self.scale
 
 
 @dataclass(frozen=True)
@@ -285,6 +297,8 @@ def load_config(path: Optional[Path] = None) -> PlanConfig:
     config = _merge(PlanConfig(), section, "fmp.")
     if config.bandwidth.basis not in ("wire", "decoded"):
         raise ValueError("fmp.bandwidth.basis must be 'wire' or 'decoded'")
+    if config.bandwidth.scale <= 0:
+        raise ValueError("fmp.bandwidth.scale must be positive")
     if config.adapter.policy != "fmp_first":
         raise ValueError("fmp.adapter.policy must be 'fmp_first' (the only policy, spec §9.2)")
     if config.intraday.interval not in INTRADAY_MINUTES:

@@ -417,7 +417,7 @@ def _calibrate_usage(args: argparse.Namespace) -> int:
         _logger.error("%s", exc)
         return EXIT_USAGE
     write_calibration(data_root, {**vars(result), "window_days": args.window_days, "sources": usage.sources},
-                      result.basis)
+                      result.basis, result.scale)
     (_logger.info if result.basis else _logger.warning)("Bandwidth calibration: %s", result.message)
     return EXIT_OK if result.basis else EXIT_STOPPED
 
