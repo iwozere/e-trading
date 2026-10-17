@@ -8,7 +8,7 @@ Usage (PowerShell, from the project root)::
 
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli probe-free
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli probe-free --offline   # rebuild report from cache
-    .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli probe-paid        # Phase 2, right after buying Premium (one unattended command)
+    .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli probe-paid [--interval 5min]   # Phase 2, right after buying Premium
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli calibrate-usage --dashboard-gb 3.2   # wire vs decoded bandwidth basis
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli plan --dry-run   # budget_plan.md, no new tasks
     .venv\\Scripts\\python.exe -m src.data.fmp_pipeline.cli plan --offline   # re-plan from the archive only
@@ -376,7 +376,7 @@ DEFAULT_PAID_REPORT = PROJECT_ROOT / "docs" / "fmp_paid_probe_report.md"
 
 
 def _probe_paid(args: argparse.Namespace) -> int:
-    from src.data.fmp_pipeline.probe.paid_probe import PaidProbe
+    from src.data.fmp_pipeline.probe.paid_probe import INTERVALS, PaidProbe
     from src.data.fmp_pipeline.probe.paid_report import MARKER, TITLE, render_paid_report
     from src.data.fmp_pipeline.probe.results import PROBE_DIR, write_results
 
@@ -385,11 +385,19 @@ def _probe_paid(args: argparse.Namespace) -> int:
     if not args.offline and not api_key:
         _logger.error("FMP_API_KEY is not set (the Premium key); use --offline to rebuild from the cache")
         return EXIT_USAGE
+    try:
+        interval = args.interval or load_config(args.config).intraday.interval
+    except (FileNotFoundError, ValueError) as exc:
+        _logger.error("%s", exc)
+        return EXIT_USAGE
+    if interval not in INTERVALS:
+        _logger.error("Unknown intraday interval %r; expected one of %s", interval, ", ".join(INTERVALS))
+        return EXIT_USAGE
     with ProbeClient(api_key, data_root / PROBE_DIR, budget=args.budget, offline=args.offline) as client:
-        run = PaidProbe(client).run()
+        run = PaidProbe(client, interval=interval).run()
         calls_used = client.calls_used
     write_report(args.report, render_paid_report(run, calls_used, args.budget), MARKER, TITLE)
-    path = write_results(data_root, run.findings, run.findings.settings, calls_used)
+    path = write_results(data_root, run.findings, run.findings.settings, calls_used, run.findings.settings_by_interval)
     _logger.info("Paid probe done: %d calls of %d; report %s; settings %s -> %s", calls_used, args.budget,
                  args.report, run.findings.settings, path)
     for note in run.findings.notes:
@@ -532,6 +540,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     paid.add_argument("--offline", action="store_true", help="Use cached responses only; make no calls")
     paid.add_argument("--data-root", type=Path, default=None, help="Default: DATA_CACHE_DIR/fmp-data")
     paid.add_argument("--report", type=Path, default=DEFAULT_PAID_REPORT)
+    paid.add_argument("--config", type=Path, default=None, help="Default: config/fmp/fmp.yaml")
+    paid.add_argument("--interval", default=None, help="Intraday interval to measure in depth together with 1hour "
+                                                       "(default: intraday.interval of the config)")
     paid.set_defaults(handler=_probe_paid)
 
     calibrate = commands.add_parser("calibrate-usage", help="Compare the FMP dashboard's bandwidth with local "

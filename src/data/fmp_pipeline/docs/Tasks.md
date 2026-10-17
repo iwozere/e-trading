@@ -49,6 +49,8 @@ only after every Phase 1 item below is done.
       calendar, `validation_report.md/.json`, `coverage_report.md`, `fmp validate`; `fmp verify --final` with the
       7-item spec §14 checklist, `ARCHIVE.sha256`/`VINTAGE.sha256`, gzip test, backup check, read-only archive,
       READY TO CANCEL; D61–D65 (2026-10-15)
+- [x] `fmp probe-paid` measures the configured intraday interval and `1hour` in depth, plus bytes per row;
+      settings follow `intraday.interval` (D76, 2026-10-17)
 - [x] `fmp probe-paid` (Phase 2, one unattended command: coverage, intervals, hourly conventions across DST, row cap,
       depth, intraday split adjustment, lists, page caps, calendar windows, indicator names, ticker reuse →
       `docs/fmp_paid_probe_report.md` + `probe_results.json` applied by every command) and

@@ -15,7 +15,7 @@ import pytest
 
 from src.data.fmp_pipeline import cli
 from src.data.fmp_pipeline.manifest.manifest import Manifest
-from src.data.fmp_pipeline.planner.config import PlanConfig, load_config
+from src.data.fmp_pipeline.planner.config import IntradayConfig, PlanConfig, load_config
 from src.data.fmp_pipeline.probe.calibrate import GB, LocalUsage, calibrate, local_usage
 from src.data.fmp_pipeline.probe.paid_analysis import (
     RowCapProbe,
@@ -26,7 +26,14 @@ from src.data.fmp_pipeline.probe.paid_analysis import (
     row_cap,
     window_complete,
 )
-from src.data.fmp_pipeline.probe.paid_probe import PaidFindings, PaidProbe, derive_settings
+from src.data.fmp_pipeline.probe.paid_probe import (
+    IntradayFindings,
+    PaidFindings,
+    PaidProbe,
+    derive_settings,
+    intraday_settings,
+    session_bars,
+)
 from src.data.fmp_pipeline.probe.paid_report import MARKER, render_paid_report
 from src.data.fmp_pipeline.probe.probe_client import ProbeClient
 from src.data.fmp_pipeline.probe.results import apply_probe_results, read_results, write_calibration, write_results
@@ -38,16 +45,16 @@ DAYS = ("2024-03-08", "2024-03-11", "2024-11-01", "2024-11-04", "2025-03-07", "2
 
 
 def hourly_rows(days: tuple[str, ...], written_in: str = ET, label: str = "start",
-                extra_hours: bool = False) -> list[dict[str, Any]]:
-    """Synthetic hourly rows: regular-session bars (early close respected) written the way a vendor might."""
+                extra_hours: bool = False, minutes: int = 60) -> list[dict[str, Any]]:
+    """Synthetic intraday rows: regular-session bars (early close respected) written the way a vendor might."""
     rows = []
     for day in days:
         close = 13 * 60 if day == "2024-11-29" else 16 * 60
-        starts = list(range(9 * 60 + 30, close, 60)) + ([16 * 60 + 30] if extra_hours else [])
+        starts = list(range(9 * 60 + 30, close, minutes)) + ([16 * 60 + 30] if extra_hours else [])
         for minute in starts:
             stamp = pd.Timestamp(f"{day} {minute // 60:02d}:{minute % 60:02d}").tz_localize(ET)
             if label == "end":
-                stamp += pd.Timedelta(minutes=60)
+                stamp += pd.Timedelta(minutes=minutes)
             local = stamp.tz_convert(written_in).tz_localize(None)
             rows.append({"date": local.strftime("%Y-%m-%d %H:%M:%S"), "close": 1.0})
     return rows
@@ -62,6 +69,20 @@ def test_conventions_are_identified_across_dst(written_in: str, label: str):
     assert (conventions.timezone, conventions.label) == (written_in, label)
     assert conventions.bars_per_day == 7 and not conventions.extended_hours and conventions.conclusive
     assert conventions.early_close_bars == {"2024-11-29": 4} and conventions.days == len(DAYS)
+
+
+@pytest.mark.parametrize("written_in,label", [(ET, "start"), ("UTC", "end")])
+def test_five_minute_conventions(written_in: str, label: str):
+    conventions = hourly_conventions(hourly_rows(DAYS, written_in, label, minutes=5), minutes=5)
+    assert (conventions.timezone, conventions.label) == (written_in, label) and conventions.bars_per_day == 78
+    assert conventions.early_close_bars == {"2024-11-29": 42}
+    assert not hourly_conventions(hourly_rows(DAYS, minutes=5), minutes=60).conclusive  # wrong bar length
+
+
+def test_session_bars_per_interval():
+    assert [session_bars(i) for i in ("1min", "5min", "15min", "30min", "1hour", "4hour")] == [390, 78, 26, 13, 7, 2]
+    assert IntradayConfig(interval="5min").session_bars == 78 and IntradayConfig().session_bars == 7
+    assert IntradayConfig(interval="5min", bars_per_day=80).session_bars == 80
 
 
 def test_conventions_extended_hours_and_inconclusive():
@@ -105,16 +126,21 @@ def test_split_window_and_reuse_verdicts():
 
 def test_derive_settings_only_from_conclusive_findings():
     assert derive_settings(PaidFindings()) == {}
-    findings = PaidFindings(conventions=hourly_conventions(hourly_rows(DAYS)),
-                            cap=row_cap([RowCapProbe(date(2016, 1, 1), date(2025, 12, 31), 5000, date(2023, 3, 1),
-                                                     date(2025, 12, 31), 17500)]),
-                            earliest_hourly=date(2010, 3, 1), page_sizes={"delisted-companies": 1000},
+    hourly = IntradayFindings("1hour", conventions=hourly_conventions(hourly_rows(DAYS)),
+                              cap=row_cap([RowCapProbe(date(2016, 1, 1), date(2025, 12, 31), 5000, date(2023, 3, 1),
+                                                       date(2025, 12, 31), 17500)]),
+                              earliest=date(2010, 3, 1), wire_bytes_per_row=20.5, decoded_bytes_per_row=140.0)
+    findings = PaidFindings(intraday={"1hour": hourly}, page_sizes={"delisted-companies": 1000},
                             calendar_windows={"splits-calendar": 90, "earnings-calendar": 30},
                             indicators={"GDP": 40, "CPI": 0})
     assert derive_settings(findings) == {
-        "intraday": {"max_rows": 5000, "bars_per_day": 7, "earliest": "2010-03-01"},
+        "intraday": {"max_rows": 5000, "bars_per_day": 7, "earliest": "2010-03-01", "wire_bytes_per_row": 20.5,
+                     "decoded_bytes_per_row": 140.0},
         "build": {"intraday_tz": ET, "intraday_label": "start"}, "page_size": 1000, "calendar_window_days": 30,
         "economic_indicators": ["GDP"]}
+    findings.interval = "5min"  # configured interval not measured: no intraday settings at all
+    assert "intraday" not in derive_settings(findings) and "build" not in derive_settings(findings)
+    assert intraday_settings(IntradayFindings("5min")) == {}
 
 
 # --- results file and config ------------------------------------------------------------------------------------
@@ -125,7 +151,7 @@ def test_results_apply_over_the_yaml_config(tmp_path: Path):
     assert apply_probe_results(config, tmp_path) is config  # no paid probe yet
     settings = {"intraday": {"max_rows": 5000, "earliest": "2010-03-01"}, "build": {"intraday_label": "end"},
                 "page_size": 1000}
-    write_results(tmp_path, PaidFindings(earliest_hourly=date(2010, 3, 1)), settings, 120)
+    write_results(tmp_path, PaidFindings(), settings, 120)
     applied = apply_probe_results(config, tmp_path)
     assert applied.intraday.max_rows == 5000 and applied.intraday.earliest == date(2010, 3, 1)
     assert applied.build.intraday_label == "end" and applied.page_size == 1000
@@ -139,6 +165,31 @@ def test_results_apply_over_the_yaml_config(tmp_path: Path):
     write_results(tmp_path, PaidFindings(), {"nonsense": 1}, 130)
     with pytest.raises(ValueError, match="unknown setting probe_results.nonsense"):
         apply_probe_results(config, tmp_path)
+
+
+def test_results_follow_the_configured_interval(tmp_path: Path, caplog: pytest.LogCaptureFixture):
+    by_interval: dict[str, dict[str, Any]] = {
+        "5min": {"intraday": {"max_rows": 9000, "bars_per_day": 78, "earliest": "2015-01-01"},
+                 "build": {"intraday_label": "end"}},
+        "1hour": {"intraday": {"max_rows": 5000, "bars_per_day": 7, "earliest": "2010-03-01"}}}
+    settings = {**by_interval["5min"], "page_size": 1000}
+    write_results(tmp_path, PaidFindings(interval="5min"), settings, 120, by_interval)
+    five = apply_probe_results(PlanConfig(intraday=IntradayConfig(interval="5min")), tmp_path)
+    assert (five.intraday.max_rows, five.intraday.session_bars, five.build.intraday_label) == (9000, 78, "end")
+    hourly = apply_probe_results(PlanConfig(), tmp_path)  # owner switched back to 1hour: no re-probe needed
+    assert (hourly.intraday.max_rows, hourly.intraday.earliest, hourly.build.intraday_label) == (
+        5000, date(2010, 3, 1), "start")
+    assert hourly.page_size == 1000
+    unmeasured = apply_probe_results(PlanConfig(intraday=IntradayConfig(interval="15min")), tmp_path)
+    assert unmeasured.intraday.max_rows is None and unmeasured.intraday.session_bars == 26
+    assert unmeasured.page_size == 1000 and "did not measure intraday 15min" in caplog.text
+
+
+def test_config_rejects_an_unknown_interval(tmp_path: Path):
+    config = tmp_path / "fmp.yaml"
+    config.write_text("fmp:\n  intraday:\n    interval: 2hour\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="fmp.intraday.interval"):
+        load_config(config)
 
 
 # --- calibration ----------------------------------------------------------------------------------------------
@@ -213,18 +264,53 @@ def test_paid_probe_against_the_mock(tmp_path: Path):
     f = run.findings
     assert f.intervals["1min"] == "plan_restricted" and f.intervals["1hour"] == "ok"
     assert f.coverage["BRK-B"] == "ok" and f.coverage["BRK.B"] == "plan_restricted"
-    assert f.conventions is not None and (f.conventions.timezone, f.conventions.label) == (ET, "start")
-    assert f.conventions.bars_per_day == 7  # the mock ignores holidays, so extended hours show up there
-    assert f.cap is not None and f.cap.capped and f.cap.max_rows == 1000 and f.cap.keeps == "newest"
-    assert f.earliest_hourly is not None and date(2010, 2, 1) <= f.earliest_hourly <= date(2010, 4, 1)
-    assert f.intraday_split == "split_adjusted" and f.earliest_daily is None
+    assert list(f.intraday) == ["1hour"]
+    m = f.intraday["1hour"]
+    assert m.conventions is not None and (m.conventions.timezone, m.conventions.label) == (ET, "start")
+    assert m.conventions.bars_per_day == 7  # the mock ignores holidays, so extended hours show up there
+    assert m.cap is not None and m.cap.capped and m.cap.max_rows == 1000 and m.cap.keeps == "newest"
+    assert m.earliest is not None and date(2010, 2, 1) <= m.earliest <= date(2010, 4, 1)
+    assert m.split == "split_adjusted" and f.earliest_daily is None
+    assert m.decoded_bytes_per_row and m.wire_bytes_per_row and m.wire_bytes_per_row < m.decoded_bytes_per_row
     assert f.page_sizes["delisted-companies"] == 100 and f.lists["stock-list"]["rows"] == 2
     assert f.exchanges == {"NASDAQ": 2, "NYSE": 1}
     assert f.settings["intraday"]["max_rows"] == 1000 and f.settings["build"]["intraday_tz"] == ET
     assert f.settings["page_size"] == 100 and calls < 150
+    assert f.settings["intraday"]["decoded_bytes_per_row"] == m.decoded_bytes_per_row
+    assert list(f.settings_by_interval) == ["1hour"]
     assert list(f.reuse) == ["SYM00001"] and f.reuse["SYM00001"].startswith("delisted and actively trading: ")
     text = render_paid_report(run, calls, 400)
-    assert text.startswith(MARKER) and "| §3.3 row cap / maximum window | 1000 rows, keeps the newest end |" in text
+    assert text.startswith(MARKER) and "| §3.3 row cap / maximum window (`1hour`) | 1000 rows, keeps the newest end |" in text
+
+
+def test_paid_probe_measures_five_minutes_and_hourly(tmp_path: Path):
+    with _mock() as fmp, ProbeClient(fmp.config.api_key, tmp_path / "cache", budget=400, min_interval_s=0,
+                                     base_url=fmp.base_url) as client:
+        run = PaidProbe(client, today=date(2026, 10, 14), interval="5min").run()
+        calls = client.calls_used
+    f = run.findings
+    assert list(f.intraday) == ["5min", "1hour"] and f.interval == "5min"
+    five = f.intraday["5min"]
+    assert five.conventions is not None and five.conventions.bars_per_day == 78
+    assert (five.conventions.timezone, five.conventions.label) == (ET, "start")
+    assert five.cap is not None and five.cap.capped and five.cap.max_rows == 1000 and five.split == "split_adjusted"
+    assert five.earliest is not None and date(2010, 2, 1) <= five.earliest <= date(2010, 4, 1)
+    assert f.settings["intraday"]["bars_per_day"] == 78
+    assert f.settings_by_interval["1hour"]["intraday"]["bars_per_day"] == 7 and calls < 200
+    text = render_paid_report(run, calls, 400)
+    assert "(intraday `5min`)" in text and "## Row-cap requests (AAPL `5min`)" in text
+    assert "## Row-cap requests (AAPL `1hour`)" in text and "| §3.3 row cap / maximum window (`5min`) |" in text
+    with pytest.raises(ValueError, match="unknown intraday interval"):
+        PaidProbe(client, interval="2hour")
+
+
+def test_paid_probe_when_the_configured_interval_is_not_served(tmp_path: Path):
+    with MockFmpServer(MockConfig(restricted_endpoints={"historical-chart/5min"})) as fmp, \
+            ProbeClient(fmp.config.api_key, tmp_path, budget=300, min_interval_s=0, base_url=fmp.base_url) as client:
+        run = PaidProbe(client, today=date(2026, 10, 14), interval="5min").run()
+    f = run.findings
+    assert "5min bars are not served" in f.notes[0] and list(f.intraday) == ["1hour"]
+    assert "intraday" not in f.settings and "intraday" in f.settings_by_interval["1hour"]
 
 
 def test_paid_probe_without_hourly_bars(tmp_path: Path):
@@ -246,7 +332,7 @@ def test_cli_probe_paid_and_calibrate(tmp_path: Path, monkeypatch: pytest.Monkey
 
         monkeypatch.setattr(cli, "ProbeClient", client)
         monkeypatch.setattr(cli, "_api_key", lambda: None)
-        args = ["probe-paid", "--data-root", str(tmp_path), "--report", str(report)]
+        args = ["probe-paid", "--data-root", str(tmp_path), "--report", str(report), "--interval", "1hour"]
         assert cli.main(args) == cli.EXIT_USAGE  # no key
         monkeypatch.setattr(cli, "_api_key", lambda: fmp.config.api_key)
         assert cli.main(args) == cli.EXIT_OK
@@ -258,6 +344,11 @@ def test_cli_probe_paid_and_calibrate(tmp_path: Path, monkeypatch: pytest.Monkey
     config.write_text("fmp:\n  dump_id: c\n", encoding="utf-8")
     plan_config = cli._config(argparse.Namespace(config=config), tmp_path)  # the CLI's config: probe applied
     assert plan_config.intraday.max_rows == 1000 and load_config(config).intraday.max_rows is None
+    assert set(read_results(tmp_path)["intraday_by_interval"]) == {"1hour"}  # type: ignore[index]
+    assert cli.main(args + ["--offline", "--interval", "2hour"]) == cli.EXIT_USAGE
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("fmp:\n  intraday:\n    interval: 2hour\n", encoding="utf-8")
+    assert cli.main(args[:-2] + ["--offline", "--config", str(bad)]) == cli.EXIT_USAGE
     assert cli.main(["calibrate-usage", "--dashboard-gb", "0.001", "--data-root", str(tmp_path)]) in (
         cli.EXIT_OK, cli.EXIT_STOPPED)
     assert read_results(tmp_path)["calibration"]["dashboard_gb"] == 0.001  # type: ignore[index]

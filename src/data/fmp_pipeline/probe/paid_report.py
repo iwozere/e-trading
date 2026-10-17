@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from src.data.fmp_pipeline.probe.paid_probe import PaidFindings, PaidRun
+from src.data.fmp_pipeline.probe.paid_probe import IntradayFindings, PaidFindings, PaidRun
 
 MARKER = "<!-- AUTO-GENERATED BELOW by `fmp probe-paid`; everything after this line is overwritten -->"
 TITLE = "FMP paid probe report (Phase 2)"
@@ -21,28 +21,61 @@ def _yes(value: bool) -> str:
     return "yes" if value else "no"
 
 
+def _cap_text(m: IntradayFindings) -> str:
+    cap = m.cap
+    if cap is None:
+        return "not measured"
+    return (f"no cap seen; largest full response {cap.largest_full} rows" if not cap.capped
+            else f"{cap.max_rows} rows, keeps the {cap.keeps or 'unclear'} end")
+
+
+def _conventions_text(m: IntradayFindings) -> str:
+    c = m.conventions
+    if c is None:
+        return "not measured"
+    if not c.conclusive:
+        return "inconclusive: no single convention puts every first bar at 09:30 ET"
+    return (f"`date` is {c.timezone} time labelling the bar {c.label}; {c.bars_per_day} bars per regular day; "
+            f"extended hours {_yes(c.extended_hours)}")
+
+
+def _bytes_text(m: IntradayFindings) -> str:
+    if not m.decoded_bytes_per_row:
+        return "not measured"
+    return f"{m.wire_bytes_per_row:g} B/row wire, {m.decoded_bytes_per_row:g} B/row decoded"
+
+
+def _per_interval(f: PaidFindings, item: str, text: Any) -> list[tuple[str, str]]:
+    """One answer row per measured interval (configured one first); ``not measured`` when none was."""
+    if not f.intraday:
+        return [(item, "not measured")]
+    return [(f"{item} (`{i}`)", text(m)) for i, m in f.intraday.items()]
+
+
 def _answers(f: PaidFindings) -> list[tuple[str, str]]:
     """One answer per "Requires paid probe" item of ``docs/fmp_probe_report.md``."""
-    c, cap = f.conventions, f.cap
     served = [i for i, s in f.intervals.items() if s == "ok"]
-    cap_text = ("no cap seen; largest full response " + str(cap.largest_full) + " rows" if cap and not cap.capped
-                else f"{cap.max_rows} rows, keeps the {cap.keeps or 'unclear'} end" if cap else "not measured")
-    conv_text = (f"`date` is {c.timezone} time labelling the bar {c.label}; {c.bars_per_day} bars per regular day; "
-                 f"extended hours {_yes(c.extended_hours)}" if c and c.conclusive else
-                 "inconclusive: no single convention puts every first bar at 09:30 ET" if c else "not measured")
-    rows = [
-        ("§3.1 / A1 intraday intervals", ", ".join(served) or "none"),
-        ("§3.2 / A1 depth of `1hour`", f"earliest month with bars: {f.earliest_hourly}" if f.earliest_hourly
-         else "; ".join(n for n in f.notes if "hourly" in n) or "not measured"),
-        ("§3.3 row cap / maximum window", cap_text),
+
+    def depth(m: IntradayFindings) -> str:
+        return (f"earliest month with bars: {m.earliest}" if m.earliest
+                else "; ".join(n for n in f.notes if n.startswith(f"{m.interval} ") or f" {m.interval} " in n)
+                or "not measured")
+
+    rows = [("§3.1 / A1 intraday intervals", ", ".join(served) or "none")]
+    rows += _per_interval(f, "§3.2 / A1 intraday depth", depth)
+    rows += _per_interval(f, "§3.3 row cap / maximum window", _cap_text)
+    rows += _per_interval(f, "Intraday bytes per row", _bytes_text)
+    rows += [
         ("§3.4 / A2 bandwidth basis", "measured by `fmp calibrate-usage` (dashboard vs local counters)"),
         ("§3.5 / A4 delisted symbols in prices", ", ".join(f"{s}: {v}" for s, v in f.delisted.items())),
         ("§3.5 / A5 constituent endpoints", ", ".join(f"{e}: {v['status']} ({v['rows']} rows)"
                                                       for e, v in f.lists.items() if "constituent" in e)),
         ("§5.3 / A5 index prices", ", ".join(f"{s}: {f.coverage.get(s, '?')}"
                                              for s in ("^GSPC", "^IXIC", "^DJI", "^VIX", "^RUT"))),
-        ("§3.6 intraday split adjustment", f.intraday_split or "not measured"),
-        ("§3.7 / A9 / A11 label, time zone, extended hours, DST", conv_text),
+    ]
+    rows += _per_interval(f, "§3.6 intraday split adjustment", lambda m: m.split or "not measured")
+    rows += _per_interval(f, "§3.7 / A9 / A11 label, time zone, extended hours, DST", _conventions_text)
+    rows += [
         ("A6 calendar `from`/`to` maximum window",
          ", ".join(f"{e}: {d} days" if d else f"{e}: none complete" for e, d in f.calendar_windows.items())),
         ("A7 class-share symbol", f"BRK-B: {f.coverage.get('BRK-B')}, BRK.B: {f.coverage.get('BRK.B')}"),
@@ -59,6 +92,22 @@ def _answers(f: PaidFindings) -> list[tuple[str, str]]:
     return rows
 
 
+def _interval_sections(f: PaidFindings) -> list[str]:
+    """Row-cap requests and conventions detail per measured interval."""
+    lines: list[str] = []
+    for interval, m in f.intraday.items():
+        if m.cap_probes:
+            lines += ["", f"## Row-cap requests (AAPL `{interval}`)", "", "| Window | Rows | Expected | First | Last |",
+                      "|---|---|---|---|---|"]
+            lines += [f"| {p.start} … {p.end} | {p.rows:,} | {p.expected:,} | {p.first} | {p.last} |"
+                      for p in m.cap_probes]
+        if m.conventions is not None:
+            c = m.conventions
+            lines += ["", f"## `{interval}` conventions", "", f"Days examined: {c.days}. First bar per day (as "
+                      f"interpreted): {json.dumps(c.first_bars)}. Early-close days: {json.dumps(c.early_close_bars)}."]
+    return lines
+
+
 def render_paid_report(run: PaidRun, calls_used: int, budget: int) -> str:
     """Render the generated part of the report (starting with ``MARKER``)."""
     f = run.findings
@@ -69,21 +118,17 @@ def render_paid_report(run: PaidRun, calls_used: int, budget: int) -> str:
              f"Generated {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC. Calls used: **{calls_used} / {budget}**; "
              f"this run's responses: {wire / MB:.1f} MB wire, {decoded / MB:.1f} MB decoded."
              + (f" **Stopped early: {run.stopped}**" if run.stopped else ""), "",
-             "## Settings `fmp plan` and `fmp build` now use", "",
+             f"## Settings `fmp plan` and `fmp build` now use (intraday `{f.interval}`)", "",
              "Written to `<data_root>/probe-paid/probe_results.json` and applied over `config/fmp/fmp.yaml` "
              "(set `fmp.use_probe_results: false` to ignore):", "", "```json",
-             json.dumps(f.settings, indent=1, sort_keys=True), "```", "",
-             "## Answers to the paid-probe items", "", "| Item | Finding |", "|---|---|"]
+             json.dumps(f.settings, indent=1, sort_keys=True), "```", ""]
+    others = {i: v for i, v in f.settings_by_interval.items() if i != f.interval}
+    if others:
+        lines += ["Also measured; applied instead when `intraday.interval` is set to one of these:", "", "```json",
+                  json.dumps(others, indent=1, sort_keys=True), "```", ""]
+    lines += ["## Answers to the paid-probe items", "", "| Item | Finding |", "|---|---|"]
     lines += [f"| {item} | {answer.replace('|', '/')} |" for item, answer in _answers(f)]
-    if f.cap_probes:
-        lines += ["", "## Row-cap requests (AAPL `1hour`)", "", "| Window | Rows | Expected | First | Last |",
-                  "|---|---|---|---|---|"]
-        lines += [f"| {p.start} … {p.end} | {p.rows:,} | {p.expected:,} | {p.first} | {p.last} |"
-                  for p in f.cap_probes]
-    if f.conventions is not None:
-        c = f.conventions
-        lines += ["", "## Hourly conventions", "", f"Days examined: {c.days}. First bar per day (as interpreted): "
-                  f"{json.dumps(c.first_bars)}. Early-close days: {json.dumps(c.early_close_bars)}."]
+    lines += _interval_sections(f)
     lines += ["", "## Reference lists", "", "| Endpoint | Status | Rows | Fields |", "|---|---|---|---|"]
     lines += [f"| `{e}` | {v['status']} | {v['rows']:,} | {', '.join(v['fields'])} |" for e, v in f.lists.items()]
     if f.notes:

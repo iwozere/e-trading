@@ -70,13 +70,19 @@ The agent never buys, cancels or changes the FMP account (D10).
 ## 2. Purchase day: paid probe (Phase 2, gate G2)
 
 1. Put the Premium key in place (section 0).
-2. Run `fmp probe-paid`. It takes about 100 calls and a few MB. Responses are cached under
-   `probe-paid/`, so re-running costs nothing, and `--offline` rebuilds the report from the cache.
+2. Set `intraday.interval` in `fmp.yaml` to the interval you want (for example `5min`), or pass
+   `--interval 5min`. Run `fmp probe-paid`. It takes about 120 calls and a few MB, and measures that interval and
+   `1hour` in depth (D76). Responses are cached under `probe-paid/`, so re-running costs nothing, and
+   `--offline` rebuilds the report from the cache.
 3. Read `docs/fmp_paid_probe_report.md`. Its measured settings, such as the intraday row cap, time zone, label
    and page size, are written to `probe-paid/probe_results.json`. Every command applies them over `fmp.yaml`
    (`use_probe_results: false` switches this off).
-   - **If `1hour` is not served, stop.** Nothing substitutes another interval (spec §6.3.6). The choices are
-     Ultimate, building hours from `30min` or `15min` (more traffic), or no intraday.
+   - **If your interval is not served, stop.** Nothing substitutes another interval (spec §6.3.6). Switching
+     to another *measured* interval (the report shows `1hour` too) only needs `intraday.interval` changed and
+     `fmp plan` re-run; its settings are applied automatically. Otherwise: Ultimate, or no intraday.
+   - **Finer than `1hour`:** compare the intraday GB in `budget_plan.md` with the cap. `5min` is about 12× the
+     `1hour` traffic. Increments after cancelling (`ingest-increments`) and the DataManager adapter cover only
+     `1d`/`1h`, and yfinance keeps only about 60 days of 5-minute history, so finer data stays a one-off dump.
    - Reused tickers: if the report shows FMP merging different companies under one symbol, set
      `build.segment_reused_tickers: true` (D46).
 4. Run `fmp plan`. This writes the tasks and `budget_plan.md` with the real universe.

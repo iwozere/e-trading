@@ -16,13 +16,13 @@ fmp:
     basis: decoded               # 'wire' only after the paid probe proves the cap counts compressed bytes
     window_days: 30
   intraday:
-    interval: 1hour
+    interval: 5min               # owner 2026-10-17: try 5min first; probe-paid also measures 1hour as the fallback (D76)
     tiers: [A, B, C, D, E]
     earliest: earliest           # first daily bar; set a date if the paid probe shows a fixed 1h depth
     max_rows: null               # row cap per request: SET FROM THE PAID PROBE; until then no intraday task is written
-    bars_per_day: 7              # spec §8.4 [VERIFY]
+    bars_per_day: null           # null = full session at the interval (7 for 1hour, 78 for 5min); the paid probe measures it
     assumed_max_rows: 2000       # used only for the projection while max_rows is null
-    wire_bytes_per_row: 18       # assumed until the paid probe measures 1h responses
+    wire_bytes_per_row: 18       # assumed until the paid probe measures the interval's responses
     decoded_bytes_per_row: 110
   universe:
     include_otc: false

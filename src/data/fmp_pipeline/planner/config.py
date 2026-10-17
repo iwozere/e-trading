@@ -11,6 +11,7 @@ un-ignores ``config/*/*.yaml``.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, fields, is_dataclass, replace
 from datetime import date
 from pathlib import Path
@@ -20,6 +21,10 @@ import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "fmp" / "fmp.yaml"
+#: FMP ``historical-chart/<interval>`` names and their bar length in minutes.
+INTRADAY_MINUTES = {"1min": 1, "5min": 5, "15min": 15, "30min": 30, "1hour": 60, "4hour": 240}
+#: Minutes of a full regular NYSE session (09:30–16:00 ET).
+SESSION_MINUTES = 390
 
 
 @dataclass(frozen=True)
@@ -34,19 +39,30 @@ class BandwidthConfig:
 
 @dataclass(frozen=True)
 class IntradayConfig:
-    """Intraday download settings (spec §6.5). ``max_rows`` and ``bars_per_day`` come from the paid probe."""
+    """
+    Intraday download settings (spec §6.5). ``max_rows`` and ``bars_per_day`` come from the paid probe.
+
+    ``bars_per_day`` ``None`` means a full regular session at ``interval`` (see ``session_bars``).
+    """
 
     interval: str = "1hour"
     tiers: tuple[str, ...] = ("A", "B", "C", "D", "E")
     earliest: Optional[date] = None
     max_rows: Optional[int] = None
-    bars_per_day: int = 7
+    bars_per_day: Optional[int] = None
     safety_factor: float = 1.25
     truncation_ratio: float = 0.95
     delisted_margin_days: int = 30
     assumed_max_rows: int = 2000
     wire_bytes_per_row: float = 18.0
     decoded_bytes_per_row: float = 110.0
+
+    @property
+    def session_bars(self) -> int:
+        """Bars per regular day: the measured ``bars_per_day``, else 390 minutes / interval rounded up."""
+        if self.bars_per_day is not None:
+            return self.bars_per_day
+        return math.ceil(SESSION_MINUTES / INTRADAY_MINUTES[self.interval])
 
 
 @dataclass(frozen=True)
@@ -271,6 +287,8 @@ def load_config(path: Optional[Path] = None) -> PlanConfig:
         raise ValueError("fmp.bandwidth.basis must be 'wire' or 'decoded'")
     if config.adapter.policy != "fmp_first":
         raise ValueError("fmp.adapter.policy must be 'fmp_first' (the only policy, spec §9.2)")
+    if config.intraday.interval not in INTRADAY_MINUTES:
+        raise ValueError(f"fmp.intraday.interval must be one of {', '.join(INTRADAY_MINUTES)}")
     if config.build.intraday_label not in ("start", "end"):
         raise ValueError("fmp.build.intraday_label must be 'start' or 'end'")
     return config

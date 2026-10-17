@@ -69,7 +69,7 @@ def render_budget_plan(projection: Projection, universe: Universe, config: PlanC
         + (f"**{intraday.max_rows}** (configured)" if intraday.max_rows is not None
            else f"**unknown** — windows sized with an assumed {intraday.assumed_max_rows} rows; no intraday task is "
                 f"written until the paid probe sets `intraday.max_rows`")
-        + f", {intraday.bars_per_day} bars/day, {intraday.decoded_bytes_per_row:g} B/row decoded and "
+        + f", {intraday.session_bars} bars/day, {intraday.decoded_bytes_per_row:g} B/row decoded and "
           f"{intraday.wire_bytes_per_row:g} B/row wire (assumed). Tiers: {', '.join(intraday.tiers)}.",
         f"- Bandwidth cap: {config.bandwidth.cap_gb:g} GB per {config.bandwidth.window_days} days, hard stop at "
         f"{config.bandwidth.safety:.0%} = **{_gb(budget)} GB**, counted on `{config.bandwidth.basis}` bytes. Used in "

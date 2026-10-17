@@ -6,11 +6,15 @@ Stages (each only uses what earlier stages found):
 1. **Account and coverage**: a known symbol, symbols the free key could not see, indices, both class-share
    spellings, foreign listings, an unknown symbol, and well-known delisted symbols in the price endpoints.
 2. **Intraday intervals**: one day of each interval (``1min`` … ``4hour``).
-3. **Hourly conventions** (spec §8.4): AAPL hourly bars around both DST changes of two years plus two early
-   closes, which settle time zone, bar label, bars per day and extended hours.
-4. **Row cap**: 1-, 3- and 10-year hourly windows; capped responses give ``max_rows`` and which end is kept.
-5. **Depth**: the earliest year with hourly bars, then month-level bisection; the daily depth of AAPL.
-6. **Intraday split adjustment**: NVDA hourly bars across its 2024-06-10 10:1 split.
+3. **Intraday conventions** (spec §8.4): AAPL bars around both DST changes of two years plus two early closes,
+   which settle time zone, bar label, bars per day and extended hours.
+4. **Row cap**: 1-, 3- and 10-year windows; capped responses give ``max_rows`` and which end is kept, and all
+   responses together give the measured bytes per row.
+5. **Depth**: the earliest year with intraday bars, then month-level bisection; the daily depth of AAPL.
+6. **Intraday split adjustment**: NVDA bars across its 2024-06-10 10:1 split.
+
+Stages 3–6 run for the configured ``intraday.interval`` and for ``1hour`` (the fallback), so the owner chooses
+between them on measured numbers. Every measured interval's settings are kept (``settings_by_interval``).
 7. **Lists, paging and windows**: the reference lists the free key could not read (field names, exchange codes),
    page-size caps, constituent endpoints, calendar maximum windows, market-cap ranges, indicator names.
 8. **Ticker reuse** (spec §4.2.8): candidates from the full delisted list, then each one's whole price history.
@@ -21,11 +25,13 @@ D5), the call budget holds across runs, and a re-run costs no calls.
 
 from __future__ import annotations
 
+import math
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any, Optional
 
+from src.data.fmp_pipeline.planner.config import INTRADAY_MINUTES, SESSION_MINUTES
 from src.data.fmp_pipeline.probe.analysis import find_reused_tickers
 from src.data.fmp_pipeline.probe.free_probe import ProbeCall, ProbeResult, ProbeRun
 from src.data.fmp_pipeline.probe.paid_analysis import (
@@ -47,8 +53,8 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 RAW = "historical-price-eod/non-split-adjusted"
-HOURLY = "historical-chart/1hour"
-INTERVALS = ("1min", "5min", "15min", "30min", "1hour", "4hour")
+HOURLY = "1hour"
+INTERVALS = tuple(INTRADAY_MINUTES)
 COVERAGE_SYMBOLS = ("AAPL", "AMGN", "QQQ", "BRK-B", "BRK.B", "^GSPC", "^IXIC", "^DJI", "^VIX", "^RUT",
                     "VOD.L", "SHOP.TO", "ZZZZQX")
 DELISTED_CHECKS = (("TWTR", "2021-06-01", "2021-06-30"), ("SIVB", "2022-06-01", "2022-06-30"),
@@ -71,16 +77,32 @@ INDICATORS = ("GDP", "realGDP", "CPI", "inflationRate", "federalFunds", "unemplo
 
 
 @dataclass
-class PaidFindings:
-    """What the paid probe concluded; ``settings`` is what ``fmp plan`` and ``fmp build`` will use."""
+class IntradayFindings:
+    """Stages 3–6 for one intraday interval."""
 
-    intervals: dict[str, str] = field(default_factory=dict)
+    interval: str
     conventions: Optional[HourlyConventions] = None
     cap: Optional[RowCap] = None
     cap_probes: list[RowCapProbe] = field(default_factory=list)
-    earliest_hourly: Optional[date] = None
+    earliest: Optional[date] = None
+    split: str = ""
+    wire_bytes_per_row: Optional[float] = None
+    decoded_bytes_per_row: Optional[float] = None
+
+
+@dataclass
+class PaidFindings:
+    """
+    What the paid probe concluded.
+
+    ``settings`` is what ``fmp plan`` and ``fmp build`` will use with ``interval`` (the configured one);
+    ``settings_by_interval`` holds the intraday part for every measured interval.
+    """
+
+    intervals: dict[str, str] = field(default_factory=dict)
+    interval: str = HOURLY
+    intraday: dict[str, IntradayFindings] = field(default_factory=dict)
     earliest_daily: Optional[date] = None
-    intraday_split: str = ""
     coverage: dict[str, str] = field(default_factory=dict)
     delisted: dict[str, str] = field(default_factory=dict)
     lists: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -93,6 +115,7 @@ class PaidFindings:
     reuse: dict[str, str] = field(default_factory=dict)
     rate_headers: dict[str, str] = field(default_factory=dict)
     settings: dict[str, Any] = field(default_factory=dict)
+    settings_by_interval: dict[str, dict[str, Any]] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
 
 
@@ -107,37 +130,56 @@ def _window(start: str, end: str) -> dict[str, str]:
     return {"from": start, "to": end}
 
 
+def _chart(interval: str) -> str:
+    return f"historical-chart/{interval}"
+
+
+def session_bars(interval: str) -> int:
+    """Bars of a full regular session (09:30–16:00 ET) at ``interval``: 7 for ``1hour``, 78 for ``5min``."""
+    return math.ceil(SESSION_MINUTES / INTRADAY_MINUTES[interval])
+
+
 class PaidProbe:
     """Runs the paid-probe stages against a ``ProbeClient`` holding the Premium key."""
 
-    def __init__(self, client: ProbeClient, today: Optional[date] = None) -> None:
+    def __init__(self, client: ProbeClient, today: Optional[date] = None, interval: str = HOURLY) -> None:
         """
         Args:
             client: Budgeted, cached client (cache dir ``<data_root>/probe-paid``).
             today: Reference date for "to today" windows (default: today).
+            interval: The configured ``intraday.interval``; measured in depth together with ``1hour``.
+
+        Raises:
+            ValueError: ``interval`` is not an FMP intraday interval.
         """
+        if interval not in INTRADAY_MINUTES:
+            raise ValueError(f"unknown intraday interval {interval!r}; expected one of {', '.join(INTERVALS)}")
         self._client = client
         self._today = today or date.today()
         self._run = PaidRun()
         self.f = self._run.findings
+        self.f.interval = interval
 
     def run(self) -> PaidRun:
         """Execute every stage; stops early only when FMP reports the quota exhausted."""
         self._coverage()
         self._intervals()
-        if self.f.intervals.get("1hour") == "ok":
-            self._conventions()
-            self._row_cap()
-            self._depth()
-            self._intraday_split()
-        else:
-            self.f.notes.append("1hour bars are not served on this plan: no intraday tasks can be planned")
+        for interval in dict.fromkeys((self.f.interval, HOURLY)):
+            if self.f.intervals.get(interval) != "ok":
+                self.f.notes.append(f"{interval} bars are not served on this plan: no {interval} tasks can be planned")
+                continue
+            m = self.f.intraday[interval] = IntradayFindings(interval)
+            self._conventions(m)
+            self._row_cap(m)
+            self._depth(m)
+            self._intraday_split(m)
         self._daily_depth()
         self._lists()
         self._paging()
         self._windows()
         self._indicators()
         self._reuse()
+        self.f.settings_by_interval = {i: intraday_settings(m) for i, m in self.f.intraday.items()}
         self.f.settings = derive_settings(self.f)
         return self._run
 
@@ -187,44 +229,56 @@ class PaidProbe:
                       {"symbol": "AAPL", **_window("2025-06-02", "2025-06-02")})
             self.f.intervals[interval] = self._status(label)
 
-    def _conventions(self) -> None:
+    def _conventions(self, m: IntradayFindings) -> None:
         rows: list[dict[str, Any]] = []
         for start, end in CONVENTION_WINDOWS:
-            rows += self._get("conventions", f"conventions:{start}", HOURLY, {"symbol": "AAPL", **_window(start, end)})
-        self.f.conventions = hourly_conventions(rows)
+            rows += self._get("conventions", f"conventions:{m.interval}:{start}", _chart(m.interval),
+                              {"symbol": "AAPL", **_window(start, end)})
+        m.conventions = hourly_conventions(rows, minutes=INTRADAY_MINUTES[m.interval])
 
-    def _bars_per_day(self) -> int:
-        conventions = self.f.conventions
-        return conventions.bars_per_day if conventions and conventions.bars_per_day else 7
+    @staticmethod
+    def _bars_per_day(m: IntradayFindings) -> int:
+        conventions = m.conventions
+        return conventions.bars_per_day if conventions and conventions.bars_per_day else session_bars(m.interval)
 
-    def _row_cap(self) -> None:
+    def _row_cap(self, m: IntradayFindings) -> None:
+        rows_seen = wire = decoded = 0
         for start, end in CAP_WINDOWS:
-            rows = self._get("row-cap", f"cap:{start}:{end}", HOURLY, {"symbol": "AAPL", **_window(start, end)})
+            label = f"cap:{m.interval}:{start}:{end}"
+            rows = self._get("row-cap", label, _chart(m.interval), {"symbol": "AAPL", **_window(start, end)})
             lo, hi = date.fromisoformat(start), min(date.fromisoformat(end), self._today)
-            self.f.cap_probes.append(RowCapProbe(lo, hi, len(rows), first_date(rows), last_date(rows),
-                                                 expected_bars(lo, hi, self._bars_per_day())))
-        self.f.cap = row_cap(self.f.cap_probes)
+            m.cap_probes.append(RowCapProbe(lo, hi, len(rows), first_date(rows), last_date(rows),
+                                            expected_bars(lo, hi, self._bars_per_day(m))))
+            response = self._run.by_label(label)
+            if rows and response is not None:
+                rows_seen += len(rows)
+                wire += response.bytes_wire
+                decoded += response.bytes_decoded
+        m.cap = row_cap(m.cap_probes)
+        if rows_seen:
+            m.wire_bytes_per_row = round(wire / rows_seen, 1)
+            m.decoded_bytes_per_row = round(decoded / rows_seen, 1)
 
-    def _depth_probe(self, start: date) -> Optional[date]:
-        rows = self._get("depth", f"depth:{start}", HOURLY,
+    def _depth_probe(self, m: IntradayFindings, start: date) -> Optional[date]:
+        rows = self._get("depth", f"depth:{m.interval}:{start}", _chart(m.interval),
                          {"symbol": "AAPL", **_window(start.isoformat(), (start + timedelta(days=13)).isoformat())})
         return first_date(rows)
 
-    def _depth(self) -> None:
+    def _depth(self, m: IntradayFindings) -> None:
         found: Optional[date] = None
         previous: Optional[date] = None
         for year in DEPTH_YEARS:
             start = date(year, 1, 5)
-            found = self._depth_probe(start)
+            found = self._depth_probe(m, start)
             if found is not None:
                 break
             previous = start
         if found is None:
-            self.f.notes.append("no hourly bars found in any probed year")
+            self.f.notes.append(f"no {m.interval} bars found in any probed year")
             return
         if previous is None:
-            self.f.earliest_hourly = None  # data already at the oldest probe: depth at least back to it
-            self.f.notes.append(f"hourly bars exist at the oldest probe ({found}); depth is at least that")
+            m.earliest = None  # data already at the oldest probe: depth at least back to it
+            self.f.notes.append(f"{m.interval} bars exist at the oldest probe ({found}); depth is at least that")
             return
         lo, hi = previous, date(found.year, found.month, 1)
         while (hi - lo).days > 31:  # month-level bisection between "no data" and "data"
@@ -232,15 +286,16 @@ class PaidProbe:
             mid = date(mid.year, mid.month, 1)
             if mid <= lo:
                 break
-            if self._depth_probe(mid) is not None:
+            if self._depth_probe(m, mid) is not None:
                 hi = mid
             else:
                 lo = mid
-        self.f.earliest_hourly = hi
+        m.earliest = hi
 
-    def _intraday_split(self) -> None:
-        rows = self._get("split", "split:NVDA:1hour", HOURLY, {"symbol": "NVDA", **_window("2024-06-06", "2024-06-11")})
-        self.f.intraday_split = intraday_split_verdict(rows, "2024-06-10", 10.0)
+    def _intraday_split(self, m: IntradayFindings) -> None:
+        rows = self._get("split", f"split:NVDA:{m.interval}", _chart(m.interval),
+                         {"symbol": "NVDA", **_window("2024-06-06", "2024-06-11")})
+        m.split = intraday_split_verdict(rows, "2024-06-10", 10.0)
 
     def _daily_depth(self) -> None:
         rows = self._get("depth", "depth:daily:AAPL", RAW, {"symbol": "AAPL", **_window("1980-01-01", "1981-12-31")})
@@ -310,26 +365,42 @@ class PaidProbe:
             self.f.reuse[candidate.symbol] = f"{candidate.reason}: {reuse_verdict(list(candidate.entries), prices)}"
 
 
-def derive_settings(f: PaidFindings) -> dict[str, Any]:
+def intraday_settings(m: IntradayFindings) -> dict[str, Any]:
     """
-    Turn findings into ``fmp.yaml``-shaped settings (only what was measured conclusively).
+    The ``fmp.yaml``-shaped settings one interval's measurements support (only what was measured conclusively).
 
     Returns:
-        A partial ``fmp:`` mapping: ``intraday`` (``max_rows``, ``bars_per_day``, ``earliest``), ``build``
-        (``intraday_tz``, ``intraday_label``), ``page_size``, ``calendar_window_days``, ``economic_indicators``.
+        A partial ``fmp:`` mapping: ``intraday`` (``max_rows``, ``bars_per_day``, ``earliest``, bytes per row) and
+        ``build`` (``intraday_tz``, ``intraday_label``); either may be missing.
     """
     settings: dict[str, Any] = {}
     intraday: dict[str, Any] = {}
-    if f.cap is not None and f.cap.max_rows:
-        intraday["max_rows"] = int(f.cap.max_rows)
-    if f.conventions is not None and f.conventions.bars_per_day:
-        intraday["bars_per_day"] = int(f.conventions.bars_per_day)
-    if f.earliest_hourly is not None:
-        intraday["earliest"] = f.earliest_hourly.isoformat()
+    if m.cap is not None and m.cap.max_rows:
+        intraday["max_rows"] = int(m.cap.max_rows)
+    if m.conventions is not None and m.conventions.bars_per_day:
+        intraday["bars_per_day"] = int(m.conventions.bars_per_day)
+    if m.earliest is not None:
+        intraday["earliest"] = m.earliest.isoformat()
+    if m.wire_bytes_per_row and m.decoded_bytes_per_row:
+        intraday["wire_bytes_per_row"] = m.wire_bytes_per_row
+        intraday["decoded_bytes_per_row"] = m.decoded_bytes_per_row
     if intraday:
         settings["intraday"] = intraday
-    if f.conventions is not None and f.conventions.conclusive:
-        settings["build"] = {"intraday_tz": f.conventions.timezone, "intraday_label": f.conventions.label}
+    if m.conventions is not None and m.conventions.conclusive:
+        settings["build"] = {"intraday_tz": m.conventions.timezone, "intraday_label": m.conventions.label}
+    return settings
+
+
+def derive_settings(f: PaidFindings) -> dict[str, Any]:
+    """
+    Turn findings into ``fmp.yaml``-shaped settings for the configured interval (only what was measured).
+
+    Returns:
+        A partial ``fmp:`` mapping: ``intraday`` and ``build`` from ``f.interval``'s measurements (see
+        ``intraday_settings``), ``page_size``, ``calendar_window_days``, ``economic_indicators``.
+    """
+    measured = f.intraday.get(f.interval)
+    settings: dict[str, Any] = intraday_settings(measured) if measured is not None else {}
     sizes = list(f.page_sizes.values()) or list(f.page_full.values())
     if sizes:
         settings["page_size"] = int(min(sizes))

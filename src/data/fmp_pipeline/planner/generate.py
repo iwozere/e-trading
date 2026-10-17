@@ -156,7 +156,7 @@ class _Gen:
 
     def _intraday(self, entry: EndpointSpec) -> Iterator[PlannedTask]:
         cfg = self.c.intraday
-        days = intraday_window_days(cfg.max_rows or cfg.assumed_max_rows, cfg.bars_per_day, cfg.safety_factor)
+        days = intraday_window_days(cfg.max_rows or cfg.assumed_max_rows, cfg.session_bars, cfg.safety_factor)
         entry = EndpointSpec(entry.endpoint, entry.block, entry.priority, entry.kind, entry.scope,
                              cfg.wire_bytes_per_row, cfg.decoded_bytes_per_row, measured=False)
         earliest = cfg.earliest or self.c.daily_from
@@ -183,7 +183,7 @@ class _Gen:
             elif not known:
                 deferred = "awaiting daily raw"
             for lo, hi in intraday_windows(first, last, self.as_of, days):
-                rows = trading_days(max(lo, first), min(hi, last)) * cfg.bars_per_day
+                rows = trading_days(max(lo, first), min(hi, last)) * cfg.session_bars
                 params = {"from": lo.isoformat(), "to": hi.isoformat()}
                 yield self.task(entry, sec.symbol, params, sub, sec.tier, rows, deferred)
 

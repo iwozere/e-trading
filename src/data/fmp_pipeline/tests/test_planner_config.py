@@ -20,7 +20,7 @@ def test_defaults_follow_the_spec():
     config = PlanConfig()
     assert config.rate_limit_per_min == 600
     assert (config.bandwidth.cap_gb, config.bandwidth.safety, config.bandwidth.basis) == (50.0, 0.90, "decoded")
-    assert config.intraday.max_rows is None and config.intraday.bars_per_day == 7
+    assert config.intraday.max_rows is None and config.intraday.session_bars == 7
     assert config.universe.include_otc is False
     assert config.priorities == ("P0", "P1")
 
