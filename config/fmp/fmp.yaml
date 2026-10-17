@@ -19,7 +19,7 @@ fmp:
   intraday:
     interval: 5min               # owner 2026-10-17: try 5min first; probe-paid also measures 1hour as the fallback (D76)
     tiers: [A, B, C, D, E]
-    tier_intervals: {}           # owner 2026-10-17: all tiers 5min, run A, D, B, C, E; revisit with the dashboard (D78)
+    tier_intervals: {D: 15min}   # owner 2026-10-17: D (delisted) at 15min, the rest 5min; run A, D, B, C, E (D78)
     earliest: earliest           # first daily bar; set a date if the paid probe shows a fixed 1h depth
     max_rows: null               # row cap per request: SET FROM THE PAID PROBE; until then no intraday task is written
     bars_per_day: null           # null = full session at the interval (7 for 1hour, 78 for 5min); the paid probe measures it
