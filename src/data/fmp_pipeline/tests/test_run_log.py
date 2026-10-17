@@ -106,3 +106,22 @@ def test_progress_fields_rates_and_eta(tmp_path: Path):
     log.close()
     progress = [r for r in _records(tmp_path / "run.jsonl") if r["event"] == "progress"]
     assert len(progress) == 3 and progress[-1]["final"] is True and progress[1]["by_status"] == {"ok": 9, "failed": 1}
+
+
+def test_progress_counts_down_from_the_pending_at_start(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    log = RunLog(tmp_path / "run.jsonl", "d", interval_s=60, clock=FakeClock())
+    guard = BandwidthGuard(cap_bytes=1000, safety=0.5, basis="decoded", window_days=30)
+    with Manifest(tmp_path / "m.sqlite", "d") as manifest:
+        manifest.record_bandwidth(100, 700)
+        log.pending_at_start = 8_000_000
+
+        def no_scan() -> dict[str, int]:
+            raise AssertionError("progress must not scan the manifest")
+
+        monkeypatch.setattr(manifest, "counts", no_scan)
+        log.finished.update({"ok": 7})
+        fields = log.progress(manifest, guard)
+        assert fields["pending"] == 8_000_000 - 7 and fields["window_bytes"] == 700
+        manifest.record_bandwidth(0, 50)
+        assert log.progress(manifest, guard)["window_bytes"] == 700  # the guard's synced total, re-read every refresh_s
+    log.close()

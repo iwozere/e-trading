@@ -23,6 +23,7 @@ from src.data.fmp_pipeline.manifest.manifest import Manifest
 from src.data.fmp_pipeline.planner.catalog import BLOCKS
 from src.data.fmp_pipeline.planner.config import PlanConfig
 from src.data.fmp_pipeline.planner.follow_ups import FollowUps
+from src.data.fmp_pipeline.planner.generate import intraday_tier_priorities
 from src.data.fmp_pipeline.planner.planner import bandwidth_guard, planned_remaining
 from src.data.fmp_pipeline.planner.universe import TIERS
 from src.data.fmp_pipeline.run_log import RunLog
@@ -143,7 +144,7 @@ class DumpExecutor:
         """
         report = RunReport()
         blocks = scope.blocks()
-        self._warn_on_skipped_order(blocks)
+        self._warn_on_skipped_order(blocks, run_log)
         reviewer = FollowUps(self.manifest, self.config)
         if run_log is not None:
             run_log.write("run_start", blocks=blocks, tier=scope.tier, workers=self.workers,
@@ -154,8 +155,11 @@ class DumpExecutor:
                          free / GB)
             if run_log is not None:
                 run_log.write("block_start", block=block, name=BLOCKS[block], free_bytes=free)
+            lowest, highest = block * 100, block * 100 + 99
+            if scope.tier is not None:  # claim inside the tier's range, not past millions of other tiers' tasks
+                lowest, highest = intraday_tier_priorities(scope.tier)
             downloader = Downloader(self.manifest, client, sink=self.archive, workers=self.workers, guard=self.guard,
-                                    reviewer=reviewer, min_priority=block * 100, max_priority=block * 100 + 99,
+                                    reviewer=reviewer, min_priority=lowest, max_priority=highest,
                                     tier=scope.tier, run_log=run_log)
             summary = await downloader.run()
             report.blocks[block] = summary
@@ -170,10 +174,16 @@ class DumpExecutor:
                      report.run_bytes / GB, self.config.bandwidth.basis)
         return report
 
-    def _warn_on_skipped_order(self, blocks: list[int]) -> None:
-        """Warn if earlier blocks still have pending work: spec §6.3.5 wants them first."""
+    def _warn_on_skipped_order(self, blocks: list[int], run_log: Optional[RunLog] = None) -> None:
+        """
+        Warn if earlier blocks still have pending work: spec §6.3.5 wants them first.
+
+        The same (only) scan of the manifest gives ``run_log`` the dump's pending tasks for its progress lines.
+        """
         earlier = min(blocks)
-        pending = sum(n for priority, _, status, n, _, _ in self.manifest.totals()
-                      if status == "pending" and priority // 100 < earlier)
+        totals = self.manifest.totals()
+        if run_log is not None:
+            run_log.pending_at_start = sum(n for _, _, status, n, _, _ in totals if status in ("pending", "running"))
+        pending = sum(n for priority, _, status, n, _, _ in totals if status == "pending" and priority // 100 < earlier)
         if pending:
             _logger.warning("%d tasks of earlier blocks are still pending; spec §6.3.5 runs blocks in order", pending)

@@ -69,6 +69,9 @@ class RunLog:
         self._last_progress = self._started
         self._finished_at_last = 0
         self.finished: Counter[str] = Counter()
+        #: Pending tasks when the run started (set by the executor from one manifest scan); progress then counts
+        #: down from it instead of scanning the manifest every minute, which takes minutes on a dump of ~8M tasks.
+        self.pending_at_start: Optional[int] = None
         path.parent.mkdir(parents=True, exist_ok=True)
         self._fh: Optional[IO[str]] = path.open("a", encoding="utf-8")
 
@@ -113,7 +116,7 @@ class RunLog:
         Write a ``progress`` record and log the same summary.
 
         Args:
-            manifest: The dump's manifest (pending counts, bandwidth window).
+            manifest: The dump's manifest (pending counts unless ``pending_at_start`` is set).
             guard: The run's bandwidth guard (basis, cap, safety, bytes this run).
             final: Marks the summary written at the end of the run.
 
@@ -125,10 +128,12 @@ class RunLog:
         interval_min = max(now - self._last_progress, 1e-9) / 60
         done = sum(self.finished.values())
         recent = done - self._finished_at_last
-        counts = manifest.counts()
-        pending = counts.get("pending", 0) + counts.get("running", 0)
-        wire, decoded = manifest.bandwidth_used(guard.window_days)
-        used = wire if guard.basis == "wire" else decoded
+        if self.pending_at_start is not None:
+            pending = max(self.pending_at_start - done, 0)
+        else:
+            counts = manifest.counts()
+            pending = counts.get("pending", 0) + counts.get("running", 0)
+        used = guard.used(manifest)
         limit = guard.limit_bytes
         rate = done / elapsed_min
         eta_h = pending / rate / 60 if rate > 0 else None

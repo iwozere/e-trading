@@ -18,7 +18,7 @@ from src.data.fmp_pipeline.planner.catalog import (
     selected,
 )
 from src.data.fmp_pipeline.planner.config import IntradayConfig, PlanConfig, UniverseConfig
-from src.data.fmp_pipeline.planner.generate import PlannedTask, bootstrap_specs, generate
+from src.data.fmp_pipeline.planner.generate import PlannedTask, bootstrap_specs, generate, intraday_tier_priorities
 from src.data.fmp_pipeline.planner.projection import GB, Bucket, Projection, disk_need
 from src.data.fmp_pipeline.planner.universe import Universe, assemble_universe
 from src.data.fmp_pipeline.planner.windowing import weekdays
@@ -122,6 +122,10 @@ def test_intraday_waits_for_daily_and_row_cap():
     assert max(t.spec.params["from"] for t in ready if t.spec.symbol == "DEAD") <= "2018-07-01"  # + 30 day margin
     tiers = {t.spec.symbol: (t.spec.tier, t.spec.priority) for t in ready}
     assert tiers["DEAD"] == ("D", 600 + 1 + 3 * 2 + 0) and tiers["LIVE"] == ("C", 600 + 1 + 2 * 2 + 1)
+    assert intraday_tier_priorities("D") == (607, 608) and intraday_tier_priorities("A") == (601, 602)
+    for t in ready:
+        lowest, highest = intraday_tier_priorities(t.spec.tier or "")
+        assert lowest <= t.spec.priority <= highest  # `fmp run --tier` claims inside this range
 
     unknown = replace(config, intraday=IntradayConfig(max_rows=None))
     deferred = {t.deferred for t in _tasks(unknown, bounds=bounds, daily_done=done) if t.spec.endpoint == INTRADAY}

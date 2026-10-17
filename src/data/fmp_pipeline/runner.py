@@ -83,16 +83,20 @@ class BandwidthGuard:
         if self.run_limit_bytes is not None and self.run_used >= self.run_limit_bytes:
             return (f"this run used {self.run_used / GB:.2f} GB ({self.basis}), reaching its --max-gb limit of "
                     f"{self.run_limit_bytes / GB:.2f} GB")
-        if self._used is None or self.clock() - self._synced_at >= self.refresh_s:
-            wire, decoded = manifest.bandwidth_used(self.window_days)
-            self._used = wire if self.basis == "wire" else decoded
-            self._synced_at = self.clock()
-        used = self._used
+        used = self.used(manifest)
         if used >= self.limit_bytes:
             scaled = f" at {self.scale:g} dashboard bytes per local byte" if self.scale != 1 else ""
             return (f"bandwidth {used / GB:.2f} GB ({self.basis}, {self.window_days}d) reached "
                     f"{self.safety:.0%} of the {self.cap_bytes / GB:.0f} GB cap{scaled}")
         return None
+
+    def used(self, manifest: Manifest) -> int:
+        """Bytes in the rolling window: re-read from the manifest every ``refresh_s``, counted up in between."""
+        if self._used is None or self.clock() - self._synced_at >= self.refresh_s:
+            wire, decoded = manifest.bandwidth_used(self.window_days)
+            self._used = wire if self.basis == "wire" else decoded
+            self._synced_at = self.clock()
+        return self._used
 
     @property
     def limit_bytes(self) -> float:

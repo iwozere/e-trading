@@ -31,6 +31,7 @@ from src.data.fmp_pipeline.planner.windowing import (
 )
 
 BOOTSTRAP_PRIORITY = 0
+INTRADAY_BLOCK = 6
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,20 @@ class PlannedTask:
     bytes_decoded: float
     measured: bool
     deferred: Optional[str] = None
+
+
+def intraday_tier_priorities(tier: str) -> tuple[int, int]:
+    """
+    The manifest priorities of one intraday tier: delisted symbols first, then live ones (tiers in ``TIERS`` order).
+
+    Args:
+        tier: A tier of ``TIERS``.
+
+    Returns:
+        ``(lowest, highest)`` priority, both inclusive.
+    """
+    first = priority_of(INTRADAY_BLOCK, 1 + TIERS.index(tier) * 2)
+    return first, first + 1
 
 
 def bootstrap_specs(config: PlanConfig) -> list[TaskSpec]:
@@ -165,7 +180,7 @@ class _Gen:
         for sec in self.symbols(entry):
             if sec.tier not in cfg.tiers:
                 continue
-            sub = 1 + TIERS.index(sec.tier) * 2 + (0 if sec.is_delisted(self.as_of) else 1)
+            sub = intraday_tier_priorities(sec.tier)[0] - priority_of(entry.block, 0) + (0 if sec.is_delisted(self.as_of) else 1)
             known = sec.symbol in self.daily_done
             if known and sec.symbol not in self.bounds:
                 continue  # daily history finished with no bars: nothing to window
