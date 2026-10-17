@@ -123,3 +123,15 @@ async def test_paging_runs_until_the_empty_page(tmp_path: Path):
             await Downloader(manifest, client, workers=1, reviewer=FollowUps(manifest, CONFIG)).run()
         rows = sorted((r["params_json"], r["status"], r["rows"]) for r in manifest.task_rows())
         assert [r[1:] for r in rows] == [("ok", 100), ("ok", 100), ("ok", 30), ("ok_empty", 0)]
+
+
+def test_each_tier_interval_is_checked_against_its_own_row_cap(manifest: Manifest):
+    intraday = IntradayConfig(interval="5min", max_rows=100, tier_intervals={"C": "15min"},
+                              measured={"15min": {"max_rows": 400}})
+    review = FollowUps(manifest, PlanConfig(dump_id="d", intraday=intraday))
+    window = {"from": "2026-01-05", "to": "2026-01-30"}
+    assert review(_task("historical-chart/5min", window, "AAA"), _result([{}] * 95))[0].classification == \
+        "possibly_truncated"
+    assert review(_task("historical-chart/15min", window, "AAA"), _result([{}] * 95))[0].classification == "ok"
+    assert review(_task("historical-chart/15min", window, "AAA"), _result([{}] * 380))[0].classification == \
+        "possibly_truncated"

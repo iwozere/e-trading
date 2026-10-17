@@ -8,7 +8,8 @@ are yielded with ``deferred`` set and a reason; they count in the projection but
 - per-symbol tasks (other than ``profile``) for candidates whose exchange is still unknown;
 - intraday windows of a symbol whose daily raw history is not finished (the windows depend on its first/last bar,
   spec §6.5.5);
-- all intraday windows while the row cap is unknown (``intraday.max_rows`` is set from the paid probe).
+- all intraday windows of an interval whose row cap is unknown (``intraday.max_rows`` is set from the paid probe;
+  each interval of ``intraday.tier_intervals`` needs its own measurement).
 """
 
 from __future__ import annotations
@@ -48,7 +49,7 @@ class PlannedTask:
 def bootstrap_specs(config: PlanConfig) -> list[TaskSpec]:
     """Return the first request of every bootstrap list (page 0 for paged ones), at the lowest priority value."""
     specs = []
-    for entry in selected(config.priorities, config.intraday.interval):
+    for entry in selected(config.priorities, config.intraday.intervals):
         if entry.bootstrap:
             params = {"page": 0, "limit": config.page_size} if entry.kind == "paged" else {}
             specs.append(TaskSpec(entry.endpoint, None, params, BOOTSTRAP_PRIORITY))
@@ -99,7 +100,7 @@ class _Gen:
         return lo, hi
 
     def run(self) -> Iterator[PlannedTask]:
-        for entry in selected(self.c.priorities, self.c.intraday.interval):
+        for entry in selected(self.c.priorities, self.c.intraday.intervals):
             if entry.bootstrap:
                 continue
             yield from getattr(self, f"_{entry.kind}")(entry)
@@ -155,7 +156,7 @@ class _Gen:
                 yield self.task(entry, sec.symbol, params, self.sub(sec), None, rows, deferred)
 
     def _intraday(self, entry: EndpointSpec) -> Iterator[PlannedTask]:
-        cfg = self.c.intraday
+        cfg = self.c.intraday.for_interval(entry.endpoint.rsplit("/", 1)[1])
         days = intraday_window_days(cfg.max_rows or cfg.assumed_max_rows, cfg.session_bars, cfg.safety_factor)
         entry = EndpointSpec(entry.endpoint, entry.block, entry.priority, entry.kind, entry.scope,
                              cfg.wire_bytes_per_row, cfg.decoded_bytes_per_row, measured=False)

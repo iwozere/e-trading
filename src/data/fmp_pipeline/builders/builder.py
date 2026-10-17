@@ -221,7 +221,7 @@ class VintageBuilder:
     def _intervals(self) -> list[str]:
         folder = self.dump_dir / "historical-chart"
         archived = sorted(p.name for p in folder.iterdir() if p.is_dir()) if folder.is_dir() else []
-        return sorted(set(archived) | {self.config.intraday.interval})
+        return sorted(set(archived) | set(self.config.intraday.intervals))
 
     def _unbuilt(self) -> list[str]:
         covered = covered_endpoints()

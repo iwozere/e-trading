@@ -55,10 +55,15 @@ class IntradayConfig:
     Intraday download settings (spec §6.5). ``max_rows`` and ``bars_per_day`` come from the paid probe.
 
     ``bars_per_day`` ``None`` means a full regular session at ``interval`` (see ``session_bars``).
+    ``tier_intervals`` gives single tiers another interval than ``interval`` (e.g. ``{C: 15min}``); ``measured``
+    holds the paid probe's intraday settings per interval (filled by ``apply_probe_results``) and is what
+    ``for_interval`` applies to those tiers.
     """
 
     interval: str = "1hour"
     tiers: tuple[str, ...] = ("A", "B", "C", "D", "E")
+    tier_intervals: dict[str, str] = field(default_factory=dict)
+    measured: dict[str, dict[str, Any]] = field(default_factory=dict)
     earliest: Optional[date] = None
     max_rows: Optional[int] = None
     bars_per_day: Optional[int] = None
@@ -75,6 +80,31 @@ class IntradayConfig:
         if self.bars_per_day is not None:
             return self.bars_per_day
         return math.ceil(SESSION_MINUTES / INTRADAY_MINUTES[self.interval])
+
+    def interval_of(self, tier: str) -> str:
+        """The interval downloaded for ``tier``."""
+        return self.tier_intervals.get(tier, self.interval)
+
+    @property
+    def intervals(self) -> tuple[str, ...]:
+        """Every interval in use by a planned tier, ``interval`` first."""
+        used = [self.interval_of(t) for t in self.tiers]
+        return tuple(i for i in dict.fromkeys((self.interval, *used)) if i in used)
+
+    def for_interval(self, interval: str) -> IntradayConfig:
+        """
+        The settings of one interval, limited to the tiers that use it.
+
+        The configured ``interval`` keeps this configuration's values. Another interval starts with an unknown row
+        cap and bars per day (so its tasks stay deferred until the paid probe measured it) and takes the probe's
+        values from ``measured``; everything else is shared.
+        """
+        tiers = tuple(t for t in self.tiers if self.interval_of(t) == interval)
+        if interval == self.interval:
+            return replace(self, tiers=tiers, tier_intervals={}, measured={})
+        base = replace(self, interval=interval, tiers=tiers, max_rows=None, bars_per_day=None, tier_intervals={},
+                       measured={})
+        return _merge(base, self.measured.get(interval, {}), f"probe_results.intraday_by_interval.{interval}.")
 
 
 @dataclass(frozen=True)
@@ -210,6 +240,10 @@ class PlanConfig:
 
 def _coerce(target: Any, value: Any) -> Any:
     """Convert a YAML value to the type of the default it replaces."""
+    if isinstance(target, dict):
+        if not isinstance(value, dict):
+            raise ValueError(f"expected a mapping, got {value!r}")
+        return dict(value)
     if isinstance(target, tuple):
         if not isinstance(value, (list, tuple)):
             raise ValueError(f"expected a list, got {value!r}")
@@ -303,6 +337,10 @@ def load_config(path: Optional[Path] = None) -> PlanConfig:
         raise ValueError("fmp.adapter.policy must be 'fmp_first' (the only policy, spec §9.2)")
     if config.intraday.interval not in INTRADAY_MINUTES:
         raise ValueError(f"fmp.intraday.interval must be one of {', '.join(INTRADAY_MINUTES)}")
+    for tier, interval in config.intraday.tier_intervals.items():
+        if tier not in IntradayConfig().tiers or interval not in INTRADAY_MINUTES:
+            raise ValueError(f"fmp.intraday.tier_intervals: {tier}: {interval} is not a tier (A-E) and an interval "
+                             f"({', '.join(INTRADAY_MINUTES)})")
     if config.build.intraday_label not in ("start", "end"):
         raise ValueError("fmp.build.intraday_label must be 'start' or 'end'")
     return config

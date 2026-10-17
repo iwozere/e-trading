@@ -185,6 +185,27 @@ def test_results_follow_the_configured_interval(tmp_path: Path, caplog: pytest.L
     assert unmeasured.page_size == 1000 and "did not measure intraday 15min" in caplog.text
 
 
+def test_results_keep_earlier_intervals_and_feed_tier_intervals(tmp_path: Path, caplog: pytest.LogCaptureFixture):
+    five = {"5min": {"intraday": {"max_rows": 510, "bars_per_day": 78}}}
+    write_results(tmp_path, PaidFindings(interval="5min"), five["5min"], 120, five)
+    write_results(tmp_path, PaidFindings(interval="15min"), {}, 140, {"15min": {"intraday": {"max_rows": 500}}})
+    assert set(read_results(tmp_path)["intraday_by_interval"]) == {"5min", "15min"}  # type: ignore[index]
+    intraday = IntradayConfig(interval="5min", tier_intervals={"C": "15min", "E": "30min"})
+    applied = apply_probe_results(PlanConfig(intraday=intraday), tmp_path).intraday
+    assert applied.max_rows == 510 and applied.for_interval("15min").max_rows == 500
+    assert applied.for_interval("30min").max_rows is None and "did not measure intraday 30min" in caplog.text
+
+
+def test_config_rejects_bad_tier_intervals(tmp_path: Path):
+    config = tmp_path / "fmp.yaml"
+    config.write_text("fmp:\n  intraday:\n    tier_intervals: {C: 15min}\n", encoding="utf-8")
+    assert load_config(config).intraday.tier_intervals == {"C": "15min"}
+    for bad in ("{F: 15min}", "{C: 2hour}", "[C]"):
+        config.write_text(f"fmp:\n  intraday:\n    tier_intervals: {bad}\n", encoding="utf-8")
+        with pytest.raises(ValueError):
+            load_config(config)
+
+
 def test_config_rejects_an_unknown_interval(tmp_path: Path):
     config = tmp_path / "fmp.yaml"
     config.write_text("fmp:\n  intraday:\n    interval: 2hour\n", encoding="utf-8")

@@ -21,6 +21,7 @@ from src.data.fmp_pipeline.planner.config import IntradayConfig, PlanConfig, Uni
 from src.data.fmp_pipeline.planner.generate import PlannedTask, bootstrap_specs, generate
 from src.data.fmp_pipeline.planner.projection import GB, Bucket, Projection, disk_need
 from src.data.fmp_pipeline.planner.universe import Universe, assemble_universe
+from src.data.fmp_pipeline.planner.windowing import weekdays
 
 AS_OF = date(2026, 10, 14)
 INTRADAY = "historical-chart/1hour"
@@ -133,6 +134,41 @@ def test_intraday_respects_tiers_and_earliest():
     tasks = [t for t in _tasks(config, bounds=bounds, daily_done={"LIVE", "DEAD"}) if t.spec.endpoint == INTRADAY]
     assert {t.spec.symbol for t in tasks} == {"LIVE"}
     assert min(t.spec.params["to"] for t in tasks) >= "2025-01-01"
+
+
+def test_selected_expands_intraday_per_interval():
+    names = [e.endpoint for e in selected(("P0",), ("5min", "15min"))]
+    assert names.count("historical-chart/5min") == 1 and names.count("historical-chart/15min") == 1
+
+
+def test_tier_intervals_window_each_tier_at_its_own_interval():
+    intraday = IntradayConfig(interval="5min", max_rows=510, bars_per_day=78, tier_intervals={"C": "15min"},
+                              measured={"15min": {"max_rows": 500, "bars_per_day": 26}})
+    config = _config(intraday=intraday)
+    bounds = {"LIVE": (date(2024, 1, 2), AS_OF), "DEAD": (date(2016, 1, 4), date(2018, 5, 31))}
+    tasks = [t for t in _tasks(config, bounds=bounds, daily_done={"LIVE", "DEAD"}) if t.block == 6]
+    by_symbol = {t.spec.symbol: t.spec.endpoint for t in tasks}
+    assert by_symbol["DEAD"] == "historical-chart/5min" and by_symbol["LIVE"] == "historical-chart/15min"
+    live = sorted((t for t in tasks if t.spec.symbol == "LIVE"), key=lambda t: t.spec.params["from"])
+    window = [date.fromisoformat(live[1].spec.params[k]) for k in ("from", "to")]
+    assert weekdays(*window) == 15  # floor(500 / 26 / 1.25), against 5 weekdays at 5min
+    assert all(t.deferred is None for t in tasks if t.spec.symbol in ("LIVE", "DEAD"))
+    assert live[1].rows == pytest.approx(15 * 26, rel=0.15)
+
+    unmeasured = _config(intraday=replace(intraday, measured={}))
+    deferred = {t.deferred for t in _tasks(unmeasured, bounds=bounds, daily_done={"LIVE", "DEAD"})
+                if t.spec.endpoint == "historical-chart/15min"}
+    assert deferred == {"row cap unknown (paid probe)"}  # 5min's row cap is never borrowed
+
+
+def test_intervals_and_for_interval():
+    intraday = IntradayConfig(interval="5min", max_rows=510, tiers=("A", "B", "C", "D"),
+                              tier_intervals={"C": "15min", "E": "30min"}, measured={"15min": {"max_rows": 500}})
+    assert intraday.intervals == ("5min", "15min")  # E is not planned, so 30min is unused
+    assert intraday.for_interval("5min").tiers == ("A", "B", "D")
+    fifteen = intraday.for_interval("15min")
+    assert (fifteen.tiers, fifteen.max_rows, fifteen.session_bars, fifteen.tier_intervals) == (("C",), 500, 26, {})
+    assert IntradayConfig(tier_intervals={"A": "1hour"}).intervals == ("1hour",)
 
 
 def test_p1_endpoints_calendars_statements_and_sample():

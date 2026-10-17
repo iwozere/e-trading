@@ -56,6 +56,8 @@ only after every Phase 1 item below is done.
       `fmp plan` with 5-weekday `5min` windows, same task ids)
 - [x] `bandwidth.scale` measured by `fmp calibrate-usage` (ratio test) and applied to every hard stop and projection;
       config for Ultimate: 150 GB, 2,400/min, 32 workers (D77, 2026-10-17)
+- [x] `intraday.tier_intervals`: per-tier intervals (owner: 5min for A, B, D; 15min C; 30min E), probe results
+      kept per interval across runs (D78, 2026-10-17)
 - [x] `fmp probe-paid` (Phase 2, one unattended command: coverage, intervals, hourly conventions across DST, row cap,
       depth, intraday split adjustment, lists, page caps, calendar windows, indicator names, ticker reuse →
       `docs/fmp_paid_probe_report.md` + `probe_results.json` applied by every command) and

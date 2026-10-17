@@ -51,11 +51,12 @@ class FollowUps:
         """
         Args:
             manifest: Receives daily bounds.
-            config: Supplies the page cap, the intraday interval and its row cap.
+            config: Supplies the page cap, the intraday intervals and their row caps.
         """
         self._manifest = manifest
         self._config = config
-        self._intraday = f"historical-chart/{config.intraday.interval}"
+        intraday = config.intraday
+        self._row_caps = {f"historical-chart/{i}": intraday.for_interval(i).max_rows for i in intraday.intervals}
         self._page_hashes: dict[tuple[str, str], tuple[int, str]] = {}
 
     def __call__(self, task: Task, result: FetchResult) -> tuple[FetchResult, list[TaskSpec]]:
@@ -69,8 +70,9 @@ class FollowUps:
             if days:
                 self._manifest.update_bounds(task.symbol, min(days), max(days))
             return result, []
-        if task.endpoint == self._intraday and self._config.intraday.max_rows is not None:
-            return self._check_truncation(task, result, self._config.intraday.max_rows)
+        max_rows = self._row_caps.get(task.endpoint)
+        if max_rows is not None:
+            return self._check_truncation(task, result, max_rows)
         return result, []
 
     def _next_page(self, task: Task, result: FetchResult) -> list[TaskSpec]:

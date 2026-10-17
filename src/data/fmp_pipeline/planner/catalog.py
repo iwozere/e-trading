@@ -14,7 +14,7 @@ estimate with the real bytes of every finished task.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
 BLOCKS = {
     0: "reference",
@@ -160,13 +160,13 @@ DAILY_ROW_ENDPOINTS = ("historical-price-eod/non-split-adjusted", "historical-pr
                        "historical-price-eod/dividend-adjusted", "historical-market-capitalization")
 
 
-def selected(priorities: tuple[str, ...], interval: str) -> list[EndpointSpec]:
+def selected(priorities: tuple[str, ...], intervals: Union[str, tuple[str, ...]]) -> list[EndpointSpec]:
     """
     Return the catalogue entries to plan.
 
     Args:
         priorities: Priorities to include (``P0``, ``P1``, ``P2``). Bootstrap lists are always included.
-        interval: Intraday interval, substituted into ``historical-chart/{interval}``.
+        intervals: Intraday interval(s), substituted into ``historical-chart/{interval}``: one entry per interval.
 
     Returns:
         Entries in catalogue order.
@@ -175,10 +175,12 @@ def selected(priorities: tuple[str, ...], interval: str) -> list[EndpointSpec]:
     for spec in CATALOG:
         if spec.priority not in priorities and not spec.bootstrap:
             continue
-        if "{interval}" in spec.endpoint:
-            spec = EndpointSpec(spec.endpoint.format(interval=interval), spec.block, spec.priority, spec.kind,
-                                spec.scope, spec.wire_per_row, spec.decoded_per_row, spec.rows, spec.measured)
-        chosen.append(spec)
+        if "{interval}" not in spec.endpoint:
+            chosen.append(spec)
+            continue
+        for interval in (intervals,) if isinstance(intervals, str) else intervals:
+            chosen.append(EndpointSpec(spec.endpoint.format(interval=interval), spec.block, spec.priority, spec.kind,
+                                       spec.scope, spec.wire_per_row, spec.decoded_per_row, spec.rows, spec.measured))
     return chosen
 
 

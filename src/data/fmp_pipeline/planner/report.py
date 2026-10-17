@@ -7,7 +7,7 @@ from datetime import date, datetime, timezone
 from typing import Optional
 
 from src.data.fmp_pipeline.planner.catalog import BLOCKS
-from src.data.fmp_pipeline.planner.config import PlanConfig
+from src.data.fmp_pipeline.planner.config import IntradayConfig, PlanConfig
 from src.data.fmp_pipeline.planner.projection import GB, Bucket, Projection
 from src.data.fmp_pipeline.planner.universe import RULES, TIERS, Universe, normalize_exchange
 
@@ -47,10 +47,19 @@ _HEADER = ("| {0} | Done | Planned | Deferred | Done wire GB | Done decoded GB |
            "Remaining decoded GB |\n|---|---|---|---|---|---|---|---|")
 
 
+def _intraday_line(intraday: IntradayConfig) -> str:
+    """The budget plan's input line for one intraday interval and the tiers it covers."""
+    return (f"- Intraday `{intraday.interval}`: row cap "
+            + (f"**{intraday.max_rows}** (configured)" if intraday.max_rows is not None
+               else f"**unknown** — windows sized with an assumed {intraday.assumed_max_rows} rows; no task of this "
+                    f"interval is written until the paid probe measures it")
+            + f", {intraday.session_bars} bars/day, {intraday.decoded_bytes_per_row:g} B/row decoded and "
+              f"{intraday.wire_bytes_per_row:g} B/row wire (assumed). Tiers: {', '.join(intraday.tiers)}.")
+
+
 def render_budget_plan(projection: Projection, universe: Universe, config: PlanConfig, ctx: PlanContext) -> str:
     """Return ``budget_plan.md``."""
     budget = config.bandwidth.limit_bytes
-    intraday = config.intraday
     lines = [
         f"# FMP budget plan — dump `{ctx.dump_id}`",
         "",
@@ -65,12 +74,7 @@ def render_budget_plan(projection: Projection, universe: Universe, config: PlanC
         f"waiting for their profile, **{sum(universe.excluded.values()):,}** excluded (see `universe_report.md`).",
         f"- Priorities: {', '.join(config.priorities)}. Daily history from {config.daily_from}, "
         f"{config.daily_window_years}-year windows. Page size {config.page_size}.",
-        f"- Intraday `{intraday.interval}`: row cap "
-        + (f"**{intraday.max_rows}** (configured)" if intraday.max_rows is not None
-           else f"**unknown** — windows sized with an assumed {intraday.assumed_max_rows} rows; no intraday task is "
-                f"written until the paid probe sets `intraday.max_rows`")
-        + f", {intraday.session_bars} bars/day, {intraday.decoded_bytes_per_row:g} B/row decoded and "
-          f"{intraday.wire_bytes_per_row:g} B/row wire (assumed). Tiers: {', '.join(intraday.tiers)}.",
+        *[_intraday_line(config.intraday.for_interval(i)) for i in config.intraday.intervals],
         f"- Bandwidth cap: {config.bandwidth.cap_gb:g} GB per {config.bandwidth.window_days} days, hard stop at "
         f"{config.bandwidth.safety:.0%} = **{_gb(budget)} GB**, counted on `{config.bandwidth.basis}` bytes"
         + (f" (FMP counts {config.bandwidth.scale:g} bytes per local byte)" if config.bandwidth.scale != 1 else "")

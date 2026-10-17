@@ -5,13 +5,14 @@ the settings derived from it (spec §4.4: ``fmp plan`` must produce ``budget_pla
 ``apply_probe_results`` overlays ``settings`` on the configuration loaded from ``config/fmp/fmp.yaml``: measured
 values win over the file's assumptions. Set ``fmp.use_probe_results: false`` to ignore them. The intraday part
 (row cap, bars per day, depth, bytes per row, time zone, label) is taken from the measurements of the configured
-``intraday.interval``, so switching between measured intervals needs no new probe.
+``intraday.interval``, so switching between measured intervals needs no new probe; the measurements of every
+interval also go to ``intraday.measured`` for the tiers that ``intraday.tier_intervals`` moves to another interval.
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict, is_dataclass, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -63,6 +64,7 @@ def write_results(data_root: Path, findings: Any, settings: dict[str, Any], call
         calls_used: Live calls used so far.
         by_interval: The ``intraday``/``build`` settings of every measured intraday interval; with it, the
             applied intraday settings follow ``intraday.interval`` even when it changes after the probe.
+            Intervals measured by an earlier run and not by this one are kept.
 
     Returns:
         The file path.
@@ -75,7 +77,7 @@ def write_results(data_root: Path, findings: Any, settings: dict[str, Any], call
                "settings": merged_settings, "findings": _plain(findings),
                "calibration": previous.get("calibration")}
     if by_interval is not None:
-        payload[BY_INTERVAL] = by_interval
+        payload[BY_INTERVAL] = {**previous.get(BY_INTERVAL, {}), **by_interval}  # earlier intervals stay measured
     path = results_path(data_root)
     atomic_write_bytes(path, json.dumps(payload, indent=1, sort_keys=True).encode("utf-8"))
     return path
@@ -103,10 +105,16 @@ def apply_probe_results(config: PlanConfig, data_root: Path) -> PlanConfig:
     if not config.use_probe_results:
         return config
     results = read_results(data_root)
-    if not results or not results.get("settings"):
+    if not results or not (results.get("settings") or results.get(BY_INTERVAL)):
         return config
     settings = _for_interval(results, config.intraday.interval)
     updated = merge_settings(config, settings, "probe_results.")
+    measured = {i: m.get("intraday", {}) for i, m in (results.get(BY_INTERVAL) or {}).items()}
+    for interval in updated.intraday.intervals[1:]:
+        if interval not in measured:
+            _logger.warning("The paid probe did not measure intraday %s (tier_intervals); its tasks stay deferred. "
+                            "Run `fmp probe-paid --interval %s`.", interval, interval)
+    updated = replace(updated, intraday=replace(updated.intraday, measured=measured))
     _logger.info("Applied paid-probe settings from %s: %s", results_path(data_root), json.dumps(settings, sort_keys=True))
     return updated
 
