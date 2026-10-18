@@ -171,6 +171,30 @@ async def test_circuit_breaker_pauses_after_consecutive_failures():
 
 
 @pytest.mark.asyncio
+async def test_endless_429_without_quota_message_stops_the_run():
+    sleep = FakeSleep()
+    with MockFmpServer() as fmp:
+        fmp.add_fault(Fault(status=429, body={"message": "bandwidth used up"}, times=None))
+        breaker = CircuitBreaker(threshold=2, pause_s=60, stop_after_opens=2, sleep=sleep)
+        async with make_client(fmp, sleep, breaker=breaker, backoff_base_s=0.001) as client:
+            with pytest.raises(QuotaExhausted, match="bandwidth used up"):
+                await client.fetch(PRICE, WINDOW)
+    assert len(fmp.requests) == 4  # second all-429 opening, before the 6 attempts run out
+
+
+@pytest.mark.asyncio
+async def test_endless_5xx_keeps_retrying_without_stopping():
+    sleep = FakeSleep()
+    with MockFmpServer() as fmp:
+        fmp.add_fault(Fault(status=503, body="down", times=None))
+        breaker = CircuitBreaker(threshold=2, pause_s=60, stop_after_opens=2, sleep=sleep)
+        async with make_client(fmp, sleep, breaker=breaker, backoff_base_s=0.001) as client:
+            for _ in range(2):
+                assert (await client.fetch(PRICE, WINDOW)).classification == "server_error"
+    assert len(fmp.requests) == 12 and breaker.times_opened == 6
+
+
+@pytest.mark.asyncio
 async def test_echoed_key_is_redacted():
     with MockFmpServer() as fmp:
         fmp.add_fault(Fault(endpoint=PRICE, status=400, body={"Error Message": "bad key test-key"}))

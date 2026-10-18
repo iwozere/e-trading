@@ -96,6 +96,35 @@ async def test_circuit_breaker_opens_pauses_and_resets():
     assert clock.sleeps == [60]
 
 
+def test_circuit_breaker_flags_repeated_all_429_openings():
+    breaker = CircuitBreaker(threshold=2, stop_after_opens=3, clock=FakeClock())
+    for _ in range(4):
+        breaker.record_failure(rate_limited=True)
+    assert breaker.rate_limited_opens == 2 and not breaker.rate_limit_exhausted
+    breaker.record_success()  # one good response clears the run of openings
+    assert breaker.rate_limited_opens == 0
+    for _ in range(6):
+        breaker.record_failure(rate_limited=True)
+    assert breaker.rate_limit_exhausted
+
+
+def test_circuit_breaker_ignores_openings_with_5xx_or_network_errors():
+    breaker = CircuitBreaker(threshold=2, stop_after_opens=2, clock=FakeClock())
+    for rate_limited in (True, True, True, False, True, True):
+        breaker.record_failure(rate_limited=rate_limited)
+    assert breaker.times_opened == 3 and breaker.rate_limited_opens == 1 and not breaker.rate_limit_exhausted
+    for _ in range(10):
+        breaker.record_failure()
+    assert breaker.rate_limited_opens == 0 and not breaker.rate_limit_exhausted
+
+
+def test_circuit_breaker_stop_can_be_disabled():
+    breaker = CircuitBreaker(threshold=1, stop_after_opens=0, clock=FakeClock())
+    for _ in range(10):
+        breaker.record_failure(rate_limited=True)
+    assert breaker.rate_limited_opens == 10 and not breaker.rate_limit_exhausted
+
+
 @pytest.mark.parametrize("params", [
     {"from": "2025-01-01", "to": "2025-12-31"}, {"date": "2024-02-29"}, {"symbol": "AAPL"}, {},
 ])

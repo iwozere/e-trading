@@ -18,6 +18,7 @@ import pytest
 
 from src.data.fmp_pipeline.archive.archive import RawArchive
 from src.data.fmp_pipeline.archive.reader import iter_records, latest_successful
+from src.data.fmp_pipeline.client.circuit_breaker import CircuitBreaker
 from src.data.fmp_pipeline.client.fmp_client import FetchResult
 from src.data.fmp_pipeline.errors import ArchiveUnavailable
 from src.data.fmp_pipeline.manifest.manifest import Manifest, Task, TaskSpec
@@ -91,6 +92,23 @@ async def test_auth_abort_stops_the_run(tmp_path: Path):
         assert summary.stop_reason == "auth"
         counts = manifest.counts()
         assert counts.get("pending", 0) >= 14 and "running" not in counts
+
+
+@pytest.mark.asyncio
+async def test_endless_429_stops_the_run_as_quota_and_keeps_tasks_pending(tmp_path: Path):
+    sleep = FakeSleep()
+    with MockFmpServer() as fmp, Manifest(tmp_path / "m.sqlite", "d") as manifest:
+        fmp.add_fault(Fault(status=429, body={"message": "bandwidth used up"}, times=None))
+        manifest.add_tasks(_price_tasks([f"S{i}" for i in range(20)]))
+        breaker = CircuitBreaker(threshold=4, pause_s=60, stop_after_opens=3, sleep=sleep)
+        async with make_client(fmp, sleep, breaker=breaker, backoff_base_s=0.001) as client:
+            summary = await Downloader(manifest, client, workers=2).run()
+        assert summary.stop_reason == "quota"
+        counts = manifest.counts()
+        assert counts.get("pending", 0) >= 18 and "running" not in counts  # nothing marked failed or done
+        assert len(fmp.requests) <= 14
+        stops = [e[2] for e in manifest.events() if e[1] == "stop_quota"]
+        assert len(stops) == 1 and "bandwidth used up" in stops[0]
 
 
 @pytest.mark.asyncio

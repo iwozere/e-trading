@@ -9,7 +9,9 @@ Production async FMP client (spec §6.4, plan WP-2).
 - Retries network errors, timeouts, 429 and 5xx with exponential backoff and jitter, up to 6 attempts, honouring
   ``Retry-After``. Other 4xx are classified, never retried. A quota message raises ``QuotaExhausted`` at once.
 - A shared ``CircuitBreaker`` pauses every worker after 20 consecutive retryable failures. ``AuthAbort`` is
-  raised after ``auth_abort_after`` consecutive 401/403 responses (revoked key or lapsed plan).
+  raised after ``auth_abort_after`` consecutive 401/403 responses (revoked key or lapsed plan). When the breaker
+  opens three times in a row on 429s alone, ``QuotaExhausted`` is raised too: an over-limit account whose 429
+  body lacks the quota message is not hammered all night.
 - ``from``/``to``/``date`` parameters are validated before sending: FMP silently ignores a malformed date and
   serves its default window instead (probe F7, D21).
 """
@@ -196,7 +198,8 @@ class FmpClient:
 
         Raises:
             ValueError: On malformed date parameters (nothing is sent).
-            QuotaExhausted: When FMP reports the quota is used up.
+            QuotaExhausted: When FMP reports the quota is used up, or keeps answering 429 through repeated
+                circuit-breaker pauses.
             AuthAbort: After ``auth_abort_after`` consecutive 401/403 responses.
         """
         params = dict(params or {})
@@ -214,7 +217,13 @@ class FmpClient:
                 self.breaker.record_success()
                 return result
 
-            self.breaker.record_failure()
+            self.breaker.record_failure(rate_limited=result.classification == "rate_limited")
+            if self.breaker.rate_limit_exhausted:
+                _logger.error("FMP kept answering 429 through %d circuit-breaker pauses; stopping the run. Last "
+                              "response at %s: HTTP %d %s", self.breaker.rate_limited_opens, endpoint,
+                              result.http_status, result.error)
+                raise QuotaExhausted(f"FMP kept answering 429 at {endpoint} through "
+                                     f"{self.breaker.rate_limited_opens} breaker pauses: {result.error[:200]}")
             if attempt < self._max_attempts:
                 delay = self._backoff(attempt, retry_after)
                 _logger.warning("FMP %s %s -> %s (attempt %d/%d), retrying in %.1fs", endpoint,
