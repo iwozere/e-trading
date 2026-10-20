@@ -42,7 +42,8 @@ vintages/<dump_id>/
                     symbol_changes, exchanges, sectors, industries, countries, statement_symbols, cik_list,
                     shares_float, index_list, market_risk_premium, holidays, market_hours, employee_count,
                     historical_employee_count, etf_info, etf_holdings
-  events/           splits, dividends, earnings, mna
+  events/           splits, dividends, earnings, mna, earnings_call_transcript_dates,
+                    earnings_call_transcripts (full text in `content`)
   prices/
     1d_raw/<bucket>/<security_id>.parquet      raw daily bars, one file per security
     1h_raw/<bucket>/<security_id>.parquet      raw hourly bars, one file per security
@@ -52,7 +53,7 @@ vintages/<dump_id>/
                     *_as_reported, full_as_reported, *_growth, analyst_estimates, market_cap,
                     financial_reports_dates, financial_scores, owner_earnings,
                     revenue_product_segmentation, revenue_geographic_segmentation, grades_historical,
-                    ratings_historical
+                    ratings_historical, grades (individual analyst actions)
   macro/            treasury_rates, economic_indicators, calendars
   _meta/build_info.json                        code version, input digests, settings, per-file rows + sha256
 ```

@@ -30,8 +30,10 @@ BLOCKS = {
 #: list: one request, no params. paged: page 0 … (follow-ups until an empty page). symbol: one per symbol.
 #: statement: one per symbol and period. daily: per symbol, ``from``/``to`` year windows. calendar: global
 #: ``from``/``to`` windows. exchange: one per exchange. indicator: one per indicator name. intraday: per symbol,
-#: windows sized from the row cap.
-KINDS = ("list", "paged", "symbol", "statement", "daily", "calendar", "exchange", "indicator", "intraday")
+#: windows sized from the row cap. follow_up: never planned up front; ``FollowUps`` plans them from another
+#: endpoint's responses (transcripts from ``earning-call-transcript-dates``), so the projection does not count them.
+KINDS = ("list", "paged", "symbol", "statement", "daily", "calendar", "exchange", "indicator", "intraday",
+         "follow_up")
 
 #: Which symbols a per-symbol endpoint covers. universe: every included security (and the explicit indices).
 #: stocks: non-ETF, non-fund securities. statements: ``financial-statement-symbol-list`` ∩ stocks when that list was
@@ -148,6 +150,11 @@ CATALOG: tuple[EndpointSpec, ...] = (
     _e("analyst-estimates", 5, "P2", "statement", "statements", rows=10),
     _e("grades-historical", 5, "P2", "symbol", "statements", rows=50),
     _e("ratings-historical", 5, "P2", "symbol", "statements", rows=50),
+    # Individual analyst actions (AAPL 2026-10-20: 1,806 rows since 2012, 179 decoded bytes per row).
+    _e("grades", 5, "P2", "symbol", "statements", rate=(30, 179), rows=150, measured=False),
+    # Ultimate: one transcript per fiscal quarter, ~46 KB decoded each (AAPL 2026-10-20); 284,669 in all FMP.
+    _e("earning-call-transcript-dates", 5, "P2", "symbol", "statements", rate=(7, 76), rows=25),
+    _e("earning-call-transcript", 5, "P2", "follow_up"),
     # --- block 6: intraday (endpoint name is completed with the configured interval)
     _e("historical-chart/{interval}", 6, "P0", "intraday", "universe"),
 )
@@ -160,20 +167,22 @@ DAILY_ROW_ENDPOINTS = ("historical-price-eod/non-split-adjusted", "historical-pr
                        "historical-price-eod/dividend-adjusted", "historical-market-capitalization")
 
 
-def selected(priorities: tuple[str, ...], intervals: Union[str, tuple[str, ...]]) -> list[EndpointSpec]:
+def selected(priorities: tuple[str, ...], intervals: Union[str, tuple[str, ...]],
+             exclude: tuple[str, ...] = ()) -> list[EndpointSpec]:
     """
     Return the catalogue entries to plan.
 
     Args:
         priorities: Priorities to include (``P0``, ``P1``, ``P2``). Bootstrap lists are always included.
         intervals: Intraday interval(s), substituted into ``historical-chart/{interval}``: one entry per interval.
+        exclude: Endpoints left out although their priority is selected (bootstrap lists cannot be excluded).
 
     Returns:
         Entries in catalogue order.
     """
     chosen = []
     for spec in CATALOG:
-        if spec.priority not in priorities and not spec.bootstrap:
+        if not spec.bootstrap and (spec.priority not in priorities or spec.endpoint in exclude):
             continue
         if "{interval}" not in spec.endpoint:
             chosen.append(spec)

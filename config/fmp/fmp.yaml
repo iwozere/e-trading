@@ -6,7 +6,14 @@ fmp:
   base_url: https://financialmodelingprep.com/stable/
   rate_limit_per_min: 2400       # 80% of Ultimate's 3,000 (owner upgraded Premium -> Ultimate 2026-10-17)
   workers: 32                    # 12 workers sustained ~595/min against the 600 limit; 2,400/min needs more in flight
-  priorities: [P0, P1]           # add P2 only if the budget allows (spec §5)
+  priorities: [P0, P1, P2]       # owner 2026-10-20: P2 with the leftover bandwidth, minus the exclusions below (spec §5)
+  # owner 2026-10-20: skip as-reported (on SEC EDGAR), growth (derivable), snapshots; ratings-historical is a daily
+  # score FMP derives from ratios (1.7 MB for AAPL alone)
+  exclude_endpoints: [income-statement-as-reported, balance-sheet-statement-as-reported,
+                      cash-flow-statement-as-reported, financial-statement-full-as-reported, income-statement-growth,
+                      balance-sheet-statement-growth, cash-flow-statement-growth, ratings-historical, employee-count,
+                      historical-employee-count, index-list, etf/info, etf/holdings, ipos-calendar, economic-calendar,
+                      market-risk-premium]
   daily_from: 2000-01-01
   daily_window_years: 5          # one daily request per symbol and 5-year window (D37)
   page_size: 100                 # free key caps limit at 100; raise after the paid probe

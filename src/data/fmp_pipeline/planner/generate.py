@@ -64,7 +64,7 @@ def intraday_tier_priorities(tier: str) -> tuple[int, int]:
 def bootstrap_specs(config: PlanConfig) -> list[TaskSpec]:
     """Return the first request of every bootstrap list (page 0 for paged ones), at the lowest priority value."""
     specs = []
-    for entry in selected(config.priorities, config.intraday.intervals):
+    for entry in selected(config.priorities, config.intraday.intervals, config.exclude_endpoints):
         if entry.bootstrap:
             params = {"page": 0, "limit": config.page_size} if entry.kind == "paged" else {}
             specs.append(TaskSpec(entry.endpoint, None, params, BOOTSTRAP_PRIORITY))
@@ -115,12 +115,15 @@ class _Gen:
         return lo, hi
 
     def run(self) -> Iterator[PlannedTask]:
-        for entry in selected(self.c.priorities, self.c.intraday.intervals):
+        for entry in selected(self.c.priorities, self.c.intraday.intervals, self.c.exclude_endpoints):
             if entry.bootstrap:
                 continue
             yield from getattr(self, f"_{entry.kind}")(entry)
 
     # --- one method per kind ---------------------------------------------------------------------------------
+
+    def _follow_up(self, entry: EndpointSpec) -> Iterator[PlannedTask]:
+        yield from ()  # planned at run time by FollowUps
 
     def _list(self, entry: EndpointSpec) -> Iterator[PlannedTask]:
         yield self.task(entry, None, {}, 2, None, entry.rows)

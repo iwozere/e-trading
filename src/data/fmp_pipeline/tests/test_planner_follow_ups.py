@@ -70,6 +70,17 @@ def test_daily_raw_records_bounds(manifest: Manifest):
     assert manifest.bounds() == {"AAA": (date(2020, 1, 2), date(2025, 3, 3))}
 
 
+def test_transcript_dates_plan_one_transcript_per_quarter(manifest: Manifest):
+    review = FollowUps(manifest, CONFIG)
+    body = [{"quarter": 3, "fiscalYear": 2026, "date": "2026-07-30"}, {"quarter": 4, "fiscalYear": 2005},
+            {"quarter": 3, "fiscalYear": 2026}, {"quarter": "x", "fiscalYear": 2020}, "junk"]
+    result, specs = review(_task("earning-call-transcript-dates", {}, "AAA"), _result(body))
+    assert result.classification == "ok"
+    assert specs == [TaskSpec("earning-call-transcript", "AAA", {"year": 2005, "quarter": 4}, 7, "C"),
+                     TaskSpec("earning-call-transcript", "AAA", {"year": 2026, "quarter": 3}, 7, "C")]
+    assert review(_task("earning-call-transcript-dates", {}, "AAA"), _result([], "ok_empty"))[1] == []
+
+
 def test_intraday_window_at_the_cap_is_split(manifest: Manifest):
     review = FollowUps(manifest, CONFIG)
     task = _task(INTRADAY, {"from": "2026-01-05", "to": "2026-01-30"}, "AAA")

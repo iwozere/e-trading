@@ -10,6 +10,8 @@ Run-time planning: the ``Reviewer`` the ``Downloader`` calls with every final re
 - **Intraday truncation** (spec §6.5.3): a window at ≥ 95% of the row cap is relabelled ``possibly_truncated`` (so
   the archive and the builder never treat it as complete) and its two halves are planned. A one-day window that
   still hits the cap cannot be split and is reported in its error text.
+- **Transcripts**: an ``ok`` ``earning-call-transcript-dates`` response plans one ``earning-call-transcript``
+  request per listed fiscal year and quarter, at the same priority.
 """
 
 from __future__ import annotations
@@ -30,6 +32,8 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 PAGED = frozenset(e.endpoint for e in CATALOG if e.kind == "paged")
+TRANSCRIPT_DATES = "earning-call-transcript-dates"
+TRANSCRIPT = "earning-call-transcript"
 
 
 def _dates(body: Any) -> list[date]:
@@ -45,7 +49,7 @@ def _dates(body: Any) -> list[date]:
 
 
 class FollowUps:
-    """Reviewer for the ``Downloader``: paging, daily bounds and intraday truncation."""
+    """Reviewer for the ``Downloader``: paging, daily bounds, intraday truncation and transcripts."""
 
     def __init__(self, manifest: Manifest, config: PlanConfig) -> None:
         """
@@ -70,6 +74,8 @@ class FollowUps:
             if days:
                 self._manifest.update_bounds(task.symbol, min(days), max(days))
             return result, []
+        if task.endpoint == TRANSCRIPT_DATES:
+            return result, self._transcripts(task, result)
         max_rows = self._row_caps.get(task.endpoint)
         if max_rows is not None:
             return self._check_truncation(task, result, max_rows)
@@ -90,6 +96,14 @@ class FollowUps:
             _logger.warning("%s reached max_pages=%d; stopping pagination", task.endpoint, self._config.max_pages)
             return []
         return [TaskSpec(task.endpoint, task.symbol, {**task.params, "page": page + 1}, task.priority, task.tier)]
+
+    def _transcripts(self, task: Task, result: FetchResult) -> list[TaskSpec]:
+        body = result.json()
+        quarters = sorted({(row["fiscalYear"], row["quarter"]) for row in body if isinstance(row, dict)
+                           and isinstance(row.get("fiscalYear"), int) and isinstance(row.get("quarter"), int)}
+                          if isinstance(body, list) else set())
+        return [TaskSpec(TRANSCRIPT, task.symbol, {"year": year, "quarter": quarter}, task.priority, task.tier)
+                for year, quarter in quarters]
 
     def _check_truncation(self, task: Task, result: FetchResult,
                           max_rows: int) -> tuple[FetchResult, list[TaskSpec]]:

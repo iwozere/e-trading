@@ -63,6 +63,7 @@ def test_earliest_keyword_means_unset(tmp_path: Path):
     ("fmp:\n  universe: {include_otc: 'no'}\n", "expected true/false"),
     ("fmp:\n  bandwidth: {basis: gzip}\n", "basis must be"),
     ("fmp:\n  daily_from: not-a-date\n", "daily_from"),
+    ("fmp:\n  exclude_endpoints: [grades, no-such-endpoint]\n", "not catalogue endpoints: no-such-endpoint"),
     ("- just a list\n", "top-level 'fmp:'"),
 ])
 def test_invalid_settings_raise(tmp_path: Path, text: str, message: str):

@@ -19,6 +19,8 @@ from typing import Any, Optional
 
 import yaml
 
+from src.data.fmp_pipeline.planner.catalog import CATALOG
+
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "fmp" / "fmp.yaml"
 #: FMP ``historical-chart/<interval>`` names and their bar length in minutes.
@@ -210,6 +212,8 @@ class PlanConfig:
     rate_limit_per_min: int = 600
     workers: int = 12
     priorities: tuple[str, ...] = ("P0", "P1")
+    #: Catalogue endpoints not planned although their priority is selected.
+    exclude_endpoints: tuple[str, ...] = ()
     daily_from: date = date(2000, 1, 1)
     daily_window_years: int = 5
     calendar_window_days: int = 90
@@ -341,6 +345,9 @@ def load_config(path: Optional[Path] = None) -> PlanConfig:
         if tier not in IntradayConfig().tiers or interval not in INTRADAY_MINUTES:
             raise ValueError(f"fmp.intraday.tier_intervals: {tier}: {interval} is not a tier (A-E) and an interval "
                              f"({', '.join(INTRADAY_MINUTES)})")
+    unknown = sorted(set(config.exclude_endpoints) - {e.endpoint for e in CATALOG})
+    if unknown:
+        raise ValueError(f"fmp.exclude_endpoints: not catalogue endpoints: {', '.join(unknown)}")
     if config.build.intraday_label not in ("start", "end"):
         raise ValueError("fmp.build.intraday_label must be 'start' or 'end'")
     return config

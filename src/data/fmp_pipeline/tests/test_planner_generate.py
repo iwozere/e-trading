@@ -71,6 +71,12 @@ def test_selected_filters_priorities_but_keeps_bootstrap():
     assert "employee-count" in {e.endpoint for e in selected(("P0", "P1", "P2"), "1hour")}
 
 
+def test_selected_drops_excluded_endpoints_but_not_bootstrap():
+    names = {e.endpoint for e in selected(("P0", "P1", "P2"), "1hour", ("grades", "stock-list", "ratios"))}
+    assert "grades" not in names and "ratios" not in names
+    assert "stock-list" in names and "earning-call-transcript-dates" in names
+
+
 def test_bootstrap_specs_page_from_zero_at_priority_zero():
     specs = {s.endpoint: s for s in bootstrap_specs(_config(page_size=250))}
     assert specs["delisted-companies"].params == {"page": 0, "limit": 250}
