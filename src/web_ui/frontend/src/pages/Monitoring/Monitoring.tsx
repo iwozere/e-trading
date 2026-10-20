@@ -47,6 +47,7 @@ import {
   Warning as WarningIcon,
 } from '@mui/icons-material';
 import { useSystemMetrics, useSystemStatus, useServicesStatus, usePipelinesStatus, useTriggerPipeline, useRunLogs } from '../../hooks/system/useSystemHealth';
+import ScheduleTimelineTab from './ScheduleTimelineTab';
 
 // ── shared types ─────────────────────────────────────────────────────────────
 
@@ -955,6 +956,7 @@ const Monitoring: React.FC = () => {
         <Tab label="System" />
         <Tab label="Services" />
         <Tab label="Pipelines" />
+        <Tab label="Timeline" />
       </Tabs>
 
       <TabPanel value={activeTab} index={0}>
@@ -965,6 +967,9 @@ const Monitoring: React.FC = () => {
       </TabPanel>
       <TabPanel value={activeTab} index={2}>
         <PipelinesTab />
+      </TabPanel>
+      <TabPanel value={activeTab} index={3}>
+        <ScheduleTimelineTab />
       </TabPanel>
     </Box>
   );

@@ -61,6 +61,15 @@ export const usePipelinesStatus = () => {
   });
 };
 
+export const useScheduleTimeline = (tz: string, days: number) => {
+  return useQuery({
+    queryKey: ['monitoring', 'schedule-timeline', tz, days],
+    queryFn: () => systemApi.getScheduleTimeline(tz, days),
+    refetchInterval: 300000,
+    refetchOnWindowFocus: false,
+  });
+};
+
 export const useTriggerPipeline = () => {
   const queryClient = useQueryClient();
   return useMutation({

@@ -6,13 +6,15 @@ Endpoints for service health and pipeline execution status.
 """
 
 import socket
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Tuple
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.api.auth import get_current_user
 from src.api.services.notification_health_service import NotificationHealthService
+from src.api.services.schedule_timeline_service import build_actual_timeline, build_planned_timeline, group_runs_by_schedule
 from src.api.services.telegram_health_service import TelegramHealthService
 from src.data.db.models.model_jobs import Schedule, ScheduleRun
 from src.data.db.models.model_users import User
@@ -243,3 +245,54 @@ async def get_pipelines_status(_current_user: User = Depends(get_current_user)) 
     except Exception:
         _logger.exception("Error fetching pipelines status:")
         raise HTTPException(status_code=500, detail="Failed to fetch pipelines status")
+
+
+# Look-back for median run durations: long enough for weekly jobs to have several samples.
+_TIMELINE_DURATION_LOOKBACK_DAYS = 70
+
+
+@router.get("/schedule-timeline")
+async def get_schedule_timeline(
+    tz: str = Query("UTC", description="IANA time zone used to group by weekday and time of day"),
+    days: int = Query(14, ge=1, le=56, description="Look-back window for actual runs"),
+    _current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Return planned (cron × median duration) and actual job timelines grouped by weekday.
+
+    Used by the Web UI to spot jobs that start or run at the same time.
+    """
+    del _current_user  # auth gate only, value unused
+    try:
+        zone = ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise HTTPException(status_code=400, detail=f"Unknown time zone: {tz}")
+
+    try:
+        now = datetime.now(UTC)
+        since = now - timedelta(days=max(days, _TIMELINE_DURATION_LOOKBACK_DAYS))
+        db_service = get_database_service()
+        with db_service.uow() as uow:
+            schedules: List[Schedule] = uow.s.query(Schedule).order_by(Schedule.name).all()
+            rows = (
+                uow.s.query(
+                    ScheduleRun.id, ScheduleRun.job_id, ScheduleRun.status, ScheduleRun.started_at, ScheduleRun.finished_at
+                )
+                .filter(ScheduleRun.started_at >= since)
+                .all()
+            )
+            runs_by_schedule = group_runs_by_schedule(
+                ((r.id, r.job_id, r.status, r.started_at, r.finished_at) for r in rows), (s.id for s in schedules)
+            )
+
+            return {
+                "timestamp": now.isoformat(),
+                "tz": tz,
+                "days": days,
+                "planned": build_planned_timeline(schedules, runs_by_schedule, now, zone),
+                "actual": build_actual_timeline(schedules, runs_by_schedule, now, zone, days),
+            }
+
+    except Exception:
+        _logger.exception("Error building schedule timeline:")
+        raise HTTPException(status_code=500, detail="Failed to build schedule timeline")
