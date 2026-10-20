@@ -22,7 +22,6 @@ Classes:
 
 import logging
 import os
-import random
 import threading
 import time
 from datetime import datetime, timedelta
@@ -40,44 +39,37 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 # ---------------------------------------------------------------------------
-# curl_cffi browser-impersonation session rotation
+# Shared curl_cffi session
 # ---------------------------------------------------------------------------
 # yfinance 1.x requires a curl_cffi session (not requests.Session) because
-# Yahoo Finance validates TLS fingerprints.  We rotate through different
-# browser impersonation targets so each OS thread presents a distinct TLS
-# fingerprint, making concurrent requests look like different real browsers.
-# curl_cffi replicates the full JA3/JA4 fingerprint of the target browser,
-# so this is far more effective than simply varying the User-Agent header.
-_BROWSER_IMPERSONATION_POOL = [
-    "chrome136",
-    "chrome131",
-    "chrome124",
-    "chrome120",
-    "chrome116",
-    "edge101",
-    "firefox135",
-    "firefox133",
-    "safari184",
-    "safari180",
-    "safari17_0",
-]
+# Yahoo Finance validates TLS fingerprints.
+#
+# yfinance keeps ONE process-wide YfData singleton holding the session, cookie
+# and crumb, and every yf.Ticker(..., session=s) call swaps that singleton's
+# session to `s`.  Handing each thread its own session therefore made worker
+# threads overwrite each other's session mid-flight: a crumb minted on one
+# session's cookies was sent with another session's jar, and Yahoo answered
+# 401 "Invalid Crumb" (hundreds per P17 run).  All callers must share a single
+# session so the cookie jar and crumb always stay matched.
+_IMPERSONATE_TARGET = "chrome"
 
-_thread_local = threading.local()
+_shared_session: curl_requests.Session | None = None
+_shared_session_lock = threading.Lock()
 
 
-def _get_rotated_session() -> curl_requests.Session:
+def _get_shared_session() -> curl_requests.Session:
     """
-    Return a thread-local curl_cffi Session with a randomly chosen browser impersonation.
+    Return the process-wide curl_cffi Session used for every yfinance call.
 
-    Each OS thread gets exactly one session (so TCP keep-alive is reused within
-    a thread), but each thread impersonates a different browser version — giving
-    each concurrent worker a distinct TLS fingerprint as seen by Yahoo Finance.
+    Returns:
+        The lazily created shared session impersonating a current Chrome build.
     """
-    if not hasattr(_thread_local, "session"):
-        target = random.choice(_BROWSER_IMPERSONATION_POOL)
-        _thread_local.session = curl_requests.Session(impersonate=cast(Any, target))
-        _logger.debug("Created curl_cffi session impersonating: %s", target)
-    return _thread_local.session
+    global _shared_session
+    with _shared_session_lock:
+        if _shared_session is None:
+            _shared_session = curl_requests.Session(impersonate=cast(Any, _IMPERSONATE_TARGET))
+            _logger.debug("Created shared curl_cffi session impersonating: %s", _IMPERSONATE_TARGET)
+        return _shared_session
 
 
 # Redirect yfinance cache away from the user home directory so the app works
@@ -174,7 +166,7 @@ class YahooDataDownloader(BaseDataDownloader):
         return ["1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"]
 
     def get_ohlcv(
-        self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs
+        self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **_kwargs
     ) -> pd.DataFrame | None:
         """
         Download OHLCV data for a single symbol with automatic batching for large date ranges.
@@ -245,7 +237,7 @@ class YahooDataDownloader(BaseDataDownloader):
         """Download OHLCV data for a single request (no batching)."""
         _logger.debug("Downloading OHLCV data for %s (%s to %s)", symbol, start_date, end_date)
 
-        ticker = yf.Ticker(symbol, session=_get_rotated_session())
+        ticker = yf.Ticker(symbol, session=_get_shared_session())
         try:
             df = ticker.history(start=start_date, end=end_date, interval=interval)
         except Exception as e:
@@ -292,7 +284,7 @@ class YahooDataDownloader(BaseDataDownloader):
         """Download OHLCV data using batching for large date ranges."""
         batches = self._calculate_batch_dates(start_date, end_date, max_period)
 
-        all_data = []
+        all_data: List[pd.DataFrame] = []
 
         for i, (batch_start, batch_end) in enumerate(batches):
             _logger.debug(
@@ -321,7 +313,7 @@ class YahooDataDownloader(BaseDataDownloader):
         return combined_df
 
     def get_ohlcv_batch(
-        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime, **kwargs
+        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime, **_kwargs
     ) -> Dict[str, pd.DataFrame]:
         """
         Download OHLCV data for multiple symbols in a single batch request.
@@ -496,7 +488,7 @@ class YahooDataDownloader(BaseDataDownloader):
                 ignore_tz=False,
                 threads=False,
                 progress=False,
-                session=_get_rotated_session(),
+                session=_get_shared_session(),
             )
         except YFRateLimitError:
             raise
@@ -541,7 +533,7 @@ class YahooDataDownloader(BaseDataDownloader):
             Fundamentals: Comprehensive fundamental data for the stock
         """
         try:
-            ticker = yf.Ticker(symbol, session=_get_rotated_session())
+            ticker = yf.Ticker(symbol, session=_get_shared_session())
             info = ticker.info
 
             if not info:
@@ -1060,7 +1052,7 @@ class YahooDataDownloader(BaseDataDownloader):
             _logger.info("Testing Yahoo Finance connection...")
 
             # Try to fetch recent data for a well-known ticker
-            test_ticker = yf.Ticker("AAPL", session=_get_rotated_session())
+            test_ticker = yf.Ticker("AAPL", session=_get_shared_session())
             df = test_ticker.history(period="1d", interval="1d")
 
             if df is not None and not df.empty:
@@ -1167,7 +1159,7 @@ class YahooDataDownloader(BaseDataDownloader):
             Dictionary with company profile data or None if failed
         """
         try:
-            ticker = yf.Ticker(symbol, session=_get_rotated_session())
+            ticker = yf.Ticker(symbol, session=_get_shared_session())
             info = ticker.info
 
             if not info:
@@ -1257,7 +1249,7 @@ class YahooDataDownloader(BaseDataDownloader):
                     delay *= 2
 
         try:
-            ticker = yf.Ticker(symbol, session=_get_rotated_session())
+            ticker = yf.Ticker(symbol, session=_get_shared_session())
             expirations = _fetch_with_retry(lambda: ticker.options, "options list")
             if not expirations:
                 _logger.debug("%s: no options expirations available", symbol)
