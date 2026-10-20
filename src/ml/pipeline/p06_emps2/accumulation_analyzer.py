@@ -10,7 +10,7 @@ Moved from p10_emps3/accumulation_analyzer.py.  P10 now imports from here.
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, cast
+from typing import Dict, List, cast
 
 import numpy as np
 import pandas as pd
@@ -415,6 +415,8 @@ class AccumulationAnalyzer:
         ts = pd.to_datetime(df_coerced["timestamp"], errors="coerce")
         historical_mask = ts.dt.date < today
         if historical_mask.any():
+            # Volume is usually int64; pandas 3 refuses to write the scaled floats back into an int column.
+            df_coerced["volume"] = df_coerced["volume"].astype(float)
             df_coerced.loc[historical_mask, "volume"] = df_coerced.loc[historical_mask, "volume"] * correction_factor
         return df_coerced
 
