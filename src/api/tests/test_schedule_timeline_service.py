@@ -58,6 +58,16 @@ def test_group_runs_ignores_unknown_job_ids_and_sorts_newest_first() -> None:
     assert grouped[29] == []
 
 
+def test_group_runs_accepts_integer_job_ids() -> None:
+    # Prod's job_schedule_runs.job_id column is an integer, not the model's String.
+    t0 = datetime(2026, 10, 1, 6, 0, tzinfo=UTC)
+    rows = [(1, 28, "completed", t0, t0 + timedelta(minutes=5)), (2, None, "completed", t0, t0)]
+
+    grouped = group_runs_by_schedule(rows, [28])
+
+    assert [r.id for r in grouped[28]] == [1]
+
+
 def test_typical_duration_is_median_of_finished_runs() -> None:
     t0 = NOW - timedelta(days=5)
     rows = [_run(i, 1, t0 + timedelta(days=i), m) for i, m in enumerate([10, 50, 30])]

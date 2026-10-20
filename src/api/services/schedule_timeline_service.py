@@ -18,7 +18,7 @@ midnight are still caught.
 import statistics
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 from croniter import croniter
 
@@ -79,7 +79,7 @@ class RunRow:
 
 
 def group_runs_by_schedule(
-    rows: Iterable[Tuple[int, Optional[str], Optional[str], Optional[datetime], Optional[datetime]]],
+    rows: Iterable[Tuple[int, Union[int, str, None], Optional[str], Optional[datetime], Optional[datetime]]],
     schedule_ids: Iterable[int],
 ) -> Dict[int, List[RunRow]]:
     """
@@ -97,9 +97,11 @@ def group_runs_by_schedule(
     """
     grouped: Dict[int, List[RunRow]] = {sid: [] for sid in schedule_ids}
     for run_id, job_id, status, started_at, finished_at in rows:
-        if not job_id or not job_id.isdigit() or int(job_id) not in grouped:
+        # The model declares job_id as String, but the prod column holds integers; accept both.
+        key = str(job_id) if job_id is not None else ""
+        if not key.isdigit() or int(key) not in grouped:
             continue
-        grouped[int(job_id)].append(RunRow(run_id, int(job_id), status, _as_utc(started_at), _as_utc(finished_at)))
+        grouped[int(key)].append(RunRow(run_id, int(key), status, _as_utc(started_at), _as_utc(finished_at)))
     epoch = datetime.min.replace(tzinfo=timezone.utc)
     for runs in grouped.values():
         runs.sort(key=lambda r: r.started_at or epoch, reverse=True)
