@@ -26,7 +26,7 @@ def classify(status: int, body: Any, text: str) -> str:
         ``rate_limited``, ``server_error``, ``api_error``.
     """
     lowered = text.lower()
-    if "limit reach" in lowered:
+    if "limit reach" in _error_text(status, body, lowered):
         return "quota_exhausted"
     if status == 401:
         return "unauthorized"
@@ -52,6 +52,20 @@ def classify(status: int, body: Any, text: str) -> str:
     if body in ([], {}):
         return "ok_empty"
     return "ok"
+
+
+def _error_text(status: int, body: Any, lowered: str) -> str:
+    """
+    The lower-cased error message of a response, ``""`` for a data response.
+
+    Only error bodies are searched: data can quote FMP's wording (the 2026-04-30 Altria earnings call transcript says
+    "limit reached"), and a quota match on data stops the whole run.
+    """
+    if isinstance(body, dict) and ("Error Message" in body or "error" in body):
+        return str(body.get("Error Message", body.get("error", ""))).lower()
+    if status >= 400 or body is None:
+        return lowered
+    return ""
 
 
 def row_count(body: Any) -> int:

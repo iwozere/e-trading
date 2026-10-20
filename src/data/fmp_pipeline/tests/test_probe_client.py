@@ -37,6 +37,8 @@ def _client(tmp_path: Path, handler, budget: int = 10, offline: bool = False) ->
          "plan_restricted"),
         (200, {"Error Message": "something else"}, "api_error"),
         (200, {"Error Message": "Limit Reach . Please upgrade your plan"}, "quota_exhausted"),
+        (200, [{"content": "the limit reached its cap"}], "ok"),  # transcript text, not FMP's quota error
+        (429, "Limit Reach . Please upgrade your plan", "quota_exhausted"),
         (401, {"Error Message": "x"}, "unauthorized"),
         (402, "Premium Query Parameter", "plan_restricted"),
         (403, {}, "plan_restricted"),
