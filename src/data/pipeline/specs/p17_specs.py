@@ -15,7 +15,8 @@ SPECS: List[PluginSpec] = [
     PluginSpec(
         name="P17 Penny Stock Screener Daily",
         category="p17",
-        cron="0 6 * * 1-5",
+        # 08:00 UTC, clear of P15 Options Daily (06:00 UTC, ~40-60 min): both hammer Yahoo with worker threads.
+        cron="0 8 * * 1-5",
         script_path="src/ml/pipeline/p17_penny_stocks/run_p17.py",
         timeout_seconds=7200,
         extra_task_params={
