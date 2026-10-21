@@ -7,7 +7,7 @@ Endpoints for service health and pipeline execution status.
 
 import socket
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -137,13 +137,54 @@ async def get_services_status(current_user: User = Depends(get_current_user)) ->
         raise HTTPException(status_code=500, detail="Failed to fetch services status")
 
 
+def _match_schedule_id(snapshot: Dict[str, Any], job_id: Any, schedules: List[Schedule]) -> Optional[int]:
+    """
+    Find the schedule a run belongs to.
+
+    Tries job_snapshot['schedule_id'], then job_snapshot['schedule_name'], then the
+    run's job_id: an exact schedule id (what the scheduler stores) or, for legacy
+    runs, a job_id containing the schedule name.
+
+    Args:
+        snapshot: The run's job_snapshot (may be empty).
+        job_id: The run's job_id; the model declares String, but the prod column holds integers.
+        schedules: All known schedules.
+
+    Returns:
+        The matching schedule id, or None.
+    """
+    by_id = {s.id: s for s in schedules}
+    try:
+        sid = int(snapshot["schedule_id"])
+        if sid in by_id:
+            return sid
+    except (KeyError, ValueError, TypeError):
+        pass
+
+    sname = snapshot.get("schedule_name")
+    if sname:
+        for s in schedules:
+            if s.name == sname:
+                return s.id
+
+    job_id_str = str(job_id) if job_id is not None else ""
+    if not job_id_str:
+        return None
+    if job_id_str.isdigit() and int(job_id_str) in by_id:
+        return int(job_id_str)
+    for s in schedules:
+        if s.name in job_id_str:
+            return s.id
+    return None
+
+
 @router.get("/pipelines")
 async def get_pipelines_status(_current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
     """
     Return all configured pipelines with their last run status and 10-run history.
 
     Matches ScheduleRun records to Schedule records via job_snapshot['schedule_id']
-    or job_snapshot['schedule_name'], falling back to job_id substring matching.
+    or job_snapshot['schedule_name'], falling back to the run's job_id.
     """
     del _current_user  # auth gate only, value unused
     try:
@@ -158,33 +199,11 @@ async def get_pipelines_status(_current_user: User = Depends(get_current_user)) 
         unmatched: List[ScheduleRun] = []
 
         for run in recent_runs:
-            snapshot = run.job_snapshot or {}
-            matched = False
-
-            sid = snapshot.get("schedule_id")
-            if sid is not None:
-                try:
-                    sid = int(sid)
-                    if sid in schedule_runs:
-                        schedule_runs[sid].append(run)
-                        matched = True
-                except (ValueError, TypeError):
-                    pass
-
-            if not matched:
-                sname = snapshot.get("schedule_name")
-                for s in schedules:
-                    if sname and sname == s.name:
-                        schedule_runs[s.id].append(run)
-                        matched = True
-                        break
-                    if not matched and run.job_id and s.name in run.job_id:
-                        schedule_runs[s.id].append(run)
-                        matched = True
-                        break
-
-            if not matched:
+            sid = _match_schedule_id(run.job_snapshot or {}, run.job_id, schedules)
+            if sid is None:
                 unmatched.append(run)
+            else:
+                schedule_runs[sid].append(run)
 
         pipelines = []
         for schedule in schedules:
