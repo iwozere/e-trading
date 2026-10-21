@@ -68,6 +68,10 @@ class PositionDeltaCalculator:
         for df in (curr, prev):
             df["cik"] = df["cik"].astype(str)
             df["ticker"] = df["ticker"].astype(str).str.strip().str.upper()
+        # One row per (institution, ticker): a 13F lists a security once per manager /
+        # discretion type, and the outer merge below would otherwise pair every prior row
+        # with every current row and report false partial exits.
+        curr, prev = _aggregate_positions(curr), _aggregate_positions(prev)
 
         merged = pd.merge(
             prev[["cik", "institution_name", "ticker", "shares", "value_usd", "pct_of_portfolio"]],
@@ -103,6 +107,36 @@ class PositionDeltaCalculator:
             (result["exit_type"] == "new_position").sum(),
         )
         return result
+
+
+def _aggregate_positions(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Collapse holdings to one share position per (cik, ticker).
+
+    Option rows (``put_call`` set) are dropped — they are not share holdings and their
+    ``sshPrnamt`` is the underlying amount — and the remaining rows are summed.
+
+    Args:
+        df: Holdings with cik, ticker, shares, value_usd, pct_of_portfolio, institution_name
+            and optionally put_call.
+
+    Returns:
+        Aggregated holdings with the same columns.
+    """
+    if df.empty:
+        return df
+    if "put_call" in df.columns:
+        put_call = df["put_call"].fillna("").astype(str).str.strip()
+        df = df[put_call == ""]
+    numeric = {c: pd.to_numeric(df[c], errors="coerce").fillna(0.0) for c in ("shares", "value_usd", "pct_of_portfolio")}
+    frame = df.assign(**numeric)
+    if "institution_name" not in frame.columns:
+        frame = frame.assign(institution_name="")
+    return (
+        frame.groupby(["cik", "ticker"], as_index=False)
+        .agg(institution_name=("institution_name", "first"), shares=("shares", "sum"),
+             value_usd=("value_usd", "sum"), pct_of_portfolio=("pct_of_portfolio", "sum"))
+    )
 
 
 def _classify_exit(row: pd.Series) -> str:

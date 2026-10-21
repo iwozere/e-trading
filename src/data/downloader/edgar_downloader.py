@@ -543,17 +543,30 @@ class EdgarDownloader(BaseDataDownloader):
             Empty DataFrame on failure.
         """
         dest = self._13f_index_dir / f"{year}_Q{quarter}.csv.gz"
-        if dest.exists() and not force:
-            _logger.debug("13F index for %d Q%d already cached at %s", year, quarter, dest)
-            return pd.read_csv(dest, compression="gzip", dtype=str)
-
         start_dt, end_dt = _13f_filing_window(year, quarter)
+        cached = pd.read_csv(dest, compression="gzip", dtype=str) if dest.exists() else None
+        if cached is not None and not force:
+            # A cache written while the filing window was still open holds only the early
+            # filers (the 2026 Q2 index was cached on 2026-07-01 with 28 of ~8,000) — refresh it.
+            cached_on = datetime.fromtimestamp(dest.stat().st_mtime).date()
+            if cached_on > end_dt:
+                _logger.debug("13F index for %d Q%d already cached at %s", year, quarter, dest)
+                return cached
+            _logger.info("13F index for %d Q%d was cached on %s, before its filing window closed (%s) — refreshing",
+                         year, quarter, cached_on, end_dt)
+
         _logger.info("Downloading 13F index for %d Q%d (filing window %s → %s)", year, quarter, start_dt, end_dt)
 
-        hits = self._efts_search(forms="13F-HR", start_dt=str(start_dt), end_dt=str(end_dt))
+        try:
+            hits = self._efts_search(forms="13F-HR", start_dt=str(start_dt), end_dt=str(min(end_dt, date.today())))
+        except EftsUnavailableError:
+            if cached is not None:
+                _logger.warning("EFTS unavailable — keeping the cached 13F index for %d Q%d (%d filers)", year, quarter, len(cached))
+                return cached
+            raise
         if not hits:
             _logger.warning("No 13F-HR filings found for %d Q%d", year, quarter)
-            return pd.DataFrame()
+            return cached if cached is not None else pd.DataFrame()
 
         records = []
         for hit in hits:
@@ -570,6 +583,10 @@ class EdgarDownloader(BaseDataDownloader):
 
         df = pd.DataFrame(records).dropna(subset=["cik"])
         df["cik"] = df["cik"].astype(str)
+        if cached is not None and len(cached) > len(df):
+            _logger.warning("Refreshed 13F index for %d Q%d is smaller than the cache (%d < %d) — keeping the cache",
+                            year, quarter, len(df), len(cached))
+            return cached
 
         atomic_to_csv(df, dest, index=False, compression="gzip")
         _logger.info("Cached 13F index: %d filers for %d Q%d → %s", len(df), year, quarter, dest)
@@ -670,6 +687,8 @@ class EdgarDownloader(BaseDataDownloader):
             if "}" in elem.tag:
                 elem.tag = elem.tag.split("}")[-1]
 
+        # Since 2023-01-03 the 13F <value> is whole dollars; before that it was thousands.
+        value_multiplier = 1000 if _quarter_year(quarter) < 2023 else 1
         records = []
         for info in root.findall(".//infoTable"):
             records.append(
@@ -679,7 +698,7 @@ class EdgarDownloader(BaseDataDownloader):
                     "quarter": quarter,
                     "name_of_issuer": _xml_text(info, "nameOfIssuer"),
                     "cusip": _xml_text(info, "cusip"),
-                    "value_usd": _safe_int(_xml_text(info, "value")) * 1000,
+                    "value_usd": _safe_int(_xml_text(info, "value")) * value_multiplier,
                     "shares": _safe_int(_xml_text(info, ".//sshPrnamt")),
                     "investment_discretion": _xml_text(info, "investmentDiscretion"),
                     "put_call": _xml_text(info, "putCall"),
@@ -689,7 +708,9 @@ class EdgarDownloader(BaseDataDownloader):
         if not records:
             return pd.DataFrame()
 
-        return pd.DataFrame(records)
+        df = pd.DataFrame(records)
+        df["value_scale"] = VALUE_SCALE_USD
+        return df
 
     def load_13f_holdings(
         self,
@@ -713,7 +734,7 @@ class EdgarDownloader(BaseDataDownloader):
         cik_int = _parse_cik(cik)
         dest = self._13f_holdings_dir / f"{year}_Q{quarter}" / f"{cik_int:010d}.csv.gz"
         if dest.exists() and not force_refresh:
-            return pd.read_csv(dest, compression="gzip")
+            return read_13f_holdings_file(dest)
 
         # Try to obtain from the index
         index_df = self.download_13f_index(year, quarter, force=False)
@@ -728,7 +749,12 @@ class EdgarDownloader(BaseDataDownloader):
         if path is None or not path.exists():
             return None
 
-        return pd.read_csv(path, compression="gzip")
+        return read_13f_holdings_file(path)
+
+    def holdings_files(self, year: int, quarter: int) -> List[Path]:
+        """Return every cached holdings file of a quarter (one per filer CIK)."""
+        quarter_dir = self._13f_holdings_dir / f"{year}_Q{quarter}"
+        return sorted(quarter_dir.glob("*.csv.gz")) if quarter_dir.is_dir() else []
 
     def get_new_13f_filings_today(self, as_of_date: date | None = None) -> pd.DataFrame:
         """
@@ -1798,6 +1824,39 @@ def _13f_filing_window(year: int, quarter: int) -> tuple:
     start = quarter_end + timedelta(days=1)
     end = quarter_end + timedelta(days=_13F_FILING_WINDOW_DAYS)
     return start, end
+
+
+VALUE_SCALE_USD = "usd"
+
+
+def _quarter_year(quarter: str) -> int:
+    """Year of a ``"2026Q1"``-style quarter string (current year if unparsable)."""
+    try:
+        return int(str(quarter)[:4])
+    except ValueError:
+        return date.today().year
+
+
+def read_13f_holdings_file(path: Path) -> pd.DataFrame:
+    """
+    Read one cached 13F holdings CSV.gz, correcting files written by the old parser.
+
+    Until 2026-10 ``parse_13f_infotable`` multiplied <value> by 1000 even though
+    13F values have been whole dollars since 2023-01-03, so every cached file
+    without a ``value_scale`` column holds values 1000x too large (all cached
+    quarters are 2025+). ``pct_of_portfolio`` is a ratio and needs no fix.
+
+    Args:
+        path: Holdings file path.
+
+    Returns:
+        Holdings with ``value_usd`` in dollars.
+    """
+    df = pd.read_csv(path, compression="gzip")
+    if "value_scale" not in df.columns and "value_usd" in df.columns:
+        df["value_usd"] = pd.to_numeric(df["value_usd"], errors="coerce") / 1000
+        df["value_scale"] = VALUE_SCALE_USD
+    return df
 
 
 def _xml_text(element: ET.Element, path: str) -> str:

@@ -57,3 +57,17 @@
 - [ ] End-to-end test with a real historical quarter (e.g., Q4 2023)
 - [ ] Integration test: full daily run against cached EDGAR data
 - [ ] Performance test: time a full backfill run for 500 institutions
+
+
+## Fixed 2026-10-21 (no alerts since 2026-08-14, ~5,000 alerts before)
+- [x] 13F `<value>` multiplied by 1000 although values are whole dollars since 2023-01-03 — every AUM/position
+      filter passed. Parser fixed; old cache files are scaled back on read (`read_13f_holdings_file`, no re-download).
+- [x] Duplicate rows per (institution, CUSIP) (one per manager/discretion, plus put/call) made the outer merge
+      pair every prior row with every current row → false partial exits (BAC "sold" by 582 funds). Positions are
+      now aggregated per (cik, ticker) and option rows dropped before the delta.
+- [x] A quarter's 13F index cached while its filing window was open was never refreshed (2026 Q2: 28 of
+      ~8,000 filers, cached 2026-07-01) → empty consensus. Such caches now refresh until the window closes.
+- [x] On days with new 13F filings the daily run built the consensus from that day's filers only and overwrote
+      the quarter's cache; it now rebuilds from every filer cached for the quarter.
+- [ ] Deploy: run `backfill_consensus.py --year 2026 --quarter 2` once on the Pi (downloads the ~8,000 Q2
+      infotables; the stale index refreshes itself, no `--force` needed).
