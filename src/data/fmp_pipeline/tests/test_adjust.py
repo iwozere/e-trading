@@ -134,17 +134,37 @@ def test_invalid_split_ratio_raises(numerator: float, denominator: float):
         adjust(raw, _splits(("2024-01-04", numerator, denominator)), mode="split")
 
 
-@pytest.mark.parametrize("amount", [5.5, 11.0, 30.0])
-def test_dividend_of_half_the_previous_close_or_more_is_left_out(amount: float):
+def test_large_dividend_without_a_price_drop_is_left_out():
+    # 3.0 is 27% of C_prev = 11, but the closes never fall: a misattributed row (SABR 2023-05-12).
     raw = _bars(DAYS, [10, 11, 12, 13, 14])
-    out = adjust(raw, dividends=_dividends(("2024-01-04", amount)), mode="total")
+    out = adjust(raw, dividends=_dividends(("2024-01-04", 3.0)), mode="total")
     assert out["close"].tolist() == raw["close"].tolist()
 
 
-def test_dividend_just_below_half_the_previous_close_is_applied():
-    raw = _bars(DAYS, [10, 11, 12, 13, 14])
-    out = adjust(raw, dividends=_dividends(("2024-01-04", 5.4)), mode="total")
-    assert out["close"].iloc[0] == pytest.approx(10 * (1 - 5.4 / 11))
+def test_large_dividend_with_a_price_drop_is_applied():
+    raw = _bars(DAYS, [10, 11, 8, 8, 8])
+    out = adjust(raw, dividends=_dividends(("2024-01-04", 3.0)), mode="total")
+    assert out["close"].iloc[0] == pytest.approx(10 * (1 - 3.0 / 11))
+
+
+def test_large_dividend_dated_a_day_after_the_drop_is_applied():
+    # FMP dates some real dividends late (NLOK 2020); the drop sits within the window before the ex-date.
+    raw = _bars(DAYS, [10, 11, 8, 8, 8])
+    out = adjust(raw, dividends=_dividends(("2024-01-05", 3.0)), mode="total")
+    assert out["close"].iloc[0] == pytest.approx(10 * (1 - 3.0 / 8))
+
+
+def test_large_dividend_drop_is_measured_on_the_ex_date_share_basis():
+    # A 2:1 split on the ex-date halves the raw close without any dividend fall: 11 -> 5.5 is no drop.
+    raw = _bars(DAYS, [10, 11, 5.5, 5.5, 5.5])
+    out = adjust(raw, _splits(("2024-01-04", 2, 1)), _dividends(("2024-01-04", 1.5)), mode="total")
+    assert out["close"].iloc[0] == pytest.approx(10 / 2)
+
+
+def test_dividend_not_smaller_than_previous_close_is_left_out():
+    raw = _bars(DAYS, [10, 11, 0.1, 0.1, 0.1])
+    out = adjust(raw, dividends=_dividends(("2024-01-04", 11.0)), mode="total")
+    assert out["close"].tolist() == raw["close"].tolist()
 
 
 def test_negative_dividend_raises():

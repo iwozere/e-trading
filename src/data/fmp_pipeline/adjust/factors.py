@@ -9,16 +9,19 @@ Definitions, for a bar at date ``t``:
   ``DF(D) = 1 - d / C_prev``; ``d`` is the cash amount on the raw basis of ``D`` and ``C_prev`` is the raw close
   of the last bar before ``D``.
 
-Two clarifications of §8.2 made here (recorded in ``docs/decisions.md``):
+Three clarifications of §8.2 made here (recorded in ``docs/decisions.md``):
 
 1. ``C_prev`` is restated on the share basis of ``D`` before computing ``DF``. When a split falls between
    ``C_prev``'s bar and ``D`` (the common case being a dividend whose ex-date *is* the split date), ``d`` is
    quoted per post-split share while ``C_prev`` is a pre-split price; dividing one by the other would
    overstate the dividend by the split ratio.
 2. A dividend with no earlier bar gets ``DF = 1``. It could only affect bars before it, and there are none.
-3. A dividend of at least ``MAX_DIVIDEND_SHARE`` (half) of the restated ``C_prev`` also gets ``DF = 1``. FMP
-   attributes some dividends to the wrong security (SABR 2023-05-12: the preferred's 1.625 against a 3.20 common
-   close), and one such row scales the whole earlier history; V-DIV-SANITY lists these rows for review.
+3. A large dividend (at least ``LARGE_DIVIDEND_SHARE`` of the restated ``C_prev``) also gets ``DF = 1`` unless the
+   raw close fell by at least ``MIN_DROP_SHARE`` of it within ``DROP_WINDOW`` closes either side of ``D``; one at
+   least as large as ``C_prev`` always does. FMP attributes some dividends to the wrong security (SABR
+   2023-05-12: the preferred's 1.625 against a 3.40 common close, which fell 0.20) or lists one twice, and one
+   such row scales the whole earlier history. The window keeps real dividends that FMP dates a day or two off
+   (NLOK's $12 in 2020). V-DIV-SANITY lists the large rows for review.
 
 Comparisons are made on calendar dates (the bar timestamp normalized to midnight, wall-clock time for
 tz-aware indexes), so the same code serves daily and intraday bars.
@@ -38,8 +41,12 @@ import pandas as pd
 
 SPLIT_COLUMNS = ("date", "numerator", "denominator")
 DIVIDEND_COLUMNS = ("date", "amount")
-#: Dividends at least this share of the previous close are left out of the adjustment (clarification 3 above).
-MAX_DIVIDEND_SHARE = 0.5
+#: Clarification 3 above: dividends of at least this share of the previous close must show in the raw closes ...
+LARGE_DIVIDEND_SHARE = 0.2
+#: ... as a fall of at least this share of the dividend, from the highest of the last ``DROP_WINDOW`` closes before
+#: the ex-date to the lowest of the first ``DROP_WINDOW`` closes from it.
+MIN_DROP_SHARE = 0.5
+DROP_WINDOW = 3
 
 
 @dataclass(frozen=True)
@@ -189,8 +196,8 @@ def dividend_factors(
         closes: Raw closes aligned with ``close_dates``; non-finite values are skipped.
 
     Returns:
-        Float array aligned with ``dividends.dates``; 1 for a dividend of at least ``MAX_DIVIDEND_SHARE`` of
-        ``C_prev``.
+        Float array aligned with ``dividends.dates``; 1 for a large dividend the closes do not confirm
+        (clarification 3).
 
     Raises:
         ValueError: If a ``C_prev`` is not positive.
@@ -211,8 +218,22 @@ def dividend_factors(
     # Splits with C_prev's date < S <= D change the share basis between the two prices.
     basis = split_adj_factor(prev_dates, splits) / split_adj_factor(dividends.dates[has_prev], splits)
     share = dividends.amounts[has_prev] / (c_prev * basis)
-    factors[has_prev] = np.where(share < MAX_DIVIDEND_SHARE, 1.0 - share, 1.0)
+    applied = share < 1.0
+    for i in np.flatnonzero(applied & (share >= LARGE_DIVIDEND_SHARE)):
+        applied[i] = _price_drop(splits, dividends.dates[has_prev][i], close_dates, closes)             >= MIN_DROP_SHARE * dividends.amounts[has_prev][i]
+    factors[has_prev] = np.where(applied, 1.0 - share, 1.0)
     return factors
+
+
+def _price_drop(splits: SplitEvents, ex_date: np.datetime64, close_dates: np.ndarray, closes: np.ndarray) -> float:
+    """Fall from the highest of the ``DROP_WINDOW`` closes before ``ex_date`` to the lowest of the ``DROP_WINDOW``
+    closes from it, all on the share basis of ``ex_date``; 0 when either side is empty."""
+    at = int(np.searchsorted(close_dates, ex_date, side="left"))
+    lo, hi = max(at - DROP_WINDOW, 0), min(at + DROP_WINDOW, len(closes))
+    if lo == at or at == hi:
+        return 0.0
+    window = closes[lo:hi] * split_adj_factor(close_dates[lo:hi], splits) / split_adj_factor(np.array([ex_date]), splits)
+    return float(window[:at - lo].max() - window[at - lo:].min())
 
 
 def adjustment_factors(
