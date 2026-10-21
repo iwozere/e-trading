@@ -91,7 +91,7 @@ def split_consistency(ctx: ValidationContext) -> CheckResult:
 
 @check("V-DIV-SANITY", WARN, "Dividends positive and below half the previous raw close")
 def dividend_sanity(ctx: ValidationContext) -> CheckResult:
-    """Flag negative dividends and ``amount_raw / C_prev >= 0.5`` (review list, not an error)."""
+    """Flag negative dividends and ``amount_raw / C_prev >= 0.5``: a review list; ``adjust()`` leaves the large ones out."""
     result = CheckResult("V-DIV-SANITY", PASS)
     for sid, group in _by_security(_events_frame(ctx, DIVIDENDS.path)):
         closes = _closes(ctx, sid)

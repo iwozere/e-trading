@@ -134,10 +134,17 @@ def test_invalid_split_ratio_raises(numerator: float, denominator: float):
         adjust(raw, _splits(("2024-01-04", numerator, denominator)), mode="split")
 
 
-def test_dividend_not_smaller_than_previous_close_raises():
+@pytest.mark.parametrize("amount", [5.5, 11.0, 30.0])
+def test_dividend_of_half_the_previous_close_or_more_is_left_out(amount: float):
     raw = _bars(DAYS, [10, 11, 12, 13, 14])
-    with pytest.raises(ValueError, match="not smaller than the previous close"):
-        adjust(raw, dividends=_dividends(("2024-01-04", 11.0)), mode="total")
+    out = adjust(raw, dividends=_dividends(("2024-01-04", amount)), mode="total")
+    assert out["close"].tolist() == raw["close"].tolist()
+
+
+def test_dividend_just_below_half_the_previous_close_is_applied():
+    raw = _bars(DAYS, [10, 11, 12, 13, 14])
+    out = adjust(raw, dividends=_dividends(("2024-01-04", 5.4)), mode="total")
+    assert out["close"].iloc[0] == pytest.approx(10 * (1 - 5.4 / 11))
 
 
 def test_negative_dividend_raises():

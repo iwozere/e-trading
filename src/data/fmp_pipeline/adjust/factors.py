@@ -16,6 +16,9 @@ Two clarifications of §8.2 made here (recorded in ``docs/decisions.md``):
    quoted per post-split share while ``C_prev`` is a pre-split price; dividing one by the other would
    overstate the dividend by the split ratio.
 2. A dividend with no earlier bar gets ``DF = 1``. It could only affect bars before it, and there are none.
+3. A dividend of at least ``MAX_DIVIDEND_SHARE`` (half) of the restated ``C_prev`` also gets ``DF = 1``. FMP
+   attributes some dividends to the wrong security (SABR 2023-05-12: the preferred's 1.625 against a 3.20 common
+   close), and one such row scales the whole earlier history; V-DIV-SANITY lists these rows for review.
 
 Comparisons are made on calendar dates (the bar timestamp normalized to midnight, wall-clock time for
 tz-aware indexes), so the same code serves daily and intraday bars.
@@ -35,6 +38,8 @@ import pandas as pd
 
 SPLIT_COLUMNS = ("date", "numerator", "denominator")
 DIVIDEND_COLUMNS = ("date", "amount")
+#: Dividends at least this share of the previous close are left out of the adjustment (clarification 3 above).
+MAX_DIVIDEND_SHARE = 0.5
 
 
 @dataclass(frozen=True)
@@ -184,10 +189,11 @@ def dividend_factors(
         closes: Raw closes aligned with ``close_dates``; non-finite values are skipped.
 
     Returns:
-        Float array aligned with ``dividends.dates``.
+        Float array aligned with ``dividends.dates``; 1 for a dividend of at least ``MAX_DIVIDEND_SHARE`` of
+        ``C_prev``.
 
     Raises:
-        ValueError: If a ``C_prev`` is not positive, or a dividend is at least as large as ``C_prev``.
+        ValueError: If a ``C_prev`` is not positive.
     """
     finite = np.isfinite(closes)
     close_dates = close_dates[finite]
@@ -204,11 +210,8 @@ def dividend_factors(
         raise ValueError("non-positive raw close before a dividend ex-date")
     # Splits with C_prev's date < S <= D change the share basis between the two prices.
     basis = split_adj_factor(prev_dates, splits) / split_adj_factor(dividends.dates[has_prev], splits)
-    df = 1.0 - dividends.amounts[has_prev] / (c_prev * basis)
-    if (df <= 0).any():
-        bad = dividends.dates[has_prev][df <= 0]
-        raise ValueError(f"dividend not smaller than the previous close on {list(pd.to_datetime(bad).date)}")
-    factors[has_prev] = df
+    share = dividends.amounts[has_prev] / (c_prev * basis)
+    factors[has_prev] = np.where(share < MAX_DIVIDEND_SHARE, 1.0 - share, 1.0)
     return factors
 
 
