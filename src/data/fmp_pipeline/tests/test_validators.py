@@ -212,6 +212,30 @@ def test_intraday_checks(vintage_root: Path):
     assert result.status == WARN and "1 days not starting 09:30 ET" in result.examples[0]
 
 
+def test_intraday_checks_cover_every_interval(vintage_root: Path):
+    store = FmpStore(vintage_root)
+    sid = store.resolve("AAA").security_id  # type: ignore[union-attr]
+    hourly = pq.read_table(store.dir / bucket_path("1h_raw", sid))
+    full = pd.date_range("2025-01-31 14:30", periods=78, freq="5min", tz="UTC")  # a whole regular session
+    late = pd.date_range("2025-02-03 14:35", periods=77, freq="5min", tz="UTC")  # first bar missing
+    early = pd.date_range("2024-11-29 14:30", periods=42, freq="5min", tz="UTC")  # Black Friday closes 13:00 ET
+    weekend = pd.DatetimeIndex(["2025-02-01 15:00"], tz="UTC")
+    stamps = pd.DatetimeIndex(early.append(full).append(weekend).append(late))
+    bars = pd.DataFrame({"security_id": sid, "ts_utc": stamps, "date_et": stamps.tz_convert("America/New_York").date,
+                         "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1, "flags": 0, "source": "fmp",
+                         "vintage": "v"})
+    path = store.dir / bucket_path("5m_raw", sid)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(pa.Table.from_pandas(bars, schema=hourly.schema, preserve_index=False), path)
+    results = _run(vintage_root, VINTAGE_CONFIG, "V-INTRADAY-ALIGN", "V-INTRADAY-DAILY")
+    align = results["V-INTRADAY-ALIGN"]
+    five = next(e for e in align.examples if "(5m," in e)
+    assert five == ("AAA (5m, tier E): 1 days not starting 09:30 ET, 1 days with an unexpected bar count, "
+                    "1 bars outside the session")
+    assert set(align.details["share_of_days_off_by_timeframe"]) == {"1h", "5m"} and "5m: 1 series" in align.message
+    assert set(results["V-INTRADAY-DAILY"].details["intraday_to_daily_volume_ratio"]) == {"1h", "5m"}
+
+
 # --- event checks -----------------------------------------------------------------------------------------------
 
 

@@ -1,6 +1,6 @@
 """
-One pass over every price file of the vintage, collecting what V-SCHEMA, V-DUP, V-ORDER, V-OHLC, V-CAL, V-FLAGS,
-V-IDENT and V-INTRADAY-ALIGN need, so ~30k files are read once instead of once per check.
+One pass over every price file of the vintage (daily and every intraday interval), collecting what V-SCHEMA, V-DUP,
+V-ORDER, V-OHLC, V-CAL, V-FLAGS, V-IDENT and V-INTRADAY-ALIGN need, so each file is read once instead of once per check.
 
 Expected trading days and session times come from the NYSE calendar (``pandas_market_calendars``, already a
 project dependency): weekends, holidays and early closes.
@@ -19,7 +19,7 @@ import pandas as pd
 import pyarrow.parquet as pq
 
 from src.data.fmp_pipeline.builders.flags import FLAG_NAMES
-from src.data.fmp_pipeline.builders.prices import DAILY_SCHEMA, INTRADAY_SCHEMA
+from src.data.fmp_pipeline.builders.prices import DAILY_SCHEMA, INTRADAY_DIR, INTRADAY_SCHEMA
 from src.data.fmp_pipeline.builders.validate import SECURITIES
 from src.data.fmp_pipeline.datamanager_adapter.fmp_store import FmpStore
 from src.notification.logger import setup_logger
@@ -28,14 +28,19 @@ _logger = setup_logger(__name__)
 
 CALENDAR_START, CALENDAR_END = "1985-01-01", "2035-12-31"
 SESSION_OPEN_MINUTES = 9 * 60 + 30
+#: Intraday timeframe (vintage folder prefix) -> bar length in minutes.
+INTRADAY_MINUTES = {folder: int(interval[:-4]) * 60 if interval.endswith("hour") else int(interval[:-3])
+                    for interval, folder in INTRADAY_DIR.items()}
 
 
 @dataclass(frozen=True)
 class Calendar:
-    """NYSE sessions: dates, and the local close time (minutes after midnight) of each."""
+    """NYSE sessions: dates, and the local close time (minutes after midnight) of each, as a dict and as an array
+    aligned with ``sessions``."""
 
     sessions: np.ndarray
     close_minutes: dict[date, int]
+    closes: np.ndarray
 
     def expected_between(self, first: np.datetime64, last: np.datetime64) -> np.ndarray:
         """Session dates from ``first`` to ``last`` inclusive."""
@@ -53,8 +58,9 @@ def nyse_calendar() -> Calendar:
     schedule = mcal.get_calendar("NYSE").schedule(CALENDAR_START, CALENDAR_END)
     closes = pd.DatetimeIndex(schedule["market_close"]).tz_convert("America/New_York")
     sessions = pd.DatetimeIndex(schedule.index).to_numpy(dtype="datetime64[D]")
-    minutes = {pd.Timestamp(s).date(): int(c.hour * 60 + c.minute) for s, c in zip(sessions, closes)}
-    return Calendar(sessions, minutes)
+    close_array = np.asarray(closes.hour * 60 + closes.minute, dtype=np.int64)
+    minutes = {pd.Timestamp(s).date(): int(c) for s, c in zip(sessions, close_array)}
+    return Calendar(sessions, minutes, close_array)
 
 
 @dataclass
@@ -88,10 +94,14 @@ class SeriesStats:
 
 @dataclass
 class PriceScan:
-    """Stats per price file plus the securities table."""
+    """Stats per price file plus the securities table; ``intraday`` is keyed by timeframe, then security."""
 
     daily: dict[int, SeriesStats] = field(default_factory=dict)
-    intraday: dict[int, SeriesStats] = field(default_factory=dict)
+    intraday: dict[str, dict[int, SeriesStats]] = field(default_factory=dict)
+
+    def intraday_series(self) -> list[SeriesStats]:
+        """Every intraday series, all timeframes."""
+        return [stats for by_sid in self.intraday.values() for stats in by_sid.values()]
     securities: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
@@ -141,40 +151,40 @@ def _daily(stats: SeriesStats, path: Path, calendar: Calendar) -> None:
         stats.max_gap_days, stats.max_gap_at = int(gaps[i]), pd.Timestamp(dates[i]).date()
 
 
-def _intraday(stats: SeriesStats, path: Path, calendar: Calendar, tz: str, bars_per_day: int,
-              interval_minutes: int) -> None:
+def _intraday(stats: SeriesStats, path: Path, calendar: Calendar, tz: str, interval_minutes: int) -> None:
+    """
+    Session alignment per exchange-local day, vectorised (a 5-minute file holds ~6k days).
+
+    A regular day expects ceil(session minutes / interval) bars from 09:30 ET; days that are not NYSE sessions only
+    count their bars as outside the session.
+    """
     df = _common(stats, path, INTRADAY_SCHEMA, "ts_utc")
     if df is None or df.empty:
         return
     local = pd.DatetimeIndex(pd.to_datetime(df["ts_utc"], utc=True)).tz_convert(tz)
-    minutes = local.hour * 60 + local.minute
-    days = local.tz_localize(None).normalize()
-    stats.first, stats.last = days.min().date(), days.max().date()
-    frame = pd.DataFrame({"day": days, "minute": minutes})
-    for _, group in frame.groupby("day"):
-        session = pd.Timestamp(group["day"].iloc[0]).date()
-        close = calendar.close_minutes.get(session)
-        stats.days += 1
-        if close is None:
-            stats.outside_session_bars += len(group)
-            continue
-        inside = group[(group["minute"] >= SESSION_OPEN_MINUTES) & (group["minute"] < close)]
-        stats.outside_session_bars += len(group) - len(inside)
-        expected = -(-(close - SESSION_OPEN_MINUTES) // interval_minutes) if close != 16 * 60 else bars_per_day
-        if len(inside) != expected:
-            stats.bad_bar_count_days += 1
-        if inside.empty or int(inside["minute"].min()) != SESSION_OPEN_MINUTES:
-            stats.bad_first_bar_days += 1
+    minutes = np.asarray(local.hour * 60 + local.minute, dtype=np.int64)
+    days = local.tz_localize(None).to_numpy(dtype="datetime64[D]")
+    unique_days, inverse = np.unique(days, return_inverse=True)
+    stats.first, stats.last = pd.Timestamp(unique_days[0]).date(), pd.Timestamp(unique_days[-1]).date()
+    stats.days = len(unique_days)
+    position = np.minimum(np.searchsorted(calendar.sessions, unique_days), len(calendar.sessions) - 1)
+    is_session = calendar.sessions[position] == unique_days
+    day_close = np.where(is_session, calendar.closes[position], SESSION_OPEN_MINUTES)
+    inside = (minutes >= SESSION_OPEN_MINUTES) & (minutes < day_close[inverse])
+    stats.outside_session_bars = int(len(minutes) - inside.sum())
+    inside_count = np.bincount(inverse, weights=inside, minlength=len(unique_days))
+    opened = np.bincount(inverse, weights=inside & (minutes == SESSION_OPEN_MINUTES), minlength=len(unique_days)) > 0
+    expected = -(-(day_close - SESSION_OPEN_MINUTES) // interval_minutes)
+    stats.bad_bar_count_days = int((is_session & (inside_count != expected)).sum())
+    stats.bad_first_bar_days = int((is_session & ~opened).sum())
 
 
-def scan_prices(store: FmpStore, bars_per_day: int = 7, interval_minutes: int = 60) -> PriceScan:
+def scan_prices(store: FmpStore) -> PriceScan:
     """
-    Read every daily and hourly price file of the vintage once.
+    Read every daily and intraday price file of the vintage once.
 
     Args:
         store: The vintage.
-        bars_per_day: Expected hourly bars on a regular day (spec §8.4: 7).
-        interval_minutes: Hourly bar length.
 
     Returns:
         Stats per security and kind, and the securities table.
@@ -183,17 +193,23 @@ def scan_prices(store: FmpStore, bars_per_day: int = 7, interval_minutes: int = 
     securities = pq.read_table(store.dir / SECURITIES).to_pandas()
     scan = PriceScan(securities=securities)
     tiers = dict(zip(securities["security_id"], securities["tier"]))
-    for info in store.securities():
+    timeframes = [tf for tf in INTRADAY_MINUTES if (store.dir / "prices" / f"{tf}_raw").is_dir()]
+    for count, info in enumerate(store.securities(), 1):
         sid = info.security_id
+        tier = str(tiers.get(sid, "E"))
         daily_path = store.price_path(sid, "1d")
         if daily_path is not None:
-            stats = SeriesStats(sid, info.symbol, str(tiers.get(sid, "E")), "1d")
+            stats = SeriesStats(sid, info.symbol, tier, "1d")
             _daily(stats, daily_path, calendar)
             scan.daily[sid] = stats
-        hourly_path = store.price_path(sid, "1h")
-        if hourly_path is not None:
-            stats = SeriesStats(sid, info.symbol, str(tiers.get(sid, "E")), "1h")
-            _intraday(stats, hourly_path, calendar, store.intraday_tz, bars_per_day, interval_minutes)
-            scan.intraday[sid] = stats
-    _logger.info("Price scan: %d daily and %d hourly files", len(scan.daily), len(scan.intraday))
+        for timeframe in timeframes:
+            path = store.price_path(sid, timeframe)
+            if path is not None:
+                stats = SeriesStats(sid, info.symbol, tier, timeframe)
+                _intraday(stats, path, calendar, store.intraday_tz, INTRADAY_MINUTES[timeframe])
+                scan.intraday.setdefault(timeframe, {})[sid] = stats
+        if count % 2000 == 0:
+            _logger.info("Price scan: %d securities read", count)
+    _logger.info("Price scan: %d daily files; intraday %s", len(scan.daily),
+                 {tf: len(by_sid) for tf, by_sid in scan.intraday.items()})
     return scan

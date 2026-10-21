@@ -50,7 +50,7 @@ def schema(ctx: ValidationContext) -> CheckResult:
 
 
 def _series(ctx: ValidationContext) -> list[SeriesStats]:
-    return list(ctx.scan.daily.values()) + list(ctx.scan.intraday.values())
+    return list(ctx.scan.daily.values()) + ctx.scan.intraday_series()
 
 
 @check("V-DUP", FAIL, "No duplicate (security_id, date) / (security_id, ts_utc)")
@@ -150,62 +150,70 @@ def flags(ctx: ValidationContext) -> CheckResult:
     return result
 
 
-@check("V-INTRADAY-ALIGN", FAIL, "1h bars: 7 per regular day, fewer on early closes, first bar 09:30 ET, none outside")
+@check("V-INTRADAY-ALIGN", FAIL, "Intraday bars: a full session per regular day (fewer on early closes), first bar "
+       "09:30 ET, none outside; FAIL for tier A/B above 1% of days")
 def intraday_align(ctx: ValidationContext) -> CheckResult:
-    """Session alignment of every hourly series (FAIL for tier A/B, WARN otherwise)."""
+    """Session alignment of every intraday series, every interval (FAIL for tier A/B, WARN otherwise)."""
     result = CheckResult("V-INTRADAY-ALIGN", PASS)
     if not ctx.scan.intraday:
-        result.status, result.message = INFO, "no hourly data in the vintage"
+        result.status, result.message = INFO, "no intraday data in the vintage"
         return result
     worst = PASS
-    for stats in ctx.scan.intraday.values():
+    per_timeframe: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+    for stats in sorted(ctx.scan.intraday_series(), key=lambda st: (st.tier, st.symbol, st.kind)):
         result.examined += stats.days
-        bad = stats.bad_first_bar_days + stats.bad_bar_count_days + stats.outside_session_bars
-        if not bad:
+        per_timeframe[stats.kind][1] += stats.days
+        bad_days = max(stats.bad_first_bar_days, stats.bad_bar_count_days)
+        per_timeframe[stats.kind][0] += bad_days
+        if not bad_days and not stats.outside_session_bars:
             continue
-        result.violations += bad
-        worst = FAIL if stats.tier in TIER_STRICT or worst == FAIL else WARN
-        result.add_example(f"{stats.symbol} (tier {stats.tier}): {stats.bad_first_bar_days} days not starting "
-                           f"09:30 ET, {stats.bad_bar_count_days} days with an unexpected bar count, "
+        result.violations += stats.bad_first_bar_days + stats.bad_bar_count_days + stats.outside_session_bars
+        strict = stats.tier in TIER_STRICT and stats.days and bad_days / stats.days > 0.01
+        worst = FAIL if strict or worst == FAIL else WARN
+        result.add_example(f"{stats.symbol} ({stats.kind}, tier {stats.tier}): {stats.bad_first_bar_days} days not "
+                           f"starting 09:30 ET, {stats.bad_bar_count_days} days with an unexpected bar count, "
                            f"{stats.outside_session_bars} bars outside the session")
     result.status = worst
+    result.details = {"share_of_days_off_by_timeframe": {tf: round(bad / days, 4) if days else 0.0
+                                                         for tf, (bad, days) in sorted(per_timeframe.items())}}
+    result.message = ", ".join(f"{tf}: {len(by_sid):,} series" for tf, by_sid in sorted(ctx.scan.intraday.items()))
     return result
 
 
-@check("V-INTRADAY-DAILY", WARN, "1h aggregated to days vs daily raw: OHLC within 0.5%, volume within 5%")
+@check("V-INTRADAY-DAILY", WARN, "Intraday aggregated to days vs daily raw: OHLC within 0.5%, volume within 5%")
 def intraday_daily(ctx: ValidationContext) -> CheckResult:
-    """Compare hourly bars rolled up per exchange-local day with the daily raw series (sample)."""
+    """Compare intraday bars rolled up per exchange-local day with the daily raw series (sample, every interval)."""
     result = CheckResult("V-INTRADAY-DAILY", PASS)
-    sids = [sid for sid in ctx.sample if sid in ctx.scan.intraday] or list(ctx.scan.intraday)[: ctx.sample_size]
-    if not sids:
-        result.status, result.message = INFO, "no hourly data in the vintage"
+    if not ctx.scan.intraday:
+        result.status, result.message = INFO, "no intraday data in the vintage"
         return result
-    volume_ratios = []
-    for sid in sids:
-        hourly = pq.read_table(ctx.store.price_path(sid, "1h")).to_pandas()  # type: ignore[arg-type]
-        daily = ctx.store.prices(sid, "1d")
-        if daily is None or hourly.empty:
-            continue
-        rolled = hourly.sort_values("ts_utc").groupby("date_et").agg(
-            open=("open", "first"), high=("high", "max"), low=("low", "min"), close=("close", "last"),
-            volume=("volume", "sum"))
-        rolled.index = pd.DatetimeIndex(pd.to_datetime(rolled.index))
-        joined = rolled.join(daily[["open", "high", "low", "close", "volume"]], rsuffix="_d", how="inner")
-        if joined.empty:
-            continue
-        result.examined += len(joined)
-        price_bad = np.zeros(len(joined), dtype=bool)
-        for column in ("open", "high", "low", "close"):
-            price_bad |= (joined[column] / joined[f"{column}_d"] - 1).abs().to_numpy() > 0.005
-        ratio = (joined["volume"] / joined["volume_d"].replace(0, np.nan)).to_numpy(dtype=float)
-        volume_ratios += [r for r in ratio if np.isfinite(r)]
-        bad = int((price_bad | (np.abs(ratio - 1) > 0.05)).sum())
-        if bad:
-            result.violations += bad
-            result.add_example(f"{ctx.store.security(sid).symbol}: {bad}/{len(joined)} days differ")
-    if volume_ratios:
-        q = np.quantile(volume_ratios, [0.01, 0.5, 0.99])
-        result.details = {"hourly_to_daily_volume_ratio": {"p01": round(q[0], 4), "median": round(q[1], 4),
-                                                           "p99": round(q[2], 4)}}
+    volume_ratios: dict[str, list[float]] = defaultdict(list)
+    for timeframe, by_sid in sorted(ctx.scan.intraday.items()):
+        sids = [sid for sid in ctx.sample if sid in by_sid] or list(by_sid)[: ctx.sample_size]
+        for sid in sids:
+            bars = pq.read_table(ctx.store.price_path(sid, timeframe)).to_pandas()  # type: ignore[arg-type]
+            daily = ctx.store.prices(sid, "1d")
+            if daily is None or bars.empty:
+                continue
+            rolled = bars.sort_values("ts_utc").groupby("date_et").agg(
+                open=("open", "first"), high=("high", "max"), low=("low", "min"), close=("close", "last"),
+                volume=("volume", "sum"))
+            rolled.index = pd.DatetimeIndex(pd.to_datetime(rolled.index))
+            joined = rolled.join(daily[["open", "high", "low", "close", "volume"]], rsuffix="_d", how="inner")
+            if joined.empty:
+                continue
+            result.examined += len(joined)
+            price_bad = np.zeros(len(joined), dtype=bool)
+            for column in ("open", "high", "low", "close"):
+                price_bad |= (joined[column] / joined[f"{column}_d"] - 1).abs().to_numpy() > 0.005
+            ratio = (joined["volume"] / joined["volume_d"].replace(0, np.nan)).to_numpy(dtype=float)
+            volume_ratios[timeframe] += [r for r in ratio if np.isfinite(r)]
+            bad = int((price_bad | (np.abs(ratio - 1) > 0.05)).sum())
+            if bad:
+                result.violations += bad
+                result.add_example(f"{ctx.store.security(sid).symbol} ({timeframe}): {bad}/{len(joined)} days differ")
+    result.details = {"intraday_to_daily_volume_ratio": {
+        tf: dict(zip(("p01", "median", "p99"), (round(float(q), 4) for q in np.quantile(r, [0.01, 0.5, 0.99]))))
+        for tf, r in sorted(volume_ratios.items()) if r}}
     result.status = WARN if result.violations else PASS
     return result
