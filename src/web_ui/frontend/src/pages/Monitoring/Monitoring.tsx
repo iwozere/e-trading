@@ -48,6 +48,7 @@ import {
 } from '@mui/icons-material';
 import { useSystemMetrics, useSystemStatus, useServicesStatus, usePipelinesStatus, useTriggerPipeline, useRunLogs } from '../../hooks/system/useSystemHealth';
 import ScheduleTimelineTab from './ScheduleTimelineTab';
+import SignalsTab from './SignalsTab';
 
 // ── shared types ─────────────────────────────────────────────────────────────
 
@@ -957,6 +958,7 @@ const Monitoring: React.FC = () => {
         <Tab label="Services" />
         <Tab label="Pipelines" />
         <Tab label="Timeline" />
+        <Tab label="Signals" />
       </Tabs>
 
       <TabPanel value={activeTab} index={0}>
@@ -970,6 +972,9 @@ const Monitoring: React.FC = () => {
       </TabPanel>
       <TabPanel value={activeTab} index={3}>
         <ScheduleTimelineTab />
+      </TabPanel>
+      <TabPanel value={activeTab} index={4}>
+        <SignalsTab />
       </TabPanel>
     </Box>
   );

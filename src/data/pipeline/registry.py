@@ -44,6 +44,7 @@ from src.data.pipeline.specs.p21_specs import SPECS as _P21_SPECS
 from src.data.pipeline.specs.p22_specs import SPECS as _P22_SPECS
 from src.data.pipeline.specs.providers import SPECS as _PROVIDER_SPECS
 from src.data.pipeline.specs.screener_specs import SPECS as _SCREENER_SPECS
+from src.data.pipeline.specs.signal_ledger_specs import SPECS as _SIGNAL_LEDGER_SPECS
 from src.data.pipeline.specs.strategy_pack_specs import SPECS as _STRATEGY_PACK_SPECS
 
 _GROUPS: List[List[PluginSpec]] = [
@@ -60,6 +61,7 @@ _GROUPS: List[List[PluginSpec]] = [
     _P22_SPECS,
     _PROVIDER_SPECS,
     _SCREENER_SPECS,
+    _SIGNAL_LEDGER_SPECS,
     _STRATEGY_PACK_SPECS,
 ]
 

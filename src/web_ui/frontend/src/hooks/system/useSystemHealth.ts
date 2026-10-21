@@ -70,6 +70,32 @@ export const useScheduleTimeline = (tz: string, days: number) => {
   });
 };
 
+export const useSignalScorecard = (benchmark: string) => {
+  return useQuery({
+    queryKey: ['signals', 'scorecard', benchmark],
+    queryFn: () => systemApi.getSignalScorecard(benchmark),
+    refetchInterval: 600000,
+    refetchOnWindowFocus: false,
+  });
+};
+
+export const useSignalBookNav = (source: string | null) => {
+  return useQuery({
+    queryKey: ['signals', 'book-nav', source],
+    queryFn: () => systemApi.getSignalBookNav(source as string),
+    enabled: !!source,
+    refetchOnWindowFocus: false,
+  });
+};
+
+export const useRecentSignals = (source: string | null, limit: number) => {
+  return useQuery({
+    queryKey: ['signals', 'recent', source, limit],
+    queryFn: () => systemApi.getRecentSignals(source, limit),
+    refetchOnWindowFocus: false,
+  });
+};
+
 export const useTriggerPipeline = () => {
   const queryClient = useQueryClient();
   return useMutation({

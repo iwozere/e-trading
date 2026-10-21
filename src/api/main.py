@@ -115,6 +115,7 @@ from src.api.services import (
     SystemMonitoringService,
 )
 from src.api.services.webui_app_service import webui_app_service
+from src.api.signal_ledger_routes import router as signal_ledger_router
 from src.api.telegram_routes import router as telegram_router
 from src.data.db.models.model_users import User
 
@@ -281,6 +282,9 @@ app.include_router(internal_router)
 
 # Include monitoring routes (services health, pipeline execution status)
 app.include_router(monitoring_router)
+
+# Include signal ledger routes (pipeline signal scorecard and paper books)
+app.include_router(signal_ledger_router)
 
 # Include trading bot management routes
 from src.api.trading_bot_routes import router as trading_bot_router

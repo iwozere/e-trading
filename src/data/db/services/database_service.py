@@ -22,6 +22,7 @@ from src.data.db.repos.repo_kestrel import KestrelRepo
 from src.data.db.repos.repo_notification import NotificationRepository
 from src.data.db.repos.repo_p22_biotech_ma import P22Repo
 from src.data.db.repos.repo_short_squeeze import ShortSqueezeRepo
+from src.data.db.repos.repo_signal_ledger import SignalLedgerRepo
 from src.data.db.repos.repo_system_health import SystemHealthRepository
 from src.data.db.repos.repo_telegram import (
     BroadcastRepo as TelegramBroadcastRepo,
@@ -113,6 +114,9 @@ class ReposBundle:
     # P22 Biotech M&A Pipeline
     p22: P22Repo
 
+    # Signal ledger (cross-pipeline signal scorecard)
+    signal_ledger: SignalLedgerRepo
+
 
 # ----------------------------- Database service ------------------------------
 
@@ -179,6 +183,8 @@ class DatabaseService:
                 kestrel=KestrelRepo(s),
                 # P22 Biotech M&A Pipeline
                 p22=P22Repo(s),
+                # Signal ledger
+                signal_ledger=SignalLedgerRepo(s),
             )
             yield repos
             s.commit()

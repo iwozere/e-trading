@@ -44,6 +44,21 @@ export const systemApi = {
     return response.data;
   },
 
+  getSignalScorecard: async (benchmark: string) => {
+    const response = await api.get(`/api/signals/scorecard`, { params: { benchmark } });
+    return response.data;
+  },
+
+  getSignalBookNav: async (source: string) => {
+    const response = await api.get(`/api/signals/books/${encodeURIComponent(source)}/nav`);
+    return response.data;
+  },
+
+  getRecentSignals: async (source: string | null, limit: number) => {
+    const response = await api.get(`/api/signals/recent`, { params: { source: source ?? undefined, limit } });
+    return response.data;
+  },
+
   triggerPipeline: async (scheduleId: number) => {
     const response = await api.post(`/api/schedules/${scheduleId}/trigger`);
     return response.data;
