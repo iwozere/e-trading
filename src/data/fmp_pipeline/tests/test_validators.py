@@ -232,6 +232,13 @@ def test_split_known_consistency_and_dividend_sanity(vintage_root: Path, monkeyp
     assert results["V-SPLIT-CONSISTENCY"].status == WARN
 
 
+def test_events_of_a_security_without_daily_bars_are_skipped(vintage_root: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(FmpStore, "prices", lambda *_: None)
+    results = _run(vintage_root, VINTAGE_CONFIG, "V-SPLIT-CONSISTENCY", "V-DIV-SANITY")
+    assert results["V-SPLIT-CONSISTENCY"].status == PASS and results["V-SPLIT-CONSISTENCY"].examined == 0
+    assert results["V-DIV-SANITY"].status == PASS and results["V-DIV-SANITY"].examined == 1
+
+
 def test_yf_xcheck_against_a_legacy_cache(vintage_root: Path, tmp_path: Path):
     store = FmpStore(vintage_root)
     ours = FmpOhlcvAdapter(store).get_ohlcv("AAA", "1d", datetime(2025, 1, 1), datetime(2025, 3, 1), "total")

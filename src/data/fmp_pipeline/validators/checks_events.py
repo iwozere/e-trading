@@ -55,7 +55,8 @@ def split_known(ctx: ValidationContext) -> CheckResult:
 
 def _closes(ctx: ValidationContext, security_id: int) -> pd.Series:
     prices = ctx.store.prices(security_id, "1d")
-    return prices["close"] if prices is not None else pd.Series(dtype=float)
+    # The empty fallback keeps a DatetimeIndex: a RangeIndex cannot be compared with the event dates
+    return prices["close"] if prices is not None else pd.Series(dtype=float, index=pd.DatetimeIndex([]))
 
 
 def _by_security(frame: pd.DataFrame) -> Iterator[tuple[int, pd.DataFrame]]:
