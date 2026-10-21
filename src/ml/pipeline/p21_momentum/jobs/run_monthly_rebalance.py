@@ -96,7 +96,9 @@ def _series_from_panel(df: Optional[pd.DataFrame], column: str) -> pd.Series:
         return pd.Series(dtype=float)
     s = df.set_index("timestamp")[column]
     s.index = pd.to_datetime(s.index)
-    return s.sort_index()
+    # Batch downloads align every symbol on the union of trading days; a symbol's own
+    # gaps must be dropped or rolling windows/iloc lookbacks see NaN (spx_vs_200dma was NaN).
+    return s.dropna().sort_index()
 
 
 def _build_prior_regime_state(history: List[Dict]) -> PriorRegimeState:
@@ -347,6 +349,14 @@ def _run_rebalance(
         max_pos_pct=MAX_POSITION_PCT,
         regime_scalar=regime_result.scalar_applied,
     )
+    # Track B (spec §9): the same names without the overlay, i.e. regime_scalar = 1.
+    allocation_b = size_positions(
+        vol_by_ticker,
+        nav_total=NAV_TOTAL_USD,
+        sleeve_pct=SLEEVE_TARGET_PCT,
+        max_pos_pct=MAX_POSITION_PCT,
+        regime_scalar=1.0,
+    )
     sleeve_usd = NAV_TOTAL_USD * SLEEVE_TARGET_PCT * regime_result.scalar_applied
     if allocation:
         _check(check_target_weight_sum(sum(allocation.values()), sleeve_usd))
@@ -366,7 +376,7 @@ def _run_rebalance(
         )
         for c in final_selected
     ]
-    write_targets(signal_date, targets, results_dir=results_dir)
+    write_targets(signal_date, targets, results_dir=results_dir, targets_b=allocation_b)
 
     warn_count = sum(1 for r in gate_results if r.outcome == GateOutcome.WARN)
     _logger.info("monthly_rebalance complete for %s: %d targets, %d warnings", signal_date, len(targets), warn_count)

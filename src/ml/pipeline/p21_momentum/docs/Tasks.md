@@ -175,12 +175,11 @@ which depends on Phase 1 having run) is not started — see "Not Yet Started" be
 - [ ] `scripts/freeze_params.py`, `verify_frozen_params()` wired into every job's `main()`
 
 ## Technical Debt
-- [ ] `jobs/run_monthly_execute.py`'s report generation renders literal `0.0` placeholders for tracks B/C/D/E
-      NAV, the §9 attribution decomposition, and the §12.5/§12.6 realized-metrics rollups (turnover, costs,
-      decision criteria) — these need a full walk over `_state/nav_daily.csv` + `_state/ledger.jsonl` history.
-      `strategy/tracks.py` has the building blocks (`apply_ter_drag`, `build_nav_series`, `compute_attribution`)
-      but they are not yet wired into the job. Track A's own state is real, not a placeholder. Flagged in the
-      module's own docstring — see `docs/Design.md`.
+- [x] Tracks B-E live (2026-10-21): replayed from inception by `strategy/live_tracks.py`, written to
+      `nav_daily.csv` by `daily_mark`, used in the monthly report (NAV table, §9 decomposition, returns, drawdowns)
+- [x] Regime `spx_vs_200dma` was NaN (gap in the batch-downloaded ^GSPC series) — series now NaN-free (2026-10-21)
+- [ ] `jobs/run_monthly_execute.py`'s report still renders literal `0.0` placeholders for the §12.5/§12.6
+      realized-metrics rollups (turnover, costs, decision criteria) — needs a walk over `_state/ledger.jsonl`.
 - [ ] `jobs/register_jobs.py`'s two ET-hour cron entries (`20:30 UTC` for the 16:30 ET jobs) do not adjust for
       DST — same known limitation as every other ET-scheduled job in this repo (P20 shares it); not solved here.
 - [ ] `backtest/` is outside both type-check gates' scope: `pyrightconfig.json`'s `include` is `["src",

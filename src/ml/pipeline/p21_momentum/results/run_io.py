@@ -13,7 +13,9 @@ import json
 from dataclasses import asdict
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
 
 from src.ml.pipeline.p21_momentum.config import RESULTS_DIR
 from src.ml.pipeline.p21_momentum.schemas import DailyMarkSnapshot, Position, SignalRow, TargetPosition
@@ -65,9 +67,24 @@ def write_signals(run_date: date, rows: List[SignalRow], results_dir: Path = RES
     _write_json(run_dir_for(run_date, results_dir) / "signals.json", payload)
 
 
-def write_targets(run_date: date, targets: List[TargetPosition], results_dir: Path = RESULTS_DIR) -> None:
-    """Write targets.json — the pre-execution target portfolio."""
-    payload = {"as_of": run_date.isoformat(), "targets": [t.to_dict() for t in targets]}
+def write_targets(
+    run_date: date,
+    targets: List[TargetPosition],
+    results_dir: Path = RESULTS_DIR,
+    targets_b: Optional[Dict[str, float]] = None,
+) -> None:
+    """
+    Write targets.json — the pre-execution target portfolio.
+
+    Args:
+        run_date: Signal date.
+        targets: Track A targets (sized with the applied regime scalar).
+        results_dir: Results root.
+        targets_b: Track B targets, ticker -> USD sized with regime_scalar = 1 (spec §9).
+    """
+    payload: Dict[str, Any] = {"as_of": run_date.isoformat(), "targets": [t.to_dict() for t in targets]}
+    if targets_b is not None:
+        payload["targets_b"] = targets_b
     _write_json(run_dir_for(run_date, results_dir) / "targets.json", payload)
 
 
@@ -142,6 +159,41 @@ def read_regime_history(path: Path) -> List[Dict[str, Any]]:
         return []
     with path.open("r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def rewrite_track_navs(path: Path, navs: pd.DataFrame) -> int:
+    """
+    Overwrite the nav_b..nav_e columns of _state/nav_daily.csv with replayed Track B-E values.
+
+    Track A's column is never touched. Rows dated before the first replayed session keep
+    their value (every track sits at its starting NAV before inception).
+
+    Args:
+        path: Path to _state/nav_daily.csv.
+        navs: Frame indexed by session date with columns nav_b..nav_e (strategy/live_tracks.replay_tracks).
+
+    Returns:
+        Number of rows updated.
+    """
+    if not path.exists() or navs.empty:
+        return 0
+    with path.open("r", encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    by_date = {pd.Timestamp(str(ts)).date().isoformat(): values for ts, values in navs.iterrows()}
+    updated = 0
+    for row in rows:
+        values = by_date.get(row["date"])
+        if values is None:
+            continue
+        for column in ("nav_b", "nav_c", "nav_d", "nav_e"):
+            row[column] = str(float(values[column]))
+        updated += 1
+    fieldnames = ["date", "nav_a", "nav_b", "nav_c", "nav_d", "nav_e"]
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    return updated
 
 
 def append_nav_row(row: Dict[str, Any], path: Path) -> None:

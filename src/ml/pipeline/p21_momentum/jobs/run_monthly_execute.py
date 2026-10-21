@@ -7,17 +7,11 @@ read TARGET -> fetch opens -> simulate fills -> apply costs -> write POSITIONS +
 Runs daily (self-guarding, same pattern as run_monthly_rebalance.py):
 no-ops unless today is the first NYSE trading day of the month.
 
-**Known gap, flagged rather than silently approximated:** full multi-track
-(B/C/D/E) NAV compounding, §9's attribution decomposition, and the §12.5/
-§12.6 realized-metrics rollups (turnover, costs, decision criteria) all
-require walking the complete _state/nav_daily.csv and _state/ledger.jsonl
-history, which is a substantial aggregation step on its own
-(strategy/tracks.py provides the building blocks: apply_ter_drag(),
-build_nav_series(), compute_attribution()). This module currently writes
-Track A's real state (positions, ledger, cash) correctly and renders a
-report with placeholder zeros for the parts that need that history walk —
-follow-up work, not a silent shortcut, and every zeroed field is a literal
-0.0 in the render_report() call below, not a fabricated number.
+Tracks B-E are replayed from inception (strategy/live_tracks.py) for the
+report's NAV table, the §9 decomposition, the month/YTD/since-inception
+returns and max drawdowns. **Still a known gap:** the §12.5/§12.6 realized
+metrics (annualized turnover, costs in bps, decision criteria) are literal
+0.0 placeholders in the render_report() call below, not fabricated numbers.
 """
 
 from __future__ import annotations
@@ -26,7 +20,9 @@ import json
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional, Tuple
+
+import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -40,11 +36,19 @@ from src.ml.pipeline.p21_momentum.execution.ledger import (
     read_current_positions,
     write_current_positions,
 )
-from src.ml.pipeline.p21_momentum.jobs.run_common import send_abort_alert, setup_run_logging
+from src.ml.pipeline.p21_momentum.jobs.run_common import replay_live_tracks, send_abort_alert, setup_run_logging
 from src.ml.pipeline.p21_momentum.quality.gates import PipelineAbort, check_cash_after_execution, run_gates
 from src.ml.pipeline.p21_momentum.reporting.monthly_report import DecisionMetrics, render_report
-from src.ml.pipeline.p21_momentum.results.run_io import already_processed, read_targets, write_positions, write_report
+from src.ml.pipeline.p21_momentum.results.run_io import (
+    already_processed,
+    read_regime_history,
+    read_targets,
+    write_positions,
+    write_report,
+)
 from src.ml.pipeline.p21_momentum.schemas import LedgerEntry, Position
+from src.ml.pipeline.p21_momentum.strategy.live_tracks import summarize_navs
+from src.ml.pipeline.p21_momentum.strategy.tracks import compute_attribution
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -235,6 +239,7 @@ def _run_execute(
     check = check_cash_after_execution(cash)
     run_gates([check])
 
+    regime = _regime_for(signal_date, state_dir / "regime_history.json")
     write_current_positions(
         new_positions,
         as_of=execution_date,
@@ -242,7 +247,7 @@ def _run_execute(
         nav_total=NAV_TOTAL_USD,
         cash=cash,
         sleeve_market_value=sleeve_market_value,
-        regime_scalar=1.0,
+        regime_scalar=float(regime["scalar_applied"]),
         path=positions_path,
     )
     write_positions(execution_date, new_positions, results_dir=results_dir)
@@ -252,11 +257,15 @@ def _run_execute(
     # B-E need the full NAV-history walk flagged in the module docstring —
     # NAV_TOTAL_USD is a literal placeholder for those, not an estimate.
     nav_a = cash + sleeve_market_value
-    nav_by_track = {"A": nav_a, "B": NAV_TOTAL_USD, "C": NAV_TOTAL_USD, "D": NAV_TOTAL_USD, "E": NAV_TOTAL_USD}
+    nav_by_track, cum_returns, max_drawdowns = _track_report_inputs(execution_date, nav_a, results_dir, state_dir)
+    attribution = compute_attribution(
+        nav_by_track["A"], nav_by_track["B"], nav_by_track["C"], nav_by_track["D"], nav_by_track["E"],
+        as_of=execution_date.isoformat(), initial_nav=NAV_TOTAL_USD,
+    )
     report_md = render_report(
         signal_date=signal_date,
         execution_date=execution_date,
-        regime={"scalar_applied": 1.0, "bear": False, "high_vol": False, "months_at_state": 1},
+        regime=regime,
         nav_by_track=nav_by_track,
         monthly_a_minus_d_diffs=[],
         trades_this_month=ledger_entries,
@@ -264,16 +273,16 @@ def _run_execute(
         rank_after={p.ticker: p.current_rank for p in new_positions if p.current_rank is not None},
         current_positions=new_positions,
         max_per_sector=MAX_PER_SECTOR,
-        cum_returns={t: {"month": 0.0, "ytd": 0.0, "since_inception": 0.0} for t in ("A", "B", "C", "D", "E")},
+        cum_returns=cum_returns,
         differences={
-            "stock_selection_effect": 0.0,
-            "overlay_effect_on_stocks": 0.0,
-            "overlay_effect_on_etf": 0.0,
-            "total_diy_benefit": 0.0,
+            "stock_selection_effect": attribution.stock_selection_effect,
+            "overlay_effect_on_stocks": attribution.overlay_effect_on_stocks,
+            "overlay_effect_on_etf": attribution.overlay_effect_on_etf,
+            "total_diy_benefit": attribution.total_diy_benefit,
         },
         turnover_annualized_pct=0.0,
         costs_bps=0.0,
-        max_drawdown_by_track={t: 0.0 for t in ("A", "B", "C", "D", "E")},
+        max_drawdown_by_track=max_drawdowns,
         months_elapsed=0,
         decision_metrics=DecisionMetrics(),
     )
@@ -291,6 +300,41 @@ def _run_execute(
         "warn_insufficient_cash": outcome.warn_insufficient_cash,
         "cash": cash,
     }
+
+
+def _regime_for(signal_date: date, regime_history_path: Path) -> Dict:
+    """Regime entry monthly_rebalance recorded for the signal date (neutral default if missing)."""
+    for entry in reversed(read_regime_history(regime_history_path)):
+        if entry.get("date") == signal_date.isoformat():
+            return entry
+    return {"scalar_applied": 1.0, "bear": False, "high_vol": False, "months_at_state": 1}
+
+
+def _track_report_inputs(
+    execution_date: date, nav_a: float, results_dir: Path, state_dir: Path
+) -> Tuple[Dict[str, float], Dict[str, Dict[str, float]], Dict[str, float]]:
+    """
+    NAV per track at execution, plus returns and drawdowns from the NAV history.
+
+    Tracks B-E come from the replay (falling back to the last nav_daily.csv row, else the
+    starting NAV); Track A is today's real cash + sleeve value.
+    """
+    nav_csv = state_dir / "nav_daily.csv"
+    history = pd.read_csv(nav_csv, parse_dates=["date"]).set_index("date") if nav_csv.exists() else pd.DataFrame()
+    track_navs = replay_live_tracks(execution_date, results_dir=results_dir, regime_history_path=state_dir / "regime_history.json")
+    navs = {t: float(NAV_TOTAL_USD) for t in ("B", "C", "D", "E")}
+    if not history.empty:
+        navs = {t: float(history[f"nav_{t.lower()}"].iloc[-1]) for t in navs}
+    if track_navs is not None and not track_navs.empty:
+        navs = {t: float(track_navs[f"nav_{t.lower()}"].iloc[-1]) for t in navs}
+        if not history.empty:
+            for column in track_navs.columns:
+                history[column] = track_navs[column].reindex(history.index).fillna(history[column])
+    nav_by_track = {"A": nav_a, **navs}
+    today_row = pd.DataFrame([{f"nav_{t.lower()}": v for t, v in nav_by_track.items()}], index=[pd.Timestamp(execution_date)])
+    frame = pd.concat([history[~history.index.isin(today_row.index)], today_row]) if not history.empty else today_row
+    cum_returns, max_drawdowns = summarize_navs(frame, execution_date)
+    return nav_by_track, cum_returns, max_drawdowns
 
 
 def _read_prior_cash(path: Path) -> Optional[float]:

@@ -82,13 +82,20 @@ a frozen historical panel). See `docs/implementation-plan.md` §1, §8.
 - **Dataclasses, not pydantic, for `schemas.py`.** Matches this repo's convention: pydantic is reserved for
   API-boundary schemas; plain dataclasses (`slots=True`, `to_dict()`/`from_dict()`) are used for file-I/O-only
   models.
-- **Known gap in `monthly_execute`'s report generation.** Full multi-track (B/C/D/E) NAV compounding and the
-  §12.5/§12.6 realized-metrics rollups need a walk over the complete `_state/nav_daily.csv` and
-  `_state/ledger.jsonl` history — `strategy/tracks.py` provides the building blocks
-  (`apply_ter_drag`, `build_nav_series`, `compute_attribution`) but `jobs/run_monthly_execute.py` does not yet
-  wire them into a full history aggregation; the report currently renders `0.0` placeholders for those fields,
-  explicitly, not silently. Track A's own state (positions, ledger, cash, NAV) is real. This is flagged in the
-  module's own docstring, not hidden.
+- **Tracks B-E are replayed, not stored (2026-10-21).** `strategy/live_tracks.py` rebuilds B (same names,
+  `regime_scalar = 1`, written as `targets_b` in `targets.json`), C/D (MTUM at 20 % of track NAV, D scaled by
+  the regime, daily TER drag) and E (100 % SPY) from inception out of the dated `targets.json` files,
+  `_state/regime_history.json` and daily prices — the same mechanics as `backtest/p21_momentum/runner.py`.
+  `daily_mark` writes today's values and rewrites the B-E columns of `_state/nav_daily.csv` (A is never
+  touched); `monthly_execute` uses the replay for the report's NAV table, §9 decomposition, returns and
+  drawdowns. Replay is fail-soft: a price-coverage abort leaves B-E at their last values and never blocks A.
+- **Known gap:** the §12.5/§12.6 realized metrics (turnover, costs in bps, decision criteria) are still `0.0`
+  placeholders in the report, explicitly, not silently.
+- **Price series are NaN-free before any lookback.** A batch download aligns all symbols on the union of
+  trading days; `_series_from_panel` and `compute_regime` drop a symbol's own gaps. Before 2026-10-21 one gap
+  made the 200-day mean NaN, so `spx_vs_200dma` was NaN and the "below 200dma" half of the bear test could
+  never fire.
+- **Track A holds ~80 % cash by design** (`SLEEVE_TARGET_PCT = 0.20`: the momentum sleeve is 20 % of NAV).
 
 ## Integration Patterns
 

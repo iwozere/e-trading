@@ -19,6 +19,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import pandas as pd
+
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -40,9 +42,9 @@ from src.ml.pipeline.p21_momentum.execution.ledger import (
     write_current_positions,
     write_pending_stops,
 )
-from src.ml.pipeline.p21_momentum.jobs.run_common import send_abort_alert, setup_run_logging
+from src.ml.pipeline.p21_momentum.jobs.run_common import replay_live_tracks, send_abort_alert, setup_run_logging
 from src.ml.pipeline.p21_momentum.quality.gates import GateOutcome, PipelineAbort, check_daily_price_change
-from src.ml.pipeline.p21_momentum.results.run_io import already_processed, append_nav_row, write_daily_mark
+from src.ml.pipeline.p21_momentum.results.run_io import already_processed, append_nav_row, rewrite_track_navs, write_daily_mark
 from src.ml.pipeline.p21_momentum.schemas import DailyMarkSnapshot, PendingStop
 from src.notification.logger import setup_logger
 
@@ -157,19 +159,16 @@ def _run_daily_mark(
         path=positions_path,
     )
 
-    nav_row = {
-        "date": today.isoformat(),
-        "nav_a": nav_a,
-        "nav_b": NAV_TOTAL_USD,
-        "nav_c": NAV_TOTAL_USD,
-        "nav_d": NAV_TOTAL_USD,
-        "nav_e": NAV_TOTAL_USD,
-    }
+    track_navs = replay_live_tracks(today, results_dir=results_dir, regime_history_path=state_dir / "regime_history.json")
+    other_navs = _navs_for(today, track_navs, state_dir / "nav_daily.csv")
+    nav_row = {"date": today.isoformat(), "nav_a": nav_a, **{f"nav_{t.lower()}": v for t, v in other_navs.items()}}
     append_nav_row(nav_row, state_dir / "nav_daily.csv")
+    if track_navs is not None:
+        rewrite_track_navs(state_dir / "nav_daily.csv", track_navs)
 
     snapshot = DailyMarkSnapshot(
         as_of=today.isoformat(),
-        nav={"A": nav_a, "B": NAV_TOTAL_USD, "C": NAV_TOTAL_USD, "D": NAV_TOTAL_USD, "E": NAV_TOTAL_USD},
+        nav={"A": nav_a, **other_navs},
         anomalies=anomalies,
         catastrophic_stops=catastrophic_stops,
     )
@@ -205,6 +204,30 @@ def _queue_pending_stops(catastrophic_stops: List[Dict], today: date, pending_st
             avg_cost=cs["avg_cost"],
         )
     write_pending_stops(list(by_ticker.values()), path=pending_stops_path)
+
+
+def _navs_for(today: date, track_navs: Optional[pd.DataFrame], nav_csv: Path) -> Dict[str, float]:
+    """
+    Tracks B-E NAV for today: the replayed value, else the last recorded one, else the starting NAV.
+
+    Args:
+        today: Mark date.
+        track_navs: Output of replay_live_tracks (None when it could not run).
+        nav_csv: _state/nav_daily.csv, for the fallback.
+
+    Returns:
+        {"B": nav, "C": nav, "D": nav, "E": nav}.
+    """
+    navs = {t: float(NAV_TOTAL_USD) for t in ("B", "C", "D", "E")}
+    if nav_csv.exists():
+        prior = pd.read_csv(nav_csv)
+        if not prior.empty:
+            navs = {t: float(prior[f"nav_{t.lower()}"].iloc[-1]) for t in navs}
+    if track_navs is not None and not track_navs.empty:
+        last = track_navs[track_navs.index <= pd.Timestamp(today)]
+        if not last.empty:
+            navs = {t: float(last[f"nav_{t.lower()}"].iloc[-1]) for t in navs}
+    return navs
 
 
 def _read_prior_cash(path: Path) -> Optional[float]:

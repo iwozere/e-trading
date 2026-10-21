@@ -102,6 +102,7 @@ def compute_regime(
         and scalar_applied (after hysteresis — the one actually used by
         strategy/sizing.py).
     """
+    spx, vix = spx.dropna(), vix.dropna()  # one NaN would make the 200-day mean NaN and disable the bear test
     spx_12m_return = float(spx.iloc[-1] / spx.iloc[-bear_lookback_days] - 1.0)
     ma = spx.rolling(ma_days).mean().iloc[-1]
     spx_vs_200dma = float(spx.iloc[-1] / ma)
