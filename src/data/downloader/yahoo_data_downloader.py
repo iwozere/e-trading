@@ -72,6 +72,83 @@ def _get_shared_session() -> curl_requests.Session:
         return _shared_session
 
 
+# ---------------------------------------------------------------------------
+# Partial ticker.info retry
+# ---------------------------------------------------------------------------
+# ticker.info merges two Yahoo calls: quoteSummary (fundamentals; every module
+# carries "maxAge") and the v7 quote (price).  yfinance resets the shared crumb
+# whenever ANY request gets a 4xx (e.g. a 404 for a dead symbol), so a
+# concurrent quoteSummary call can fail with 401 "Invalid Crumb".  yfinance only
+# logs that and returns the v7 part alone: price but no sector, float or ratios.
+# Such partial info is retried once; dead symbols (no price) are not retried.
+_PARTIAL_INFO_RETRY_DELAY_S = 1.0
+
+
+def _is_partial_info(info: Optional[Dict[str, Any]]) -> bool:
+    """
+    Tell whether ticker.info holds only the v7 quote because quoteSummary failed.
+
+    Args:
+        info: The dict returned by yf.Ticker(...).info.
+
+    Returns:
+        True when a price is present but no quoteSummary module was merged in.
+    """
+    return info is not None and bool(info) and "maxAge" not in info and info.get("regularMarketPrice") is not None
+
+
+def _fetch_ticker_info(symbol: str) -> Dict[str, Any]:
+    """
+    Fetch yf.Ticker(symbol).info, retrying once when only the price part came back.
+
+    Args:
+        symbol: Ticker symbol.
+
+    Returns:
+        The info dict (possibly still partial, or empty for unknown symbols).
+    """
+    info = yf.Ticker(symbol, session=_get_shared_session()).info
+    if not _is_partial_info(info):
+        return info
+    _logger.warning("%s: Yahoo returned price-only info (fundamentals call failed) — retrying once", symbol)
+    time.sleep(_PARTIAL_INFO_RETRY_DELAY_S)
+    # A new Ticker is needed: each one caches its first info fetch.
+    retry = yf.Ticker(symbol, session=_get_shared_session()).info
+    if _is_partial_info(retry):
+        _logger.warning("%s: fundamentals still missing after retry — keeping price-only info", symbol)
+    return retry if retry and len(retry) >= len(info) else info
+
+
+class _SharedBackoff:
+    """
+    Process-wide rate-limit pause shared by all worker threads.
+
+    When one thread is rate limited, every thread waits out the same pause
+    instead of the others continuing to hit Yahoo and prolonging the limit.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._resume_at = 0.0
+
+    def extend(self, seconds: float) -> None:
+        """Make all threads pause until at least `seconds` from now."""
+        with self._lock:
+            self._resume_at = max(self._resume_at, time.monotonic() + seconds)
+
+    def wait(self) -> None:
+        """Block until the current shared pause (if any) is over."""
+        while True:
+            with self._lock:
+                remaining = self._resume_at - time.monotonic()
+            if remaining <= 0:
+                return
+            time.sleep(remaining)
+
+
+_yahoo_rate_limit_backoff = _SharedBackoff()
+
+
 # Redirect yfinance cache away from the user home directory so the app works
 # regardless of which OS user (host vs Docker container) runs the process.
 _yf_cache_dir = Path(os.getenv("DATA_CACHE_DIR", "c:/data-cache")) / "yfinance"
@@ -533,8 +610,7 @@ class YahooDataDownloader(BaseDataDownloader):
             Fundamentals: Comprehensive fundamental data for the stock
         """
         try:
-            ticker = yf.Ticker(symbol, session=_get_shared_session())
-            info = ticker.info
+            info = _fetch_ticker_info(symbol)
 
             if not info:
                 _logger.error("No data returned from yfinance for ticker %s", symbol)
@@ -1159,8 +1235,7 @@ class YahooDataDownloader(BaseDataDownloader):
             Dictionary with company profile data or None if failed
         """
         try:
-            ticker = yf.Ticker(symbol, session=_get_shared_session())
-            info = ticker.info
+            info = _fetch_ticker_info(symbol)
 
             if not info:
                 _logger.warning("No profile data for %s", symbol)
@@ -1229,23 +1304,24 @@ class YahooDataDownloader(BaseDataDownloader):
         _RATE_LIMIT_BASE_DELAY = 10.0  # seconds; doubles each retry (10 → 20 → 40s)
 
         def _fetch_with_retry(fn, label: str):
-            """Call fn(), retrying on YFRateLimitError with exponential backoff."""
+            """Call fn(), retrying on YFRateLimitError with an exponential backoff shared by all threads."""
             delay = _RATE_LIMIT_BASE_DELAY
             for attempt in range(_RATE_LIMIT_RETRIES):
+                _yahoo_rate_limit_backoff.wait()
                 try:
                     return fn()
                 except YFRateLimitError:
                     if attempt == _RATE_LIMIT_RETRIES - 1:
                         raise
                     _logger.warning(
-                        "%s: rate limited on %s — sleeping %.0fs (attempt %d/%d)",
+                        "%s: rate limited on %s — pausing all workers %.0fs (attempt %d/%d)",
                         symbol,
                         label,
                         delay,
                         attempt + 1,
                         _RATE_LIMIT_RETRIES,
                     )
-                    time.sleep(delay)
+                    _yahoo_rate_limit_backoff.extend(delay)
                     delay *= 2
 
         try:
