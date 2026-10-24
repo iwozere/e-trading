@@ -64,3 +64,37 @@ def test_throttling_503_is_still_retried(tmp_path: Path) -> None:
 
     assert xml == "<informationTable/>"
     sleep.assert_called_once_with(30)
+
+
+def test_falls_back_to_folder_index_json_for_nonstandard_filename(tmp_path: Path) -> None:
+    """When no guessed name exists, the infotable is found via the folder's index.json."""
+    dl = EdgarDownloader(cache_dir=tmp_path)
+    index = MagicMock(status_code=200)
+    index.json.return_value = {
+        "directory": {
+            "item": [
+                {"name": "0002134841-26-000123-index.html"},
+                {"name": "primary_doc.xml"},
+                {"name": "SPXGestao13FQ226.xml"},
+            ]
+        }
+    }
+    requested = []
+
+    def fake_get(url: str, **_kwargs: object) -> MagicMock:
+        requested.append(url)
+        name = url.rsplit("/", 1)[1]
+        if name == "index.json":
+            return index
+        if name == "SPXGestao13FQ226.xml":
+            return _resp(200, b"<informationTable/>")
+        return _resp(404)
+
+    dl._session.get = MagicMock(side_effect=fake_get)  # type: ignore[method-assign]
+    dl._throttle = MagicMock()  # type: ignore[method-assign]
+
+    xml = dl._fetch_filing_xml(_CIK, _ACC)
+
+    assert xml == "<informationTable/>"
+    assert requested[-1] == f"https://www.sec.gov/Archives/edgar/data/{_CIK}/{_ACC}/SPXGestao13FQ226.xml"
+    assert not any(u.endswith("primary_doc.xml") for u in requested)

@@ -1615,20 +1615,26 @@ class EdgarDownloader(BaseDataDownloader):
                             )
                             time.sleep(sleep_sec)
 
-            index_url = f"{_EDGAR_ARCHIVES_BASE}/{path_cik}/{acc_norm}/{acc_norm}-index.htm"
+            # The folder's index.json lists its files by bare name. (The old "{acc_norm}-index.htm"
+            # does not exist — the real page uses the dashed accession — and its hrefs are absolute.)
+            index_url = f"{_EDGAR_ARCHIVES_BASE}/{path_cik}/{acc_norm}/index.json"
             try:
                 self._throttle()
                 resp = self._session.get(index_url, timeout=30)
                 self._last_request_time = time.monotonic()
 
                 if resp.status_code == 200:
-                    import re as _re
-
-                    xml_files = re.findall(r'href="([^"]+\.xml)"', resp.text, _re.IGNORECASE)
-                    infotable_candidates = [
-                        f for f in xml_files if any(kw in f.lower() for kw in ("form", "info", "table"))
+                    items = resp.json().get("directory", {}).get("item", [])
+                    # primary_doc.xml is the cover page, never the holdings table.
+                    xml_files = [
+                        name
+                        for name in (item.get("name", "") for item in items)
+                        if name.lower().endswith(".xml") and name.lower() != "primary_doc.xml"
                     ]
-                    for xml_file in infotable_candidates or xml_files:
+                    infotable_candidates = [
+                        f for f in xml_files if any(kw in f.lower() for kw in ("form", "info", "table", "13f"))
+                    ]
+                    for xml_file in infotable_candidates + [f for f in xml_files if f not in infotable_candidates]:
                         xml_url = f"{_EDGAR_ARCHIVES_BASE}/{path_cik}/{acc_norm}/{xml_file}"
                         # Was previously unthrottled: infotable_candidates or
                         # xml_files can hold several files, so without this a
