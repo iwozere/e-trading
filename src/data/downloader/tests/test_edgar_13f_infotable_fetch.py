@@ -98,3 +98,29 @@ def test_falls_back_to_folder_index_json_for_nonstandard_filename(tmp_path: Path
     assert xml == "<informationTable/>"
     assert requested[-1] == f"https://www.sec.gov/Archives/edgar/data/{_CIK}/{_ACC}/SPXGestao13FQ226.xml"
     assert not any(u.endswith("primary_doc.xml") for u in requested)
+
+
+def test_download_13f_infotable_reads_folder_listing_first(tmp_path: Path) -> None:
+    """A custom-named infotable is fetched with two requests (listing + file), no guessing."""
+    dl = EdgarDownloader(cache_dir=tmp_path)
+    index = MagicMock(status_code=200)
+    index.json.return_value = {"directory": {"item": [{"name": "primary_doc.xml"}, {"name": "SPXGestao13FQ226.xml"}]}}
+    xml = (
+        b'<informationTable xmlns="http://www.sec.gov/edgar/document/thirteenf/informationtable">'
+        b"<infoTable><nameOfIssuer>APPLE INC</nameOfIssuer><cusip>037833100</cusip><value>1000</value>"
+        b"<shrsOrPrnAmt><sshPrnamt>10</sshPrnamt></shrsOrPrnAmt><investmentDiscretion>SOLE</investmentDiscretion>"
+        b"</infoTable></informationTable>"
+    )
+    requested = []
+
+    def fake_get(url: str, **_kwargs: object) -> MagicMock:
+        requested.append(url.rsplit("/", 1)[1])
+        return index if url.endswith("index.json") else _resp(200, xml)
+
+    dl._session.get = MagicMock(side_effect=fake_get)  # type: ignore[method-assign]
+    dl._throttle = MagicMock()  # type: ignore[method-assign]
+
+    path = dl.download_13f_infotable(_CIK, "0002134841-26-000123", 2026, 2)
+
+    assert path is not None and path.exists()
+    assert requested == ["index.json", "SPXGestao13FQ226.xml"]

@@ -628,7 +628,11 @@ class EdgarDownloader(BaseDataDownloader):
             return dest
 
         acc_norm = accession_number.replace("-", "")
-        xml_content = self._fetch_filing_xml(cik_int, acc_norm)
+        # Most infotables have filer-chosen names, so read the folder listing first (2 requests)
+        # instead of guessing _INFOTABLE_FILENAMES (up to 5 misses). Guessing still covers
+        # filings stored under a filing agent's CIK, where this listing is not found.
+        listed = self._list_infotable_candidates(cik_int, acc_norm)
+        xml_content = self._fetch_filing_xml(cik_int, acc_norm, candidate_names=listed or None)
         if xml_content is None:
             _logger.warning("Could not fetch infotable XML for CIK %010d acc %s", cik_int, accession_number)
             return None
@@ -1615,40 +1619,55 @@ class EdgarDownloader(BaseDataDownloader):
                             )
                             time.sleep(sleep_sec)
 
-            # The folder's index.json lists its files by bare name. (The old "{acc_norm}-index.htm"
-            # does not exist — the real page uses the dashed accession — and its hrefs are absolute.)
-            index_url = f"{_EDGAR_ARCHIVES_BASE}/{path_cik}/{acc_norm}/index.json"
             try:
-                self._throttle()
-                resp = self._session.get(index_url, timeout=30)
-                self._last_request_time = time.monotonic()
-
-                if resp.status_code == 200:
-                    items = resp.json().get("directory", {}).get("item", [])
-                    # primary_doc.xml is the cover page, never the holdings table.
-                    xml_files = [
-                        name
-                        for name in (item.get("name", "") for item in items)
-                        if name.lower().endswith(".xml") and name.lower() != "primary_doc.xml"
-                    ]
-                    infotable_candidates = [
-                        f for f in xml_files if any(kw in f.lower() for kw in ("form", "info", "table", "13f"))
-                    ]
-                    for xml_file in infotable_candidates + [f for f in xml_files if f not in infotable_candidates]:
-                        xml_url = f"{_EDGAR_ARCHIVES_BASE}/{path_cik}/{acc_norm}/{xml_file}"
-                        # Was previously unthrottled: infotable_candidates or
-                        # xml_files can hold several files, so without this a
-                        # burst of back-to-back requests could exceed SEC's
-                        # 10 req/sec fair-access limit.
-                        self._throttle()
-                        r2 = self._session.get(xml_url, timeout=30)
-                        self._last_request_time = time.monotonic()
-                        if r2.status_code == 200:
-                            return r2.text
+                for xml_file in self._list_infotable_candidates(path_cik, acc_norm) or []:
+                    xml_url = f"{_EDGAR_ARCHIVES_BASE}/{path_cik}/{acc_norm}/{xml_file}"
+                    # Throttled: the listing can hold several files, and a burst of
+                    # back-to-back requests could exceed SEC's 10 req/sec fair-access limit.
+                    self._throttle()
+                    r2 = self._session.get(xml_url, timeout=30)
+                    self._last_request_time = time.monotonic()
+                    if r2.status_code == 200:
+                        return r2.text
             except Exception as e:
                 _logger.warning("Fallback index fetch failed for CIK %d acc %s: %s", path_cik, acc_norm, e)
 
         return None
+
+    def _list_infotable_candidates(self, path_cik: int, acc_norm: str) -> List[str] | None:
+        """
+        List a filing folder's XML documents via its index.json, likeliest infotable first.
+
+        (A ``{acc_norm}-index.htm`` page does not exist — the real one uses the dashed
+        accession — and its hrefs are absolute, so the JSON listing is used instead.)
+
+        Args:
+            path_cik: CIK whose Archives directory holds the filing.
+            acc_norm: Accession number without dashes.
+
+        Returns:
+            XML filenames with infotable-like names first and ``primary_doc.xml`` (the
+            cover page) left out, or None if the listing could not be fetched.
+        """
+        index_url = f"{_EDGAR_ARCHIVES_BASE}/{path_cik}/{acc_norm}/index.json"
+        try:
+            self._throttle()
+            resp = self._session.get(index_url, timeout=30)
+            self._last_request_time = time.monotonic()
+            if resp.status_code != 200:
+                return None
+            items = resp.json().get("directory", {}).get("item", [])
+        except (requests.RequestException, ValueError) as e:
+            _logger.warning("Could not list filing folder for CIK %d acc %s: %s", path_cik, acc_norm, e)
+            return None
+
+        xml_files = [
+            name
+            for name in (item.get("name", "") for item in items)
+            if name.lower().endswith(".xml") and name.lower() != "primary_doc.xml"
+        ]
+        likely = [f for f in xml_files if any(kw in f.lower() for kw in ("form", "info", "table", "13f"))]
+        return likely + [f for f in xml_files if f not in likely]
 
     def _resolve_cik_list(
         self,
