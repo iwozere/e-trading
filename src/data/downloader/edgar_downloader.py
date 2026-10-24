@@ -1447,7 +1447,7 @@ class EdgarDownloader(BaseDataDownloader):
                 self._last_request_time = time.monotonic()
                 if resp.status_code == 200:
                     return resp.text
-                if resp.status_code == 404:
+                if _is_missing_document(resp):
                     return None
                 if resp.status_code == 503:
                     sleep_sec = 30 * (attempt + 1)
@@ -1550,7 +1550,7 @@ class EdgarDownloader(BaseDataDownloader):
                     if resp.status_code == 200:
                         _logger.debug("Found filing document at %s", url)
                         return resp.text
-                    if resp.status_code == 404:
+                    if _is_missing_document(resp):
                         break  # file does not exist; try next candidate name
                     if resp.status_code == 503:
                         sleep_sec = 30 * (attempt + 1)
@@ -1591,7 +1591,7 @@ class EdgarDownloader(BaseDataDownloader):
                             if resp.status_code == 200:
                                 _logger.debug("Found filing document at %s (agent CIK path)", url)
                                 return resp.text
-                            if resp.status_code == 404:
+                            if _is_missing_document(resp):
                                 break
                             if resp.status_code == 503:
                                 sleep_sec = 30 * (attempt + 1)
@@ -1857,6 +1857,25 @@ def read_13f_holdings_file(path: Path) -> pd.DataFrame:
         df["value_usd"] = pd.to_numeric(df["value_usd"], errors="coerce") / 1000
         df["value_scale"] = VALUE_SCALE_USD
     return df
+
+
+def _is_missing_document(resp: Any) -> bool:
+    """
+    Whether an EDGAR Archives response means the requested file does not exist.
+
+    Besides 404, SEC's storage answers some missing keys with 503 and an S3
+    ``NoSuchKey`` body (live-verified 2026-10-24). Treating that as rate limiting
+    cost 30+60+90 s of sleep per wrong filename guess.
+
+    Args:
+        resp: ``requests`` response.
+
+    Returns:
+        True if the file is missing, False otherwise (including real throttling).
+    """
+    if resp.status_code == 404:
+        return True
+    return resp.status_code == 503 and b"NoSuchKey" in resp.content
 
 
 def _xml_text(element: ET.Element, path: str) -> str:
