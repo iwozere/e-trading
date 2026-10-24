@@ -45,6 +45,16 @@ def test_fetch_studies_for_sponsor_paginates():
     assert client._client.get.call_count == 2
 
 
+def test_fetch_studies_lowercases_sponsor_query():
+    """Uppercase words like RANGE/NOT would otherwise parse as query operators."""
+    client = ClinicalTrialsClient()
+    client._client.get = MagicMock(return_value=_mock_response({"studies": []}))
+
+    client.fetch_studies_for_sponsor("RANGE IMPACT, INC.")
+
+    assert client._client.get.call_args.kwargs["params"]["query.spons"] == "range impact, inc."
+
+
 def test_fetch_studies_returns_empty_on_no_results():
     client = ClinicalTrialsClient()
     client._client.get = MagicMock(return_value=_mock_response({"studies": []}))

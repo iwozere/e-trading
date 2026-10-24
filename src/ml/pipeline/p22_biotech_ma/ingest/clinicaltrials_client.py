@@ -101,7 +101,10 @@ class ClinicalTrialsClient:
 
         while True:
             params: Dict[str, Any] = {
-                "query.spons": sponsor_name,
+                # Lowercased: the query syntax treats uppercase AND/OR/NOT/RANGE/... as
+                # operators (live-verified 2026-10-24: "RANGE IMPACT, INC." 400s and
+                # "NOT ..." matches every study), while sponsor matching ignores case.
+                "query.spons": sponsor_name.lower(),
                 "fields": ",".join(CLINICALTRIALS_FIELDS),
                 "pageSize": _PAGE_SIZE,
             }
