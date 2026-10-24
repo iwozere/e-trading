@@ -129,3 +129,55 @@ def test_unparseable_html_falls_back_to_plain_text(
     assert send.await_args_list[1].kwargs["parse_mode"] is None
     queue_client.record_delivery_success.assert_called_once_with(7)
     queue_client.record_delivery_failure.assert_not_called()
+
+
+def test_split_text_keeps_short_text_whole() -> None:
+    """Text within the limit is returned as one chunk, unchanged."""
+    assert tqp._split_text("a\nb", limit=10) == ["a\nb"]
+
+
+def test_split_text_breaks_at_line_ends() -> None:
+    """Long text is split between lines, every chunk within the limit, nothing lost."""
+    text = "\n".join(f"line {i:02d}" for i in range(10))  # 10 lines of 7 chars
+
+    chunks = tqp._split_text(text, limit=20)
+
+    assert all(len(c) <= 20 for c in chunks)
+    assert "\n".join(chunks) == text
+    assert chunks[0] == "line 00\nline 01"
+
+
+def test_split_text_cuts_overlong_line() -> None:
+    """A single line longer than the limit is cut hard."""
+    assert tqp._split_text("x" * 25, limit=10) == ["x" * 10, "x" * 10, "x" * 5]
+
+
+def test_split_text_counts_emoji_as_two_units() -> None:
+    """Limits are in UTF-16 code units, as Telegram counts them."""
+    chunks = tqp._split_text("\U0001f53a" * 6, limit=4)
+
+    assert chunks == ["\U0001f53a" * 2] * 3
+
+
+def test_long_message_sent_in_chunks(processor: tqp.TelegramQueueProcessor, bot: Mock, queue_client: Mock) -> None:
+    """A message over Telegram's limit is delivered as several messages instead of failing."""
+    text = "\n".join("row " + "x" * 90 for _ in range(100))  # ~9.5k chars
+
+    asyncio.run(processor._process_message(_delivery(text)))
+
+    sent = [call.kwargs["text"] for call in bot.send_message.await_args_list]
+    assert len(sent) == 3
+    assert all(tqp._utf16_len(s) <= tqp._TEXT_LIMIT for s in sent)
+    assert "\n".join(sent) == text
+    queue_client.record_delivery_success.assert_called_once_with(7)
+
+
+def test_long_caption_sent_as_separate_text(processor: tqp.TelegramQueueProcessor, bot: Mock) -> None:
+    """Text over the caption limit is not used as a caption but sent as its own message."""
+    bot.send_document = AsyncMock()
+    text = "y" * (tqp._CAPTION_LIMIT + 1)
+
+    asyncio.run(processor._send_with_attachments(123, text, {"a.txt": b"data"}))
+
+    assert bot.send_document.await_args.kwargs["caption"] is None
+    assert bot.send_message.await_args.kwargs["text"] == text

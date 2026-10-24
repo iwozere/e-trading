@@ -40,6 +40,51 @@ _PERMANENT_BAD_REQUEST_MARKERS = ("chat not found", "user is deactivated", "peer
 # (e.g. a literal "<message>" in log-alert text).
 _PARSE_ENTITIES_MARKER = "can't parse entities"
 
+# Telegram limits, counted in UTF-16 code units (an emoji counts as 2).
+_TEXT_LIMIT = 4096
+_CAPTION_LIMIT = 1024
+
+
+def _utf16_len(text: str) -> int:
+    """Length of ``text`` as Telegram counts it (UTF-16 code units)."""
+    return len(text.encode("utf-16-le")) // 2
+
+
+def _split_text(text: str, limit: int = _TEXT_LIMIT) -> list[str]:
+    """
+    Split text into chunks Telegram accepts, breaking at line ends where possible.
+
+    Args:
+        text: Message text.
+        limit: Maximum chunk length in UTF-16 code units.
+
+    Returns:
+        Chunks in order; a single chunk when the text already fits.
+    """
+    if _utf16_len(text) <= limit:
+        return [text]
+
+    chunks: list[str] = []
+    current = ""
+    for line in text.split("\n"):
+        candidate = f"{current}\n{line}" if current else line
+        if _utf16_len(candidate) <= limit:
+            current = candidate
+            continue
+        if current:
+            chunks.append(current)
+        # A single line over the limit is cut hard.
+        while _utf16_len(line) > limit:
+            cut = limit
+            while _utf16_len(line[:cut]) > limit:
+                cut -= 1
+            chunks.append(line[:cut])
+            line = line[cut:]
+        current = line
+    if current:
+        chunks.append(current)
+    return chunks
+
 
 class TelegramQueueProcessor:
     """
@@ -328,18 +373,20 @@ class TelegramQueueProcessor:
                 file_obj = await self._process_attachment(filename, attachment_data)
 
                 if file_obj:
-                    # Send document
+                    # Text over the caption limit goes out as a separate message below
+                    caption = text if text and _utf16_len(text) <= _CAPTION_LIMIT else None
                     await self.bot.send_document(
                         chat_id=chat_id,
                         document=file_obj,
-                        caption=text if text else None,
+                        caption=caption,
                         reply_to_message_id=reply_to_message_id,
                         parse_mode="HTML",
                     )
                     self._logger.debug("Sent attachment %s to chat %s", filename, chat_id)
 
                     # Only send caption once with first attachment
-                    text = None
+                    if caption:
+                        text = None
 
             except Exception:
                 self._logger.exception("Failed to send attachment %s:", filename)
@@ -354,24 +401,28 @@ class TelegramQueueProcessor:
         Send a text message as HTML, falling back to plain text if Telegram rejects the markup.
 
         Message producers embed arbitrary text (log lines, user input) without escaping,
-        so a stray "<tag>" would otherwise fail the delivery outright.
+        so a stray "<tag>" would otherwise fail the delivery outright. Text over Telegram's
+        length limit is sent as several messages; only the first replies to
+        ``reply_to_message_id``.
 
         Args:
             chat_id: Telegram chat ID
             text: Message text (HTML)
             reply_to_message_id: Optional message ID to reply to
         """
-        try:
-            await self.bot.send_message(
-                chat_id=chat_id, text=text, reply_to_message_id=reply_to_message_id, parse_mode="HTML"
-            )
-        except TelegramBadRequest as e:
-            if _PARSE_ENTITIES_MARKER not in str(e).lower():
-                raise
-            self._logger.warning("HTML rejected for chat %s (%s); resending as plain text", chat_id, e)
-            await self.bot.send_message(
-                chat_id=chat_id, text=text, reply_to_message_id=reply_to_message_id, parse_mode=None
-            )
+        for chunk in _split_text(text):
+            try:
+                await self.bot.send_message(
+                    chat_id=chat_id, text=chunk, reply_to_message_id=reply_to_message_id, parse_mode="HTML"
+                )
+            except TelegramBadRequest as e:
+                if _PARSE_ENTITIES_MARKER not in str(e).lower():
+                    raise
+                self._logger.warning("HTML rejected for chat %s (%s); resending as plain text", chat_id, e)
+                await self.bot.send_message(
+                    chat_id=chat_id, text=chunk, reply_to_message_id=reply_to_message_id, parse_mode=None
+                )
+            reply_to_message_id = None
 
     @staticmethod
     def _is_permanent_telegram_error(error: TelegramAPIError) -> bool:
