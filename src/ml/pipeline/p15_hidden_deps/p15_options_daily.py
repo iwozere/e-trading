@@ -131,10 +131,10 @@ def _load_nasdaq_tickers(date_str: str) -> List[str]:
     resp.raise_for_status()
 
     lines = resp.text.strip().split("\n")
-    data_lines = [l for l in lines[1:] if not l.startswith("File Creation")]
+    data_lines = [line for line in lines[1:] if not line.startswith("File Creation")]
 
     df = pd.DataFrame(
-        [l.split("|") for l in data_lines],
+        [line.split("|") for line in data_lines],
         columns=["Symbol", "Name", "MarketCat", "TestIssue", "FinStatus", "RoundLot", "ETF", "NextShares"],
     )
 

@@ -251,7 +251,7 @@ class EMPS2Pipeline:
             final_df = self._stage6_create_final_results(fundamental_df, volatility_df, phase1_df, phase2_df)
 
             # Stage 7: Sentiment Data Collection (social momentum metrics)
-            sentiment_df = self._stage7_sentiment_data_collection(phase2_df)
+            self._stage7_sentiment_data_collection(phase2_df)
 
             # Stage 8: Send Alerts (with sentiment data)
             self._stage8_send_alerts(phase1_df, phase2_df)
