@@ -18,7 +18,7 @@ from src.ml.pipeline.p05_ai_selector.stages.stage2_scorer import Stage2Scorer
 from src.ml.pipeline.p05_ai_selector.stages.stage3_llm_synthesizer import Stage3LLMSynthesizer
 from src.ml.pipeline.p05_ai_selector.stages.stage4_output import Stage4Output
 from src.ml.pipeline.p05_ai_selector.stages.universe_loader import UniverseLoader
-from src.notification.logger import setup_logger
+from src.notification.logger import SensitiveDataFilter, setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -44,6 +44,7 @@ class P05Pipeline:
         handler = logging.FileHandler(run_dir / "pipeline.log", encoding="utf-8")
         handler.setLevel(logging.DEBUG)
         handler.setFormatter(logging.Formatter(_RUN_LOG_FORMAT))
+        handler.addFilter(SensitiveDataFilter())
         logging.getLogger(_P05_LOGGER_NAME).addHandler(handler)
         return handler
 

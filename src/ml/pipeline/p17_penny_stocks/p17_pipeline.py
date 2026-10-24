@@ -38,7 +38,7 @@ from src.ml.pipeline.p17_penny_stocks.agents.technical_agent import TechnicalAge
 from src.ml.pipeline.p17_penny_stocks.agents.universe_agent import UniverseAgent
 from src.ml.pipeline.p17_penny_stocks.config import P17PipelineConfig
 from src.ml.pipeline.p17_penny_stocks.models.candidate import Candidate
-from src.notification.logger import setup_logger
+from src.notification.logger import SensitiveDataFilter, setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -366,6 +366,7 @@ class P17Pipeline:
         handler.setLevel(logging.DEBUG)
         fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s")
         handler.setFormatter(fmt)
+        handler.addFilter(SensitiveDataFilter())
         pipeline_logger = logging.getLogger("src.ml.pipeline")
         pipeline_logger.addHandler(handler)
         pipeline_logger.setLevel(logging.DEBUG)

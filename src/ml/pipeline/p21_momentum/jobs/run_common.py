@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from src.ml.pipeline.p21_momentum.config import REGIME_HISTORY_PATH, RESULTS_DIR
+from src.notification.logger import SensitiveDataFilter
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -43,6 +44,7 @@ def setup_run_logging(run_date: date | None = None) -> Path:
             datefmt="%Y-%m-%d %H:%M:%S",
         )
     )
+    handler.addFilter(SensitiveDataFilter())
 
     root_logger = logging.getLogger()
     existing_files = {

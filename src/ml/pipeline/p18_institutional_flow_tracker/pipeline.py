@@ -30,7 +30,7 @@ from src.ml.pipeline.p18_institutional_flow_tracker.processors.form4_monitor imp
 from src.ml.pipeline.p18_institutional_flow_tracker.processors.position_delta_calculator import PositionDeltaCalculator
 from src.ml.pipeline.p18_institutional_flow_tracker.processors.volume_anomaly_detector import VolumeAnomalyDetector
 from src.ml.pipeline.p18_institutional_flow_tracker.scoring.composite_scorer import CompositeScorer
-from src.notification.logger import setup_logger
+from src.notification.logger import SensitiveDataFilter, setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -508,6 +508,7 @@ class InstitutionalFlowPipeline:
         handler.setFormatter(
             logging.Formatter("%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s")
         )
+        handler.addFilter(SensitiveDataFilter())
         logging.getLogger("src.ml.pipeline.p18_institutional_flow_tracker").addHandler(handler)
 
 

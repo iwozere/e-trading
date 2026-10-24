@@ -50,7 +50,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from config.donotshare.donotshare import DATA_CACHE_DIR as _cache_root
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.data.utils.atomic_write import atomic_to_csv
-from src.notification.logger import setup_logger
+from src.notification.logger import SensitiveDataFilter, setup_logger
 
 _logger = setup_logger(__name__)
 
@@ -83,6 +83,7 @@ def _setup_file_logging() -> None:
             datefmt="%Y-%m-%d %H:%M:%S",
         )
     )
+    handler.addFilter(SensitiveDataFilter())
     logging.getLogger().addHandler(handler)
 
 

@@ -30,7 +30,7 @@ from src.ml.pipeline.shared.sentiment_filter import SentimentFilter
 from src.ml.pipeline.shared.trf_downloader import download_trf
 from src.ml.pipeline.shared.universe_downloader import NasdaqUniverseDownloader
 from src.ml.pipeline.shared.volatility_filter import VolatilityFilter
-from src.notification.logger import setup_logger
+from src.notification.logger import SensitiveDataFilter, setup_logger
 
 from .config import EMPS2PipelineConfig
 
@@ -150,6 +150,7 @@ class EMPS2Pipeline:
             "%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
         )
         file_handler.setFormatter(formatter)
+        file_handler.addFilter(SensitiveDataFilter())
 
         # Add handler to the pipeline's own logger instead of root
         # This prevents polluting other modules while still capturing pipeline activity

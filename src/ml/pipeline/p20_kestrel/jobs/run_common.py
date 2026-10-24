@@ -23,6 +23,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p20_kestrel.config import RESULTS_DIR
+from src.notification.logger import SensitiveDataFilter
 
 
 class _TeeStream(io.TextIOBase):
@@ -80,6 +81,7 @@ def setup_run_logging(run_date: date | None = None) -> Path:
             datefmt="%Y-%m-%d %H:%M:%S",
         )
     )
+    handler.addFilter(SensitiveDataFilter())
 
     # Attach to ROOT logger so every logger in the entire process propagates here.
     # This covers src.data.*, src.common.*, yfinance internals, etc.
