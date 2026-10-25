@@ -68,27 +68,24 @@ it. If that cache is missing the daily scan produces **zero signals** (empty
 results folder) — see the `run_summary.json` `consensus_rows` field to confirm.
 
 Building the consensus is a **heavy** job (thousands of filers × EDGAR rate-limit
-+ FIGI CUSIP mapping = hours). **Never run it through the project scheduler**
-(`job_schedules` / APScheduler): its `timeout_seconds` will SIGKILL the run
-mid-way, leaving the cache empty. Run it detached, or — preferably — let Linux
-cron do it automatically.
++ FIGI CUSIP mapping = hours; ~8 h cold on the Pi).
 
-### Forget-proof: crontab (recommended)
+### Scheduled: "P18 Quarterly Consensus Backfill"
 
-`bin/scheduler/p18_consensus_backfill.sh` runs the backfill **outside** the
-scheduler (no timeout) and is **idempotent + self-targeting**: `--auto-quarter`
-picks the most recently completed quarter and `--if-missing` makes the run a
-no-op once a non-empty consensus exists. Schedule it generously across each
-filing window and forget about it:
+Registered in `src/data/pipeline/specs/p18_specs.py` and applied with
+`python -m src.data.pipeline.register_jobs`. It runs
+`backfill_consensus.py --auto-quarter` at **08:00 UTC on the 15th of Feb, May,
+Aug and Nov** (13F-HR are due 45 days after quarter-end) with a 24 h
+`timeout_seconds`, and sends a Telegram message if it fails.
 
-```cron
-# 13F-HR are due ~45 days after quarter-end (mid-Feb/May/Aug/Nov). Run daily at
-# 04:00 UTC across the back half of each filing month; --if-missing makes every
-# run after the first success an instant no-op.
-0 4 16-28 2,5,8,11 * /opt/apps/e-trading/bin/scheduler/p18_consensus_backfill.sh
-```
+`--auto-quarter` targets the most recently completed quarter. Infotables already
+on disk are reused, so triggering the job again later in the month (Run now)
+only downloads filers that were not cached yet and rebuilds the consensus. Use
+this when the deadline moved past the 15th (weekend/holiday), to pick up late
+filers, or when the run was missed (the scheduler drops firings that are more
+than 5 minutes late, e.g. during a restart) or killed by a scheduler restart.
 
-Log: `results/p18_institutional_flow/consensus_backfill_cron.log`.
+Logs go to the scheduler's `app.log`; the run's outcome is in `job_schedule_runs`.
 
 ### Manual one-off (recovery / first seed)
 

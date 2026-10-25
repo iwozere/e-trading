@@ -5,18 +5,17 @@ Downloads all 13F-HR filings for the specified quarter from EDGAR and builds
 the consensus cache that the daily pipeline depends on.
 
 This is a HEAVY job (hours: thousands of filers × EDGAR rate-limit + FIGI CUSIP
-mapping). It MUST NOT be run through the project scheduler (job_schedules /
-APScheduler), whose `timeout_seconds` would SIGKILL it mid-run. Run it detached
-(nohup / tmux / systemd one-shot) or via the dedicated crontab wrapper
-``bin/scheduler/p18_consensus_backfill.sh`` — see that script and the P18 README.
+mapping). The scheduler runs it quarterly as "P18 Quarterly Consensus Backfill"
+(see ``src/data/pipeline/specs/p18_specs.py``) with a 24 h timeout. Infotables
+already on disk are reused, so a re-run only fetches filers it has not seen.
 
 Usage (from project root, with venv activated):
     # Explicit quarter, always rebuild:
     python src/ml/pipeline/p18_institutional_flow_tracker/backfill_consensus.py --year 2026 --quarter 1
     # Force re-download of every infotable:
     python src/ml/pipeline/p18_institutional_flow_tracker/backfill_consensus.py --year 2026 --quarter 1 --force
-    # Idempotent, self-targeting (for cron): pick the most recently completed
-    # quarter and only build if the consensus cache is missing:
+    # Self-targeting: pick the most recently completed quarter, and skip the
+    # run when its consensus cache already exists:
     python src/ml/pipeline/p18_institutional_flow_tracker/backfill_consensus.py --auto-quarter --if-missing
 """
 

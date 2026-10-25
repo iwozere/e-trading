@@ -107,3 +107,22 @@ def test_dependents_never_fire_with_their_dependency():
                 first = min(shared).strftime("%H:%M")
                 collisions.append(f"{spec.name} and {dep.name} both fire at {first} UTC")
     assert collisions == [], "\n".join(collisions)
+
+
+def test_p18_quarterly_backfill_fires_mid_month_after_each_quarter():
+    """The P18 backfill fires on the 15th of Feb/May/Aug/Nov and targets the quarter whose 13F deadline is that month."""
+    from src.ml.pipeline.p18_institutional_flow_tracker.pipeline import _quarter_end_date, _resolve_current_quarter
+
+    spec = get_by_name("P18 Quarterly Consensus Backfill")
+    assert spec is not None
+    assert spec.script_args == ["--auto-quarter"]
+    assert spec.timeout_seconds >= 12 * 3600
+
+    year_start = datetime(2027, 1, 1, tzinfo=timezone.utc)
+    fire_times = sorted(t for d in range(365) for t in _fire_times_on(spec.cron, year_start + timedelta(days=d)))
+    assert [(t.month, t.day, t.hour) for t in fire_times] == [(2, 15, 8), (5, 15, 8), (8, 15, 8), (11, 15, 8)]
+
+    for fired in fire_times:
+        _, year, quarter = _resolve_current_quarter(fired.date())
+        deadline = _quarter_end_date(year, quarter) + timedelta(days=45)
+        assert (deadline.year, deadline.month) == (fired.year, fired.month)

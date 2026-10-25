@@ -69,5 +69,8 @@
       ~8,000 filers, cached 2026-07-01) → empty consensus. Such caches now refresh until the window closes.
 - [x] On days with new 13F filings the daily run built the consensus from that day's filers only and overwrote
       the quarter's cache; it now rebuilds from every filer cached for the quarter.
-- [ ] Deploy: run `backfill_consensus.py --year 2026 --quarter 2` once on the Pi (downloads the ~8,000 Q2
-      infotables; the stale index refreshes itself, no `--force` needed).
+- [x] Deploy: run `backfill_consensus.py --year 2026 --quarter 2` once on the Pi (done 2026-10-24: 8,821
+      infotables, 1,175 consensus tickers). Needed three EDGAR fixes: NoSuchKey 503 treated as missing file,
+      folder `index.json` instead of the nonexistent `{acc}-index.htm`, and listing read before guessing names.
+- [x] Quarterly backfill moved from the Linux crontab wrapper to the project scheduler
+      ("P18 Quarterly Consensus Backfill", 08:00 UTC on the 15th of Feb/May/Aug/Nov, 24 h timeout).
