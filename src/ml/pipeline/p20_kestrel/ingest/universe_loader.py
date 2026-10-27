@@ -46,7 +46,7 @@ def _load_nasdaq_csv() -> pd.DataFrame:
     path = Path(str(NASDAQ_TICKERS_CSV))
     if not path.exists():
         raise FileNotFoundError(
-            "Nasdaq ticker CSV not found at %s. Download from Nasdaq screener or configure NASDAQ_TICKERS_CSV." % path
+            f"Nasdaq ticker CSV not found at {path}. Download from Nasdaq screener or configure NASDAQ_TICKERS_CSV."
         )
     df = pd.read_csv(path, dtype=str)
     rename = {
@@ -59,7 +59,7 @@ def _load_nasdaq_csv() -> pd.DataFrame:
     }
     df = df.rename(columns={k: v for k, v in rename.items() if k in df.columns})
     if "ticker" not in df.columns:
-        raise ValueError("CSV missing 'Symbol' column. Columns found: %s" % list(df.columns))
+        raise ValueError(f"CSV missing 'Symbol' column. Columns found: {list(df.columns)}")
     df["ticker"] = df["ticker"].str.strip().str.upper()
     mask = df["ticker"].notna() & (df["ticker"] != "")
     result: pd.DataFrame = df[mask].reset_index(drop=True)  # type: ignore[assignment]

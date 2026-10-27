@@ -23,7 +23,7 @@ Classes:
 import os
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, List, cast
+from typing import Any, List
 
 import pandas as pd
 
@@ -419,7 +419,6 @@ class AlpacaDataDownloader(BaseDataDownloader):
             df["timestamp"] = df["timestamp"].dt.tz_convert(None)  # type: ignore[attr-defined]
 
         # Filter data to ensure it starts from the requested start_date (UTC).
-        # cast() needed because pandas stubs infer a wide union from boolean indexing.
         mask = (df["timestamp"] >= start_date) & (df["timestamp"] <= end_date)
         df = df.loc[mask]
 
@@ -481,7 +480,6 @@ class AlpacaDataDownloader(BaseDataDownloader):
             df["timestamp"] = df["timestamp"].dt.tz_convert(None)  # type: ignore[attr-defined]
 
         # Filter data to ensure it starts from the requested start_date (UTC).
-        # cast() required — pandas stubs infer a wide union from boolean indexing.
         df = df[df["timestamp"] >= start_date]
         df = df[df["timestamp"] <= end_date]
 
