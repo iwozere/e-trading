@@ -279,6 +279,25 @@ linkage decision, `docs/Tasks.md` "Decisions needed" item 8.
   backfill years of history would silently store already-adjusted values under a column named
   `close_raw`. `P22Repo.upsert_price_daily`'s pre-existing never-rewrite behavior is a deliberate
   second line of defense against this class of mistake, not just against duplicate writes.
+- **Size floor = derived market cap, checked against the company's own 10-K public float**
+  (2026-10-27; `ingest/market_cap.py`, `ingest/price_quality.py`, `ingest/size_floor.py`).
+  Cross-check of vintage raw close × SEC share count against `dei:EntityPublicFloat` on the float's
+  measurement date (6,398 10-K values, 846 biotech filers): median ratio 1.14, 87% within [0.8, 4] —
+  better than FMP's own historical `marketCap` (83%; its >8× tail is 7.6% vs our 3.3%), so FMP's
+  number is not used as ground truth. What the tails were: (1) a share count from before a reverse
+  split paired with a price after it — 42% of the >8× tail, now fixed by rescaling shares with
+  `p22_corporate_action` splits between the count's `period_end` and the price day; (2) ADRs (SEC
+  counts ordinary shares; BeiGene 13 per ADS); (3) corrupt vintage "raw" prices for some serial
+  reverse-splitters (ACOR ~$0.004 for 2006–2020 against ~$30 real; TNXP partly adjusted) — in prod
+  `p22_price_daily` too, so M6 must exclude these (`cli/size_floor_report_cli.py price-quality`
+  lists them); (4) share series that stop updating (Amarin's last tag is 2013) — now rejected after
+  400 days; (5) filers tagging the float 1000× too large (Sarepta, Fate, Innoviva).
+  The decision rule (`size_floor.py` docstring) uses market cap when it is consistent with the float
+  (ratio in [0.5, 10]), else falls back to "float ≥ floor ⇒ met" (market cap ≥ non-affiliate
+  float), else unknown — never a silent `False`. Replayed on the cross-check points, false exclusion
+  of companies whose float alone exceeds $25M drops from 3.0% (market cap alone) to 0.4%.
+  The live roster (`build_universe`) still does not compute the floor; `build_universe_history`
+  takes it as an injected `(cik, as_of)` callable so the function stays pure and testable.
 
 ## Integration Patterns
 - Job scripts follow the P20 contract exactly: `PROJECT_ROOT` on `sys.path`, `run_common.py`'s

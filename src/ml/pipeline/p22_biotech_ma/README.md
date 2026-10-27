@@ -37,6 +37,14 @@ python -m src.ml.pipeline.p22_biotech_ma.cli.fmp_vintage_load_cli --limit 5
 python -m src.ml.pipeline.p22_biotech_ma.cli.fmp_vintage_load_cli
 ```
 
+Read-only size-floor checks (`ingest/size_floor.py`; need the `public_float` fact, written by
+`jobs/run_financial_facts_normalization.py`):
+
+```bash
+python -m src.ml.pipeline.p22_biotech_ma.cli.size_floor_report_cli price-quality --out /tmp/p22_price_quality.csv
+python -m src.ml.pipeline.p22_biotech_ma.cli.size_floor_report_cli history --since 2015q1
+```
+
 ## Integration
 This module integrates with:
 - `src.data.downloader.edgar_downloader` — SEC EDGAR access (submissions, XBRL, EFTS, 13F, Form 4, 13D/G)

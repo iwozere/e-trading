@@ -33,8 +33,11 @@ implemented here and why:
 **Not implemented at all in this slice** (spec §2.0.3), and explicitly left
 `None` on `UniverseCandidate` rather than guessed at:
 
-- **Size floor** (market cap > $25M) — blocked on the deferred market-data
-  vendor decision (spec §2.0.6/§2.4).
+- **Size floor** (market cap > $25M) — not computed for the live roster.
+  `build_universe_history` fills it point-in-time when given a `size_floor`
+  callable (`ingest/size_floor.make_size_floor_lookup`, added 2026-10-27,
+  backed by FMP-vintage prices + SEC share counts + the 10-K public float);
+  without one it stays `None`.
 - **Asset floor** (>=1 Phase I+ program) — needs `p22_trial` populated from
   CT.gov data cross-referenced to the resolved company, which is a further
   M2/M3 entity-resolution step (§3.3's alias matching, see
@@ -65,10 +68,11 @@ from __future__ import annotations
 
 import re
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 import httpx
 
@@ -149,7 +153,7 @@ class UniverseCandidate:
     eligible_reporting: bool
     eligible_exchange: Optional[bool]  # None = unresolved (current-snapshot map has no entry), not "ineligible"
     flagged_spac: bool
-    size_floor_met: Optional[bool] = None  # not computed at M2 — spec §2.0.6, blocked on vendor decision
+    size_floor_met: Optional[bool] = None  # None = not checked or undecidable; see ingest/size_floor.py
     asset_floor_met: Optional[bool] = None  # not computed at M2 — needs p22_trial linkage
 
 
@@ -189,11 +193,17 @@ def build_universe(
     ticker_exchange_map: Mapping[str, Tuple[Optional[str], Optional[str]]],
     as_of: date,
     reporting_lookback_days: int = _DEFAULT_REPORTING_LOOKBACK_DAYS,
+    size_floor: Optional[Callable[[str, date], Optional[bool]]] = None,
 ) -> List[UniverseCandidate]:
     """
     Build one `UniverseCandidate` per distinct CIK from landed DERA `sub.txt`
     rows, applying the eligibility filters this slice can compute (see module
     docstring for the ones it can't yet).
+
+    `size_floor`, when given, is called as `size_floor(cik, as_of)` for every
+    reporting-eligible candidate and its result stored in `size_floor_met`
+    (ineligible ones are skipped — the floor is moot and each call is several
+    DB reads).
     """
     first_row_by_cik: Dict[str, Dict[str, Any]] = {}
     latest_filing_by_cik: Dict[str, Tuple[date, Optional[str]]] = {}
@@ -234,6 +244,7 @@ def build_universe(
                 eligible_reporting=eligible_reporting,
                 eligible_exchange=eligible_exchange,
                 flagged_spac=is_likely_spac(name),
+                size_floor_met=size_floor(cik, as_of) if size_floor is not None and eligible_reporting else None,
             )
         )
 
@@ -259,6 +270,7 @@ def build_universe_history(
     quarters_rows: Mapping[str, List[Dict[str, Any]]],
     ticker_exchange_map: Mapping[str, Tuple[Optional[str], Optional[str]]],
     reporting_lookback_days: int = _DEFAULT_REPORTING_LOOKBACK_DAYS,
+    size_floor: Optional[Callable[[str, date], Optional[bool]]] = None,
 ) -> Dict[str, List[UniverseCandidate]]:
     """
     Point-in-time eligibility, re-computed per quarter (spec §2.0.3). See the
@@ -272,13 +284,15 @@ def build_universe_history(
         ticker_exchange_map: Same current-snapshot map `build_universe` takes
             — see the module docstring's caveat about its use here.
         reporting_lookback_days: Passed through to `build_universe` per quarter.
+        size_floor: Passed through to `build_universe` — evaluated against each
+            quarter's own `as_of`, e.g. `size_floor.make_size_floor_lookup(repo)`.
 
     Returns:
         `{quarter: [UniverseCandidate, ...]}`, one entry per valid quarter key
         present in `quarters_rows`, each computed against a cumulative union
         of every quarter up to and including it (chronological order).
     """
-    valid_quarters = sorted((q for q in quarters_rows if _quarter_end_date(q) is not None))
+    valid_quarters = sorted(q for q in quarters_rows if _quarter_end_date(q) is not None)
     skipped = set(quarters_rows) - set(valid_quarters)
     if skipped:
         _logger.warning("Skipping malformed DERA quarter keys: %s", sorted(skipped))
@@ -290,8 +304,18 @@ def build_universe_history(
         as_of = _quarter_end_date(quarter)
         assert as_of is not None  # guaranteed by valid_quarters filter above
         history[quarter] = build_universe(
-            cumulative_rows, ticker_exchange_map, as_of=as_of, reporting_lookback_days=reporting_lookback_days
+            cumulative_rows,
+            ticker_exchange_map,
+            as_of=as_of,
+            reporting_lookback_days=reporting_lookback_days,
+            size_floor=size_floor,
         )
+        if size_floor is not None:
+            outcomes = Counter(c.size_floor_met for c in history[quarter] if c.eligible_reporting)
+            _logger.info(
+                "Size floor %s: met=%d not_met=%d unknown=%d",
+                quarter, outcomes[True], outcomes[False], outcomes[None],
+            )
 
     _logger.info("Built point-in-time universe history for %d quarters", len(history))
     return history

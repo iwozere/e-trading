@@ -23,6 +23,20 @@ delisted-ticker-history question (`docs/Tasks.md` item 1's "Not yet
 root-caused" framing narrowed to just that case), needed for the M6
 backtest's historical labeling, not for live Block A/C scoring.
 
+**Guards added 2026-10-27** (cross-check against 10-K public float, see
+`docs/Design.md` "Size floor"):
+
+- A close older than `MARKET_CAP_MAX_PRICE_AGE_DAYS` or a share count whose
+  `period_end` is older than `MARKET_CAP_MAX_SHARES_AGE_DAYS` is rejected
+  (`stale_price`/`stale_shares_outstanding`) — `get_latest_raw_close_as_of`
+  happily returns a delisted company's last bar years later, and a few filers'
+  share series simply stop (Amarin's last tagged count is from 2013).
+- The share count is rescaled by every split/reverse split with an ex-date
+  after its `period_end` and on or before the price's trade date. The cover-
+  page count is as of `period_end`; a reverse split between that date and the
+  price day otherwise inflates market cap by the split factor — 42% of the
+  >8x outliers in the cross-check were exactly this.
+
 The result is written as an ordinary `p22_financial_fact` row (metric
 `"market_cap"`) via `P22Repo.upsert_financial_fact_bitemporal` — every
 existing Block A/C feature function that reads `market_cap` via
@@ -42,6 +56,7 @@ from typing import Any, Dict, List, Optional, Tuple
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.ml.pipeline.p22_biotech_ma.config import MARKET_CAP_MAX_PRICE_AGE_DAYS, MARKET_CAP_MAX_SHARES_AGE_DAYS
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -57,7 +72,31 @@ class MarketCapResult:
     company_id: int
     market_cap: float
     price_trade_date: date
-    shares_outstanding: float
+    shares_outstanding: float  # split-adjusted to price_trade_date
+    shares_period_end: Optional[date] = None
+    split_factor: float = 1.0
+
+
+def split_factor_between(splits: List[Dict[str, Any]], after: Optional[date], through: date) -> float:
+    """
+    Product of split ratios with `after < ex_date <= through` — what a share count as of `after`
+    must be multiplied by to be comparable with a price on `through`.
+
+    Args:
+        splits: `P22Repo.get_splits_as_of` rows (`ex_date`, `ratio`).
+        after: The share count's `period_end`; None means unknown, so no rescaling.
+        through: The price's trade date.
+
+    Returns:
+        1.0 when no split falls in the window.
+    """
+    if after is None:
+        return 1.0
+    factor = 1.0
+    for split in splits:
+        if after < split["ex_date"] <= through:
+            factor *= split["ratio"]
+    return factor
 
 
 def compute_market_cap(repo: Any, company_id: int, as_of: date) -> Tuple[Optional[MarketCapResult], Optional[str]]:
@@ -78,6 +117,8 @@ def compute_market_cap(repo: Any, company_id: int, as_of: date) -> Tuple[Optiona
     price = repo.get_latest_raw_close_as_of(company_id, as_of)
     if price is None:
         return None, "no_price"
+    if (as_of - price["trade_date"]).days > MARKET_CAP_MAX_PRICE_AGE_DAYS:
+        return None, "stale_price"
 
     shares_facts = repo.get_financial_facts_as_of(company_id, "shares_outstanding", as_of)
     if not shares_facts or shares_facts[0].get("value") is None:
@@ -87,6 +128,12 @@ def compute_market_cap(repo: Any, company_id: int, as_of: date) -> Tuple[Optiona
     if shares_outstanding <= 0:
         return None, "non_positive_shares_outstanding"
 
+    shares_period_end = shares_facts[0].get("period_end")
+    if shares_period_end is not None and (as_of - shares_period_end).days > MARKET_CAP_MAX_SHARES_AGE_DAYS:
+        return None, "stale_shares_outstanding"
+
+    split_factor = split_factor_between(repo.get_splits_as_of(company_id, as_of), shares_period_end, price["trade_date"])
+    shares_outstanding *= split_factor
     market_cap = price["close_raw"] * shares_outstanding
     return (
         MarketCapResult(
@@ -94,6 +141,8 @@ def compute_market_cap(repo: Any, company_id: int, as_of: date) -> Tuple[Optiona
             market_cap=market_cap,
             price_trade_date=price["trade_date"],
             shares_outstanding=shares_outstanding,
+            shares_period_end=shares_period_end,
+            split_factor=split_factor,
         ),
         None,
     )

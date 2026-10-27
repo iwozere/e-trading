@@ -568,3 +568,27 @@ def test_get_corporate_action_keys(db_session) -> None:
 
     assert repo.get_corporate_action_keys(company_id) == {(date(2023, 5, 1), "reverse_split"),
                                                           (date(2023, 6, 1), "dividend")}
+
+
+def test_get_splits_as_of_respects_known_from_and_skips_dividends(db_session) -> None:
+    """Only splits known by as_of, oldest first; dividends, ratio-less rows and NULL known_from are left out."""
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000083", name="Split Reader Inc", role="target")
+
+    def known(day: date) -> datetime:
+        return datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+
+    repo.upsert_corporate_action(company_id=company_id, ex_date=date(2022, 3, 1), action_type="split", source="fmp",
+                                 ratio=4.0, known_from=known(date(2022, 3, 1)))
+    repo.upsert_corporate_action(company_id=company_id, ex_date=date(2023, 5, 1), action_type="reverse_split",
+                                 source="fmp", ratio=0.05, known_from=known(date(2023, 5, 1)))
+    repo.upsert_corporate_action(company_id=company_id, ex_date=date(2023, 1, 1), action_type="dividend", source="fmp",
+                                 cash_amount=0.1, known_from=known(date(2023, 1, 1)))
+    repo.upsert_corporate_action(company_id=company_id, ex_date=date(2023, 2, 1), action_type="split", source="fmp",
+                                 ratio=2.0, known_from=None)
+
+    assert repo.get_splits_as_of(company_id, date(2023, 4, 30)) == [{"ex_date": date(2022, 3, 1), "ratio": 4.0}]
+    assert repo.get_splits_as_of(company_id, date(2024, 1, 1)) == [
+        {"ex_date": date(2022, 3, 1), "ratio": 4.0},
+        {"ex_date": date(2023, 5, 1), "ratio": 0.05},
+    ]

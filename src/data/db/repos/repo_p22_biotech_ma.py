@@ -925,6 +925,30 @@ class P22Repo:
         ).all()
         return {(row.ex_date, row.action_type) for row in rows}
 
+    def get_splits_as_of(self, company_id: int, as_of: date) -> List[Dict[str, Any]]:
+        """
+        Every split/reverse split for `company_id` known on or before `as_of`, oldest first.
+
+        Same lookahead guard as `get_latest_raw_close_as_of`: a NULL `known_from` counts as "not yet
+        known". Rows without a ratio are skipped, since they cannot rescale anything.
+
+        Returns:
+            `[{"ex_date": date, "ratio": float}, ...]` — ratio 4.0 for a 4:1 forward split, 0.05 for 1:20 reverse.
+        """
+        as_of_end = datetime.combine(as_of, datetime.max.time(), tzinfo=timezone.utc)
+        rows = self.session.execute(
+            select(P22CorporateAction.ex_date, P22CorporateAction.ratio)
+            .where(
+                P22CorporateAction.company_id == company_id,
+                P22CorporateAction.action_type.in_(("split", "reverse_split")),
+                P22CorporateAction.ratio.is_not(None),
+                P22CorporateAction.known_from.is_not(None),
+                P22CorporateAction.known_from <= as_of_end,
+            )
+            .order_by(P22CorporateAction.ex_date)
+        ).all()
+        return [{"ex_date": row.ex_date, "ratio": float(row.ratio)} for row in rows]
+
     def get_raw_close(
         self, company_id: int, trade_date: date, vendor: Optional[str] = None
     ) -> Optional[float]:

@@ -313,11 +313,19 @@ use in the code/config; this section exists so they're all in one place to walk 
       today, not a read of already-landed data. Scoping this out until that infrastructure is built is
       a deliberate decision, not a gap nobody looked at. `eligible_exchange` stays `None` (not `False`)
       for any CIK the current-snapshot map doesn't cover, per the existing design.
-- [ ] Size floor ($25M market cap) and asset floor (≥1 Phase I+ program) eligibility filters (spec
-      §2.0.3) — blocked on the vendor decision (size) and on `p22_trial` existing and being linked to a
-      resolved company (asset floor) — CT.gov data still only lands in the raw zone, nothing normalizes
-      it into `p22_trial` yet (that's M3 work). Both fields exist on `UniverseCandidate`, explicitly
-      `None`, not defaulted or guessed.
+- [x] Size floor ($25M market cap), 2026-10-27 — point-in-time in `build_universe_history` via
+      `ingest/size_floor.make_size_floor_lookup` (market cap checked against the 10-K public float, see
+      docs/Design.md "Size floor"). New `public_float` metric in `FACT_TAG_MAP`, new
+      `P22Repo.get_splits_as_of`, `compute_market_cap` now rejects stale prices/share counts and rescales
+      shares across splits. Report CLI: `cli/size_floor_report_cli.py`. Not yet run on prod: needs one
+      `run_financial_facts_normalization.py` run first so `public_float` exists.
+- [ ] Asset floor (≥1 Phase I+ program) eligibility filter (spec §2.0.3) — blocked on `p22_trial`
+      existing and being linked to a resolved company — CT.gov data still only lands in the raw zone,
+      nothing normalizes it into `p22_trial` yet (that's M3 work). The field exists on
+      `UniverseCandidate`, explicitly `None`, not defaulted or guessed.
+- [ ] M6: exclude companies `size_floor_report_cli.py price-quality` marks suspect (corrupt vintage
+      prices such as ACOR/TNXP, ADRs) from return labels — their `p22_price_daily` rows are wrong, not
+      just their market cap. ADRs need an ADS ratio before their market cap can be trusted at all.
 - [ ] Cross-reference roster disappearances against `p22_deal` to classify acquired/delisted/late-filing
       (spec §2.0.1) — `p22_deal` isn't populated until M6.
 
@@ -791,6 +799,12 @@ use in the code/config; this section exists so they're all in one place to walk 
   `[]`/`None` indistinguishably) — a real but separate refactor, not done speculatively here.
 
 ## Known Issues / Open Decisions
+- **FMP vintage "raw" prices are wrong for some serial reverse-splitters** (found 2026-10-27, size-floor
+  cross-check): ACOR's vintage closes are ~$0.004 for 2006–2020 while it traded ~$30; TNXP looks
+  partly adjusted. Already loaded into prod `p22_price_daily`. Detected (not repaired) by
+  `ingest/price_quality.py`; the root cause is in the FMP data/builder, not P22.
+- **`shares_outstanding` stops updating for a few filers** (Amarin: last tagged count 2013, 380,694
+  shares) — `compute_market_cap` now rejects counts older than 400 days instead of using them.
 - ~~**Naive `as_of` upper bound in `get_financial_facts_as_of`**~~ — **fixed 2026-09-05**:
   `datetime.combine(as_of_date, datetime.max.time())` had no `tzinfo`, while `known_from`
   (`TIMESTAMPTZ`) is always written UTC-aware. A naive bound would be interpreted in the DB session's

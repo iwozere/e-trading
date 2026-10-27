@@ -8,7 +8,8 @@ from unittest.mock import MagicMock
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.ml.pipeline.p22_biotech_ma.ingest.market_cap import MarketCapResult, compute_market_cap, run
+from src.ml.pipeline.p22_biotech_ma.ingest.market_cap import MarketCapResult, compute_market_cap, run, split_factor_between
+from src.ml.pipeline.p22_biotech_ma.tests.fake_market_repo import FakeMarketRepo
 
 _AS_OF = date(2026, 9, 5)
 
@@ -122,3 +123,50 @@ def test_run_mixed_pass_and_fail():
     assert summary["computed"] == 1
     assert summary["skipped"] == 1
     assert summary["rejection_breakdown"] == {"no_price": 1}
+
+
+def test_compute_market_cap_rejects_stale_price():
+    repo = _repo(price={"trade_date": date(2026, 8, 1), "close_raw": 20.0, "vendor": "fmp"}, shares_facts=[{"value": 1.0}])
+
+    result, reason = compute_market_cap(repo, company_id=7, as_of=_AS_OF)
+
+    assert result is None
+    assert reason == "stale_price"
+
+
+def test_compute_market_cap_rejects_stale_shares_outstanding():
+    repo = _repo(
+        price={"trade_date": date(2026, 9, 4), "close_raw": 20.0, "vendor": "fmp"},
+        shares_facts=[{"value": 1_000_000.0, "period_end": date(2024, 5, 1)}],
+    )
+
+    result, reason = compute_market_cap(repo, company_id=7, as_of=_AS_OF)
+
+    assert result is None
+    assert reason == "stale_shares_outstanding"
+
+
+def test_compute_market_cap_rescales_shares_for_reverse_split_after_share_count():
+    """Shares counted on the 10-Q cover date, then a 1:20 reverse split before the price day."""
+    repo = FakeMarketRepo()
+    repo.add_fact(7, "shares_outstanding", 20_000_000.0, period_end=date(2026, 5, 1), filed=date(2026, 5, 10))
+    repo.add_split(7, date(2026, 7, 1), 0.05)
+    repo.add_split(7, date(2026, 4, 1), 0.5)  # before the share count: already reflected in it
+    repo.add_price(7, date(2026, 9, 4), 10.0)
+
+    result, reason = compute_market_cap(repo, company_id=7, as_of=_AS_OF)
+
+    assert reason is None
+    assert result is not None
+    assert result.split_factor == 0.05
+    assert result.shares_outstanding == 1_000_000.0
+    assert result.market_cap == 10_000_000.0
+
+
+def test_split_factor_between_window_is_exclusive_start_inclusive_end():
+    splits = [{"ex_date": date(2026, 1, 1), "ratio": 4.0}, {"ex_date": date(2026, 2, 1), "ratio": 0.1},
+              {"ex_date": date(2026, 3, 1), "ratio": 2.0}]
+
+    assert split_factor_between(splits, after=date(2026, 1, 1), through=date(2026, 3, 1)) == 0.2
+    assert split_factor_between(splits, after=None, through=date(2026, 3, 1)) == 1.0
+    assert split_factor_between(splits, after=date(2026, 3, 1), through=date(2026, 4, 1)) == 1.0

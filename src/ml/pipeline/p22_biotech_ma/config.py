@@ -154,6 +154,24 @@ FMP_STABLE_URL = "https://financialmodelingprep.com/stable"
 FMP_RATE_LIMIT_RPS: int = 5
 
 # ---------------------------------------------------------------------------
+# Size floor (spec §2.0.3/§2.0.6), 2026-10-27 — ingest/market_cap.py, ingest/size_floor.py,
+# ingest/price_quality.py. Thresholds come from cross-checking derived market cap against 6,398 10-K
+# public-float values (846 biotech filers): see docs/Design.md "Size floor".
+# ---------------------------------------------------------------------------
+SIZE_FLOOR_USD: float = 25_000_000.0
+# A close older than this is not "the price on as_of" (delisted/halted names keep their last bar forever).
+MARKET_CAP_MAX_PRICE_AGE_DAYS: int = 10
+# Filers report shares every 10-Q/10-K; a count older than ~5 quarters means the series stopped updating.
+MARKET_CAP_MAX_SHARES_AGE_DAYS: int = 400
+# The float is measured once a year (end of fiscal Q2) and filed with the 10-K ~8 months later.
+PUBLIC_FLOAT_MAX_AGE_DAYS: int = 600
+# Derived market cap / public float on the float's own measurement date. Market cap is >= the float by
+# definition (float excludes insiders); below 0.5 the price or share series is wrong, above 10 it is
+# usually an ADR (shares counted in ordinary shares) or a share count from before a reverse merger.
+FLOAT_CONSISTENCY_MIN_RATIO: float = 0.5
+FLOAT_CONSISTENCY_MAX_RATIO: float = 10.0
+
+# ---------------------------------------------------------------------------
 # yfinance — ongoing/daily current-price ingest (spec §2.0.7), 2026-09-01.
 # Free, no API key. Deliberately NOT used for historical backfill — see
 # ingest/yfinance_client.py's docstring for the live-verified retroactive

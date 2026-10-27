@@ -11,6 +11,11 @@ filers (Moderna, Sarepta, Alnylam):
 
 - `cash_and_equivalents` <- `us-gaap:CashAndCashEquivalentsAtCarryingValue` (USD, instant)
 - `shares_outstanding` <- `dei:EntityCommonStockSharesOutstanding` (shares, instant)
+- `public_float` <- `dei:EntityPublicFloat` (USD, instant; 10-K cover, measured at the end of the
+  filer's second fiscal quarter) — added 2026-10-27 as the independent check `ingest/size_floor.py`
+  runs on derived `market_cap`: the non-affiliate float is a lower bound on market cap. Checked against
+  846 biotech filers' landed companyfacts (6,398 10-K values); a few filers tag it 1000x too large
+  (e.g. Sarepta, Fate), which `size_floor.py` tolerates — see that module.
 - `short_term_investments` <- `us-gaap:ShortTermInvestments` (USD, instant) — confirmed present
   for only 1 of the 3 filers checked (Sarepta); Moderna and Alnylam report neither this tag nor
   spec §2.1's suggested alternative (`MarketableSecuritiesCurrent`, checked and absent for all
@@ -106,6 +111,7 @@ _logger = setup_logger(__name__)
 FACT_TAG_MAP: Dict[str, List[Tuple[str, str, str]]] = {
     "cash_and_equivalents": [("us-gaap", "CashAndCashEquivalentsAtCarryingValue", "USD")],
     "shares_outstanding": [("dei", "EntityCommonStockSharesOutstanding", "shares")],
+    "public_float": [("dei", "EntityPublicFloat", "USD")],
     "short_term_investments": [("us-gaap", "ShortTermInvestments", "USD")],
     "total_debt": [
         ("us-gaap", "LongTermDebtNoncurrent", "USD"),
