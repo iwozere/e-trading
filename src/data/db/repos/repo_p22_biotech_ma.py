@@ -885,25 +885,27 @@ class P22Repo:
         self.session.execute(upsert_stmt)
         self.session.flush()
 
-    # Postgres caps one statement at 65,535 bind parameters; 9 columns per row.
-    _PRICE_BULK_CHUNK_ROWS = 5000
-
     def insert_price_daily_bulk(self, rows: List[Dict[str, Any]]) -> int:
         """
         Insert many RAW daily OHLCV rows (`upsert_price_daily`'s columns), skipping existing
-        `(company_id, trade_date, vendor)` keys — same never-rewrite rule, one statement per chunk
-        instead of one per row (a historical backfill is millions of rows).
+        `(company_id, trade_date, vendor)` keys — same never-rewrite rule, batched instead of one
+        statement per row (a historical backfill is millions of rows).
+
+        One statement with the rows passed as executemany parameters, so SQLAlchemy compiles it once and
+        batches the VALUES itself ("insertmanyvalues"); building `.values(rows)` per chunk instead spent
+        ~0.7 s compiling every 5,000 rows. RETURNING reports only the rows actually inserted.
 
         Returns:
             Number of rows actually inserted.
         """
-        inserted = 0
-        for start in range(0, len(rows), self._PRICE_BULK_CHUNK_ROWS):
-            chunk = rows[start : start + self._PRICE_BULK_CHUNK_ROWS]
-            stmt = pg_insert(P22PriceDaily).values(chunk)
-            stmt = stmt.on_conflict_do_nothing(index_elements=["company_id", "trade_date", "vendor"])
-            result = self.session.execute(stmt)
-            inserted += result.rowcount  # type: ignore[attr-defined]
+        if not rows:
+            return 0
+        stmt = (
+            pg_insert(P22PriceDaily)
+            .on_conflict_do_nothing(index_elements=["company_id", "trade_date", "vendor"])
+            .returning(P22PriceDaily.trade_date)
+        )
+        inserted = len(self.session.execute(stmt, rows).all())
         self.session.flush()
         return inserted
 
