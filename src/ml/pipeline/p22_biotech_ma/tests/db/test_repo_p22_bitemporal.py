@@ -534,3 +534,37 @@ def test_upsert_patent_expiry_is_idempotent_on_repeated_calls(db_session) -> Non
     assert len(rows) == 1
     assert rows[0]["therapeutic_area"] is None
     assert rows[0]["ttm_revenue_usd"] is None
+
+
+def test_insert_price_daily_bulk_skips_existing_keys(db_session) -> None:
+    """Bulk insert keeps the never-rewrite rule: an existing (company, date, vendor) row wins, and the count is new rows only."""
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000081", name="Bulk Price Inc", role="target")
+    known = datetime(2024, 6, 10, 21, 0, tzinfo=timezone.utc)
+    repo.upsert_price_daily(company_id=company_id, trade_date=date(2024, 6, 10), vendor="fmp", close_raw=10.0,
+                            known_from=known)
+
+    rows = [
+        {"company_id": company_id, "trade_date": date(2024, 6, d), "vendor": "fmp", "open_raw": 1.0, "high_raw": 2.0,
+         "low_raw": 0.5, "close_raw": 99.0, "volume_raw": 100, "known_from": known}
+        for d in (10, 11, 12)
+    ]
+    assert repo.insert_price_daily_bulk(rows) == 2
+
+    assert repo.get_raw_close(company_id, date(2024, 6, 10), vendor="fmp") == 10.0
+    assert repo.get_raw_close(company_id, date(2024, 6, 11), vendor="fmp") == 99.0
+    assert company_id in repo.get_company_ids_with_prices("fmp")
+    assert company_id not in repo.get_company_ids_with_prices("yfinance")
+
+
+def test_get_corporate_action_keys(db_session) -> None:
+    """Returns every (ex_date, action_type) the company has, whatever the source."""
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000082", name="Action Keys Inc", role="target")
+    repo.upsert_corporate_action(company_id=company_id, ex_date=date(2023, 5, 1), action_type="reverse_split",
+                                 source="yfinance", ratio=0.05)
+    repo.upsert_corporate_action(company_id=company_id, ex_date=date(2023, 6, 1), action_type="dividend",
+                                 source="fmp", cash_amount=0.1)
+
+    assert repo.get_corporate_action_keys(company_id) == {(date(2023, 5, 1), "reverse_split"),
+                                                          (date(2023, 6, 1), "dividend")}

@@ -1,6 +1,9 @@
 """
 P22 — FMP historical bulk backfill CLI (spec §2.0.6/§2.4, M3, 2026-08-31).
 
+**Superseded for prices (2026-10-27):** historical prices now load from the shared FMP vintage via
+`cli/fmp_vintage_load_cli.py`; the `backfill` command below is no longer needed for them.
+
 Human-run, ONE-TIME tool for the window a Premium-tier FMP subscription is
 active — not a `jobs/run_*.py` scheduler script (no `__SCHEDULER_RESULT__`
 output, takes argparse flags a human tunes interactively, same reasoning as

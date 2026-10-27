@@ -885,6 +885,44 @@ class P22Repo:
         self.session.execute(upsert_stmt)
         self.session.flush()
 
+    # Postgres caps one statement at 65,535 bind parameters; 9 columns per row.
+    _PRICE_BULK_CHUNK_ROWS = 5000
+
+    def insert_price_daily_bulk(self, rows: List[Dict[str, Any]]) -> int:
+        """
+        Insert many RAW daily OHLCV rows (`upsert_price_daily`'s columns), skipping existing
+        `(company_id, trade_date, vendor)` keys — same never-rewrite rule, one statement per chunk
+        instead of one per row (a historical backfill is millions of rows).
+
+        Returns:
+            Number of rows actually inserted.
+        """
+        inserted = 0
+        for start in range(0, len(rows), self._PRICE_BULK_CHUNK_ROWS):
+            chunk = rows[start : start + self._PRICE_BULK_CHUNK_ROWS]
+            stmt = pg_insert(P22PriceDaily).values(chunk)
+            stmt = stmt.on_conflict_do_nothing(index_elements=["company_id", "trade_date", "vendor"])
+            result = self.session.execute(stmt)
+            inserted += result.rowcount  # type: ignore[attr-defined]
+        self.session.flush()
+        return inserted
+
+    def get_company_ids_with_prices(self, vendor: str) -> set[int]:
+        """`company_id`s that already have at least one `p22_price_daily` row from `vendor`."""
+        rows = self.session.execute(
+            select(P22PriceDaily.company_id).where(P22PriceDaily.vendor == vendor).distinct()
+        ).scalars().all()
+        return set(rows)
+
+    def get_corporate_action_keys(self, company_id: int) -> set[tuple[date, str]]:
+        """`(ex_date, action_type)` of every `p22_corporate_action` row the company has."""
+        rows = self.session.execute(
+            select(P22CorporateAction.ex_date, P22CorporateAction.action_type).where(
+                P22CorporateAction.company_id == company_id
+            )
+        ).all()
+        return {(row.ex_date, row.action_type) for row in rows}
+
     def get_raw_close(
         self, company_id: int, trade_date: date, vendor: Optional[str] = None
     ) -> Optional[float]:

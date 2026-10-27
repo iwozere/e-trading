@@ -5,7 +5,7 @@ This module defines the bitemporal contract any future FUNDAMENTALS adapter
 (market cap, shares outstanding, segment revenue — point-in-time facts) must
 satisfy. Daily OHLCV price ingest does NOT go through this Protocol — it has
 its own dedicated, already-implemented path (`P22Repo.upsert_price_daily`/
-`upsert_corporate_action`, `ingest/price_ingest.py`, `ingest/fmp_backfill.py`)
+`upsert_corporate_action`, `ingest/price_ingest.py`, `ingest/fmp_vintage.py`)
 directly against `p22_price_daily`'s own `vendor` column, which was already
 designed to be multi-source (`'ibkr'|'fmp'|'yfinance'`).
 
@@ -18,8 +18,8 @@ yfinance (`ingest/yfinance_client.py`, `jobs/run_price_ingest.py`, running
 daily in production) rather than IBKR — sidesteps IBKR's still-unverified
 raw-vs-adjusted question (`docs/Tasks.md` item 6) and needs no live
 TWS/Gateway session. Deep historical prices for delisted tickers (needed for
-`E[return | deal]` labeling, M6/M7) are FMP's role
-(`ingest/fmp_backfill.py`) — see `docs/Tasks.md` item 1.
+`E[return | deal]` labeling, M6/M7) are FMP's role, read from the shared FMP
+vintage (`ingest/fmp_vintage.py`, 2026-10-27) — see `docs/Tasks.md` item 1.
 """
 
 from __future__ import annotations

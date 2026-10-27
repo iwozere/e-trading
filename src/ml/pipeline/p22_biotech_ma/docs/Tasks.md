@@ -73,6 +73,21 @@ use in the code/config; this section exists so they're all in one place to walk 
    get `None` here, same as before — that specific gap is what the FMP Premium decision is actually
    for now, needed for M6, not M3/Block A live scoring.
 
+   **Historical prices now come from the shared FMP vintage, 2026-10-27.** The FMP data pipeline
+   (`src/data/fmp_pipeline/`, Ultimate month 2026-10-17..) downloaded the whole US market incl.
+   delisted securities into `DATA_CACHE_DIR/fmp-data/vintages/2026-10/` (also on the Pi), so P22 no
+   longer needs its own per-ticker download. `ingest/fmp_vintage.py` + `cli/fmp_vintage_load_cli.py`
+   load `p22_price_daily`/`p22_corporate_action` (vendor/source `'fmp'`) from it. The raw-vs-adjusted
+   question above is answered: `prices/1d_raw` is as traded (NVDA 1208.90 on 2024-06-07, 121.79 on the
+   2024-06-10 split day) and split ratios use our convention. Matching is by CIK (then exact name
+   without legal-form words); a CIK's several listings (ticker changes kept as separate securities by
+   FMP) are stitched, never interleaved. `known_from` = trade date (spec §2.4 price lag 0), not the
+   load date. **Coverage, measured against the 1,705 DERA biotech CIKs:** 1,063 matched by CIK + 1 by
+   name, 641 unmatched — ~91% of still-filing companies, ~72% of 2021+ exits, ~9% of pre-2021 exits
+   (FMP's delisted list is essentially 2021+; Kite, Juno, Loxo, MyoKardia, Immunomedics, Spark absent).
+   That last number is the open decision for M6: start labels in 2021, or find a second source for
+   older delisted prices. Not yet run against the prod DB.
+
    **User's plan, confirmed 2026-09-08: buy Premium ~2026-09-15 for one month.** Also extended
    this session, ahead of that purchase, to cover items 9-10's `ratios`/`analyst-estimates` gap
    (Block A's `ebitda`/forward-P/E), not just the delisted-price gap — `land_ratios_and_estimates`
@@ -517,6 +532,12 @@ use in the code/config; this section exists so they're all in one place to walk 
       the still-open per-symbol-entitlement discovery. Deliberately does NOT write
       `p22_price_daily`/`p22_corporate_action` or implement `MarketDataProvider` — see item 1's "Built
       and ready" note for why both are correctly deferred past the download step.
+- [x] FMP vintage price load, 2026-10-27 — `ingest/fmp_vintage.py` (vintage security matching,
+      listing stitching, price/corporate-action row building), `cli/fmp_vintage_load_cli.py`
+      (`--dry-run`/`--limit`/`--reload`/`--company-id`, one unit of work per company, resumable), new
+      `P22Repo.insert_price_daily_bulk` / `get_company_ids_with_prices` / `get_corporate_action_keys`.
+      Bad prints the FMP builder flagged (OHLC violation, reverted spike) are not written; existing
+      corporate actions (yfinance-sourced or SEC-verified) are never overwritten. See item 1.
 - [x] `ingest/acquirer_config.py` + `jobs/run_acquirer_load.py`, 2026-08-30, later same day — loads
       `p22_acquirers.yaml` into `p22_company` (role `acquirer`, or `both` if the company already
       matches a resolved DERA target row). Deliberately loads only *identity* — `bloc`/`entry_date`/
@@ -840,6 +861,9 @@ use in the code/config; this section exists so they're all in one place to walk 
   fixed in `config.CLINICALTRIALS_FIELDS`; see `docs/implementation-plan.md` §4.1.
 - **openFDA `sponsor_name` search is case-sensitive** — fixed by uppercasing the search term in
   `openfda_client.py`; see `docs/implementation-plan.md` §4.1.
+- **Delisted-ticker price coverage before 2021 is ~9%** (2026-10-27) — the vendor question below is
+  answered (FMP, via the shared vintage, see item 1), but FMP's delisted universe is essentially 2021+.
+  Decide before M6 whether labels start in 2021 or a second source covers older acquisitions.
 - **Delisted-ticker historical price vendor not selected** (spec §2.0.6, narrowed from the earlier
   broader §2.4 framing now that §2.0's source-capability matrix assigns live-name prices to the
   already-integrated IBKR downloader and fundamentals to EDGAR). This blocks `E[return | deal]`

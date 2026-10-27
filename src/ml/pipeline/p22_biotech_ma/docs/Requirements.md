@@ -46,6 +46,9 @@
   that historical TRADES bars are split-adjusted server-side with no raw-print option, which would
   make it unsuitable as the `p22_price_daily` raw-storage source (spec §2.0.7, added v0.6) even though
   it's fine for options IV / short interest / borrow. See `Tasks.md` Known Issues.
+- `src.data.fmp_pipeline` (`datamanager_adapter.fmp_store.FmpStore`, `builders.flags`,
+  `builders.validate.SECURITIES`) — read-only access to the FMP vintage at `DATA_CACHE_DIR/fmp-data`
+  for historical prices (`ingest/fmp_vintage.py`); needs `pyarrow` (already a dependency).
 - **Delisted-ticker historical price vendor** (spec §2.0.6) — **not yet selected**, and narrower
   than earlier drafts assumed: EDGAR (fundamentals) + IBKR (live-name prices) cover everything
   except historical prices for companies that no longer trade, which `E[return | deal]` labeling

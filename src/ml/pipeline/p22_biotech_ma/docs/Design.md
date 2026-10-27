@@ -263,8 +263,9 @@ linkage decision, `docs/Tasks.md` "Decisions needed" item 8.
   downstream code and reviewers can filter on it to find candidate misclassifications rather than
   silently trusting every asset's therapeutic area.
 - **Two independent, differently-scoped price sources, not one vendor doing both jobs** — FMP
-  (`ingest/fmp_backfill.py`, one-time, manually run during a paid month) for deep historical
-  backfill of delisted tickers; yfinance (`ingest/price_ingest.py`, `jobs/run_price_ingest.py`,
+  for deep historical backfill of delisted tickers, read since 2026-10-27 from the shared FMP data
+  pipeline's vintage (`ingest/fmp_vintage.py`, `cli/fmp_vintage_load_cli.py`; the per-ticker API
+  download in `ingest/fmp_backfill.py` is superseded for prices); yfinance (`ingest/price_ingest.py`, `jobs/run_price_ingest.py`,
   daily, free) for the ongoing current-price role spec §2.0.5 originally assigned to IBKR. Neither
   was ever meant to depend on the other, and `p22_price_daily.vendor` was already designed
   multi-source for exactly this. yfinance was picked over IBKR specifically because it needs no live

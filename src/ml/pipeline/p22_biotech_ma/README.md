@@ -28,9 +28,19 @@ Jobs are run as standalone scripts (see `jobs/`) and registered with the schedul
 `src.data.pipeline` (`specs/p22_specs.py`), which supersedes this module's own
 `jobs/register_jobs.py`.
 
+Historical raw prices and corporate actions (delisted companies included) are loaded by hand from
+the shared FMP vintage, not by a scheduled job:
+
+```bash
+python -m src.ml.pipeline.p22_biotech_ma.cli.fmp_vintage_load_cli --dry-run   # match report only
+python -m src.ml.pipeline.p22_biotech_ma.cli.fmp_vintage_load_cli --limit 5
+python -m src.ml.pipeline.p22_biotech_ma.cli.fmp_vintage_load_cli
+```
+
 ## Integration
 This module integrates with:
 - `src.data.downloader.edgar_downloader` — SEC EDGAR access (submissions, XBRL, EFTS, 13F, Form 4, 13D/G)
+- `src.data.fmp_pipeline` — read-only FMP vintage (`FmpStore`): historical raw daily bars, splits, dividends
 - `src.data.db` — Postgres storage (models, migrations, repos, UoW service)
 - `src.data.utils.rate_limiting` — per-host token-bucket rate limiting
 - `src.notification.logger` — project-wide logging
