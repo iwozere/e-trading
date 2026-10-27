@@ -5,6 +5,7 @@
 ### ✅ COMPLETED
 - [x] Extended `EdgarDownloader` with 13F, Form 4, 13D/G methods
 - [x] `OpenFigiMapper` — CUSIP→ticker with CSV.gz cache
+- [x] `OpenFigiMapper` US-only resolution (2026-10-27) — `exchCode=US`, equity security types only (no bond/preferred/warrant fallback), BRK/B → BRK-B; cache rows tagged `resolver`, older rows re-resolved lazily. Consensus files cached before this hold foreign tickers (6D8, APLSUSD, ...) and must be rebuilt
 - [x] `PositionDeltaCalculator` — Q-over-Q delta engine
 - [x] `ExitScreener` — reduction threshold filter
 - [x] `ConsensusDetector` — multi-institution overlap aggregator

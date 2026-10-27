@@ -8,11 +8,15 @@ only once.
 Cache layout:
     DATA_CACHE_DIR/openfigi/
         cusip_map.csv.gz   ← accumulated mapping, columns: cusip, ticker,
-                               name, exchange_code, security_type, resolved_at
+                               resolved_at, resolver
 
-Free tier: 25 requests/minute (no key required).
-With OPENFIGI_API_KEY env var: 250 requests/minute.
-Each request resolves up to 100 CUSIPs in a single POST.
+Only US-composite listings of equity securities are accepted, and share-class
+tickers use the dash form (BRK/B → BRK-B). Cache rows written by an older
+resolver (no or different ``resolver`` value) are treated as unknown and
+re-resolved on the next lookup.
+
+Free tier: 25 requests/minute, 10 CUSIPs per POST (no key required).
+With OPENFIGI_API_KEY env var: 250 requests/minute, 100 CUSIPs per POST.
 
 Classes:
 - OpenFigiMapper: CUSIP→ticker mapper with persistent CSV.gz cache
@@ -42,10 +46,15 @@ except ImportError:
     DATA_CACHE_DIR = "c:/data-cache"
 
 _OPENFIGI_URL = "https://api.openfigi.com/v3/mapping"
-_BATCH_SIZE = 100
+_BATCH_SIZE_FREE = 10
+_BATCH_SIZE_KEYED = 100
 # Free tier: 25 req/min → 1 req per 2.4s; keyed: 250/min → 1 per 0.24s
 _MIN_INTERVAL_FREE = 2.5
 _MIN_INTERVAL_KEYED = 0.25
+# Bump when the resolution rules change so cached rows from older rules are re-resolved.
+# us_equity_v2: exchCode=US filter, equity security types only, BRK/B → BRK-B.
+_RESOLVER_VERSION = "us_equity_v2"
+_EQUITY_SECURITY_TYPES = frozenset({"Common Stock", "ADR", "ETP", "REIT", "Closed-End Fund", "MLP"})
 
 
 class OpenFigiMapper(BaseDataDownloader):
@@ -81,9 +90,11 @@ class OpenFigiMapper(BaseDataDownloader):
         if key:
             self._session.headers.update({"X-OPENFIGI-APIKEY": key})
             self._min_interval = _MIN_INTERVAL_KEYED
+            self._batch_size = _BATCH_SIZE_KEYED
             _logger.debug("OpenFIGI: using keyed tier (250 req/min)")
         else:
             self._min_interval = _MIN_INTERVAL_FREE
+            self._batch_size = _BATCH_SIZE_FREE
             _logger.debug("OpenFIGI: using free tier (25 req/min)")
 
         self._last_request_time: float = 0.0
@@ -156,8 +167,8 @@ class OpenFigiMapper(BaseDataDownloader):
         Load the full CSV.gz mapping table as a DataFrame.
 
         Returns:
-            DataFrame with columns: cusip, ticker, name, exchange_code,
-            security_type, resolved_at. Empty DataFrame if no cache exists.
+            DataFrame with columns: cusip, ticker, resolved_at, resolver.
+            Empty DataFrame if no cache exists.
         """
         if not self._cache_file.exists():
             return pd.DataFrame()
@@ -168,17 +179,22 @@ class OpenFigiMapper(BaseDataDownloader):
     # ------------------------------------------------------------------
 
     def _load_cache(self) -> Dict[str, str | None]:
-        """Load the cache dict from CSV.gz."""
+        """Load the cache dict from CSV.gz, skipping rows written by an older resolver."""
         if self._cache is not None:
             return self._cache
         if not self._cache_file.exists():
             self._cache = {}
             return self._cache
         df = pd.read_csv(self._cache_file, compression="gzip", dtype=str).fillna("")
+        resolvers = df["resolver"] if "resolver" in df.columns else pd.Series("", index=df.index)
+        current = df[resolvers == _RESOLVER_VERSION]
         mapping: Dict[str, str | None] = {}
-        for cusip, ticker in zip(df["cusip"].tolist(), df["ticker"].tolist()):
+        for cusip, ticker in zip(current["cusip"].tolist(), current["ticker"].tolist()):
             mapping[str(cusip)] = str(ticker) if ticker else None
         self._cache = mapping
+        stale = len(df) - len(current)
+        if stale:
+            _logger.info("Ignoring %d CUSIP mappings from an older resolver; they will be re-resolved", stale)
         _logger.debug("Loaded %d CUSIPs from cache %s", len(self._cache), self._cache_file)
         return self._cache
 
@@ -189,7 +205,8 @@ class OpenFigiMapper(BaseDataDownloader):
 
         resolved_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         rows = [
-            {"cusip": cusip, "ticker": ticker, "resolved_at": resolved_at} for cusip, ticker in new_mappings.items()
+            {"cusip": cusip, "ticker": ticker, "resolved_at": resolved_at, "resolver": _RESOLVER_VERSION}
+            for cusip, ticker in new_mappings.items()
         ]
 
         new_df = pd.DataFrame(rows)
@@ -206,10 +223,10 @@ class OpenFigiMapper(BaseDataDownloader):
         _logger.info("Saved %d new CUSIP mappings to %s (total: %d)", len(new_df), self._cache_file, len(combined))
 
     def _fetch_all(self, cusips: List[str]) -> Dict[str, str | None]:
-        """Batch-fetch all CUSIPs from OpenFIGI in chunks of 100."""
+        """Batch-fetch all CUSIPs from OpenFIGI in chunks of the tier's batch size."""
         result: Dict[str, str | None] = {}
-        for i in range(0, len(cusips), _BATCH_SIZE):
-            batch = cusips[i : i + _BATCH_SIZE]
+        for i in range(0, len(cusips), self._batch_size):
+            batch = cusips[i : i + self._batch_size]
             batch_result = self._fetch_batch(batch)
             result.update(batch_result)
             _logger.debug("OpenFIGI: resolved %d/%d CUSIPs", i + len(batch), len(cusips))
@@ -217,15 +234,18 @@ class OpenFigiMapper(BaseDataDownloader):
 
     def _fetch_batch(self, cusips: List[str]) -> Dict[str, str | None]:
         """
-        POST up to 100 CUSIPs to OpenFIGI and return resolved tickers.
+        POST up to one batch of CUSIPs to OpenFIGI and return resolved tickers.
+
+        Only US-composite listings are requested: without the exchCode filter
+        OpenFIGI's first hit is often a foreign line (DWDPEUR, 6D8, APLSUSD).
 
         Args:
-            cusips: List of up to 100 CUSIP strings.
+            cusips: List of CUSIP strings, at most the tier's batch size.
 
         Returns:
             Mapping of {cusip: ticker_or_None}.
         """
-        payload = [{"idType": "ID_CUSIP", "idValue": c} for c in cusips]
+        payload = [{"idType": "ID_CUSIP", "idValue": c, "exchCode": "US"} for c in cusips]
 
         elapsed = time.monotonic() - self._last_request_time
         if elapsed < self._min_interval:
@@ -256,17 +276,28 @@ class OpenFigiMapper(BaseDataDownloader):
 
         result: Dict[str, str | None] = {}
         for cusip, item in zip(cusips, items):
-            data = item.get("data", [])
-            if not data:
-                result[cusip] = None
-                continue
-
-            # Prefer equities on recognised exchanges; fall back to first result
-            equity = next(
-                (d for d in data if d.get("securityType") in ("Common Stock", "ETP") and d.get("ticker")),
-                data[0],
-            )
-            ticker = equity.get("ticker")
-            result[cusip] = ticker if ticker else None
+            result[cusip] = _select_equity_ticker(item.get("data", []))
 
         return result
+
+
+def _select_equity_ticker(data: List[Dict[str, Any]]) -> str | None:
+    """
+    Pick the equity ticker from one OpenFIGI mapping result.
+
+    Bonds, preferreds, warrants and rights map to None (falling back to the
+    first hit used to cache bond descriptions like "AAPL 3.25 02/23/26" as
+    tickers). Share-class slashes become dashes (BRK/B → BRK-B), the form the
+    OHLCV providers use.
+
+    Args:
+        data: The ``data`` list of one OpenFIGI mapping job.
+
+    Returns:
+        The ticker, or None when no equity listing is present.
+    """
+    for entry in data:
+        ticker = entry.get("ticker")
+        if ticker and entry.get("securityType") in _EQUITY_SECURITY_TYPES:
+            return str(ticker).replace("/", "-")
+    return None
