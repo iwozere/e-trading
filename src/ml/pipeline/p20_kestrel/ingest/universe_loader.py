@@ -8,6 +8,7 @@ rows into k20_universe. Marks tickers absent from the CSV as 'delisted'.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -111,10 +112,30 @@ def _fetch_fundamentals_for_ticker(ticker: str) -> Any | None:
     try:
         # get_fundamentals_unified is declared async but performs synchronous
         # I/O internally — run it in this worker thread's own event loop.
-        return asyncio.run(get_fundamentals_unified(ticker, provider="yf"))
+        fund = asyncio.run(get_fundamentals_unified(ticker, provider="yf"))
     except Exception:
         _logger.debug("No fundamentals for %s", ticker)
         return None
+    # get_fundamentals_unified never returns None: when every provider fails
+    # (e.g. a Yahoo 429) it returns a Fundamentals with all data fields None.
+    # Treating that as success skipped the retry pass and nulled the stored
+    # balance-sheet columns, so report it as a failure instead.
+    if not _has_fundamentals_data(fund):
+        _logger.debug("Empty fundamentals for %s", ticker)
+        return None
+    return fund
+
+
+_FUNDAMENTALS_METADATA_FIELDS = frozenset({"ticker", "data_source", "last_updated", "sources"})
+
+
+def _has_fundamentals_data(fund: Any) -> bool:
+    """Return True if a Fundamentals object carries at least one non-metadata value."""
+    return any(
+        getattr(fund, f.name) is not None
+        for f in dataclasses.fields(fund)
+        if f.name not in _FUNDAMENTALS_METADATA_FIELDS
+    )
 
 
 def _derive_balance_sheet_fields(fund: Any) -> Dict[str, float | None]:
@@ -284,7 +305,13 @@ def run() -> Dict[str, Any]:
         nonlocal upserted
         if not buffer:
             return
-        count = upsert_universe_rows(buffer)
+        # Rows without fundamentals omit the balance-sheet keys so the upsert
+        # keeps the previously stored values; the upsert's column list comes
+        # from its first row, so each key set goes in its own statement.
+        groups: Dict[frozenset[str], List[Dict[str, Any]]] = {}
+        for universe_row in buffer:
+            groups.setdefault(frozenset(universe_row), []).append(universe_row)
+        count = sum(upsert_universe_rows(rows) for rows in groups.values())
         upserted += count
         _logger.info("Upserted %d universe rows (%d total so far)", count, upserted)
         buffer.clear()

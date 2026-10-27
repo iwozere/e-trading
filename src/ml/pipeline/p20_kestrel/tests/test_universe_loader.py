@@ -116,3 +116,70 @@ def test_derive_balance_sheet_fields_all_missing():
 
     assert fields["net_debt"] is None
     assert fields["net_debt_ebitda"] is None
+
+
+def test_fetch_fundamentals_for_ticker_treats_empty_result_as_failure(monkeypatch):
+    """
+    Regression guard: get_fundamentals_unified returns an all-None Fundamentals
+    when Yahoo rate-limits; that must count as a failure so the retry pass runs.
+    """
+
+    async def _empty(ticker, provider=None):
+        return Fundamentals(ticker=ticker, sources={})
+
+    monkeypatch.setattr(universe_loader, "get_fundamentals_unified", _empty)
+
+    assert universe_loader._fetch_fundamentals_for_ticker("AAA") is None
+
+
+def test_fetch_fundamentals_for_ticker_returns_populated_result(monkeypatch):
+    """A Fundamentals with real data passes through unchanged."""
+    fund = Fundamentals(ticker="AAA", market_cap=1e9)
+
+    async def _populated(ticker, provider=None):
+        return fund
+
+    monkeypatch.setattr(universe_loader, "get_fundamentals_unified", _populated)
+
+    assert universe_loader._fetch_fundamentals_for_ticker("AAA") is fund
+
+
+def test_fetch_all_fundamentals_retries_empty_results(monkeypatch):
+    """Tickers that come back empty in pass 1 are retried in pass 2."""
+    attempts: dict[str, int] = {}
+
+    async def _rate_limited_once(ticker, provider=None):
+        attempts[ticker] = attempts.get(ticker, 0) + 1
+        if ticker == "BBB" and attempts[ticker] == 1:
+            return Fundamentals(ticker=ticker)
+        return Fundamentals(ticker=ticker, market_cap=1e9)
+
+    monkeypatch.setattr(universe_loader, "get_fundamentals_unified", _rate_limited_once)
+    monkeypatch.setattr(universe_loader, "_RETRY_COOLDOWN_SECONDS", 0)
+
+    results = list(universe_loader._fetch_all_fundamentals(["AAA", "BBB"]))
+
+    assert [(t, f is None) for t, f in results] == [("AAA", False), ("BBB", True), ("BBB", False)]
+    assert attempts == {"AAA": 1, "BBB": 2}
+
+
+def test_run_failed_ticker_keeps_stored_balance_sheet_fields(monkeypatch, upsert_calls):
+    """
+    A ticker without fundamentals is upserted without balance-sheet keys (so the
+    stored values survive), in a separate statement from tickers that have them.
+    """
+    tickers = ["AAA", "BBB"]
+    monkeypatch.setattr(universe_loader, "_load_nasdaq_csv", lambda: _fake_csv_df(tickers))
+    fund = Fundamentals(total_debt=10.0, total_cash=5.0)
+    monkeypatch.setattr(
+        universe_loader, "_fetch_all_fundamentals", lambda tks: iter([("AAA", fund), ("BBB", None)])
+    )
+
+    result = universe_loader.run()
+
+    assert result["tickers_upserted"] == 2
+    assert len(upsert_calls) == 2
+    rows_by_ticker = {row["ticker"]: row for call in upsert_calls for row in call}
+    assert rows_by_ticker["AAA"]["net_debt"] == 5.0
+    assert "net_debt" not in rows_by_ticker["BBB"]
+    assert "gross_margin" not in rows_by_ticker["BBB"]

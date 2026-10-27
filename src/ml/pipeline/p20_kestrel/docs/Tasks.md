@@ -5,6 +5,7 @@
 ### ✅ COMPLETED FEATURES
 
 - [x] Database migration `002_kestrel_schema.py` — all 12 k20_* tables
+- [x] Universe loader treats an all-empty `Fundamentals` (Yahoo 429) as a failure (2026-10-27) — pass 2 retry now runs, and tickers that still fail keep their stored balance-sheet columns instead of being nulled
 - [x] `src.data.db.models.model_kestrel` — ORM models (in shared data layer, git-tracked)
 - [x] `src.data.db.repos.repo_kestrel` — Session-based KestrelRepo class
 - [x] `src.data.db.services.kestrel_service` — KestrelService(BaseDBService) with @with_uow
