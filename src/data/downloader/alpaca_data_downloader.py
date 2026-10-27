@@ -22,7 +22,7 @@ Classes:
 
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, List, cast
 
 import pandas as pd
@@ -51,6 +51,25 @@ except ImportError:
     TradingClient: Any = None  # type: ignore[no-redef]
     ALPACA_AVAILABLE = False
     _logger.warning("alpaca-py not installed. Install with: pip install alpaca-py")
+
+
+def _to_naive_utc(dt: datetime) -> datetime:
+    """
+    Convert a datetime to timezone-naive UTC.
+
+    Bar timestamps are stored as naive UTC, so tz-aware request bounds must be
+    converted before they are compared with them (pandas raises TypeError on a
+    tz-naive vs tz-aware comparison). Naive input is assumed to already be UTC.
+
+    Args:
+        dt: Naive (UTC) or tz-aware datetime.
+
+    Returns:
+        The same instant as a naive UTC datetime.
+    """
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class AlpacaDataDownloader(BaseDataDownloader):
@@ -183,6 +202,9 @@ class AlpacaDataDownloader(BaseDataDownloader):
         """
         if interval not in self.interval_mapping:
             raise ValueError(f"Unsupported interval: {interval}. Supported: {self.get_supported_intervals()}")
+
+        start_date = _to_naive_utc(start_date)
+        end_date = _to_naive_utc(end_date)
 
         try:
             _logger.debug(
