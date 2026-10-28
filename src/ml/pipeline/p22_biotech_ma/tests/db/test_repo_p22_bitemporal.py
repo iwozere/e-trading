@@ -592,3 +592,14 @@ def test_get_splits_as_of_respects_known_from_and_skips_dividends(db_session) ->
         {"ex_date": date(2022, 3, 1), "ratio": 4.0},
         {"ex_date": date(2023, 5, 1), "ratio": 0.05},
     ]
+
+
+def test_get_company_by_cik_matches_bare_and_padded_forms(db_session) -> None:
+    """Raw-zone manifests carry "84"-style CIKs; `p22_company` stores "0000000084"."""
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000084", name="Padding Bio Inc", role="target")
+
+    for key in ("0000000084", "84", " 84 ", "084"):
+        found = repo.get_company_by_cik(key)
+        assert found is not None and found["company_id"] == company_id
+    assert repo.get_company_by_cik("Padding Bio Inc") is None

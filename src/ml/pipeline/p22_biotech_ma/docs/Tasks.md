@@ -799,6 +799,13 @@ use in the code/config; this section exists so they're all in one place to walk 
   `[]`/`None` indistinguishably) — a real but separate refactor, not done speculatively here.
 
 ## Known Issues / Open Decisions
+- **FIXED 2026-10-28: the CIK-keyed normalization jobs had never matched a company on prod.**
+  `run_financial_facts_normalization.py`, `run_domicile_normalization.py` and `run_trial_normalization.py`
+  looked up the raw-zone manifest's bare CIK ("1367083") against `p22_company.cik`'s 10-digit form, so
+  every run since at least 2026-09-01 logged `matched: 0` and wrote nothing. `P22Repo.get_company_by_cik`
+  now pads numeric keys. After deploy, rerun all three jobs once; `p22_financial_fact` (shares, cash,
+  public float, ...), domicile and trial rows only start existing from then, so any M3 feature, market
+  cap or backtest output computed before that ran on empty inputs.
 - **FMP vintage "raw" prices are wrong for some serial reverse-splitters** (found 2026-10-27, size-floor
   cross-check): ACOR's vintage closes are ~$0.004 for 2006–2020 while it traded ~$30; TNXP looks
   partly adjusted. Already loaded into prod `p22_price_daily`. Detected (not repaired) by

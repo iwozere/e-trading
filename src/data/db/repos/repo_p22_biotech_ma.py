@@ -89,7 +89,18 @@ class P22Repo:
         return result.scalar_one()
 
     def get_company_by_cik(self, cik: str) -> Optional[Dict[str, Any]]:
-        row = self.session.execute(select(P22Company).where(P22Company.cik == cik)).scalars().first()
+        """
+        One company by CIK, zero-padded or not.
+
+        `p22_company.cik` holds the 10-digit form (`entity_resolution.normalize_cik`), while raw-zone
+        manifests carry the bare CIK the universe snapshot lists ("1367083"). Until 2026-10-28 this
+        compared them as-is, so every normalization job keyed on a manifest entity matched nothing.
+        A non-numeric key (a CT.gov sponsor name) is looked up unchanged and simply finds nothing.
+        """
+        key = cik.strip()
+        if key.isdigit():
+            key = key.lstrip("0").zfill(10)
+        row = self.session.execute(select(P22Company).where(P22Company.cik == key)).scalars().first()
         if row is None:
             return None
         return {c.key: getattr(row, c.key) for c in P22Company.__table__.columns}
