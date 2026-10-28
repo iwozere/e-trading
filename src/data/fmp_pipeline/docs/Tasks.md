@@ -109,10 +109,15 @@ only after every Phase 1 item below is done.
   - ACOR-type: closes ~7,500x too low for 2006–2020; no split explains it.
   - A blind repair is wrong: multiplying pre-ex bars by the ratio for every no-jump split fixed AIXC and
     KLRS but broke 5 of 12 others (mis-dated split rows, splits that did not apply to the listing).
-  - [ ] Detection in `fmp build` / `fmp validate`: `split_without_jump_candidates.csv` next to
-        `missing_splits_candidates.csv` (flag only, D11).
-  - [ ] Repair only with outside evidence (SEC share counts, a second price source): an explicit reviewed
-        override table applied at read time by `FmpStore`, so no rebuild and an audit trail per fix.
+  - [x] Detection: `fmp validate` (V-SPLIT-CONSISTENCY) writes every inconsistent split to
+        `reports/<vintage>/split_without_jump_candidates.csv`, `verdict=flat` for the probable basis errors
+        (flag only, D11). In validate, not build: it needs split ratios and runs on an existing vintage.
+  - [x] Repair only with outside evidence: reviewed rows in `<data_root>/overrides/price_basis.csv`
+        (`datamanager_adapter/price_overrides.py`) applied at read time by `FmpStore` (daily bars, `bulk_daily`,
+        `events` for `add_split` rows, adjusted-cache key). Rows are tied to a vintage; V-OVERRIDES warns on bad
+        rows and on rows left from another vintage.
+  - [ ] Review the 2026-10 candidates and write the first override rows (AIXC, KLRS; CTXR, DWTX with
+        `add_split`), each with its evidence; copy the file to the Pi; reload the P22 prices of those companies.
 - Mock assumptions not yet verifiable (free key): quota body shape, Premium page-size cap, intraday row cap
   and truncation direction (newest rows kept), intraday field names. All are `MockConfig` knobs — set them from
   `fmp probe-paid` results.

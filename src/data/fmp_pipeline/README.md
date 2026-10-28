@@ -134,6 +134,12 @@ raw = dm.get_ohlcv("AAPL", "1d", datetime(2020, 1, 1), datetime(2020, 12, 31), a
 is inserted) and `identity_uncertain.csv` (suspected ticker reuse, renames with duplicate history). Exit code 1
 means the build was rejected by structural validation and left in `vintages/.<dump_id>.rejected/`.
 
+`fmp validate` writes `reports/<vintage>/split_without_jump_candidates.csv`: splits whose raw closes do not move
+by the split ratio (`verdict=flat`: the bars before the split are probably already adjusted). Nothing is
+corrected automatically. A reviewed correction, with its evidence, goes into `<data_root>/overrides/price_basis.csv`
+(columns and semantics in `datamanager_adapter/price_overrides.py`); `FmpStore` applies it on read, so no rebuild
+is needed, and V-OVERRIDES reports what is applied.
+
 A typical dump: `plan` → `run` → `plan` (profiles resolve the universe) → `run` → `plan` (intraday windows from
 the daily bars) → `run`, until `budget_plan.md` shows no deferred tasks. Exit codes: 0 done, 1 stopped (quota,
 auth, bandwidth, archive), 2 usage/lock/not planned, 3 not enough disk.

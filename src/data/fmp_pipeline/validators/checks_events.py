@@ -1,8 +1,10 @@
-"""Corporate-event and cross-source checks (spec §11): V-SPLIT-KNOWN, V-SPLIT-CONSISTENCY, V-DIV-SANITY, V-ADJ-RECON,
-V-YF-XCHECK."""
+"""Corporate-event and cross-source checks (spec §11): V-SPLIT-KNOWN, V-SPLIT-CONSISTENCY, V-OVERRIDES, V-DIV-SANITY,
+V-ADJ-RECON, V-YF-XCHECK."""
 
 from __future__ import annotations
 
+import csv
+import io
 from collections.abc import Iterator
 from datetime import date, datetime
 
@@ -12,6 +14,8 @@ import pyarrow.parquet as pq
 
 from src.data.fmp_pipeline.builders.events import DIVIDENDS, SPLITS
 from src.data.fmp_pipeline.datamanager_adapter.adapter import FmpOhlcvAdapter
+from src.data.fmp_pipeline.datamanager_adapter.price_overrides import OVERRIDES_FILE
+from src.data.fmp_pipeline.fsutil import atomic_write_bytes
 from src.data.fmp_pipeline.validators.framework import FAIL, INFO, PASS, WARN, CheckResult, ValidationContext, check
 
 #: Spec §8.3 test vectors: (symbol, effective date, ratio).
@@ -21,6 +25,9 @@ KNOWN_SPLITS = (("AAPL", date(2020, 8, 31), 4.0), ("AAPL", date(2014, 6, 9), 7.0
 #: (symbol, ex-date, raw amount).
 KNOWN_DIVIDENDS = (("AAPL", date(2020, 8, 7), 0.82),)
 RECON_TABLE = "prices/recon/daily_div_adjusted_sample.parquet"
+SPLIT_CANDIDATES = "split_without_jump_candidates.csv"
+#: A raw close move inside this band means "no split happened in the prices".
+FLAT_BAND = (0.7, 1.4)
 EARLY = datetime(1900, 1, 1)
 LATE = datetime(2100, 1, 1)
 
@@ -66,10 +73,23 @@ def _by_security(frame: pd.DataFrame) -> Iterator[tuple[int, pd.DataFrame]]:
         yield int(group["security_id"].iloc[0]), group
 
 
+def _verdict(ratio: float, observed: float) -> str:
+    """``flat``: the raw closes do not move although the split is large (bars probably already adjusted)."""
+    split_is_large = not FLAT_BAND[0] <= ratio <= FLAT_BAND[1]
+    return "flat" if split_is_large and FLAT_BAND[0] <= observed <= FLAT_BAND[1] else "mismatch"
+
+
 @check("V-SPLIT-CONSISTENCY", WARN, "Raw close ratio across each split within 0.7–1.4 × the declared ratio (≥ 95%)")
 def split_consistency(ctx: ValidationContext) -> CheckResult:
-    """For each split, compare the raw price move across its date with the declared ratio."""
+    """
+    For each split, compare the raw price move across its date with the declared ratio.
+
+    Every inconsistent split goes to ``split_without_jump_candidates.csv`` for review (D11: flag, never alter).
+    ``flat`` rows are the probable price-basis errors; a reviewed one is corrected with a row in
+    ``overrides/price_basis.csv``, after which it passes here (the store applies the override).
+    """
     result = CheckResult("V-SPLIT-CONSISTENCY", PASS)
+    rows: list[list[object]] = []
     for sid, group in _by_security(_events_frame(ctx, SPLITS.path)):
         closes = _closes(ctx, sid)
         for _, row in group[group["ratio"].notna()].iterrows():
@@ -83,9 +103,46 @@ def split_consistency(ctx: ValidationContext) -> CheckResult:
                 result.violations += 1
                 result.add_example(f"{row['symbol']} {when.date()}: declared {row['ratio']:g}, raw closes moved "
                                    f"{observed:.3f}x")
+                gap = (after.index[0] - before.index[-1]).days
+                rows.append([row["symbol"], sid, when.date().isoformat(), round(float(row["ratio"]), 6),
+                             round(observed, 6), _verdict(float(row["ratio"]), observed), float(before.iloc[-1]),
+                             float(after.iloc[0]), gap])
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow(["symbol", "security_id", "date", "ratio", "observed", "verdict", "close_before", "close_after",
+                     "gap_days"])
+    rows.sort(key=lambda r: (str(r[0]), str(r[2])))
+    writer.writerows(rows)
+    ctx.report_dir.mkdir(parents=True, exist_ok=True)
+    atomic_write_bytes(ctx.report_dir / SPLIT_CANDIDATES, buffer.getvalue().encode("utf-8"))
     share = 1 - result.violations / result.examined if result.examined else 1.0
+    flat = sum(1 for r in rows if r[5] == "flat")
     result.status = WARN if share < 0.95 else PASS
-    result.message = f"{share:.1%} of splits consistent with the raw prices"
+    result.message = f"{share:.1%} of splits consistent with the raw prices; {flat} flat (see {SPLIT_CANDIDATES})"
+    result.details = {SPLIT_CANDIDATES: len(rows), "flat": flat}
+    return result
+
+
+@check("V-OVERRIDES", WARN, "Price-basis overrides: every row valid; none left from another vintage")
+def overrides(ctx: ValidationContext) -> CheckResult:
+    """Report the overrides the store applies, rows it skipped, and rows reviewed against another vintage."""
+    found = ctx.store.overrides
+    result = CheckResult("V-OVERRIDES", PASS, examined=len(found) + len(found.problems) + found.other_vintages)
+    if not (ctx.data_root / OVERRIDES_FILE).exists():
+        result.status, result.message = INFO, f"no {OVERRIDES_FILE}"
+        return result
+    for problem in found.problems:
+        result.violations += 1
+        result.add_example(problem)
+    if found.other_vintages:
+        result.violations += found.other_vintages
+        result.add_example(f"{found.other_vintages} row(s) reviewed against another vintage: review them again for "
+                           f"{ctx.store.vintage} or remove them")
+    result.status = WARN if result.violations else PASS
+    result.message = f"{len(found)} override(s) applied for {len(found.rows)} securities"
+    result.details = {"applied": [f"{o.symbol} ({o.security_id}) {o.ex_date} x{o.ratio:g}"
+                                  f"{' +split' if o.add_split else ''}: {o.evidence}"
+                                  for sid in sorted(found.rows) for o in found.rows[sid]]}
     return result
 
 

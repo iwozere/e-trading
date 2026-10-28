@@ -102,6 +102,10 @@ securities' daily bars with one DuckDB query. `FmpOhlcvAdapter` (``adapter.py``)
 `adjust()` (hourly bars by exchange-local date with daily `C_prev`), caches the adjusted full history in an LRU
 and slices the request. ``factory.py`` builds it from `fmp.adapter` or returns `None`; `DataManager` calls it
 first and falls back to `_get_ohlcv_legacy`. ``golden.py`` hashes `get_ohlcv` offline for the regression check.
+``price_overrides.py`` holds reviewed price-basis corrections (bars FMP delivered already split-adjusted, splits
+FMP lacks). `FmpStore` applies them to everything it returns, so the vintage files stay as built (D11) and every
+reader sees one corrected series. They are never derived from prices alone: in vintage 2026-10 rebasing every
+flat split fixed 2 companies and broke 5.
 D50–D55, `docs/datamanager_integration.md`.
 
 **`increments/`** — `IncrementIngester.run` (``ingest.py``) checks the writer host, takes the lock, then per

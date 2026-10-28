@@ -9,6 +9,9 @@ securities' daily bars at once with a single DuckDB query.
 **Symbol resolution** (spec §9.6). In order: the security's own ``symbol``, its ``yf_symbol``, the same two with
 the class-share separator swapped (``BRK-B`` ↔ ``BRK.B``), then ``symbol_history``. More than one security
 without an ``as_of`` that picks exactly one raises ``AmbiguousSymbol`` — never a silent guess.
+
+**Price-basis overrides** (``price_overrides``): reviewed corrections in ``<data_root>/overrides/price_basis.csv``
+are applied to the daily bars and splits this store returns, so every reader sees the same corrected series.
 """
 
 from __future__ import annotations
@@ -28,6 +31,15 @@ from src.data.fmp_pipeline.builders.builder import HISTORY, read_current
 from src.data.fmp_pipeline.builders.events import DIVIDENDS, SPLITS
 from src.data.fmp_pipeline.builders.prices import INTRADAY_DIR, bucket_path
 from src.data.fmp_pipeline.builders.validate import SECURITIES
+from src.data.fmp_pipeline.datamanager_adapter.price_overrides import (
+    OVERRIDES_FILE,
+    add_override_splits,
+    apply_price_overrides,
+    load_overrides,
+)
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
 
 #: DataManager timeframe -> vintage price folder.
 TIMEFRAME_KINDS = {"1d": "1d_raw", **{v: f"{v}_raw" for v in INTRADAY_DIR.values()}}
@@ -100,6 +112,7 @@ class FmpStore:
         if vintage is None:
             raise FileNotFoundError(f"no active FMP vintage ({data_root / 'current.txt'} missing or empty)")
         self.vintage = vintage
+        self.data_root = data_root
         self.dir = data_root / "vintages" / vintage
         if not (self.dir / SECURITIES).exists():
             raise FileNotFoundError(f"vintage {vintage} has no {SECURITIES} under {self.dir}")
@@ -111,6 +124,13 @@ class FmpStore:
         self._by_symbol: dict[str, list[int]] = {}
         self._history: dict[str, list[tuple[int, Optional[date], Optional[date]]]] = {}
         self._load_reference()
+        self.overrides = load_overrides(data_root / OVERRIDES_FILE, vintage,
+                                        {sid: info.symbol for sid, info in self._securities.items()})
+        for problem in self.overrides.problems:
+            _logger.error("Skipped price-basis override: %s", problem)
+        if len(self.overrides):
+            _logger.info("FMP vintage %s: %d price-basis override(s) for %d securities", vintage,
+                         len(self.overrides), len(self.overrides.rows))
 
     def _load_reference(self) -> None:
         columns = ["security_id", "symbol", "yf_symbol", "first_price_date", "last_price_date", "valid_from",
@@ -186,7 +206,7 @@ class FmpStore:
 
     def prices(self, security_id: int, timeframe: str) -> Optional[pd.DataFrame]:
         """
-        Read a security's raw bars.
+        Read a security's raw bars, daily bars with the price-basis overrides applied.
 
         Returns:
             Frame on a tz-naive ``DatetimeIndex`` (daily: the date; intraday: the UTC bar start) with ``open`` …
@@ -201,7 +221,8 @@ class FmpStore:
         if index.tz is not None:
             index = index.tz_convert("UTC").tz_localize(None)
         df.index = index.rename("timestamp")
-        return df.drop(columns=["security_id", "vintage"])
+        df = df.drop(columns=["security_id", "vintage"])
+        return apply_price_overrides(df, self.overrides.for_security(security_id)) if timeframe == "1d" else df
 
     def events(self, security_id: int) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
@@ -217,7 +238,7 @@ class FmpStore:
         """
         Return the events of many securities with one read per table (``events`` shape per security).
 
-        Securities without any event are absent.
+        Securities without any event are absent. Splits include those added by ``add_split`` overrides.
         """
         wanted = sorted(set(security_ids))
         if not wanted:
@@ -233,11 +254,13 @@ class FmpStore:
         dividends = dividends.rename(columns={"ex_date": "date", "amount_raw": "amount"})
         split_groups = {int(k): g for k, g in splits.groupby("security_id")}
         dividend_groups = {int(k): g for k, g in dividends.groupby("security_id")}
+        added = {sid for sid in wanted if any(o.add_split for o in self.overrides.for_security(sid))}
         out = {}
-        for sid in split_groups.keys() | dividend_groups.keys():
+        for sid in split_groups.keys() | dividend_groups.keys() | added:
             s, d = split_groups.get(sid), dividend_groups.get(sid)
             empty_s, empty_d = _no_events()
-            out[sid] = (empty_s if s is None else s.drop(columns=["security_id"]).reset_index(drop=True),
+            sp = empty_s if s is None else s.drop(columns=["security_id"]).reset_index(drop=True)
+            out[sid] = (add_override_splits(sp, self.overrides.for_security(sid)),
                         empty_d if d is None else d.drop(columns=["security_id"]).reset_index(drop=True))
         return out
 
@@ -251,7 +274,7 @@ class FmpStore:
             end: Last date (inclusive).
 
         Returns:
-            ``{security_id: frame}`` in the ``prices`` shape.
+            ``{security_id: frame}`` in the ``prices`` shape, price-basis overrides applied.
         """
         import duckdb  # deferred: only readers with the adapter enabled need it
 
@@ -268,12 +291,12 @@ class FmpStore:
             sid = int(part["security_id"].iloc[0])
             frame = part.drop(columns=["security_id"])
             frame.index = pd.DatetimeIndex(pd.to_datetime(frame.pop("date"))).rename("timestamp")
-            out[sid] = frame
+            out[sid] = apply_price_overrides(frame, self.overrides.for_security(sid))
         return out
 
     def events_hash(self, splits: pd.DataFrame, dividends: pd.DataFrame) -> str:
         """Identify an event set together with the vintage (part of the adjusted-cache key, spec §9.5)."""
-        digest = hashlib.sha256(self.vintage.encode("utf-8"))
+        digest = hashlib.sha256((self.vintage + self.overrides.digest).encode("utf-8"))
         for frame in (splits, dividends):
             digest.update(frame.sort_values("date").to_csv(index=False).encode("utf-8"))
         return digest.hexdigest()[:16]
