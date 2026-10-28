@@ -98,6 +98,21 @@ only after every Phase 1 item below is done.
       and Yahoo throttling, then tune `batch_size`/`pause_s`.
 
 ## Known Issues
+- **Vintage 2026-10: some `1d_raw` stretches are not on the raw basis** (found 2026-10-28 by P22's
+  market-cap vs 10-K public-float check, ~1,700 small/mid-cap biotechs; full detail in P22 `docs/Tasks.md`).
+  FMP's `non-split-adjusted` endpoint itself returned these bars; the builder stored them as delivered (D11).
+  - Split row present, no close jump on the ex-date: 26 of 1,071 testable splits (2.4%, ~14 securities,
+    mostly serial reverse-splitters: AIXC, BGMSP, ECOC, KLRS). Not caught by any flag: `JUMP_NO_SPLIT` only
+    looks for jumps *without* a split, never for a split without a jump.
+  - Split missing AND no jump (CTXR Aug 2024 1:25, DWTX 2024): invisible in the price series alone; found
+    only through SEC share counts. ~20 credible cases among the P22 universe.
+  - ACOR-type: closes ~7,500x too low for 2006–2020; no split explains it.
+  - A blind repair is wrong: multiplying pre-ex bars by the ratio for every no-jump split fixed AIXC and
+    KLRS but broke 5 of 12 others (mis-dated split rows, splits that did not apply to the listing).
+  - [ ] Detection in `fmp build` / `fmp validate`: `split_without_jump_candidates.csv` next to
+        `missing_splits_candidates.csv` (flag only, D11).
+  - [ ] Repair only with outside evidence (SEC share counts, a second price source): an explicit reviewed
+        override table applied at read time by `FmpStore`, so no rebuild and an audit trail per fix.
 - Mock assumptions not yet verifiable (free key): quota body shape, Premium page-size cap, intraday row cap
   and truncation direction (newest rows kept), intraday field names. All are `MockConfig` knobs — set them from
   `fmp probe-paid` results.

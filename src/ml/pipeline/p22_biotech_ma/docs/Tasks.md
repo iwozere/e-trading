@@ -810,6 +810,26 @@ use in the code/config; this section exists so they're all in one place to walk 
   cross-check): ACOR's vintage closes are ~$0.004 for 2006–2020 while it traded ~$30; TNXP looks
   partly adjusted. Already loaded into prod `p22_price_daily`. Detected (not repaired) by
   `ingest/price_quality.py`; the root cause is in the FMP data/builder, not P22.
+  **First prod price-quality report (2026-10-28, after the CIK fix):** 842 of 1,701 companies have a
+  comparable public float; 6,309 float dates, median market-cap/float ratio 1.18; 469 dates outside
+  [0.5, 10] (345 low, 124 high); 86 suspect companies (29 delisted). Groups: corrupt low prices (ACOR,
+  PPCB, DCPH, AGRX), split-basis errors (below), ADRs (BEIGF, AKTX), filer-mis-scaled floats (SRPT).
+  **Split audit against the vintage** (same day, offline replay of prod's check from the vintage and the
+  raw-zone company facts; matches prod's inconsistent counts for 82/86 suspects):
+  - Of 1,071 testable vintage splits, 1,045 (97.6%) show the expected raw close jump on the ex-date;
+    26 (~14 companies: AIXC, BGMSP, ECOC, KLRS, HURA, ...) show none, i.e. "raw" prices already on the
+    post-split basis or a mis-dated split row.
+  - SEC share counts falling below 1/4 between filings with no vintage split nearby: 78 cases in 67
+    companies, mostly XBRL tagging errors (13 at ~x0.001, 18 recover next filing). About 20 look like
+    real reverse splits missing from the vintage; CTXR (Aug 2024, 1:25) and DWTX (2024, ~1:20) are
+    confirmed: no split row AND no price jump, so pre-split "raw" closes are already adjusted (CTXR's
+    market cap/float ~27x for 2020–2023). ENVB 2011, Orexigen 2016, GenVec 2016, Argos 2017 have a
+    raw jump but no split row.
+  - Adding the missing rows to `p22_corporate_action` would NOT fix these: the error is in the price.
+    Re-basing pre-ex bars for every no-jump split fixes AIXC (480x -> 1.0) and KLRS (37x -> 2.0) but
+    breaks BGMSP, JBIO, ASBPW, Astria and ECOC, so no blind repair — see fmp_pipeline Tasks.md.
+  - Size-floor impact is bounded: errors > 10x fail the float-consistency check (fallback to float or
+    unknown); a missing split below ~1:10 can still pass undetected.
 - **`shares_outstanding` stops updating for a few filers** (Amarin: last tagged count 2013, 380,694
   shares) — `compute_market_cap` now rejects counts older than 400 days instead of using them.
 - ~~**Naive `as_of` upper bound in `get_financial_facts_as_of`**~~ — **fixed 2026-09-05**:
