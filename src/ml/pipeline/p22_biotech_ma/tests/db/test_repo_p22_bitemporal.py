@@ -557,6 +557,23 @@ def test_insert_price_daily_bulk_skips_existing_keys(db_session) -> None:
     assert company_id not in repo.get_company_ids_with_prices("yfinance")
 
 
+def test_delete_price_daily_removes_one_vendor_of_one_company(db_session) -> None:
+    """Only the given company's rows from the given vendor go; other vendors and companies stay."""
+    repo = P22Repo(db_session)
+    first = repo.upsert_company(cik="0000000085", name="Replace Me Inc", role="target")
+    other = repo.upsert_company(cik="0000000086", name="Keep Me Inc", role="target")
+    known = datetime(2024, 6, 10, 21, 0, tzinfo=timezone.utc)
+    for company_id, vendor in ((first, "fmp"), (first, "yfinance"), (other, "fmp")):
+        repo.upsert_price_daily(company_id=company_id, trade_date=date(2024, 6, 10), vendor=vendor, close_raw=10.0,
+                                known_from=known)
+
+    assert repo.delete_price_daily(first, "fmp") == 1
+
+    assert repo.get_raw_close(first, date(2024, 6, 10), vendor="fmp") is None
+    assert repo.get_raw_close(first, date(2024, 6, 10), vendor="yfinance") == 10.0
+    assert repo.get_raw_close(other, date(2024, 6, 10), vendor="fmp") == 10.0
+
+
 def test_get_corporate_action_keys(db_session) -> None:
     """Returns every (ex_date, action_type) the company has, whatever the source."""
     repo = P22Repo(db_session)

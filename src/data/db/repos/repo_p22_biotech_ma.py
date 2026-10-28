@@ -16,7 +16,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -919,6 +919,22 @@ class P22Repo:
         inserted = len(self.session.execute(stmt, rows).all())
         self.session.flush()
         return inserted
+
+    def delete_price_daily(self, company_id: int, vendor: str) -> int:
+        """
+        Delete one company's `p22_price_daily` rows from `vendor` — the one exception to the never-rewrite rule.
+
+        Only for replacing a vendor history that was wrong as delivered (e.g. FMP bars already split-adjusted,
+        corrected by a reviewed price-basis override), inside the same unit of work as the re-insert.
+
+        Returns:
+            Number of rows deleted.
+        """
+        result = self.session.execute(
+            delete(P22PriceDaily).where(P22PriceDaily.company_id == company_id, P22PriceDaily.vendor == vendor)
+        )
+        self.session.flush()
+        return int(getattr(result, "rowcount", 0) or 0)
 
     def get_company_ids_with_prices(self, vendor: str) -> set[int]:
         """`company_id`s that already have at least one `p22_price_daily` row from `vendor`."""

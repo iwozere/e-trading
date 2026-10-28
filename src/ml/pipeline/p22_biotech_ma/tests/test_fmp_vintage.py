@@ -205,6 +205,11 @@ class _FakeRepo:
     def __init__(self) -> None:
         self.price_rows: List[Dict[str, Any]] = []
         self.actions: List[Dict[str, Any]] = []
+        self.deleted: List[tuple] = []
+
+    def delete_price_daily(self, company_id, vendor):
+        self.deleted.append((company_id, vendor))
+        return 7
 
     def insert_price_daily_bulk(self, rows):
         self.price_rows.extend(rows)
@@ -228,9 +233,30 @@ def test_load_company_writes_stitched_history():
 
     result = load_company(store, repo, CompanyMatch(5, (11, 10, 12), "cik"))
 
-    assert result == {"prices_written": 3, "bars_skipped": 0, "actions_written": 1, "listings_used": 2}
+    assert result == {"prices_deleted": 0, "prices_written": 3, "bars_skipped": 0, "actions_written": 1,
+                      "listings_used": 2}
     assert store.event_requests == [[10, 11]]
     assert repo.actions[0]["action_type"] == "split"
+    assert repo.deleted == []
+
+
+def test_load_company_replace_prices_deletes_fmp_bars_first():
+    """replace_prices deletes the company's FMP rows, then writes the (corrected) bars."""
+    store = _FakeStore(prices={11: _bars(["2023-01-03"])}, events={})
+    repo = _FakeRepo()
+
+    result = load_company(store, repo, CompanyMatch(5, (11,), "cik"), replace_prices=True)
+
+    assert repo.deleted == [(5, "fmp")]
+    assert result["prices_deleted"] == 7 and result["prices_written"] == 1
+
+
+def test_cli_replace_prices_requires_company_ids(tmp_path):
+    """A whole-universe delete-and-rewrite is refused before anything is opened."""
+    from src.ml.pipeline.p22_biotech_ma.cli import fmp_vintage_load_cli
+
+    assert fmp_vintage_load_cli.run(tmp_path, dry_run=False, limit=None, reload=False, company_ids=[],
+                                    replace_prices=True) == 2
 
 
 def test_vendor_is_fmp():

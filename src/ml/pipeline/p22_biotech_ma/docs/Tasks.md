@@ -830,6 +830,15 @@ use in the code/config; this section exists so they're all in one place to walk 
     breaks BGMSP, JBIO, ASBPW, Astria and ECOC, so no blind repair — see fmp_pipeline Tasks.md.
   - Size-floor impact is bounded: errors > 10x fail the float-consistency check (fallback to float or
     unknown); a missing split below ~1:10 can still pass undetected.
+  - **Repair path (2026-10-28):** reviewed rows in the FMP `overrides/price_basis.csv`, applied when
+    `FmpStore` reads, then `fmp_vintage_load_cli --replace-prices --company-id ...` (a plain `--reload`
+    keeps existing price keys and so never picks up a correction). First rows: KLRS, CTXR, DWTX and
+    Qualigen/AIXC (prod company_ids 185, 741, 125, 650). AIXC was not a vintage split error: P22 matched
+    security 6529 (`FFR`, AIXC renamed 2026-09-30), whose whole history FMP serves split-adjusted.
+  - [ ] Same pattern in ~30 more companies: a reverse merger's new-ticker listing carries the pre-rename
+    history split-adjusted while the old listing is raw (KLRS/ALVR 23x, ACGN/IDRA 17x, ZVRA/KMPH 16x,
+    KRRO/FREQ 50x, WHWK/ARPO 6,750x). Also some common/preferred pairs wrongly matched as listings
+    (HROWL, FBIOP, LFMDP). Proposed: a same-CIK sibling comparison that writes proposed override rows.
 - **`shares_outstanding` stops updating for a few filers** (Amarin: last tagged count 2013, 380,694
   shares) — `compute_market_cap` now rejects counts older than 400 days instead of using them.
 - ~~**Naive `as_of` upper bound in `get_financial_facts_as_of`**~~ — **fixed 2026-09-05**:

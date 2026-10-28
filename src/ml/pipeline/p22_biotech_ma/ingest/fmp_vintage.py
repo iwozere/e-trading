@@ -327,21 +327,24 @@ def _action_row(company_id: int, ex_date: date, action_type: str, *, ratio: Opti
     }
 
 
-def load_company(store: Any, repo: Any, match: CompanyMatch) -> Dict[str, int]:
+def load_company(store: Any, repo: Any, match: CompanyMatch, replace_prices: bool = False) -> Dict[str, int]:
     """
     Write one company's vintage history to `p22_price_daily` / `p22_corporate_action`.
 
     Args:
         store: An `FmpStore` (`prices`, `events_many`).
         repo: A `P22Repo`-shaped object (`insert_price_daily_bulk`, `get_corporate_action_keys`,
-            `upsert_corporate_action`).
+            `upsert_corporate_action`, and `delete_price_daily` for `replace_prices`).
         match: The company's listings from `match_companies`.
+        replace_prices: Delete the company's existing FMP bars first. Existing keys are otherwise left alone, so
+            a corrected vintage read (price-basis override) never reaches rows already loaded.
 
     Returns:
-        `{"prices_written", "bars_skipped", "actions_written", "listings_used"}`.
+        `{"prices_deleted", "prices_written", "bars_skipped", "actions_written", "listings_used"}`.
     """
     bars = stitch_daily_bars([(sid, store.prices(sid, "1d")) for sid in match.security_ids])
     price_rows, skipped = build_price_rows(match.company_id, bars)
+    prices_deleted = repo.delete_price_daily(match.company_id, VENDOR) if replace_prices else 0
     prices_written = repo.insert_price_daily_bulk(price_rows) if price_rows else 0
 
     action_rows: List[Dict[str, Any]] = []
@@ -354,6 +357,7 @@ def load_company(store: Any, repo: Any, match: CompanyMatch) -> Dict[str, int]:
         repo.upsert_corporate_action(**row)
 
     return {
+        "prices_deleted": prices_deleted,
         "prices_written": prices_written,
         "bars_skipped": skipped,
         "actions_written": len(action_rows),

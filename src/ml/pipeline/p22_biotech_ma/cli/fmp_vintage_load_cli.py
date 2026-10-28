@@ -13,6 +13,9 @@ so the run is safe to Ctrl-C and re-run; companies that already have FMP price r
     # Small real batch first, then the full run:
     python -m src.ml.pipeline.p22_biotech_ma.cli.fmp_vintage_load_cli --limit 5
     python -m src.ml.pipeline.p22_biotech_ma.cli.fmp_vintage_load_cli
+
+    # After a price-basis override (fmp_pipeline overrides/price_basis.csv): replace those companies' bars
+    python -m src.ml.pipeline.p22_biotech_ma.cli.fmp_vintage_load_cli --replace-prices --company-id 650
 """
 
 from __future__ import annotations
@@ -36,13 +39,21 @@ _logger = setup_logger(__name__)
 _PROGRESS_EVERY = 50
 
 
-def run(data_root: Path, *, dry_run: bool, limit: Optional[int], reload: bool, company_ids: List[int]) -> int:
+def run(data_root: Path, *, dry_run: bool, limit: Optional[int], reload: bool, company_ids: List[int],
+        replace_prices: bool = False) -> int:
     """
     Match every `p22_company` to the active vintage and load the matched companies' history.
 
+    `replace_prices` deletes each company's FMP bars before writing (implies `reload`). It needs `company_ids`, so
+    a whole-universe rewrite is never one flag away.
+
     Returns:
-        Process exit code (0 on success, 1 if any company failed to load).
+        Process exit code (0 on success, 1 if any company failed to load, 2 for `replace_prices` without ids).
     """
+    if replace_prices and not company_ids:
+        _logger.error("--replace-prices needs --company-id: it deletes and rewrites those companies' FMP bars")
+        return 2
+    reload = reload or replace_prices
     store = FmpStore(data_root)
     securities = load_vintage_securities(store.dir)
     db_service = DatabaseService()
@@ -65,13 +76,13 @@ def run(data_root: Path, *, dry_run: bool, limit: Optional[int], reload: bool, c
     todo = [m for cid, m in sorted(matches.items()) if cid not in already_loaded]
     if limit is not None:
         todo = todo[:limit]
-    totals = {"prices_written": 0, "bars_skipped": 0, "actions_written": 0}
+    totals = {"prices_deleted": 0, "prices_written": 0, "bars_skipped": 0, "actions_written": 0}
     failed: List[int] = []
     for i, match in enumerate(todo, 1):
         try:
             # One unit of work per company: a failure rolls back only that company and the run goes on.
             with db_service.uow() as uow:
-                result = load_company(store, uow.p22, match)
+                result = load_company(store, uow.p22, match, replace_prices=replace_prices)
         except Exception:
             _logger.exception("FMP vintage load failed for company_id %d (securities %s)", match.company_id,
                               match.security_ids)
@@ -94,10 +105,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--limit", type=int, default=None, help="Load at most N companies")
     parser.add_argument("--reload", action="store_true", help="Also process companies that already have FMP rows")
     parser.add_argument("--company-id", type=int, action="append", default=[], help="Only this company (repeatable)")
+    parser.add_argument("--replace-prices", action="store_true",
+                        help="Delete and rewrite the FMP bars of the --company-id companies (after a price-basis override)")
     parser.add_argument("--data-root", type=Path, default=None, help="FMP data root (default DATA_CACHE_DIR/fmp-data)")
     args = parser.parse_args(argv)
     return run(args.data_root or default_data_root(), dry_run=args.dry_run, limit=args.limit, reload=args.reload,
-               company_ids=args.company_id)
+               company_ids=args.company_id, replace_prices=args.replace_prices)
 
 
 if __name__ == "__main__":
