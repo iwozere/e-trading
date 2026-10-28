@@ -140,6 +140,14 @@ corrected automatically. A reviewed correction, with its evidence, goes into `<d
 (columns and semantics in `datamanager_adapter/price_overrides.py`); `FmpStore` applies it on read, so no rebuild
 is needed, and V-OVERRIDES reports what is applied.
 
+`fmp validate` also writes `reports/<vintage>/sibling_basis_candidates.csv` (V-SIBLING-BASIS): listings sharing a
+CIK whose closes differ by a whole split factor on the dates both have — typically a reverse-merger rename whose
+new ticker back-fills the old one's history split-adjusted, which no single-listing check can see. Each row is a
+proposed `price_basis.csv` row (override columns first, then diagnostics and `confidence`: `high` = a split row on
+the ex-date, `medium` = a plain n-for-1 step, `low` = neither) with `evidence` left empty, so it is rejected until
+reviewed. Which listing is wrong is a guess (a reviewed override marks the right one, else the continuing listing),
+so check the direction too. Apply the reviewed rows and rerun: chains of renames resolve one link per round.
+
 A typical dump: `plan` → `run` → `plan` (profiles resolve the universe) → `run` → `plan` (intraday windows from
 the daily bars) → `run`, until `budget_plan.md` shows no deferred tasks. Exit codes: 0 done, 1 stopped (quota,
 auth, bandwidth, archive), 2 usage/lock/not planned, 3 not enough disk.

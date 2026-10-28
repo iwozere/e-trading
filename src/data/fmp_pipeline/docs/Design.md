@@ -105,7 +105,9 @@ first and falls back to `_get_ohlcv_legacy`. ``golden.py`` hashes `get_ohlcv` of
 ``price_overrides.py`` holds reviewed price-basis corrections (bars FMP delivered already split-adjusted, splits
 FMP lacks). `FmpStore` applies them to everything it returns, so the vintage files stay as built (D11) and every
 reader sees one corrected series. They are never derived from prices alone: in vintage 2026-10 rebasing every
-flat split fixed 2 companies and broke 5.
+flat split fixed 2 companies and broke 5. `validators/checks_siblings.py` (V-SIBLING-BASIS) proposes rows for
+the case the split check cannot see: same-CIK listings whose closes sit on a constant whole split factor
+(runs of a constant ratio, not merely a near-whole one: at large factors every ratio is near a whole number).
 D50–D55, `docs/datamanager_integration.md`.
 
 **`increments/`** — `IncrementIngester.run` (``ingest.py``) checks the writer host, takes the lock, then per

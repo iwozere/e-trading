@@ -116,8 +116,11 @@ only after every Phase 1 item below is done.
         (`datamanager_adapter/price_overrides.py`) applied at read time by `FmpStore` (daily bars, `bulk_daily`,
         `events` for `add_split` rows, adjusted-cache key). Rows are tied to a vintage; V-OVERRIDES warns on bad
         rows and on rows left from another vintage.
-  - [ ] Review the 2026-10 candidates and write the first override rows (AIXC, KLRS; CTXR, DWTX with
-        `add_split`), each with its evidence; copy the file to the Pi; reload the P22 prices of those companies.
+  - [x] First override rows for 2026-10 (KLRS; CTXR, DWTX with `add_split`; FFR/AIXC x4), each with evidence;
+        on the Pi 2026-10-28, P22 prices reloaded with `fmp_vintage_load_cli --replace-prices`.
+  - [x] Same-CIK sibling check (V-SIBLING-BASIS, `sibling_basis_candidates.csv`): on vintage 2026-10, 103
+        listings, 142 proposed rows (68 high / 70 medium / 4 low), e.g. KRRO/FREQ, ACGN/IDRA, BALL/BLL, VIRI/DWTX.
+  - [ ] Review the sibling candidates (high first), add the confirmed rows to `price_basis.csv`, rerun until clean.
 - Mock assumptions not yet verifiable (free key): quota body shape, Premium page-size cap, intraday row cap
   and truncation direction (newest rows kept), intraday field names. All are `MockConfig` knobs — set them from
   `fmp probe-paid` results.
