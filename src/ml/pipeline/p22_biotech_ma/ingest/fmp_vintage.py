@@ -62,8 +62,9 @@ _PRICE_KNOWN_UTC_TIME = time(21, 0)
 _SKIP_FLAGS = OHLC_VIOLATION | SPIKE_REVERTED
 _COMMON_INSTRUMENT_TYPES = frozenset({"stock", "adr"})
 _PLAIN_SYMBOL_RE = re.compile(r"^[A-Z]{1,5}$")
-# Nasdaq's fifth-letter suffixes for warrants, rights and units (ABCDW / ABCDR / ABCDU).
-_DERIVATIVE_SUFFIX_RE = re.compile(r"^[A-Z]{4}[WRU]$")
+# Nasdaq's fifth-letter suffixes for warrants, rights, units and first preferreds (ABCDW / ABCDR / ABCDU / ABCDP).
+# FMP types preferreds like BGMSP as "stock"; as the latest listing they would take over the common's history.
+_DERIVATIVE_SUFFIX_RE = re.compile(r"^[A-Z]{4}[WRUP]$")
 # Legal-form words only. entity_resolution.normalize_company_name also strips "therapeutics" /
 # "pharmaceuticals" / "biosciences", which is right for alias matching but would let "Acme Therapeutics"
 # take "Acme Pharmaceuticals"' price history here.
@@ -132,7 +133,7 @@ def is_common_listing(security: VintageSecurity) -> bool:
     """
     True for a plain common-stock (or ADR) listing with price history.
 
-    Excludes preferreds (`AIG-PA`), warrants (`AP-WT`, `ACHRW`), units, rights, other share-class symbols,
+    Excludes preferreds (`AIG-PA`, `BGMSP`), warrants (`AP-WT`, `ACHRW`), units, rights, other share-class symbols,
     securities whose identity the FMP builder could not settle, and listings that never traded.
     """
     if security.identity_uncertain or security.first_price_date is None:

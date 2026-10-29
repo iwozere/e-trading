@@ -49,6 +49,8 @@ def _bars(days: List[str], close: float = 10.0, flags: int = 0) -> pd.DataFrame:
         (_sec(1, "AP-WT"), False),
         (_sec(1, "ACMEW"), False),
         (_sec(1, "ACMEU"), False),
+        (_sec(1, "BGMSP"), False),
+        (_sec(1, "ACMP"), True),
         (_sec(1, "ACME", instrument_type="warrant"), False),
         (_sec(1, "ACME", instrument_type="etf"), False),
         (_sec(1, "ACME", uncertain=True), False),

@@ -839,6 +839,10 @@ use in the code/config; this section exists so they're all in one place to walk 
     history split-adjusted while the old listing is raw (KLRS/ALVR 23x, ACGN/IDRA 17x, ZVRA/KMPH 16x,
     KRRO/FREQ 50x, WHWK/ARPO 6,750x). Also some common/preferred pairs wrongly matched as listings
     (HROWL, FBIOP, LFMDP). Proposed: a same-CIK sibling comparison that writes proposed override rows.
+  - [x] `is_common_listing` now drops fifth-letter-P preferreds (2026-10-29): FMP types all 108 of them in
+    the vintage as `stock` (BGMSP, CYCCP, FBIOP, LFMDP, XOMAP, ...), and as the latest listing BGMSP took
+    over Cyclacel's history. Needs `--replace-prices` for the affected companies. Not covered: second and
+    later preferreds and notes (O/N/M/L/G/H/I/Z, e.g. HROWL, XOMAO), which FMP also types as `stock`.
 - **`shares_outstanding` stops updating for a few filers** (Amarin: last tagged count 2013, 380,694
   shares) — `compute_market_cap` now rejects counts older than 400 days instead of using them.
 - ~~**Naive `as_of` upper bound in `get_financial_facts_as_of`**~~ — **fixed 2026-09-05**:
