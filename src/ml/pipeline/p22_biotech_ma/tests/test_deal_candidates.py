@@ -22,7 +22,7 @@ def _hit(ciks, form, adsh, doc="primary_doc.htm", names=None):
 def test_run_queues_candidate_for_matched_universe_company():
     repo = MagicMock()
     repo.list_companies_full.return_value = [{"company_id": 7, "cik": "0000000001"}]
-    repo.get_pending_review_items.return_value = []
+    repo.get_review_items.return_value = []
     edgar = MagicMock()
     edgar.efts_filings_search.return_value = [_hit(["0000000001"], "SC 14D9", "0001-26-000001")]
 
@@ -40,7 +40,7 @@ def test_run_queues_candidate_for_matched_universe_company():
 def test_run_skips_filing_with_no_universe_match():
     repo = MagicMock()
     repo.list_companies_full.return_value = [{"company_id": 7, "cik": "0000000001"}]
-    repo.get_pending_review_items.return_value = []
+    repo.get_review_items.return_value = []
     edgar = MagicMock()
     edgar.efts_filings_search.return_value = [_hit(["0000000999"], "S-4", "0001-26-000002")]
 
@@ -53,7 +53,7 @@ def test_run_skips_filing_with_no_universe_match():
 def test_run_dedupes_hits_across_form_queries():
     repo = MagicMock()
     repo.list_companies_full.return_value = [{"company_id": 7, "cik": "0000000001"}]
-    repo.get_pending_review_items.return_value = []
+    repo.get_review_items.return_value = []
     edgar = MagicMock()
     same_hit = _hit(["0000000001"], "S-4", "0001-26-000003")
     edgar.efts_filings_search.return_value = [same_hit]
@@ -64,11 +64,12 @@ def test_run_dedupes_hits_across_form_queries():
     assert summary["candidates_queued"] == 1
 
 
-def test_run_does_not_requeue_already_pending_candidate():
+def test_run_does_not_requeue_already_reviewed_candidate():
+    """Dedup covers every status: a confirmed/rejected candidate must not return on a rescan."""
     repo = MagicMock()
     repo.list_companies_full.return_value = [{"company_id": 7, "cik": "0000000001"}]
-    repo.get_pending_review_items.return_value = [
-        {"payload": {"company_id": 7, "accession_no": "0001-26-000004"}},
+    repo.get_review_items.return_value = [
+        {"status": "rejected", "payload": {"company_id": 7, "accession_no": "0001-26-000004"}},
     ]
     edgar = MagicMock()
     edgar.efts_filings_search.return_value = [_hit(["0000000001"], "DEFM14A", "0001-26-000004")]
@@ -87,7 +88,7 @@ def test_run_queues_both_sides_when_both_are_universe_members():
     repo.list_companies_full.return_value = [
         {"company_id": 7, "cik": "0000000001"}, {"company_id": 8, "cik": "0000000002"},
     ]
-    repo.get_pending_review_items.return_value = []
+    repo.get_review_items.return_value = []
     edgar = MagicMock()
     edgar.efts_filings_search.return_value = [_hit(["0000000001", "0000000002"], "S-4", "0001-26-000005")]
 
@@ -101,7 +102,7 @@ def test_run_queues_both_sides_when_both_are_universe_members():
 def test_run_no_matches_at_all():
     repo = MagicMock()
     repo.list_companies_full.return_value = []
-    repo.get_pending_review_items.return_value = []
+    repo.get_review_items.return_value = []
     edgar = MagicMock()
     edgar.efts_filings_search.return_value = []
 

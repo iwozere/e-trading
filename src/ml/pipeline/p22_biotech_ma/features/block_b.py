@@ -62,8 +62,8 @@ def _phase_rank(phase: Optional[str]) -> Optional[int]:
     return max(ranks) if ranks else None
 
 
-def _lead_asset(trials: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """The furthest-progressed asset's therapeutic_area + phase rank, or `None` if no trial has a
+def lead_asset(trials: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The furthest-progressed asset (`asset_id`, `therapeutic_area`, `phase_rank`), or `None` if no trial has a
     recognizable phase. See module docstring for why this is a proxy for spec's `is_lead` field."""
     best: Optional[Dict[str, Any]] = None
     best_rank = -1
@@ -76,7 +76,7 @@ def _lead_asset(trials: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
             best = trial
     if best is None:
         return None
-    return {"therapeutic_area": best.get("therapeutic_area"), "phase_rank": best_rank}
+    return {"therapeutic_area": best.get("therapeutic_area"), "phase_rank": best_rank, "asset_id": best.get("asset_id")}
 
 
 @register_feature("block_b.phase_max")
@@ -163,7 +163,7 @@ def lead_asset_poa(company_id: int, as_of: date, ctx: FeatureContext) -> Optiona
     """
     del as_of
     trials = ctx.get_trials_for_company(company_id)
-    lead = _lead_asset(trials)
+    lead = lead_asset(trials)
     if lead is None or lead["phase_rank"] > _PHASE1_MAX_RANK:
         return None
 

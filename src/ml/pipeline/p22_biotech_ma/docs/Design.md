@@ -299,6 +299,52 @@ linkage decision, `docs/Tasks.md` "Decisions needed" item 8.
   The live roster (`build_universe`) still does not compute the floor; `build_universe_history`
   takes it as an injected `(cik, as_of)` callable so the function stays pure and testable.
 
+### Deal-label entry (M6, 2026-10-29)
+`deal_candidates.py` only names filings to read; a human enters the deal through
+`cli/deal_entry_cli.py` (`ingest/deal_entry.py`). The human supplies what needs reading the filing
+(announcement date, `deal_type`, acquirer, upfront per share, CVR, status, consideration mix). The
+code derives `premium_1d`/`premium_30d` from raw closes rescaled to the announcement-date share basis,
+and evaluates spec §2.5's reverse-merger heuristics into `p22_deal.review_flags`. A
+`strategic_acquisition`, the only positive label, cannot be entered while a flag fires unless the
+reviewer acknowledges it (`--ack-flags` / `ack_flags` column), because those flags describe the
+reverse mergers that "look like acquisitions in the filings". Deals are unique per
+`(target_id, announcement_date)` (migration 011); further filings of the same deal are *linked*,
+which confirms the review item without a second row. The CSV import is all-or-nothing. Candidate
+dedup now covers every review status, so rescans (and the historical `scan`) never re-queue a
+reviewed filing. The "pipeline discontinuation within 12 months" heuristic has no data source and is
+always reported as unchecked.
+
+### Phase 1 scoring (M4, 2026-10-29)
+`scoring/` implements spec §4.4 and §5.1–§5.2; `jobs/run_scoring.py` persists `p22_score_run` +
+`p22_score` and writes the §6.1 watchlist. Choices the spec leaves open, and the reasons for them:
+
+- **Block scores.** Each feature is rank-percentiled across the as-of universe (ties share the lower
+  rank, so a binary friction nobody has costs nothing), combined by the within-block weights in
+  `p22_weights.yaml`, then rank-percentiled again. The within-block weights and directions are
+  drafts, not spec values.
+- **Missing blocks.** Known positive blocks are scaled up to the full positive weight; this equals
+  the spec formula once every block is known. `coverage` is stored so a score built on one block is
+  visible as such. Unknown friction subtracts nothing, and an unknown `dilution_risk` leaves the gate
+  open (both recorded). A target with no known positive block is left unranked.
+- **fit().** Unknown preference terms are left out and the weights renormalized; an unknown gate is
+  treated as open and listed in `unknown_gates`, since closing it would drop every pair while
+  `dry_powder` is unavailable. `ta_overlap` is binary on the sign of `pipeline_gap_by_ta`.
+  `modality_capability` is binary on whether the acquirer owns an asset of that modality. Antitrust
+  is an exact indication match against the acquirer's Phase III+ assets. The FIS target-side
+  increment is not applied (no data).
+- **Acquirer pressure** is Block A rank-percentiled across acquirers, read for the likely acquirer.
+  That is the fit argmax, or a verified Block G partner when one exists (spec §5.2 override).
+- **Ranks.** Only `rank_by_composite` exists until the M7 return model supplies `expected_value`.
+  No bare `rank` column is ever written (spec §5.4).
+- **Universe.** Active, non-acquirer companies not known to fail the size floor (unknown is kept).
+- **config_hash** covers `p22_weights.yaml` and `p22_acquirers.yaml`.
+
+What the score actually rests on today: Block B (`phase_max`, `catalyst_window`), Block C
+(`ev_to_cash`, `size_band`), Block E (`is_foreign_domiciled`) and the modality term of `fit()`.
+Block A (`revenue_at_risk` needs `ttm_revenue_usd`), `ta_overlap` (needs Block A), `geographic_fit`
+(no footprint data), `size_feasibility` (needs `dry_powder`) and `dilution_risk` (needs
+`catalyst_days_to_next`) are all still unknown.
+
 ## Integration Patterns
 - Job scripts follow the P20 contract exactly: `PROJECT_ROOT` on `sys.path`, `run_common.py`'s
   `setup_run_logging()`, a `run()` function, `print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")`

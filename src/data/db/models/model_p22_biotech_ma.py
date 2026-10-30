@@ -205,8 +205,20 @@ class P22Deal(Base):
     premium_30d: Mapped[float | None] = mapped_column(Numeric)
     status: Mapped[str | None] = mapped_column(Text)
     deal_type: Mapped[str | None] = mapped_column(Text)  # spec §2.5 mandatory exclusions
+    # Hand-verification fields (migration 011, cli/deal_entry_cli.py). `acquirer_name` is always set;
+    # `acquirer_id` only when the acquirer has a p22_company row (private/PE buyers never do).
+    acquirer_name: Mapped[str | None] = mapped_column(Text)
+    accession_no: Mapped[str | None] = mapped_column(Text)
+    review_item_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("p22_review_item.item_id"))
+    stock_consideration_pct: Mapped[float | None] = mapped_column(Numeric)
+    target_holders_pct: Mapped[float | None] = mapped_column(Numeric)
+    review_flags: Mapped[dict | None] = mapped_column(JsonType)
+    entered_by: Mapped[str | None] = mapped_column(Text)
+    entered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    note: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (
+        UniqueConstraint("target_id", "announcement_date", name="uq_p22_deal_target_announcement"),
         CheckConstraint(
             "status IN ('announced','completed','terminated') OR status IS NULL",
             name="ck_p22_deal_status",

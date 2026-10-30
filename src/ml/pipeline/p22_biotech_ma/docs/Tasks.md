@@ -242,6 +242,14 @@ use in the code/config; this section exists so they're all in one place to walk 
     asset still at Phase I or earlier (where `by_therapeutic_area` applies directly with no
     composition needed) and returns `None` for anything further along, pending this decision.
 
+14. **Phase 1 scoring weights the spec doesn't give** — new 2026-10-29 with M4. The §5.1
+    composite weights, dilution gate and §4.4.1 bloc penalties come straight from the spec; these
+    are drafts in `config/pipeline/p22_weights.yaml`: within-block feature weights and directions
+    (e.g. is a nearer catalyst better? is a lower EV/cash better? `asset_count_ph2plus` carries no
+    weight because the spec calls its direction ambiguous), `fit()` preference weights w1–w3
+    (0.4/0.3/0.3), and the same-indication antitrust penalty (0.5). Changing any of them changes
+    `config_hash`, so scores from before and after a change are never mixed.
+
 ## Implementation Status
 
 ### ✅ COMPLETED FEATURES (M1)
@@ -762,7 +770,20 @@ use in the code/config; this section exists so they're all in one place to walk 
       accumulating `deal_candidate` rows the next time this job fires; per spec, "expect 400-700
       events" total across all of 2010-present, so the review queue's `queue_depth_report` should
       make the true scale visible quickly once real data lands.
-- [ ] **Actually hand-verifying candidates into `p22_deal` rows is NOT built** — no CLI/confirm
+- [x] **Hand-verification into `p22_deal`, 2026-10-29** — `ingest/deal_entry.py` +
+      `cli/deal_entry_cli.py` (`list`/`show`/`preview`/`enter`/`link`/`reject`, CSV `export`/`import`,
+      historical `scan`). Migration `011_p22_deal_review_fields` adds `acquirer_name`, `accession_no`,
+      `review_item_id`, consideration mix, `review_flags`, audit fields and unique
+      `(target_id, announcement_date)`. Premiums are derived from raw closes; spec §2.5's
+      reverse-merger heuristics become `review_flags` and block a `strategic_acquisition` until
+      acknowledged. Also fixed: candidate dedup only looked at *pending* items, so the 7-day rescan
+      re-queued anything reviewed that week. See docs/Design.md "Deal-label entry".
+      **Not yet run on prod:** needs `alembic upgrade head` on the Pi, then
+      `deal_entry_cli scan --start 2010-01-01` to queue history (the daily job only covers since
+      2026-09-08), then the actual review work (spec: 400–700 events).
+- [ ] Historical note on the item below: superseded by the entry above. Original text kept for the
+      reasoning about why a generic confirm can't write a deal row. Hand-verifying candidates into
+      `p22_deal` rows was NOT built at the time — no CLI/confirm
       path exists yet for turning a reviewed `deal_candidate` item into a real `p22_deal` row.
       Deliberately not built this pass: unlike `process_events.py`/`activist_positions.py`'s
       binary confirm, a `p22_deal` row needs MANY hand-entered fields per spec §2.5
@@ -774,14 +795,31 @@ use in the code/config; this section exists so they're all in one place to walk 
       A future CLI (`cli/deal_entry_cli.py`?) for a human to read the actual filing and hand-enter
       these fields is real, separate work, not attempted here.
 
+### 🔄 IN PROGRESS — M4 Rule-based scoring (spec §4.4, §5.1–§5.2)
+- [x] `scoring/` + `jobs/run_scoring.py` + `config/pipeline/p22_weights.yaml`, 2026-10-29 —
+      pairwise `fit()` with multiplicative size/FIS/antitrust gates, Phase 1 composite with
+      rank-percentile block scores and the dilution gate, §5.2 tiers with `tier_reason`
+      (`block_g.process_tier`), partner override of `likely_acquirer`, `config_hash`, persistence to
+      `p22_score_run`/`p22_score`, watchlist CSV/JSON. Registered as `P22 Scoring` (weekdays 23:00
+      UTC, after Market Cap Compute). See docs/Design.md "Phase 1 scoring" for every choice the
+      spec left open. **Not yet run on prod** (needs the job registered on the Pi). The dev-local
+      DB has no trials/facts, so a smoke run there scored 660 targets with 0 ranked.
+- [ ] Domain review of the DRAFT values in `p22_weights.yaml` (within-block weights/directions,
+      `fit_preference` w1–w3, antitrust penalty) — "Decisions needed" item 14.
+- [ ] Inputs still unknown for every company, so the composite currently rests on Blocks B, C, E
+      and fit's modality term: Block A `revenue_at_risk` (needs `ttm_revenue_usd`); `dry_powder`
+      (items 9–11); `geographic_fit` (no acquirer commercial-footprint data); `dilution_risk`
+      (`catalyst_days_to_next` is never written — `block_b.catalyst_window` already computes the
+      days from trials, so wiring it in is cheap).
+- [ ] `rank_by_expected_value` (the spec's default view) needs M7; until then only
+      `rank_by_composite` is populated.
+
 ### 🚀 PLANNED ENHANCEMENTS (by milestone, spec §9)
-- [ ] **M4 — Rule-based scoring:** `fit()` pairwise gates (§4.4), Phase 1 composite (§5.1).
 - [ ] **M5 — Block G remaining work:** `stated_intent` classification (needs `review_queue.py`
       support for multi-valued confirm, see above), incumbent-partner structures (blocked on M4's
       composite ranking).
-- [ ] **M6 — Labels + backtest remaining work:** hand-verification CLI for `deal_candidate` items
-      into real `p22_deal` rows (see IN PROGRESS above) with `deal_type` classification and
-      reverse-merger exclusion (§2.5); walk-forward harness against all three baselines (§0.3);
+- [ ] **M6 — Labels + backtest remaining work:** the actual review of historical candidates (CLI
+      built 2026-10-29, see IN PROGRESS above); walk-forward harness against all three baselines (§0.3);
       `cvr_policy.yaml` decision (§10, "On CVR valuation" — recommended v1 convention: value CVRs
       at zero — already made, see that config file, just not wired to any code yet).
 - [ ] **M7 — Return model:** `E[return | deal]`; `expected_value` becomes default ranking (§5.4).

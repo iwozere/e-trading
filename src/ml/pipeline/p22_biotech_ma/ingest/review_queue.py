@@ -113,6 +113,12 @@ def confirm_item(item: Dict[str, Any], repo: Any, *, reviewed_by: str, note: str
             f"verified process event_id={payload['event_id']} for company_id={payload['company_id']} "
             f"(state={payload['state']}, strength={payload['strength']})"
         )
+    elif reason == "deal_candidate":
+        # A deal label needs many hand-entered fields a bare confirm cannot supply (spec §2.5).
+        raise UnknownReviewItemReasonError(
+            f"Item {item['item_id']} is a deal_candidate: use cli/deal_entry_cli.py "
+            "(enter / link / reject, or export + import) instead of a bare confirm"
+        )
     else:
         raise UnknownReviewItemReasonError(
             f"No confirm handler for reason={reason!r} (item_id={item['item_id']}, "

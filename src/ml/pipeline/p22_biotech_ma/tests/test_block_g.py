@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.ml.pipeline.p22_biotech_ma.features.block_g import BlockG, apply_process_tier, build_block_g
+from src.ml.pipeline.p22_biotech_ma.features.block_g import BlockG, apply_process_tier, build_block_g, process_tier
 from src.ml.pipeline.p22_biotech_ma.features.context import FeatureContext
 
 _AS_OF = date(2026, 9, 8)
@@ -160,3 +160,16 @@ def test_apply_process_tier_one_for_asset_only_scope():
 def test_apply_process_tier_precedence_tier3_beats_tier2():
     g = BlockG(partner_structure_max="acquisition_option", has_13d_activist=True)
     assert apply_process_tier(0.1, g) == 3.1
+
+
+# ---------------------------------------------------------------------
+# process_tier
+# ---------------------------------------------------------------------
+
+def test_process_tier_names_the_reason():
+    assert process_tier(BlockG()) == (0, "fundamentals_only")
+    assert process_tier(BlockG(partner_structure_max="acquisition_option")) == (3, "partner_acquisition_option")
+    assert process_tier(BlockG(has_strategic_toehold=True)) == (2, "strategic_toehold")
+    assert process_tier(BlockG(partner_structure_max="rofn_rofr")) == (2, "partner_rofn_rofr")
+    assert process_tier(BlockG(has_13d_activist=True)) == (1, "13d_activist")
+    assert process_tier(BlockG(process_state="rumored")) == (1, "rumored_process")

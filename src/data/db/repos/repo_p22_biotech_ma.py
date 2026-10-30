@@ -27,12 +27,15 @@ from src.data.db.models.model_p22_biotech_ma import (
     P22CompanyAlias,
     P22CorporateAction,
     P22CorporateProcessEvent,
+    P22Deal,
     P22FetchFailure,
     P22FinancialFact,
     P22PartnershipStructure,
     P22PatentExpiry,
     P22PriceDaily,
     P22ReviewItem,
+    P22Score,
+    P22ScoreRun,
     P22Trial,
 )
 
@@ -766,6 +769,15 @@ class P22Repo:
         rows = self.session.execute(stmt).scalars().all()
         return [{c.key: getattr(r, c.key) for c in P22ReviewItem.__table__.columns} for r in rows]
 
+    def get_review_items(self, item_type: str, statuses: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """Review items of one `item_type` in any status (or only `statuses`), oldest first — for dedup
+        against items a human already resolved, which `get_pending_review_items` cannot see."""
+        stmt = select(P22ReviewItem).where(P22ReviewItem.item_type == item_type)
+        if statuses:
+            stmt = stmt.where(P22ReviewItem.status.in_(statuses))
+        rows = self.session.execute(stmt.order_by(P22ReviewItem.item_id.asc())).scalars().all()
+        return [{c.key: getattr(r, c.key) for c in P22ReviewItem.__table__.columns} for r in rows]
+
     def get_review_item(self, item_id: int) -> Optional[Dict[str, Any]]:
         row = self.session.execute(select(P22ReviewItem).where(P22ReviewItem.item_id == item_id)).scalars().first()
         if row is None:
@@ -793,6 +805,79 @@ class P22Repo:
             .values(status=status, reviewed_by=reviewed_by, reviewed_at=datetime.now(timezone.utc), note=note)
         )
         self.session.flush()
+
+    # ------------------------------------------------------------------
+    # Deal labels (spec §2.5) — written only by hand-verification (cli/deal_entry_cli.py)
+    # ------------------------------------------------------------------
+
+    def insert_deal(self, **fields: Any) -> int:
+        """Insert one hand-verified `p22_deal` row; `fields` are column names. Returns `deal_id`."""
+        row = P22Deal(**fields)
+        self.session.add(row)
+        self.session.flush()
+        return row.deal_id
+
+    def get_deal(self, deal_id: int) -> Optional[Dict[str, Any]]:
+        row = self.session.execute(select(P22Deal).where(P22Deal.deal_id == deal_id)).scalars().first()
+        if row is None:
+            return None
+        return {c.key: getattr(row, c.key) for c in P22Deal.__table__.columns}
+
+    def find_deal(self, target_id: int, announcement_date: date) -> Optional[Dict[str, Any]]:
+        """The deal already entered for `(target_id, announcement_date)`, if any (unique per migration 011)."""
+        row = self.session.execute(
+            select(P22Deal).where(P22Deal.target_id == target_id, P22Deal.announcement_date == announcement_date)
+        ).scalars().first()
+        if row is None:
+            return None
+        return {c.key: getattr(row, c.key) for c in P22Deal.__table__.columns}
+
+    def list_deals(self, target_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Every deal (or one target's), ordered by announcement date."""
+        stmt = select(P22Deal)
+        if target_id is not None:
+            stmt = stmt.where(P22Deal.target_id == target_id)
+        rows = self.session.execute(stmt.order_by(P22Deal.announcement_date, P22Deal.deal_id)).scalars().all()
+        return [{c.key: getattr(r, c.key) for c in P22Deal.__table__.columns} for r in rows]
+
+    def get_corporate_actions_between(self, company_id: int, start: date, end: date) -> List[Dict[str, Any]]:
+        """Corporate actions with `start <= ex_date <= end`, oldest first. Not lookahead-gated: used for
+        deal-label review heuristics (a reverse split before announcement), not for features."""
+        rows = self.session.execute(
+            select(P22CorporateAction.ex_date, P22CorporateAction.action_type, P22CorporateAction.ratio)
+            .where(
+                P22CorporateAction.company_id == company_id,
+                P22CorporateAction.ex_date >= start,
+                P22CorporateAction.ex_date <= end,
+            )
+            .order_by(P22CorporateAction.ex_date)
+        ).all()
+        return [
+            {"ex_date": r.ex_date, "action_type": r.action_type, "ratio": float(r.ratio) if r.ratio is not None else None}
+            for r in rows
+        ]
+
+    # ------------------------------------------------------------------
+    # Scoring (spec §3.2, §5) — written by scoring/score_run.py
+    # ------------------------------------------------------------------
+
+    def get_assets_for_company(self, company_id: int) -> List[Dict[str, Any]]:
+        """Every `p22_asset` row for `company_id` (modality/indication for Block D's `fit()`, spec §4.4)."""
+        rows = self.session.execute(select(P22Asset).where(P22Asset.company_id == company_id)).scalars().all()
+        return [{c.key: getattr(r, c.key) for c in P22Asset.__table__.columns} for r in rows]
+
+    def create_score_run(self, *, as_of_date: date, model_version: str, config_hash: str) -> int:
+        row = P22ScoreRun(as_of_date=as_of_date, model_version=model_version, config_hash=config_hash)
+        self.session.add(row)
+        self.session.flush()
+        return row.run_id
+
+    def insert_scores(self, run_id: int, rows: List[Dict[str, Any]]) -> int:
+        """Insert one `p22_score` row per dict (column names as keys) for `run_id`. Returns the count."""
+        for fields in rows:
+            self.session.add(P22Score(run_id=run_id, **fields))
+        self.session.flush()
+        return len(rows)
 
     # ------------------------------------------------------------------
     # Fetch failures (spec §7.2)

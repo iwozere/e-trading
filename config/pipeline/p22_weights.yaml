@@ -1,0 +1,65 @@
+# P22 Biotech M&A — Phase 1 rule-based scoring weights (spec §5.1, §4.4, §4.4.1).
+#
+# Read by src/ml/pipeline/p22_biotech_ma/scoring/weights_config.py. The whole file (plus
+# p22_acquirers.yaml) is hashed into p22_score_run.config_hash, so any change here forces a
+# distinguishable re-score (spec §5.1: "Weights live in config/weights.yaml, versioned, and are
+# inputs to config_hash").
+#
+# Values marked SPEC are copied from the specification. Values marked DRAFT are not given by the
+# spec and were chosen 2026-10-29 as neutral defaults; they need a domain reviewer's sign-off (see
+# docs/Tasks.md "Decisions needed").
+
+model_version: phase1-rules-v1
+
+# §5.1 composite. SPEC.
+composite:
+  acquirer_pressure_matched: 0.30   # Block A of the argmax acquirer from Block D
+  target_asset_quality: 0.25        # Block B, PoA excluded (§4.2)
+  strategic_fit: 0.20               # Block D: max over acquirers of fit()
+  financial_attractiveness: 0.15    # Block C
+  friction_penalty: 0.10            # Block E, subtracted
+dilution_gate_factor: 0.5           # SPEC: composite halved when dilution_risk = TRUE
+
+# Within-block feature weights and directions. DRAFT — the spec names the features but not how
+# they combine into one block score. `direction: higher` means a larger raw value scores higher;
+# `lower` the opposite. Each feature is rank-percentiled across the as-of universe before weighting.
+blocks:
+  target_asset_quality:
+    phase_max: {weight: 0.5, direction: higher}
+    # Ordinal 0 = "<60 days" ... 4 = ">730 days": a nearer readout scores higher (§4.2: deal
+    # likelihood is elevated ahead of a major catalyst).
+    catalyst_window: {weight: 0.5, direction: lower}
+    # Spec: "single-asset companies are riskier but also cheaper targets" — direction is ambiguous,
+    # so it is computed and shown in the breakdown but carries no weight.
+    asset_count_ph2plus: {weight: 0.0, direction: higher}
+  financial_attractiveness:
+    ev_to_cash: {weight: 0.6, direction: lower}   # cheap relative to cash on hand
+    size_band: {weight: 0.4, direction: lower}    # smaller targets are feasible for more acquirers
+  friction_penalty:
+    is_foreign_domiciled: {weight: 1.0, direction: higher}
+  acquirer_pressure:
+    revenue_at_risk_3y: {weight: 0.5, direction: higher}
+    revenue_at_risk_5y: {weight: 0.5, direction: higher}
+
+# §4.4 fit() preference terms. DRAFT — the spec writes w1..w3 without values.
+fit_preference:
+  ta_overlap: 0.4
+  modality_capability: 0.3
+  geographic_fit: 0.3
+
+# §4.4 size_feasibility gate. SPEC: 1.0 below 0.15 x dry powder, decaying to 0 at dry powder.
+size_feasibility_full_below: 0.15
+
+# §4.4.1 foreign-investment-screening gate, by acquirer bloc. SPEC.
+fis_penalty_by_acquirer_bloc:
+  us: 0.00
+  allied: 0.02
+  neutral: 0.10
+  elevated_scrutiny: 0.45
+
+# §4.4.2 antitrust gate. DRAFT — penalty when the acquirer already has a Phase III+ asset in the
+# target lead asset's exact indication (the "me-too vs incumbent" case). The spec gives no number.
+antitrust_same_indication_penalty: 0.5
+
+# Number of acquirer pairs kept per target in p22_score.contributions (§4.4: "store the top three pairs").
+top_pairs: 3

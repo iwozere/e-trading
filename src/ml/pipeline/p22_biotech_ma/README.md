@@ -45,6 +45,24 @@ python -m src.ml.pipeline.p22_biotech_ma.cli.size_floor_report_cli price-quality
 python -m src.ml.pipeline.p22_biotech_ma.cli.size_floor_report_cli history --since 2015q1
 ```
 
+Deal labels (spec §2.5, M6) are hand-verified from the `deal_candidate` review queue, one at a time
+or through a CSV round trip (`ingest/deal_entry.py` holds the logic, premiums and reverse-merger
+flags). `scan` queues historical candidates; the daily job only looks back one week:
+
+```bash
+python -m src.ml.pipeline.p22_biotech_ma.cli.deal_entry_cli scan --start 2010-01-01
+python -m src.ml.pipeline.p22_biotech_ma.cli.deal_entry_cli export deals.csv
+python -m src.ml.pipeline.p22_biotech_ma.cli.deal_entry_cli import deals.csv --reviewer ak --dry-run
+python -m src.ml.pipeline.p22_biotech_ma.cli.deal_entry_cli list-deals
+```
+
+Phase 1 scoring (spec §5.1–5.2, M4) runs daily as the `P22 Scoring` job and can be run by hand;
+weights live in `config/pipeline/p22_weights.yaml`:
+
+```bash
+python src/ml/pipeline/p22_biotech_ma/jobs/run_scoring.py --dry-run   # watchlist files, DB rolled back
+```
+
 ## Integration
 This module integrates with:
 - `src.data.downloader.edgar_downloader` — SEC EDGAR access (submissions, XBRL, EFTS, 13F, Form 4, 13D/G)

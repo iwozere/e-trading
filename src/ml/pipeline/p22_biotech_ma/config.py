@@ -55,6 +55,8 @@ STRATEGIC_PROCESS_PHRASES_YAML = PROJECT_ROOT / "config" / "pipeline" / "p22_str
 ACTIVIST_FILERS_YAML = PROJECT_ROOT / "config" / "activist_filers.yaml"
 # Probability-of-approval base rates (spec §4.2), for features/block_b.py's lead_asset_poa.
 BASE_RATES_YAML = PROJECT_ROOT / "config" / "pipeline" / "p22_base_rates.yaml"
+# Phase 1 composite weights (spec §5.1) — scoring/weights_config.py; hashed into p22_score_run.config_hash.
+WEIGHTS_YAML = PROJECT_ROOT / "config" / "pipeline" / "p22_weights.yaml"
 
 # ---------------------------------------------------------------------------
 # ClinicalTrials.gov API v2 (spec §2.2)

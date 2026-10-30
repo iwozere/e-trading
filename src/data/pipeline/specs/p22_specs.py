@@ -179,4 +179,13 @@ SPECS: List[PluginSpec] = [
             ]},
         },
     ),
+    PluginSpec(
+        name="P22 Scoring",
+        category="p22",
+        cron="0 23 * * 1-5",  # weekdays, after Market Cap Compute (22:30) writes the day's market cap
+        script_path=f"{_SCRIPT_BASE}/run_scoring.py",
+        timeout_seconds=3600,
+        description="M4 (spec §5.1-5.2): Phase 1 rule-based composite + tiers -> p22_score_run/p22_score + watchlist CSV/JSON.",
+        depends_on=["P22 Market Cap Compute"],
+    ),
 ]

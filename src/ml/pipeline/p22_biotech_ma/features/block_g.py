@@ -36,7 +36,7 @@ import sys
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -124,28 +124,38 @@ def build_block_g(company_id: int, as_of: date, ctx: FeatureContext) -> BlockG:
     )
 
 
-def apply_process_tier(fundamental: float, g: BlockG) -> float:
+def process_tier(g: BlockG) -> Tuple[int, str]:
     """
-    Tiers are disjoint bands; fundamental score orders WITHIN a tier (spec §5.2). Direct port of
-    spec's own pseudocode — see that section for the rationale (Block G's conditional
+    The spec §5.2 tier and a short reason (stored as `p22_score.tier`/`tier_reason`, which the spec
+    requires so a user can tell "ranks high because a process is public" from "the model likes it").
+    Direct port of spec's own pseudocode — see that section for the rationale (Block G's conditional
     probabilities are "an order of magnitude above what fundamentals produce," so a linear weight
     would either dissolve or swamp the signal).
     """
     if g.partner_structure_max == "acquisition_option":
-        return 3.0 + fundamental  # Tier 3 — contractually pre-arranged
+        return 3, "partner_acquisition_option"  # contractually pre-arranged
     if (
         g.process_state == "disclosed_open"
         and g.process_scope == "whole_company"
         and g.days_since_process_open is not None
         and g.days_since_process_open < 365
     ):
-        return 3.0 + fundamental  # Tier 3 — sale process underway
-    if (
-        g.activist_intent_max == "sale_demand"
-        or g.has_strategic_toehold
-        or g.partner_structure_max in ("rofn_rofr", "equity_plus_commercial")
-    ):
-        return 2.0 + fundamental  # Tier 2 — structural pressure or pre-positioning
-    if g.has_13d_activist or g.process_state == "rumored" or g.process_scope == "asset_only":
-        return 1.0 + fundamental  # Tier 1 — elevated
-    return fundamental  # Tier 0 — fundamentals only
+        return 3, "disclosed_sale_process"
+    if g.activist_intent_max == "sale_demand":
+        return 2, "activist_sale_demand"
+    if g.has_strategic_toehold:
+        return 2, "strategic_toehold"
+    if g.partner_structure_max in ("rofn_rofr", "equity_plus_commercial"):
+        return 2, f"partner_{g.partner_structure_max}"
+    if g.has_13d_activist:
+        return 1, "13d_activist"
+    if g.process_state == "rumored":
+        return 1, "rumored_process"
+    if g.process_scope == "asset_only":
+        return 1, "asset_only_process"
+    return 0, "fundamentals_only"
+
+
+def apply_process_tier(fundamental: float, g: BlockG) -> float:
+    """Tiers are disjoint bands; fundamental score orders WITHIN a tier (spec §5.2)."""
+    return process_tier(g)[0] + fundamental

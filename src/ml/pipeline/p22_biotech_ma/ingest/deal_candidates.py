@@ -66,9 +66,11 @@ def run(repo: Any, edgar: Any, start_dt: str, end_dt: str) -> Dict[str, Any]:
     companies_by_cik = {c["cik"]: c["company_id"] for c in repo.list_companies_full() if c.get("cik")}
     universe_ciks = list(companies_by_cik.keys())
 
+    # Every status, not just pending: a candidate a human already confirmed or rejected must not come
+    # back when the trailing window (or a historical backfill) rescans the same filing.
     already_queued: Set[Tuple[int, str]] = {
         (item["payload"]["company_id"], item["payload"]["accession_no"])
-        for item in repo.get_pending_review_items(item_type="deal_candidate")
+        for item in repo.get_review_items(item_type="deal_candidate")
         if "company_id" in item.get("payload", {}) and "accession_no" in item.get("payload", {})
     }
 
