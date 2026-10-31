@@ -246,13 +246,23 @@ def test_resolve_acquirers_matches_by_cik_and_skips_not_yet_entered():
     assert [(cfg.ticker, cid) for cfg, cid in resolved] == [("PFE", 1)]
 
 
-def test_select_targets_excludes_acquirers_inactive_and_below_floor(monkeypatch):
-    floors = {10: True, 11: None, 12: False}
+def test_select_targets_excludes_acquirers_inactive_and_below_floors(monkeypatch):
+    floors = {10: True, 11: None, 12: False, 14: True, 15: True}
     monkeypatch.setattr(score_run, "evaluate_size_floor",
                         lambda repo, cid, as_of: SizeFloorDecision(floors[cid], "market_cap"))
-    targets, excluded = score_run.select_targets(_FakeRepo(), _FakeRepo().companies, {1}, _AS_OF)
-    assert targets == [10, 11]
-    assert excluded == {"inactive": 1, "acquirer": 1, "below_size_floor": 1, "size_floor_unknown_kept": 1}
+    repo = _FakeRepo()
+    repo.companies += [
+        {"company_id": 14, "cik": "0000000014", "ticker": "EEE", "name": "Preclinical", "role": "target", "is_active": True},
+        {"company_id": 15, "cik": "0000000015", "ticker": "FFF", "name": "No trials", "role": "target", "is_active": True},
+    ]
+    repo.trials[14] = [{"asset_id": 140, "therapeutic_area": None, "phase": "EARLY_PHASE1", "primary_completion_date": None}]
+    ctx = score_run.FeatureContext(as_of=_AS_OF, repo=repo)
+    targets, excluded = score_run.select_targets(repo, ctx, repo.companies, {1}, _AS_OF)
+    assert targets == [10, 11, 15]
+    assert excluded == {
+        "inactive": 1, "acquirer": 1, "below_size_floor": 1, "size_floor_unknown_kept": 1,
+        "below_asset_floor": 1, "asset_floor_unknown_kept": 1,
+    }
 
 
 def test_score_universe_ranks_tiers_and_explains():

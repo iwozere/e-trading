@@ -53,3 +53,16 @@ def test_404_treated_as_no_results_not_error():
     apps = client.fetch_applications_for_sponsor("Nonexistent Sponsor")
 
     assert apps == []
+
+
+def test_404_is_no_results_but_other_errors_are_recorded():
+    client = OpenFDAClient()
+    client._client.get = MagicMock(return_value=_mock_response({}, status_code=404))
+    assert client.fetch_applications_for_sponsor("Nobody Inc") == []
+    assert client.failures == []
+
+    client._client.get = MagicMock(return_value=_mock_response({}, status_code=403))
+    assert client.fetch_applications_for_sponsor("Example Therapeutics Inc") == []
+    assert [(f.source, f.entity, f.error_message) for f in client.failures] == [
+        ("openfda_drugsfda", "Example Therapeutics Inc", "status 403"),
+    ]

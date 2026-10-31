@@ -12,7 +12,9 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p22_biotech_ma.features.block_b import (
     asset_count_ph2plus,
+    asset_floor_met,
     catalyst_window,
+    days_to_next_catalyst,
     lead_asset_poa,
     phase_max,
 )
@@ -153,3 +155,26 @@ def test_lead_asset_poa_uses_furthest_progressed_asset_as_lead_proxy():
     ]
     with patch("src.ml.pipeline.p22_biotech_ma.features.block_b.load_base_rates", return_value=_FAKE_RATES):
         assert lead_asset_poa(_COMPANY_ID, _AS_OF, _ctx(trials)) == 0.096  # immunology's fallback rate
+
+
+# ---------------------------------------------------------------------
+# asset_floor_met / days_to_next_catalyst
+# ---------------------------------------------------------------------
+
+def test_asset_floor_met_for_phase1_or_later():
+    assert asset_floor_met(_COMPANY_ID, _AS_OF, _ctx([_trial(phase="EARLY_PHASE1"), _trial(phase="PHASE1")])) is True
+
+
+def test_asset_floor_not_met_when_only_early_phase1():
+    assert asset_floor_met(_COMPANY_ID, _AS_OF, _ctx([_trial(phase="EARLY_PHASE1")])) is False
+
+
+def test_asset_floor_unknown_without_phased_trials():
+    assert asset_floor_met(_COMPANY_ID, _AS_OF, _ctx([])) is None
+    assert asset_floor_met(_COMPANY_ID, _AS_OF, _ctx([_trial(phase="NA")])) is None
+
+
+def test_days_to_next_catalyst_takes_nearest_upcoming():
+    trials = [_trial(pcd=date(2026, 9, 1)), _trial(pcd=date(2026, 12, 7)), _trial(pcd=date(2026, 10, 8))]
+    assert days_to_next_catalyst(_COMPANY_ID, _AS_OF, _ctx(trials)) == 30
+    assert days_to_next_catalyst(_COMPANY_ID, _AS_OF, _ctx([_trial(pcd=date(2026, 9, 1))])) is None

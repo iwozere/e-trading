@@ -21,11 +21,16 @@ import sys
 from datetime import date
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Sequence
+
+from sqlalchemy.exc import SQLAlchemyError
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.data.db.services.database_service import DatabaseService
 from src.ml.pipeline.p22_biotech_ma.config import RESULTS_DIR
+from src.ml.pipeline.p22_biotech_ma.ingest.http_retry import FetchFailureRecord
 from src.notification.logger import SensitiveDataFilter
 
 
@@ -98,3 +103,23 @@ def setup_run_logging(run_date: date | None = None) -> Path:
     logging.getLogger(__name__).info("Run logging active — all output going to %s", log_file)
 
     return results_dir
+
+
+def record_fetch_failures(failures: Sequence[FetchFailureRecord]) -> int:
+    """
+    Write a job's collected fetch failures to `p22_fetch_failure` (spec §7.2) in one short unit of work.
+    A database error is logged, not raised: the data the job did land is still good.
+
+    Returns:
+        Number of rows written.
+    """
+    if not failures:
+        return 0
+    try:
+        with DatabaseService().uow() as uow:
+            for f in failures:
+                uow.p22.log_fetch_failure(source=f.source, entity=f.entity, url=f.url, error_message=f.error_message)
+    except SQLAlchemyError:
+        logging.getLogger(__name__).exception("Could not record %d fetch failures", len(failures))
+        return 0
+    return len(failures)

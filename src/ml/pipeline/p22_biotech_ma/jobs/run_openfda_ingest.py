@@ -19,7 +19,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.ml.pipeline.p22_biotech_ma.ingest import raw_zone
 from src.ml.pipeline.p22_biotech_ma.ingest.openfda_client import OpenFDAClient
 from src.ml.pipeline.p22_biotech_ma.ingest.universe_snapshot import latest_universe_rows
-from src.ml.pipeline.p22_biotech_ma.jobs.run_common import setup_run_logging
+from src.ml.pipeline.p22_biotech_ma.jobs.run_common import record_fetch_failures, setup_run_logging
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -48,8 +48,13 @@ def run() -> dict:
                     source="openfda_drugsfda", entity=cik or name, as_of_date=today, payload=applications
                 )
                 applications_landed += len(applications)
+        failures = list(client.failures)
 
-    summary = {"companies_attempted": len(universe), "applications_landed": applications_landed}
+    summary = {
+        "companies_attempted": len(universe),
+        "applications_landed": applications_landed,
+        "fetch_failures": record_fetch_failures(failures),
+    }
     _logger.info("openFDA ingest complete: %s", summary)
     return summary
 

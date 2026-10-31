@@ -87,6 +87,8 @@ _logger = setup_logger(__name__)
 
 COMPANY_TICKERS_EXCHANGE_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
 
+_DERIVATIVE_TICKER_RE = re.compile(r"^[A-Z]{4}[WRUP]$|[-.]")
+
 _REPORTING_FORMS = frozenset({"10-K", "10-Q"})
 _ELIGIBLE_EXCHANGES = frozenset({"NYSE", "NYSE American", "Nasdaq"})
 _DEFAULT_REPORTING_LOOKBACK_DAYS = 183  # "trailing 6 months" (spec §2.0.3)
@@ -157,11 +159,26 @@ class UniverseCandidate:
     asset_floor_met: Optional[bool] = None  # not computed at M2 — needs p22_trial linkage
 
 
+def is_derivative_ticker(ticker: Optional[str]) -> bool:
+    """
+    True for a symbol that is not the common share: Nasdaq fifth-letter warrants, rights, units and
+    preferreds (`AIMDW`, `ABCDR`, `ABCDU`, `BGMSP`) and suffixed classes (`AP-WT`, `AIG-PA`, `BRK-B`).
+    Same rule as `fmp_vintage.is_common_listing`'s suffix check.
+    """
+    if not ticker:
+        return True
+    return bool(_DERIVATIVE_TICKER_RE.search(ticker))
+
+
 def fetch_ticker_exchange_map(client: Optional[httpx.Client] = None) -> Dict[str, Tuple[Optional[str], Optional[str]]]:
     """
     CIK -> (ticker, exchange) from SEC's current-snapshot mapping (spec
     §2.0.2). **Current names only** — see module docstring for the delisted-
     name limitation.
+
+    SEC lists one row per symbol, so a CIK with warrants or preferreds has several rows. The first
+    common-looking symbol wins (SEC lists the primary listing first); a CIK with only suffixed symbols
+    keeps its first one. Letting the last row win had put warrants such as AIMDW in the universe.
     """
     owns_client = client is None
     client = client or httpx.Client(timeout=30.0)
@@ -180,7 +197,10 @@ def fetch_ticker_exchange_map(client: Optional[httpx.Client] = None) -> Dict[str
             if len(row) < 4:
                 continue
             cik_raw, ticker, exchange = row[0], row[2], row[3]
-            mapping[normalize_cik(str(cik_raw))] = (ticker, exchange)
+            cik = normalize_cik(str(cik_raw))
+            current = mapping.get(cik)
+            if current is None or (is_derivative_ticker(current[0]) and not is_derivative_ticker(ticker)):
+                mapping[cik] = (ticker, exchange)
         _logger.info("Loaded %d CIK->ticker/exchange mappings", len(mapping))
         return mapping
     finally:
@@ -256,7 +276,7 @@ _QUARTER_RE = re.compile(r"^(\d{4})q([1-4])$")
 _QUARTER_END_MONTH_DAY = {1: (3, 31), 2: (6, 30), 3: (9, 30), 4: (12, 31)}
 
 
-def _quarter_end_date(quarter: str) -> Optional[date]:
+def quarter_end_date(quarter: str) -> Optional[date]:
     """"2019q3" -> 2019-09-30. Returns None for a malformed quarter string."""
     match = _QUARTER_RE.match(quarter)
     if not match:
@@ -292,7 +312,7 @@ def build_universe_history(
         present in `quarters_rows`, each computed against a cumulative union
         of every quarter up to and including it (chronological order).
     """
-    valid_quarters = sorted(q for q in quarters_rows if _quarter_end_date(q) is not None)
+    valid_quarters = sorted(q for q in quarters_rows if quarter_end_date(q) is not None)
     skipped = set(quarters_rows) - set(valid_quarters)
     if skipped:
         _logger.warning("Skipping malformed DERA quarter keys: %s", sorted(skipped))
@@ -301,7 +321,7 @@ def build_universe_history(
     cumulative_rows: List[Dict[str, Any]] = []
     for quarter in valid_quarters:
         cumulative_rows = cumulative_rows + quarters_rows[quarter]
-        as_of = _quarter_end_date(quarter)
+        as_of = quarter_end_date(quarter)
         assert as_of is not None  # guaranteed by valid_quarters filter above
         history[quarter] = build_universe(
             cumulative_rows,

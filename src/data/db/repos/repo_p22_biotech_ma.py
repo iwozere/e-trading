@@ -16,7 +16,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -471,11 +471,13 @@ class P22Repo:
         single-intervention-trial-linked assets (`docs/Tasks.md` item 8).
 
         Returns:
-            `[{"asset_id", "therapeutic_area", "phase", "primary_completion_date", "status"}, ...]`.
+            `[{"nct_id", "asset_id", "asset_name", "therapeutic_area", "phase", "primary_completion_date", "status"}, ...]`.
         """
         rows = self.session.execute(
             select(
+                P22Trial.nct_id,
                 P22Trial.asset_id,
+                P22Asset.name.label("asset_name"),
                 P22Asset.therapeutic_area,
                 P22Trial.phase,
                 P22Trial.primary_completion_date,
@@ -486,7 +488,9 @@ class P22Repo:
         ).all()
         return [
             {
+                "nct_id": r.nct_id,
                 "asset_id": r.asset_id,
+                "asset_name": r.asset_name,
                 "therapeutic_area": r.therapeutic_area,
                 "phase": r.phase,
                 "primary_completion_date": r.primary_completion_date,
@@ -865,6 +869,31 @@ class P22Repo:
         """Every `p22_asset` row for `company_id` (modality/indication for Block D's `fit()`, spec §4.4)."""
         rows = self.session.execute(select(P22Asset).where(P22Asset.company_id == company_id)).scalars().all()
         return [{c.key: getattr(r, c.key) for c in P22Asset.__table__.columns} for r in rows]
+
+    def lookahead_audit_population(self, per_category: int = 1000) -> List[Dict[str, Any]]:
+        """
+        Random `(company_id, known_from, category)` rows for spec §8.3's stratified lookahead audit,
+        up to `per_category` each: `vendor_fact` (derived market cap and vendor price rows),
+        `13d_process_event` (13D/G positions and 8-K process events) and `sec_fact` (every other
+        financial fact). 13F holdings are not stored yet (Block F), so that category is absent.
+        """
+        queries = [
+            ("vendor_fact", select(P22FinancialFact.company_id, P22FinancialFact.known_from)
+             .where(P22FinancialFact.metric == "market_cap")),
+            ("vendor_fact", select(P22PriceDaily.company_id, P22PriceDaily.known_from)
+             .where(P22PriceDaily.known_from.is_not(None))),
+            ("13d_process_event", select(P22ActivistPosition.company_id, P22ActivistPosition.known_from)
+             .where(P22ActivistPosition.known_from.is_not(None))),
+            ("13d_process_event", select(P22CorporateProcessEvent.company_id, P22CorporateProcessEvent.known_from)
+             .where(P22CorporateProcessEvent.known_from.is_not(None))),
+            ("sec_fact", select(P22FinancialFact.company_id, P22FinancialFact.known_from)
+             .where(P22FinancialFact.metric != "market_cap")),
+        ]
+        rows: List[Dict[str, Any]] = []
+        for category, stmt in queries:
+            for r in self.session.execute(stmt.order_by(func.random()).limit(per_category)).all():
+                rows.append({"company_id": r.company_id, "known_from": r.known_from, "category": category})
+        return rows
 
     def create_score_run(self, *, as_of_date: date, model_version: str, config_hash: str) -> int:
         row = P22ScoreRun(as_of_date=as_of_date, model_version=model_version, config_hash=config_hash)

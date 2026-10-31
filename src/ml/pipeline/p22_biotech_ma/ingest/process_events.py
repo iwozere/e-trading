@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import sys
 from collections import Counter
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -163,12 +163,18 @@ def run(repo: Any, edgar: Any, as_of_date: Optional[date] = None) -> Dict[str, A
             continue
 
         filed_date_str = str(row.get("filed_date") or "")
+        filed_date: Optional[date]
         try:
-            event_date = date.fromisoformat(filed_date_str) if filed_date_str else (as_of_date or date.today())
+            filed_date = date.fromisoformat(filed_date_str) if filed_date_str else None
         except ValueError:
-            event_date = as_of_date or date.today()
+            filed_date = None
+        event_date = filed_date or as_of_date or date.today()
 
-        known_from = datetime.now(timezone.utc)
+        # Spec §4.7/§8.3: known_from is the filing date (same convention as financial_facts), so a
+        # backtest sees the event from the day it became public. Ingest time only when the date is missing.
+        known_from = (
+            datetime.combine(filed_date, time.min, tzinfo=timezone.utc) if filed_date is not None else datetime.now(timezone.utc)
+        )
         event_id = repo.upsert_corporate_process_event(
             company_id=company_id,
             event_date=event_date,

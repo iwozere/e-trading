@@ -89,3 +89,23 @@ def test_context_manager_closes_client():
     with ClinicalTrialsClient() as client:
         client._client.close = close_mock
     close_mock.assert_called_once()
+
+
+def test_failed_requests_are_kept_for_the_fetch_failure_table():
+    client = ClinicalTrialsClient()
+    client._client.get = MagicMock(return_value=_mock_response({}, status_code=400))
+
+    assert client.fetch_studies_for_sponsor("Example Therapeutics Inc") == []
+    assert client.fetch_study_version_history("NCT001") == []
+
+    assert [(f.source, f.entity, f.error_message) for f in client.failures] == [
+        ("clinicaltrials_studies", "Example Therapeutics Inc", "status 400"),
+        ("clinicaltrials_history", "NCT001", "status 400"),
+    ]
+
+
+def test_empty_result_is_not_a_failure():
+    client = ClinicalTrialsClient()
+    client._client.get = MagicMock(return_value=_mock_response({"studies": []}))
+    client.fetch_studies_for_sponsor("Example Therapeutics Inc")
+    assert client.failures == []

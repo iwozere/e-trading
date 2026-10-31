@@ -12,8 +12,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.ml.pipeline.p22_biotech_ma.config import ORANGE_BOOK_ZIP_URL
+from src.ml.pipeline.p22_biotech_ma.ingest.http_retry import FetchFailureRecord
 from src.ml.pipeline.p22_biotech_ma.ingest.orange_book_client import fetch_and_land_orange_book
-from src.ml.pipeline.p22_biotech_ma.jobs.run_common import setup_run_logging
+from src.ml.pipeline.p22_biotech_ma.jobs.run_common import record_fetch_failures, setup_run_logging
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -22,7 +24,9 @@ _logger = setup_logger(__name__)
 def run() -> dict:
     setup_run_logging()
     results = fetch_and_land_orange_book()
-    summary = {"files_landed": len(results), "files": list(results.keys())}
+    # The client logs the cause; an empty result means the download or the archive failed.
+    failures = [] if results else [FetchFailureRecord("orange_book", None, ORANGE_BOOK_ZIP_URL, "no files landed")]
+    summary = {"files_landed": len(results), "files": list(results.keys()), "fetch_failures": record_fetch_failures(failures)}
     _logger.info("Orange Book ingest complete: %s", summary)
     return summary
 

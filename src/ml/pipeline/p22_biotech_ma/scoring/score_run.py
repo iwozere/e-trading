@@ -8,7 +8,8 @@ bitemporal — a known gap, see `features/context.py`).
 
 **Universe:** `p22_company` rows that are active, not in the acquirer universe (big pharma resolved
 from DERA as `role='both'` is a buyer here, not a target), and not known to fail the $25M size floor
-(`size_floor.evaluate_size_floor`; an unknown floor is kept and counted in the summary).
+(`size_floor.evaluate_size_floor`) or the Phase I+ asset floor (`block_b.asset_floor_met`). An unknown
+floor is kept and counted in the summary.
 
 **Acquirers:** `p22_acquirers.yaml` entries whose `entry_date <= as_of < exit_date`, matched to
 `p22_company` by CIK and then by ticker.
@@ -142,24 +143,45 @@ def build_target_profile(repo: Any, ctx: FeatureContext, company_id: int) -> Tar
     )
 
 
-def select_targets(repo: Any, companies: Sequence[Dict[str, Any]], acquirer_ids: set[int], as_of: date) -> tuple[List[int], Dict[str, int]]:
-    """The scoring universe (see module docstring) and a count of why companies were left out."""
-    excluded = {"inactive": 0, "acquirer": 0, "below_size_floor": 0, "size_floor_unknown_kept": 0}
+def select_targets(
+    repo: Any,
+    ctx: FeatureContext,
+    companies: Sequence[Dict[str, Any]],
+    acquirer_ids: set[int],
+    as_of: date,
+    require_active: bool = True,
+) -> tuple[List[int], Dict[str, int]]:
+    """
+    The scoring universe (see module docstring) and a count of why companies were left out.
+
+    `require_active=False` is for historical snapshots: `is_active` describes today, so the backtest
+    passes a point-in-time universe instead and must not drop companies that were later acquired.
+    """
+    excluded = {
+        "inactive": 0, "acquirer": 0, "below_size_floor": 0, "size_floor_unknown_kept": 0,
+        "below_asset_floor": 0, "asset_floor_unknown_kept": 0,
+    }
     targets: List[int] = []
     for company in companies:
         company_id = company["company_id"]
         if company_id in acquirer_ids or company.get("role") == "acquirer":
             excluded["acquirer"] += 1
             continue
-        if company.get("is_active") is not True:
+        if require_active and company.get("is_active") is not True:
             excluded["inactive"] += 1
             continue
         decision = evaluate_size_floor(repo, company_id, as_of)
         if decision.met is False:
             excluded["below_size_floor"] += 1
             continue
+        asset_floor = block_b.asset_floor_met(company_id, as_of, ctx)
+        if asset_floor is False:
+            excluded["below_asset_floor"] += 1
+            continue
         if decision.met is None:
             excluded["size_floor_unknown_kept"] += 1
+        if asset_floor is None:
+            excluded["asset_floor_unknown_kept"] += 1
         targets.append(company_id)
     return targets, excluded
 
@@ -191,7 +213,7 @@ def score_universe(
 
     excluded: Dict[str, int] = {}
     if target_ids is None:
-        targets, excluded = select_targets(repo, companies, acquirer_ids, as_of)
+        targets, excluded = select_targets(repo, ctx, companies, acquirer_ids, as_of)
     else:
         targets = list(target_ids)
 

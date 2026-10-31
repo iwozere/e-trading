@@ -4,7 +4,8 @@ computation path (facts present) and the null path (spec §8.1: "including the n
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Dict, Tuple
+from datetime import timedelta
+from typing import Any, Dict, List, Optional, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -26,8 +27,9 @@ _COMPANY_ID = 7
 class _FakeRepo:
     """Duck-typed P22Repo stand-in: metric -> value, read through get_financial_facts_as_of."""
 
-    def __init__(self, facts: Dict[str, float]):
+    def __init__(self, facts: Dict[str, float], trials: Optional[List[Dict[str, Any]]] = None):
         self._facts = facts
+        self._trials = trials or []
 
     def get_financial_facts_as_of(self, company_id: int, metric: str, as_of_date: date):
         del company_id, as_of_date
@@ -35,9 +37,13 @@ class _FakeRepo:
             return [{"value": self._facts[metric]}]
         return []
 
+    def get_trials_for_company(self, company_id: int):
+        del company_id
+        return self._trials
 
-def _ctx(facts: Dict[str, float]) -> FeatureContext:
-    return FeatureContext(as_of=_AS_OF, repo=_FakeRepo(facts))
+
+def _ctx(facts: Dict[str, float], trials: Optional[List[Dict[str, Any]]] = None) -> FeatureContext:
+    return FeatureContext(as_of=_AS_OF, repo=_FakeRepo(facts, trials))
 
 
 def test_enterprise_value_computes_from_market_cap_cash_debt():
@@ -135,9 +141,35 @@ def test_dilution_risk_false_when_runway_long():
     assert dilution_risk(_COMPANY_ID, _AS_OF, ctx) == 0.0
 
 
-def test_dilution_risk_none_when_catalyst_data_not_normalized_yet():
+def test_dilution_risk_none_when_short_runway_and_no_trials_on_file():
     ctx = _ctx({"cash_and_equivalents": 300.0, "quarterly_opex_burn": -100.0})
     assert dilution_risk(_COMPANY_ID, _AS_OF, ctx) is None
+
+
+def test_dilution_risk_false_for_long_runway_even_without_catalyst_data():
+    ctx = _ctx({"cash_and_equivalents": 900.0, "quarterly_opex_burn": -30.0})
+    assert dilution_risk(_COMPANY_ID, _AS_OF, ctx) == 0.0
+
+
+def test_dilution_risk_reads_trial_completion_date_when_no_fact():
+    trials = [
+        {"primary_completion_date": _AS_OF - timedelta(days=30)},
+        {"primary_completion_date": _AS_OF + timedelta(days=90)},  # inside 9 months
+    ]
+    ctx = _ctx({"cash_and_equivalents": 300.0, "quarterly_opex_burn": -100.0}, trials)
+    assert dilution_risk(_COMPANY_ID, _AS_OF, ctx) == 1.0
+
+
+def test_dilution_risk_false_when_next_readout_after_runway():
+    trials = [{"primary_completion_date": _AS_OF + timedelta(days=400)}]
+    ctx = _ctx({"cash_and_equivalents": 300.0, "quarterly_opex_burn": -100.0}, trials)
+    assert dilution_risk(_COMPANY_ID, _AS_OF, ctx) == 0.0
+
+
+def test_dilution_risk_false_when_trials_exist_but_none_upcoming():
+    trials = [{"primary_completion_date": _AS_OF - timedelta(days=30)}]
+    ctx = _ctx({"cash_and_equivalents": 300.0, "quarterly_opex_burn": -100.0}, trials)
+    assert dilution_risk(_COMPANY_ID, _AS_OF, ctx) == 0.0
 
 
 def test_atm_capacity_pct_none_when_shelf_not_extracted_yet():

@@ -57,7 +57,7 @@ from src.ml.pipeline.p22_biotech_ma.config import (
     CLINICALTRIALS_FIELDS,
     CLINICALTRIALS_HISTORY_BASE_URL,
 )
-from src.ml.pipeline.p22_biotech_ma.ingest.http_retry import get_with_retry
+from src.ml.pipeline.p22_biotech_ma.ingest.http_retry import FetchFailureRecord, describe_failure, get_with_retry
 from src.ml.pipeline.p22_biotech_ma.ingest.rate_limits import clinicaltrials_history_limiter, clinicaltrials_limiter
 from src.notification.logger import setup_logger
 
@@ -72,6 +72,8 @@ class ClinicalTrialsClient:
     def __init__(self, base_url: str = CLINICALTRIALS_BASE_URL, timeout: float = 30.0) -> None:
         self._base_url = base_url
         self._client = httpx.Client(timeout=timeout)
+        # Requests that failed after retries; the job writes them to p22_fetch_failure (spec §7.2).
+        self.failures: List[FetchFailureRecord] = []
 
     def close(self) -> None:
         self._client.close()
@@ -119,6 +121,7 @@ class ClinicalTrialsClient:
                         sponsor_name,
                         resp.status_code,
                     )
+                self.failures.append(FetchFailureRecord("clinicaltrials_studies", sponsor_name, self._base_url, describe_failure(resp)))
                 break
 
             data = resp.json()
@@ -149,6 +152,7 @@ class ClinicalTrialsClient:
                 _logger.error(
                     "ClinicalTrials.gov history fetch for %s failed: status %d", nct_id, resp.status_code
                 )
+            self.failures.append(FetchFailureRecord("clinicaltrials_history", nct_id, url, describe_failure(resp)))
             return []
         data = resp.json()
         return data.get("changes", []) if isinstance(data, dict) else []

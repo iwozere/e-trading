@@ -2,7 +2,7 @@
 are MagicMocks/fakes."""
 
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -181,6 +181,8 @@ def test_run_writes_activist_position_for_subject_in_universe():
     assert kwargs["filer_cik"] == "0001841619"
     assert kwargs["form_type"] == "SC 13D"
     assert kwargs["stated_intent"] is None
+    assert kwargs["filed_date"] == date(2026, 9, 1)
+    assert kwargs["known_from"] == datetime(2026, 9, 1, tzinfo=timezone.utc)  # filing date, not ingest time (spec §8.3)
 
 
 def test_run_dedupes_hits_across_form_queries():

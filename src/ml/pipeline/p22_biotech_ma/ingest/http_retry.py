@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -29,6 +30,21 @@ _logger = setup_logger(__name__)
 
 MAX_ATTEMPTS = 5
 _RETRYABLE_STATUS = {429}
+
+
+@dataclass(frozen=True)
+class FetchFailureRecord:
+    """A request that failed after retries, kept by a client for its job to write to `p22_fetch_failure` (spec §7.2)."""
+
+    source: str
+    entity: Optional[str]
+    url: Optional[str]
+    error_message: str
+
+
+def describe_failure(resp: Optional[httpx.Response]) -> str:
+    """Error text for a failed `get_with_retry` result: the status, or that retries ran out."""
+    return "no response after retries" if resp is None else f"status {resp.status_code}"
 
 
 def get_with_retry(

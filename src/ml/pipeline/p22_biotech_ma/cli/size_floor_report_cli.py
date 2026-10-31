@@ -27,7 +27,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.database_service import DatabaseService
 from src.ml.pipeline.p22_biotech_ma.ingest.entity_resolution import build_universe_history
-from src.ml.pipeline.p22_biotech_ma.ingest.price_quality import float_consistency_history, summarize_consistency
+from src.ml.pipeline.p22_biotech_ma.ingest.price_quality import float_consistency_history, is_suspect, summarize_consistency
 from src.ml.pipeline.p22_biotech_ma.ingest.size_floor import make_size_floor_lookup
 from src.ml.pipeline.p22_biotech_ma.ingest.universe_snapshot import all_landed_quarters
 from src.notification.logger import setup_logger
@@ -36,11 +36,6 @@ _logger = setup_logger(__name__)
 
 _PROGRESS_EVERY = 200
 _REPORT_TOP = 40
-
-
-def is_suspect(summary: Dict[str, Any]) -> bool:
-    """A company is suspect when at least two float dates, or every checked one, fail the consistency check."""
-    return summary["inconsistent"] >= 2 or (summary["checked"] > 0 and summary["inconsistent"] == summary["checked"])
 
 
 def run_price_quality(as_of: date, out: Optional[Path]) -> int:

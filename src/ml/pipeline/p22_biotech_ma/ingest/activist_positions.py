@@ -43,7 +43,7 @@ from __future__ import annotations
 import re
 import sys
 from collections import Counter
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -212,11 +212,13 @@ def run(repo: Any, edgar: Any, as_of_date: Optional[date] = None, lookback_days:
             continue
 
         pct_of_class = extract_single_pct_of_class(doc_text)
+        # Spec §4.7/§8.3: known_from is the filing date, never the 5%-crossing date or the ingest time.
         try:
             filed_date = date.fromisoformat(str(src.get("file_date")))
+            known_from = datetime.combine(filed_date, time.min, tzinfo=timezone.utc)
         except (TypeError, ValueError):
             filed_date = end
-        known_from = datetime.now(timezone.utc)
+            known_from = datetime.now(timezone.utc)
         source_url = (
             f"https://www.sec.gov/Archives/edgar/data/{int(ciks_in_hit[0])}/"
             f"{accession.replace('-', '')}/{filename}"

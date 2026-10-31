@@ -17,6 +17,7 @@ from src.ml.pipeline.p22_biotech_ma.ingest.entity_resolution import (
     build_universe,
     build_universe_history,
     fetch_ticker_exchange_map,
+    is_derivative_ticker,
     is_likely_spac,
     normalize_cik,
     normalize_company_name,
@@ -50,6 +51,36 @@ def test_fetch_ticker_exchange_map_parses_and_normalizes_cik():
 
     assert mapping["0000320193"] == ("AAPL", "Nasdaq")
     assert mapping["0000059478"] == ("LLY", "NYSE")
+
+
+def test_fetch_ticker_exchange_map_prefers_common_over_warrant_listed_after_it():
+    client = MagicMock()
+    client.get.return_value = _mock_json_response(
+        {
+            "fields": ["cik", "name", "ticker", "exchange"],
+            "data": [
+                [946644, "AIM ImmunoTech", "AIM", "NYSE"],
+                [946644, "AIM ImmunoTech", "AIMDW", "NYSE"],
+                [1, "Warrant First", "ABCDW", "Nasdaq"],
+                [1, "Warrant First", "ABCD", "Nasdaq"],
+                [2, "Only Classes", "XYZ-A", "NYSE"],
+                [2, "Only Classes", "XYZ-B", "NYSE"],
+            ],
+        }
+    )
+
+    mapping = fetch_ticker_exchange_map(client)
+
+    assert mapping["0000946644"] == ("AIM", "NYSE")
+    assert mapping["0000000001"] == ("ABCD", "Nasdaq")
+    assert mapping["0000000002"] == ("XYZ-A", "NYSE")
+
+
+def test_is_derivative_ticker():
+    for ticker in ("AIMDW", "BGMSP", "AP-WT", "AIG-PA", None):
+        assert is_derivative_ticker(ticker), ticker
+    for ticker in ("AIM", "ACMP", "ABCD", "MRNA"):
+        assert not is_derivative_ticker(ticker), ticker
 
 
 def test_fetch_ticker_exchange_map_returns_empty_on_failure():

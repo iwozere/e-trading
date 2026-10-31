@@ -342,8 +342,59 @@ always reported as unchecked.
 What the score actually rests on today: Block B (`phase_max`, `catalyst_window`), Block C
 (`ev_to_cash`, `size_band`), Block E (`is_foreign_domiciled`) and the modality term of `fit()`.
 Block A (`revenue_at_risk` needs `ttm_revenue_usd`), `ta_overlap` (needs Block A), `geographic_fit`
-(no footprint data), `size_feasibility` (needs `dry_powder`) and `dilution_risk` (needs
-`catalyst_days_to_next`) are all still unknown.
+(no footprint data) and `size_feasibility` (needs `dry_powder`) are still unknown. `dilution_risk`
+reads the nearest upcoming trial completion since 2026-10-30.
+
+The universe also drops companies failing the asset floor (spec §2.0.3, `block_b.asset_floor_met`):
+only when every phased trial is EARLY_PHASE1. No linked trial means unknown and the company stays,
+because trial linkage only covers single-intervention trials.
+
+### Backtest (M6, 2026-10-30)
+
+`backtest/` + `cli/backtest_cli.py`, spec §0.3/§8.4. Read-only; runs by hand.
+
+- **Universe per snapshot is point in time.** The latest DERA quarter ending on or before `as_of`
+  (reporting in the last 183 days, not a SPAC), mapped to `p22_company` by CIK, then the live filters
+  through `select_targets(require_active=False)`. Live scoring uses `is_active`, which is today's state;
+  in a backtest it would drop every company that was later acquired, i.e. every positive.
+- **Labels** (`backtest/labels.py`): positive = `strategic_acquisition` announced in
+  `(as_of, as_of + 24 months]`, terminated deals included (labels key on announcement).
+  `pe_take_private` is counted separately, never pooled. Excluded types stay in the universe as
+  negatives. A company with its own deal already pending at `as_of` is removed from that snapshot.
+  Snapshots whose window passes `--labels-through` are censored.
+- **Rankings:** model (`composite` desc, unranked names left out), naive-informed (`phase_max` desc,
+  then runway desc), catalyst-proximity (Phase II+ with a known upcoming completion, nearest first).
+  Random is reported as its exact expectation (precision = base rate, recall = k/N), not a sampled shuffle.
+- **Metrics** are pooled over snapshots (sum of hits over sum of slots), for all names and for Tier 0
+  names. `precision@k` divides by k even when a ranking is shorter than k.
+- **No embargo:** the spec's 24-month embargo separates training from test; Phase 1 fits nothing.
+- **Return labels** for M7: `upfront / close(as_of) - 1`, the close rescaled to the announcement's
+  share basis, CVRs at zero (`p22_cvr_policy.yaml`), None for price-quality suspects.
+- **Inherited lookahead gaps:** trials are not bitemporal (phases and completion dates are today's),
+  and a DERA quarter is used from its quarter end although it is published weeks later.
+
+### Lookahead audit on real data (2026-10-30)
+
+`features/lookahead_audit_run.py` runs every registered feature, Block G and the size floor for each
+sampled `(company, as_of)` through a `RecordingRepo` proxy, then checks the rows actually read, not the
+table contents. Samples are stratified (vendor facts, 13D/8-K, SEC facts) and their `as_of` straddles
+each source row's `known_from` (the day before, or up to a year after). Rows without `known_from`
+(price closes, trials) are counted as unaudited reads. Writing this exposed the Block G ingests stamping
+`known_from` with the ingest time; fixed in code and by migration 012.
+
+### Dossier (M4, 2026-10-30)
+
+`outputs/dossier.py`, Markdown per top-25 company, written by the scoring job. Every figure sits beside
+a link (SEC filing index, ClinicalTrials.gov, the vendor price page); a stored figure without
+`source_url` is omitted and listed under "Omitted (no source)". Derived figures (market cap, EV, runway)
+are shown as arithmetic over linked inputs.
+
+### Deal coverage (M6, 2026-10-30)
+
+`ingest/deal_coverage.py`, `deal_entry_cli coverage`: every company with no 10-K/10-Q in the 183 days
+before the latest DERA quarter, classified against `p22_deal` and the candidate queue. `no_candidate`
+rows are bankruptcies and delistings, or deals the SC 14D9/DEFM14A/S-4 scan cannot see (schemes of
+arrangement, written-consent mergers). That is the list to check for missing positives.
 
 ## Integration Patterns
 - Job scripts follow the P20 contract exactly: `PROJECT_ROOT` on `sys.path`, `run_common.py`'s

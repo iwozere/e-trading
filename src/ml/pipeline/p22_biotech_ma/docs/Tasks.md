@@ -198,6 +198,12 @@ use in the code/config; this section exists so they're all in one place to walk 
    broader forward-estimates coverage for this specific universe — not assumed to be the same
    answer as item 1's plan choice, since forward-consensus-estimates coverage and historical-price
    depth are different products even within one vendor).
+   **Decided 2026-10-31: SEC XBRL, no paid vendor.** FMP's quota is spent until mid-November 2026 and
+   only the free tier remains after that. EBITDA = OperatingIncomeLoss + DepreciationDepletionAndAmortization
+   (us-gaap; ifrs-full equivalents for 20-F filers), revenue and debt from the same companyfacts, all
+   point-in-time by filing date. Forward P/E has no free point-in-time source; the replacement for
+   `currency_quality` (trailing P/E from SEC diluted EPS + price) is part of item 10's decision.
+   Acquirers without SEC filings (e.g. Roche) get `None`. Not built yet.
 10. **`stability_factor(trailing 12m realized vol)` has no defined formula** (spec §4.1's
     `currency_quality = percentile_rank(fwd_pe) × stability_factor(vol)`) — new, found 2026-09-08.
     Spec names the input and the role but never gives the function shape (unlike, say,
@@ -327,15 +333,20 @@ use in the code/config; this section exists so they're all in one place to walk 
       `P22Repo.get_splits_as_of`, `compute_market_cap` now rejects stale prices/share counts and rescales
       shares across splits. Report CLI: `cli/size_floor_report_cli.py`. Not yet run on prod: needs one
       `run_financial_facts_normalization.py` run first so `public_float` exists.
-- [ ] Asset floor (≥1 Phase I+ program) eligibility filter (spec §2.0.3) — blocked on `p22_trial`
-      existing and being linked to a resolved company — CT.gov data still only lands in the raw zone,
-      nothing normalizes it into `p22_trial` yet (that's M3 work). The field exists on
-      `UniverseCandidate`, explicitly `None`, not defaulted or guessed.
-- [ ] M6: exclude companies `size_floor_report_cli.py price-quality` marks suspect (corrupt vintage
-      prices such as ACOR/TNXP, ADRs) from return labels — their `p22_price_daily` rows are wrong, not
-      just their market cap. ADRs need an ADS ratio before their market cap can be trusted at all.
-- [ ] Cross-reference roster disappearances against `p22_deal` to classify acquired/delisted/late-filing
-      (spec §2.0.1) — `p22_deal` isn't populated until M6.
+- [x] Asset floor (≥1 Phase I+ program, spec §2.0.3), 2026-10-30 — `block_b.asset_floor_met`, applied in
+      `score_run.select_targets`. False only when every phased trial is EARLY_PHASE1; no linked trial is
+      unknown and kept (counted as `asset_floor_unknown_kept`), since linkage only covers
+      single-intervention trials. `UniverseCandidate.asset_floor_met` stays unused.
+- [x] Price-quality suspects excluded from return labels, 2026-10-30 — `backtest/labels.deal_return`
+      returns None for `price_quality.is_price_suspect` companies (rule moved out of the CLI). ADRs still
+      need an ADS ratio before their market cap can be trusted.
+- [x] Roster disappearances vs `p22_deal` (spec §2.0.1), 2026-10-30 — `ingest/deal_coverage.py`,
+      `deal_entry_cli coverage`. Classes: deal_entered / candidates_pending / candidates_reviewed_no_deal /
+      no_candidate. Prod raw zone has 802 companies that stopped filing since 2010.
+- [x] Warrant tickers in the universe, 2026-10-30 — `fetch_ticker_exchange_map` let the last SEC row per
+      CIK win; for 793 CIKs that is a warrant/unit/right/preferred (AIMDW). First common-looking symbol
+      now wins (`is_derivative_ticker`). Prod rows correct on the next entity-resolution run; price rows
+      already ingested under a warrant ticker are not repaired.
 
 ### 🔄 IN PROGRESS — M3 Feature store
 - [x] `config/pipeline/p22_acquirers.yaml`, `p22_therapeutic_area.yaml`, `p22_modality.yaml`,
@@ -808,9 +819,11 @@ use in the code/config; this section exists so they're all in one place to walk 
       `fit_preference` w1–w3, antitrust penalty) — "Decisions needed" item 14.
 - [ ] Inputs still unknown for every company, so the composite currently rests on Blocks B, C, E
       and fit's modality term: Block A `revenue_at_risk` (needs `ttm_revenue_usd`); `dry_powder`
-      (items 9–11); `geographic_fit` (no acquirer commercial-footprint data); `dilution_risk`
-      (`catalyst_days_to_next` is never written — `block_b.catalyst_window` already computes the
-      days from trials, so wiring it in is cheap).
+      (items 9–11); `geographic_fit` (no acquirer commercial-footprint data).
+- [x] `dilution_risk` catalyst leg, 2026-10-30 — reads `block_b.days_to_next_catalyst` (nearest upcoming
+      trial completion) when no `catalyst_days_to_next` fact exists; a runway ≥ 12 months is 0 outright.
+- [x] Dossiers (spec §6.2), 2026-10-30 — `outputs/dossier.py`; the scoring job writes the top 25 to
+      `results/.../dossiers/`. Figures without a `source_url` are omitted and listed, never printed bare.
 - [ ] `rank_by_expected_value` (the spec's default view) needs M7; until then only
       `rank_by_composite` is populated.
 
@@ -818,23 +831,30 @@ use in the code/config; this section exists so they're all in one place to walk 
 - [ ] **M5 — Block G remaining work:** `stated_intent` classification (needs `review_queue.py`
       support for multi-valued confirm, see above), incumbent-partner structures (blocked on M4's
       composite ranking).
-- [ ] **M6 — Labels + backtest remaining work:** the actual review of historical candidates (CLI
-      built 2026-10-29, see IN PROGRESS above); walk-forward harness against all three baselines (§0.3);
-      `cvr_policy.yaml` decision (§10, "On CVR valuation" — recommended v1 convention: value CVRs
-      at zero — already made, see that config file, just not wired to any code yet).
+- [x] **M6 — walk-forward harness, 2026-10-30:** `backtest/` (metrics, labels, baselines, harness) +
+      `cli/backtest_cli.py`. Point-in-time universe from DERA quarters (never today's `is_active`),
+      model vs naive-informed vs catalyst-proximity vs random expectation, all names and Tier 0, pooled
+      lift/precision/recall@k, §0.3 pass/fail. Return labels under `p22_cvr_policy.yaml` (CVRs at zero)
+      written for M7. See docs/Design.md "Backtest".
+- [ ] **M6 — Labels:** the actual review of historical candidates (2,691 queued 2026-10-30), then
+      `deal_entry_cli coverage` for companies that vanished without a candidate.
+- [ ] **Block F (spec §4.6)** — not built. 13F specialist presence needs the ~30-fund list (a curation
+      decision) and a CUSIP map; Form 4 buys exist only in P18's daily cache (no history before it
+      started), so no backtest value; zero composite weight under §5.1. Dossier context only.
 - [ ] **M7 — Return model:** `E[return | deal]`; `expected_value` becomes default ranking (§5.4).
 - [ ] **M8 — Calibrated model:** only if M6 shows lift over the naive-informed baseline.
 - [ ] **M9 — Partnership structures:** manual EX-10 enrichment, scoped to top 200 by composite.
 - [ ] **M10 — API + alerts:** FastAPI read endpoints; idempotent change alerts.
 
 ## Technical Debt
-- **Fetch-failure logging (spec §7.2) is only wired into SEC EDGAR ingest and daily price ingest**,
-  fixed 2026-09-05 alongside the bugs below. `P22Repo.log_fetch_failure` existed since M1 but was
-  never called anywhere — every other client's failures (CT.gov, openFDA, Orange Book, Purple Book,
-  SEC DERA universe) only reach the log file, not `p22_fetch_failure`, and those jobs don't open a DB
-  session at all today. Extending them the same way needs each client's return contract to
-  distinguish "legitimately empty" from "request failed after retries" (they currently both return
-  `[]`/`None` indistinguishably) — a real but separate refactor, not done speculatively here.
+- ~~**Fetch-failure logging (spec §7.2) only in SEC EDGAR and price ingest**~~ — **fixed 2026-10-30**: the
+  CT.gov and openFDA clients keep a `failures` list (`http_retry.FetchFailureRecord`) without changing
+  their return contracts; Orange Book, Purple Book and DERA record "nothing landed". Each job writes them
+  through `run_common.record_fetch_failures` in one short unit of work after fetching.
+- ~~**Block G `known_from` was the ingest time**~~ — **fixed 2026-10-30**: `activist_positions.py` and
+  `process_events.py` stamped `datetime.now()` instead of the filing date (spec §4.7/§8.3). Not a leak,
+  but it hid every historical 13D/8-K from the backtest. Both write the filing date at 00:00 UTC now;
+  migration `012_p22_block_g_known_from` backfills existing rows.
 
 ## Known Issues / Open Decisions
 - **FIXED 2026-10-28: the CIK-keyed normalization jobs had never matched a company on prod.**
@@ -1045,10 +1065,10 @@ use in the code/config; this section exists so they're all in one place to walk 
       `database "postgres" does not exist` — the same pre-existing dev-machine Postgres limitation
       noted elsewhere in this repo's memory, not something these tests introduced. Not run in the
       default `pytest` invocation until CI is wired for it (tracked here, not yet done).
-- [ ] M3/M5/M6: the mandatory §8.3 lookahead-audit test, wired against real DB data — the sampling
-      and assertion logic itself is built and tested (`features/lookahead_audit.py`), but running it
-      for real needs the three named high-risk categories (vendor facts, 13F, 13D/process events)
-      populated first; see that module's docstring and "Decisions needed" above.
+- [x] §8.3 lookahead audit against real data, 2026-10-30 — `features/lookahead_audit_run.py` +
+      `cli/lookahead_audit_cli.py` (exit 1 on failure). Records every row the features read for each
+      sampled (company, as_of); checks known_from <= as_of, filing-date known_from for 13D/8-K rows, and
+      that no unverified Block G row is read. 13F is absent until Block F. CI has no DB, so it runs on the Pi.
 
 ## Documentation Updates
 - [ ] Update this file at the start of each new milestone's work, not retroactively.

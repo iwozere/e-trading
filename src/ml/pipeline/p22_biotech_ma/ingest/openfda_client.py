@@ -26,7 +26,7 @@ from src.ml.pipeline.p22_biotech_ma.config import (
     OPENFDA_API_KEY,
     OPENFDA_DRUGSFDA_URL,
 )
-from src.ml.pipeline.p22_biotech_ma.ingest.http_retry import get_with_retry
+from src.ml.pipeline.p22_biotech_ma.ingest.http_retry import FetchFailureRecord, describe_failure, get_with_retry
 from src.ml.pipeline.p22_biotech_ma.ingest.rate_limits import openfda_limiter
 from src.notification.logger import setup_logger
 
@@ -41,6 +41,8 @@ class OpenFDAClient:
     def __init__(self, base_url: str = OPENFDA_DRUGSFDA_URL, timeout: float = 30.0) -> None:
         self._base_url = base_url
         self._client = httpx.Client(timeout=timeout)
+        # Requests that failed after retries; the job writes them to p22_fetch_failure (spec §7.2).
+        self.failures: List[FetchFailureRecord] = []
 
     def close(self) -> None:
         self._client.close()
@@ -81,6 +83,7 @@ class OpenFDAClient:
 
             resp = get_with_retry(self._client, self._base_url, params=params, rate_limiter=openfda_limiter)
             if resp is None:
+                self.failures.append(FetchFailureRecord("openfda_drugsfda", sponsor_name, self._base_url, describe_failure(resp)))
                 break
             if resp.status_code == 404:
                 # openFDA returns 404 for "no matches" rather than an empty list.
@@ -89,6 +92,7 @@ class OpenFDAClient:
                 _logger.error(
                     "openFDA request for sponsor=%s failed: status %d", sponsor_name, resp.status_code
                 )
+                self.failures.append(FetchFailureRecord("openfda_drugsfda", sponsor_name, self._base_url, describe_failure(resp)))
                 break
 
             data = resp.json()

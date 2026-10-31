@@ -7,10 +7,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.ml.pipeline.p22_biotech_ma.cli.size_floor_report_cli import is_suspect
 from src.ml.pipeline.p22_biotech_ma.ingest.entity_resolution import build_universe_history
 from src.ml.pipeline.p22_biotech_ma.ingest.price_quality import (
     float_consistency_history,
+    is_suspect,
     latest_public_float,
     summarize_consistency,
 )

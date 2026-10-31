@@ -116,6 +116,16 @@ def float_consistency_history(repo: Any, company_id: int, as_of: date) -> List[F
     return [c for c in checks if c is not None]
 
 
+def is_suspect(summary: Dict[str, Any]) -> bool:
+    """A company is suspect when at least two float dates, or every checked one, fail the consistency check."""
+    return summary["inconsistent"] >= 2 or (summary["checked"] > 0 and summary["inconsistent"] == summary["checked"])
+
+
+def is_price_suspect(repo: Any, company_id: int, as_of: date) -> bool:
+    """`is_suspect` over every float date known by `as_of` — the price series cannot be trusted for returns."""
+    return is_suspect(summarize_consistency(float_consistency_history(repo, company_id, as_of)))
+
+
 def summarize_consistency(checks: List[FloatConsistency]) -> Dict[str, Any]:
     """
     Per-company summary for reports: how many float dates were checked and how many failed, low vs high.

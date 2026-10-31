@@ -23,7 +23,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.ml.pipeline.p22_biotech_ma.ingest import raw_zone
 from src.ml.pipeline.p22_biotech_ma.ingest.clinicaltrials_client import ClinicalTrialsClient
 from src.ml.pipeline.p22_biotech_ma.ingest.universe_snapshot import latest_universe_rows
-from src.ml.pipeline.p22_biotech_ma.jobs.run_common import setup_run_logging
+from src.ml.pipeline.p22_biotech_ma.jobs.run_common import record_fetch_failures, setup_run_logging
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -110,12 +110,14 @@ def run() -> dict:
                     raw_zone.write(
                         source="clinicaltrials_history", entity=nct_id, as_of_date=today, payload=history
                     )
+        failures = list(client.failures)
 
     summary = {
         "companies_attempted": len(universe),
         "studies_landed": studies_landed,
         "history_fetched": history_fetched,
         "history_skipped_unchanged": history_skipped_unchanged,
+        "fetch_failures": record_fetch_failures(failures),
     }
     _logger.info("ClinicalTrials.gov ingest complete: %s", summary)
     return summary

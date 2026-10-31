@@ -24,6 +24,9 @@ all-or-nothing: any invalid row aborts the whole file before anything is committ
 
 Historical candidates (the daily job only scans the last week):
     ... deal_entry_cli scan --start 2010-01-01 --end 2026-10-29
+
+Label gaps — companies that stopped filing with no deal and no candidate (spec §2.0.1):
+    ... deal_entry_cli coverage --since 2010-01-01 --out coverage.csv
 """
 
 from __future__ import annotations
@@ -41,6 +44,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.database_service import DatabaseService
 from src.ml.pipeline.p22_biotech_ma.ingest.deal_candidates import run as run_deal_candidates
+from src.ml.pipeline.p22_biotech_ma.ingest.deal_coverage import CLASSIFICATIONS, classify, latest_candidates
 from src.ml.pipeline.p22_biotech_ma.ingest.deal_entry import (
     DEAL_STATUSES,
     DEAL_TYPES,
@@ -53,6 +57,7 @@ from src.ml.pipeline.p22_biotech_ma.ingest.deal_entry import (
     record_deal,
 )
 from src.ml.pipeline.p22_biotech_ma.ingest.review_queue import reject_item
+from src.ml.pipeline.p22_biotech_ma.ingest.universe_snapshot import all_landed_quarters
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -304,6 +309,29 @@ def _cmd_scan(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_coverage(args: argparse.Namespace) -> int:
+    as_of, candidates = latest_candidates(all_landed_quarters())
+    if as_of is None:
+        _logger.error("No landed DERA quarters — run run_sec_universe_ingest.py first")
+        return 1
+    with DatabaseService().uow() as uow:
+        companies_by_cik = {c["cik"]: c for c in uow.p22.list_companies_full() if c.get("cik")}
+        rows = classify(candidates, companies_by_cik, uow.p22.list_deals(),
+                        uow.p22.get_review_items(item_type="deal_candidate"), date.fromisoformat(args.since))
+    counts = {name: sum(1 for r in rows if r.classification == name) for name in CLASSIFICATIONS}
+    _logger.info("Companies that stopped filing since %s (as of DERA %s): %d — %s", args.since, as_of, len(rows), counts)
+    if args.out:
+        out = Path(args.out)
+        with out.open("w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=list(rows[0].as_row().keys()) if rows else ["classification"])
+            writer.writeheader()
+            writer.writerows(r.as_row() for r in rows)
+        _logger.info("Wrote %s", out)
+    for r in [r for r in rows if r.classification == "no_candidate"][:args.show]:
+        _logger.info("  no candidate: %s %s (CIK %s), last %s %s", r.ticker or "-", r.name, r.cik, r.last_form, r.last_filed)
+    return 0
+
+
 def _add_entry_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("item_id", type=int)
     parser.add_argument("--announcement-date", dest="announcement_date", required=True)
@@ -372,6 +400,12 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--start", required=True)
     scan.add_argument("--end", default=None)
     scan.set_defaults(func=_cmd_scan)
+
+    coverage = sub.add_parser("coverage", help="Companies that stopped filing, classified against entered deals")
+    coverage.add_argument("--since", default="2010-01-01", help="Ignore companies whose last 10-K/10-Q is older")
+    coverage.add_argument("--out", default=None, help="Write every row to this CSV")
+    coverage.add_argument("--show", type=int, default=20, help="Log this many no-candidate companies")
+    coverage.set_defaults(func=_cmd_coverage)
 
     return parser
 

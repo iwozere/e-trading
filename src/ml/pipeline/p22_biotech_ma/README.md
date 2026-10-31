@@ -60,7 +60,15 @@ Phase 1 scoring (spec §5.1–5.2, M4) runs daily as the `P22 Scoring` job and c
 weights live in `config/pipeline/p22_weights.yaml`:
 
 ```bash
-python src/ml/pipeline/p22_biotech_ma/jobs/run_scoring.py --dry-run   # watchlist files, DB rolled back
+python src/ml/pipeline/p22_biotech_ma/jobs/run_scoring.py --dry-run   # watchlist + dossiers, DB rolled back
+```
+
+Label coverage, walk-forward backtest (spec §0.3, M6) and the lookahead audit (spec §8.3), all read-only:
+
+```bash
+python -m src.ml.pipeline.p22_biotech_ma.cli.deal_entry_cli coverage --since 2010-01-01 --out coverage.csv
+python -m src.ml.pipeline.p22_biotech_ma.cli.backtest_cli --labels-through 2026-10-30   # results/.../backtest/
+python -m src.ml.pipeline.p22_biotech_ma.cli.lookahead_audit_cli --samples 200          # exit 1 on a violation
 ```
 
 ## Integration

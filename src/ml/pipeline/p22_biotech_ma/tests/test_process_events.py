@@ -2,6 +2,7 @@
 MagicMocks/fakes."""
 
 import sys
+from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -163,6 +164,8 @@ def test_run_writes_candidate_event_and_review_item_on_match():
     assert kwargs["state"] == "disclosed_open"
     assert kwargs["strength"] == "strong"
     assert kwargs["is_verified"] is False
+    assert kwargs["event_date"] == date(2026, 9, 1)
+    assert kwargs["known_from"] == datetime(2026, 9, 1, tzinfo=timezone.utc)  # filing date, not ingest time (spec §8.3)
 
     repo.add_review_item.assert_called_once()
     review_kwargs = repo.add_review_item.call_args.kwargs

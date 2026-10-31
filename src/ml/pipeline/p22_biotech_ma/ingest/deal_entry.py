@@ -246,7 +246,7 @@ def validate_entry(entry: DealEntry) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _close_on_basis(repo: Any, company_id: int, on_or_before: date, basis_date: date) -> Optional[Dict[str, Any]]:
+def close_on_basis(repo: Any, company_id: int, on_or_before: date, basis_date: date) -> Optional[Dict[str, Any]]:
     """Latest raw close on or before `on_or_before`, rescaled to `basis_date`'s share basis.
 
     None if there is no close or it is older than `MARKET_CAP_MAX_PRICE_AGE_DAYS`."""
@@ -301,8 +301,8 @@ def evaluate_flags(
 def gather_context(repo: Any, target_id: int, entry: DealEntry) -> DealContext:
     """Prices, premiums, point-in-time market cap and reverse splits for one entry."""
     day_before = entry.announcement_date - timedelta(days=1)
-    prior_close = _close_on_basis(repo, target_id, day_before, entry.announcement_date)
-    close_30d = _close_on_basis(
+    prior_close = close_on_basis(repo, target_id, day_before, entry.announcement_date)
+    close_30d = close_on_basis(
         repo, target_id, entry.announcement_date - timedelta(days=PREMIUM_30D_LOOKBACK_DAYS), entry.announcement_date
     )
     market_cap_result, market_cap_reason = compute_market_cap(repo, target_id, day_before)

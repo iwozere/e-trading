@@ -2,8 +2,9 @@
 P22 job — Phase 1 rule-based scoring (spec §5.1–§5.2, M4), 2026-10-29.
 
 Runs on weekdays after Market Cap Compute, so Block C reads the day's market cap. Writes one
-`p22_score_run` + `p22_score` rows, and the ranked watchlist (spec §6.1) as
-`results/p22_biotech_ma/YYYY-MM-DD/watchlist.csv` and `watchlist.json`.
+`p22_score_run` + `p22_score` rows, the ranked watchlist (spec §6.1) as
+`results/p22_biotech_ma/YYYY-MM-DD/watchlist.csv` and `watchlist.json`, and a dossier (spec §6.2)
+per top-ranked company under `dossiers/`.
 
     python src/ml/pipeline/p22_biotech_ma/jobs/run_scoring.py [--as-of 2026-10-29] [--dry-run]
 
@@ -26,6 +27,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.data.db.services.database_service import DatabaseService
 from src.ml.pipeline.p22_biotech_ma.ingest.acquirer_config import load_acquirers
 from src.ml.pipeline.p22_biotech_ma.jobs.run_common import setup_run_logging
+from src.ml.pipeline.p22_biotech_ma.outputs.dossier import write_dossiers
 from src.ml.pipeline.p22_biotech_ma.scoring.score_run import persist_score_run, score_universe
 from src.ml.pipeline.p22_biotech_ma.scoring.weights_config import config_hash, load_scoring_config
 from src.notification.logger import setup_logger
@@ -37,6 +39,9 @@ _CSV_COLUMNS = [
     "coverage", "likely_acquirer", "acquirer_pressure_matched", "target_asset_quality", "strategic_fit",
     "financial_attractiveness", "friction_penalty", "dilution_gate",
 ]
+
+
+DOSSIER_TOP_N = 25
 
 
 class _DryRunRollback(Exception):
@@ -83,6 +88,8 @@ def run(as_of: date | None = None, dry_run: bool = False) -> dict:
             summary = dict(result.summary)
             write_watchlist(result.rows, results_dir, summary)
             summary["run_id"] = persist_score_run(uow.p22, as_of, config, digest, result.rows)
+            run_meta = {"run_id": summary["run_id"], "model_version": config.model_version, "config_hash": digest}
+            summary["dossiers"] = len(write_dossiers(uow.p22, result.rows, as_of, run_meta, results_dir / "dossiers", DOSSIER_TOP_N))
             if dry_run:
                 raise _DryRunRollback()
     except _DryRunRollback:

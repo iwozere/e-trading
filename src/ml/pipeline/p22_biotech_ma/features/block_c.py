@@ -13,15 +13,15 @@ normalized by `ingest/financial_facts.py`); `enterprise_value`/`ev_to_cash`/
 `size_band` now compute for any company `ingest/market_cap.py` has produced a
 `market_cap` fact for (which is any currently-listed company with a landed
 yfinance price and a known `shares_outstanding` — no market-data vendor
-purchase needed after all, see that module's docstring). Two gaps remain,
-both needing extraction work that hasn't been built, not a vendor decision:
-`atm_capacity_pct` needs `atm_shelf_remaining` (424B5/10-Q text parsing), and
-`dilution_risk`'s catalyst leg needs `catalyst_days_to_next` (CT.gov
-trial-completion-date extraction). These functions are correct and
+purchase needed after all, see that module's docstring). One gap remains,
+needing extraction work that hasn't been built, not a vendor decision:
+`atm_capacity_pct` needs `atm_shelf_remaining` (424B5/10-Q text parsing).
+`dilution_risk`'s catalyst leg reads trial completion dates through
+`block_b.days_to_next_catalyst` (2026-10-30). These functions are correct and
 unit-tested against synthetic fixtures (spec §8.1: "every feature function
-with hand-constructed fixtures, including the null path"); the two
-still-blocked ones start returning real values the moment their upstream
-normalizers exist, with no change needed here.
+with hand-constructed fixtures, including the null path"); the
+still-blocked one starts returning real values the moment its upstream
+normalizer exists, with no change needed here.
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ from typing import List, Optional
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.ml.pipeline.p22_biotech_ma.features.block_b import days_to_next_catalyst
 from src.ml.pipeline.p22_biotech_ma.features.context import FeatureContext
 from src.ml.pipeline.p22_biotech_ma.features.registry import register_feature
 
@@ -94,16 +95,26 @@ def dilution_risk(company_id: int, as_of: date, ctx: FeatureContext) -> Optional
     """
     Boolean, encoded 1.0/0.0 per the shared feature-function signature
     (spec §4: `float | None`): runway < 12 months **and** a catalyst date
-    inside the runway window (spec §4.3). `catalyst_days_to_next` isn't
-    normalized into the store yet (needs CT.gov trial-completion-date
-    extraction, M3+ work) — always `None` today.
+    inside the runway window (spec §4.3).
+
+    The catalyst date is a `catalyst_days_to_next` fact if one exists, otherwise the nearest
+    upcoming trial `primary_completion_date` (`block_b.days_to_next_catalyst`). A runway of 12
+    months or more is `0.0` whether or not a catalyst is known, since the conjunction is already
+    false. A short runway with trials on file but none upcoming is also `0.0`; with no trials on
+    file at all the catalyst leg is unknown and the result is `None`.
     """
     runway_months = cash_runway_months(company_id, as_of, ctx)
-    catalyst_days = ctx.get_latest_fact(company_id, "catalyst_days_to_next")
-    if runway_months is None or catalyst_days is None:
+    if runway_months is None:
         return None
-    catalyst_inside_runway = catalyst_days <= runway_months * _AVG_DAYS_PER_MONTH
-    return 1.0 if (runway_months < 12.0 and catalyst_inside_runway) else 0.0
+    if runway_months >= 12.0:
+        return 0.0
+    catalyst_days = ctx.get_latest_fact(company_id, "catalyst_days_to_next")
+    if catalyst_days is None:
+        next_days = days_to_next_catalyst(company_id, as_of, ctx)
+        if next_days is None:
+            return 0.0 if ctx.get_trials_for_company(company_id) else None
+        catalyst_days = float(next_days)
+    return 1.0 if catalyst_days <= runway_months * _AVG_DAYS_PER_MONTH else 0.0
 
 
 @register_feature("block_c.atm_capacity_pct")

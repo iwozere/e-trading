@@ -15,8 +15,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.ml.pipeline.p22_biotech_ma.ingest.http_retry import FetchFailureRecord
 from src.ml.pipeline.p22_biotech_ma.ingest.sec_universe_ingest import land_all_quarters
-from src.ml.pipeline.p22_biotech_ma.jobs.run_common import setup_run_logging
+from src.ml.pipeline.p22_biotech_ma.jobs.run_common import record_fetch_failures, setup_run_logging
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -26,7 +27,13 @@ def run() -> dict:
     setup_run_logging()
     results = land_all_quarters()
     new_writes = sum(1 for r in results.values() if r.was_new)
-    summary = {"quarters_landed": len(results), "quarters_newly_written": new_writes}
+    # Per-quarter failures are logged by the client; nothing landed at all is the case worth a row.
+    failures = [] if results else [FetchFailureRecord("sec_dera_universe", None, None, "no quarters landed")]
+    summary = {
+        "quarters_landed": len(results),
+        "quarters_newly_written": new_writes,
+        "fetch_failures": record_fetch_failures(failures),
+    }
     _logger.info("SEC DERA universe ingest complete: %s", summary)
     return summary
 

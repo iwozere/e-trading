@@ -91,6 +91,20 @@ def phase_max(company_id: int, as_of: date, ctx: FeatureContext) -> Optional[flo
     return float(max(ranks)) if ranks else None
 
 
+def asset_floor_met(company_id: int, as_of: date, ctx: FeatureContext) -> Optional[bool]:
+    """
+    Spec §2.0.3 asset floor: at least one program at Phase I or later. `False` only when the company
+    has trials with a recognizable phase and all of them are EARLY_PHASE1 (preclinical/platform
+    names). `None` when no phased trial is linked, which is common: trials reach a company only via
+    single-intervention linkage (docs/Tasks.md item 8), so missing trials are not evidence of no
+    program. `p22_trial` is not bitemporal, so this reads current trial phases (same gap as `phase_max`).
+    """
+    best = phase_max(company_id, as_of, ctx)
+    if best is None:
+        return None
+    return best >= _PHASE_RANK["PHASE1"]
+
+
 @register_feature("block_b.asset_count_ph2plus")
 def asset_count_ph2plus(company_id: int, as_of: date, ctx: FeatureContext) -> Optional[float]:
     """Count of distinct assets with at least one trial reaching Phase II or later (spec §4.2:
@@ -107,6 +121,22 @@ def asset_count_ph2plus(company_id: int, as_of: date, ctx: FeatureContext) -> Op
     return float(len(ph2plus_assets))
 
 
+def days_to_next_catalyst(company_id: int, as_of: date, ctx: FeatureContext) -> Optional[int]:
+    """
+    Days from `as_of` to the nearest upcoming `primary_completion_date` across all of the company's
+    trials, or `None` if none is on or after `as_of`. Shared by `catalyst_window` and Block C's
+    `dilution_risk`, which needs the raw days rather than the bucket.
+    """
+    trials = ctx.get_trials_for_company(company_id)
+    upcoming = [
+        t["primary_completion_date"] for t in trials
+        if t.get("primary_completion_date") is not None and t["primary_completion_date"] >= as_of
+    ]
+    if not upcoming:
+        return None
+    return (min(upcoming) - as_of).days
+
+
 @register_feature("block_b.catalyst_window")
 def catalyst_window(company_id: int, as_of: date, ctx: FeatureContext) -> Optional[float]:
     """
@@ -119,14 +149,9 @@ def catalyst_window(company_id: int, as_of: date, ctx: FeatureContext) -> Option
     bucket spec also names is never reachable here — it needs to know a readout was POSITIVE, and
     this repo has no results/outcome data (`hasResults`, topline direction) for any trial yet.
     """
-    trials = ctx.get_trials_for_company(company_id)
-    upcoming = [
-        t["primary_completion_date"] for t in trials
-        if t.get("primary_completion_date") is not None and t["primary_completion_date"] >= as_of
-    ]
-    if not upcoming:
+    days = days_to_next_catalyst(company_id, as_of, ctx)
+    if days is None:
         return None
-    days = (min(upcoming) - as_of).days
     if days < 60:
         return 0.0
     if days < 180:

@@ -57,6 +57,8 @@ ACTIVIST_FILERS_YAML = PROJECT_ROOT / "config" / "activist_filers.yaml"
 BASE_RATES_YAML = PROJECT_ROOT / "config" / "pipeline" / "p22_base_rates.yaml"
 # Phase 1 composite weights (spec §5.1) — scoring/weights_config.py; hashed into p22_score_run.config_hash.
 WEIGHTS_YAML = PROJECT_ROOT / "config" / "pipeline" / "p22_weights.yaml"
+# CVR valuation convention for deal-return labels (spec §10) — backtest/labels.py.
+CVR_POLICY_YAML = PROJECT_ROOT / "config" / "pipeline" / "p22_cvr_policy.yaml"
 
 # ---------------------------------------------------------------------------
 # ClinicalTrials.gov API v2 (spec §2.2)
