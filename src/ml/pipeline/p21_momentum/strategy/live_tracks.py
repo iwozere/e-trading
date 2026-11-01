@@ -20,6 +20,7 @@ Every track starts at ``NAV_TOTAL_USD`` on the first execution date.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -104,8 +105,9 @@ def _price(frame: pd.DataFrame, ticker: str, ts: pd.Timestamp) -> Optional[float
     """Positive price of ticker at ts, else None."""
     if ticker not in frame.columns:
         return None
-    value = pd.to_numeric(frame.at[ts, ticker], errors="coerce")
-    number = float(value) if pd.notna(value) else 0.0
+    # A one-cell Series keeps pandas-stubs (>=3.1) typing: `.at` returns a broad scalar union.
+    values = pd.to_numeric(frame.loc[[ts], ticker], errors="coerce").to_numpy(dtype=float, na_value=math.nan)
+    number = float(values[0]) if not math.isnan(values[0]) else 0.0
     return number if number > 0 else None
 
 

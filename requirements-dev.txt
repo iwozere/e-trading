@@ -25,7 +25,7 @@ types-tqdm
 # pandas-stubs is what pyright needs to reach zero errors. mypy tolerates it
 # via the follow_imports=skip override in pyproject.toml, so both checkers now
 # run cleanly in this one environment (no split-brain).
-pandas-stubs
+pandas-stubs==3.1.0.261029
 # Optional runtime deps imported by active code (redis/zstandard/pyarrow
 # caching, duckdb FMP reads, san data, onnx model export, slowapi rate limiting). Present so
 # the checkers resolve the imports in the type-check environment, which
