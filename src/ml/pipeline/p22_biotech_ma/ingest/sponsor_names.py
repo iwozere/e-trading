@@ -17,12 +17,17 @@ Two jobs, one tokenization:
 Unlike `entity_resolution.normalize_company_name` (spec §3.3's alias-dedup key), descriptive words
 such as "therapeutics"/"pharmaceuticals" are KEPT: dropping them turns "Compass Therapeutics" into
 the query "compass", which also matches "Compass Pathways".
+
+Token subsets cannot tell apart two unrelated companies that share a name, so known homonyms are
+excluded explicitly (`_HOMONYM_SPONSOR_TOKENS`): Merck & Co.'s query "merck" also returns Merck KGaA's
+trials (2026-11-01 run: 330 of 5,242 studies, led by "Merck KGaA, Darmstadt, Germany" and "Merck
+Healthcare KGaA, ..."), which Merck & Co.'s own sponsor strings never contain.
 """
 
 from __future__ import annotations
 
 import re
-from typing import List
+from typing import Dict, FrozenSet, List
 
 # Legal-form words only — never descriptive ones (see module docstring).
 _LEGAL_FORM_TOKENS = frozenset({
@@ -35,6 +40,10 @@ _EDGAR_TAG_RE = re.compile(r"/\s*[a-z]{2,5}\b/?")
 # Dotted legal forms collapse to one token before punctuation is stripped ("n.v." -> "nv").
 _DOTTED_FORMS = (("n.v.", "nv"), ("s.a.", "sa"), ("s.p.a.", "spa"), ("b.v.", "bv"))
 _NON_WORD_RE = re.compile(r"[^a-z0-9]+")
+# Company query tokens -> sponsor tokens that mark an unrelated same-name company (see module docstring).
+_HOMONYM_SPONSOR_TOKENS: Dict[FrozenSet[str], FrozenSet[str]] = {
+    frozenset({"merck"}): frozenset({"kgaa", "serono"}),
+}
 
 
 def _tokens(name: str) -> List[str]:
@@ -65,4 +74,7 @@ def sponsor_matches_company(sponsor_name: str, company_name: str) -> bool:
     wanted = set(company_query_tokens(company_name))
     if not wanted or not sponsor_name:
         return False
-    return wanted <= set(_tokens(sponsor_name))
+    sponsor_tokens = set(_tokens(sponsor_name))
+    if sponsor_tokens & _HOMONYM_SPONSOR_TOKENS.get(frozenset(wanted), frozenset()):
+        return False
+    return wanted <= sponsor_tokens

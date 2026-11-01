@@ -50,6 +50,16 @@ def test_sponsor_matches_company_rejects_other_lead_sponsors():
     assert not sponsor_matches_company("Compass Pathways", "COMPASS THERAPEUTICS, INC.")
 
 
+def test_sponsor_matches_company_rejects_merck_kgaa_for_merck_and_co():
+    assert not sponsor_matches_company("Merck KGaA, Darmstadt, Germany", "MERCK & CO. INC.")
+    assert not sponsor_matches_company("Merck Healthcare KGaA, Darmstadt, Germany, an affiliate of Merck KGaA, Darmstadt, Germany", "MERCK & CO. INC.")
+    assert sponsor_matches_company("Verona Pharma, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA", "MERCK & CO. INC.")
+
+
+def test_homonym_exclusion_does_not_affect_other_companies():
+    assert sponsor_matches_company("SpringWorks Therapeutics, Inc., a healthcare company of Merck KGaA, Darmstadt, Germany", "SpringWorks Therapeutics, Inc.")
+
+
 def test_sponsor_matches_company_empty_inputs_never_match():
     assert not sponsor_matches_company("", "SPERO THERAPEUTICS, INC.")
     assert not sponsor_matches_company("Anything Inc", "Inc.")
