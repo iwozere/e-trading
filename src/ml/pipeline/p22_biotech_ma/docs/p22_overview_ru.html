@@ -1,0 +1,966 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Пайплайн P22 Biotech M&amp;A</title>
+<style>
+:root {
+  --bg: #fbfaf7; --surface: #ffffff; --surface-2: #f3f1ec; --text: #1d1d1b; --muted: #5f5d57;
+  --border: #e2ded5; --accent: #2f5d8a; --accent-soft: #e7eef6; --ok: #2e7d4f; --ok-soft: #e5f3ea;
+  --warn: #9a6200; --warn-soft: #fbf0d9; --bad: #a33b3b; --bad-soft: #f8e3e3; --code-bg: #f1eee8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161615; --surface: #1f1f1d; --surface-2: #272724; --text: #e9e7e1; --muted: #a9a59b;
+    --border: #3a3935; --accent: #8db7e3; --accent-soft: #1f2d3b; --ok: #7cc79a; --ok-soft: #1c2e23;
+    --warn: #e2b357; --warn-soft: #33290f; --bad: #e88b8b; --bad-soft: #3a1f1f; --code-bg: #2a2926;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161615; --surface: #1f1f1d; --surface-2: #272724; --text: #e9e7e1; --muted: #a9a59b;
+  --border: #3a3935; --accent: #8db7e3; --accent-soft: #1f2d3b; --ok: #7cc79a; --ok-soft: #1c2e23;
+  --warn: #e2b357; --warn-soft: #33290f; --bad: #e88b8b; --bad-soft: #3a1f1f; --code-bg: #2a2926;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+.layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); max-width: 1320px; margin: 0 auto; }
+nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; padding: 28px 18px 40px 22px; border-right: 1px solid var(--border); font-size: 14px; }
+nav.toc .brand { font-weight: 700; font-size: 15px; margin-bottom: 14px; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: toc; }
+nav.toc li { margin: 2px 0; }
+nav.toc a { color: var(--muted); text-decoration: none; display: block; padding: 3px 8px; border-radius: 6px; }
+nav.toc a:hover { background: var(--surface-2); color: var(--text); }
+main { padding: 36px 48px 80px; min-width: 0; }
+header.hero { border-bottom: 1px solid var(--border); padding-bottom: 22px; margin-bottom: 8px; }
+header.hero h1 { font-size: 32px; line-height: 1.2; margin: 0 0 8px; }
+header.hero p { color: var(--muted); margin: 4px 0; max-width: 820px; }
+h2 { font-size: 24px; margin: 56px 0 12px; padding-top: 8px; border-top: 1px solid var(--border); scroll-margin-top: 16px; }
+h3 { font-size: 19px; margin: 32px 0 8px; scroll-margin-top: 16px; }
+h4 { font-size: 16px; margin: 22px 0 6px; }
+p, li { max-width: 900px; }
+a { color: var(--accent); }
+code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 13.5px; line-height: 1.5; }
+pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+.table-wrap { overflow-x: auto; margin: 12px 0 18px; border: 1px solid var(--border); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; background: var(--surface); }
+th, td { text-align: left; vertical-align: top; padding: 8px 11px; border-bottom: 1px solid var(--border); }
+th { background: var(--surface-2); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+.note, .warn, .bad, .ok { border-radius: 8px; padding: 12px 16px; margin: 14px 0; max-width: 900px; border: 1px solid var(--border); }
+.note { background: var(--accent-soft); }
+.warn { background: var(--warn-soft); }
+.bad { background: var(--bad-soft); }
+.ok { background: var(--ok-soft); }
+.note > :first-child, .warn > :first-child, .bad > :first-child, .ok > :first-child { margin-top: 0; }
+.note > :last-child, .warn > :last-child, .bad > :last-child, .ok > :last-child { margin-bottom: 0; }
+.tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.t-ok { background: var(--ok-soft); color: var(--ok); }
+.t-part { background: var(--warn-soft); color: var(--warn); }
+.t-no { background: var(--bad-soft); color: var(--bad); }
+.t-man { background: var(--accent-soft); color: var(--accent); }
+dl.glossary { display: grid; grid-template-columns: minmax(150px, 230px) minmax(0, 1fr); gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+dl.glossary dt, dl.glossary dd { margin: 0; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+dl.glossary dt { font-weight: 600; background: var(--surface-2); }
+.flow { display: grid; gap: 10px; margin: 18px 0 24px; }
+.flow .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.flow .box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.flow .box b { display: block; margin-bottom: 2px; }
+.flow .box span { color: var(--muted); font-size: 13px; }
+.flow .arrow { text-align: center; color: var(--muted); font-size: 18px; line-height: 1; }
+.flow .layer { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.step { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; margin: 16px 0; }
+.step h4 { margin-top: 0; font-size: 17px; }
+.step .io { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 4px 12px; font-size: 14.5px; }
+.step .io .k { color: var(--muted); font-weight: 600; }
+.q { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 14px 18px; margin: 14px 0; }
+.q h4 { margin-top: 0; }
+.q .rec { color: var(--ok); font-weight: 600; }
+.theme-btn { float: right; font: inherit; font-size: 13px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; }
+footer { margin-top: 60px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); padding-top: 14px; }
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  nav.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); padding: 16px; }
+  main { padding: 20px 16px 60px; }
+  header.hero h1 { font-size: 26px; }
+  dl.glossary { grid-template-columns: 1fr; }
+  dl.glossary dt { border-bottom: none; }
+  .step .io { grid-template-columns: 1fr; }
+}
+@media print { nav.toc, .theme-btn { display: none; } .layout { display: block; } }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="Содержание">
+  <div class="brand">P22 Biotech M&amp;A</div>
+  <ol>
+    <li><a href="#s1">1. Что это и зачем</a></li>
+    <li><a href="#s2">2. Словарь: источники и термины</a></li>
+    <li><a href="#s3">3. Главные принципы</a></li>
+    <li><a href="#s4">4. Архитектура</a></li>
+    <li><a href="#s5">5. Хранилище: таблицы</a></li>
+    <li><a href="#s6">6. Расписание джобов</a></li>
+    <li><a href="#s7">7. Шаги пайплайна подробно</a></li>
+    <li><a href="#s8">8. Признаки: блоки A–G</a></li>
+    <li><a href="#s9">9. Скоринг</a></li>
+    <li><a href="#s10">10. Выходные данные</a></li>
+    <li><a href="#s11">11. Сделки, разметка, бэктест</a></li>
+    <li><a href="#s12">12. Ручные инструменты (CLI)</a></li>
+    <li><a href="#s13">13. Конфигурация (YAML)</a></li>
+    <li><a href="#s14">14. Эксплуатация и диагностика</a></li>
+    <li><a href="#s15">15. Текущее состояние</a></li>
+    <li><a href="#s16">16. Решения за владельцем</a></li>
+    <li><a href="#s17">17. Где что лежит в коде</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="hero">
+  <button class="theme-btn" type="button" id="themeBtn">Тема</button>
+  <h1>Пайплайн P22 Biotech M&amp;A: полное описание</h1>
+  <p>Документ для нового члена команды, который будет сопровождать пайплайн. Предполагается, что вы не знаете ни одного источника данных и ни одного термина: всё объясняется с нуля.</p>
+  <p>Состояние на 31.10.2026 (коммит <code>6c6e2c9</code>). Нормативная спецификация: <code>docs/pipeline-specification.md</code> (v0.6), журнал работ и решений: <code>docs/Tasks.md</code>, дизайн: <code>docs/Design.md</code>.</p>
+</header>
+
+<!-- ============================================================ -->
+<h2 id="s1">1. Что это и зачем</h2>
+
+<p><b>P22</b> — это скрининговый пайплайн, который каждый рабочий день ранжирует американские публичные биотех-компании по вероятности того, что их <b>купят в ближайшие 12–24 месяца</b>, и объясняет, почему каждая компания стоит на своём месте.</p>
+
+<h3>Гипотеза, на которой всё построено</h3>
+<p>Крупная фарма (Pfizer, Merck, Novartis и т. д.) покупает биотех, когда одновременно выполняются три условия:</p>
+<ol>
+  <li><b>Давление:</b> у покупателя скоро истекают патенты на продукты, приносящие большую выручку («патентный обрыв», patent cliff), и ему нужно чем-то эту выручку заменить.</li>
+  <li><b>Возможность:</b> у покупателя есть деньги (наличные, долговая ёмкость, дорогие собственные акции), чтобы заплатить.</li>
+  <li><b>Подходящий актив:</b> на рынке есть биотех с препаратом достаточно поздней стадии в той терапевтической области, в которой покупатель уже продаёт.</li>
+</ol>
+<p>Пайплайн моделирует все три стороны и оценивает их пересечение. Плюс он отдельно отслеживает «явные» сигналы того, что продажа уже идёт (компания объявила о поиске стратегических альтернатив, активист купил крупный пакет и т. п.).</p>
+
+<h3>Чего пайплайн НЕ делает (сознательно)</h3>
+<ul>
+  <li>Не торгует и не выставляет ордера.</li>
+  <li>Не прогнозирует цены.</li>
+  <li>Не даёт инвестиционных рекомендаций (каждый выходной файл несёт обязательный дисклеймер).</li>
+  <li>Не предсказывает, сработает ли лекарство: использует только опубликованные среднестатистические вероятности успеха клинических испытаний.</li>
+  <li>Не скрейпит сайты, которые это запрещают.</li>
+</ul>
+
+<h3>Как мы поймём, что пайплайн работает</h3>
+<p>Критерии успеха (спецификация §0.3) проверяются <b>бэктестом</b> — прогоном модели «в прошлом», 2016–2025, как если бы мы жили в каждый месяц того времени:</p>
+<div class="table-wrap"><table>
+<tr><th>Метрика</th><th>Порог</th><th>Что значит простыми словами</th></tr>
+<tr><td>Lift@50</td><td>≥ 3.0</td><td>Среди 50 лучших по рейтингу компаний доля купленных должна быть минимум в 3 раза выше, чем во всей вселенной.</td></tr>
+<tr><td>Precision@25</td><td>≥ 0.12</td><td>Из 25 лучших хотя бы 12% (3 компании) получили предложение о покупке в течение 24 месяцев.</td></tr>
+<tr><td>Recall@200</td><td>≥ 2× случайного</td><td>200 лучших покрывают минимум вдвое больше реальных сделок, чем 200 случайных компаний.</td></tr>
+<tr><td>Ошибки «заглядывания в будущее»</td><td>0</td><td>Ни один признак не использует данные, которых в тот момент ещё не было (см. <a href="#s3">принципы</a>).</td></tr>
+</table></div>
+<p>Модель сравнивается с тремя «базовыми» стратегиями, и главный соперник — <b>naive-informed</b>: просто отсортировать компании по самой поздней фазе испытаний, а при равенстве — по запасу денег. Так за полдня сделал бы начинающий аналитик. Если модель его не обыгрывает, ей незачем существовать.</p>
+
+<!-- ============================================================ -->
+<h2 id="s2">2. Словарь: источники данных и термины</h2>
+
+<h3>2.1 Источники данных</h3>
+
+<h4>SEC и EDGAR — главный источник (бесплатный)</h4>
+<p><b>SEC</b> (Securities and Exchange Commission) — американский регулятор фондового рынка. Все публичные компании США обязаны подавать в SEC отчёты. <b>EDGAR</b> — публичная база всех этих документов. Это основа пайплайна: она бесплатна, авторитетна и, главное, <b>не теряет исчезнувшие компании</b> — отчётность купленной в 2015 году компании доступна навсегда.</p>
+<p>Правила доступа: в каждом запросе обязателен заголовок <code>User-Agent</code> с названием приложения и e-mail (иначе SEC блокирует), не более 10 запросов в секунду. В коде это <code>config.EDGAR_USER_AGENT</code> и общий ограничитель скорости.</p>
+<dl class="glossary">
+  <dt>CIK</dt><dd>Central Index Key — постоянный числовой идентификатор компании в SEC (например, <code>0001442836</code>). Тикер может меняться, CIK — никогда. <b>Во всём пайплайне компании идентифицируются по CIK, а не по тикеру.</b></dd>
+  <dt>10-K</dt><dd>Годовой отчёт компании (финансы, бизнес, риски).</dd>
+  <dt>10-Q</dt><dd>Квартальный отчёт. Если компания перестала подавать 10-K/10-Q, она, скорее всего, куплена, обанкротилась или ушла с биржи.</dd>
+  <dt>8-K</dt><dd>Отчёт о существенном событии, подаётся в течение 4 рабочих дней. Разделы называются Item: <b>Item 1.01</b> — подписан существенный договор (например, о слиянии); <b>Item 7.01 / 8.01</b> — прочие события и пресс-релизы, сюда попадают объявления «изучаем стратегические альтернативы»; <b>Item 2.01</b> — завершение приобретения. Пресс-релиз прикладывается как приложение EX-99.1.</dd>
+  <dt>SC 14D9</dt><dd>Позиция совета директоров компании-цели по тендерному предложению (кто-то предложил купить все акции). Почти всегда означает реальную сделку покупки.</dd>
+  <dt>SC TO-T</dt><dd>Само тендерное предложение, подаётся покупателем.</dd>
+  <dt>DEFM14A</dt><dd>Окончательная прокси-записка к голосованию акционеров по слиянию. Ещё один сильный признак сделки.</dd>
+  <dt>S-4</dt><dd>Регистрация акций, выпускаемых при слиянии. Встречается и при настоящих покупках за акции, и при обратных слияниях (см. ниже), поэтому неоднозначна.</dd>
+  <dt>SC 13D / 13D/A</dt><dd>Подаётся тем, кто купил больше 5% акций <b>с намерением влиять</b> на компанию (активист, стратегический инвестор). В Item 4 указывается цель. 13D/A — поправки; их последовательность (эскалация) тоже сигнал.</dd>
+  <dt>SC 13G</dt><dd>То же, что 13D, но для пассивных инвесторов. Слабый сигнал.</dd>
+  <dt>13F</dt><dd>Квартальный отчёт фондов о портфеле. Запаздывает на 45 дней, для P22 почти бесполезен (используется только в блоке F, который не построен).</dd>
+  <dt>Form 4</dt><dd>Сделки инсайдеров (директоров, менеджмента) с акциями компании.</dd>
+  <dt>Form 25 / Form 15</dt><dd>Form 25 — уведомление о снятии акций с биржи (делистинг); Form 15 — прекращение регистрации в SEC. После покупки компании обычно подаются оба. Мы используем дату Form 25 как приблизительную дату закрытия сделки.</dd>
+  <dt>XBRL</dt><dd>Машиночитаемая разметка финансовых показателей внутри отчётов. Каждый показатель имеет «тег», например <code>us-gaap:CashAndCashEquivalentsAtCarryingValue</code> (денежные средства) или <code>dei:EntityCommonStockSharesOutstanding</code> (количество акций). <code>us-gaap</code> — американские стандарты, <code>ifrs-full</code> — международные (у иностранных эмитентов, подающих 20-F).</dd>
+  <dt>companyfacts</dt><dd>API SEC (<code>data.sec.gov/api/xbrl/companyfacts/CIK….json</code>), который возвращает все XBRL-показатели компании за всю историю с датой подачи каждого значения. Источник всех наших финансовых фактов.</dd>
+  <dt>submissions</dt><dd>API SEC (<code>data.sec.gov/submissions/CIK….json</code>) — список всех документов компании, её адрес, тикеры, отраслевой код.</dd>
+  <dt>EFTS</dt><dd>Полнотекстовый поиск EDGAR (<code>efts.sec.gov</code>). Используется, чтобы находить 8-K с нужными фразами, 13D и документы о сделках.</dd>
+  <dt>DERA Financial Statement Data Sets</dt><dd>Квартальные ZIP-архивы от отдела DERA в SEC: по одной строке на каждый XBRL-отчёт (CIK, название, отраслевой код, форма, дата). <b>Это единственный источник, по которому можно восстановить, какие компании существовали в каждом прошлом квартале.</b> Из него строится «вселенная».</dd>
+  <dt>SIC</dt><dd>Standard Industrial Classification — отраслевой код. Биотех для нас — это 2833, 2834 (фармпрепараты), 2835 (диагностика), 2836 (биологические продукты), 8731 (биологические исследования).</dd>
+  <dt>20-F</dt><dd>Годовой отчёт иностранной компании (аналог 10-K). Например, Novo Nordisk, Genmab.</dd>
+</dl>
+
+<h4>ClinicalTrials.gov (бесплатный)</h4>
+<p>Реестр клинических испытаний Национальных институтов здоровья США. Каждое испытание имеет номер <b>NCT</b> (например, <code>NCT04567890</code>), спонсора, фазу, статус, дату основного завершения (primary completion date), список вмешательств (препаратов) и заболеваний. Мы берём API v2 и <b>историю версий</b> каждой записи: изменение конечной точки или переносы дат в середине испытания — важный сигнал.</p>
+<dl class="glossary">
+  <dt>Фазы испытаний</dt><dd><b>Early Phase 1 / Phase 1</b> — безопасность на небольшой группе; <b>Phase 2</b> — первая проверка эффективности (самый высокий отсев, ~70% проваливаются); <b>Phase 3</b> — большое подтверждающее испытание; после него — подача заявки в FDA. Чем дальше фаза, тем меньше риск и тем дороже актив.</dd>
+  <dt>Спонсор</dt><dd>Организация, проводящая испытание. Название спонсора часто не совпадает с названием компании в SEC («Acme Therapeutics» vs «ACME THERAPEUTICS, INC.»), поэтому нужно сопоставление имён (alias matching).</dd>
+  <dt>Катализатор (catalyst)</dt><dd>Ожидаемое событие, способное резко изменить цену акций: результаты испытания, решение FDA. Мы приближаем его датой основного завершения ближайшего испытания.</dd>
+</dl>
+
+<h4>FDA (бесплатно)</h4>
+<p><b>FDA</b> — американское агентство, одобряющее лекарства.</p>
+<dl class="glossary">
+  <dt>openFDA Drugs@FDA</dt><dd>API с одобренными заявками: номер заявки (NDA — для малых молекул, BLA — для биологических препаратов), заявитель, продукты. Говорит, у кого какие одобренные лекарства.</dd>
+  <dt>Orange Book</dt><dd>Квартальный ZIP от FDA: патенты и периоды эксклюзивности для малых молекул. Отсюда берутся даты <b>LOE</b> (loss of exclusivity — потеря эксклюзивности, после неё выходят дженерики и выручка падает). Ядро модели «давления на покупателя».</dd>
+  <dt>Purple Book</dt><dd>То же для биологических препаратов (антитела и т. п.): даты эксклюзивности, после которых возможны биосимиляры.</dd>
+  <dt>CRL</dt><dd>Complete Response Letter — отказ FDA в одобрении (с перечнем замечаний).</dd>
+  <dt>PDUFA date</dt><dd>Дата, к которой FDA обязано вынести решение по заявке.</dd>
+</dl>
+
+<h4>Рыночные данные (цены)</h4>
+<dl class="glossary">
+  <dt>FMP</dt><dd>Financial Modeling Prep — платный поставщик рыночных данных. Мы <b>однократно</b> выкачали из него исторические дневные цены, сплиты и дивиденды, включая уже исчезнувшие компании («винтаж» FMP, общий для нескольких пайплайнов, модуль <code>src/data/fmp_pipeline</code>). Цены из винтажа загружены в базу на проде. <b>Лимит FMP исчерпан до середины ноября 2026, затем доступен только бесплатный тариф (250 запросов в день) — для пайплайна непригоден. Новых данных из FMP не будет.</b> Покрытие винтажа: ~91% живых компаний, ~72% выбывших после 2021, только ~9% выбывших до 2021.</dd>
+  <dt>yfinance</dt><dd>Неофициальная библиотека к Yahoo Finance. Бесплатна, но без гарантий и без исчезнувших тикеров. Используется для <b>ежедневного дозаполнения</b> свежих цен по текущим компаниям (джоб Daily Price Ingest), всегда с <code>auto_adjust=False</code> (сырые цены).</dd>
+  <dt>IBKR</dt><dd>Interactive Brokers. В спецификации предполагался как источник цен и данных по опционам/шорту; в текущей реализации не используется.</dd>
+  <dt>Сплит / обратный сплит</dt><dd>Дробление (1 акция → 4) или консолидация акций (20 → 1). Микрокапы биотеха часто делают обратные сплиты, чтобы цена не упала ниже $1 и их не сняли с биржи. Из-за этого «скорректированные» исторические цены опасны (см. <a href="#s3">принципы</a>).</dd>
+</dl>
+
+<h3>2.2 Финансовые и сделочные термины</h3>
+<dl class="glossary">
+  <dt>Market cap</dt><dd>Рыночная капитализация = цена акции × количество акций. Мы считаем её сами: сырая цена закрытия × количество акций с обложки последнего отчёта.</dd>
+  <dt>EV</dt><dd>Enterprise value = капитализация − (деньги + краткосрочные вложения) + долг. Сколько реально «стоит» бизнес без учёта денег на счету. У биотеха бывает отрицательной (денег больше, чем стоит компания).</dd>
+  <dt>Burn</dt><dd>Операционный «сжиг» денег за квартал (отрицательный операционный денежный поток).</dd>
+  <dt>Runway</dt><dd>Запас хода: (деньги + краткосрочные вложения) ÷ средний квартальный burn × 3 = на сколько месяцев хватит денег.</dd>
+  <dt>Dilution / ATM</dt><dd>Размывание — выпуск новых акций для привлечения денег, обычно бьёт по цене. ATM (at-the-market) — программа постепенной продажи новых акций на бирже.</dd>
+  <dt>Тендерное предложение</dt><dd>Покупатель напрямую предлагает акционерам продать акции по фиксированной цене. Документы: SC TO-T (покупатель), SC 14D9 (компания).</dd>
+  <dt>Слияние (merger)</dt><dd>Покупка через голосование акционеров. Документ: DEFM14A, при оплате акциями — ещё S-4.</dd>
+  <dt>Scheme of arrangement</dt><dd>Британский/ирландский механизм покупки через суд (например, Alkermes — Avadel). Не всегда даёт SC 14D9/DEFM14A, поэтому наш поиск может такие сделки пропустить.</dd>
+  <dt>Upfront per share</dt><dd>Гарантированная цена за акцию, выплачиваемая при закрытии сделки.</dd>
+  <dt>CVR</dt><dd>Contingent value right — право на дополнительную выплату, если наступит событие (одобрение FDA, достижение продаж). Часто не выплачивается. <b>Наша политика: CVR оценивается в ноль</b> (<code>p22_cvr_policy.yaml</code>), максимальная сумма хранится справочно.</dd>
+  <dt>Премия (premium)</dt><dd>На сколько цена сделки выше цены акции до объявления. Считаем за 1 день и за 30 дней до объявления.</dd>
+  <dt>Strategic acquisition</dt><dd>Операционная фарма/биотех покупает компанию ради её препаратов. <b>Единственный тип сделки, который считается положительной меткой.</b></dd>
+  <dt>Reverse merger</dt><dd>Обратное слияние: провалившаяся публичная биотех-компания сливается с частной, и частная получает биржевой листинг. В документах выглядит как покупка, но по смыслу — противоположность: компанию «купили», потому что её наука провалилась. Не положительная метка.</dd>
+  <dt>De-SPAC</dt><dd>SPAC — пустая публичная компания, созданная, чтобы слиться с частной. Слияние SPAC с биотехом — разновидность выхода частной компании на биржу, не покупка.</dd>
+  <dt>Shell transaction</dt><dd>Покупка «денежной оболочки» без интереса к активам: например, XOMA Royalty или XenoTherapeutics покупают биотех с деньгами на счету по цене ≈ денег на акцию. Не положительная метка.</dd>
+  <dt>PE take-private</dt><dd>Покупка финансовым инвестором (фондом прямых инвестиций), не стратегом. Отдельная метка, никогда не смешивается с основной.</dd>
+  <dt>Liquidation / asset sale</dt><dd>Ликвидация с выплатой денег акционерам / продажа активов при сохранении компании. Не положительные метки.</dd>
+</dl>
+
+<h3>2.3 Термины модели</h3>
+<dl class="glossary">
+  <dt>Вселенная (universe)</dt><dd>Множество компаний, которые на дату X подлежат ранжированию. Строится заново для каждой даты.</dd>
+  <dt>as_of</dt><dd>«По состоянию на» — дата, для которой считается рейтинг. В бою это сегодня, в бэктесте — каждая прошлая дата.</dd>
+  <dt>Point-in-time</dt><dd>«Как было известно в тот момент». Любое значение берётся в том виде, в каком его можно было знать на дату as_of.</dd>
+  <dt>Bitemporal</dt><dd>У каждого факта две оси времени: когда он стал верен в мире (<code>valid_from</code>/<code>valid_to</code>) и когда мы о нём узнали (<code>known_from</code>).</dd>
+  <dt>Lookahead (заглядывание в будущее)</dt><dd>Ошибка, при которой расчёт на прошлую дату использует информацию, появившуюся позже. Даёт красивый, но полностью фиктивный бэктест.</dd>
+  <dt>Survivorship bias</dt><dd>Ошибка выжившего: если брать список компаний у поставщика сегодня, из него выпадут все купленные — то есть ровно положительные примеры.</dd>
+  <dt>PoA / LoA</dt><dd>Probability / Likelihood of approval — вероятность, что препарат дойдёт до одобрения. Берём средние по отрасли из исследования BIO/Informa.</dd>
+  <dt>Терапевтическая область (TA)</dt><dd>Например, oncology_solid, neurology, immunology. Словарь в <code>p22_therapeutic_area.yaml</code>.</dd>
+  <dt>Модальность</dt><dd>Тип препарата: малая молекула, моноклональное антитело, ADC, клеточная, генная, РНК-терапия и т. д. (<code>p22_modality.yaml</code>).</dd>
+  <dt>Rank percentile</dt><dd>Позиция значения внутри вселенной, нормированная в [0, 1]. Все блоки нормируются так, а не через z-оценки: устойчиво к выбросам.</dd>
+  <dt>Tier (уровень)</dt><dd>Полоса 0–3 по силе «явного» сигнала продажи (блок G). Tier 3 — продажа уже идёт или контрактно предрешена.</dd>
+  <dt>Review queue</dt><dd>Очередь ручной проверки: всё, что машина не может надёжно решить сама (совпадения имён, события продажи, тип сделки), ждёт подтверждения человека.</dd>
+</dl>
+
+<!-- ============================================================ -->
+<h2 id="s3">3. Главные принципы (нарушать нельзя)</h2>
+
+<div class="bad">
+<p><b>1. Никакого заглядывания в будущее.</b> Каждый факт в базе имеет <code>known_from</code> — момент, когда рынок мог о нём узнать (дата подачи документа, а не дата периода и не дата нашего скачивания). Любой расчёт на дату as_of читает только строки с <code>known_from ≤ as_of</code>. Пример: 10-Q за квартал, закончившийся 31.03.2023, подан 08.05.2023. Расчёт на 15.04.2023 этот отчёт видеть не должен. Это проверяется автоматическим аудитом (<code>lookahead_audit_cli</code>).</p>
+</div>
+<div class="bad">
+<p><b>2. Вселенная строится только из SEC, никогда из поставщика цен.</b> Иначе в прошлом «исчезнут» все купленные компании.</p>
+</div>
+<div class="bad">
+<p><b>3. Цены хранятся сырыми, корректировка — только при чтении.</b> Сплиты лежат в отдельной таблице и применяются при чтении, только если были известны к дате as_of. Если хранить скорректированные цены, то после обратного сплита 1:20 вся история капитализации будет завышена в 20 раз, а фильтр «капитализация &gt; $25M» начнёт использовать информацию из будущего.</p>
+</div>
+<div class="warn">
+<p><b>4. Отсутствие значения — это None, а не ноль.</b> Если признак не удалось посчитать, функция возвращает <code>None</code>, и это честно отражается в рейтинге (поле <code>coverage</code>), а не превращается в ноль.</p>
+</div>
+<div class="warn">
+<p><b>5. Не выдумывать бизнес-логику.</b> Если спецификация не даёт формулу или число (например, «финансовый рычаг покупателя»), код возвращает <code>None</code> и вопрос уходит владельцу (<a href="#s16">раздел 16</a>), а не заполняется «разумной догадкой».</p>
+</div>
+<div class="warn">
+<p><b>6. Сильные сигналы проходят через человека.</b> События блока G (продажа, активисты) и метки сделок попадают в расчёт только после ручного подтверждения (<code>is_verified = TRUE</code>). Одна неподтверждённая ложная тревога поставила бы случайную компанию на первое место.</p>
+</div>
+<div class="note">
+<p><b>7. Каждое число в отчёте — со ссылкой на источник.</b> В досье цифра без <code>source_url</code> не печатается, а выносится в раздел «Omitted (no source)».</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s4">4. Архитектура</h2>
+
+<div class="flow" role="img" aria-label="Схема потока данных P22">
+  <div class="layer">Источники</div>
+  <div class="row">
+    <div class="box"><b>SEC EDGAR</b><span>DERA, submissions, companyfacts, EFTS (8-K, 13D, сделки)</span></div>
+    <div class="box"><b>ClinicalTrials.gov</b><span>испытания + история версий</span></div>
+    <div class="box"><b>FDA</b><span>openFDA, Orange Book, Purple Book</span></div>
+    <div class="box"><b>Цены</b><span>FMP-винтаж (история, разово), yfinance (ежедневно)</span></div>
+    <div class="box"><b>Люди</b><span>проверка очереди, ввод сделок, YAML-конфиги</span></div>
+  </div>
+  <div class="arrow">↓</div>
+  <div class="layer">Сырая зона (raw zone)</div>
+  <div class="row"><div class="box"><b>Файлы ответов как есть</b><span><code>DATA_CACHE_DIR/p22/raw/&lt;источник&gt;/&lt;дата&gt;/…</code>, неизменяемые, с датой получения; повторно не скачиваются</span></div></div>
+  <div class="arrow">↓</div>
+  <div class="layer">Нормализация</div>
+  <div class="row">
+    <div class="box"><b>Компании</b><span>вселенная, тикеры, покупатели</span></div>
+    <div class="box"><b>Финансовые факты</b><span>деньги, долг, burn, акции</span></div>
+    <div class="box"><b>Сопоставление имён</b><span>спонсор CT.gov / заявитель FDA → компания</span></div>
+    <div class="box"><b>Активы и испытания</b><span>препарат, фаза, область, модальность</span></div>
+    <div class="box"><b>Патенты покупателей</b><span>даты LOE</span></div>
+  </div>
+  <div class="arrow">↓</div>
+  <div class="layer">Битемпоральное хранилище Postgres (таблицы p22_*)</div>
+  <div class="arrow">↓</div>
+  <div class="layer">Признаки (as_of)</div>
+  <div class="row">
+    <div class="box"><b>A</b><span>давление на покупателя</span></div>
+    <div class="box"><b>B</b><span>качество актива</span></div>
+    <div class="box"><b>C</b><span>финансы цели</span></div>
+    <div class="box"><b>D</b><span>совместимость пары</span></div>
+    <div class="box"><b>E</b><span>помехи сделке</span></div>
+    <div class="box"><b>G</b><span>явные сигналы продажи</span></div>
+  </div>
+  <div class="arrow">↓</div>
+  <div class="layer">Скоринг и выходы</div>
+  <div class="row">
+    <div class="box"><b>Композит + tier</b><span>p22_score_run / p22_score</span></div>
+    <div class="box"><b>Watchlist</b><span>CSV + JSON</span></div>
+    <div class="box"><b>Досье</b><span>Markdown на топ-25</span></div>
+    <div class="box"><b>Бэктест</b><span>вручную, против базовых стратегий</span></div>
+  </div>
+</div>
+
+<p><b>Технически:</b> Python 3, Postgres (общая база проекта), каждый шаг — отдельный скрипт <code>jobs/run_*.py</code>, который запускается общим планировщиком проекта (<code>scheduler.service</code> на Raspberry Pi, APScheduler). Регистрация джобов — через общий реестр <code>src/data/pipeline</code> (<code>specs/p22_specs.py</code>). Скрипт пишет лог в <code>results/p22_biotech_ma/ГГГГ-ММ-ДД/pipeline.log</code> и последней строкой печатает <code>__SCHEDULER_RESULT__:{json}</code> — по ней планировщик понимает результат.</p>
+<p><b>Зависимости между джобами:</b> джоб с зависимостями сначала проверяет, что все его предшественники <b>сегодня успешно отработали через планировщик</b>. Если нет — он «откладывается» (<code>deferred: true</code>) и ничего не делает. Ручной запуск предшественника из консоли не считается: см. <a href="#s14">раздел 14</a>.</p>
+
+<!-- ============================================================ -->
+<h2 id="s5">5. Хранилище: таблицы</h2>
+<p>Все таблицы с префиксом <code>p22_</code>, модели — <code>src/data/db/models/*p22*</code>, доступ — через <code>P22Repo</code> (<code>src/data/db/repos/repo_p22_biotech_ma.py</code>), миграции — Alembic (<code>src/data/db/migrations/versions/</code>, последняя P22-миграция — 012).</p>
+<div class="table-wrap"><table>
+<tr><th>Таблица</th><th>Что хранит</th><th>Кто пишет</th></tr>
+<tr><td><code>p22_company</code></td><td>Компании: CIK, название, тикер, биржа, SIC, активна ли, роль (target / acquirer).</td><td>Entity Resolution, Acquirer Roster Load</td></tr>
+<tr><td><code>p22_company_alias</code></td><td>Альтернативные имена компании (спонсор CT.gov, заявитель FDA), подтверждено ли.</td><td>Alias Matching + ручная проверка</td></tr>
+<tr><td><code>p22_financial_fact</code></td><td>Финансовые показатели (деньги, долг, burn, акции, free float, капитализация) с битемпоральными полями и ссылкой на документ.</td><td>Financial Facts Normalization, Market Cap Compute</td></tr>
+<tr><td><code>p22_asset</code></td><td>Препараты (программы): компания, название, модальность, терапевтическая область, показание.</td><td>Trial Normalization</td></tr>
+<tr><td><code>p22_trial</code></td><td>Испытания: NCT, препарат, фаза, статус, дата завершения, страны.</td><td>Trial Normalization</td></tr>
+<tr><td><code>p22_patent_expiry</code></td><td>Даты потери эксклюзивности продуктов покупателей.</td><td>Patent Expiry Normalization</td></tr>
+<tr><td><code>p22_price_daily</code></td><td>Сырые дневные цены (OHLCV) по компании, с поставщиком (fmp / yfinance).</td><td>FMP vintage load (вручную), Daily Price Ingest</td></tr>
+<tr><td><code>p22_corporate_action</code></td><td>Сплиты, обратные сплиты, дивиденды, смена тикера.</td><td>То же</td></tr>
+<tr><td><code>p22_corporate_process_event</code></td><td>События продажи из 8-K: состояние (rumored / disclosed_open / concluded_…), охват (вся компания / актив), подтверждено ли.</td><td>Process Events Ingest + проверка</td></tr>
+<tr><td><code>p22_activist_position</code></td><td>Пакеты по 13D/13G: кто подал, тип (активист, фонд, корпорация), %, намерение.</td><td>Activist Positions Ingest + проверка</td></tr>
+<tr><td><code>p22_partnership_structure</code></td><td>Партнёрства с правом выкупа (опцион на покупку, ROFN/ROFR, доля партнёра).</td><td>Только вручную (пока пусто)</td></tr>
+<tr><td><code>p22_deal</code></td><td><b>Метки:</b> сделки — цель, покупатель, тип, даты объявления и закрытия, цена, CVR, премии, флаги «похоже на обратное слияние».</td><td>Только человек, через <code>deal_entry_cli</code></td></tr>
+<tr><td><code>p22_review_item</code></td><td>Очередь ручной проверки: тип, данные кандидата, ссылка, статус (pending / confirmed / rejected).</td><td>Все детекторы</td></tr>
+<tr><td><code>p22_score_run</code>, <code>p22_score</code></td><td>Прогоны скоринга (дата, версия модели, хэш конфигурации) и оценки компаний (композит, tier, ранг, разбивка).</td><td>P22 Scoring</td></tr>
+<tr><td><code>p22_fetch_failure</code></td><td>Неудачные загрузки после всех повторов (источник, URL, ошибка).</td><td>Джобы загрузки</td></tr>
+</table></div>
+<p><b>Битемпоральные поля</b> (в фактах и событиях): <code>valid_from</code>, <code>valid_to</code> (NULL = актуально), <code>known_from</code>, <code>source_id</code>, <code>source_url</code>. Исправления (restatement) записываются новой строкой с закрытием старой, а не перезаписью.</p>
+
+<!-- ============================================================ -->
+<h2 id="s6">6. Расписание джобов</h2>
+<p>Время — UTC. «Будни» = понедельник–пятница. Квартальные джобы срабатывают 1–2 января, апреля, июля и октября.</p>
+<div class="table-wrap"><table>
+<tr><th>Время</th><th>Джоб</th><th>Частота</th><th>Ждёт</th><th>Что делает</th></tr>
+<tr><td>04:00, 1-е</td><td>P22 SEC Universe Ingest</td><td>квартал</td><td>—</td><td>Скачивает квартальные архивы DERA.</td></tr>
+<tr><td>04:30, 1-е</td><td>P22 Entity Resolution</td><td>квартал</td><td>Universe Ingest</td><td>Строит/обновляет список компаний-целей.</td></tr>
+<tr><td>04:45, 1-е</td><td>P22 Acquirer Roster Load</td><td>квартал</td><td>Entity Resolution</td><td>Загружает 25 покупателей из YAML.</td></tr>
+<tr><td>04:00, 2-е</td><td>P22 Orange Book Ingest</td><td>квартал</td><td>—</td><td>Патенты малых молекул.</td></tr>
+<tr><td>04:15, 2-е</td><td>P22 Purple Book Ingest</td><td>квартал</td><td>—</td><td>Эксклюзивность биопрепаратов.</td></tr>
+<tr><td>04:30, 2-е</td><td>P22 Patent Expiry Normalization</td><td>квартал</td><td>Orange Book, Acquirer Roster</td><td>Даты LOE продуктов покупателей.</td></tr>
+<tr><td>05:00</td><td>P22 SEC Filings Ingest</td><td>будни</td><td>—</td><td>submissions + companyfacts по каждой компании.</td></tr>
+<tr><td>05:15</td><td>P22 Financial Facts Normalization</td><td>будни</td><td>SEC Filings</td><td>XBRL → финансовые факты.</td></tr>
+<tr><td>05:20</td><td>P22 Domicile Normalization</td><td>будни</td><td>SEC Filings</td><td>Иностранная ли компания (по адресу).</td></tr>
+<tr><td>05:30</td><td>P22 ClinicalTrials Ingest</td><td>будни</td><td>—</td><td>Испытания + история версий.</td></tr>
+<tr><td>06:00</td><td>P22 openFDA Ingest</td><td>будни</td><td>—</td><td>Одобренные заявки.</td></tr>
+<tr><td>06:15</td><td>P22 Process Events Ingest</td><td>будни</td><td>Entity Resolution*</td><td>8-K с фразами о продаже → очередь.</td></tr>
+<tr><td>06:30</td><td>P22 Alias Matching</td><td>будни</td><td>CT.gov, openFDA</td><td>Имена спонсоров/заявителей → компании.</td></tr>
+<tr><td>06:30</td><td>P22 Activist Positions Ingest</td><td>будни</td><td>Entity Resolution*</td><td>13D/13G → очередь.</td></tr>
+<tr><td>06:45</td><td>P22 Trial Normalization</td><td>будни</td><td>Alias Matching</td><td>Испытания и препараты в таблицы.</td></tr>
+<tr><td>06:45</td><td>P22 Deal Candidates Ingest</td><td>будни</td><td>Entity Resolution*</td><td>SC 14D9 / DEFM14A / S-4 → очередь.</td></tr>
+<tr><td>22:00</td><td>P22 Daily Price Ingest</td><td>будни</td><td>—</td><td>Свежие цены из yfinance.</td></tr>
+<tr><td>22:30</td><td>P22 Market Cap Compute</td><td>будни</td><td>Price Ingest, Financial Facts</td><td>Капитализация = цена × акции.</td></tr>
+<tr><td>23:00</td><td>P22 Scoring</td><td>будни</td><td>Market Cap Compute</td><td>Рейтинг, watchlist, досье.</td></tr>
+</table></div>
+<p class="note">* Эти три джоба объявляют зависимость от Entity Resolution только для порядка запуска; сами скрипты зависимость не проверяют и работают каждый будний день. Проверку «предшественник сегодня успешно отработал» делают только Entity Resolution, Acquirer Roster Load, Financial Facts, Domicile, Alias Matching, Trial Normalization и Patent Expiry Normalization. При новом результате (кандидат, пакет, документ о сделке) эти джобы шлют уведомление в e-mail и Telegram.</p>
+
+<!-- ============================================================ -->
+<h2 id="s7">7. Шаги пайплайна подробно</h2>
+<p>Для каждого шага: вход, что происходит, выход, на что смотреть при сбоях. Скрипты лежат в <code>jobs/</code>, логика — в <code>ingest/</code>.</p>
+
+<h3>7.1 Вселенная и компании (ежеквартально)</h3>
+
+<div class="step">
+<h4>Шаг 1. SEC Universe Ingest — <code>run_sec_universe_ingest.py</code></h4>
+<div class="io">
+<div class="k">Вход</div><div>Страница DERA Financial Statement Data Sets на sec.gov; квартальные ZIP-архивы (<code>sub.txt</code>).</div>
+<div class="k">Обработка</div><div>Ссылки на архивы берутся со страницы (не захардкожены — путь у SEC менялся). Каждый архив сохраняется в сырую зону. Повторно уже скачанные кварталы не качаются.</div>
+<div class="k">Выход</div><div>Файлы в <code>raw/sec_dera/…</code>. В базу ничего не пишет. Ошибки «ничего не скачалось» → <code>p22_fetch_failure</code>.</div>
+<div class="k">Сбои</div><div>SEC отвечает 403 — проверить <code>User-Agent</code> и частоту запросов.</div>
+</div></div>
+
+<div class="step">
+<h4>Шаг 2. Entity Resolution — <code>run_entity_resolution.py</code></h4>
+<div class="io">
+<div class="k">Вход</div><div>Последний квартал DERA из сырой зоны; текущая карта SEC «CIK → тикер → биржа» (<code>company_tickers_exchange.json</code>).</div>
+<div class="k">Обработка</div><div>Отбирает компании с биотех-SIC, подававшие 10-K/10-Q за последние 6 месяцев, на NYSE / NYSE American / Nasdaq, не SPAC. Назначает тикер. Если у компании несколько бумаг, берётся обыкновенная акция, а не варрант (<code>…W</code>), право (<code>…R</code>), unit (<code>…U</code>) или привилегированная (<code>…P</code>) — до 30.10.2026 тут была ошибка, и 793 компании получили тикер варранта. Похожие на SPAC — в очередь на проверку.</div>
+<div class="k">Выход</div><div><code>p22_company</code> (цели); отчёт о глубине очереди проверки.</div>
+<div class="k">Важно</div><div>Флаг <code>is_active</code> — это <b>сегодняшнее</b> состояние. В бэктесте он не используется; там вселенная строится заново по DERA за каждый квартал.</div>
+</div></div>
+
+<div class="step">
+<h4>Шаг 3. Acquirer Roster Load — <code>run_acquirer_load.py</code></h4>
+<div class="io">
+<div class="k">Вход</div><div><code>config/pipeline/p22_acquirers.yaml</code> — 25 покупателей, составленных вручную: Pfizer, Merck, AbbVie, Amgen, Gilead, J&amp;J, BMS, Lilly, Vertex, Biogen, Regeneron, Incyte, Novartis, Roche, AstraZeneca, Sanofi, GSK, Novo Nordisk, Bayer, Takeda, Ipsen, Jazz, Astellas, Daiichi Sankyo, CSL. С CIK, страной («блоком»), датами входа/выхода.</div>
+<div class="k">Обработка</div><div>Создаёт/обновляет строки покупателей. Roche, Bayer и Astellas не имеют CIK в SEC (не отчитываются там).</div>
+<div class="k">Выход</div><div><code>p22_company</code> с ролью acquirer.</div>
+</div></div>
+
+<h3>7.2 Финансы из SEC (ежедневно)</h3>
+
+<div class="step">
+<h4>Шаг 4. SEC Filings Ingest — <code>run_sec_ingest.py</code></h4>
+<div class="io">
+<div class="k">Вход</div><div>Список компаний из <code>p22_company</code>.</div>
+<div class="k">Обработка</div><div>Для каждого CIK скачивает <code>submissions</code> и <code>companyfacts</code>. Ответ сохраняется в сырую зону с адресацией по содержимому (одинаковые ответы не дублируются).</div>
+<div class="k">Выход</div><div>JSON-файлы в сырой зоне.</div>
+</div></div>
+
+<div class="step">
+<h4>Шаг 5. Financial Facts Normalization — <code>run_financial_facts_normalization.py</code></h4>
+<div class="io">
+<div class="k">Вход</div><div>Сегодняшние <code>companyfacts</code>.</div>
+<div class="k">Обработка</div><div>Извлекает показатели по таблице тегов <code>FACT_TAG_MAP</code> (<code>ingest/financial_facts.py</code>):
+<ul>
+<li><code>cash_and_equivalents</code> ← us-gaap:CashAndCashEquivalentsAtCarryingValue</li>
+<li><code>short_term_investments</code> ← us-gaap:ShortTermInvestments</li>
+<li><code>total_debt</code> ← LongTermDebtNoncurrent / LongTermDebt / ConvertibleDebtNoncurrent (значения из всех тегов объединяются: компании меняют теги по ходу истории)</li>
+<li><code>quarterly_opex_burn</code> ← NetCashProvidedByUsedInOperatingActivities (из накопленных с начала года значений выводятся квартальные)</li>
+<li><code>shares_outstanding</code> ← dei:EntityCommonStockSharesOutstanding (с обложки отчёта)</li>
+<li><code>public_float</code> ← dei:EntityPublicFloat</li>
+</ul>
+<code>known_from</code> = дата подачи отчёта, <code>valid_from</code> = конец отчётного периода. Если значение за тот же период изменилось — это пересмотр, пишется новая строка.</div>
+<div class="k">Выход</div><div><code>p22_financial_fact</code>.</div>
+</div></div>
+
+<div class="step">
+<h4>Шаг 6. Domicile Normalization — <code>run_domicile_normalization.py</code></h4>
+<div class="io">
+<div class="k">Вход</div><div><code>submissions</code> (адрес компании).</div>
+<div class="k">Обработка</div><div>Определяет, зарегистрирована ли компания вне США.</div>
+<div class="k">Выход</div><div>Факт <code>is_foreign_domiciled</code> (блок E).</div>
+</div></div>
+
+<h3>7.3 Испытания и FDA (ежедневно)</h3>
+
+<div class="step">
+<h4>Шаг 7. ClinicalTrials Ingest — <code>run_clinicaltrials_ingest.py</code></h4>
+<div class="io">
+<div class="k">Вход</div><div>Названия компаний и их подтверждённые альтернативные имена.</div>
+<div class="k">Обработка</div><div>Ищет испытания по спонсору в API v2 ClinicalTrials.gov, скачивает сами записи и историю версий. Самый «тяжёлый» по количеству запросов джоб.</div>
+<div class="k">Выход</div><div>Сырая зона; неудачные загрузки → <code>p22_fetch_failure</code>.</div>
+</div></div>
+
+<div class="step">
+<h4>Шаг 8. openFDA Ingest — <code>run_openfda_ingest.py</code></h4>
+<div class="io">
+<div class="k">Вход</div><div>Имена компаний.</div>
+<div class="k">Обработка</div><div>Запросы к Drugs@FDA по заявителю. Ответ 404 означает «ничего не найдено» и не считается ошибкой.</div>
+<div class="k">Выход</div><div>Сырая зона; ошибки → <code>p22_fetch_failure</code>.</div>
+</div></div>
+
+<div class="step">
+<h4>Шаг 9. Alias Matching — <code>run_alias_matching.py</code></h4>
+<div class="io">
+<div class="k">Вход</div><div>Названия спонсоров CT.gov и заявителей FDA из сырой зоны; <code>p22_company</code>.</div>
+<div class="k">Обработка</div><div>Нормализует имена (нижний регистр, без «inc», «corp», «therapeutics» и т. п.). Точное совпадение принимается сразу; нечёткое (token-set ratio ≥ 88) — только в очередь на проверку, <b>никогда не принимается автоматически</b>.</div>
+<div class="k">Выход</div><div><code>p22_company_alias</code>; элементы очереди <code>entity_match</code>.</div>
+</div></div>
+
+<div class="step">
+<h4>Шаг 10. Trial Normalization — <code>run_trial_normalization.py</code></h4>
+<div class="io">
+<div class="k">Вход</div><div>Испытания из сырой зоны, подтверждённые алиасы.</div>
+<div class="k">Обработка</div><div>Записывает испытания. Если в испытании <b>ровно один</b> препарат (DRUG/BIOLOGICAL), создаётся/находится актив и испытание к нему привязывается; терапевтическая область определяется классификатором по ключевым словам из списка заболеваний (неуверенно → <code>unclassified</code>), модальность — классификатором модальностей. Испытания с несколькими препаратами к активу не привязываются (нерешённая задача).</div>
+<div class="k">Выход</div><div><code>p22_trial</code>, <code>p22_asset</code>.</div>
+<div class="k">Ограничение</div><div>Таблица испытаний <b>не битемпоральная</b>: фазы и даты — сегодняшние. Для бэктеста это источник неточности (записано в Design.md).</div>
+</div></div>
+
+<h3>7.4 Патенты покупателей (ежеквартально)</h3>
+<div class="step">
+<h4>Шаги 11–13. Orange Book Ingest, Purple Book Ingest, Patent Expiry Normalization</h4>
+<div class="io">
+<div class="k">Вход</div><div>ZIP Orange Book (<code>products.txt</code>, <code>patent.txt</code>, <code>exclusivity.txt</code>), CSV Purple Book, список покупателей.</div>
+<div class="k">Обработка</div><div>Находит продукты покупателей и последнюю дату патента/эксклюзивности по каждому.</div>
+<div class="k">Выход</div><div><code>p22_patent_expiry</code>. <b>Не хватает выручки по продуктам (<code>ttm_revenue_usd</code>)</b>, без неё «доля выручки под угрозой» не считается — это часть решения A (<a href="#s16">раздел 16</a>).</div>
+</div></div>
+
+<h3>7.5 Явные сигналы продажи и сделки (ежедневно)</h3>
+
+<div class="step">
+<h4>Шаг 14. Process Events Ingest — <code>run_process_events_ingest.py</code> (блок G)</h4>
+<div class="io">
+<div class="k">Вход</div><div>Полнотекстовый поиск EDGAR по 8-K и EX-99 за последние дни; список фраз <code>p22_strategic_process_phrases.yaml</code> (сильные: «exploring strategic alternatives», «evaluating a potential sale of the company»; умеренные: «strategic review»; отрицательные: «concluded its review of strategic alternatives»).</div>
+<div class="k">Обработка</div><div>Каждое совпадение по компании из вселенной — кандидат в очередь. Человек подтверждает: действительно ли процесс открыт и касается ли он всей компании или только актива.</div>
+<div class="k">Выход</div><div>Элементы очереди <code>process_event</code> → после подтверждения <code>p22_corporate_process_event</code> с <code>known_from</code> = дата подачи 8-K (исправлено 30.10.2026, миграция 012).</div>
+</div></div>
+
+<div class="step">
+<h4>Шаг 15. Activist Positions Ingest — <code>run_activist_positions_ingest.py</code> (блок G)</h4>
+<div class="io">
+<div class="k">Вход</div><div>EFTS: SC 13D, 13D/A, 13G, 13G/A по компаниям вселенной; список активистов <code>config/activist_filers.yaml</code> (16 фондов).</div>
+<div class="k">Обработка</div><div>Скачивает документ <code>primary_doc.xml</code> (с декабря 2024 13D/13G подаются только в структурированном XML). Из него берёт CIK компании-объекта (<code>issuerCIK</code>) и CIK подавших (<code>filerCredentials</code>), процент (<code>percentOfClass</code> для 13D, <code>classPercent</code> для 13G; если у нескольких лиц разные проценты, процент не записывается). Имя подавшего берётся из EFTS. Тип подавшего определяется автоматически: активист (есть в <code>activist_filers.yaml</code>), корпорация-покупатель (есть во вселенной с ролью acquirer) или пусто. Намерение (passive / engagement / board_seats / sale_demand) пока <b>не заполняется</b>.</div>
+<div class="k">Дозагрузка</div><div><code>python src/ml/pipeline/p22_biotech_ma/jobs/run_activist_positions_ingest.py --lookback-days 730</code> — однократно просканировать прошлые два года (ежедневный запуск смотрит только вчерашний день).</div>
+<div class="k">Выход</div><div><code>p22_activist_position</code> (<code>known_from</code> = дата подачи) и элементы очереди.</div>
+</div></div>
+
+<div class="step">
+<h4>Шаг 16. Deal Candidates Ingest — <code>run_deal_candidates_ingest.py</code> (метки, M6)</h4>
+<div class="io">
+<div class="k">Вход</div><div>EFTS: SC 14D9, DEFM14A, S-4 (и поправки) за последнюю неделю по компаниям вселенной.</div>
+<div class="k">Обработка</div><div>Только находит документы. <b>Сам сделки никогда не создаёт.</b> Исторический поиск с 2010 года запускается вручную: <code>deal_entry_cli scan</code>.</div>
+<div class="k">Выход</div><div>Элементы очереди <code>deal_candidate</code> (на 31.10.2026: 2 691 документ по 689 компаниям).</div>
+</div></div>
+
+<h3>7.6 Цены и капитализация</h3>
+
+<div class="step">
+<h4>Шаг 17 (разовый, вручную). Загрузка истории цен из FMP-винтажа — <code>fmp_vintage_load_cli</code></h4>
+<div class="io">
+<div class="k">Вход</div><div>Локальный винтаж FMP (сырые дневные бары, сплиты, дивиденды), привязка бумаг к CIK.</div>
+<div class="k">Обработка</div><div>Сопоставляет бумаги винтажа с компаниями, пишет сырые цены и корпоративные действия. Плохие точки, помеченные сборщиком винтажа, не пишутся. Для нескольких компаний с ошибочной базой цен есть ручные исправления (<code>overrides/price_basis.csv</code> в FMP-пайплайне) и ключ <code>--replace-prices</code>.</div>
+<div class="k">Выход</div><div><code>p22_price_daily</code> (vendor=fmp), <code>p22_corporate_action</code>. <b>Уже выполнено на проде.</b></div>
+</div></div>
+
+<div class="step">
+<h4>Шаг 18. Daily Price Ingest — <code>run_price_ingest.py</code></h4>
+<div class="io">
+<div class="k">Вход</div><div>Тикеры активных компаний.</div>
+<div class="k">Обработка</div><div>yfinance, только новые дни, <code>auto_adjust=False</code>, сплиты отдельно.</div>
+<div class="k">Выход</div><div><code>p22_price_daily</code> (vendor=yfinance), <code>p22_corporate_action</code>.</div>
+<div class="k">Сбои</div><div>Тикер мог смениться или «исчезнуть» — тогда дозаполнение молча останавливается. Неверный тикер (например, варрант) даёт неверные цены.</div>
+</div></div>
+
+<div class="step">
+<h4>Шаг 19. Market Cap Compute — <code>run_market_cap_compute.py</code></h4>
+<div class="io">
+<div class="k">Вход</div><div>Последняя сырая цена закрытия (не старше допустимого возраста), количество акций с последней обложки отчёта, сплиты между датой обложки и датой цены.</div>
+<div class="k">Обработка</div><div>капитализация = цена × акции, приведённые к одной базе по сплитам.</div>
+<div class="k">Выход</div><div>Факт <code>market_cap</code> в <code>p22_financial_fact</code>.</div>
+</div></div>
+
+<h3>7.7 Скоринг (ежедневно, 23:00 UTC)</h3>
+<div class="step">
+<h4>Шаг 20. P22 Scoring — <code>run_scoring.py</code></h4>
+<div class="io">
+<div class="k">Вход</div><div>Всё хранилище на дату as_of; <code>p22_weights.yaml</code>; <code>p22_acquirers.yaml</code>.</div>
+<div class="k">Обработка</div><div>Отбор целей → расчёт признаков блоков A–E и G → парная совместимость с каждым покупателем → композит → tier → ранг. Подробно — <a href="#s9">раздел 9</a>.</div>
+<div class="k">Выход</div><div><code>p22_score_run</code>, <code>p22_score</code>; файлы <code>watchlist.csv</code>, <code>watchlist.json</code> и <code>dossiers/NNN_TICKER.md</code> (топ-25) в <code>results/p22_biotech_ma/ГГГГ-ММ-ДД/</code>. Ключ <code>--dry-run</code> пишет файлы, но откатывает базу.</div>
+</div></div>
+
+<!-- ============================================================ -->
+<h2 id="s8">8. Признаки: блоки A–G</h2>
+<p>Каждый признак — функция <code>feature(company_id, as_of, ctx) → число | None</code>, зарегистрированная в <code>features/registry.py</code>. Статус: <span class="tag t-ok">работает</span> <span class="tag t-part">частично</span> <span class="tag t-no">не работает</span> <span class="tag t-man">вручную</span>.</p>
+
+<h3>Блок A — давление на покупателя (по каждому из 25)</h3>
+<p>Насколько покупателю нужно что-то купить и может ли он заплатить. Файл <code>features/block_a.py</code>.</p>
+<div class="table-wrap"><table>
+<tr><th>Признак</th><th>Определение</th><th>Статус</th></tr>
+<tr><td><code>revenue_at_risk_3y / 5y</code></td><td>Доля выручки от продуктов, теряющих эксклюзивность в ближайшие 3 / 5 лет.</td><td><span class="tag t-no">нет выручки по продуктам</span></td></tr>
+<tr><td><code>cash_capacity</code></td><td>деньги + (целевой рычаг × EBITDA − чистый долг), не ниже 0.</td><td><span class="tag t-no">нет EBITDA, нет рычага</span></td></tr>
+<tr><td><code>equity_capacity</code></td><td>капитализация × 0.15 × «качество валюты» (насколько дорого стоят акции покупателя).</td><td><span class="tag t-no">нет P/E и формулы стабильности</span></td></tr>
+<tr><td><code>dry_powder</code></td><td>cash_capacity + equity_capacity — общая покупательная способность.</td><td><span class="tag t-no">зависит от двух выше</span></td></tr>
+<tr><td><code>pipeline_gap_by_ta</code></td><td>По области: выручка под угрозой − собственные Phase III × ожидаемые пиковые продажи. <b>Главный выход блока:</b> в какую область покупателю нужно «докупиться».</td><td><span class="tag t-no">нет пиковых продаж</span></td></tr>
+<tr><td><code>deal_cadence_3y</code>, <code>stock_deal_propensity</code></td><td>Число крупных покупок за 3 года, доля сделок за акции.</td><td><span class="tag t-no">нужны метки сделок</span></td></tr>
+</table></div>
+<div class="warn"><p><b>Итог: блок A сейчас не даёт ни одного значения</b> (<code>acquirer_pressure_matched</code> = 0 компаний). Решено (31.10.2026) строить его на данных SEC XBRL вместо FMP — см. решение A.</p></div>
+
+<h3>Блок B — качество актива цели</h3>
+<p>Файл <code>features/block_b.py</code>. Вероятность одобрения (PoA) <b>сознательно не входит</b> в вероятность сделки: высокая PoA означает не «купят чаще», а «купят дороже», поэтому она пойдёт в модель доходности (M7).</p>
+<div class="table-wrap"><table>
+<tr><th>Признак</th><th>Определение</th><th>Статус</th></tr>
+<tr><td><code>phase_max</code></td><td>Самая поздняя фаза среди испытаний компании.</td><td><span class="tag t-ok">работает</span></td></tr>
+<tr><td><code>days_to_next_catalyst</code>, <code>catalyst_window</code></td><td>Дни до ближайшей даты основного завершения испытания; корзины &lt;60, 60–180, 180–365, 365–730, &gt;730.</td><td><span class="tag t-ok">работает</span></td></tr>
+<tr><td><code>asset_floor_met</code></td><td>Есть ли программа Phase 1 или дальше (иначе компания исключается).</td><td><span class="tag t-ok">работает</span></td></tr>
+<tr><td><code>asset_count_ph2plus</code></td><td>Сколько препаратов в Phase 2+. Направление влияния неоднозначно, вес 0.</td><td><span class="tag t-ok">считается, вес 0</span></td></tr>
+<tr><td><code>lead_asset_poa</code></td><td>Базовая вероятность одобрения ведущего препарата по области и фазе.</td><td><span class="tag t-part">только Phase 1 (решение D)</span></td></tr>
+<tr><td><code>ev_to_risk_adjusted_npv</code>, <code>has_positive_ph3</code>, <code>pdufa_pending</code>, <code>endpoint_stability</code>, <code>trial_design_quality</code></td><td>Из спецификации.</td><td><span class="tag t-no">не построены</span></td></tr>
+</table></div>
+
+<h3>Блок C — финансы цели</h3>
+<p>Файл <code>features/block_c.py</code>.</p>
+<div class="table-wrap"><table>
+<tr><th>Признак</th><th>Определение</th><th>Статус</th></tr>
+<tr><td><code>enterprise_value</code></td><td>капитализация − (деньги + краткосрочные вложения) + долг.</td><td><span class="tag t-ok">работает</span></td></tr>
+<tr><td><code>cash_runway_months</code></td><td>(деньги + вложения) ÷ средний квартальный burn за 4 квартала × 3.</td><td><span class="tag t-ok">работает</span></td></tr>
+<tr><td><code>ev_to_cash</code></td><td>EV ÷ деньги. Низкое = дёшево относительно денег.</td><td><span class="tag t-ok">работает</span></td></tr>
+<tr><td><code>dilution_risk</code></td><td>Денег меньше чем на 12 месяцев <b>и</b> катализатор наступит раньше, чем закончатся деньги → придётся размывать акционеров.</td><td><span class="tag t-ok">работает</span></td></tr>
+<tr><td><code>size_band</code></td><td>Корзина EV: &lt;500M, 500M–2B, 2B–5B, 5B–15B, &gt;15B.</td><td><span class="tag t-ok">работает</span></td></tr>
+<tr><td><code>atm_capacity_pct</code></td><td>Остаток ATM-программы ÷ капитализация.</td><td><span class="tag t-no">нет разбора 424B5</span></td></tr>
+</table></div>
+
+<h3>Блок D — совместимость пары «покупатель × цель»</h3>
+<p>Файл <code>scoring/fit.py</code>. Считается для каждой пары. Два типа слагаемых, которые нельзя смешивать:</p>
+<ul>
+<li><b>Предпочтения</b> (складываются с весами): <code>ta_overlap</code> — нужна ли покупателю эта область (<span class="tag t-no">нужен блок A</span>); <code>modality_capability</code> — есть ли у покупателя препараты такой модальности (<span class="tag t-ok">работает</span>); <code>geographic_fit</code> (<span class="tag t-no">нет данных о присутствии покупателя</span>).</li>
+<li><b>Ворота</b> (перемножаются, могут обнулить пару): <code>size_feasibility</code> — хватит ли денег (<span class="tag t-no">нужен dry_powder</span>); антимонопольный риск — у покупателя уже есть Phase III+ в том же показании (<span class="tag t-ok">работает</span>); <b>FIS/CFIUS</b> — проверка иностранных инвестиций по «блоку» страны покупателя: США 0, союзники 0.02, нейтральные 0.10, повышенный контроль 0.45 (<span class="tag t-ok">работает</span>).</li>
+</ul>
+<p>Совместимость цели = максимум по покупателям; покупатель-аргмакс записывается как <code>likely_acquirer</code>, топ-3 пары с разбивкой сохраняются для досье. Неизвестные ворота считаются открытыми и перечисляются в <code>unknown_gates</code>.</p>
+
+<h3>Блок E — помехи сделке (только свойства самой цели)</h3>
+<p>Файл <code>features/block_e.py</code>. Работает только <code>is_foreign_domiciled</code> <span class="tag t-ok">работает</span>. Не построены: контролирующий акционер &gt;30%, «ядовитая пилюля», ступенчатый совет, акции двух классов, недавний неудачный процесс продажи, роялти-обременение (нужен разбор текстов документов) <span class="tag t-no">не построены</span>.</p>
+
+<h3>Блок F — владение и настроения (только контекст)</h3>
+<p>Фонды-специалисты по 13F, покупки инсайдеров по Form 4, короткие позиции. <span class="tag t-no">не построен сознательно</span>: нужен список ~30 фондов от владельца, история Form 4 есть только с начала кэша P18, вес в композите 0.</p>
+
+<h3>Блок G — явные сигналы продажи</h3>
+<p>Файл <code>features/block_g.py</code>. Читает только <b>подтверждённые</b> строки. <span class="tag t-man">зависит от ручной проверки</span>. Признаки: состояние и охват процесса продажи, дни с открытия процесса, активист с 13D, максимальное намерение активиста, эскалация поправок, стратегический пакет корпорации-покупателя, партнёрство с правом выкупа. Не взвешивается, а задаёт <b>tier</b> (<a href="#s9">раздел 9</a>).</p>
+
+<!-- ============================================================ -->
+<h2 id="s9">9. Скоринг</h2>
+
+<h3>9.1 Кто ранжируется</h3>
+<p>Функция <code>select_targets</code> (<code>scoring/score_run.py</code>): активные компании, кроме покупателей, кроме тех, у кого <b>известно</b>, что капитализация ниже $25M (порог размера), кроме тех, у кого все испытания Early Phase 1 (порог актива), кроме компаний с уже объявленной сделкой. Если размер или испытания неизвестны — компания <b>остаётся</b> (и это считается в счётчиках <code>…_unknown_kept</code>).</p>
+
+<h3>9.2 Формула</h3>
+<pre><code>fundamental = ( 0.30 × acquirer_pressure_matched   # блок A выбранного покупателя
+              + 0.25 × target_asset_quality        # блок B
+              + 0.20 × strategic_fit               # блок D, максимум по покупателям
+              + 0.15 × financial_attractiveness    # блок C
+              − 0.10 × friction_penalty )          # блок E
+              × dilution_gate                      # 0.5, если dilution_risk, иначе 1.0
+
+composite = tier + fundamental                     # tier ∈ {0,1,2,3}</code></pre>
+<ul>
+<li>Каждый признак переводится в процентиль внутри вселенной на дату as_of, взвешивается внутри блока (веса — черновые, <code>p22_weights.yaml</code>), блок снова переводится в процентиль.</li>
+<li>Неизвестные блоки исключаются, а веса известных пропорционально растягиваются до полной суммы. Поле <code>coverage</code> показывает, на какой доле модели держится оценка. Компания без единого известного положительного блока не ранжируется (<code>unranked_no_fundamental</code>).</li>
+</ul>
+
+<h3>9.3 Tier — явные сигналы как полосы, а не веса</h3>
+<div class="table-wrap"><table>
+<tr><th>Tier</th><th>Условие</th></tr>
+<tr><td>3</td><td>Партнёр имеет опцион на покупку компании; или открыт процесс продажи всей компании менее года назад.</td></tr>
+<tr><td>2</td><td>Активист требует продажи; или корпорация-покупатель держит пакет; или у партнёра ROFN/ROFR либо доля + совместная коммерциализация.</td></tr>
+<tr><td>1</td><td>Есть активист с 13D; или слухи о процессе; или процесс только по отдельному активу.</td></tr>
+<tr><td>0</td><td>Только фундаментальные данные.</td></tr>
+</table></div>
+<div class="note"><p><b>Важно понимать:</b> Tier 3 — это компании, которые <b>скорее всего купят</b>, но и <b>наименее выгодные</b> для входа: рынок закладывает объявленный процесс в цену за минуты. Tier 3 полезен для проверки модели. Экономически интересны компании с высоким fundamental на Tier 0–1.</p></div>
+
+<h3>9.4 Ранги</h3>
+<p>Сейчас записывается только <code>rank_by_composite</code>. По спецификации основным должен стать <code>rank_by_expected_value</code> (с учётом ожидаемой доходности), но для этого нужна модель доходности (M7). Колонка с «голым» <code>rank</code> запрещена.</p>
+<p><b>config_hash</b> — хэш <code>p22_weights.yaml</code> + <code>p22_acquirers.yaml</code>. Любое изменение весов даёт новый хэш, и оценки до и после изменения никогда не смешиваются.</p>
+
+<!-- ============================================================ -->
+<h2 id="s10">10. Выходные данные</h2>
+<div class="table-wrap"><table>
+<tr><th>Что</th><th>Где</th><th>Содержимое</th></tr>
+<tr><td>Watchlist CSV</td><td><code>results/p22_biotech_ma/ГГГГ-ММ-ДД/watchlist.csv</code></td><td>Ранг, тикер, название, композит, tier и причина, fundamental, coverage, вероятный покупатель, оценки блоков, dilution_gate. Для быстрого просмотра.</td></tr>
+<tr><td>Watchlist JSON</td><td><code>…/watchlist.json</code></td><td>Сводка прогона + полные subscores и contributions (разбивка по признакам и топ-3 парам с покупателями).</td></tr>
+<tr><td>Досье</td><td><code>…/dossiers/001_TICKER.md</code> …</td><td>Для топ-25: дисклеймер; идентификация и структура капитала; капитализация с арифметикой; деньги и runway с расчётом; таблица испытаний со ссылками на ClinicalTrials.gov; события блока G со ссылками на 8-K; таблица совместимости с покупателями (какие ворота закрыты/неизвестны); «Omitted (no source)».</td></tr>
+<tr><td>База</td><td><code>p22_score_run</code>, <code>p22_score</code></td><td>Всё то же для истории и сравнения прогонов.</td></tr>
+<tr><td>Лог</td><td><code>…/pipeline.log</code></td><td>Лог всех P22-джобов за день.</td></tr>
+<tr><td>Бэктест</td><td><code>results/…/backtest/</code></td><td><code>metrics_all.csv</code>, <code>metrics_tier0.csv</code>, <code>snapshots.csv</code>, <code>return_labels.csv</code>, <code>summary.json</code>.</td></tr>
+</table></div>
+<p>Каждый выходной файл несёт обязательный дисклеймер (спецификация §11): это исследовательский скрининг, не инвестиционная рекомендация.</p>
+<p>Не построены: оповещения об изменениях (рост в рейтинге, переход в Tier 2/3, новый 13D и т. п.), API.</p>
+
+<!-- ============================================================ -->
+<h2 id="s11">11. Сделки, разметка, бэктест</h2>
+
+<h3>11.1 Зачем метки</h3>
+<p>Чтобы проверить модель, нужно знать, какие компании в прошлом действительно купили и когда. Это и есть метки: таблица <code>p22_deal</code>. Её заполняет <b>только человек</b>: автоматическое извлечение слишком шумное, а ошибка (например, обратное слияние, принятое за покупку) переворачивает сигнал модели.</p>
+
+<h3>11.2 Процесс разметки</h3>
+<ol>
+<li><b>Найти кандидатов:</b> <code>deal_entry_cli scan --start 2010-01-01</code> ставит в очередь все SC 14D9 / DEFM14A / S-4 по компаниям вселенной.</li>
+<li><b>Выгрузить:</b> <code>deal_entry_cli export deals.csv</code> — по строке на документ, сгруппировано по компаниям, с пустыми колонками для ввода.</li>
+<li><b>Заполнить</b> для каждого документа колонку <code>action</code>:
+  <ul>
+  <li><code>deal</code> — это новая сделка; заполнить: <code>announcement_date</code>, <code>deal_type</code>, <code>acquirer_name</code> (обязательно), а также <code>status</code> (announced / completed / terminated), <code>completion_date</code>, <code>upfront_per_share</code>, <code>has_cvr</code>, <code>cvr_max_per_share</code>, <code>stock_consideration_pct</code>, <code>target_holders_pct</code>, <code>acquirer_is_private</code>, <code>acquirer_has_approved_product</code>, <code>note</code>.</li>
+  <li><code>link</code> — ещё один документ уже введённой сделки (поправка, второй документ). Пустой <code>link_deal_id</code> = последняя сделка этой компании, объявленная не позже даты документа.</li>
+  <li><code>reject</code> — документ не о покупке этой компании (например, она сама покупатель).</li>
+  <li>пусто — пропустить пока.</li>
+  </ul></li>
+<li><b>Проверить:</b> <code>deal_entry_cli import deals.csv --reviewer ИМЯ --dry-run</code>.</li>
+<li><b>Импортировать:</b> то же без <code>--dry-run</code>. Импорт «всё или ничего»: одна ошибочная строка — ничего не пишется.</li>
+</ol>
+<p>При вводе код сам считает премии за 1 и 30 дней (по сырым ценам, приведённым к базе акций на дату объявления) и проверяет признаки обратного слияния: покупатель частный и без одобренных продуктов; капитализация цели &lt; $50M; оплата в основном акциями с долей акционеров цели &lt; 20%; обратный сплит за 90 дней до объявления. Если хоть один признак сработал, ввести <code>strategic_acquisition</code> можно только с явным подтверждением (<code>ack_flags</code>).</p>
+
+<h3>11.3 Какой тип сделки ставить</h3>
+<div class="table-wrap"><table>
+<tr><th>deal_type</th><th>Когда</th><th>Метка</th></tr>
+<tr><td><code>strategic_acquisition</code></td><td>Фарма/биотех покупает компанию ради препаратов.</td><td><b>Положительная</b></td></tr>
+<tr><td><code>reverse_merger</code></td><td>Частная компания получает листинг через провалившуюся публичную (включая de-SPAC).</td><td>Исключена</td></tr>
+<tr><td><code>shell_transaction</code></td><td>Покупка ради денег на счету (XOMA Royalty, XenoTherapeutics, Tang Capital/Concentra).</td><td>Исключена</td></tr>
+<tr><td><code>liquidation</code></td><td>Ликвидация и выплата денег акционерам.</td><td>Исключена</td></tr>
+<tr><td><code>asset_sale</code></td><td>Проданы активы, компания осталась.</td><td>Исключена</td></tr>
+<tr><td><code>pe_take_private</code></td><td>Покупатель — финансовый фонд.</td><td>Отдельная метка</td></tr>
+</table></div>
+
+<h3>11.4 Покрытие</h3>
+<p><code>deal_entry_cli coverage</code> находит компании, переставшие отчитываться, и делит их на: сделка введена; есть кандидаты в очереди; кандидаты отклонены; кандидатов нет. На 31.10.2026: 802 компании с 2010 года — 438 с кандидатами, ~360 без (в основном банкротства и делистинги мелких компаний, но там же могут быть пропущенные сделки по британскому scheme of arrangement).</p>
+
+<h3>11.5 Бэктест</h3>
+<p><code>backtest_cli --labels-through ДАТА</code> (только чтение):</p>
+<ul>
+<li>Помесячные «снимки» с 2016 года. Для каждого снимка вселенная строится заново по DERA за квартал (а не по сегодняшнему <code>is_active</code>, иначе выпали бы все купленные).</li>
+<li>Положительная метка: <code>strategic_acquisition</code>, объявленная в течение 24 месяцев после даты снимка (расторгнутые тоже считаются: метка привязана к объявлению). <code>pe_take_private</code> считается отдельно. Компании с уже объявленной сделкой из снимка удаляются. Снимки, чьё 24-месячное окно выходит за <code>--labels-through</code>, отбрасываются.</li>
+<li>Сравнение: модель, naive-informed, catalyst-proximity (Phase 2+ с известным ближайшим завершением), случайный рейтинг (точное ожидание).</li>
+<li>Метрики отдельно для всех компаний и для Tier 0 (честная проверка фундаментальной модели: Tier 1–3 «надувают» результат).</li>
+<li>Метки доходности для будущей модели M7: upfront ÷ цена на дату снимка − 1, CVR = 0, компании с подозрительными ценами пропускаются.</li>
+</ul>
+<div class="warn"><p><b>Известные неточности бэктеста:</b> испытания не битемпоральны (фазы и даты — сегодняшние); квартал DERA используется с конца квартала, хотя публикуется на несколько недель позже. Пока не введена ни одна сделка, бэктест не имеет смысла.</p></div>
+
+<!-- ============================================================ -->
+<h2 id="s12">12. Ручные инструменты (CLI)</h2>
+<p>Запуск на Pi из <code>/opt/apps/e-trading</code> через <code>.venv/bin/python -m src.ml.pipeline.p22_biotech_ma.cli.&lt;имя&gt;</code>.</p>
+<div class="table-wrap"><table>
+<tr><th>Инструмент</th><th>Команды</th><th>Зачем</th></tr>
+<tr><td><code>review_queue_cli</code></td><td><code>status</code>, <code>list [--item-type …]</code>, <code>show ID</code>, <code>confirm ID --reviewer ИМЯ</code>, <code>reject ID --reviewer ИМЯ</code></td><td>Проверка очереди: совпадения имён, события продажи, намерения активистов.</td></tr>
+<tr><td><code>deal_entry_cli</code></td><td><code>scan</code>, <code>export</code>, <code>import [--dry-run]</code>, <code>enter</code>, <code>list-deals</code>, <code>coverage</code></td><td>Метки сделок (<a href="#s11">раздел 11</a>).</td></tr>
+<tr><td><code>backtest_cli</code></td><td><code>--labels-through</code>, <code>--start</code>, <code>--end</code>, <code>--step-months</code>, <code>--k</code></td><td>Бэктест.</td></tr>
+<tr><td><code>lookahead_audit_cli</code></td><td><code>--samples 200</code>, <code>--min-per-category</code>, <code>--seed</code></td><td>Проверка отсутствия заглядывания в будущее. Код выхода 1 при нарушении.</td></tr>
+<tr><td><code>size_floor_report_cli</code></td><td><code>price-quality --out файл</code>, <code>history --since 2015q1</code></td><td>Отчёт о подозрительных ценах и о пороге размера во времени.</td></tr>
+<tr><td><code>fmp_vintage_load_cli</code></td><td><code>--dry-run</code>, <code>--limit N</code>, <code>--replace-prices</code></td><td>Загрузка истории цен из FMP-винтажа (выполнено).</td></tr>
+<tr><td><code>fmp_backfill_cli</code></td><td>—</td><td>Устаревший прямой выкачиватель FMP; неприменим, пока нет подписки.</td></tr>
+<tr><td><code>jobs/run_scoring.py</code></td><td><code>--as-of ДАТА</code>, <code>--dry-run</code></td><td>Ручной прогон скоринга.</td></tr>
+<tr><td><code>src.data.pipeline.register_jobs</code></td><td><code>--dry-run --category p22</code>, затем без <code>--dry-run</code></td><td>Регистрация/обновление джобов в планировщике.</td></tr>
+</table></div>
+
+<!-- ============================================================ -->
+<h2 id="s13">13. Конфигурация (YAML)</h2>
+<p>Папка <code>config/pipeline/</code>. Конфиги версионируются в git; изменения меняют поведение модели.</p>
+<div class="table-wrap"><table>
+<tr><th>Файл</th><th>Что внутри</th><th>Кто меняет</th></tr>
+<tr><td><code>p22_acquirers.yaml</code></td><td>25 покупателей: CIK, тикер, страна/блок, даты входа и выхода.</td><td>Владелец</td></tr>
+<tr><td><code>p22_weights.yaml</code></td><td>Веса композита (из спецификации), веса и направления признаков внутри блоков (черновые), веса fit, штрафы FIS и антимонопольный.</td><td>Владелец (решение E)</td></tr>
+<tr><td><code>p22_base_rates.yaml</code></td><td>Вероятности одобрения по областям и фазам с цитатами источника (BIO/Informa 2011–2020). 15 из 21 областей заполнены.</td><td>Владелец</td></tr>
+<tr><td><code>p22_therapeutic_area.yaml</code></td><td>Словарь терапевтических областей.</td><td>Владелец</td></tr>
+<tr><td><code>p22_modality.yaml</code></td><td>Словарь модальностей (не проверен специалистом).</td><td>Владелец</td></tr>
+<tr><td><code>p22_strategic_process_phrases.yaml</code></td><td>Фразы для поиска процессов продажи в 8-K.</td><td>Владелец</td></tr>
+<tr><td><code>p22_cvr_policy.yaml</code></td><td>Политика оценки CVR (ноль).</td><td>Владелец; изменение обесценивает все метки доходности</td></tr>
+<tr><td><code>activist_filers.yaml</code> (<code>config/</code>)</td><td>16 фондов-активистов и специалистов с CIK.</td><td>Владелец (решение G)</td></tr>
+</table></div>
+<p>Технические константы (URL, пути кэша, лимиты, <code>EDGAR_USER_AGENT</code>) — <code>src/ml/pipeline/p22_biotech_ma/config.py</code>.</p>
+
+<!-- ============================================================ -->
+<h2 id="s14">14. Эксплуатация и диагностика</h2>
+
+<h3>14.1 Где что на проде</h3>
+<ul>
+<li>Сервер: Raspberry Pi, код в <code>/opt/apps/e-trading</code>, Python — <code>.venv/bin/python</code>.</li>
+<li>Планировщик: systemd-сервис <code>scheduler.service</code> (<code>sudo systemctl restart scheduler.service</code> после регистрации джобов).</li>
+<li>Логи и результаты: <code>/opt/apps/e-trading/results/p22_biotech_ma/ГГГГ-ММ-ДД/</code>.</li>
+<li>Сырая зона и рабочие файлы: <code>/share/data-cache/p22/</code> (с Windows-машины разработчика — <code>R:\data-cache\p22</code>).</li>
+<li>Ручной запуск джобов с учётом зависимостей — через страницу Jobs в веб-интерфейсе (кнопка запуска создаёт прогон в планировщике).</li>
+</ul>
+
+<h3>14.2 Обновление кода на проде</h3>
+<pre><code>cd /opt/apps/e-trading
+git pull
+.venv/bin/alembic upgrade head                                   # если есть новые миграции
+.venv/bin/python -m src.data.pipeline.register_jobs --dry-run --category p22
+.venv/bin/python -m src.data.pipeline.register_jobs --category p22
+sudo systemctl restart scheduler.service</code></pre>
+
+<h3>14.3 Типичные ситуации</h3>
+<div class="table-wrap"><table>
+<tr><th>Симптом</th><th>Причина</th><th>Что делать</th></tr>
+<tr><td><code>"deferred": true</code>, «dependency … has not run yet today»</td><td>Джоб ждёт, что предшественник сегодня успешно отработал <b>через планировщик</b>. Ручной запуск из консоли не учитывается.</td><td>Запустить цепочку из веб-интерфейса по порядку, либо дождаться расписания. Квартальные джобы следующий раз сработают 1 января.</td></tr>
+<tr><td>Все компании Tier 0</td><td>Нет подтверждённых событий блока G.</td><td>Разобрать очередь <code>process_event</code> / <code>activist_intent</code> в <code>review_queue_cli</code>.</td></tr>
+<tr><td>Странная капитализация (в 10–100 раз)</td><td>Обратный сплит не записан, неверная база цен в винтаже, или тикер указывает на варрант.</td><td><code>size_floor_report_cli price-quality</code>; проверить тикер в <code>p22_company</code>; исправления базы цен — в FMP-пайплайне.</td></tr>
+<tr><td>SEC 403</td><td>Нет <code>User-Agent</code> или превышена скорость.</td><td>Проверить <code>config.EDGAR_USER_AGENT</code>, не запускать параллельно несколько тяжёлых джобов.</td></tr>
+<tr><td>Много <code>base_rate_fallback</code> в логе</td><td>Область препарата <code>unclassified</code> или без цифр в <code>p22_base_rates.yaml</code>.</td><td>Не ошибка; список показывает, где не хватает данных.</td></tr>
+<tr><td>Ошибки загрузки</td><td>Сеть, лимиты источника.</td><td>Таблица <code>p22_fetch_failure</code>.</td></tr>
+<tr><td>Очередь растёт</td><td>Никто не разбирает.</td><td><code>review_queue_cli status</code>. По спецификации события продажи должны разбираться в течение 1 рабочего дня.</td></tr>
+</table></div>
+
+<h3>14.4 Проверки качества</h3>
+<ul>
+<li><b>Тесты:</b> <code>src/ml/pipeline/p22_biotech_ma/tests/</code> (на 30.10.2026 — 607 проходят; тесты <code>tests/db</code> требуют локального Postgres).</li>
+<li><b>Типы:</b> <code>scripts/typecheck.py</code> (pyright + mypy), должно быть 0 ошибок.</li>
+<li><b>Аудит заглядывания в будущее:</b> <code>lookahead_audit_cli --samples 200</code> после любых изменений в загрузке данных.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s15">15. Текущее состояние (31.10.2026)</h2>
+<div class="table-wrap"><table>
+<tr><th>Этап (спецификация §9)</th><th>Статус</th></tr>
+<tr><td>M1 Загрузка и хранилище</td><td><span class="tag t-ok">готово</span></td></tr>
+<tr><td>M2 Сопоставление сущностей</td><td><span class="tag t-part">работает; испытания с несколькими препаратами не привязываются</span></td></tr>
+<tr><td>M3 Признаки</td><td><span class="tag t-part">B, C, E частично; A не работает</span></td></tr>
+<tr><td>M4 Rule-based скоринг + досье</td><td><span class="tag t-ok">работает</span> (на неполных данных)</td></tr>
+<tr><td>M5 Блок G</td><td><span class="tag t-part">загрузка есть, подтверждённых событий нет</span></td></tr>
+<tr><td>M6 Метки + бэктест</td><td><span class="tag t-part">инструменты готовы, сделки не введены (идёт разметка)</span></td></tr>
+<tr><td>M7 Модель доходности</td><td><span class="tag t-no">не начато</span></td></tr>
+<tr><td>M8 ML-модель</td><td><span class="tag t-no">только если M6 обыграет базовую стратегию</span></td></tr>
+<tr><td>M9 Партнёрства</td><td><span class="tag t-no">не начато</span></td></tr>
+<tr><td>M10 API и оповещения</td><td><span class="tag t-no">не начато</span></td></tr>
+</table></div>
+
+<p><b>Последний прогон скоринга (dry-run, 31.10.2026):</b> 25 покупателей; 497 целей, 455 ранжированы, 42 без единого блока; все 497 — Tier 0. Покрытие блоков: качество актива — 217, финансы — 431, помехи — 496, совместимость — 28, давление покупателя — 0. Исключено: неактивные 1 024, ниже порога размера 155; оставлено при неизвестном размере 42, при неизвестных испытаниях 280.</p>
+<p><b>Аудит заглядывания в будущее:</b> пройден (200 выборок, 180 066 строк). Строки блока G не проверялись — их ещё нет.</p>
+<div class="bad">
+<p><b>Известные проблемы, найденные в логе прода за 30.10.2026:</b></p>
+<ul>
+<li><b>Activist Positions Ingest не записывает ни одного пакета:</b> 13 из 13 найденных 13D/13G отклонены с причиной <code>header_parse_failed</code>. Причина (проверено 01.11.2026): документ <code>primary_doc.xml</code> — структурированный XML без текстового SGML-заголовка, а разбор искал только заголовок <code>SUBJECT COMPANY:</code>. <b>Исправлено 01.11.2026</b>: разбор читает XML. После развёртывания нужна однократная дозагрузка (<code>--lookback-days 730</code>, см. шаг 15).</li>
+<li><b>Очередь сопоставления имён не разбирается:</b> 3 952 элемента <code>entity_match</code>, медианный возраст ~57 дней; 1 719 названий спонсоров CT.gov не сопоставлены ни с одной компанией. Это напрямую сужает блок B.</li>
+</ul>
+</div>
+<p><b>Сделки:</b> 0 введено; в очереди 2 691 документ по 689 компаниям; подготовлена первая пачка из 18 сделок (<code>/share/data-cache/p22/p22_batch01.csv</code>), ждёт ответов на вопросы L1–L3.</p>
+<div class="warn"><p><b>Вывод:</b> рейтинг сейчас держится в основном на фазе испытаний, близости катализатора, EV/деньги и размере. Это близко к базовой стратегии naive-informed, поэтому пока не следует ждать от рейтинга преимущества над ней.</p></div>
+
+<!-- ============================================================ -->
+<h2 id="s16">16. Решения за владельцем</h2>
+<p>Ниже — всё, что пайплайн не может решить сам. Для каждого пункта: суть, варианты, рекомендация.</p>
+
+<h3>16.1 Данные и модель</h3>
+
+<div class="q">
+<h4>A. Источник данных для блока A — <span class="tag t-ok">решено 31.10.2026</span></h4>
+<p>Решение: <b>SEC XBRL, без платных поставщиков</b>. EBITDA = операционная прибыль (OperatingIncomeLoss) + амортизация (DepreciationDepletionAndAmortization); выручка и долг из тех же данных; иностранные эмитенты — через теги ifrs-full. Покупатели без отчётности в SEC (Roche, Bayer, Astellas) получат None.</p>
+<p><b>Ещё не решено внутри A:</b></p>
+<ul>
+<li><b>Выручка по продуктам для «выручки под угрозой».</b> В XBRL продуктовая выручка есть не у всех (сегментные теги ненадёжны). Варианты: (1) разбирать продуктовую разбивку из 10-K вручную для 25 покупателей × ~15 продуктов раз в год; (2) пытаться брать сегментные XBRL-факты там, где они есть. <span class="rec">Рекомендация: (2) с ручным дозаполнением для ключевых продуктов.</span></li>
+<li>Строить ли блок A сейчас или после первой волны разметки.</li>
+</ul>
+</div>
+
+<div class="q">
+<h4>B. «Качество валюты» покупателя (forward P/E и стабильность)</h4>
+<p>Спецификация: <code>currency_quality = процентиль(forward P/E среди покупателей) × stability_factor(волатильность за 12 мес)</code>. Проблемы: бесплатного исторического forward P/E нет (yfinance даёт только сегодняшний); формула <code>stability_factor</code> в спецификации не задана.</p>
+<p>Варианты: (1) заменить forward P/E на trailing P/E (цена ÷ разводнённая прибыль на акцию из SEC) — бесплатно и point-in-time; (2) пропустить equity_capacity совсем (только cash_capacity); (3) задать формулу стабильности, например <code>1 / (1 + годовая волатильность)</code> или процентиль волатильности.</p>
+<p><span class="rec">Рекомендация: trailing P/E + stability_factor = 1 − процентиль волатильности среди покупателей.</span></p>
+</div>
+
+<div class="q">
+<h4>C. Финансовый рычаг покупателя и пиковые продажи</h4>
+<p><code>target_leverage_ratio</code> — сколько EBITDA долга покупатель готов взять (cash_capacity); <code>assumed_peak_sales</code> по области — ожидаемые пиковые продажи препарата Phase III (pipeline_gap_by_ta). Спецификация чисел не даёт.</p>
+<p>Ориентиры: для крупной фармы рычаг обычно 2–3× EBITDA; пиковые продажи — по области, например онкология выше, редкие болезни ниже.</p>
+<p><span class="rec">Нужно: одно число рычага (предложение 2.5×) и таблица пиковых продаж по областям (или одно общее число на старте).</span></p>
+</div>
+
+<div class="q">
+<h4>D. Вероятность одобрения (PoA) для поздних фаз и орфанных препаратов</h4>
+<p>Цифры по областям — «от Phase 1 до одобрения»; для поздних фаз есть только общие (не по областям) вероятности переходов. Как их комбинировать, спецификация не говорит. Орфанные препараты имеют собственную таблицу по фазам.</p>
+<p>Варианты: (1) для Phase 2+ использовать общие вероятности переходов без учёта области; (2) масштабировать общие вероятности коэффициентом области (отношение LoA области к общему LoA); (3) оставить None (сейчас).</p>
+<p><span class="rec">Рекомендация: (2). PoA не входит в текущий композит, решение нужно к модели доходности (M7).</span></p>
+<p>Также: 6 областей без цифр в источнике (immunology, cardiometabolic, rare_metabolic, gene_cell_therapy, rare_orphan_disease, vaccines) и 5 общих вероятностей оставлены из спецификации, а не из нового отчёта — обновлять ли.</p>
+</div>
+
+<div class="q">
+<h4>E. Веса внутри блоков и параметры fit</h4>
+<p>Черновики в <code>p22_weights.yaml</code>: фаза 0.5 / катализатор 0.5 (ближе = лучше); EV/деньги 0.6 (ниже = лучше) / размер 0.4 (меньше = лучше); число препаратов Phase 2+ — вес 0; веса fit 0.4/0.3/0.3; антимонопольный штраф 0.5.</p>
+<p><span class="rec">Рекомендация: утвердить как есть до первого бэктеста, затем пересмотреть по результатам (каждое изменение — новый config_hash).</span></p>
+</div>
+
+<div class="q">
+<h4>F. Географическая совместимость (geographic_fit)</h4>
+<p>Нужны данные о коммерческом присутствии покупателя по странам. Источника нет.</p>
+<p>Варианты: (1) убрать слагаемое и перераспределить вес; (2) ручная таблица регионов для 25 покупателей; (3) брать страны испытаний покупателя из CT.gov как приближение.</p>
+<p><span class="rec">Рекомендация: (1) сейчас, (3) позже.</span></p>
+</div>
+
+<div class="q">
+<h4>G. Список активистов и фондов-специалистов</h4>
+<p>В <code>activist_filers.yaml</code> 16 фондов, проверенных только технически (CIK действительно подаёт 13D). Спецификация хочет ~30 и разделение «активист с историей кампаний» vs «фонд-специалист».</p>
+<p><span class="rec">Нужно: просмотреть список, разметить тип каждого, дополнить. Этот же список нужен для блока F (13F).</span></p>
+</div>
+
+<div class="q">
+<h4>H. Словарь модальностей</h4>
+<p><code>p22_modality.yaml</code> не проверен специалистом; от него зависит слагаемое <code>modality_capability</code>.</p>
+</div>
+
+<div class="q">
+<h4>I. Блок F (13F, инсайдеры, шорт)</h4>
+<p>Вес в композите 0, только контекст досье. Строить ли вообще; если да — нужен список фондов (пункт G). Короткие позиции можно брать бесплатно из файлов FINRA.</p>
+<p><span class="rec">Рекомендация: отложить до M7.</span></p>
+</div>
+
+<div class="q">
+<h4>J. 280 компаний без привязанных испытаний</h4>
+<p>Испытания привязываются к препарату, только если в нём один препарат. У 280 из 497 целей нет ни одного привязанного испытания с фазой — блок B для них пуст, и порог «есть Phase 1» к ним не применяется.</p>
+<p>Варианты: (1) считать phase_max по всем испытаниям спонсора, без привязки к препарату; (2) ручная привязка для многопрепаратных испытаний; (3) оставить.</p>
+<p><span class="rec">Рекомендация: (1) для phase_max и порога актива, привязку к препарату оставить строгой.</span></p>
+</div>
+
+<h3>16.2 Разметка сделок (первая пачка)</h3>
+
+<div class="q">
+<h4>L1. Какие условия сделки записывать при перебивании цены</h4>
+<p>Metsera: Pfizer объявил $47.50 + CVR до $22.50, после встречного предложения Novo Nordisk поднял цену перед закрытием (по памяти — около $65.60 + CVR до $20.65, в документах не сверено). Avadel: Alkermes объявил $18.50, затем поднял до $21.00.</p>
+<p>Варианты: (1) условия на дату объявления; (2) окончательные условия.</p>
+<p><span class="rec">По умолчанию (1) для единообразия с датой объявления; для меток доходности логичнее (2). Нужно выбрать одно правило для всех сделок.</span></p>
+</div>
+
+<div class="q">
+<h4>L2. Частные покупатели и «копеечные» сделки</h4>
+<p>Cycle Group купила проблемную Applied Therapeutics за $0.088 + CVR; QOL Medical (частная) купила Evoke. Считать ли такие сделки стратегическими (положительными метками)?</p>
+<p><span class="rec">По умолчанию: да, с <code>acquirer_is_private = true</code>.</span></p>
+</div>
+
+<div class="q">
+<h4>L3. Отложенные строки первой пачки</h4>
+<ul>
+<li>Adverum, 2016: Avalanche слилась с частной Annapurna → предлагается <code>reverse_merger</code>.</li>
+<li>Carisma (company 562): 2016 Eleven Bio купила Viventia (сама покупатель) → <code>reject</code>; 2022 Sesen Bio + Carisma → <code>reverse_merger</code>; 2025 слияние с OrthoCellix, компания снята с биржи в декабре 2025 — нужно выяснить, состоялось ли.</li>
+</ul>
+</div>
+
+<div class="q">
+<h4>L4. Порядок разметки</h4>
+<p>Предложено начать с 438 компаний, переставших отчитываться и имеющих кандидатов (379 из них — документы со стороны цели), от новых к старым. Сделки до 2016 года для бэктеста почти не нужны (снимки начинаются в 2016). Подтвердить порядок и нужно ли размечать сделки до 2016.</p>
+</div>
+
+<h3>16.3 Эксплуатация</h3>
+<div class="q">
+<h4>O1. Исправление тикеров-варрантов сейчас или 1 января</h4>
+<p>Исправление кода уже на проде, но Entity Resolution — квартальный джоб. Чтобы применить сейчас, нужно вручную запустить из веб-интерфейса Universe Ingest, затем Entity Resolution. Цены, уже собранные под тикерами варрантов, автоматически не исправятся.</p>
+</div>
+<div class="q">
+<h4>O2. Кто разбирает очередь блока G и с какой регулярностью</h4>
+<p>Без этого все компании остаются Tier 0. Спецификация требует разбора событий продажи в течение одного рабочего дня.</p>
+</div>
+<div class="q">
+<h4>O3. Очередь сопоставления имён (3 952 элемента)</h4>
+<p>Разбирать вручную целиком нереально. Варианты: (1) разобрать только спонсоров с испытаниями Phase 2+ (самые ценные для блока B); (2) поднять порог нечёткого совпадения и автоматически принимать почти точные совпадения (нарушает правило «нечёткое — только через человека», нужно явное согласие владельца); (3) оставить как есть.</p>
+<p><span class="rec">Рекомендация: (1).</span></p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s17">17. Где что лежит в коде</h2>
+<div class="table-wrap"><table>
+<tr><th>Путь (от <code>src/ml/pipeline/p22_biotech_ma/</code>)</th><th>Содержимое</th></tr>
+<tr><td><code>jobs/</code></td><td>Скрипты джобов (<code>run_*.py</code>), общий код <code>run_common.py</code>.</td></tr>
+<tr><td><code>ingest/</code></td><td>Клиенты источников (<code>clinicaltrials_client</code>, <code>openfda_client</code>, <code>orange_book_client</code>, <code>yfinance_client</code>, <code>fmp_*</code>), сырая зона, нормализация (<code>financial_facts</code>, <code>trial_normalization</code>, <code>asset_normalization</code>, классификаторы), сущности (<code>entity_resolution</code>, <code>alias_matching</code>), цены (<code>price_ingest</code>, <code>market_cap</code>, <code>price_quality</code>, <code>size_floor</code>), блок G (<code>process_events</code>, <code>activist_positions</code>), сделки (<code>deal_candidates</code>, <code>deal_entry</code>, <code>deal_coverage</code>), очередь (<code>review_queue</code>), повторы (<code>http_retry</code>).</td></tr>
+<tr><td><code>features/</code></td><td>Блоки A, B, C, E, G; реестр признаков; аудит заглядывания в будущее.</td></tr>
+<tr><td><code>scoring/</code></td><td><code>fit.py</code> (блок D), <code>composite.py</code>, <code>score_run.py</code> (отбор целей, прогон), <code>weights_config.py</code>.</td></tr>
+<tr><td><code>backtest/</code></td><td>Метрики, метки, базовые стратегии, харнесс.</td></tr>
+<tr><td><code>outputs/dossier.py</code></td><td>Досье.</td></tr>
+<tr><td><code>cli/</code></td><td>Ручные инструменты.</td></tr>
+<tr><td><code>tests/</code></td><td>Юнит-тесты (фейковые репозитории), <code>tests/db</code> — с настоящей БД.</td></tr>
+<tr><td><code>docs/</code></td><td>Спецификация, план, дизайн, задачи, требования, этот документ.</td></tr>
+<tr><td><code>src/data/db/…</code></td><td>Модели, миграции, <code>repo_p22_biotech_ma.py</code>.</td></tr>
+<tr><td><code>src/data/pipeline/specs/p22_specs.py</code></td><td>Регистрация джобов: расписание и зависимости.</td></tr>
+<tr><td><code>config/pipeline/p22_*.yaml</code></td><td>Конфиги модели.</td></tr>
+</table></div>
+
+<footer>
+Документ подготовлен 31.10.2026 по состоянию кода на коммите <code>6c6e2c9</code>. Источник истины — <code>docs/pipeline-specification.md</code> и <code>docs/Tasks.md</code>; при расхождении верить им и обновить этот документ.<br>
+Это исследовательский скрининговый инструмент, не инвестиционная рекомендация.
+</footer>
+</main>
+</div>
+<script>
+(function () {
+  var btn = document.getElementById("themeBtn");
+  var root = document.documentElement;
+  function current() {
+    var t = root.getAttribute("data-theme");
+    if (t) return t;
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  try { var saved = localStorage.getItem("p22-theme"); if (saved) root.setAttribute("data-theme", saved); } catch (e) {}
+  btn.addEventListener("click", function () {
+    var next = current() === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("p22-theme", next); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>

@@ -715,6 +715,13 @@ use in the code/config; this section exists so they're all in one place to walk 
       family, which is what made the more efficient ingest design below possible; that docstring
       itself isn't corrected in this pass (out of scope — the method's own behavior, not its
       prose, was the actionable bug) but is worth fixing next time that file is touched.
+- [x] **13D/G ingest never wrote a row — fixed 2026-11-01.** Prod log 2026-10-30: 13/13 hits
+      rejected `header_parse_failed`. The EFTS-named `primary_doc.xml` is the structured-XML
+      Schedule 13D/G (mandatory since Dec 2024) and has no SGML `SUBJECT COMPANY:` header, which
+      was all `parse_13dg_header` understood (its tests used synthetic SGML). Now parses
+      `issuerCIK`/`issuerCik`, `filerCredentials/cik`, `percentOfClass`/`classPercent`; filer
+      names from EFTS `display_names`. Verified on 4 live filings. **Pi: one-off backfill**
+      `run_activist_positions_ingest.py --lookback-days 730` after deploy.
 - [x] **Schedule 13D/13D-A/13G/13G-A ingest** (spec §2.6.2), 2026-09-08 —
       `ingest/activist_positions.py` + `jobs/run_activist_positions_ingest.py`, registered daily.
       Uses `EdgarDownloader.efts_filings_search` (CIK-targeted, chunked at 100) with the real

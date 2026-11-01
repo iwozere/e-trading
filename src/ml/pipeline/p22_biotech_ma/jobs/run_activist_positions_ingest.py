@@ -8,6 +8,7 @@ detection strategy and its disclosed `stated_intent` scope gap.
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -24,18 +25,21 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
-def run() -> dict:
+def run(lookback_days: int = 1) -> dict:
+    """Scan the last `lookback_days` days of 13D/G filings (1 for the daily job; larger for a one-off backfill)."""
     setup_run_logging()
 
     edgar = EdgarDownloader()
     db_service = DatabaseService()
     with db_service.uow() as uow:
-        summary = run_activist_positions(uow.p22, edgar)
+        summary = run_activist_positions(uow.p22, edgar, lookback_days=lookback_days)
 
     _logger.info("Activist-positions ingest complete: %s", summary)
     return summary
 
 
 if __name__ == "__main__":
-    result = run()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--lookback-days", type=int, default=1, help="Days to scan, ending yesterday (backfill: e.g. 730)")
+    result = run(parser.parse_args().lookback_days)
     print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")

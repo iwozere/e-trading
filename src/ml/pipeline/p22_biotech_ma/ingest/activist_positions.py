@@ -17,6 +17,10 @@ filer-centric and would need a document fetch per filing just to learn the subje
 entry is the subject vs. the filer(s) — resolving that (and getting `pct_of_class`) needs the
 actual filing. `_id` (`"{accession}:primary_doc.xml"`) already names the exact document, so no
 filename-guessing is needed (unlike `process_events.py`'s use of a similar pattern for 8-Ks).
+That document is the structured-XML Schedule 13D/G, which has NO SGML `SUBJECT COMPANY:` header —
+until 2026-11-01 the parser only understood that header, so every filing was rejected as
+`header_parse_failed`. Subject/filer CIKs now come from the XML; filer names from EFTS
+`display_names` (EDGAR conformed names), falling back to the 13D reporting-person name.
 
 **`pct_of_class` is populated ONLY when exactly one distinct `<percentOfClass>` value appears
 in the whole document.** Real filings (live-verified) often carry several cover-page rows with
@@ -44,6 +48,7 @@ import re
 import sys
 from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
+from html import unescape
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -72,7 +77,21 @@ _FORM_TYPE_CANONICAL = {
 _FILER_BLOCK_MARKER = re.compile(r"FILED BY:|REPORTING-OWNER:")
 _CIK_PATTERN = re.compile(r"CENTRAL INDEX KEY:\s*(\d+)")
 _NAME_PATTERN = re.compile(r"COMPANY CONFORMED NAME:\s*(.+)")
-_PCT_OF_CLASS_PATTERN = re.compile(r"<percentOfClass>([\d.]+)</percentOfClass>")
+# 13D uses <percentOfClass>, 13G uses <classPercent> (live-verified 2026-11-01).
+_PCT_OF_CLASS_PATTERN = re.compile(r"<(?:percentOfClass|classPercent)>\s*([\d.]+)\s*</(?:percentOfClass|classPercent)>")
+
+# Structured-XML Schedule 13D/G (`primary_doc.xml`, mandatory since Dec 2024) — no SGML header at
+# all. Live-verified 2026-11-01: subject is `<issuerCIK>` (13D) / `<issuerCik>` (13G); each filer is
+# a `<filerCredentials><cik>` in `<headerData>`; 13D `<reportingPersonInfo>` blocks pair a CIK with a
+# name, 13G reporting persons carry a name only.
+_XML_ROOT_MARKER = "<edgarSubmission"
+_XML_SUBJECT_CIK = re.compile(r"<issuerC[iI][kK]>\s*(\d+)\s*</issuerC[iI][kK]>")
+_XML_FILER_CIK = re.compile(r"<filerCredentials>.*?<cik>\s*(\d+)\s*</cik>", re.DOTALL)
+_XML_REPORTING_PERSON = re.compile(r"<reportingPersonInfo>(.*?)</reportingPersonInfo>", re.DOTALL)
+_XML_REPORTING_CIK = re.compile(r"<reportingPersonCIK>\s*(\d+)\s*</reportingPersonCIK>")
+_XML_REPORTING_NAME = re.compile(r"<reportingPersonName>\s*(.*?)\s*</reportingPersonName>", re.DOTALL)
+# EFTS `display_names` entries look like "SenesTech, Inc.  (SNES)  (CIK 0001680378)".
+_DISPLAY_NAME_PATTERN = re.compile(r"^(.*?)\s{2}.*\(CIK (\d+)\)\s*$")
 
 
 def load_activist_filers(path: Path = ACTIVIST_FILERS_YAML) -> set:
@@ -87,16 +106,45 @@ def load_activist_filers(path: Path = ACTIVIST_FILERS_YAML) -> set:
 
 def parse_13dg_header(text: str) -> Optional[Dict[str, Any]]:
     """
-    Extract the subject company's CIK and every filer's (CIK, name) from a 13D/G filing's SGML
-    header. Returns `None` if no `SUBJECT COMPANY:`/filer-block structure is found at all (an
-    unexpected document shape — logged as `header_parse_failed` by the caller, not silently
-    treated as "no filers").
+    Extract the subject company's CIK and every filer's (CIK, name) from a 13D/G filing — the
+    structured-XML `primary_doc.xml` (what EFTS `_id` names today) or a legacy SGML header.
+    Returns `None` if neither shape is recognised (logged as `header_parse_failed` by the caller,
+    not silently treated as "no filers").
 
     Returns:
-        `{"subject_cik": str, "filers": [{"cik": str, "name": str}, ...]}` — CIKs zero-padded to
-        10 digits. `filers` may be empty if a filer block's CIK/name couldn't be parsed even
-        though a block marker was found (logged, not raised).
+        `{"subject_cik": str, "filers": [{"cik": str, "name": Optional[str]}, ...]}` — CIKs
+        zero-padded to 10 digits. `filers` may be empty if no filer CIK could be parsed. An XML
+        filer's `name` is `None` when no reporting person carries its CIK (always so for 13G).
     """
+    if _XML_ROOT_MARKER in text:
+        return _parse_13dg_xml(text)
+    return _parse_13dg_sgml(text)
+
+
+def _parse_13dg_xml(text: str) -> Optional[Dict[str, Any]]:
+    """Structured-XML branch of `parse_13dg_header`."""
+    subject_match = _XML_SUBJECT_CIK.search(text)
+    if subject_match is None:
+        return None
+    names_by_cik: Dict[str, str] = {}
+    for block in _XML_REPORTING_PERSON.findall(text):
+        cik_match = _XML_REPORTING_CIK.search(block)
+        name_match = _XML_REPORTING_NAME.search(block)
+        if cik_match and name_match:
+            names_by_cik[cik_match.group(1).zfill(10)] = unescape(name_match.group(1))
+
+    filers: List[Dict[str, Optional[str]]] = []
+    seen: set = set()
+    for raw_cik in _XML_FILER_CIK.findall(text):
+        cik = raw_cik.zfill(10)
+        if cik not in seen:
+            seen.add(cik)
+            filers.append({"cik": cik, "name": names_by_cik.get(cik)})
+    return {"subject_cik": subject_match.group(1).zfill(10), "filers": filers}
+
+
+def _parse_13dg_sgml(text: str) -> Optional[Dict[str, Any]]:
+    """Legacy SGML-header branch of `parse_13dg_header` (`SUBJECT COMPANY:` / `FILED BY:` blocks)."""
     subject_idx = text.find("SUBJECT COMPANY:")
     if subject_idx == -1:
         return None
@@ -121,6 +169,17 @@ def parse_13dg_header(text: str) -> Optional[Dict[str, Any]]:
             filers.append({"cik": cik_match.group(1).zfill(10), "name": name_match.group(1).strip()})
 
     return {"subject_cik": subject_cik, "filers": filers}
+
+
+def efts_names_by_cik(display_names: List[str]) -> Dict[str, str]:
+    """Map zero-padded CIK -> EDGAR conformed name from an EFTS hit's `display_names` list —
+    the filer-name source for XML filings, whose header carries only the filer's CIK."""
+    names: Dict[str, str] = {}
+    for entry in display_names:
+        match = _DISPLAY_NAME_PATTERN.match(str(entry))
+        if match:
+            names[match.group(2).zfill(10)] = match.group(1).strip()
+    return names
 
 
 def extract_single_pct_of_class(text: str) -> Optional[float]:
@@ -228,12 +287,13 @@ def run(repo: Any, edgar: Any, as_of_date: Optional[date] = None, lookback_days:
             skip_reasons["no_filers_parsed"] += 1
             continue
 
+        efts_names = efts_names_by_cik(src.get("display_names") or [])
         for filer in header["filers"]:
             filer_type = classify_filer_type(filer["cik"], repo, activist_filer_ciks)
             repo.upsert_activist_position(
                 company_id=company_id,
                 filer_cik=filer["cik"],
-                filer_name=filer["name"],
+                filer_name=efts_names.get(filer["cik"]) or filer["name"],
                 filer_type=filer_type,
                 form_type=canonical_form,
                 pct_of_class=pct_of_class,

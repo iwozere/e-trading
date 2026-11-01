@@ -11,11 +11,76 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p22_biotech_ma.ingest.activist_positions import (
     classify_filer_type,
+    efts_names_by_cik,
     extract_single_pct_of_class,
     load_activist_filers,
     parse_13dg_header,
     run,
 )
+
+# Trimmed from real primary_doc.xml files (0001731122-26-001384, 0002100121-26-001147), 2026-11-01.
+_REAL_13D_XML = """<?xml version="1.0" encoding="UTF-8"?><edgarSubmission xmlns="http://www.sec.gov/edgar/schedule13D" xmlns:com="http://www.sec.gov/edgar/common">
+  <schemaVersion>X0202</schemaVersion>
+<headerData>
+    <submissionType>SCHEDULE 13D/A</submissionType>
+    <filerInfo>
+      <filer>
+        <filerCredentials>
+          <!-- Field: Pseudo-Tag; ID: Name; Data: GLENBROOK CAPITAL MANAGEMENT -->
+          <cik>0001273782</cik>
+          <ccc>XXXXXXXX</ccc>
+        </filerCredentials>
+      </filer>
+      <liveTestFlag>LIVE</liveTestFlag>
+    </filerInfo>
+  </headerData>
+  <formData>
+    <coverPageHeader>
+      <issuerInfo>
+        <issuerCIK>0001680378</issuerCIK>
+        <issuerName>SenesTech, Inc.</issuerName>
+      </issuerInfo>
+    </coverPageHeader>
+    <reportingPersons>
+      <reportingPersonInfo>
+        <reportingPersonCIK>0001273782</reportingPersonCIK>
+        <reportingPersonNoCIK>N</reportingPersonNoCIK>
+        <reportingPersonName>GLENBROOK CAPITAL &amp; CO</reportingPersonName>
+        <percentOfClass>40.51</percentOfClass>
+      </reportingPersonInfo>
+    </reportingPersons>
+  </formData>
+</edgarSubmission>
+"""
+
+_REAL_13G_XML = """<?xml version="1.0" encoding="UTF-8"?><edgarSubmission xmlns="http://www.sec.gov/edgar/schedule13g" xmlns:com="http://www.sec.gov/edgar/common">
+<schemaVersion>X0202</schemaVersion>
+<headerData>
+<submissionType>SCHEDULE 13G/A</submissionType>
+<filerInfo>
+<filer>
+<filerCredentials>
+<cik>0002100121</cik>
+<ccc>XXXXXXXX</ccc>
+</filerCredentials>
+</filer>
+</filerInfo>
+</headerData>
+<formData>
+<coverPageHeader>
+<issuerInfo>
+<issuerCik>0000752642</issuerCik>
+<issuerName>UMH Properties Inc</issuerName>
+</issuerInfo>
+</coverPageHeader>
+<coverPageHeaderReportingPersonDetails>
+<reportingPersonName>Vanguard Portfolio Management</reportingPersonName>
+<classPercent>4.99</classPercent>
+</coverPageHeaderReportingPersonDetails>
+<items><item4><classPercent>4.99</classPercent></item4></items>
+</formData>
+</edgarSubmission>
+"""
 
 _REAL_HEADER = """SUBJECT COMPANY:\t
 
@@ -84,6 +149,37 @@ def test_parse_13dg_header_no_filer_block_returns_empty_filers():
     assert result == {"subject_cik": "0000000001", "filers": []}
 
 
+def test_parse_13dg_header_xml_13d_pairs_filer_cik_with_reporting_person_name():
+    assert parse_13dg_header(_REAL_13D_XML) == {
+        "subject_cik": "0001680378",
+        "filers": [{"cik": "0001273782", "name": "GLENBROOK CAPITAL & CO"}],
+    }
+
+
+def test_parse_13dg_header_xml_13g_lowercase_issuer_cik_and_no_reporting_cik():
+    assert parse_13dg_header(_REAL_13G_XML) == {
+        "subject_cik": "0000752642",
+        "filers": [{"cik": "0002100121", "name": None}],
+    }
+
+
+def test_parse_13dg_header_xml_without_issuer_cik_returns_none():
+    assert parse_13dg_header("<edgarSubmission><headerData/></edgarSubmission>") is None
+
+
+# ---------------------------------------------------------------------
+# efts_names_by_cik
+# ---------------------------------------------------------------------
+
+def test_efts_names_by_cik_parses_display_names_with_and_without_ticker():
+    names = efts_names_by_cik([
+        "SenesTech, Inc.  (SNES)  (CIK 0001680378)",
+        "GLENBROOK CAPITAL MANAGEMENT  (CIK 0001273782)",
+        "garbage",
+    ])
+    assert names == {"0001680378": "SenesTech, Inc.", "0001273782": "GLENBROOK CAPITAL MANAGEMENT"}
+
+
 # ---------------------------------------------------------------------
 # extract_single_pct_of_class
 # ---------------------------------------------------------------------
@@ -105,6 +201,10 @@ def test_extract_single_pct_of_class_ok_when_repeated_same_value():
 
 def test_extract_single_pct_of_class_none_when_absent():
     assert extract_single_pct_of_class("no percentages here") is None
+
+
+def test_extract_single_pct_of_class_reads_13g_class_percent():
+    assert extract_single_pct_of_class(_REAL_13G_XML) == 4.99
 
 
 # ---------------------------------------------------------------------
@@ -160,8 +260,50 @@ def test_classify_filer_type_none_when_target_role_not_acquirer():
 # run
 # ---------------------------------------------------------------------
 
-def _hit(ciks, form, adsh, doc="primary_doc.xml", file_date="2026-09-01"):
-    return {"_id": f"{adsh}:{doc}", "_source": {"ciks": ciks, "form": form, "adsh": adsh, "file_date": file_date}}
+def _hit(ciks, form, adsh, doc="primary_doc.xml", file_date="2026-09-01", display_names=None):
+    source = {"ciks": ciks, "form": form, "adsh": adsh, "file_date": file_date}
+    if display_names is not None:
+        source["display_names"] = display_names
+    return {"_id": f"{adsh}:{doc}", "_source": source}
+
+
+def test_run_xml_13g_writes_position_named_from_efts_display_names():
+    repo = MagicMock()
+    repo.list_companies_full.return_value = [{"company_id": 3, "cik": "0000752642"}]
+    repo.get_company_by_cik.return_value = None
+    edgar = MagicMock()
+    edgar.efts_filings_search.return_value = [_hit(
+        ["0000752642", "0002100121"], "SCHEDULE 13G/A", "0002100121-26-001147",
+        display_names=["UMH PROPERTIES, INC.  (UMH, UMH-PD)  (CIK 0000752642)", "VANGUARD PORTFOLIO MANAGEMENT LLC  (CIK 0002100121)"],
+    )]
+    edgar.fetch_filing_document.return_value = _REAL_13G_XML
+
+    summary = run(repo, edgar, as_of_date=date(2026, 9, 1))
+
+    assert summary["positions_written"] == 1
+    assert summary["rejection_breakdown"] == {}
+    kwargs = repo.upsert_activist_position.call_args.kwargs
+    assert kwargs["company_id"] == 3
+    assert kwargs["filer_cik"] == "0002100121"
+    assert kwargs["filer_name"] == "VANGUARD PORTFOLIO MANAGEMENT LLC"
+    assert kwargs["form_type"] == "SC 13G/A"
+    assert kwargs["pct_of_class"] == 4.99
+
+
+def test_run_xml_13d_falls_back_to_reporting_person_name():
+    repo = MagicMock()
+    repo.list_companies_full.return_value = [{"company_id": 5, "cik": "0001680378"}]
+    repo.get_company_by_cik.return_value = None
+    edgar = MagicMock()
+    edgar.efts_filings_search.return_value = [_hit(["0001680378", "0001273782"], "SCHEDULE 13D/A", "0001731122-26-001384")]
+    edgar.fetch_filing_document.return_value = _REAL_13D_XML
+
+    summary = run(repo, edgar, as_of_date=date(2026, 9, 1))
+
+    assert summary["positions_written"] == 1
+    kwargs = repo.upsert_activist_position.call_args.kwargs
+    assert kwargs["filer_name"] == "GLENBROOK CAPITAL & CO"
+    assert kwargs["pct_of_class"] == 40.51
 
 
 def test_run_writes_activist_position_for_subject_in_universe():
