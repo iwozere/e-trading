@@ -244,7 +244,10 @@ def run(repo: Any, edgar: Any, as_of_date: Optional[date] = None, lookback_days:
     positions_written = 0
     skip_reasons: Counter = Counter()
 
-    for hit in hits:
+    _logger.info("Activist-position scan %s..%s: %d filings to fetch", start, end, len(hits))
+    for done, hit in enumerate(hits, start=1):
+        if done % 250 == 0:
+            _logger.info("Activist-position scan %s..%s: %d/%d filings processed", start, end, done, len(hits))
         src = hit.get("_source", {})
         accession = str(src.get("adsh") or "")
         canonical_form = _FORM_TYPE_CANONICAL.get(str(src.get("form") or ""))

@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
+from datetime import date, timedelta
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
@@ -25,17 +27,37 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
+# EFTS serves at most ~10,000 hits per query (deeper pages 500), and the uow commits only on exit:
+# a long backfill window both truncates silently and loses everything on interrupt. Backfills are
+# therefore split into windows, each searched and committed on its own (upserts are idempotent,
+# so re-running an interrupted backfill is safe).
+_BACKFILL_WINDOW_DAYS = 30
+
+
 def run(lookback_days: int = 1) -> dict:
     """Scan the last `lookback_days` days of 13D/G filings (1 for the daily job; larger for a one-off backfill)."""
     setup_run_logging()
 
     edgar = EdgarDownloader()
     db_service = DatabaseService()
-    with db_service.uow() as uow:
-        summary = run_activist_positions(uow.p22, edgar, lookback_days=lookback_days)
+    end = date.today() - timedelta(days=1)
+    totals: Counter = Counter()
+    rejections: Counter = Counter()
+    remaining = lookback_days
+    while remaining > 0:
+        window = min(remaining, _BACKFILL_WINDOW_DAYS)
+        with db_service.uow() as uow:
+            summary = run_activist_positions(uow.p22, edgar, as_of_date=end, lookback_days=window)
+        totals.update({k: summary[k] for k in ("filings_matched", "positions_written")})
+        rejections.update(summary["rejection_breakdown"])
+        if lookback_days > window:
+            _logger.info("Backfill window ending %s committed (%d days left): %s", end, remaining - window, summary)
+        end -= timedelta(days=window)
+        remaining -= window
 
-    _logger.info("Activist-positions ingest complete: %s", summary)
-    return summary
+    result = {**totals, "rejection_breakdown": dict(rejections)}
+    _logger.info("Activist-positions ingest complete: %s", result)
+    return result
 
 
 if __name__ == "__main__":
