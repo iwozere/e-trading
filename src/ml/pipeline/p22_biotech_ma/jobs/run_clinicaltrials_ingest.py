@@ -2,11 +2,12 @@
 P22 job — land ClinicalTrials.gov studies + version history for the current
 universe snapshot (spec §2.2).
 
-M1 placeholder: queries CT.gov by company `name` from `latest_universe_rows()`
-as a best-effort sponsor-name match. Real alias resolution (sponsor string ->
-verified company) is M2/M3's job (spec §2.2: "match on sponsor.leadSponsor.
-name, then hand-verify aliases into an override table") — this job only
-lands raw data, it does not claim to have resolved sponsor identity.
+Queries CT.gov by company `name` from `latest_universe_rows()`, with legal-form
+words stripped (`sponsor_names.ctgov_query_name` — the raw SEC name returned
+nothing for 45% of targets). The hit list still includes trials where the
+company is only a collaborator; `run_trial_normalization.py` decides which
+trials are actually the company's (lead-sponsor match). This job only lands
+raw data, it does not claim to have resolved sponsor identity.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p22_biotech_ma.ingest import raw_zone
 from src.ml.pipeline.p22_biotech_ma.ingest.clinicaltrials_client import ClinicalTrialsClient
+from src.ml.pipeline.p22_biotech_ma.ingest.sponsor_names import ctgov_query_name
 from src.ml.pipeline.p22_biotech_ma.ingest.universe_snapshot import latest_universe_rows
 from src.ml.pipeline.p22_biotech_ma.jobs.run_common import record_fetch_failures, setup_run_logging
 from src.notification.logger import setup_logger
@@ -85,7 +87,7 @@ def run() -> dict:
             if not name:
                 continue
 
-            studies = client.fetch_studies_for_sponsor(name)
+            studies = client.fetch_studies_for_sponsor(ctgov_query_name(name))
             if studies:
                 raw_zone.write(source="clinicaltrials_studies", entity=cik or name, as_of_date=today, payload=studies)
                 studies_landed += len(studies)

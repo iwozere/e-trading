@@ -14,7 +14,7 @@ see docs/Design.md for why that invariant matters.
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -37,6 +37,7 @@ from src.data.db.models.model_p22_biotech_ma import (
     P22Score,
     P22ScoreRun,
     P22Trial,
+    P22TrialAsset,
 )
 
 # `ingest/price_archive.py`'s pure adjustment math is imported lazily, inside
@@ -374,7 +375,6 @@ class P22Repo:
         self,
         *,
         nct_id: str,
-        asset_id: Optional[int] = None,
         phase: Optional[str] = None,
         status: Optional[str] = None,
         enrollment: Optional[int] = None,
@@ -395,10 +395,10 @@ class P22Repo:
         over its life and there is one current record per NCT ID, not a
         history of prior states to preserve here; the actual change-over-time
         signal spec §2.2 wants lives in the separate version-history endpoint,
-        not in this table's row history).
+        not in this table's row history). Company/asset attribution is NOT a
+        column here — see `replace_trial_asset_links`.
         """
         values: Dict[str, Any] = {
-            "asset_id": asset_id,
             "phase": phase,
             "status": status,
             "enrollment": enrollment,
@@ -417,6 +417,25 @@ class P22Repo:
             set_={k: insert_stmt.excluded[k] for k in values},
         )
         self.session.execute(upsert_stmt)
+        self.session.flush()
+
+    def replace_trial_asset_links(self, company_id: int, links: Sequence[Tuple[str, int]]) -> None:
+        """
+        Make `links` (`(nct_id, asset_id)` pairs, assets owned by `company_id`) the company's complete
+        set of `p22_trial_asset` rows: every existing link to any of the company's assets is deleted
+        first, so links that no longer qualify (lead-sponsor or intervention rules) disappear on the
+        next run. Other companies' links to the same NCT IDs are untouched. Every `nct_id` must
+        already be in `p22_trial` (call `upsert_trial` first).
+        """
+        company_assets = select(P22Asset.asset_id).where(P22Asset.company_id == company_id)
+        self.session.execute(delete(P22TrialAsset).where(P22TrialAsset.asset_id.in_(company_assets)))
+        unique_links = sorted(set(links))
+        if unique_links:
+            self.session.execute(
+                pg_insert(P22TrialAsset)
+                .values([{"nct_id": nct_id, "asset_id": asset_id} for nct_id, asset_id in unique_links])
+                .on_conflict_do_nothing()
+            )
         self.session.flush()
 
     def get_trial(self, nct_id: str) -> Optional[Dict[str, Any]]:
@@ -438,13 +457,15 @@ class P22Repo:
         rather than a substring check, so a hypothetical future `"PHASE30"`-shaped value (CT.gov
         has never used one, but nothing guarantees it never will) can't false-match.
 
-        Only reaches trials already linked via `p22_trial.asset_id` — currently single-intervention
-        trials only (`docs/Tasks.md` item 8); an asset whose only trials are multi-intervention and
-        therefore unlinked is invisible here, same known gap as everywhere else that reads `p22_asset`.
+        Only reaches trials linked in `p22_trial_asset` — lead-sponsored, single non-placebo
+        intervention trials only (`ingest/trial_normalization.py`); an asset whose only trials are
+        multi-intervention and therefore unlinked is invisible here, same known gap as everywhere
+        else that reads `p22_asset`.
         """
         rows = self.session.execute(
             select(P22Asset.asset_id, P22Asset.therapeutic_area, P22Trial.phase)
-            .join(P22Trial, P22Trial.asset_id == P22Asset.asset_id)
+            .join(P22TrialAsset, P22TrialAsset.asset_id == P22Asset.asset_id)
+            .join(P22Trial, P22Trial.nct_id == P22TrialAsset.nct_id)
             .where(P22Asset.company_id == company_id)
         ).all()
 
@@ -460,7 +481,7 @@ class P22Repo:
 
     def get_trials_for_company(self, company_id: int) -> List[Dict[str, Any]]:
         """
-        Every `p22_trial` row linked (via `p22_trial.asset_id`) to any `p22_asset` owned by
+        Every `p22_trial` row linked (via `p22_trial_asset`) to any `p22_asset` owned by
         `company_id` — the shared input for Block B's `phase_max`/`asset_count_ph2plus`/
         `catalyst_window`/`lead_asset_poa` (spec §4.2), all of which need the company's whole
         trial portfolio at once rather than one row at a time. Kept as one query + pure Python
@@ -468,7 +489,7 @@ class P22Repo:
         same "dumb repo, smart feature module" split as `get_patent_expiries_for_acquirer`.
 
         Same coverage gap as `count_phase3_assets_by_therapeutic_area`: only reaches
-        single-intervention-trial-linked assets (`docs/Tasks.md` item 8).
+        lead-sponsored, single-intervention-trial-linked assets (`docs/Tasks.md` item 8).
 
         Returns:
             `[{"nct_id", "asset_id", "asset_name", "therapeutic_area", "phase", "primary_completion_date", "status"}, ...]`.
@@ -476,14 +497,15 @@ class P22Repo:
         rows = self.session.execute(
             select(
                 P22Trial.nct_id,
-                P22Trial.asset_id,
+                P22TrialAsset.asset_id,
                 P22Asset.name.label("asset_name"),
                 P22Asset.therapeutic_area,
                 P22Trial.phase,
                 P22Trial.primary_completion_date,
                 P22Trial.status,
             )
-            .join(P22Asset, P22Asset.asset_id == P22Trial.asset_id)
+            .join(P22TrialAsset, P22TrialAsset.nct_id == P22Trial.nct_id)
+            .join(P22Asset, P22Asset.asset_id == P22TrialAsset.asset_id)
             .where(P22Asset.company_id == company_id)
         ).all()
         return [
@@ -866,8 +888,14 @@ class P22Repo:
     # ------------------------------------------------------------------
 
     def get_assets_for_company(self, company_id: int) -> List[Dict[str, Any]]:
-        """Every `p22_asset` row for `company_id` (modality/indication for Block D's `fit()`, spec §4.4)."""
-        rows = self.session.execute(select(P22Asset).where(P22Asset.company_id == company_id)).scalars().all()
+        """
+        Every `p22_asset` row for `company_id` that has at least one linked trial (modality/indication for
+        Block D's `fit()`, spec §4.4). Assets are only ever created from trials, so an asset with no link is
+        one whose trials no longer qualify (e.g. created before the 2026-11-01 lead-sponsor check for a CRO
+        or licensor) and must not count as this company's program.
+        """
+        linked = select(P22TrialAsset.asset_id).where(P22TrialAsset.asset_id == P22Asset.asset_id).exists()
+        rows = self.session.execute(select(P22Asset).where(P22Asset.company_id == company_id, linked)).scalars().all()
         return [{c.key: getattr(r, c.key) for c in P22Asset.__table__.columns} for r in rows]
 
     def lookahead_audit_population(self, per_category: int = 1000) -> List[Dict[str, Any]]:

@@ -8,9 +8,9 @@ CIK (the raw-zone manifest's `entity` — `cik or name` per that job, so a
 company with no CIK on file lands under its name and is skipped here rather
 than guessed at) to a `company_id` via `p22_company`, and writes every
 `p22_trial` row via `ingest.trial_normalization`. See that module's docstring
-for exactly which columns are populated this pass, and
-`ingest.asset_normalization`'s docstring for how single-intervention trials
-get `asset_id` linked (multi-intervention trials still don't).
+for exactly which columns are populated this pass, and for which trials get
+linked to a company's asset (single non-placebo intervention + the company is
+the lead sponsor) in `p22_trial_asset`.
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ def run() -> dict:
             companies_matched += 1
 
             records = extract_trial_records(studies, datetime.fromisoformat(known_from))
-            trials_written += write_trial_records(records, uow.p22, company_id=company["company_id"])
+            trials_written += write_trial_records(records, uow.p22, company_id=company["company_id"], company_name=company["name"])
 
     summary = {
         "entities_attempted": len(studies_by_entity),

@@ -60,6 +60,24 @@ def test_extract_single_intervention_name_biological_type_counts():
     assert extract_single_intervention_name(study) == "Some mAb"
 
 
+def _study_with(*names):
+    return {"protocolSection": {"armsInterventionsModule": {"interventions": [{"type": "DRUG", "name": n} for n in names]}}}
+
+
+def test_extract_single_intervention_name_ignores_control_arms():
+    for control in ("Placebo", "Placebo (matched to Povetacicept)", "Vehicle cream", "Sham injection", "Normal saline"):
+        assert extract_single_intervention_name(_study_with("Povetacicept", control)) == "Povetacicept", control
+
+
+def test_extract_single_intervention_name_control_arm_words_inside_names_still_count():
+    """Only whole-word control terms are dropped — a drug literally named e.g. 'Shamrockumab' is not."""
+    assert extract_single_intervention_name(_study_with("ALPN-303", "Shamrockumab")) is None
+
+
+def test_extract_single_intervention_name_placebo_only_trial_has_no_asset():
+    assert extract_single_intervention_name(_study_with("Placebo")) is None
+
+
 def test_extract_single_intervention_type_single_drug():
     assert extract_single_intervention_type(_SINGLE_INTERVENTION_STUDY) == "DRUG"
 

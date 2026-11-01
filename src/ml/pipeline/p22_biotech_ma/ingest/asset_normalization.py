@@ -3,8 +3,8 @@ P22 — CT.gov single-intervention-trial asset linkage (spec §3.2, M3 Block B i
 
 Resolves `docs/Tasks.md` "Decisions needed" item 8's safe subset, per user
 decision 2026-08-31: a trial with **exactly one** DRUG/BIOLOGICAL-type
-intervention has no ambiguity about which intervention is the sponsor's own
-asset (there's only one candidate) — unlike the Vertex/Moderna VX-522+IVA
+intervention (placebo/vehicle/sham control arms not counted, 2026-11-01) has
+no ambiguity about which intervention is the sponsor's own asset (there's only one candidate) — unlike the Vertex/Moderna VX-522+IVA
 example that motivated leaving `asset_id` unconditionally `None`
 (`ingest/trial_normalization.py`'s docstring), where a comparator/partner
 drug made "which intervention is the asset" a real question. Multi-
@@ -27,6 +27,7 @@ company-level pipeline context this trial-by-trial view doesn't have).
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -41,16 +42,29 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 _ASSET_INTERVENTION_TYPES = frozenset({"DRUG", "BIOLOGICAL"})
+# Control arms CT.gov files as DRUG/BIOLOGICAL ("Placebo", "Vehicle cream", "Sham injection",
+# "Placebo (matched to Povetacicept)"). Counting them made every placebo-controlled trial look
+# multi-intervention and left it unlinked: excluding them links roughly 2,500 more of 17,432 landed
+# trials (~+40%, measured 2026-11-01).
+_CONTROL_ARM_RE = re.compile(r"\b(placebo|vehicle|sham|dummy)\b|^\s*(normal\s+)?saline\b", re.IGNORECASE)
+
+
+def _asset_interventions(study: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The study's DRUG/BIOLOGICAL interventions, control arms (placebo/vehicle/sham) excluded."""
+    interventions = study.get("protocolSection", {}).get("armsInterventionsModule", {}).get("interventions", [])
+    return [
+        i for i in interventions
+        if i.get("type") in _ASSET_INTERVENTION_TYPES and not _CONTROL_ARM_RE.search(i.get("name") or "")
+    ]
 
 
 def extract_single_intervention_name(study: Dict[str, Any]) -> Optional[str]:
     """
-    Return the trial's sole DRUG/BIOLOGICAL intervention name, or `None` if
-    there are zero or multiple such interventions (the ambiguous case this
+    Return the trial's sole non-placebo DRUG/BIOLOGICAL intervention name, or
+    `None` if there are zero or multiple such interventions (the ambiguous case this
     module deliberately does not handle — see module docstring).
     """
-    interventions = study.get("protocolSection", {}).get("armsInterventionsModule", {}).get("interventions", [])
-    drug_like = [i for i in interventions if i.get("type") in _ASSET_INTERVENTION_TYPES]
+    drug_like = _asset_interventions(study)
     if len(drug_like) != 1:
         return None
     name = drug_like[0].get("name")
@@ -66,8 +80,7 @@ def extract_single_intervention_type(study: Dict[str, Any]) -> Optional[str]:
     `single_intervention_name`'s original call sites were written; a tuple return would have
     forced updating every existing caller for a field most of them don't need.
     """
-    interventions = study.get("protocolSection", {}).get("armsInterventionsModule", {}).get("interventions", [])
-    drug_like = [i for i in interventions if i.get("type") in _ASSET_INTERVENTION_TYPES]
+    drug_like = _asset_interventions(study)
     if len(drug_like) != 1:
         return None
     return drug_like[0].get("type")

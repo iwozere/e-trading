@@ -25,19 +25,20 @@ yet, not because they were overlooked:
   boolean is separate, not-yet-built feature-engineering work (see that
   client's module docstring).
 
-**`asset_id` is linked ONLY for single-intervention trials, per user decision
-2026-08-31 (`docs/Tasks.md` "Decisions needed" item 8).** A trial's
-`armsInterventionsModule.interventions` can list multiple DRUG/BIOLOGICAL
-entries (a company's own asset plus a combination/comparator partner drug —
-see the Vertex/Moderna VX-522+IVA study checked live for this module), and
-CT.gov gives no field marking which intervention is "this sponsor's own
-asset" versus a comparator or partner compound. A trial with exactly ONE such
-intervention has no such ambiguity — there's only one candidate — so
-`ingest/asset_normalization.py` resolves/creates a `p22_asset` for those and
-this module wires the resulting `asset_id` into `p22_trial`. Multi-
-intervention trials still get `asset_id=None`, unchanged; solving that harder
-case (a maintained drug-name-to-company mapping or a real entity-linking
-step) remains open.
+**A trial is linked to a company's asset ONLY when (a) it has a single
+non-placebo DRUG/BIOLOGICAL intervention, per user decision 2026-08-31
+(`docs/Tasks.md` "Decisions needed" item 8), and (b) its lead sponsor is that
+company (`sponsor_names.sponsor_matches_company`, 2026-11-01).** (a): a
+trial's interventions can list a company's own asset plus a combination/
+comparator partner drug (the Vertex/Moderna VX-522+IVA study checked live for
+this module) and CT.gov doesn't mark which is "the sponsor's own asset";
+placebo/vehicle/sham arms are ignored when counting (`asset_normalization`).
+(b): the CT.gov hit list for a company also contains trials where it is only
+a collaborator — CROs got their clients' trials, licensors their partners'.
+Links live in `p22_trial_asset` (many-to-many, migration 013) and are
+replaced per company on every run: before that, `p22_trial.asset_id` held
+one link per NCT ID, so a trial landed under several companies flipped to
+whichever was written last, and a later unlinked write erased a good link.
 
 This module owns parsing only. It does not read the raw zone or open a DB
 session — `jobs/run_trial_normalization.py` does that.
@@ -49,7 +50,7 @@ import sys
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -60,6 +61,7 @@ from src.ml.pipeline.p22_biotech_ma.ingest.asset_normalization import (
     extract_single_intervention_type,
     resolve_or_create_asset,
 )
+from src.ml.pipeline.p22_biotech_ma.ingest.sponsor_names import sponsor_matches_company
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -94,6 +96,7 @@ class TrialRecord:
     single_intervention_name: Optional[str]  # set only for single-DRUG/BIOLOGICAL-intervention trials
     conditions: List[str]  # for asset therapeutic_area classification and indication text
     single_intervention_type: Optional[str] = None  # CT.gov DRUG/BIOLOGICAL, for asset modality classification
+    lead_sponsor: Optional[str] = None  # sponsorCollaboratorsModule.leadSponsor.name, for company attribution
 
 
 def _parse_ctgov_date(raw: Optional[str]) -> Optional[date]:
@@ -172,6 +175,7 @@ def extract_trial_record(study: Dict[str, Any], known_from: datetime) -> Optiona
         single_intervention_name=extract_single_intervention_name(study),
         conditions=extract_conditions(study),
         single_intervention_type=extract_single_intervention_type(study),
+        lead_sponsor=protocol.get("sponsorCollaboratorsModule", {}).get("leadSponsor", {}).get("name"),
     )
 
 
@@ -181,35 +185,35 @@ def extract_trial_records(studies: List[Dict[str, Any]], known_from: datetime) -
     return [r for r in records if r is not None]
 
 
-def write_trial_records(records: List[TrialRecord], repo: Any, *, company_id: Optional[int] = None) -> int:
+def write_trial_records(
+    records: List[TrialRecord],
+    repo: Any,
+    *,
+    company_id: Optional[int] = None,
+    company_name: Optional[str] = None,
+) -> int:
     """
-    Write a list of `TrialRecord`s via `P22Repo.upsert_trial`. Returns the
-    number written.
+    Write a list of `TrialRecord`s via `P22Repo.upsert_trial` and, for a
+    company, replace that company's trial-asset links. Returns the number of
+    trials written.
 
     Args:
-        records: Trials to write.
+        records: Trials to write (every one is upserted, linked or not).
         repo: A `P22Repo`-shaped object.
-        company_id: The company these trials belong to. When given, and a
-            record has a `single_intervention_name` (single-DRUG/BIOLOGICAL-
-            intervention trial), resolves/creates a `p22_asset` and links it
-            via `asset_id` (see module docstring). `None` (the default)
-            preserves the old behavior of never linking — callers that don't
-            have a company_id in scope, or tests exercising trial-only
-            writes, are unaffected.
+        company_id: The company whose CT.gov hit list these records are. When
+            given together with `company_name`, every record that has a
+            `single_intervention_name` AND whose lead sponsor is this company
+            gets a `p22_asset` resolved/created and linked; the company's
+            previous links are replaced by exactly this set (see module
+            docstring). Without both, nothing is linked and existing links
+            are left untouched.
+        company_name: The company's registrant name, for the lead-sponsor check.
     """
+    links: List[Tuple[str, int]] = []
+    attribute_to = company_id if company_name else None
     for record in records:
-        asset_id = None
-        if company_id is not None and record.single_intervention_name:
-            asset_id = resolve_or_create_asset(
-                company_id=company_id,
-                intervention_name=record.single_intervention_name,
-                conditions=record.conditions,
-                repo=repo,
-                intervention_type=record.single_intervention_type,
-            )
         repo.upsert_trial(
             nct_id=record.nct_id,
-            asset_id=asset_id,
             phase=record.phase,
             status=record.status,
             enrollment=record.enrollment,
@@ -222,4 +226,20 @@ def write_trial_records(records: List[TrialRecord], repo: Any, *, company_id: Op
             countries=record.countries,
             known_from=record.known_from,
         )
+        if attribute_to is None or not record.single_intervention_name:
+            continue
+        if not sponsor_matches_company(record.lead_sponsor or "", company_name or ""):
+            continue
+        asset_id = resolve_or_create_asset(
+            company_id=attribute_to,
+            intervention_name=record.single_intervention_name,
+            conditions=record.conditions,
+            repo=repo,
+            intervention_type=record.single_intervention_type,
+        )
+        links.append((record.nct_id, asset_id))
+
+    if attribute_to is not None:
+        repo.replace_trial_asset_links(attribute_to, links)
+        _logger.debug("company_id=%s: %d of %d trials linked to an asset", attribute_to, len(links), len(records))
     return len(records)

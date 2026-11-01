@@ -144,50 +144,84 @@ def test_extract_trial_records_drops_studies_missing_nct_id():
     assert records[0].nct_id == "NCT05668741"
 
 
-def test_write_trial_records_calls_repo_with_asset_id_none_without_company_id():
-    """Multi-intervention study (the _STUDY fixture), no company_id given: never linked."""
+def _single_intervention_study(nct_id="NCT09999999", lead="Vertex Pharmaceuticals Incorporated", interventions=None):
+    return {
+        "protocolSection": {
+            "identificationModule": {"nctId": nct_id},
+            "sponsorCollaboratorsModule": {"leadSponsor": {"name": lead}},
+            "armsInterventionsModule": {"interventions": interventions or [{"type": "DRUG", "name": "VX-522 mRNA therapy"}]},
+            "conditionsModule": {"conditions": ["Cystic Fibrosis"]},
+        }
+    }
+
+
+def test_extract_trial_record_reads_lead_sponsor():
+    record = extract_trial_record(_STUDY, _KNOWN_FROM)
+    assert record is not None
+    assert record.lead_sponsor == "Vertex Pharmaceuticals Incorporated"
+
+
+def test_write_trial_records_without_company_writes_trial_and_never_links():
     repo = MagicMock()
-    records = extract_trial_records([_STUDY], _KNOWN_FROM)
+    records = extract_trial_records([_single_intervention_study()], _KNOWN_FROM)
 
     count = write_trial_records(records, repo)
 
     assert count == 1
-    repo.upsert_trial.assert_called_once()
     kwargs = repo.upsert_trial.call_args.kwargs
-    assert kwargs["nct_id"] == "NCT05668741"
-    assert kwargs["asset_id"] is None  # deliberately not linked — see module docstring
+    assert kwargs["nct_id"] == "NCT09999999"
+    assert "asset_id" not in kwargs  # attribution lives in p22_trial_asset, not on the trial row
     assert kwargs["known_from"] == _KNOWN_FROM
+    repo.upsert_asset.assert_not_called()
+    repo.replace_trial_asset_links.assert_not_called()  # existing links left untouched
 
 
-def test_write_trial_records_asset_id_none_for_multi_intervention_even_with_company_id():
-    """The _STUDY fixture has 2 DRUG interventions — must stay unlinked even when company_id IS given."""
+def test_write_trial_records_multi_intervention_not_linked_but_links_still_replaced():
+    """The _STUDY fixture has 2 DRUG interventions: no asset, and the company's link set is replaced
+    with an empty one (so a stale link from an earlier run disappears)."""
     repo = MagicMock()
     records = extract_trial_records([_STUDY], _KNOWN_FROM)
 
-    write_trial_records(records, repo, company_id=7)
+    write_trial_records(records, repo, company_id=7, company_name="VERTEX PHARMACEUTICALS INC / MA")
 
     repo.upsert_asset.assert_not_called()
-    kwargs = repo.upsert_trial.call_args.kwargs
-    assert kwargs["asset_id"] is None
+    repo.replace_trial_asset_links.assert_called_once_with(7, [])
 
 
-def test_write_trial_records_links_asset_for_single_intervention_trial():
-    single_intervention_study = {
-        "protocolSection": {
-            "identificationModule": {"nctId": "NCT09999999"},
-            "armsInterventionsModule": {"interventions": [{"type": "DRUG", "name": "VX-522 mRNA therapy"}]},
-            "conditionsModule": {"conditions": ["Cystic Fibrosis"]},
-        }
-    }
+def test_write_trial_records_links_asset_for_lead_sponsored_single_intervention_trial():
     repo = MagicMock()
     repo.get_asset_by_company_and_name.return_value = None
     repo.upsert_asset.return_value = 123
-    records = extract_trial_records([single_intervention_study], _KNOWN_FROM)
+    records = extract_trial_records([_single_intervention_study()], _KNOWN_FROM)
 
-    write_trial_records(records, repo, company_id=7)
+    write_trial_records(records, repo, company_id=7, company_name="VERTEX PHARMACEUTICALS INC / MA")
 
     repo.upsert_asset.assert_called_once()
     assert repo.upsert_asset.call_args.kwargs["name"] == "VX-522 mRNA therapy"
     assert repo.upsert_asset.call_args.kwargs["modality"] == "rna_therapeutic"  # threaded through, 2026-09-08
-    trial_kwargs = repo.upsert_trial.call_args.kwargs
-    assert trial_kwargs["asset_id"] == 123
+    repo.replace_trial_asset_links.assert_called_once_with(7, [("NCT09999999", 123)])
+
+
+def test_write_trial_records_skips_trial_led_by_another_sponsor():
+    """A CRO's or partner's hit list contains trials it only collaborates on — not its assets."""
+    repo = MagicMock()
+    records = extract_trial_records([_single_intervention_study(lead="Xencor, Inc.")], _KNOWN_FROM)
+
+    write_trial_records(records, repo, company_id=9, company_name="ICON PLC /ADR/")
+
+    repo.upsert_trial.assert_called_once()  # the trial itself is still stored
+    repo.upsert_asset.assert_not_called()
+    repo.replace_trial_asset_links.assert_called_once_with(9, [])
+
+
+def test_write_trial_records_placebo_controlled_trial_is_single_intervention():
+    repo = MagicMock()
+    repo.get_asset_by_company_and_name.return_value = {"asset_id": 55}
+    study = _single_intervention_study(lead="Alpine Immune Sciences, Inc.", interventions=[
+        {"type": "DRUG", "name": "ALPN-303"}, {"type": "DRUG", "name": "Placebo"},
+    ])
+    records = extract_trial_records([study], _KNOWN_FROM)
+
+    write_trial_records(records, repo, company_id=3, company_name="ALPINE IMMUNE SCIENCES, INC.")
+
+    repo.replace_trial_asset_links.assert_called_once_with(3, [("NCT09999999", 55)])

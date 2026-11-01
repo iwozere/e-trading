@@ -142,7 +142,6 @@ class P22Trial(Base):
     __tablename__ = "p22_trial"
 
     nct_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    asset_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("p22_asset.asset_id"))
     phase: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str | None] = mapped_column(Text)
     enrollment: Mapped[int | None] = mapped_column(Integer)
@@ -155,7 +154,20 @@ class P22Trial(Base):
     countries: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
     known_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    __table_args__ = (Index("idx_p22_trial_asset", "asset_id"),)
+
+class P22TrialAsset(Base):
+    """
+    Trial -> company asset link (migration 013). Many-to-many: one NCT ID can be the lead-sponsored
+    trial of several universe companies (e.g. Pfizer/Mylan/Viatris for the Upjohn trials). Written by
+    `ingest/trial_normalization.py`, which replaces a company's links on every run.
+    """
+
+    __tablename__ = "p22_trial_asset"
+
+    nct_id: Mapped[str] = mapped_column(Text, ForeignKey("p22_trial.nct_id", ondelete="CASCADE"), primary_key=True)
+    asset_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("p22_asset.asset_id", ondelete="CASCADE"), primary_key=True)
+
+    __table_args__ = (Index("idx_p22_trial_asset_asset", "asset_id"),)
 
 
 class P22PatentExpiry(Base):

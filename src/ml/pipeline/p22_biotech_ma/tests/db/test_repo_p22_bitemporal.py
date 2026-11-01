@@ -192,10 +192,16 @@ def test_count_phase3_assets_by_therapeutic_area(db_session) -> None:
     onc_asset_combined_phase = repo.upsert_asset(company_id=company_id, name="Onc-2", therapeutic_area="oncology_solid")
     neuro_asset_ph2_only = repo.upsert_asset(company_id=company_id, name="Neuro-1", therapeutic_area="neurology")
 
-    repo.upsert_trial(nct_id="NCT00001001", asset_id=onc_asset_two_trials, phase="PHASE3")
-    repo.upsert_trial(nct_id="NCT00001002", asset_id=onc_asset_two_trials, phase="PHASE3")  # same asset, 2nd trial
-    repo.upsert_trial(nct_id="NCT00001003", asset_id=onc_asset_combined_phase, phase="PHASE2/PHASE3")
-    repo.upsert_trial(nct_id="NCT00001004", asset_id=neuro_asset_ph2_only, phase="PHASE2")
+    repo.upsert_trial(nct_id="NCT00001001", phase="PHASE3")
+    repo.upsert_trial(nct_id="NCT00001002", phase="PHASE3")
+    repo.upsert_trial(nct_id="NCT00001003", phase="PHASE2/PHASE3")
+    repo.upsert_trial(nct_id="NCT00001004", phase="PHASE2")
+    repo.replace_trial_asset_links(company_id, [
+        ("NCT00001001", onc_asset_two_trials),
+        ("NCT00001002", onc_asset_two_trials),  # same asset, 2nd trial
+        ("NCT00001003", onc_asset_combined_phase),
+        ("NCT00001004", neuro_asset_ph2_only),
+    ])
 
     counts = repo.count_phase3_assets_by_therapeutic_area(company_id)
 
@@ -258,14 +264,37 @@ def test_get_trials_for_company_returns_asset_and_trial_fields(db_session) -> No
     repo = P22Repo(db_session)
     company_id = repo.upsert_company(cik="0000000039", name="Block B Inc", role="target")
     asset_id = repo.upsert_asset(company_id=company_id, name="Asset-1", therapeutic_area="oncology_solid")
-    repo.upsert_trial(nct_id="NCT00002001", asset_id=asset_id, phase="PHASE2", primary_completion_date=date(2027, 1, 1))
+    repo.upsert_trial(nct_id="NCT00002001", phase="PHASE2", primary_completion_date=date(2027, 1, 1))
+    repo.replace_trial_asset_links(company_id, [("NCT00002001", asset_id)])
 
     trials = repo.get_trials_for_company(company_id)
 
     assert trials == [{
-        "asset_id": asset_id, "therapeutic_area": "oncology_solid", "phase": "PHASE2",
-        "primary_completion_date": date(2027, 1, 1), "status": None,
+        "nct_id": "NCT00002001", "asset_id": asset_id, "asset_name": "Asset-1", "therapeutic_area": "oncology_solid",
+        "phase": "PHASE2", "primary_completion_date": date(2027, 1, 1), "status": None,
     }]
+
+
+def test_replace_trial_asset_links_shares_trials_and_replaces_only_own_links(db_session) -> None:
+    """One NCT ID can belong to several companies (migration 013); re-linking one company must
+    neither touch the other's link nor keep its own stale links, and unlinked assets drop out of
+    `get_assets_for_company`."""
+    repo = P22Repo(db_session)
+    first = repo.upsert_company(cik="0000000051", name="Shared One Inc", role="target")
+    second = repo.upsert_company(cik="0000000052", name="Shared Two Inc", role="target")
+    first_asset = repo.upsert_asset(company_id=first, name="SH-1", therapeutic_area="oncology_solid")
+    stale_asset = repo.upsert_asset(company_id=first, name="SH-OLD", therapeutic_area="oncology_solid")
+    second_asset = repo.upsert_asset(company_id=second, name="SH-1", therapeutic_area="oncology_solid")
+    repo.upsert_trial(nct_id="NCT00005001", phase="PHASE3")
+    repo.upsert_trial(nct_id="NCT00005002", phase="PHASE1")
+
+    repo.replace_trial_asset_links(first, [("NCT00005001", first_asset), ("NCT00005002", stale_asset)])
+    repo.replace_trial_asset_links(second, [("NCT00005001", second_asset)])
+    repo.replace_trial_asset_links(first, [("NCT00005001", first_asset), ("NCT00005001", first_asset)])
+
+    assert [t["nct_id"] for t in repo.get_trials_for_company(first)] == ["NCT00005001"]
+    assert [t["asset_id"] for t in repo.get_trials_for_company(second)] == [second_asset]
+    assert [a["asset_id"] for a in repo.get_assets_for_company(first)] == [first_asset]
 
 
 def test_upsert_activist_position_idempotent_on_natural_key(db_session) -> None:
@@ -413,7 +442,6 @@ def test_upsert_trial_round_trip_and_second_call_updates_in_place(db_session) ->
     trial = repo.get_trial("NCT05668741")
     assert trial is not None
     assert trial["status"] == "RECRUITING"
-    assert trial["asset_id"] is None
     assert trial["countries"] == ["United States"]
 
     # Re-fetch later: status changed, no new row.

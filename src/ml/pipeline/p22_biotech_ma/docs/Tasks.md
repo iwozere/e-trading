@@ -864,6 +864,25 @@ use in the code/config; this section exists so they're all in one place to walk 
   migration `012_p22_block_g_known_from` backfills existing rows.
 
 ## Known Issues / Open Decisions
+- **FIXED 2026-11-01: Block B trial coverage and attribution (4 bugs).** 2026-10-31 scoring: Block B
+  for only 217/497 targets. (1) `run_clinicaltrials_ingest.py` searched CT.gov with the raw SEC name;
+  CT.gov needs every word in the sponsor name, so "MAIA BIOTECHNOLOGY, INC." found nothing — 225
+  targets had zero studies. Now `sponsor_names.ctgov_query_name` strips legal forms (live test: 139
+  of the 225 recovered). (2) Every hit was attributed to the company, incl. trials it only
+  collaborates on (ICON/PPD/Covance got clients' trials, licensors partners'). Now an asset link
+  needs `sponsor_matches_company(leadSponsor, company)`. (3) `p22_trial.asset_id` held one link per
+  NCT ID: 1,452 trials landed under >1 company flipped to the last writer and an unlinked write
+  erased good links (72 targets, e.g. Theravance lost all). Migration 013 moves links to
+  many-to-many `p22_trial_asset`, rebuilt per company each run; `get_assets_for_company` returns
+  linked assets only, so assets created for the wrong company drop out of Block D. (4) Placebo/
+  vehicle/sham arms counted as a second drug, so placebo-controlled trials never linked (~2,500
+  more trials link now). **Pi: migration 013, then CT.gov Ingest -> Trial Normalization** (Block B
+  reads no trials between the migration and the normalization run).
+  Still open: trials are not point-in-time (backtest sees post-as_of trials; fix = fetch
+  `studyFirstPostDateStruct` and filter); trials led by a partner or under a former name are now
+  not attributed (MacroGenics/ImmunoGen, Akari/Celsus); GENETIC-type interventions (gene therapy)
+  are not asset candidates; the raw zone names payloads by content hash, so two companies with
+  byte-identical hit lists share one manifest.
 - **FIXED 2026-10-28: the CIK-keyed normalization jobs had never matched a company on prod.**
   `run_financial_facts_normalization.py`, `run_domicile_normalization.py` and `run_trial_normalization.py`
   looked up the raw-zone manifest's bare CIK ("1367083") against `p22_company.cik`'s 10-digit form, so
