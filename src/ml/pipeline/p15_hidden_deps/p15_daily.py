@@ -28,9 +28,11 @@ Jobs executed (in order, failures are isolated):
                             Skips: continuous futures, forex pairs, VIX index series.
     4. fear_greed         — CNN Fear & Greed incremental append+dedup in-place
                             → DATA_CACHE_DIR/fear_greed/cnn_fear_greed.csv.gz
-    4. gdelt_gkg          — GDELT v2 GKG aggregated parquet; range fill via
-                            download_gkg_range() which skips already-cached days
-    5. gdelt_events       — GDELT v2 Events aggregated parquet; same range-fill pattern
+    4. gdelt_gkg          — GDELT v2 GKG aggregated parquet; re-scans the full 60-day
+                            window each run via download_gkg_range() (cached days are
+                            skipped), so interior holes self-heal even after P20 writes
+                            later days
+    5. gdelt_events       — GDELT v2 Events aggregated parquet; same re-scan pattern
     6. fred_daily         — FRED daily series incremental update;
                             per-series → DATA_CACHE_DIR/fred/{SERIES_ID}.csv.gz
     7. fred_combined      — Rebuild DATA_CACHE_DIR/fred/fred_combined.csv.gz
@@ -176,6 +178,32 @@ def _gap_window(
     start = max(natural_start, hard_floor)
     start = min(start, yesterday)  # safety: never overshoot yesterday
     return start, yesterday
+
+
+def _rescan_window(
+    source_start: _Date,
+    yesterday: _Date,
+    cap_days: int = _GAP_CAP_DAYS,
+) -> Tuple[_Date, _Date]:
+    """
+    Compute a full-retention re-scan window ending at yesterday.
+
+    Unlike ``_gap_window`` this ignores the watermark, so interior holes are
+    retried every run. Use it for caches that other jobs also write to (or whose
+    days can fail individually): once a later day lands, a watermark-only resume
+    would skip an earlier missing day forever. Only cheap when the downloader
+    skips already-cached days in O(1).
+
+    Args:
+        source_start: Earliest date this data source provides useful data.
+        yesterday:    Target end date (UTC yesterday from the caller).
+        cap_days:     Calendar days to re-scan (default: _GAP_CAP_DAYS).
+
+    Returns:
+        Tuple (start_date, end_date) where start_date <= end_date = yesterday.
+    """
+    start = max(source_start, _CUTOFF_DATE, yesterday - timedelta(days=cap_days - 1))
+    return min(start, yesterday), yesterday
 
 
 # ---------------------------------------------------------------------------
@@ -340,10 +368,23 @@ def _job_fear_greed() -> Dict[str, Any] | None:
 
 
 def _job_gdelt_gkg(yesterday: _Date) -> Dict[str, Any] | None:
+    """
+    Fill the GDELT GKG cache, re-scanning the whole retention window each run.
 
+    The P20 GDELT job writes the same per-day files with a short lookback, so it
+    can land later days around a hole this job missed (e.g. a run killed by a
+    scheduler restart). A watermark-only resume would then never retry that day;
+    re-scanning heals it, and cached days are O(1) skips in download_gkg_range.
+
+    Args:
+        yesterday: UTC date to fill up to (inclusive).
+
+    Returns:
+        Range summary dict (total, downloaded, skipped, errors).
+    """
     gkg_dir = Path(_cache_root) / "gdelt" / "gkg"
     watermark = _gdelt_watermark(gkg_dir, ".gkg.csv.gz")
-    start, end = _gap_window(watermark, _GDELT_V2_START, yesterday)
+    start, end = _rescan_window(_GDELT_V2_START, yesterday)
     _logger.info("gdelt_gkg: %s → %s (watermark=%s)", start, end, watermark)
 
     dl = GdeltDownloader()
@@ -355,9 +396,22 @@ def _job_gdelt_gkg(yesterday: _Date) -> Dict[str, Any] | None:
 
 
 def _job_gdelt_events(yesterday: _Date) -> Dict[str, Any] | None:
+    """
+    Fill the GDELT Events cache, re-scanning the whole retention window each run.
+
+    Same self-healing policy as ``_job_gdelt_gkg``: a day that fails or is
+    interrupted is retried on later runs instead of being skipped once a later
+    day is cached.
+
+    Args:
+        yesterday: UTC date to fill up to (inclusive).
+
+    Returns:
+        Range summary dict (total, downloaded, skipped, errors).
+    """
     events_dir = Path(_cache_root) / "gdelt" / "events"
     watermark = _gdelt_watermark(events_dir, ".events.csv.gz")
-    start, end = _gap_window(watermark, _GDELT_V2_START, yesterday)
+    start, end = _rescan_window(_GDELT_V2_START, yesterday)
     _logger.info("gdelt_events: %s → %s (watermark=%s)", start, end, watermark)
 
     dl = GdeltDownloader()
@@ -883,8 +937,7 @@ def _job_edgar_8k_index(yesterday: _Date) -> Dict[str, Any] | None:
     # Re-scan the full retention window each run (not just watermark+1) so a day
     # previously skipped on a transient EFTS failure self-heals; cached days are
     # O(1) skips inside download_8k_filings, so the re-scan is cheap.
-    end = yesterday
-    start = max(_EDGAR_8K_START, _CUTOFF_DATE, end - timedelta(days=_GAP_CAP_DAYS - 1))
+    start, end = _rescan_window(_EDGAR_8K_START, yesterday)
     _logger.info("edgar_8k_index: %s → %s (watermark=%s)", start, end, watermark)
 
     days_downloaded = 0
