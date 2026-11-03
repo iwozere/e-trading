@@ -20,7 +20,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.database_service import DatabaseService
 from src.data.downloader.edgar_downloader import EdgarDownloader
-from src.ml.pipeline.p22_biotech_ma.ingest.activist_positions import reclassify_filer_types
+from src.ml.pipeline.p22_biotech_ma.ingest.activist_positions import reclassify_filer_types, repair_missing_pct
 from src.ml.pipeline.p22_biotech_ma.ingest.activist_positions import run as run_activist_positions
 from src.ml.pipeline.p22_biotech_ma.jobs.run_common import setup_run_logging
 from src.notification.logger import setup_logger
@@ -69,10 +69,25 @@ def reclassify() -> dict:
         return reclassify_filer_types(uow.p22)
 
 
+def repair_pct() -> dict:
+    """Re-fetch filings stored with `pct_of_class` NULL and fill in the highest reported percentage."""
+    setup_run_logging()
+    edgar = EdgarDownloader()
+    with DatabaseService().uow() as uow:
+        return repair_missing_pct(uow.p22, edgar)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lookback-days", type=int, default=1, help="Days to scan, ending yesterday (backfill: e.g. 730)")
-    parser.add_argument("--reclassify", action="store_true", help="Only re-label filer_type on existing rows (no EDGAR scan)")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--reclassify", action="store_true", help="Only re-label filer_type on existing rows (no EDGAR scan)")
+    mode.add_argument("--repair-pct", action="store_true", help="Only re-fetch filings stored with pct_of_class NULL")
     args = parser.parse_args()
-    result = reclassify() if args.reclassify else run(args.lookback_days)
+    if args.reclassify:
+        result = reclassify()
+    elif args.repair_pct:
+        result = repair_pct()
+    else:
+        result = run(args.lookback_days)
     print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")

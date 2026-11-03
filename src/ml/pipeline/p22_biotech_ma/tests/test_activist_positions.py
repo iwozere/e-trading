@@ -12,10 +12,12 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.ml.pipeline.p22_biotech_ma.ingest.activist_positions import (
     classify_filer_type,
     efts_names_by_cik,
-    extract_single_pct_of_class,
+    extract_pct_of_class,
     load_activist_filers,
     load_crossover_funds,
+    parse_source_url,
     reclassify_filer_types,
+    repair_missing_pct,
     parse_13dg_header,
     run,
 )
@@ -183,30 +185,31 @@ def test_efts_names_by_cik_parses_display_names_with_and_without_ticker():
 
 
 # ---------------------------------------------------------------------
-# extract_single_pct_of_class
+# extract_pct_of_class
 # ---------------------------------------------------------------------
 
-def test_extract_single_pct_of_class_one_value():
+def test_extract_pct_of_class_one_value():
     text = "<item5><percentOfClass>9.9</percentOfClass></item5>"
-    assert extract_single_pct_of_class(text) == 9.9
+    assert extract_pct_of_class(text) == 9.9
 
 
-def test_extract_single_pct_of_class_none_when_multiple_distinct_values():
-    text = "<percentOfClass>9.9</percentOfClass><percentOfClass>1.1</percentOfClass>"
-    assert extract_single_pct_of_class(text) is None
+def test_extract_pct_of_class_takes_highest_of_joint_filers():
+    # Avoro on WHWK, 2026-05-14: adviser 19.99, fund 4.1, controlling person 19.99.
+    text = "<percentOfClass>19.99</percentOfClass><percentOfClass>4.1</percentOfClass><percentOfClass>19.99</percentOfClass>"
+    assert extract_pct_of_class(text) == 19.99
 
 
-def test_extract_single_pct_of_class_ok_when_repeated_same_value():
+def test_extract_pct_of_class_repeated_same_value():
     text = "<percentOfClass>9.9</percentOfClass><percentOfClass>9.9</percentOfClass>"
-    assert extract_single_pct_of_class(text) == 9.9
+    assert extract_pct_of_class(text) == 9.9
 
 
-def test_extract_single_pct_of_class_none_when_absent():
-    assert extract_single_pct_of_class("no percentages here") is None
+def test_extract_pct_of_class_none_when_absent():
+    assert extract_pct_of_class("no percentages here") is None
 
 
-def test_extract_single_pct_of_class_reads_13g_class_percent():
-    assert extract_single_pct_of_class(_REAL_13G_XML) == 4.99
+def test_extract_pct_of_class_reads_13g_class_percent():
+    assert extract_pct_of_class(_REAL_13G_XML) == 4.99
 
 
 # ---------------------------------------------------------------------
@@ -420,3 +423,51 @@ def test_run_writes_one_row_per_filer_for_multi_filer_filing():
 
     assert summary["positions_written"] == 2
     assert repo.upsert_activist_position.call_count == 2
+
+
+# ---------------------------------------------------------------------
+# parse_source_url / repair_missing_pct
+# ---------------------------------------------------------------------
+
+_URL = "https://www.sec.gov/Archives/edgar/data/1446847/000089914026000333/primary_doc.xml"
+
+
+def test_parse_source_url_splits_cik_accession_filename():
+    assert parse_source_url(_URL) == ("1446847", "000089914026000333", "primary_doc.xml")
+
+
+def test_parse_source_url_rejects_other_urls():
+    assert parse_source_url("https://example.com/x") is None
+    assert parse_source_url("") is None
+
+
+def test_repair_missing_pct_fetches_each_filing_once_and_updates_its_rows():
+    repo = MagicMock()
+    repo.list_activist_positions_missing_pct.return_value = [(1, _URL), (2, _URL), (3, None)]
+    repo.set_activist_position_pct.return_value = 2
+    edgar = MagicMock()
+    edgar.fetch_filing_document.return_value = "<percentOfClass>5.6</percentOfClass><percentOfClass>5.8</percentOfClass>"
+
+    summary = repair_missing_pct(repo, edgar)
+
+    edgar.fetch_filing_document.assert_called_once_with("1446847", "000089914026000333", "primary_doc.xml")
+    repo.set_activist_position_pct.assert_called_once_with([1, 2], 5.8)
+    assert summary == {
+        "filings_checked": 2,
+        "filings_repaired": 1,
+        "rows_updated": 2,
+        "still_missing": {"bad_source_url": 1},
+    }
+
+
+def test_repair_missing_pct_counts_fetch_failures_and_documents_without_pct():
+    other = _URL.replace("000089914026000333", "000089914026000334")
+    repo = MagicMock()
+    repo.list_activist_positions_missing_pct.return_value = [(1, _URL), (2, other)]
+    edgar = MagicMock()
+    edgar.fetch_filing_document.side_effect = [None, "<html>no tags</html>"]
+
+    summary = repair_missing_pct(repo, edgar)
+
+    repo.set_activist_position_pct.assert_not_called()
+    assert summary["still_missing"] == {"document_fetch_failed": 1, "no_pct_in_document": 1}

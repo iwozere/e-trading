@@ -22,11 +22,13 @@ until 2026-11-01 the parser only understood that header, so every filing was rej
 `header_parse_failed`. Subject/filer CIKs now come from the XML; filer names from EFTS
 `display_names` (EDGAR conformed names), falling back to the 13D reporting-person name.
 
-**`pct_of_class` is populated ONLY when exactly one distinct `<percentOfClass>` value appears
-in the whole document.** Real filings (live-verified) often carry several cover-page rows with
-DIFFERENT percentages for different reporting persons even within what the header calls one
-"FILED BY" company (affiliated funds/individuals filing jointly) — attributing the wrong one to
-the wrong filer would be a worse error than reporting `None`.
+**`pct_of_class` is the HIGHEST `<percentOfClass>`/`<classPercent>` value in the document.**
+Joint filings carry one cover-page row per reporting person (the fund, its adviser, the controlling
+individual), often with different percentages (live-verified 2026-11-03: Avoro on WHWK 19.99/4.1/
+19.99, Sarissa on IRWD 5.6/5.8). The highest is the group's beneficial ownership, which is what
+Block G's stake threshold asks about. Until 2026-11-03 such filings were stored as `None`; rows
+written then are back-filled by `repair_missing_pct` (`run_activist_positions_ingest.py
+--repair-pct`).
 
 **`stated_intent` is always `None` — deliberately not attempted this pass.** Spec says to
 "classify intent... via the review queue," but Item 4 (Purpose of Transaction) text is dense,
@@ -50,7 +52,7 @@ from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
 from html import unescape
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
@@ -90,6 +92,8 @@ _XML_FILER_CIK = re.compile(r"<filerCredentials>.*?<cik>\s*(\d+)\s*</cik>", re.D
 _XML_REPORTING_PERSON = re.compile(r"<reportingPersonInfo>(.*?)</reportingPersonInfo>", re.DOTALL)
 _XML_REPORTING_CIK = re.compile(r"<reportingPersonCIK>\s*(\d+)\s*</reportingPersonCIK>")
 _XML_REPORTING_NAME = re.compile(r"<reportingPersonName>\s*(.*?)\s*</reportingPersonName>", re.DOTALL)
+# The `source_url` this module writes (see `run`).
+_SOURCE_URL_PATTERN = re.compile(r"^https://www\.sec\.gov/Archives/edgar/data/(\d+)/(\d+)/([^/]+)$")
 # EFTS `display_names` entries look like "SenesTech, Inc.  (SNES)  (CIK 0001680378)".
 _DISPLAY_NAME_PATTERN = re.compile(r"^(.*?)\s{2}.*\(CIK (\d+)\)\s*$")
 
@@ -195,14 +199,69 @@ def efts_names_by_cik(display_names: List[str]) -> Dict[str, str]:
     return names
 
 
-def extract_single_pct_of_class(text: str) -> Optional[float]:
-    """`pct_of_class`, only when every `<percentOfClass>` tag in the document agrees on one
-    value — see module docstring for why a document with several DIFFERENT values (multiple
-    reporting persons on the same filing) is left `None` rather than guessed."""
-    values = {m.group(1) for m in _PCT_OF_CLASS_PATTERN.finditer(text)}
-    if len(values) == 1:
-        return float(next(iter(values)))
-    return None
+def extract_pct_of_class(text: str) -> Optional[float]:
+    """The highest `<percentOfClass>`/`<classPercent>` value in a 13D/G document — the group's
+    beneficial ownership on a joint filing (see module docstring). `None` if the document has none."""
+    values = []
+    for m in _PCT_OF_CLASS_PATTERN.finditer(text):
+        try:
+            values.append(float(m.group(1)))
+        except ValueError:
+            continue  # e.g. a lone "." — not a percentage
+    return max(values) if values else None
+
+
+def parse_source_url(url: str) -> Optional[Tuple[str, str, str]]:
+    """`(cik, accession_no_dashes, filename)` from a stored `source_url`
+    (`https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{filename}`), or `None`."""
+    m = _SOURCE_URL_PATTERN.match(url or "")
+    return (m.group(1), m.group(2), m.group(3)) if m else None
+
+
+def repair_missing_pct(repo: Any, edgar: Any) -> Dict[str, Any]:
+    """
+    Re-fetch every filing whose positions have `pct_of_class` NULL and fill it with
+    `extract_pct_of_class`. Each filing is fetched once even when it produced several rows (one
+    per filer).
+
+    Returns:
+        `{"filings_checked", "filings_repaired", "rows_updated", "still_missing": {reason: count}}`.
+    """
+    rows = repo.list_activist_positions_missing_pct()
+    by_url: Dict[str, List[int]] = {}
+    for position_id, source_url in rows:
+        by_url.setdefault(source_url or "", []).append(position_id)
+
+    still_missing: Counter = Counter()
+    filings_repaired = 0
+    rows_updated = 0
+    _logger.info("pct_of_class repair: %d rows over %d filings", len(rows), len(by_url))
+    for done, (url, position_ids) in enumerate(by_url.items(), start=1):
+        if done % 100 == 0:
+            _logger.info("pct_of_class repair: %d/%d filings processed", done, len(by_url))
+        parts = parse_source_url(url)
+        if parts is None:
+            still_missing["bad_source_url"] += 1
+            continue
+        doc_text = edgar.fetch_filing_document(*parts)
+        if doc_text is None:
+            still_missing["document_fetch_failed"] += 1
+            continue
+        pct = extract_pct_of_class(doc_text)
+        if pct is None:
+            still_missing["no_pct_in_document"] += 1
+            continue
+        rows_updated += repo.set_activist_position_pct(position_ids, pct)
+        filings_repaired += 1
+
+    summary = {
+        "filings_checked": len(by_url),
+        "filings_repaired": filings_repaired,
+        "rows_updated": rows_updated,
+        "still_missing": dict(still_missing),
+    }
+    _logger.info("pct_of_class repair complete: %s", summary)
+    return summary
 
 
 def classify_filer_type(
@@ -323,7 +382,7 @@ def run(repo: Any, edgar: Any, as_of_date: Optional[date] = None, lookback_days:
             skip_reasons["subject_not_in_universe"] += 1
             continue
 
-        pct_of_class = extract_single_pct_of_class(doc_text)
+        pct_of_class = extract_pct_of_class(doc_text)
         # Spec §4.7/§8.3: known_from is the filing date, never the 5%-crossing date or the ingest time.
         try:
             filed_date = date.fromisoformat(str(src.get("file_date")))

@@ -891,8 +891,11 @@ use in the code/config; this section exists so they're all in one place to walk 
   activists are Sarissa, Elliott, Avoro, Starboard, Icahn ×2, Third Point, JANA. (2) A stake counts
   only if the filer's latest filing known at as_of reports ≥ `block_g.min_stake_pct` (5.0) in
   `p22_weights.yaml`; an unparsed % does not count. **Pi: `run_activist_positions_ingest.py
-  --reclassify`, then scoring.** Still open: `pct_of_class` is NULL when reporting persons on one
-  filing report different %s (`extract_single_pct_of_class`), which now drops those stakes.
+  --reclassify`, then scoring** (done 2026-11-03, run 8: Tier 1 = 1, Tier 2 = 8).
+  Follow-up same day: `pct_of_class` was NULL whenever the reporting persons on one joint filing gave
+  different %s (Avoro on WHWK 19.99/4.1/19.99, Sarissa on IRWD 5.6/5.8), which dropped real stakes.
+  `extract_pct_of_class` now keeps the highest (the group's beneficial ownership); existing NULL rows
+  are filled by **`run_activist_positions_ingest.py --repair-pct`**, then re-score.
 - **FIXED 2026-10-28: the CIK-keyed normalization jobs had never matched a company on prod.**
   `run_financial_facts_normalization.py`, `run_domicile_normalization.py` and `run_trial_normalization.py`
   looked up the raw-zone manifest's bare CIK ("1367083") against `p22_company.cik`'s 10-digit form, so

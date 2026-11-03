@@ -742,6 +742,27 @@ class P22Repo:
         self.session.flush()
         return int(getattr(result, "rowcount", 0) or 0)
 
+    def list_activist_positions_missing_pct(self) -> List[Tuple[int, Optional[str]]]:
+        """`(position_id, source_url)` for every `p22_activist_position` row with `pct_of_class` NULL."""
+        rows = self.session.execute(
+            select(P22ActivistPosition.position_id, P22ActivistPosition.source_url)
+            .where(P22ActivistPosition.pct_of_class.is_(None))
+            .order_by(P22ActivistPosition.position_id)
+        ).all()
+        return [(r[0], r[1]) for r in rows]
+
+    def set_activist_position_pct(self, position_ids: Sequence[int], pct_of_class: float) -> int:
+        """Set `pct_of_class` on the given positions. Returns the number of rows updated."""
+        if not position_ids:
+            return 0
+        result = self.session.execute(
+            update(P22ActivistPosition)
+            .where(P22ActivistPosition.position_id.in_(list(position_ids)))
+            .values(pct_of_class=pct_of_class)
+        )
+        self.session.flush()
+        return int(getattr(result, "rowcount", 0) or 0)
+
     def get_verified_activist_positions(self, company_id: int, as_of: date) -> List[Dict[str, Any]]:
         """Every `p22_activist_position` row for `company_id` KNOWN as of `as_of`. No
         `is_verified` column exists on this table (spec §3.2's own schema has none; unlike process
