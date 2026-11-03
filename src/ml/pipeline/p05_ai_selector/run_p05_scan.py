@@ -5,6 +5,7 @@ import json
 import sys
 from datetime import date
 from pathlib import Path
+from typing import Any, Dict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -25,6 +26,23 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _exit_code(result: Dict[str, Any]) -> int:
+    """
+    Map a pipeline result to a process exit code.
+
+    The scheduler marks a run FAILED only on a nonzero exit code; it does not
+    inspect the ``success`` field of the ``__SCHEDULER_RESULT__`` payload. A
+    failed run that exits 0 is recorded as COMPLETED and raises no alert.
+
+    Args:
+        result: Result dict returned by ``P05Pipeline.run``.
+
+    Returns:
+        0 when the run succeeded, 1 otherwise.
+    """
+    return 0 if result.get("success") else 1
+
+
 def main() -> int:
     args = _parse_args()
 
@@ -42,7 +60,7 @@ def main() -> int:
                 "notification_override": 0,
             }
             print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")
-            return 0
+            return 1
 
     try:
         result = P05Pipeline().run(
@@ -51,7 +69,7 @@ def main() -> int:
             force_refresh=args.force_refresh,
         )
         print(f"__SCHEDULER_RESULT__:{json.dumps(result, default=str)}")
-        return 0
+        return _exit_code(result)
 
     except Exception as exc:
         _logger.exception("Unhandled error in P05 scan: %s", exc)
@@ -63,7 +81,7 @@ def main() -> int:
             "notification_override": 0,
         }
         print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")
-        return 0
+        return 1
 
 
 if __name__ == "__main__":

@@ -1,19 +1,22 @@
 """
 NASDAQ Universe Downloader
 
-Downloads complete US stock universe from NASDAQ Trader FTP service.
+Downloads complete US stock universe from NASDAQ Trader (FTP, with HTTPS fallback).
 Stores results in results/emps2/YYYY-MM-DD/ for date-based organization.
 """
 
+import ftplib
 import io
 import json
 import sys
+import time
 from datetime import datetime
 from ftplib import FTP
 from pathlib import Path
-from typing import Any, List
+from typing import Dict, List
 
 import pandas as pd
+import requests
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -24,6 +27,13 @@ from src.notification.logger import setup_logger
 from .config import UniverseConfig
 
 _logger = setup_logger(__name__)
+
+_FTP_HOST = "ftp.nasdaqtrader.com"
+_HTTPS_BASE_URL = "https://www.nasdaqtrader.com/dynamic/SymDir"
+_SYMBOL_FILES = ("nasdaqlisted.txt", "otherlisted.txt")
+_TIMEOUT_SECONDS = 30
+_FETCH_ATTEMPTS = 3
+_RETRY_DELAY_SECONDS = 20
 
 
 class NasdaqUniverseDownloader:
@@ -108,33 +118,14 @@ class NasdaqUniverseDownloader:
             List of ticker symbols
         """
         try:
-            _logger.info("Downloading from NASDAQ Trader FTP...")
-
-            # Connect to FTP server
-            ftp = FTP("ftp.nasdaqtrader.com", timeout=30)
-            ftp.login()  # Anonymous login
-            _logger.debug("Connected to FTP server: %s", ftp.getwelcome())
-
-            # Change to SymbolDirectory
-            ftp.cwd("SymbolDirectory")
-
-            # Download NASDAQ listed
-            _logger.debug("Fetching nasdaqlisted.txt")
-            nasdaq_data: list[Any] = []
-            ftp.retrlines("RETR nasdaqlisted.txt", nasdaq_data.append)
-            nasdaq_text = "\n".join(nasdaq_data)
-            df1 = pd.read_csv(io.StringIO(nasdaq_text), sep="|")
+            texts = self._fetch_symbol_files()
+            df1 = pd.read_csv(io.StringIO(texts["nasdaqlisted.txt"]), sep="|")
             _logger.debug("Downloaded %d rows from nasdaqlisted.txt", len(df1))
-
-            # Download other listed (NYSE, AMEX, etc.)
-            _logger.debug("Fetching otherlisted.txt")
-            other_data: list[Any] = []
-            ftp.retrlines("RETR otherlisted.txt", other_data.append)
-            other_text = "\n".join(other_data)
-            df2 = pd.read_csv(io.StringIO(other_text), sep="|")
+            df2 = pd.read_csv(io.StringIO(texts["otherlisted.txt"]), sep="|")
             _logger.debug("Downloaded %d rows from otherlisted.txt", len(df2))
-
-            ftp.quit()
+            # otherlisted.txt names its ticker column "ACT Symbol"; without this rename
+            # every NYSE/AMEX row has a NaN "Symbol" after concat and is silently dropped.
+            df2 = df2.rename(columns={"ACT Symbol": "Symbol"})
 
             # Combine
             df = pd.concat([df1, df2], ignore_index=True)
@@ -180,12 +171,71 @@ class NasdaqUniverseDownloader:
             return tickers
 
         except Exception:
-            _logger.exception("Error downloading from NASDAQ Trader FTP:")
+            _logger.exception("Error downloading from NASDAQ Trader:")
             _logger.error("Unable to download from NASDAQ Trader. Please check network/firewall settings.")
             _logger.info(
                 "You can try manual download using: python src/ml/pipeline/p06_emps2/download_nasdaq_manual.py"
             )
             return []
+
+    def _fetch_symbol_files(self) -> Dict[str, str]:
+        """
+        Fetch the raw NASDAQ Trader symbol directory files.
+
+        Each attempt tries FTP first and falls back to the HTTPS mirror of the
+        same files; a failed attempt is retried after a delay. Previously a
+        single FTP connect timeout emptied the universe and aborted P06/P17.
+
+        Returns:
+            Mapping of file name (``nasdaqlisted.txt`` / ``otherlisted.txt``) to its text.
+
+        Raises:
+            RuntimeError: When every attempt over both transports failed.
+        """
+        fetchers = (("FTP", self._fetch_via_ftp), ("HTTPS", self._fetch_via_https))
+        for attempt in range(1, _FETCH_ATTEMPTS + 1):
+            for transport, fetch in fetchers:
+                try:
+                    _logger.info("Downloading NASDAQ Trader symbol files via %s (attempt %d/%d)", transport, attempt, _FETCH_ATTEMPTS)
+                    return fetch()
+                except (OSError, EOFError, ftplib.Error, requests.RequestException) as exc:
+                    _logger.warning("NASDAQ Trader %s download failed (attempt %d/%d): %s", transport, attempt, _FETCH_ATTEMPTS, exc)
+            if attempt < _FETCH_ATTEMPTS:
+                time.sleep(_RETRY_DELAY_SECONDS)
+        raise RuntimeError(f"NASDAQ Trader symbol files unavailable via FTP and HTTPS after {_FETCH_ATTEMPTS} attempts")
+
+    @staticmethod
+    def _fetch_via_ftp() -> Dict[str, str]:
+        """
+        Fetch the symbol files from the NASDAQ Trader FTP server.
+
+        Returns:
+            Mapping of file name to its text.
+        """
+        texts: Dict[str, str] = {}
+        with FTP(_FTP_HOST, timeout=_TIMEOUT_SECONDS) as ftp:
+            ftp.login()  # Anonymous login
+            ftp.cwd("SymbolDirectory")
+            for name in _SYMBOL_FILES:
+                lines: List[str] = []
+                ftp.retrlines(f"RETR {name}", lines.append)
+                texts[name] = "\n".join(lines)
+        return texts
+
+    @staticmethod
+    def _fetch_via_https() -> Dict[str, str]:
+        """
+        Fetch the symbol files from the NASDAQ Trader HTTPS mirror.
+
+        Returns:
+            Mapping of file name to its text.
+        """
+        texts: Dict[str, str] = {}
+        for name in _SYMBOL_FILES:
+            response = requests.get(f"{_HTTPS_BASE_URL}/{name}", timeout=_TIMEOUT_SECONDS)
+            response.raise_for_status()
+            texts[name] = response.text
+        return texts
 
     def _apply_filters(self, tickers: List[str]) -> List[str]:
         """
