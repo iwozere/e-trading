@@ -20,6 +20,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.database_service import DatabaseService
 from src.data.downloader.edgar_downloader import EdgarDownloader
+from src.ml.pipeline.p22_biotech_ma.ingest.activist_positions import reclassify_filer_types
 from src.ml.pipeline.p22_biotech_ma.ingest.activist_positions import run as run_activist_positions
 from src.ml.pipeline.p22_biotech_ma.jobs.run_common import setup_run_logging
 from src.notification.logger import setup_logger
@@ -60,8 +61,18 @@ def run(lookback_days: int = 1) -> dict:
     return result
 
 
+def reclassify() -> dict:
+    """Re-label `filer_type` on already-ingested positions from the current `activist_filers.yaml`
+    and acquirer universe — no EDGAR calls."""
+    setup_run_logging()
+    with DatabaseService().uow() as uow:
+        return reclassify_filer_types(uow.p22)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lookback-days", type=int, default=1, help="Days to scan, ending yesterday (backfill: e.g. 730)")
-    result = run(parser.parse_args().lookback_days)
+    parser.add_argument("--reclassify", action="store_true", help="Only re-label filer_type on existing rows (no EDGAR scan)")
+    args = parser.parse_args()
+    result = reclassify() if args.reclassify else run(args.lookback_days)
     print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")

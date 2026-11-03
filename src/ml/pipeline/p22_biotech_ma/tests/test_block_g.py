@@ -43,6 +43,19 @@ def _ctx(**kwargs) -> FeatureContext:
     return FeatureContext(as_of=_AS_OF, repo=_FakeRepo(**kwargs))
 
 
+def _pos(
+    filer_cik: str, filer_type: str | None, form_type: str, filed_date: date, pct: float | None, stated_intent: str | None = None
+) -> Dict[str, Any]:
+    return {
+        "filer_cik": filer_cik,
+        "filer_type": filer_type,
+        "form_type": form_type,
+        "filed_date": filed_date,
+        "pct_of_class": pct,
+        "stated_intent": stated_intent,
+    }
+
+
 # ---------------------------------------------------------------------
 # build_block_g
 # ---------------------------------------------------------------------
@@ -73,8 +86,8 @@ def test_build_block_g_concluded_state_has_no_days_since():
 
 def test_build_block_g_activist_intent_takes_the_strongest():
     ctx = _ctx(activist_positions=[
-        {"filer_type": "activist", "form_type": "SC 13D", "stated_intent": "engagement", "pct_of_class": 6.0},
-        {"filer_type": "activist", "form_type": "SC 13D/A", "stated_intent": "sale_demand", "pct_of_class": 6.0},
+        _pos("A1", "activist", "SC 13D", date(2026, 1, 5), 6.0, stated_intent="engagement"),
+        _pos("A2", "activist", "SC 13D/A", date(2026, 3, 5), 6.0, stated_intent="sale_demand"),
     ])
     g = build_block_g(_COMPANY_ID, _AS_OF, ctx)
     assert g.has_13d_activist is True
@@ -84,12 +97,47 @@ def test_build_block_g_activist_intent_takes_the_strongest():
 
 def test_build_block_g_strategic_toehold_from_corporate_filer():
     ctx = _ctx(activist_positions=[
-        {"filer_type": "strategic_corporate", "form_type": "SC 13D", "stated_intent": None, "pct_of_class": 7.5},
+        _pos("S1", "strategic_corporate", "SC 13D", date(2026, 2, 1), 7.5),
     ])
     g = build_block_g(_COMPANY_ID, _AS_OF, ctx)
     assert g.has_13d_activist is False  # not filer_type == 'activist'
     assert g.has_strategic_toehold is True
     assert g.strategic_toehold_pct == 7.5
+
+
+def test_build_block_g_exit_amendment_cancels_strategic_toehold():
+    ctx = _ctx(activist_positions=[
+        _pos("S1", "strategic_corporate", "SC 13G", date(2025, 2, 1), 9.0),
+        _pos("S1", "strategic_corporate", "SC 13G/A", date(2026, 2, 1), 3.9),
+    ])
+    g = build_block_g(_COMPANY_ID, _AS_OF, ctx)
+    assert g.has_strategic_toehold is False
+    assert g.strategic_toehold_pct is None
+
+
+def test_build_block_g_null_pct_does_not_count():
+    ctx = _ctx(activist_positions=[_pos("A1", "activist", "SC 13D/A", date(2026, 4, 1), None)])
+    assert build_block_g(_COMPANY_ID, _AS_OF, ctx).has_13d_activist is False
+
+
+def test_build_block_g_activist_uses_latest_filing_only():
+    # Latest filing is a 13G (activist turned passive) — no longer a 13D activist.
+    ctx = _ctx(activist_positions=[
+        _pos("A1", "activist", "SC 13D", date(2025, 6, 1), 8.0),
+        _pos("A1", "activist", "SC 13G", date(2026, 6, 1), 8.0),
+    ])
+    assert build_block_g(_COMPANY_ID, _AS_OF, ctx).has_13d_activist is False
+
+
+def test_build_block_g_crossover_fund_13d_is_not_activist():
+    ctx = _ctx(activist_positions=[_pos("C1", "crossover_fund", "SC 13D/A", date(2026, 4, 1), 12.0)])
+    assert build_block_g(_COMPANY_ID, _AS_OF, ctx).has_13d_activist is False
+
+
+def test_build_block_g_min_stake_pct_is_configurable():
+    ctx = _ctx(activist_positions=[_pos("S1", "strategic_corporate", "SC 13G/A", date(2026, 2, 1), 4.0)])
+    assert build_block_g(_COMPANY_ID, _AS_OF, ctx).has_strategic_toehold is False
+    assert build_block_g(_COMPANY_ID, _AS_OF, ctx, min_stake_pct=3.0).has_strategic_toehold is True
 
 
 def test_build_block_g_partnership_picks_strongest_structure():

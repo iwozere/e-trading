@@ -725,6 +725,23 @@ class P22Repo:
         self.session.flush()
         return row.position_id
 
+    def list_activist_position_filer_types(self) -> List[Tuple[str, Optional[str]]]:
+        """Distinct `(filer_cik, filer_type)` pairs in `p22_activist_position`, for reclassification."""
+        rows = self.session.execute(
+            select(P22ActivistPosition.filer_cik, P22ActivistPosition.filer_type).distinct()
+        ).all()
+        return [(r[0], r[1]) for r in rows]
+
+    def set_activist_position_filer_type(self, filer_cik: str, filer_type: Optional[str]) -> int:
+        """Set `filer_type` on every position filed by `filer_cik`. Returns the number of rows updated."""
+        result = self.session.execute(
+            update(P22ActivistPosition)
+            .where(P22ActivistPosition.filer_cik == filer_cik)
+            .values(filer_type=filer_type)
+        )
+        self.session.flush()
+        return int(getattr(result, "rowcount", 0) or 0)
+
     def get_verified_activist_positions(self, company_id: int, as_of: date) -> List[Dict[str, Any]]:
         """Every `p22_activist_position` row for `company_id` KNOWN as of `as_of`. No
         `is_verified` column exists on this table (spec §3.2's own schema has none; unlike process

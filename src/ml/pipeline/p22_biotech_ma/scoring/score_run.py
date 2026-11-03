@@ -245,7 +245,7 @@ def score_universe(
         top = pairs[0] if pairs and pairs[0].fit is not None else None
         strategic_fit_raw[company_id] = top.fit if top is not None else None
 
-        g = build_block_g(company_id, as_of, ctx)
+        g = build_block_g(company_id, as_of, ctx, min_stake_pct=config.min_stake_pct)
         tiers[company_id] = process_tier(g)
         # Spec §5.2: a disclosed partner overrides the fit argmax as likely_acquirer.
         if g.partner_identity is not None and g.partner_identity in acquirer_ids:

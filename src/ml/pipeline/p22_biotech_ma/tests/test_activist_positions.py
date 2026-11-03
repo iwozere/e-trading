@@ -14,6 +14,8 @@ from src.ml.pipeline.p22_biotech_ma.ingest.activist_positions import (
     efts_names_by_cik,
     extract_single_pct_of_class,
     load_activist_filers,
+    load_crossover_funds,
+    reclassify_filer_types,
     parse_13dg_header,
     run,
 )
@@ -254,6 +256,43 @@ def test_classify_filer_type_none_when_target_role_not_acquirer():
     repo = MagicMock()
     repo.get_company_by_cik.return_value = {"role": "target"}
     assert classify_filer_type("0000000001", repo, set()) is None
+
+
+def test_classify_filer_type_crossover_fund_from_config_list():
+    repo = MagicMock()
+    assert classify_filer_type("0001263508", repo, {"0001577524"}, {"0001263508"}) == "crossover_fund"
+    repo.get_company_by_cik.assert_not_called()
+
+
+def test_load_crossover_funds_reads_real_repo_config():
+    crossover = load_crossover_funds()
+    assert "0001263508" in crossover  # Baker Bros Advisors
+    assert not crossover & load_activist_filers()  # the two lists never overlap
+
+
+def test_load_crossover_funds_missing_key_returns_empty_set(tmp_path):
+    f = tmp_path / "filers.yaml"
+    f.write_text("activist_filer_ciks:\n  - '1577524'\n", encoding="utf-8")
+    assert load_crossover_funds(f) == set()
+
+
+def test_reclassify_filer_types_updates_only_changed_filers():
+    repo = MagicMock()
+    repo.get_company_by_cik.return_value = None
+    repo.list_activist_position_filer_types.return_value = [
+        ("0001263508", "activist"),   # Baker Bros: activist -> crossover_fund
+        ("0001577524", "activist"),   # Sarissa: unchanged
+        ("0000000009", None),         # unknown filer: unchanged
+    ]
+    repo.set_activist_position_filer_type.return_value = 40
+    summary = reclassify_filer_types(repo)
+    repo.set_activist_position_filer_type.assert_called_once_with("0001263508", "crossover_fund")
+    assert summary == {
+        "filers_checked": 3,
+        "filers_changed": 1,
+        "rows_updated": 40,
+        "changes": {"activist->crossover_fund": 1},
+    }
 
 
 # ---------------------------------------------------------------------

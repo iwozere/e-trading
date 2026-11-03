@@ -20,6 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p22_biotech_ma.config import ACQUIRERS_YAML, WEIGHTS_YAML
+from src.ml.pipeline.p22_biotech_ma.features.block_g import DEFAULT_MIN_STAKE_PCT
 from src.ml.pipeline.p22_biotech_ma.ingest.acquirer_config import VALID_BLOCS
 
 COMPOSITE_POSITIVE_TERMS = (
@@ -50,6 +51,7 @@ class ScoringConfig:
     fis_penalty_by_bloc: Dict[str, float]
     antitrust_same_indication_penalty: float
     top_pairs: int
+    min_stake_pct: float
 
 
 def load_scoring_config(path: Path = WEIGHTS_YAML) -> ScoringConfig:
@@ -90,9 +92,11 @@ def load_scoring_config(path: Path = WEIGHTS_YAML) -> ScoringConfig:
         fis_penalty_by_bloc=fis,
         antitrust_same_indication_penalty=float(raw["antitrust_same_indication_penalty"]),
         top_pairs=int(raw.get("top_pairs", 3)),
+        min_stake_pct=float((raw.get("block_g") or {}).get("min_stake_pct", DEFAULT_MIN_STAKE_PCT)),
     )
     weights = list(composite.values()) + list(config.fit_preference.values()) + list(fis.values())
     weights += [fw.weight for features in blocks.values() for fw in features.values()]
+    weights.append(config.min_stake_pct)
     if any(w < 0 for w in weights):
         raise ValueError("weights and penalties must be non-negative")
     return config

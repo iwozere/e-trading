@@ -883,6 +883,16 @@ use in the code/config; this section exists so they're all in one place to walk 
   not attributed (MacroGenics/ImmunoGen, Akari/Celsus); GENETIC-type interventions (gene therapy)
   are not asset candidates; the raw zone names payloads by content hash, so two companies with
   byte-identical hit lists share one manifest.
+- **FIXED 2026-11-03: Block G tiers rested on crossover funds and exited stakes.** After the 730-day
+  13D/G backfill (9,904 positions), run 7 put 28 targets in Tier 1 and 21 in Tier 2. Tier 1 was mostly
+  OrbiMed/Baker Bros/Redmile/Casdin/Deep Track/Cormorant 13D/As, and about half the Tier 2 "toeholds" were
+  pharma 13G/As reporting 0–4.9% (exits). Decisions: (1) `activist_filers.yaml` split — 8 healthcare
+  crossover funds moved to `crossover_fund_ciks` (`filer_type = 'crossover_fund'`, no tier);
+  activists are Sarissa, Elliott, Avoro, Starboard, Icahn ×2, Third Point, JANA. (2) A stake counts
+  only if the filer's latest filing known at as_of reports ≥ `block_g.min_stake_pct` (5.0) in
+  `p22_weights.yaml`; an unparsed % does not count. **Pi: `run_activist_positions_ingest.py
+  --reclassify`, then scoring.** Still open: `pct_of_class` is NULL when reporting persons on one
+  filing report different %s (`extract_single_pct_of_class`), which now drops those stakes.
 - **FIXED 2026-10-28: the CIK-keyed normalization jobs had never matched a company on prod.**
   `run_financial_facts_normalization.py`, `run_domicile_normalization.py` and `run_trial_normalization.py`
   looked up the raw-zone manifest's bare CIK ("1367083") against `p22_company.cik`'s 10-digit form, so

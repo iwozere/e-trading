@@ -43,7 +43,18 @@
 activist_filer_ciks:
   - "0001577524"  # Sarissa Capital Management (Alex Denner) — healthcare-specialist activist
   - "0001791786"  # Elliott Investment Management — generalist activist, has taken healthcare positions
-  - "0001633313"  # Avoro Capital (formerly venBio) — healthcare specialist
+  - "0001633313"  # Avoro Capital (formerly venBio) — healthcare specialist; ran the 2018 Immunomedics proxy fight
+  - "0001517137"  # Starboard Value LP — generalist activist, disambiguated 2026-09-08 (see header)
+  - "0000813762"  # Icahn Enterprises L.P. — generalist activist, disambiguated 2026-09-08
+  - "0001034563"  # Icahn Enterprises Holdings L.P. — affiliated Icahn entity, disambiguated 2026-09-08
+  - "0001040273"  # Third Point LLC — generalist activist, disambiguated 2026-09-08
+  - "0001159159"  # JANA Partners LLC — generalist activist, disambiguated 2026-09-08
+
+# Healthcare-specialist crossover / long-only funds (2026-11-03 split, user decision). They file 13Ds
+# for size or board seats, not sale campaigns, so they are classified `crossover_fund` and do not
+# trigger Tier 1. Rows already ingested are re-labelled with
+# `run_activist_positions_ingest.py --reclassify`.
+crossover_fund_ciks:
   - "0001263508"  # Baker Bros Advisors — biotech specialist, large concentrated positions
   - "0001493215"  # RTW Investments — healthcare specialist
   - "0001856083"  # Deep Track Capital — healthcare specialist
@@ -52,8 +63,3 @@ activist_filer_ciks:
   - "0001583977"  # Cormorant Asset Management — healthcare specialist
   - "0001425738"  # Redmile Group — healthcare specialist
   - "0001055951"  # OrbiMed Advisors — healthcare specialist
-  - "0001517137"  # Starboard Value LP — generalist activist, disambiguated 2026-09-08 (see header)
-  - "0000813762"  # Icahn Enterprises L.P. — generalist activist, disambiguated 2026-09-08
-  - "0001034563"  # Icahn Enterprises Holdings L.P. — affiliated Icahn entity, disambiguated 2026-09-08
-  - "0001040273"  # Third Point LLC — generalist activist, disambiguated 2026-09-08
-  - "0001159159"  # JANA Partners LLC — generalist activist, disambiguated 2026-09-08

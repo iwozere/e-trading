@@ -94,14 +94,27 @@ _XML_REPORTING_NAME = re.compile(r"<reportingPersonName>\s*(.*?)\s*</reportingPe
 _DISPLAY_NAME_PATTERN = re.compile(r"^(.*?)\s{2}.*\(CIK (\d+)\)\s*$")
 
 
-def load_activist_filers(path: Path = ACTIVIST_FILERS_YAML) -> set:
-    """CIKs from `config/activist_filers.yaml` (spec §2.6.2), zero-padded to 10 digits to match
-    the header-parsed CIK format. Missing file -> empty set (not an error — this list starts
-    genuinely incomplete pending domain review, see that file's header)."""
+def _load_cik_list(path: Path, key: str) -> set:
+    """One CIK list from `config/activist_filers.yaml`, zero-padded to 10 digits to match the
+    header-parsed CIK format. Missing file or key -> empty set."""
     if not path.exists():
         return set()
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    return {str(cik).zfill(10) for cik in raw.get("activist_filer_ciks", [])}
+    return {str(cik).zfill(10) for cik in raw.get(key) or []}
+
+
+def load_activist_filers(path: Path = ACTIVIST_FILERS_YAML) -> set:
+    """Activist-fund CIKs from `config/activist_filers.yaml` (spec §2.6.2). Missing file -> empty
+    set (not an error — this list starts genuinely incomplete pending domain review, see that
+    file's header)."""
+    return _load_cik_list(path, "activist_filer_ciks")
+
+
+def load_crossover_funds(path: Path = ACTIVIST_FILERS_YAML) -> set:
+    """Healthcare crossover-fund CIKs from `config/activist_filers.yaml` — spec §2.6.2: a 13D
+    from a crossover fund "is not the same event as a 13D from an activist with a campaign
+    history, and the model must distinguish them"."""
+    return _load_cik_list(path, "crossover_fund_ciks")
 
 
 def parse_13dg_header(text: str) -> Optional[Dict[str, Any]]:
@@ -192,22 +205,58 @@ def extract_single_pct_of_class(text: str) -> Optional[float]:
     return None
 
 
-def classify_filer_type(filer_cik: str, repo: Any, activist_filer_ciks: set) -> Optional[str]:
+def classify_filer_type(
+    filer_cik: str, repo: Any, activist_filer_ciks: set, crossover_fund_ciks: Optional[set] = None
+) -> Optional[str]:
     """
-    Mechanical filer-type classification (spec §2.6.2) — both checks are set-membership/DB-lookup,
-    not judgment calls, so unlike `stated_intent` these ARE safe to auto-populate:
-      - `'activist'` if `filer_cik` is in the curated `activist_filers.yaml` list.
+    Mechanical filer-type classification (spec §2.6.2) — every check is set-membership/DB-lookup,
+    not a judgment call, so unlike `stated_intent` these ARE safe to auto-populate:
+      - `'activist'` if `filer_cik` is in the curated `activist_filer_ciks` list.
+      - `'crossover_fund'` if `filer_cik` is in the curated `crossover_fund_ciks` list.
       - `'strategic_corporate'` if `filer_cik` matches a `p22_company` row with
         `role in ('acquirer', 'both')` — spec: "13D filed by a strategic (corporate) filer in the
         acquirer universe."
-      - `None` otherwise (not a guess at `'crossover_fund'`/`'other'` — genuinely unclassified).
+      - `None` otherwise (not a guess at `'other'` — genuinely unclassified).
     """
     if filer_cik in activist_filer_ciks:
         return "activist"
+    if crossover_fund_ciks and filer_cik in crossover_fund_ciks:
+        return "crossover_fund"
     company = repo.get_company_by_cik(filer_cik)
     if company is not None and company.get("role") in ("acquirer", "both"):
         return "strategic_corporate"
     return None
+
+
+def reclassify_filer_types(repo: Any) -> Dict[str, Any]:
+    """
+    Re-run `classify_filer_type` over every filer already in `p22_activist_position` and rewrite
+    `filer_type` where it changed — needed after `activist_filers.yaml` or the acquirer universe
+    changes, since `filer_type` is stamped at ingest time.
+
+    Returns:
+        `{"filers_checked": int, "filers_changed": int, "rows_updated": int, "changes": {...}}`,
+        where `changes` maps `"old->new"` to the number of filers that moved.
+    """
+    activist_filer_ciks = load_activist_filers()
+    crossover_fund_ciks = load_crossover_funds()
+    filers = repo.list_activist_position_filer_types()
+    changes: Counter = Counter()
+    rows_updated = 0
+    for filer_cik, current in filers:
+        new = classify_filer_type(filer_cik, repo, activist_filer_ciks, crossover_fund_ciks)
+        if new == current:
+            continue
+        rows_updated += repo.set_activist_position_filer_type(filer_cik, new)
+        changes[f"{current}->{new}"] += 1
+    summary = {
+        "filers_checked": len(filers),
+        "filers_changed": sum(changes.values()),
+        "rows_updated": rows_updated,
+        "changes": dict(changes),
+    }
+    _logger.info("Activist-position filer reclassification complete: %s", summary)
+    return summary
 
 
 def run(repo: Any, edgar: Any, as_of_date: Optional[date] = None, lookback_days: int = 1) -> Dict[str, Any]:
@@ -230,6 +279,7 @@ def run(repo: Any, edgar: Any, as_of_date: Optional[date] = None, lookback_days:
 
     companies_by_cik = {c["cik"]: c["company_id"] for c in repo.list_companies_full() if c.get("cik")}
     activist_filer_ciks = load_activist_filers()
+    crossover_fund_ciks = load_crossover_funds()
     universe_ciks = list(companies_by_cik.keys())
 
     seen_ids: set = set()
@@ -292,7 +342,7 @@ def run(repo: Any, edgar: Any, as_of_date: Optional[date] = None, lookback_days:
 
         efts_names = efts_names_by_cik(src.get("display_names") or [])
         for filer in header["filers"]:
-            filer_type = classify_filer_type(filer["cik"], repo, activist_filer_ciks)
+            filer_type = classify_filer_type(filer["cik"], repo, activist_filer_ciks, crossover_fund_ciks)
             repo.upsert_activist_position(
                 company_id=company_id,
                 filer_cik=filer["cik"],

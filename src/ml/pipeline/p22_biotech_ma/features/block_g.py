@@ -36,12 +36,15 @@ import sys
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p22_biotech_ma.features.context import FeatureContext
+
+# SEC 13D/G reporting threshold; the scorer passes `p22_weights.yaml` `block_g.min_stake_pct`.
+DEFAULT_MIN_STAKE_PCT = 5.0
 
 # spec §5.2's tiering order for stated_intent (weakest to strongest).
 _INTENT_RANK = {"passive": 0, "engagement": 1, "board_seats": 2, "sale_demand": 3}
@@ -67,10 +70,36 @@ class BlockG:
     partner_identity: Optional[int] = None  # company_id of the partner, spec §5.2's likely_acquirer override
 
 
-def build_block_g(company_id: int, as_of: date, ctx: FeatureContext) -> BlockG:
+def _current_stakes(positions: List[Dict[str, Any]], min_stake_pct: float) -> List[Dict[str, Any]]:
+    """
+    Each filer's most recent 13D/G known as of the scoring date, kept only if it reports at least
+    `min_stake_pct` of the class. A later filing below the threshold (typically the 13G/A or 13D/A
+    reporting an exit under 5%) therefore cancels the filer's earlier stake. A filing whose
+    percentage could not be parsed (`pct_of_class` NULL) does not count.
+
+    Args:
+        positions: `get_verified_activist_positions` rows, ordered `filed_date` DESC.
+        min_stake_pct: Minimum `pct_of_class` for a stake to count.
+
+    Returns:
+        One row per filer with a current stake.
+    """
+    latest: Dict[str, Dict[str, Any]] = {}
+    for p in sorted(positions, key=lambda r: r["filed_date"], reverse=True):
+        latest.setdefault(p["filer_cik"], p)
+    return [
+        p for p in latest.values()
+        if p.get("pct_of_class") is not None and float(p["pct_of_class"]) >= min_stake_pct
+    ]
+
+
+def build_block_g(company_id: int, as_of: date, ctx: FeatureContext, min_stake_pct: float = DEFAULT_MIN_STAKE_PCT) -> BlockG:
     """Assemble one company's `BlockG` snapshot from the three verification-gated,
     lookahead-safe reads (`FeatureContext.get_verified_process_events`/
-    `get_verified_activist_positions`/`get_verified_partnership_structures`)."""
+    `get_verified_activist_positions`/`get_verified_partnership_structures`).
+
+    Activist and strategic-toehold flags use only each filer's latest filing, and only when it
+    reports at least `min_stake_pct` (see `_current_stakes`)."""
     process_events = ctx.get_verified_process_events(company_id)
     process_state = "none"
     process_scope = None
@@ -83,15 +112,18 @@ def build_block_g(company_id: int, as_of: date, ctx: FeatureContext) -> BlockG:
             days_since_process_open = (as_of - latest["event_date"]).days
 
     activist_positions = ctx.get_verified_activist_positions(company_id)
+    current_stakes = _current_stakes(activist_positions, min_stake_pct)
     has_13d_activist = any(
-        p["filer_type"] == "activist" and p["form_type"] in ("SC 13D", "SC 13D/A") for p in activist_positions
+        p["filer_type"] == "activist" and p["form_type"] in ("SC 13D", "SC 13D/A") for p in current_stakes
     )
-    activist_intents = [p["stated_intent"] for p in activist_positions if p.get("stated_intent")]
+    activist_intents = [
+        p["stated_intent"] for p in current_stakes if p["filer_type"] == "activist" and p.get("stated_intent")
+    ]
     activist_intent_max = (
         max(activist_intents, key=lambda i: _INTENT_RANK.get(i, -1)) if activist_intents else None
     )
     activist_escalation = sum(1 for p in activist_positions if p["form_type"] == "SC 13D/A")
-    strategic_toeholds = [p for p in activist_positions if p["filer_type"] == "strategic_corporate"]
+    strategic_toeholds = [p for p in current_stakes if p["filer_type"] == "strategic_corporate"]
     has_strategic_toehold = bool(strategic_toeholds)
     strategic_toehold_pct = (
         max((p["pct_of_class"] for p in strategic_toeholds if p.get("pct_of_class") is not None), default=None)
