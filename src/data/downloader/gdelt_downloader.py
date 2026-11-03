@@ -121,6 +121,12 @@ _GKG_COLS = [
     "Extras",
 ]
 
+# The only GKG columns consumed downstream (_aggregate_gkg, _extract_orgs_slice).
+# Parsing just these is essential: reading all 27 columns as str (GCAM, locations,
+# quotations, ...) peaked at ~18 GB RSS for one 4-file day, which got the Pi
+# scheduler OOM-killed mid-run (P15 daily, 2026-10-31 and 2026-11-03).
+_GKG_USED_COLS = ["SourceCommonName", "V2Themes", "V2Organizations", "V2Tone"]
+
 _EVENTS_COLS = [
     "GLOBALEVENTID",
     "SQLDATE",
@@ -530,6 +536,7 @@ class GdeltDownloader(BaseDataDownloader):
                     sep="\t",
                     header=None,
                     names=_GKG_COLS,
+                    usecols=_GKG_USED_COLS,
                     on_bad_lines="skip",
                     low_memory=False,
                     dtype=str,
@@ -788,25 +795,25 @@ def _aggregate_gkg(raw: pd.DataFrame, date: datetime) -> pd.DataFrame:
     if raw.empty:
         return pd.DataFrame()
 
-    # Parse tone into separate numeric columns
+    # Parse tone into separate numeric columns. Work on a slim frame (themes +
+    # tone only) so the explode below never multiplies unrelated wide columns.
     tone_df = raw["V2Tone"].apply(_parse_tone).apply(pd.Series)
-    raw = pd.concat([raw.reset_index(drop=True), tone_df.reset_index(drop=True)], axis=1)
-    raw = raw.dropna(subset=["tone"])
+    slim = pd.concat([raw[["V2Themes"]].reset_index(drop=True), tone_df.reset_index(drop=True)], axis=1)
+    slim = slim.dropna(subset=["tone"])
 
-    if raw.empty:
+    if slim.empty:
         return pd.DataFrame()
 
-    # Expand V2Themes — one row per (article × theme)
-    raw = raw.copy()
-    raw["theme"] = raw["V2Themes"].apply(_parse_themes)
-    raw = raw.explode("theme")
-    raw = raw.loc[raw["theme"].notna() & (raw["theme"] != "")].copy()
+    # Expand V2Themes — one row per (article × theme); drop the raw theme string first.
+    slim["theme"] = slim["V2Themes"].apply(_parse_themes)
+    slim = slim.drop(columns=["V2Themes"]).explode("theme")
+    slim = slim.loc[slim["theme"].notna() & (slim["theme"] != "")]
 
-    if raw.empty:
+    if slim.empty:
         return pd.DataFrame()
 
     agg = (
-        raw.groupby("theme", sort=False)
+        slim.groupby("theme", sort=False)
         .agg(
             article_count=("tone", "count"),
             avg_tone=("tone", "mean"),
