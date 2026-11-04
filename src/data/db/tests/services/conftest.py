@@ -39,6 +39,7 @@ from src.data.db.repos.repo_notification import NotificationRepository
 from src.data.db.repos.repo_kestrel import KestrelRepo
 from src.data.db.repos.repo_p22_biotech_ma import P22Repo
 from src.data.db.repos.repo_signal_ledger import SignalLedgerRepo
+from src.data.db.repos.repo_trade_ledger import TradeLedgerRepo
 from src.data.db.repos.repo_short_squeeze import ShortSqueezeRepo
 from src.data.db.repos.repo_system_health import SystemHealthRepository
 from src.data.db.repos.repo_telegram import (
@@ -119,6 +120,7 @@ def mock_database_service(db_session: Session) -> Mock:
         kestrel=KestrelRepo(db_session),
         p22=P22Repo(db_session),
         signal_ledger=SignalLedgerRepo(db_session),
+        trade_ledger=TradeLedgerRepo(db_session),
     )
 
     # Mock the uow context manager to return the repos bundle
@@ -158,6 +160,7 @@ def repos_bundle(db_session: Session) -> ReposBundle:
         kestrel=KestrelRepo(db_session),
         p22=P22Repo(db_session),
         signal_ledger=SignalLedgerRepo(db_session),
+        trade_ledger=TradeLedgerRepo(db_session),
     )
 
 

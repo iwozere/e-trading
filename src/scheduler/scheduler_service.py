@@ -770,7 +770,9 @@ class SchedulerService:
         # A script that exited nonzero is a failed run, even though the
         # executor itself ran to completion.
         if is_failed_job_result(result):
-            error_msg = (
+            # Python handlers (e.g. portfolio.trade_ledger) report their own `error`;
+            # script results carry exit_code + stderr instead.
+            error_msg = result.get("error") or (
                 f"Script exited with code {result.get('exit_code')}; "
                 f"stderr tail: {(result.get('stderr_preview') or '')[-500:]}"
             )
@@ -828,8 +830,11 @@ class SchedulerService:
 
         Dispatches schedules whose `target` starts with `"portfolio."` to the
         matching Python handler: `"portfolio.pnl_alert"`
-        (`src.portfolio.pnl_alert.runner.run_once`) or `"portfolio.management"`
-        (`src.portfolio.management.runner.run_once`).
+        (`src.portfolio.pnl_alert.runner.run_once`), `"portfolio.management"`
+        (`src.portfolio.management.runner.run_once`) or
+        `"portfolio.trade_ledger"` (`src.portfolio.trade_ledger.runner.run_once`;
+        returns `success: False` + `error` when the report failed, so the run
+        is recorded as FAILED).
 
         Args:
             schedule: Schedule object (with `target` and `task_params`).
@@ -853,6 +858,23 @@ class SchedulerService:
                 "target": target,
                 "summary": summary_to_dict(summary),
             }
+
+        if target == "portfolio.trade_ledger":
+            from src.portfolio.trade_ledger.config import DEFAULT_CONFIG_PATH as LEDGER_DEFAULT_CONFIG_PATH
+            from src.portfolio.trade_ledger.config import load_config as load_ledger_config
+            from src.portfolio.trade_ledger.runner import run_once as run_ledger_once
+            from src.portfolio.trade_ledger.runner import summary_to_dict as ledger_summary_to_dict
+
+            ledger_cfg = load_ledger_config(task_params.get("config_path", LEDGER_DEFAULT_CONFIG_PATH))
+            ledger_summary = await run_ledger_once(ledger_cfg)
+            ledger_result: Dict[str, Any] = {
+                "target": target,
+                "success": ledger_summary.ok,
+                "summary": ledger_summary_to_dict(ledger_summary),
+            }
+            if not ledger_summary.ok:
+                ledger_result["error"] = "; ".join(ledger_summary.errors)
+            return ledger_result
 
         if target == "portfolio.management":
             from src.portfolio.management.config import DEFAULT_CONFIG_PATH as MGMT_DEFAULT_CONFIG_PATH

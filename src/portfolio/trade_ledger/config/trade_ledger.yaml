@@ -1,0 +1,27 @@
+# Trade Ledger — monthly IBKR executions / weighted-average-cost report.
+#
+# The Flex token and the "My Trades" query id come from config/donotshare/.env
+# (IBKR_FLEX_TOKEN, IBKR_FLEX_TRADES_QUERY_ID), never from this file.
+
+# User ID whose email address receives the report (same user as pnl_alert).
+recipient_id: 2
+
+# Delivery channels. The report is an HTML email with an XLSX attachment,
+# so only "email" is supported.
+channels:
+  - email
+
+# Cron expression (UTC) for the scheduled run: 06:00 on the 2nd of every
+# month, reporting the previous calendar month (the query's period is
+# "Last Month").
+cron: "0 6 2 * *"
+
+# Download the previous month's statement from the Flex Web Service before
+# building the report. false = report only from what is already imported.
+download: true
+
+# Raw Flex XML archive (monthly downloads land in <raw_dir>/monthly/) and the
+# output folder for the XLSX / HTML copies. Both must be under data/ on the
+# Pi: scheduler.service (ProtectSystem=strict) can only write there.
+raw_dir: data/portfolio/trade_ledger/raw
+reports_dir: data/portfolio/trade_ledger/reports

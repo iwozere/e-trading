@@ -36,6 +36,7 @@ from src.data.db.repos.repo_telegram import (
 from src.data.db.repos.repo_telegram import (
     SettingsRepo as TelegramSettingsRepo,
 )
+from src.data.db.repos.repo_trade_ledger import TradeLedgerRepo
 from src.data.db.repos.repo_trading import (
     BotsRepo as TradingBotsRepo,
 )
@@ -117,6 +118,9 @@ class ReposBundle:
     # Signal ledger (cross-pipeline signal scorecard)
     signal_ledger: SignalLedgerRepo
 
+    # Trade ledger (monthly IBKR trade report, src/portfolio/trade_ledger)
+    trade_ledger: TradeLedgerRepo
+
 
 # ----------------------------- Database service ------------------------------
 
@@ -185,6 +189,8 @@ class DatabaseService:
                 p22=P22Repo(s),
                 # Signal ledger
                 signal_ledger=SignalLedgerRepo(s),
+                # Trade ledger
+                trade_ledger=TradeLedgerRepo(s),
             )
             yield repos
             s.commit()

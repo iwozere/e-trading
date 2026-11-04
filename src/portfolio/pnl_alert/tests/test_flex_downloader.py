@@ -4,9 +4,10 @@ from pathlib import Path
 from typing import List
 
 import pytest
+import requests
 
 from src.portfolio.pnl_alert import flex_downloader
-from src.portfolio.pnl_alert.flex_downloader import download_open_positions_xml
+from src.portfolio.pnl_alert.flex_downloader import FlexQueryError, download_flex_statement, download_open_positions_xml
 
 _SEND_REQUEST_SUCCESS = b"""<FlexStatementResponse timestamp='now'>
 <Status>Success</Status>
@@ -49,7 +50,7 @@ _STATEMENT_SUCCESS = b"""<FlexQueryResponse queryName="Open Positions" type="AF"
 
 
 class _FakeResponse:
-    def __init__(self, content: bytes):
+    def __init__(self, content: bytes) -> None:
         self.content = content
 
     def raise_for_status(self) -> None:
@@ -60,7 +61,7 @@ def _queue_get(responses: List[bytes], monkeypatch: pytest.MonkeyPatch, sleeps: 
     """Patch requests.get to return each queued body in order, and no-op time.sleep."""
     calls = iter(responses)
 
-    def _fake_get(*_args, **_kwargs):
+    def _fake_get(*_args: object, **_kwargs: object) -> _FakeResponse:
         return _FakeResponse(next(calls))
 
     monkeypatch.setattr(flex_downloader.requests, "get", _fake_get)
@@ -71,7 +72,7 @@ def _queue_get(responses: List[bytes], monkeypatch: pytest.MonkeyPatch, sleeps: 
     )
 
 
-def test_download_success_writes_fixed_and_dated_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_download_success_writes_fixed_and_dated_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _queue_get([_SEND_REQUEST_SUCCESS, _STATEMENT_SUCCESS], monkeypatch)
 
     result = download_open_positions_xml(tmp_path, token="tok", query_id="qid")
@@ -85,7 +86,7 @@ def test_download_success_writes_fixed_and_dated_files(monkeypatch: pytest.Monke
     assert result.read_bytes() == _STATEMENT_SUCCESS
 
 
-def test_download_missing_credentials_returns_none_and_writes_nothing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_download_missing_credentials_returns_none_and_writes_nothing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     result = download_open_positions_xml(tmp_path, token="", query_id="")
 
     assert result is None
@@ -94,7 +95,7 @@ def test_download_missing_credentials_returns_none_and_writes_nothing(monkeypatc
 
 def test_download_send_request_failure_returns_none_and_preserves_existing_file(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
+) -> None:
     fixed = tmp_path / "Open_Positions.xml"
     fixed.write_bytes(b"<old/>")
 
@@ -106,7 +107,7 @@ def test_download_send_request_failure_returns_none_and_preserves_existing_file(
     assert fixed.read_bytes() == b"<old/>"  # untouched — caller falls back to this
 
 
-def test_get_statement_retries_on_in_progress_then_succeeds(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_get_statement_retries_on_in_progress_then_succeeds(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     sleeps: List[float] = []
     _queue_get(
         [_SEND_REQUEST_SUCCESS, _STATEMENT_IN_PROGRESS, _STATEMENT_IN_PROGRESS, _STATEMENT_SUCCESS],
@@ -121,7 +122,7 @@ def test_get_statement_retries_on_in_progress_then_succeeds(monkeypatch: pytest.
     assert len(sleeps) == 2  # slept once per "in progress" response
 
 
-def test_get_statement_fatal_error_returns_none(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_get_statement_fatal_error_returns_none(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _queue_get([_SEND_REQUEST_SUCCESS, _STATEMENT_FATAL_ERROR], monkeypatch)
 
     result = download_open_positions_xml(tmp_path, token="tok", query_id="qid")
@@ -130,7 +131,7 @@ def test_get_statement_fatal_error_returns_none(monkeypatch: pytest.MonkeyPatch,
     assert list(tmp_path.iterdir()) == []
 
 
-def test_get_statement_gives_up_after_max_attempts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_get_statement_gives_up_after_max_attempts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(flex_downloader, "_POLL_MAX_ATTEMPTS", 3)
     sleeps: List[float] = []
     _queue_get(
@@ -143,3 +144,33 @@ def test_get_statement_gives_up_after_max_attempts(monkeypatch: pytest.MonkeyPat
 
     assert result is None
     assert len(sleeps) == 3
+
+
+def test_download_flex_statement_returns_raw_xml(monkeypatch: pytest.MonkeyPatch) -> None:
+    _queue_get([_SEND_REQUEST_SUCCESS, _STATEMENT_SUCCESS], monkeypatch)
+
+    assert download_flex_statement("tok", "qid") == _STATEMENT_SUCCESS
+
+
+def test_download_flex_statement_raises_on_ibkr_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    _queue_get([_SEND_REQUEST_FAIL], monkeypatch)
+
+    with pytest.raises(FlexQueryError, match="1003"):
+        download_flex_statement("tok", "qid")
+
+
+def test_download_flex_statement_wraps_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise(*_args: object, **_kwargs: object) -> None:
+        raise requests.ConnectionError("boom")
+
+    monkeypatch.setattr(flex_downloader.requests, "get", _raise)
+
+    with pytest.raises(FlexQueryError, match="boom"):
+        download_flex_statement("tok", "qid")
+
+
+def test_download_flex_statement_wraps_unparseable_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    _queue_get([b"not xml"], monkeypatch)
+
+    with pytest.raises(FlexQueryError):
+        download_flex_statement("tok", "qid")

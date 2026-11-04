@@ -43,7 +43,7 @@ def _send_request(token: str, query_id: str) -> Tuple[str, str]:
 
     Args:
         token: Flex Web Service token.
-        query_id: Flex Query id for the "Open Positions" report.
+        query_id: Flex Query id to run.
 
     Returns:
         (reference_code, statement_url) to poll for the finished report.
@@ -119,6 +119,32 @@ def _get_statement(token: str, reference_code: str, statement_url: str) -> bytes
     raise FlexQueryError(f"Flex statement not ready after {_POLL_MAX_ATTEMPTS} attempts")
 
 
+def download_flex_statement(token: str, query_id: str) -> bytes:
+    """
+    Download any Flex Query report through the Flex Web Service.
+
+    Runs the 2-step SendRequest / GetStatement flow for `query_id` and returns
+    the raw report XML. Used by both the "Open Positions" query (this module)
+    and the "My Trades" query (`src.portfolio.trade_ledger`).
+
+    Args:
+        token: Flex Web Service token.
+        query_id: Flex Query id to run.
+
+    Returns:
+        Raw XML bytes of the finished FlexQueryResponse report.
+
+    Raises:
+        FlexQueryError: On any failure — IBKR error response, network error,
+            or unparseable response — so callers only need to catch one type.
+    """
+    try:
+        reference_code, statement_url = _send_request(token, query_id)
+        return _get_statement(token, reference_code, statement_url)
+    except (requests.RequestException, ET.ParseError) as exc:
+        raise FlexQueryError(f"Flex Web Service request failed: {exc}") from exc
+
+
 def download_open_positions_xml(
     out_dir: Path,
     *,
@@ -159,9 +185,8 @@ def download_open_positions_xml(
         return None
 
     try:
-        reference_code, statement_url = _send_request(token, query_id)
-        xml_bytes = _get_statement(token, reference_code, statement_url)
-    except (FlexQueryError, requests.RequestException, ET.ParseError):
+        xml_bytes = download_flex_statement(token, query_id)
+    except FlexQueryError:
         _logger.exception("Failed to download Open Positions Flex Query report")
         return None
 

@@ -67,6 +67,9 @@ IBKR_PAPER_CLIENT_ID = os.getenv("IBKR_PAPER_CLIENT_ID")
 # used to download the daily "Open Positions" report for the portfolio PnL alert.
 IBKR_FLEX_TOKEN = os.getenv("IBKR_FLEX_TOKEN")
 IBKR_FLEX_QUERY_ID = os.getenv("IBKR_FLEX_QUERY_ID")
+# "My Trades" Activity Flex Query (Trades/Corporate Actions/Transfers) — used by
+# the monthly trade ledger report (src/portfolio/trade_ledger). Same token as above.
+IBKR_FLEX_TRADES_QUERY_ID = os.getenv("IBKR_FLEX_TRADES_QUERY_ID")
 
 # Dedicated clientId for src.portfolio.management's read-only live-Gateway
 # open-orders check — distinct from IBKR_CLIENT_ID so it can never collide

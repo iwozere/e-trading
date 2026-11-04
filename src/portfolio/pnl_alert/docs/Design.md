@@ -31,7 +31,10 @@ APScheduler  ->  runner.run_once(cfg)
 
 ### Component Design
 - **config.py** - `PnLAlertConfig` dataclass + `load_config(path)` YAML loader.
-- **flex_downloader.py** - calls IBKR's Flex Web Service (SendRequest /
+- **flex_downloader.py** - public `download_flex_statement(token, query_id) -> bytes`
+  runs any Flex Query (also used by `src.portfolio.trade_ledger` for the
+  "My Trades" query; raises `FlexQueryError` on any failure). On top of it,
+  `download_open_positions_xml` calls IBKR's Flex Web Service (SendRequest /
   GetStatement) to refresh `Open_Positions.xml` at the start of every run.
   Writes both a fixed filename and a `Open_Positions-YYYY-MM-DD.xml`
   date-stamped copy. Best-effort: any failure (missing credentials, network
