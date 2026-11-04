@@ -87,7 +87,7 @@ def test_confirm_fuzzy_alias_item_writes_alias_with_known_from_not_now():
 def _strategic_item() -> dict:
     return {
         "item_id": 4,
-        "item_type": "strategic_alternatives_candidate",
+        "item_type": "process_event",
         "payload": {
             "reason": "strategic_alternatives_candidate",
             "event_id": 99,

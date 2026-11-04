@@ -197,7 +197,8 @@ def run(repo: Any, edgar: Any, as_of_date: Optional[date] = None) -> Dict[str, A
             ),
         )
         repo.add_review_item(
-            item_type="strategic_alternatives_candidate",
+            # ck_p22_review_item_type allows "process_event"; the confirm dispatch keys on payload["reason"].
+            item_type="process_event",
             payload={
                 "reason": "strategic_alternatives_candidate",
                 "event_id": event_id,

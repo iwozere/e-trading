@@ -1,6 +1,7 @@
 """Tests for ingest/process_events.py (spec §2.6.1, §4.7). No live DB or network — repo/edgar are
 MagicMocks/fakes."""
 
+import re
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -8,10 +9,12 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
+from sqlalchemy import CheckConstraint
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.data.db.models.model_p22_biotech_ma import P22ReviewItem
 from src.ml.pipeline.p22_biotech_ma.ingest.process_events import (
     classify_filing_text,
     load_strategic_process_phrases,
@@ -106,6 +109,14 @@ def test_classify_filing_text_case_insensitive():
 # run
 # ---------------------------------------------------------------------
 
+def _allowed_review_item_types() -> set:
+    """The item_type values `ck_p22_review_item_type` accepts, read from the model's CHECK constraint."""
+    for arg in P22ReviewItem.__table_args__:
+        if isinstance(arg, CheckConstraint) and str(arg.sqltext).startswith("item_type IN"):
+            return set(re.findall(r"'([^']+)'", str(arg.sqltext)))
+    raise AssertionError("ck_p22_review_item_type not found on P22ReviewItem")
+
+
 def _index_df(rows):
     cols = ["cik", "company", "accession_number", "items", "description", "filed_date", "primary_document"]
     return pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
@@ -169,7 +180,8 @@ def test_run_writes_candidate_event_and_review_item_on_match():
 
     repo.add_review_item.assert_called_once()
     review_kwargs = repo.add_review_item.call_args.kwargs
-    assert review_kwargs["item_type"] == "strategic_alternatives_candidate"
+    assert review_kwargs["item_type"] == "process_event"
+    assert review_kwargs["item_type"] in _allowed_review_item_types()  # ck_p22_review_item_type (2026-11-05 prod CheckViolation)
     assert review_kwargs["payload"]["event_id"] == 555
     assert review_kwargs["priority"] == 2  # strong match -> higher priority
 

@@ -891,6 +891,9 @@ use in the code/config; this section exists so they're all in one place to walk 
   queue a second review item for the same 8-K). Confirming a candidate used to set only `is_verified`,
   leaving scope 'unclear', so a verified event could never reach a tier: `review_queue_cli confirm`
   now requires `--scope whole_company|asset_only|unclear` for these items and writes it.
+  First Pi backfill (2026-11-05) crashed on 2025-02-27's first candidate: review items were written with
+  `item_type='strategic_alternatives_candidate'`, which `ck_p22_review_item_type` rejects (the daily job
+  had simply never found a candidate). Now `item_type='process_event'` (already allowed); `reason` unchanged.
 - **FIXED 2026-11-03: Block G tiers rested on crossover funds and exited stakes.** After the 730-day
   13D/G backfill (9,904 positions), run 7 put 28 targets in Tier 1 and 21 in Tier 2. Tier 1 was mostly
   OrbiMed/Baker Bros/Redmile/Casdin/Deep Track/Cormorant 13D/As, and about half the Tier 2 "toeholds" were
