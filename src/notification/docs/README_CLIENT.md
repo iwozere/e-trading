@@ -122,6 +122,8 @@ def send_notification(
 - `channels`: List of channels to send to (default: ["telegram", "email"])
 - `recipient_id`: Recipient identifier (email, chat ID, etc.)
 - `attachments`: Dictionary of filename -> data attachments
+- `html` (`NotificationServiceClient.send_notification`): HTML body, stored as `content.html` — the only place the
+  email channel reads HTML from. Passing HTML inside `data` puts it in metadata, where it is ignored.
 - `metadata`: Additional metadata for the notification
 - `**kwargs`: Backward compatibility parameters
 

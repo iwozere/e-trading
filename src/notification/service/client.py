@@ -264,6 +264,7 @@ class NotificationServiceClient:
         reply_to_message_id: Optional[int] = None,
         telegram_chat_id: Optional[int] = None,
         recipient_id: Optional[str] = None,
+        html: Optional[str] = None,
     ) -> bool:
         """
         Send a notification through the service.
@@ -283,6 +284,8 @@ class NotificationServiceClient:
             reply_to_message_id: Reply to message ID for Telegram messages
             telegram_chat_id: Telegram chat ID for Telegram messages
             recipient_id: Recipient user ID
+            html: Optional HTML body. Stored as `content.html`, which is where
+                the email channel reads it (`data` only lands in metadata).
 
         Returns:
             True if notification was queued successfully
@@ -310,6 +313,8 @@ class NotificationServiceClient:
                 "content": {"title": title, "message": message, "source": source},
                 "message_metadata": data or {},
             }
+            if html:
+                message_data["content"]["html"] = html
 
             # Add compatibility data for legacy parameters
             if attachments:

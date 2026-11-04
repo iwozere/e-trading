@@ -66,6 +66,9 @@ def test_digest_sent_even_when_nothing_flagged():
     assert summary.flagged_row_count == 0
     assert summary.notification_sent is True
     assert summary.errors == []
+    kwargs = client.send_notification.call_args.kwargs
+    assert "NVDA" in kwargs["html"]  # HTML body goes to content.html, not into data/metadata
+    assert "html" not in kwargs["data"]
 
 
 def test_insider_activity_failure_does_not_block_digest():

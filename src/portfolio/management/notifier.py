@@ -173,7 +173,8 @@ async def send_reminder(
         priority="normal",
         channels=list(channels),
         source="portfolio.management",
-        data={"html": html, "reminder_count": len(reminders), "uncovered_count": uncovered},
+        data={"reminder_count": len(reminders), "uncovered_count": uncovered},
+        html=html,
         recipient_id=str(recipient_id) if recipient_id is not None else None,
     )
 

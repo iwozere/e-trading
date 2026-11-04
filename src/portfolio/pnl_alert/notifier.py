@@ -291,7 +291,8 @@ async def send_alert(
         priority="normal",
         channels=list(channels),
         source="portfolio.pnl_alert",
-        data={"html": html, "row_count": len(rows), "flagged_count": flagged_count, "threshold_pct": threshold_pct},
+        data={"row_count": len(rows), "flagged_count": flagged_count, "threshold_pct": threshold_pct},
+        html=html,
         recipient_id=str(recipient_id) if recipient_id is not None else None,
     )
 

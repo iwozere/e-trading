@@ -153,6 +153,8 @@ def test_t_minus_1_day_trigger_uncovered_position_sends_notification(tmp_path):
     assert client.calls[0]["source"] == "portfolio.management"
     assert "AAA" in client.calls[0]["message"]
     assert "UNCOVERED" in client.calls[0]["message"]
+    assert "AAA" in client.calls[0]["html"]  # HTML body goes to content.html, not into data/metadata
+    assert "html" not in client.calls[0]["data"]
 
 
 def test_t_minus_1_hour_trigger_covered_position_still_notifies(tmp_path):
