@@ -66,6 +66,28 @@ _SIGNAL_GRADES_NET_60D = "fmp_grade_net_60d"
 _SIGNAL_FINNHUB_MOMENTUM = "finnhub_rec_momentum"
 _SIGNAL_REVISIONS_SCORE = "revisions_score"
 
+_UPSERT_CHUNK_TICKERS = 50  # flush signals every N tickers so a timeout keeps the work already done
+
+
+class _FmpGate:
+    """
+    Run-scoped circuit breaker for FMP.
+
+    FMP answers 429 ("Bandwidth Limit Reach" / rate limit) for every call once
+    the account's quota is spent. Without this gate the job kept paying ~0.7s
+    per FMP call for 2 calls x ~370 tickers, pushing it past its timeout while
+    writing nothing from FMP. After the first 429 every further FMP call is skipped.
+    """
+
+    def __init__(self) -> None:
+        self.closed = False
+
+    def note_status(self, status_code: int, endpoint: str) -> None:
+        """Trip the breaker on a 429 and log it once."""
+        if status_code == 429 and not self.closed:
+            self.closed = True
+            _logger.warning("FMP %s returned 429 (quota/bandwidth limit); skipping FMP for the rest of this run", endpoint)
+
 
 def _get_target_tickers() -> List[str]:
     """Union of watchlist + positions tickers (same scope as filings_ingest)."""
@@ -74,7 +96,7 @@ def _get_target_tickers() -> List[str]:
     return sorted(watchlist | positions)
 
 
-def _fetch_fmp_eps_avg_next_fy(ticker: str, api_key: str, today: date) -> float | None:
+def _fetch_fmp_eps_avg_next_fy(ticker: str, api_key: str, today: date, gate: _FmpGate | None = None) -> float | None:
     """
     Fetch the consensus EPS estimate for the nearest upcoming fiscal year.
 
@@ -86,11 +108,14 @@ def _fetch_fmp_eps_avg_next_fy(ticker: str, api_key: str, today: date) -> float 
         ticker: Ticker symbol.
         api_key: FMP API key.
         today: Today's date, used to pick the nearest *future* fiscal year row.
+        gate: Optional FMP circuit breaker; when tripped the call is skipped.
 
     Returns:
         Consensus EPS average for the nearest upcoming fiscal year, or None
         on failure / no future row found.
     """
+    if gate is not None and gate.closed:
+        return None
     try:
         resp = requests.get(
             f"{_FMP_STABLE_URL}/analyst-estimates",
@@ -98,6 +123,8 @@ def _fetch_fmp_eps_avg_next_fy(ticker: str, api_key: str, today: date) -> float 
             timeout=15,
         )
         if resp.status_code != 200:
+            if gate is not None:
+                gate.note_status(resp.status_code, "analyst-estimates")
             _logger.debug("FMP analyst-estimates non-200 for %s: %s", ticker, resp.status_code)
             return None
         rows = resp.json()
@@ -124,7 +151,7 @@ def _fetch_fmp_eps_avg_next_fy(ticker: str, api_key: str, today: date) -> float 
         return None
 
 
-def _fetch_fmp_grades_net_60d(ticker: str, api_key: str, today: date) -> int | None:
+def _fetch_fmp_grades_net_60d(ticker: str, api_key: str, today: date, gate: _FmpGate | None = None) -> int | None:
     """
     Count net analyst rating changes (upgrades - downgrades) in the trailing window.
 
@@ -133,10 +160,13 @@ def _fetch_fmp_grades_net_60d(ticker: str, api_key: str, today: date) -> int | N
         api_key: FMP API key.
         today: Today's date; defines the trailing window via
             `REVISIONS_GRADES_WINDOW_DAYS`.
+        gate: Optional FMP circuit breaker; when tripped the call is skipped.
 
     Returns:
         Net upgrade count, or None on failure.
     """
+    if gate is not None and gate.closed:
+        return None
     try:
         resp = requests.get(
             f"{_FMP_STABLE_URL}/grades",
@@ -144,6 +174,8 @@ def _fetch_fmp_grades_net_60d(ticker: str, api_key: str, today: date) -> int | N
             timeout=15,
         )
         if resp.status_code != 200:
+            if gate is not None:
+                gate.note_status(resp.status_code, "grades")
             _logger.debug("FMP grades non-200 for %s: %s", ticker, resp.status_code)
             return None
         rows = resp.json()
@@ -265,6 +297,7 @@ def _compute_ticker_signals(
     fmp_api_key: str,
     finnhub_api_key: str,
     today: date,
+    gate: _FmpGate | None = None,
 ) -> Dict[str, float]:
     """
     Fetch all three raw signals for one ticker and blend them into `revisions_score`.
@@ -274,6 +307,7 @@ def _compute_ticker_signals(
         fmp_api_key: FMP API key.
         finnhub_api_key: Finnhub API key.
         today: Today's date.
+        gate: Optional FMP circuit breaker shared across the run.
 
     Returns:
         Dict of `signal_type -> value` for every signal successfully fetched,
@@ -282,11 +316,11 @@ def _compute_ticker_signals(
     """
     out: Dict[str, float] = {}
 
-    eps_avg = _fetch_fmp_eps_avg_next_fy(ticker, fmp_api_key, today)
+    eps_avg = _fetch_fmp_eps_avg_next_fy(ticker, fmp_api_key, today, gate)
     if eps_avg is not None:
         out[_SIGNAL_EPS_AVG] = eps_avg
 
-    grades_net = _fetch_fmp_grades_net_60d(ticker, fmp_api_key, today)
+    grades_net = _fetch_fmp_grades_net_60d(ticker, fmp_api_key, today, gate)
     if grades_net is not None:
         out[_SIGNAL_GRADES_NET_60D] = float(grades_net)
 
@@ -344,25 +378,30 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
         tickers = _get_target_tickers()
         _logger.info("Revisions ingest: %d tickers (watchlist ∪ positions)", len(tickers))
 
-        all_rows: List[Dict[str, Any]] = []
+        gate = _FmpGate()
+        pending: List[Dict[str, Any]] = []
         processed = 0
-        for ticker in tickers:
-            signals = _compute_ticker_signals(ticker, fmp_api_key, finnhub_api_key, target_date)
-            if not signals:
-                continue
-            processed += 1
-            for signal_type, value in signals.items():
-                all_rows.append(
-                    {
-                        "ticker": ticker,
-                        "date": target_date,
-                        "signal_type": signal_type,
-                        "value": value,
-                        "sleeve": _SLEEVE,
-                    }
-                )
+        rows_upserted = 0
+        for idx, ticker in enumerate(tickers, start=1):
+            signals = _compute_ticker_signals(ticker, fmp_api_key, finnhub_api_key, target_date, gate)
+            if signals:
+                processed += 1
+                for signal_type, value in signals.items():
+                    pending.append(
+                        {
+                            "ticker": ticker,
+                            "date": target_date,
+                            "signal_type": signal_type,
+                            "value": value,
+                            "sleeve": _SLEEVE,
+                        }
+                    )
+            if pending and idx % _UPSERT_CHUNK_TICKERS == 0:
+                rows_upserted += upsert_signals(pending)
+                pending = []
 
-        rows_upserted = upsert_signals(all_rows) if all_rows else 0
+        if pending:
+            rows_upserted += upsert_signals(pending)
         finish_job_run(_JOB_NAME, target_date, status="ok", rows_out=rows_upserted)
         _logger.info(
             "Revisions ingest complete: %d/%d tickers, %d signal rows",
@@ -370,7 +409,12 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
             len(tickers),
             rows_upserted,
         )
-        return {"tickers_processed": processed, "tickers_total": len(tickers), "rows_upserted": rows_upserted}
+        return {
+            "tickers_processed": processed,
+            "tickers_total": len(tickers),
+            "rows_upserted": rows_upserted,
+            "fmp_available": not gate.closed,
+        }
 
     except Exception as exc:
         _logger.exception("Revisions ingest failed")

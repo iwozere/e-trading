@@ -14,6 +14,10 @@ ExecStart=/opt/apps/e-trading/.venv/bin/python -m src.scheduler.main
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=10
+# A job subprocess killed by the kernel OOM killer must not take the whole service down.
+# The default (OOMPolicy=stop) SIGTERMed the scheduler and cancelled every in-flight job
+# (P15 GDELT GKG parse, 2026-10-31 and 2026-11-03).
+OOMPolicy=continue
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=e-trading-scheduler

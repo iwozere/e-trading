@@ -421,3 +421,30 @@ def test_run_skips_when_no_tickers(_db, monkeypatch):
 
     assert poll.run(date(2026, 10, 14)) == {"tickers": 0, "resolved": 0, "rows_upserted": 0}
     assert _db["finished"][-1]["status"] == "skipped"
+
+
+def test_fetch_daily_views_retries_429_then_succeeds(monkeypatch):
+    d0 = date(2026, 10, 1)
+    responses = iter([_FakeResponse(429), _FakeResponse(429), _FakeResponse(200, _items([(d0, 3)]))])
+    session = _FakeSession(lambda u, p: next(responses))
+    waits: list[float] = []
+    monkeypatch.setattr(poll.time, "sleep", waits.append)
+
+    assert poll._fetch_daily_views(_as_session(session), "Apple Inc.", d0, d0) == {d0: 3}
+    assert len(session.calls) == 3
+    assert waits == [poll._RETRY_BACKOFF_S, poll._RETRY_BACKOFF_S * 2]
+
+
+def test_fetch_daily_views_gives_up_after_max_retries():
+    session = _FakeSession(lambda u, p: _FakeResponse(429))
+
+    with pytest.raises(poll._PageviewsUnavailable):
+        poll._fetch_daily_views(_as_session(session), "Apple Inc.", date(2026, 10, 1), date(2026, 10, 2))
+    assert len(session.calls) == poll._MAX_RETRIES + 1
+
+
+def test_retry_wait_honours_numeric_retry_after():
+    resp = _FakeResponse(429)
+    resp.headers = {"Retry-After": "2"}  # type: ignore[attr-defined]
+
+    assert poll._retry_wait_s(cast(requests.Response, resp), 3) == 2.0

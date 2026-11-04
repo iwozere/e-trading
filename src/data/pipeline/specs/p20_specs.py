@@ -103,8 +103,11 @@ SPECS: List[PluginSpec] = [
     PluginSpec(
         name="P20 Revisions Ingest",
         category="p20",
-        cron="50 20 * * 1-5",
+        # 20:30 + 1500s still finishes before Screen Turnaround (21:00, depends_on this job).
+        # Sequential FMP + Finnhub calls for ~370 tickers ran ~9.6 min — over the old 600s default on 2026-11-03.
+        cron="30 20 * * 1-5",
         script_path=f"{_SCRIPT_BASE}/run_revisions_ingest.py",
+        timeout_seconds=1500,
         description="Sleeve A revisions feed (shadow mode) — must run before P20 Screen Turnaround.",
     ),
     PluginSpec(

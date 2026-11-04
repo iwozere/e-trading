@@ -268,3 +268,57 @@ def test_run_skipped_without_api_keys(monkeypatch):
     result = run(as_of_date=_TODAY)
 
     assert result == {"tickers_processed": 0, "tickers_total": 0, "rows_upserted": 0}
+
+
+# ---------------------------------------------------------------------------
+# FMP circuit breaker + chunked upserts
+# ---------------------------------------------------------------------------
+
+
+def test_fmp_gate_skips_all_fmp_calls_after_first_429(monkeypatch):
+    calls: list[str] = []
+
+    def _fake_get(url, *a, **kw):
+        calls.append(url)
+        return _FakeResponse(429, {"Error Message": "Bandwidth Limit Reach"})
+
+    monkeypatch.setattr(revisions_ingest.requests, "get", _fake_get)
+    gate = revisions_ingest._FmpGate()
+
+    assert _fetch_fmp_eps_avg_next_fy("NVDA", "k", _TODAY, gate) is None
+    assert gate.closed
+    assert _fetch_fmp_grades_net_60d("NVDA", "k", _TODAY, gate) is None
+    assert _fetch_fmp_eps_avg_next_fy("AAPL", "k", _TODAY, gate) is None
+    assert len(calls) == 1
+
+
+def test_fmp_gate_stays_open_on_non_429_errors(monkeypatch):
+    monkeypatch.setattr(revisions_ingest.requests, "get", lambda *a, **kw: _FakeResponse(404, {}))
+    gate = revisions_ingest._FmpGate()
+
+    assert _fetch_fmp_grades_net_60d("NVDA", "k", _TODAY, gate) is None
+    assert not gate.closed
+
+
+def test_run_upserts_in_chunks_and_reports_fmp_availability(monkeypatch, run_env):
+    monkeypatch.setattr(revisions_ingest, "_get_target_tickers", lambda: ["A", "B", "C", "D", "E"])
+    monkeypatch.setattr(revisions_ingest, "_UPSERT_CHUNK_TICKERS", 2)
+    batches: list[int] = []
+
+    def _fake_upsert(rows):
+        batches.append(len(rows))
+        return len(rows)
+
+    monkeypatch.setattr(revisions_ingest, "upsert_signals", _fake_upsert)
+
+    def _fake_compute(ticker, fmp_key, finnhub_key, today, gate):
+        gate.closed = True  # simulate FMP quota exhausted mid-run
+        return {"revisions_score": 1.0}
+
+    monkeypatch.setattr(revisions_ingest, "_compute_ticker_signals", _fake_compute)
+
+    result = run(as_of_date=_TODAY)
+
+    assert batches == [2, 2, 1]
+    assert result["rows_upserted"] == 5
+    assert result["fmp_available"] is False

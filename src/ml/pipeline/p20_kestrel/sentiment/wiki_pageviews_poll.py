@@ -47,8 +47,12 @@ _PAGEVIEWS_URL = (
     "en.wikipedia.org/all-access/user/{title}/daily/{start}/{end}"
 )
 _LOOKBACK_DAYS = 35  # > aggregator's 30-day z-score window
-_REQUEST_DELAY_S = 0.1
+_REQUEST_DELAY_S = 0.2
 _TIMEOUT_S = 20
+_RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+_MAX_RETRIES = 3  # per article; Wikimedia started 429-ing bursts in 2026-11, which used to abort the run
+_RETRY_BACKOFF_S = 5.0  # doubled per attempt unless the response carries Retry-After
+_MAX_RETRY_WAIT_S = 60.0
 _FAILURE_ABORT_THRESHOLD = 10  # consecutive non-404 failures → API is down, stop hammering it
 
 
@@ -63,6 +67,39 @@ def _legal_names() -> Dict[str, str]:
         if row.get("alias_type") == "legal_name":
             names.setdefault(str(row["ticker"]).upper(), str(row["alias"]))
     return names
+
+
+def _retry_wait_s(resp: requests.Response, attempt: int) -> float:
+    """Seconds to wait before retry ``attempt`` (0-based): Retry-After if numeric, else exponential backoff."""
+    retry_after = (getattr(resp, "headers", None) or {}).get("Retry-After")
+    try:
+        wait = float(retry_after) if retry_after is not None else _RETRY_BACKOFF_S * (2 ** attempt)
+    except ValueError:
+        wait = _RETRY_BACKOFF_S * (2 ** attempt)
+    return min(max(wait, 0.0), _MAX_RETRY_WAIT_S)
+
+
+def _get_with_retry(session: requests.Session, url: str) -> requests.Response:
+    """
+    GET ``url``, retrying 429/5xx responses up to ``_MAX_RETRIES`` times with backoff.
+
+    Returns:
+        The final response (may still be a retryable status once retries are exhausted).
+
+    Raises:
+        _PageviewsUnavailable: On a network error.
+    """
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            resp = session.get(url, timeout=_TIMEOUT_S)
+        except requests.RequestException as exc:
+            raise _PageviewsUnavailable(str(exc)) from exc
+        if resp.status_code not in _RETRY_STATUSES or attempt == _MAX_RETRIES:
+            return resp
+        wait = _retry_wait_s(resp, attempt)
+        _logger.debug("Pageviews HTTP %s; retry %d/%d in %.1fs", resp.status_code, attempt + 1, _MAX_RETRIES, wait)
+        time.sleep(wait)
+    raise AssertionError("unreachable")
 
 
 def _fetch_daily_views(session: requests.Session, title: str, start: date, end: date) -> Dict[date, int]:
@@ -81,10 +118,7 @@ def _fetch_daily_views(session: requests.Session, title: str, start: date, end: 
         start=start.strftime("%Y%m%d"),
         end=end.strftime("%Y%m%d"),
     )
-    try:
-        resp = session.get(url, timeout=_TIMEOUT_S)
-    except requests.RequestException as exc:
-        raise _PageviewsUnavailable(str(exc)) from exc
+    resp = _get_with_retry(session, url)
     if resp.status_code == 404:
         return {}
     if resp.status_code != 200:
