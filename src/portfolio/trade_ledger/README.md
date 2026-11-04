@@ -19,6 +19,8 @@ previous month.
 - **Year to date** table (incl. positions closed earlier in the year) and
   **P&L per ticker since 2020**: realized + net dividends + unrealized at
   IBKR's month-end closing price.
+- Net deposits per currency for the month, YTD and since the first deposit
+  (Cash Transactions `Deposits/Withdrawals`).
 - Reconciliation: share counts are checked against IBKR's month-end open
   positions every month; mismatches are shown at the top of the email.
 - Idempotent storage in Postgres (`trade_ledger_*` tables); raw Flex XML is

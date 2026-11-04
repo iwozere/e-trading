@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from src.portfolio.trade_ledger.models import CASH_COMMISSION_ADJUSTMENT, CASH_DIVIDEND
+from src.portfolio.trade_ledger.models import CASH_COMMISSION_ADJUSTMENT, CASH_DEPOSITS_WITHDRAWALS, CASH_DIVIDEND
 from src.portfolio.trade_ledger.tests.flex_fixture import FLEX_XML as _XML
 from src.portfolio.trade_ledger.xml_parser import (
     FlexParseError,
@@ -132,14 +132,19 @@ def test_mask_account(raw: str, expected: str) -> None:
 def test_only_ledger_cash_types_are_read_from_cash_transactions() -> None:
     rows = parse_flex_bytes(_XML, "fixture.xml").statements[0].cash_transactions
 
-    assert [r.cash_type for r in rows] == [CASH_COMMISSION_ADJUSTMENT, CASH_DIVIDEND]  # broker interest is ignored
-    adj, div = rows
+    # broker interest is ignored; account-level deposits are kept (assetCategory is empty)
+    assert [r.cash_type for r in rows] == [CASH_COMMISSION_ADJUSTMENT, CASH_DIVIDEND, CASH_DEPOSITS_WITHDRAWALS, CASH_DEPOSITS_WITHDRAWALS]
+    adj, div, deposit, misfiled = rows
     assert adj.trade_id == "9001"
     assert adj.amount == Decimal("1")
     assert adj.cash_datetime == datetime(2025, 6, 6)
     assert div.trade_id is None
     assert div.amount == Decimal("2.5")
     assert div.conid == "111"
+    assert (deposit.conid, deposit.symbol, deposit.currency, deposit.amount) == ("", "", "CHF", Decimal("2200"))
+    assert deposit.is_deposit
+    assert not misfiled.is_deposit  # "ADJUSTMENT: COMMISSION" filed under Deposits/Withdrawals
+    assert not div.is_deposit
 
 
 def test_open_position_reads_mark_price() -> None:

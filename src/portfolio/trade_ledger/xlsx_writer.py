@@ -4,7 +4,7 @@ XLSX attachment of the monthly trade-ledger report.
 Sheets: Summary (the month, as in the email), Executions (full history, each
 row annotated with the position state after it), Positions (held at month
 end), Cycles (closed position cycles), Corporate Actions, Reconciliation,
-YTD (per ticker this year, incl. closed), P&L per Ticker (lifetime, unrealized at IBKR's month-end close) and Warnings. Values are written as numbers (Decimal), never as formatted text,
+YTD (per ticker this year, incl. closed), Deposits, P&L per Ticker (lifetime, unrealized at IBKR's month-end close) and Warnings. Values are written as numbers (Decimal), never as formatted text,
 so the workbook stays sortable / filterable.
 """
 
@@ -185,6 +185,17 @@ def write_xlsx(view: ReportView, result: LedgerResult, path: Path) -> Path:
          "Commissions"],
         [None, None, _QTY, _PRICE, _PRICE, _MONEY, _MONEY, _MONEY, _MONEY, _MONEY, _MONEY],
         pnl_rows,
+    )
+
+    deposit_rows: List[Sequence[Any]] = [
+        [c.cash_datetime, c.account_id, c.currency, c.amount, c.description, c.transaction_id] for c in result.deposit_rows
+    ]
+    deposit_rows += [[None, f"Total {d.currency}", d.currency, d.lifetime, f"month {d.month}, YTD {d.ytd}", None] for d in view.deposits]
+    _sheet(
+        wb, "Deposits",
+        ["Date/time", "Account", "Ccy", "Amount", "Description", "Transaction ID"],
+        [_DATETIME, None, None, _MONEY, None, None],
+        deposit_rows,
     )
 
     _sheet(

@@ -6,6 +6,7 @@ from typing import Optional
 
 from src.portfolio.trade_ledger.models import (
     CASH_COMMISSION_ADJUSTMENT,
+    CASH_DEPOSITS_WITHDRAWALS,
     CASH_DIVIDEND,
     CashTransaction,
     CorporateActionLeg,
@@ -63,6 +64,15 @@ def refund(when: str, execution: Execution, amount: str) -> CashTransaction:
         account_id=execution.account_id, transaction_id=f"R{next(_counter)}", cash_type=CASH_COMMISSION_ADJUSTMENT, trade_id=execution.trade_id,
         action_id=None, conid=execution.conid, isin=None, symbol=execution.symbol, currency="USD", cash_datetime=datetime.fromisoformat(when),
         amount=D(amount), description=None, source_file="t.xml",
+    )
+
+
+def deposit(when: str, amount: str, currency: str = "CHF", description: str = "CASH RECEIPTS / ELECTRONIC FUND TRANSFERS", account: str = ACC) -> CashTransaction:
+    """Build an account-level deposit (positive) or withdrawal (negative)."""
+    return CashTransaction(
+        account_id=account, transaction_id=f"W{next(_counter)}", cash_type=CASH_DEPOSITS_WITHDRAWALS, trade_id=None, action_id=None,
+        conid="", isin=None, symbol="", currency=currency, cash_datetime=datetime.fromisoformat(when), amount=D(amount),
+        description=description, source_file="t.xml",
     )
 
 

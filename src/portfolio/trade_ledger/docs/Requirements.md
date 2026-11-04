@@ -75,6 +75,12 @@ Status: spec (2026-11-04). Background and decisions: [brainstorm.md](brainstorm.
   realized P&L, net dividends, total; totals row per currency. The month
   positions table (FR-3.2) therefore shows month figures only.
 - FR-3.2b Account IDs are shown in full (header and executions table).
+- FR-3.2c **Net deposits** per currency (deposits minus withdrawals, all accounts
+  combined) for the month, YTD and since the first deposit — a tile in the
+  header, a line in the plain text, every deposit in the XLSX `Deposits`
+  sheet. Source: Cash Transactions of type `Deposits/Withdrawals` (no Flex
+  change); rows whose description starts with "ADJUSTMENT" are booking
+  corrections and are ignored.
 - FR-3.3a Last section: **P&L per ticker** for every ticker since the start of
   history (2020): shares held, average incl. commission, IBKR month-end
   `markPrice`, market value, unrealized (= shares × mark − remaining cost incl.
@@ -87,7 +93,7 @@ Status: spec (2026-11-04). Background and decisions: [brainstorm.md](brainstorm.
 - FR-3.4 XLSX attachment `trade_ledger_YYYY-MM.xlsx` with sheets:
   `Summary`, `Executions` (full history), `Positions` (state at month end),
   `Cycles` (closed position cycles with realized P&L), `Corporate Actions`,
-  `Reconciliation`, `YTD <year>`, `P&L per Ticker`, `Warnings`.
+  `Reconciliation`, `YTD <year>`, `Deposits`, `P&L per Ticker`, `Warnings`.
 - FR-3.5 Sent by email only, to `recipient_id` from config (default 2,
   same as `pnl_alert`).
 - FR-3.6 A month without executions still sends the report (holdings summary).

@@ -39,6 +39,10 @@ FLEX_XML = b"""<FlexQueryResponse queryName="My Trades" type="AF">
   transactionID="7001" tradeID="9001" dateTime="20250606" amount="1" description="Refund (ABC, 15, 2025-05-21)" />
 <CashTransaction accountId="U0000001" assetCategory="STK" currency="USD" symbol="ABC" conid="111" type="Dividends"
   transactionID="7002" dateTime="20250610;202000" amount="2.5" description="ABC CASH DIVIDEND" />
+<CashTransaction accountId="U0000001" assetCategory="" currency="CHF" symbol="" conid="" type="Deposits/Withdrawals"
+  transactionID="7004" dateTime="20250602;192227" amount="2200" description="CASH RECEIPTS / ELECTRONIC FUND TRANSFERS" />
+<CashTransaction accountId="U0000001" assetCategory="" currency="USD" symbol="" conid="" type="Deposits/Withdrawals"
+  transactionID="7005" dateTime="20250603;154402" amount="0.01" description="ADJUSTMENT: COMMISSION" />
 <CashTransaction accountId="U0000001" assetCategory="" currency="USD" symbol="" conid="" type="Broker Interest Received"
   transactionID="7003" dateTime="20250605" amount="0.4" description="USD CREDIT INT" />
 </CashTransactions>

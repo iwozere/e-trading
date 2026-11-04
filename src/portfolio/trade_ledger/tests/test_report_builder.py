@@ -18,7 +18,7 @@ from src.portfolio.trade_ledger.models import (
 )
 from src.portfolio.trade_ledger.reconciler import STATUS_NO_SNAPSHOT, STATUS_OK
 from src.portfolio.trade_ledger.report_builder import ReportView, build_report_view, build_ticker_pnl, format_html, format_plain_text
-from src.portfolio.trade_ledger.tests.event_factories import cash, trade
+from src.portfolio.trade_ledger.tests.event_factories import cash, deposit, trade
 from src.portfolio.trade_ledger.xlsx_writer import write_xlsx
 
 D = Decimal
@@ -196,3 +196,20 @@ def test_full_account_ids_are_shown() -> None:
     html = format_html(_view())
 
     assert "U0000001" in html
+
+
+def test_deposits_tile_text_line_and_xlsx_sheet(tmp_path: Path) -> None:
+    result = _ledger([trade("2025-12-05 10:00", "10", "20")], [deposit("2025-12-02 19:00", "2200"), deposit("2024-06-02 19:00", "5000")])
+    view = build_report_view(result, _recon(result, "25"), datetime(2026, 1, 2, tzinfo=timezone.utc))
+
+    assert "Net deposits CHF (month / YTD / total)" in format_html(view)
+    assert "2,200.00 / 2,200.00 / 7,200.00" in format_html(view)
+    assert "Net deposits CHF: month 2,200.00, YTD 2,200.00, total 7,200.00 since 2024-06-02" in format_plain_text(view)
+    ws = load_workbook(write_xlsx(view, result, tmp_path / "d.xlsx"))["Deposits"]
+    rows = [[c.value for c in row] for row in ws.iter_rows(min_row=2)]
+    assert [r[3] for r in rows] == [5000, 2200, 7200]
+    assert rows[-1][1] == "Total CHF"
+
+
+def test_no_deposits_no_tile() -> None:
+    assert "Net deposits" not in format_html(_view())

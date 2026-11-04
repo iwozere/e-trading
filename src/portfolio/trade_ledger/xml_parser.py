@@ -19,6 +19,7 @@ from typing import Callable, List, Optional, TypeVar
 
 from src.notification.logger import setup_logger
 from src.portfolio.trade_ledger.models import (
+    CASH_DEPOSITS_WITHDRAWALS,
     CASH_TYPES,
     CashTransaction,
     CorporateActionLeg,
@@ -240,6 +241,25 @@ def _parse_cash_transaction(el: ET.Element, source_file: str) -> CashTransaction
     )
 
 
+def _parse_deposit(el: ET.Element, source_file: str) -> CashTransaction:
+    """Build an account-level `CashTransaction` (Deposits/Withdrawals; no security, so conid / symbol are "")."""
+    return CashTransaction(
+        account_id=_req(el, "accountId"),
+        transaction_id=_req(el, "transactionID"),
+        cash_type=_req(el, "type"),
+        trade_id=None,
+        action_id=None,
+        conid=_opt(el, "conid") or "",
+        isin=None,
+        symbol="",
+        currency=_req(el, "currency"),
+        cash_datetime=parse_flex_datetime(_req(el, "dateTime")),
+        amount=_dec(el, "amount"),
+        description=_opt(el, "description"),
+        source_file=source_file,
+    )
+
+
 def _parse_open_position(el: ET.Element, source_file: str, fallback_date: date) -> IbkrOpenPosition:
     """Build an `IbkrOpenPosition` from an `OpenPosition` element."""
     return IbkrOpenPosition(
@@ -263,6 +283,7 @@ def _collect(
     kind: str,
     account_id: str,
     result: ParseResult,
+    stk_only: bool = True,
 ) -> List[T]:
     """
     Build rows from STK elements, counting and logging skipped ones.
@@ -273,13 +294,14 @@ def _collect(
         kind: Row kind for skip-reason keys and logs ("trade", ...).
         account_id: Statement account id (for masked logging).
         result: ParseResult whose skip counters are updated.
+        stk_only: Skip rows whose assetCategory is not STK (False for account-level cash).
 
     Returns:
         Successfully built rows.
     """
     rows: List[T] = []
     for el in elements:
-        if el.get("assetCategory") != _STK:
+        if stk_only and el.get("assetCategory") != _STK:
             result.count_skip(f"{kind}_non_stk")
             continue
         try:
@@ -322,9 +344,13 @@ def _parse_statement(st: ET.Element, result: ParseResult) -> ParsedStatement:
     )
     statement.transfers = _collect(list(st.iter("Transfer")), lambda e: _parse_transfer(e, source), "transfer", account_id, result)
 
-    # Per-security cash only: commission adjustments and dividends. Interest, deposits, fees etc. are ignored.
-    cash = [el for el in st.iter("CashTransaction") if el.get("type") in CASH_TYPES]
+    # Per-security cash (commission adjustments, dividends) plus account-level deposits / withdrawals.
+    # Interest, fees etc. are ignored.
+    cash_elements = list(st.iter("CashTransaction"))
+    cash = [el for el in cash_elements if el.get("type") in CASH_TYPES]
     statement.cash_transactions = _collect(cash, lambda e: _parse_cash_transaction(e, source), "cash_transaction", account_id, result)
+    deposits = [el for el in cash_elements if el.get("type") == CASH_DEPOSITS_WITHDRAWALS]
+    statement.cash_transactions += _collect(deposits, lambda e: _parse_deposit(e, source), "deposit", account_id, result, stk_only=False)
 
     positions = []
     for el in st.iter("OpenPosition"):

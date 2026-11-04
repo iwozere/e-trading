@@ -27,5 +27,5 @@ def test_storing_same_file_twice_inserts_nothing_new() -> None:
     first = store_parse_result(parsed, storage)
     second = store_parse_result(parsed, storage)
 
-    assert first == {"executions": 2, "corporate_actions": 2, "transfers": 2, "cash_transactions": 2, "open_positions": 2}
+    assert first == {"executions": 2, "corporate_actions": 2, "transfers": 2, "cash_transactions": 4, "open_positions": 2}
     assert second == {"executions": 0, "corporate_actions": 0, "transfers": 0, "cash_transactions": 0, "open_positions": 0}

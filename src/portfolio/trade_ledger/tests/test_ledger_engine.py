@@ -18,7 +18,7 @@ from src.portfolio.trade_ledger.models import (
     PositionState,
     TransferEvent,
 )
-from src.portfolio.trade_ledger.tests.event_factories import ACC, ACC2, cash, leg, refund, trade, transfer
+from src.portfolio.trade_ledger.tests.event_factories import ACC, ACC2, cash, deposit, leg, refund, trade, transfer
 
 D = Decimal
 
@@ -299,3 +299,41 @@ def test_lifetime_totals_span_all_years_and_cycles() -> None:
     assert life.commissions == D(4)
     assert life.executions == 4
     assert result.ytd_totals["100"].executions == 2
+
+
+def test_deposits_are_summed_per_currency_for_month_ytd_and_lifetime() -> None:
+    result = _run(
+        [trade("2025-03-05 10:00", "10", "20")],
+        adjustments=[
+            deposit("2024-11-02 19:00", "5000"),
+            deposit("2025-01-07 19:00", "3000"),
+            deposit("2025-03-04 19:00", "2200"),
+            deposit("2025-03-20 19:00", "-500"),  # withdrawal
+            deposit("2025-03-21 19:00", "1000", account=ACC2),
+            deposit("2025-03-22 15:00", "0.01", currency="USD", description="ADJUSTMENT: COMMISSION"),
+            deposit("2025-04-01 19:00", "999"),  # after the period
+        ],
+        start=date(2025, 3, 1),
+        end=date(2025, 3, 31),
+    )
+
+    (chf,) = result.deposits.values()
+    assert chf.currency == "CHF"
+    assert chf.month == D(2700) and chf.count_month == 3
+    assert chf.ytd == D(5700)
+    assert chf.lifetime == D(10700)
+    assert chf.first_date == date(2024, 11, 2)
+    assert len(result.deposit_rows) == 5
+    assert list(result.positions) == ["100"]  # deposits never create positions
+    assert result.warnings == []
+
+
+def test_internal_cash_transfer_between_own_accounts_nets_to_zero() -> None:
+    result = _run(
+        [trade("2025-03-05 10:00", "10", "20")],
+        adjustments=[deposit("2025-03-10 12:00", "-1000"), deposit("2025-03-10 12:00", "1000", account=ACC2)],
+        start=date(2025, 3, 1),
+        end=date(2025, 3, 31),
+    )
+
+    assert result.deposits["CHF"].month == D(0)

@@ -48,12 +48,18 @@
         7/7 → `run --month 2026-10 --dry-run` with a real Flex download ok
 12. [x] pyright + mypy clean (`scripts/typecheck.py`, whole repo, 2026-11-04)
 13. [ ] Deploy on Pi: migration 014, import backfill, seed schedule, one manual `run --month 2026-10`
-14. [ ] **Deposits** (requested 2026-11-04): net deposits for the month, YTD and since start, per currency,
+14. [x] **Deposits** (requested and built 2026-11-04): net deposits for the month, YTD and since start, per currency,
         as tiles / a small table. No Flex change needed — Cash Transactions already carry type
         `Deposits/Withdrawals` (backfill: 54 deposits, all CHF, no withdrawals). Add the type to
         `CASH_TYPES` (account-level rows: no conid), store, sum in the report. Exclude rows whose
         description starts with "ADJUSTMENT" (IBKR files a 0.01 USD commission adjustment under this type).
         Internal cash transfers between own accounts, if any appear, net to zero when accounts are combined.
+        Done: parser keeps account-level `Deposits/Withdrawals` rows (conid / symbol ""), same table
+        (no migration change); engine `DepositTotals` per currency; tile + plain-text line + `Deposits`
+        XLSX sheet; 6 tests. Real backfill: Oct 2026 2,200 CHF, YTD 22,100, total 167,300 since
+        2020-10-20 (54 deposits) = independent XML sum.
+        Deploy: after `git pull` re-run `import data/portfolio/trade_ledger/raw/backfill` once — the
+        already-imported files now yield the deposit rows (idempotent, only the new rows are inserted).
 
 ## Technical Debt
 - None yet.

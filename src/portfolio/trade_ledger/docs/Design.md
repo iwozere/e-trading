@@ -173,6 +173,17 @@ reproduce this as a regression test on the backfill (manual, Tasks step 11).
   dividends) and per currency;
 - warnings.
 
+### Deposits
+Account-level `CashTransaction` rows of type `Deposits/Withdrawals` (empty
+`assetCategory`, so they bypass the STK filter via `_collect(stk_only=False)`)
+are stored in `trade_ledger_cash_transactions` with `conid = symbol = ""`.
+The engine sums them per currency into `LedgerResult.deposits`
+(`DepositTotals`: month, YTD, lifetime, first date) and keeps the rows for the
+XLSX; they never touch positions or P&L. `CashTransaction.is_deposit` drops
+booking corrections IBKR files under the same type ("ADJUSTMENT: ..."). A
+cash transfer between the user's own accounts would appear as -X / +X and
+nets to zero, consistent with the combined-accounts view.
+
 ### P&L per ticker (report)
 `report_builder.build_ticker_pnl` combines `lifetime_totals` (realized incl.
 commission over all cycles + net dividends) with unrealized P&L at IBKR's

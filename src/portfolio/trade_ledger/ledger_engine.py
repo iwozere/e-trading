@@ -30,11 +30,13 @@ from typing import Dict, Iterable, List, Optional, Tuple, Union
 from src.notification.logger import setup_logger
 from src.portfolio.trade_ledger.models import (
     CASH_COMMISSION_ADJUSTMENT,
+    CASH_DEPOSITS_WITHDRAWALS,
     DIVIDEND_CASH_TYPES,
     ClosedCycle,
     CashTransaction,
     CorporateActionLeg,
     CorporateActionRow,
+    DepositTotals,
     Execution,
     ExecutionRow,
     LedgerEvents,
@@ -419,11 +421,36 @@ class _Engine:
                     self._close_cycle(pos, when.date())
 
     def apply_cash_transaction(self, cash: CashTransaction) -> None:
-        """Dispatch a per-security cash transaction by type."""
-        if cash.cash_type == CASH_COMMISSION_ADJUSTMENT:
+        """Dispatch a cash transaction by type."""
+        if cash.cash_type == CASH_DEPOSITS_WITHDRAWALS:
+            self.apply_deposit(cash)
+        elif cash.cash_type == CASH_COMMISSION_ADJUSTMENT:
             self.apply_commission_adjustment(cash)
         elif cash.cash_type in DIVIDEND_CASH_TYPES:
             self.apply_dividend(cash)
+
+    def apply_deposit(self, cash: CashTransaction) -> None:
+        """
+        Add a deposit (positive) / withdrawal (negative) to the per-currency totals.
+
+        Never touches positions. Booking corrections IBKR files under the same
+        type are ignored. Cash moved between the user's own accounts appears as
+        a withdrawal plus a deposit and nets to zero.
+        """
+        if not cash.is_deposit:
+            _logger.debug("Ignoring non-deposit %s row %s: %s", cash.cash_type, cash.transaction_id, cash.description)
+            return
+        day = cash.cash_datetime.date()
+        totals = self.result.deposits.setdefault(cash.currency, DepositTotals(currency=cash.currency))
+        totals.lifetime += cash.amount
+        if totals.first_date is None or day < totals.first_date:
+            totals.first_date = day
+        if self.ytd_start <= day:
+            totals.ytd += cash.amount
+        if self.period_start <= day:
+            totals.month += cash.amount
+            totals.count_month += 1
+        self.result.deposit_rows.append(cash)
 
     def apply_dividend(self, cash: CashTransaction) -> None:
         """Add a dividend / payment in lieu / withholding tax to the ticker's net dividends."""

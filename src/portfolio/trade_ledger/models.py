@@ -105,6 +105,11 @@ CASH_WITHHOLDING_TAX = "Withholding Tax"
 CASH_PAYMENT_IN_LIEU = "Payment In Lieu Of Dividends"
 CASH_TYPES = frozenset({CASH_COMMISSION_ADJUSTMENT, CASH_DIVIDEND, CASH_WITHHOLDING_TAX, CASH_PAYMENT_IN_LIEU})
 DIVIDEND_CASH_TYPES = frozenset({CASH_DIVIDEND, CASH_WITHHOLDING_TAX, CASH_PAYMENT_IN_LIEU})
+# Account-level cash (no security): money paid into / taken out of an account.
+CASH_DEPOSITS_WITHDRAWALS = "Deposits/Withdrawals"
+# IBKR also files some booking corrections under "Deposits/Withdrawals"
+# (e.g. "ADJUSTMENT: COMMISSION" 0.01 USD); they are not deposits.
+DEPOSIT_EXCLUDED_DESCRIPTION_PREFIXES = ("ADJUSTMENT",)
 
 
 @dataclass(frozen=True)
@@ -118,6 +123,8 @@ class CashTransaction:
     - "Dividends", "Payment In Lieu Of Dividends" (positive) and
       "Withholding Tax" (negative, or positive when IBKR reverses it): summed
       per ticker into net dividends; they never change the average cost.
+    - "Deposits/Withdrawals": account-level (no security), so `conid` and
+      `symbol` are empty strings; positive = deposit, negative = withdrawal.
     """
 
     account_id: str
@@ -133,6 +140,13 @@ class CashTransaction:
     amount: Decimal
     description: Optional[str]
     source_file: str
+
+    @property
+    def is_deposit(self) -> bool:
+        """True for a real deposit / withdrawal (not a booking correction filed under that type)."""
+        if self.cash_type != CASH_DEPOSITS_WITHDRAWALS:
+            return False
+        return not (self.description or "").upper().startswith(DEPOSIT_EXCLUDED_DESCRIPTION_PREFIXES)
 
 
 @dataclass(frozen=True)
@@ -313,6 +327,18 @@ class PeriodTotals:
     executions: int = 0
 
 
+@dataclass
+class DepositTotals:
+    """Net deposits (deposits minus withdrawals) of one currency, all accounts combined."""
+
+    currency: str
+    month: Decimal = Decimal(0)
+    ytd: Decimal = Decimal(0)
+    lifetime: Decimal = Decimal(0)
+    count_month: int = 0
+    first_date: Optional[date] = None
+
+
 @dataclass(frozen=True)
 class PositionSummary:
     """Per-position line of the monthly report."""
@@ -346,6 +372,8 @@ class LedgerResult:
     month_totals: Dict[str, PeriodTotals] = field(default_factory=dict)
     ytd_totals: Dict[str, PeriodTotals] = field(default_factory=dict)
     lifetime_totals: Dict[str, PeriodTotals] = field(default_factory=dict)
+    deposits: Dict[str, DepositTotals] = field(default_factory=dict)
+    deposit_rows: List[CashTransaction] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------

@@ -16,6 +16,7 @@ from typing import Dict, List, Optional
 from src.portfolio.trade_ledger.models import (
     ClosedCycle,
     CorporateActionRow,
+    DepositTotals,
     ExecutionRow,
     LedgerResult,
     LedgerWarning,
@@ -149,6 +150,7 @@ class ReportView:
     history_start: Optional[date] = None
     ytd: List[YtdTicker] = field(default_factory=list)
     ytd_totals: List[YtdTotals] = field(default_factory=list)
+    deposits: List[DepositTotals] = field(default_factory=list)
 
     @property
     def title(self) -> str:
@@ -315,6 +317,7 @@ def build_report_view(result: LedgerResult, reconciliation: ReconciliationReport
         history_start=min((row.execution.trade_date for row in result.execution_rows), default=None),
         ytd=ytd_rows,
         ytd_totals=_ytd_totals(ytd_rows),
+        deposits=sorted(result.deposits.values(), key=lambda d: d.currency),
     )
 
 
@@ -407,6 +410,8 @@ def _tiles_html(view: ReportView) -> str:
         tiles.append(_tile(f"Realized P&L {t.currency} month", fmt_signed(t.realized_month), colour))
         colour = _GAIN if t.realized_ytd > 0 else _LOSS if t.realized_ytd < 0 else _INK
         tiles.append(_tile(f"Realized P&L {t.currency} YTD", fmt_signed(t.realized_ytd), colour))
+    for d in view.deposits:
+        tiles.append(_tile(f"Net deposits {d.currency} (month / YTD / total)", f"{fmt_money(d.month)} / {fmt_money(d.ytd)} / {fmt_money(d.lifetime)}"))
     return f"<table cellpadding='0' cellspacing='0' style='border-collapse:collapse;margin:8px 0;'><tr>{''.join(tiles)}</tr></table>"
 
 
@@ -689,6 +694,9 @@ def format_plain_text(view: ReportView) -> str:
             f"{t.currency}: {t.executions_month} executions, commissions {fmt_money(t.commissions_month)} (YTD {fmt_money(t.commissions_ytd)}), "
             f"realized {fmt_signed(t.realized_month)} (YTD {fmt_signed(t.realized_ytd)})"
         )
+    for d in view.deposits:
+        since = f" since {d.first_date}" if d.first_date else ""
+        lines.append(f"Net deposits {d.currency}: month {fmt_money(d.month)}, YTD {fmt_money(d.ytd)}, total {fmt_money(d.lifetime)}{since}")
     rec = view.reconciliation
     if rec.status == STATUS_OK:
         lines.append(f"Reconciliation: OK vs IBKR {rec.snapshot_date}")
